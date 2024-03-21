@@ -960,10 +960,10 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         // 6. Deploy an LP token for the pool using BunniManager
         {
-            console2.log("Deploying LP token for Uniswap V3 OHM-wETH pool");
+            console2.log("Deploying LP token for full range position Uniswap V3 OHM-wETH pool");
             addToBatch(
                 bunniManager,
-                abi.encodeWithSelector(BunniManager.deployPoolToken.selector, ohmWethUniV3Pool)
+                abi.encodeWithSelector(BunniManager.deployFullRangeToken.selector, ohmWethUniV3Pool)
             );
         }
 
@@ -1016,8 +1016,9 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             addToBatch(
                 bunniManager,
                 abi.encodeWithSelector(
-                    BunniManager.activatePoolToken.selector,
+                    BunniManager.activatePositionToken.selector,
                     ohmWethUniV3Pool,
+                    0,
                     ohmWethPriceMovingAverageDuration,
                     ohmWethPriceLastObservationTime,
                     ohmWethPriceObservations,

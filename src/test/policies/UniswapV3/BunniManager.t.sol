@@ -157,6 +157,13 @@ contract BunniManagerTest is Test {
 
     event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
 
+    event PositionTokenRegistered(
+        address indexed token_,
+        address indexed pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    );
+
     event NewBunni(
         IBunniToken indexed token,
         bytes32 indexed bunniKeyHash,
@@ -165,9 +172,11 @@ contract BunniManagerTest is Test {
         int24 tickUpper
     );
 
-    event PoolTokenStatusChanged(
-        address indexed pool,
-        address indexed token,
+    event PositionTokenStatusChanged(
+        address indexed token_,
+        address indexed pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
         bool indexed activated
     );
 
@@ -335,12 +344,27 @@ contract BunniManagerTest is Test {
     }
 
     function _expectRevert_invalidAddress(address address_) internal {
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidAddress.selector,
+            address_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_positionNotFound(address pool_, uint256 id_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_PositionNotFound.selector,
+            pool_,
+            id_
+        );
         vm.expectRevert(err);
     }
 
     function _expectRevert_poolNotFound(address pool_) internal {
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_PoolNotFound.selector,
+            pool_
+        );
         vm.expectRevert(err);
     }
 
@@ -382,8 +406,13 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
-    function _expectRevert_tokenDeployed(address pool_, address token_) internal {
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+    function _expectRevert_tokenDeployed(address token_, address pool_, uint256 id_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_TokenDeployed.selector,
+            token_,
+            pool_,
+            id_
+        );
         vm.expectRevert(err);
     }
 
@@ -400,8 +429,13 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
-    function _expectRevert_tokenActivated(address pool_, Keycode module_) internal {
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+    function _expectRevert_tokenActivated(address pool_, uint256 id_, Keycode module_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_TokenActivated.selector,
+            pool_,
+            id_,
+            module_
+        );
         vm.expectRevert(err);
     }
 
@@ -428,7 +462,7 @@ contract BunniManagerTest is Test {
         return newBunniManager;
     }
 
-    function _getBunniKey(
+    function _getPositionKey(
         IUniswapV3Pool pool_,
         IBunniToken token_
     ) internal view returns (BunniKey memory) {
@@ -685,7 +719,7 @@ contract BunniManagerTest is Test {
         }
     }
 
-    // [X] registerPool
+    // [X] registerPosition
     //  [X] reverts if caller is unauthorized
     //  [X] reverts if bunniHub not set
     //  [X] reverts if token already managed by the policy
@@ -695,65 +729,87 @@ contract BunniManagerTest is Test {
     //  [X] deploys and returns token
     //  [X] reverts if either asset price not defined
 
-    function test_registerPool_unauthorizedReverts() public {
+    function test_registerPosition_unauthorizedReverts() public {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.registerPool(address(pool));
+        bunniManager.registerPosition(address(pool), address(0), 0);
     }
 
-    function test_registerPool_inactiveReverts() public {
+    function test_registerPosition_inactiveReverts() public {
         // Create a new BunniManager policy, but don't install/activate it
         BunniManager newBunniManager = _createNewBunniManager();
 
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(0), 0);
     }
 
-    function test_registerPool_bunniHubNotSetReverts() public {
+    function test_registerPosition_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
         BunniManager newBunniManager = _setUpNewBunniManager();
 
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(0), 0);
     }
 
-    function test_registerPool_invalidPoolReverts() public {
+    function test_registerPosition_invalidPoolReverts() public {
         _expectRevert_poolNotFound(ohmAddress);
 
         vm.prank(policy);
-        bunniManager.registerPool(ohmAddress);
+        bunniManager.registerPosition(ohmAddress, address(0), 0);
     }
 
-    function test_registerPool_noDeployedTokenReverts() public {
-        // Expect an error, as no token has been deployed against the pool
-        _expectRevert_poolNotFound(address(pool));
+    function test_registerPosition_noDeployedTokenReverts() public {
+        // Create a new BunniManager policy
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniLens(bunniLensAddress);
+
+        // Expect an error, as no token has been deployed against the old manager
+        _expectRevert_positionNotFound(address(pool), 0);
 
         // Register the pool with the new policy
         vm.prank(policy);
-        bunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(bunniManager), 0);
     }
 
-    function test_registerPool_alreadyDeployedTokenReverts() public {
+    function test_registerPosition_alreadyDeployedTokenReverts() public {
+        // Deploy a full-range position on the old manager
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(pool));
+
+        // Create a new BunniManager policy
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniLens(bunniLensAddress);
+
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
+        newBunniManager.registerPosition(address(pool), address(bunniManager), 0);
 
-        _expectRevert_tokenDeployed(address(pool), address(deployedToken));
+        _expectRevert_tokenDeployed(address(deployedToken), address(pool), 0);
 
         // Register the pool
         vm.prank(policy);
-        bunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(bunniManager), 0);
     }
 
-    function test_registerPool_usdcPriceUnsetReverts() public {
+    function test_registerPosition_usdcPriceUnsetReverts() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Install a new policy
         BunniManager newBunniManager = _setUpNewBunniManager();
@@ -770,13 +826,13 @@ contract BunniManagerTest is Test {
         _expectRevert_priceZero(usdcAddress);
 
         vm.prank(policy);
-        newBunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(bunniManager), 0);
     }
 
-    function test_registerPool_ohmPriceUnsetReverts() public {
+    function test_registerPosition_ohmPriceUnsetReverts() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Install a new policy
         BunniManager newBunniManager = _setUpNewBunniManager();
@@ -793,13 +849,13 @@ contract BunniManagerTest is Test {
         _expectRevert_priceZero(ohmAddress);
 
         vm.prank(policy);
-        newBunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(bunniManager), 0);
     }
 
-    function test_registerPool() public {
+    function test_registerPosition() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Install a new policy
         BunniManager newBunniManager = _setUpNewBunniManager();
@@ -810,15 +866,30 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniLens(bunniLensAddress);
 
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PositionTokenRegistered(
+            address(deployedToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper
+        );
+
         // Register the pool with the new policy
         vm.prank(policy);
-        IBunniToken newDeployedToken = newBunniManager.registerPool(address(pool));
+        IBunniToken newDeployedToken = newBunniManager.registerPosition(
+            address(pool),
+            address(bunniManager),
+            0
+        );
 
         // Token should be the same as before
         assertEq(address(newDeployedToken), address(deployedToken));
 
         // Check that the pool is registered
-        uint256 poolCount = newBunniManager.getPoolCount();
+        uint256 poolCount = newBunniManager.poolCount();
         assertEq(poolCount, 1);
         address poolOne = newBunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -840,10 +911,10 @@ contract BunniManagerTest is Test {
         assertEq(polo, 0);
     }
 
-    function test_registerPool_multiple() public {
+    function test_registerPosition_multiple() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
         bunniSetup.mockGetPrice(address(dai), 1e18);
@@ -854,7 +925,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the second token
         vm.prank(policy);
-        IBunniToken deployedTokenTwo = bunniManager.deployPoolToken(address(newPool));
+        IBunniToken deployedTokenTwo = bunniManager.deployFullRangeToken(address(newPool));
 
         // Install a new policy
         BunniManager newBunniManager = _setUpNewBunniManager();
@@ -865,16 +936,36 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniLens(bunniLensAddress);
 
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PositionTokenRegistered(
+            address(deployedToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper
+        );
+
         // Register the pool with the new policy
         vm.prank(policy);
-        newBunniManager.registerPool(address(pool));
+        newBunniManager.registerPosition(address(pool), address(bunniManager), 0);
+
+        key = bunniManager.getPositionKey(address(newPool), 0);
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PositionTokenRegistered(
+            address(deployedTokenTwo),
+            address(newPool),
+            key.tickLower,
+            key.tickUpper
+        );
 
         // Register the new pool with the new policy
         vm.prank(policy);
-        newBunniManager.registerPool(address(newPool));
+        newBunniManager.registerPosition(address(newPool), address(bunniManager), 0);
 
         // Check that the pools are registered
-        uint256 poolCount = newBunniManager.getPoolCount();
+        uint256 poolCount = newBunniManager.poolCount();
         assertEq(poolCount, 2);
         address poolOne = newBunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -882,7 +973,7 @@ contract BunniManagerTest is Test {
         assertEq(poolTwo, address(newPool));
     }
 
-    // [X] deployPoolToken
+    // [X] deployFullRangeToken
     //  [X] caller is unauthorized
     //  [X] bunniHub not set
     //  [X] token already deployed
@@ -892,65 +983,65 @@ contract BunniManagerTest is Test {
     //  [X] reverts if either asset price not defined
     //  [X] handles different pool fees
 
-    function test_deployPoolToken_unauthorizedReverts() public {
+    function test_deployFullRangeToken_unauthorizedReverts() public {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
     }
 
-    function test_deployPoolToken_inactiveReverts() public {
+    function test_deployFullRangeToken_inactiveReverts() public {
         // Create a new BunniManager policy, but don't install/activate it
         BunniManager newBunniManager = _createNewBunniManager();
 
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.deployPoolToken(address(pool));
+        newBunniManager.deployFullRangeToken(address(pool));
     }
 
-    function test_deployPoolToken_bunniHubNotSetReverts() public {
+    function test_deployFullRangeToken_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
         BunniManager newBunniManager = _setUpNewBunniManager();
 
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.deployPoolToken(address(pool));
+        newBunniManager.deployFullRangeToken(address(pool));
     }
 
-    function test_deployPoolToken_invalidPoolReverts() public {
+    function test_deployFullRangeToken_invalidPoolReverts() public {
         _expectRevert_poolNotFound(ohmAddress);
 
         vm.prank(policy);
-        bunniManager.deployPoolToken(ohmAddress);
+        bunniManager.deployFullRangeToken(ohmAddress);
     }
 
-    function test_deployPoolToken_usdcPriceUnsetReverts() public {
+    function test_deployFullRangeToken_usdcPriceUnsetReverts() public {
         _mockGetPriceReverts(usdcAddress);
 
         _expectRevert_priceZero(usdcAddress);
 
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
     }
 
-    function test_deployPoolToken_ohmPriceUnsetReverts() public {
+    function test_deployFullRangeToken_ohmPriceUnsetReverts() public {
         _mockGetPriceReverts(ohmAddress);
 
         _expectRevert_priceZero(ohmAddress);
 
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
     }
 
-    function test_deployPoolToken() public {
+    function test_deployFullRangeToken() public {
         // Recognise the emitted event
         vm.expectEmit(false, false, true, false);
         emit NewBunni(IBunniToken(address(0)), bytes32(0), pool, 0, 0);
 
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Check details of token
         assertEq(address(deployedToken.pool()), address(pool));
@@ -958,7 +1049,7 @@ contract BunniManagerTest is Test {
         assertEq(deployedToken.tickUpper(), 887270);
 
         // Check that the pool is registered
-        uint256 poolCount = bunniManager.getPoolCount();
+        uint256 poolCount = bunniManager.poolCount();
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -980,9 +1071,9 @@ contract BunniManagerTest is Test {
         assertEq(polo, 0);
     }
 
-    function test_deployPoolToken_multiple() public {
+    function test_deployFullRangeToken_multiple() public {
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
         bunniSetup.mockGetPrice(address(dai), 1e18);
@@ -993,10 +1084,10 @@ contract BunniManagerTest is Test {
 
         // Deploy the second token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(newPool));
+        bunniManager.deployFullRangeToken(address(newPool));
 
         // Check that the pools are registered
-        uint256 poolCount = bunniManager.getPoolCount();
+        uint256 poolCount = bunniManager.poolCount();
         assertEq(poolCount, 2);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -1004,18 +1095,18 @@ contract BunniManagerTest is Test {
         assertEq(poolTwo, address(newPool));
     }
 
-    function test_deployPoolToken_duplicateReverts() public {
+    function test_deployFullRangeToken_duplicateReverts() public {
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(pool));
 
-        _expectRevert_tokenDeployed(address(pool), address(deployedToken));
+        _expectRevert_tokenDeployed(address(deployedToken), address(pool), 0);
 
         // Deploy a second time
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
     }
 
-    function test_deployPoolToken_poolFee3000() public {
+    function test_deployFullRangeToken_poolFee3000() public {
         // Create a pool with a different fee
         uint24 poolFee = 3000;
         IUniswapV3Pool poolTwo = IUniswapV3Pool(
@@ -1024,7 +1115,7 @@ contract BunniManagerTest is Test {
         poolTwo.initialize(OHM_USDC_SQRTPRICEX96);
 
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(poolTwo));
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(poolTwo));
 
         int24 tick = _getTick(poolFee, true);
 
@@ -1034,7 +1125,7 @@ contract BunniManagerTest is Test {
         assertEq(deployedToken.tickUpper(), tick);
 
         // Check that the pool is registered
-        uint256 poolCount = bunniManager.getPoolCount();
+        uint256 poolCount = bunniManager.poolCount();
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(poolTwo));
@@ -1052,6 +1143,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(poolTwo),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1059,7 +1151,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_deployPoolToken_poolFee100() public {
+    function test_deployFullRangeToken_poolFee100() public {
         uint24 poolFee = 100;
 
         // 0.01% / 100 pool fee isn't enabled in UniswapV3Factory, so add it
@@ -1073,7 +1165,7 @@ contract BunniManagerTest is Test {
         poolTwo.initialize(OHM_USDC_SQRTPRICEX96);
 
         vm.prank(policy);
-        IBunniToken deployedToken = bunniManager.deployPoolToken(address(poolTwo));
+        IBunniToken deployedToken = bunniManager.deployFullRangeToken(address(poolTwo));
 
         int24 tick = _getTick(poolFee, true);
 
@@ -1083,7 +1175,7 @@ contract BunniManagerTest is Test {
         assertEq(deployedToken.tickUpper(), tick);
 
         // Check that the pool is registered
-        uint256 poolCount = bunniManager.getPoolCount();
+        uint256 poolCount = bunniManager.poolCount();
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(poolTwo));
@@ -1101,6 +1193,253 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(poolTwo),
+            0,
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+    }
+
+    // [X] deployConcentratedPositionToken
+    //  [X] caller is unauthorized
+    //  [X] bunniHub not set
+    //  [X] token already deployed
+    //  [X] not a Uniswap V3 pool
+    //  [X] deploys and returns token
+    //  [X] reverts when inactive
+    //  [X] reverts if either asset price not defined
+    //  [X] handles different pool fees
+
+    function test_deployConcentratedPositionToken_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        vm.prank(alice);
+        bunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = _createNewBunniManager();
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        vm.prank(policy);
+        newBunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken_invalidPoolReverts() public {
+        _expectRevert_poolNotFound(ohmAddress);
+
+        vm.prank(policy);
+        bunniManager.deployConcentratedToken(ohmAddress, -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken_usdcPriceUnsetReverts() public {
+        _mockGetPriceReverts(usdcAddress);
+
+        _expectRevert_priceZero(usdcAddress);
+
+        vm.prank(policy);
+        bunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken_ohmPriceUnsetReverts() public {
+        _mockGetPriceReverts(ohmAddress);
+
+        _expectRevert_priceZero(ohmAddress);
+
+        vm.prank(policy);
+        bunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken() public {
+        // Recognise the emitted event
+        vm.expectEmit(false, false, true, false);
+        emit NewBunni(IBunniToken(address(0)), bytes32(0), pool, 0, 0);
+
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployConcentratedToken(
+            address(pool),
+            -444444,
+            444444
+        );
+
+        int24 tick = (444444 / pool.tickSpacing()) * pool.tickSpacing();
+
+        // Check details of token
+        assertEq(address(deployedToken.pool()), address(pool));
+        assertEq(deployedToken.tickLower(), -1 * tick);
+        assertEq(deployedToken.tickUpper(), tick);
+
+        // Check that the pool is registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 1);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(pool));
+
+        // Check that the token has NOT been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(deployedToken));
+        assertFalse(priceAsset.approved);
+
+        // Check that the token has NOT been added to TRSRY
+        TRSRYv1_1.Asset memory trsryAsset = TRSRY.getAssetData(address(deployedToken));
+        assertFalse(trsryAsset.approved);
+
+        // Check that the token has NOT been added to the BunniSupply submodule
+        uint256 supplySubmoduleBunniTokenCount = supplySubmoduleBunni.bunniTokenCount();
+        assertEq(supplySubmoduleBunniTokenCount, 0);
+
+        // Check that the token is NOT included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertEq(polo, 0);
+    }
+
+    function test_deployConcentratedPositionToken_multiple() public {
+        vm.prank(policy);
+        bunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+
+        // Create a new pool with an overlapping underlying token
+        bunniSetup.mockGetPrice(address(dai), 1e18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(
+            uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
+        );
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Deploy the second token
+        vm.prank(policy);
+        bunniManager.deployConcentratedToken(address(newPool), -444444, 444444);
+
+        // Check that the pools are registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 2);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(pool));
+        address poolTwo = bunniManager.pools(1);
+        assertEq(poolTwo, address(newPool));
+    }
+
+    function test_deployConcentratedPositionToken_duplicateReverts() public {
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployConcentratedToken(
+            address(pool),
+            -444444,
+            444444
+        );
+
+        _expectRevert_tokenDeployed(address(deployedToken), address(pool), 0);
+
+        // Deploy a second time
+        vm.prank(policy);
+        bunniManager.deployConcentratedToken(address(pool), -444444, 444444);
+    }
+
+    function test_deployConcentratedPositionToken_poolFee3000() public {
+        // Create a pool with a different fee
+        uint24 poolFee = 3000;
+        IUniswapV3Pool poolTwo = IUniswapV3Pool(
+            uniswapFactory.createPool(ohmAddress, usdcAddress, poolFee)
+        );
+        poolTwo.initialize(OHM_USDC_SQRTPRICEX96);
+
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployConcentratedToken(
+            address(poolTwo),
+            -444444,
+            444444
+        );
+
+        int24 tick = (444444 / poolTwo.tickSpacing()) * poolTwo.tickSpacing();
+
+        // Check details of token
+        assertEq(address(deployedToken.pool()), address(poolTwo));
+        assertEq(deployedToken.tickLower(), -1 * tick);
+        assertEq(deployedToken.tickUpper(), tick);
+
+        // Check that the pool is registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 1);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(poolTwo));
+
+        // === Deposit === //
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        // Will revert if there is a problem
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(poolTwo),
+            0,
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+    }
+
+    function test_deployConcentratedPositionToken_poolFee100() public {
+        uint24 poolFee = 100;
+
+        // 0.01% / 100 pool fee isn't enabled in UniswapV3Factory, so add it
+        // Values from: https://support.uniswap.org/hc/en-us/articles/21069524840589-What-is-a-tick-when-providing-liquidity-
+        uniswapFactory.enableFeeAmount(poolFee, 1);
+
+        // Create a pool with a different fee
+        IUniswapV3Pool poolTwo = IUniswapV3Pool(
+            uniswapFactory.createPool(ohmAddress, usdcAddress, poolFee)
+        );
+        poolTwo.initialize(OHM_USDC_SQRTPRICEX96);
+
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployConcentratedToken(
+            address(poolTwo),
+            -444444,
+            444444
+        );
+
+        int24 tick = (444444 / poolTwo.tickSpacing()) * poolTwo.tickSpacing();
+
+        // Check details of token
+        assertEq(address(deployedToken.pool()), address(poolTwo));
+        assertEq(deployedToken.tickLower(), -1 * tick);
+        assertEq(deployedToken.tickUpper(), tick);
+
+        // Check that the pool is registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 1);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(poolTwo));
+
+        // === Deposit === //
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        // Will revert if there is a problem
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(poolTwo),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1123,8 +1462,9 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1142,8 +1482,9 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.activatePoolToken(
+        newBunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1161,8 +1502,9 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.activatePoolToken(
+        newBunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1174,11 +1516,12 @@ contract BunniManagerTest is Test {
     }
 
     function testRevert_activatePoolToken_tokenNotDeployed() public {
-        _expectRevert_poolNotFound(address(pool));
+        _expectRevert_positionNotFound(address(pool), 0);
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1192,17 +1535,19 @@ contract BunniManagerTest is Test {
     function testRevert_activatePoolToken_noLiquidity() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_InvalidPoolLiquidity.selector,
-            address(pool)
+            BunniManager.BunniManager_PositionHasNoLiquidity.selector,
+            address(pool),
+            0
         );
         vm.expectRevert(err);
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1220,7 +1565,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1230,6 +1575,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1243,11 +1589,12 @@ contract BunniManagerTest is Test {
         TRSRY.addAsset(address(poolToken), trsryLocations);
 
         // Expect a revert
-        _expectRevert_tokenActivated(address(pool), toKeycode("TRSRY"));
+        _expectRevert_tokenActivated(address(pool), 0, toKeycode("TRSRY"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1265,7 +1612,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1275,6 +1622,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1307,11 +1655,12 @@ contract BunniManagerTest is Test {
         );
 
         // Expect a revert
-        _expectRevert_tokenActivated(address(pool), toKeycode("PRICE"));
+        _expectRevert_tokenActivated(address(pool), 0, toKeycode("PRICE"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1329,7 +1678,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1339,6 +1688,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1357,11 +1707,12 @@ contract BunniManagerTest is Test {
         );
 
         // Expect a revert
-        _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
+        _expectRevert_tokenActivated(address(pool), 0, toKeycode("SPPLY"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1379,7 +1730,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1389,6 +1740,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1401,13 +1753,21 @@ contract BunniManagerTest is Test {
         vm.prank(writeTRSRY);
         TRSRY.addAsset(address(poolToken), trsryLocations);
 
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolTokenStatusChanged(address(pool), address(poolToken), true);
+        emit PositionTokenStatusChanged(
+            address(poolToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper,
+            true
+        );
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1447,7 +1807,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1457,6 +1817,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1471,13 +1832,22 @@ contract BunniManagerTest is Test {
         vm.prank(writeTRSRY);
         TRSRY.categorize(address(poolToken), toTreasuryCategory("protocol-owned-liquidity"));
 
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
+
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolTokenStatusChanged(address(pool), address(poolToken), true);
+        emit PositionTokenStatusChanged(
+            address(poolToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper,
+            true
+        );
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1529,7 +1899,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1539,19 +1909,29 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
             SLIPPAGE_DEFAULT
         );
 
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
+
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolTokenStatusChanged(address(pool), address(poolToken), true);
+        emit PositionTokenStatusChanged(
+            address(poolToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper,
+            true
+        );
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1631,7 +2011,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.deactivatePoolToken(address(pool));
+        bunniManager.deactivatePositionToken(address(pool), 0);
     }
 
     function test_deactivatePoolToken_inactiveReverts() public {
@@ -1641,7 +2021,7 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.deactivatePoolToken(address(pool));
+        newBunniManager.deactivatePositionToken(address(pool), 0);
     }
 
     function test_deactivatePoolToken_bunniHubNotSetReverts() public {
@@ -1651,14 +2031,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.deactivatePoolToken(address(pool));
+        newBunniManager.deactivatePositionToken(address(pool), 0);
     }
 
     function test_deactivatePoolToken_tokenNotDeployedReverts() public {
-        _expectRevert_poolNotFound(address(pool));
+        _expectRevert_positionNotFound(address(pool), 0);
 
         vm.prank(policy);
-        bunniManager.deactivatePoolToken(address(pool));
+        bunniManager.deactivatePositionToken(address(pool), 0);
     }
 
     function test_deactivatePoolToken_hasLiquidityReverts() public {
@@ -1668,7 +2048,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1678,6 +2058,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1685,13 +2066,14 @@ contract BunniManagerTest is Test {
         );
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_InvalidPoolLiquidity.selector,
-            address(pool)
+            BunniManager.BunniManager_PositionHasLiquidity.selector,
+            address(pool),
+            0
         );
         vm.expectRevert(err);
 
         vm.prank(policy);
-        bunniManager.deactivatePoolToken(address(pool));
+        bunniManager.deactivatePositionToken(address(pool), 0);
     }
 
     function test_deactivatePoolToken() public {
@@ -1701,7 +2083,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
@@ -1711,6 +2093,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -1719,8 +2102,9 @@ contract BunniManagerTest is Test {
 
         // Activate the token
         vm.prank(policy);
-        bunniManager.activatePoolToken(
+        bunniManager.activatePositionToken(
             address(pool),
+            0,
             _priceMovingAverageDuration,
             _priceLastObservationTime,
             _priceObservations,
@@ -1732,15 +2116,23 @@ contract BunniManagerTest is Test {
 
         // Withdraw
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), bunniTokenShares, SLIPPAGE_DEFAULT);
+        bunniManager.withdraw(address(pool), 0, bunniTokenShares, SLIPPAGE_DEFAULT);
+
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
 
         // Recognise the emitted event
-        vm.expectEmit(true, true, false, false);
-        emit PoolTokenStatusChanged(address(pool), address(poolToken), false);
+        vm.expectEmit(true, true, false, true);
+        emit PositionTokenStatusChanged(
+            address(poolToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper,
+            false
+        );
 
         // Deactivate
         vm.prank(policy);
-        bunniManager.deactivatePoolToken(address(pool));
+        bunniManager.deactivatePositionToken(address(pool), 0);
 
         // Check that the token has NOT been removed from TRSRY (since we can't actually do that)
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1766,17 +2158,25 @@ contract BunniManagerTest is Test {
     function test_deactivatePoolToken_ignoresUnregistered() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken poolToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Do NOT deposit or activate, so that TRSRY/PRICE/SPPLY are not registered
 
+        BunniKey memory key = bunniManager.getPositionKey(address(pool), 0);
+
         // Recognise the emitted event
-        vm.expectEmit(true, true, false, false);
-        emit PoolTokenStatusChanged(address(pool), address(poolToken), false);
+        vm.expectEmit(true, true, false, true);
+        emit PositionTokenStatusChanged(
+            address(poolToken),
+            address(pool),
+            key.tickLower,
+            key.tickUpper,
+            false
+        );
 
         // Deactivate
         vm.prank(policy);
-        bunniManager.deactivatePoolToken(address(pool));
+        bunniManager.deactivatePositionToken(address(pool), 0);
 
         // Check that the token has NOT been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1813,7 +2213,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(pool), 0, ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_inactiveReverts() public {
@@ -1823,7 +2223,7 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
+        newBunniManager.deposit(address(pool), 0, ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_bunniHubNotSetReverts() public {
@@ -1833,14 +2233,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
+        newBunniManager.deposit(address(pool), 0, ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_tokenNotDeployedReverts() public {
-        _expectRevert_poolNotFound(address(pool));
+        _expectRevert_positionNotFound(address(pool), 0);
 
         vm.prank(policy);
-        bunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(pool), 0, ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
@@ -1860,7 +2260,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(newPool));
+        bunniManager.deployFullRangeToken(address(newPool));
 
         // Mint tokens to the TRSRY
         dai.mint(treasuryAddress, daiBalance);
@@ -1875,7 +2275,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(newPool), 0, address(dai), 1e18, 1e6, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
@@ -1895,7 +2295,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(newPool));
+        bunniManager.deployFullRangeToken(address(newPool));
 
         // Mint tokens to the TRSRY
         dai.mint(treasuryAddress, daiBalance);
@@ -1910,7 +2310,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(newPool), 0, address(dai), 1e18, 1e6, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_nonOhmTokens_fuzz(uint256 usdcAmount_) public {
@@ -1926,7 +2326,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(newPool));
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(newPool));
 
         // Mint tokens to the TRSRY
         dai.mint(treasuryAddress, daiAmount);
@@ -1937,6 +2337,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(newPool),
+            0,
             address(dai),
             daiAmount,
             usdcAmount,
@@ -1961,7 +2362,7 @@ contract BunniManagerTest is Test {
     function test_deposit_invalidUnderlyingTokenReverts() public {
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Expect a revert
         bytes memory err = abi.encodeWithSelector(UniswapV3PoolLibrary.InvalidParams.selector);
@@ -1969,7 +2370,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(pool), address(wETH), 1e9, 1e6, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(pool), 0, address(wETH), 1e9, 1e6, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_ohmToken_fuzz(uint256 amount_) public {
@@ -1979,7 +2380,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -1989,6 +2390,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2009,7 +2411,7 @@ contract BunniManagerTest is Test {
         // OHM was minted
         // The exact amount of OHM is only known at run-time (due to slippage)
         (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(
-            _getBunniKey(pool, bunniToken)
+            _getPositionKey(pool, bunniToken)
         );
         uint256 ohmReserve = pool.token0() == ohmAddress ? reserve0 : reserve1;
 
@@ -2034,7 +2436,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2044,6 +2446,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2064,7 +2467,7 @@ contract BunniManagerTest is Test {
         // OHM was minted
         // The exact amount of OHM is only known at run-time (due to slippage)
         (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(
-            _getBunniKey(pool, bunniToken)
+            _getPositionKey(pool, bunniToken)
         );
         uint256 ohmReserve = pool.token0() == ohmAddress ? reserve0 : reserve1;
         uint256 usdcReserve = pool.token0() == usdcAddress ? reserve0 : reserve1;
@@ -2080,7 +2483,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2091,7 +2494,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, slippage);
+        bunniManager.deposit(address(pool), 0, ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, slippage);
     }
 
     // [X] withdraw
@@ -2107,7 +2510,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
+        bunniManager.withdraw(address(pool), 0, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_inactiveReverts() public {
@@ -2117,7 +2520,7 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
+        newBunniManager.withdraw(address(pool), 0, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_bunniHubNotSetReverts() public {
@@ -2127,14 +2530,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
+        newBunniManager.withdraw(address(pool), 0, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_tokenNotDeployedReverts() public {
-        _expectRevert_poolNotFound(address(pool));
+        _expectRevert_positionNotFound(address(pool), 0);
 
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
+        bunniManager.withdraw(address(pool), 0, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_insufficientBalanceReverts() public {
@@ -2143,7 +2546,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        IBunniToken token = bunniManager.deployPoolToken(address(pool));
+        IBunniToken token = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2152,6 +2555,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2168,7 +2572,7 @@ contract BunniManagerTest is Test {
         );
 
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
+        bunniManager.withdraw(address(pool), 0, bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
@@ -2181,7 +2585,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        IBunniToken token = bunniManager.deployPoolToken(address(newPool));
+        IBunniToken token = bunniManager.deployFullRangeToken(address(newPool));
 
         // Mint tokens to the TRSRY
         dai.mint(treasuryAddress, 1e18);
@@ -2194,6 +2598,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(newPool),
+            0,
             address(dai),
             DAI_DEPOSIT,
             USDC_DEPOSIT,
@@ -2207,7 +2612,7 @@ contract BunniManagerTest is Test {
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         vm.prank(policy);
-        bunniManager.withdraw(address(newPool), bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
+        bunniManager.withdraw(address(newPool), 0, bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
 
         // Check that:
         // withdrawn DAU has been returned to TRSRY
@@ -2241,7 +2646,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        IBunniToken token = bunniManager.deployPoolToken(address(pool));
+        IBunniToken token = bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2250,6 +2655,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2262,7 +2668,7 @@ contract BunniManagerTest is Test {
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
+        bunniManager.withdraw(address(pool), 0, bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
 
         // Check that:
         // withdrawn USDC has been returned to TRSRY
@@ -2293,7 +2699,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2302,6 +2708,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 shares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2314,7 +2721,7 @@ contract BunniManagerTest is Test {
 
         // Withdraw
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), shares, slippage);
+        bunniManager.withdraw(address(pool), 0, shares, slippage);
     }
 
     // [X] getPoolToken
@@ -2329,22 +2736,22 @@ contract BunniManagerTest is Test {
 
         _expectRevert_bunniHubNotSet();
 
-        newBunniManager.getPoolToken(address(pool));
+        newBunniManager.getPositionToken(address(pool), 0);
     }
 
     function test_getPoolToken_tokenNotDeployedReverts() public {
-        _expectRevert_poolNotFound(address(pool));
+        _expectRevert_positionNotFound(address(pool), 0);
 
-        bunniManager.getPoolToken(address(pool));
+        bunniManager.getPositionToken(address(pool), 0);
     }
 
     function test_getPoolToken() public {
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Get the token
-        IBunniToken token = bunniManager.getPoolToken(address(pool));
+        IBunniToken token = bunniManager.getPositionToken(address(pool), 0);
 
         // Check return value
         assertEq(address(token.pool()), address(pool));
@@ -2355,13 +2762,13 @@ contract BunniManagerTest is Test {
     function test_getPoolToken_inactive() public {
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Disable the policy
         kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Get the token
-        IBunniToken token = bunniManager.getPoolToken(address(pool));
+        IBunniToken token = bunniManager.getPositionToken(address(pool), 0);
 
         // Check return value
         assertEq(address(token.pool()), address(pool));
@@ -2381,22 +2788,22 @@ contract BunniManagerTest is Test {
 
         _expectRevert_bunniHubNotSet();
 
-        newBunniManager.getPoolTokenBalance(address(pool));
+        newBunniManager.getPositionTokenBalance(address(pool), 0);
     }
 
     function test_getPoolTokenBalance_tokenNotDeployedReverts() public {
-        _expectRevert_poolNotFound(address(pool));
+        _expectRevert_positionNotFound(address(pool), 0);
 
-        bunniManager.getPoolTokenBalance(address(pool));
+        bunniManager.getPositionTokenBalance(address(pool), 0);
     }
 
     function test_getPoolTokenBalance_zeroBalance() public {
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Get the token
-        uint256 balance = bunniManager.getPoolTokenBalance(address(pool));
+        uint256 balance = bunniManager.getPositionTokenBalance(address(pool), 0);
 
         // Check return value
         assertEq(balance, 0);
@@ -2409,7 +2816,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2418,6 +2825,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2425,7 +2833,7 @@ contract BunniManagerTest is Test {
         );
 
         // Check that the value is consistent
-        uint256 balance = bunniManager.getPoolTokenBalance(address(pool));
+        uint256 balance = bunniManager.getPositionTokenBalance(address(pool), 0);
         assertEq(balance, bunniTokenShares);
     }
 
@@ -2436,7 +2844,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2445,6 +2853,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2455,7 +2864,7 @@ contract BunniManagerTest is Test {
         kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Check that the value is consistent
-        uint256 balance = bunniManager.getPoolTokenBalance(address(pool));
+        uint256 balance = bunniManager.getPositionTokenBalance(address(pool), 0);
         assertEq(balance, bunniTokenShares);
     }
 
@@ -2675,7 +3084,7 @@ contract BunniManagerTest is Test {
     function test_harvest_noPosition() public {
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // No deposit
 
@@ -2693,7 +3102,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2702,6 +3111,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deposit(
             address(pool),
+            0,
             ohmAddress,
             OHM_DEPOSIT,
             USDC_DEPOSIT,
@@ -2724,7 +3134,7 @@ contract BunniManagerTest is Test {
 
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
             usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -2733,6 +3143,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -2874,9 +3285,9 @@ contract BunniManagerTest is Test {
         {
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
             vm.prank(policy);
-            tokenTwo = bunniManager.deployPoolToken(address(poolTwo));
+            tokenTwo = bunniManager.deployFullRangeToken(address(poolTwo));
         }
 
         // Perform the deposit
@@ -2891,6 +3302,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -2901,6 +3313,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(poolTwo),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3097,7 +3510,7 @@ contract BunniManagerTest is Test {
 
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
             usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -3106,6 +3519,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3187,7 +3601,7 @@ contract BunniManagerTest is Test {
 
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
             usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -3196,6 +3610,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3368,7 +3783,12 @@ contract BunniManagerTest is Test {
 
     function test_setHarvestFrequency_zeroFrequencyReverts() public {
         uint48 newFrequency = 0;
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidHarvestFrequency.selector,
+            1,
+            newFrequency,
+            type(uint48).max
+        );
         vm.expectRevert(err);
 
         // Call with a zero frequency
@@ -3406,7 +3826,11 @@ contract BunniManagerTest is Test {
 
     function test_setHarvestRewardParameters_feeInvalidReverts() public {
         uint16 newFee = BPS_MAX + 1;
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidHarvestFee.selector,
+            newFee,
+            BPS_MAX
+        );
         vm.expectRevert(err);
 
         // Call with an invalid fee
@@ -3485,7 +3909,7 @@ contract BunniManagerTest is Test {
     function test_updateSwapFees_noPosition() public {
         // Deploy the token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployFullRangeToken(address(pool));
 
         // No deposit
 
@@ -3512,9 +3936,9 @@ contract BunniManagerTest is Test {
         {
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
             vm.prank(policy);
-            tokenTwo = bunniManager.deployPoolToken(address(poolTwo));
+            tokenTwo = bunniManager.deployFullRangeToken(address(poolTwo));
         }
 
         // Perform the deposit
@@ -3529,6 +3953,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3539,6 +3964,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(poolTwo),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3666,11 +4092,11 @@ contract BunniManagerTest is Test {
     function testRevert_bunniHub_deposit_onlyOwner() public {
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Construct the parameters
         IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
-            key: _getBunniKey(pool, bunniToken),
+            key: _getPositionKey(pool, bunniToken),
             amount0Desired: 0,
             amount1Desired: 0,
             amount0Min: 0,
@@ -3688,11 +4114,11 @@ contract BunniManagerTest is Test {
     function testRevert_bunniHub_withdraw_onlyOwner() public {
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(pool));
 
         // Construct the parameters
         IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
-            key: _getBunniKey(pool, bunniToken),
+            key: _getPositionKey(pool, bunniToken),
             recipient: address(TRSRY),
             shares: 0,
             amount0Min: 0,
@@ -3709,8 +4135,8 @@ contract BunniManagerTest is Test {
     function testRevert_bunniHub_updateSwapFees_onlyOwner() public {
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
-        BunniKey memory key = _getBunniKey(pool, bunniToken);
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(pool));
+        BunniKey memory key = _getPositionKey(pool, bunniToken);
 
         // Call as an unauthorized user
         vm.prank(alice);
@@ -3721,8 +4147,8 @@ contract BunniManagerTest is Test {
     function testRevert_bunniHub_compound_onlyOwner() public {
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
-        BunniKey memory key = _getBunniKey(pool, bunniToken);
+        IBunniToken bunniToken = bunniManager.deployFullRangeToken(address(pool));
+        BunniKey memory key = _getPositionKey(pool, bunniToken);
 
         // Call as an unauthorized user
         vm.prank(alice);
