@@ -682,7 +682,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        functions should update the pending fees before calling this function using `updateSwapFees()`.
     function getCurrentHarvestReward() public view override bunniHubSet returns (uint256 reward) {
         // 0 if enough time has not elapsed
-        if (lastHarvest + harvestFrequency < block.timestamp) return 0;
+        if (lastHarvest + harvestFrequency > block.timestamp) return 0;
 
         uint256 feeUsdValue; // Scale: PRICE decimals
         uint256 priceScale = 10 ** PRICE.decimals();

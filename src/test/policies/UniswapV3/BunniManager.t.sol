@@ -2769,6 +2769,9 @@ contract BunniManagerTest is Test {
         _storeTokenBalance(alice, usdcAddress);
         _storeTokenBalance(alice, ohmAddress);
 
+        // Warp forward
+        vm.warp(block.timestamp + HARVEST_FREQUENCY);
+
         // Determine the reward to be given
         uint256 currentReward;
         uint256 usdcFeeAmountBefore;
@@ -2789,13 +2792,154 @@ contract BunniManagerTest is Test {
         uint128 liquidityBefore = pool.liquidity();
 
         // Harvest
-        {
-            // Warp forward
-            vm.warp(block.timestamp + HARVEST_FREQUENCY);
+        vm.prank(alice);
+        bunniManager.harvest();
 
-            vm.prank(alice);
-            bunniManager.harvest();
+        // Check that there are less owed fees
+        {
+            _recalculateFees(pool);
+            (uint256 usdcFeeAmount, uint256 ohmFeeAmount) = _getPoolFees(token, usdcAddress);
+
+            assertLt(usdcFeeAmount, usdcFeeAmountBefore, "post-harvest USDC fees should be less");
+            assertLt(ohmFeeAmount, ohmFeeAmountBefore, "post-harvest OHM fees should be less");
         }
+
+        // Pool liquidity has increased
+        assertGt(pool.liquidity(), liquidityBefore, "post-harvest liquidity did not increase");
+
+        // OHM, USDC not transferred to any of the wallets
+        assertEq(
+            usdc.balanceOf(treasuryAddress),
+            _getStoredTokenBalance(treasuryAddress, usdcAddress),
+            "TRSRY balance of USDC should be same"
+        );
+        assertEq(
+            ohm.balanceOf(treasuryAddress),
+            _getStoredTokenBalance(treasuryAddress, ohmAddress),
+            "TRSRY balance of OHM should be same"
+        );
+        assertEq(usdc.balanceOf(bunniHubAddress), 0, "bunniHub balance of USDC should be 0");
+        assertEq(ohm.balanceOf(bunniHubAddress), 0, "bunniHub balance of OHM should be 0");
+        assertEq(
+            usdc.balanceOf(bunniManagerAddress),
+            0,
+            "bunniManager balance of USDC should be 0"
+        );
+        assertEq(ohm.balanceOf(bunniManagerAddress), 0, "bunniManager balance of OHM should be 0");
+        assertEq(
+            usdc.balanceOf(policy),
+            _getStoredTokenBalance(policy, usdcAddress),
+            "policy wallet balance of USDC should be same"
+        );
+        assertEq(
+            ohm.balanceOf(policy),
+            _getStoredTokenBalance(policy, ohmAddress),
+            "policy wallet balance of OHM should be same"
+        );
+        assertEq(
+            usdc.balanceOf(alice),
+            _getStoredTokenBalance(alice, usdcAddress),
+            "alice wallet balance of USDC should be same"
+        );
+
+        // Caller received the OHM reward
+        assertEq(
+            ohm.balanceOf(alice),
+            _getStoredTokenBalance(alice, ohmAddress) + currentReward,
+            "alice wallet balance of OHM should have increased due to reward"
+        );
+
+        // lastHarvest updated
+        assertEq(
+            bunniManager.lastHarvest(),
+            block.timestamp,
+            "lastHarvest should be updated to the current timestamp"
+        );
+    }
+
+    function test_harvest_afterMinimum_fuzz(uint48 elapsed_) public {
+        uint48 elapsed = uint48(bound(elapsed_, 1, HARVEST_FREQUENCY));
+
+        IBunniToken token;
+        {
+            uint256 USDC_DEPOSIT = (10_000_000e6 * OHM_USDC_PRICE) / 1e18; // Ensures that the token amounts are in the correct ratio
+            uint256 OHM_DEPOSIT = 10_000_000e9;
+
+            // Deploy the token
+            vm.prank(policy);
+            token = bunniManager.deployPoolToken(address(pool));
+
+            // Mint the non-OHM token to the TRSRY
+            usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+            // Deposit
+            vm.prank(policy);
+            bunniManager.deposit(
+                address(pool),
+                ohmAddress,
+                OHM_DEPOSIT,
+                USDC_DEPOSIT,
+                SLIPPAGE_DEFAULT
+            );
+        }
+
+        // Perform the swap
+        {
+            uint256 swapAmountUsdcIn = 1_000_000e6;
+
+            // Mint USDC into another wallet
+            usdc.mint(alice, swapAmountUsdcIn);
+
+            // Swap USDC for OHM
+            uint256 ohmAmountOut = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
+
+            // Swap OHM for USDC
+            _swap(pool, ohmAddress, usdcAddress, alice, ohmAmountOut, OHM_USDC_PRICE);
+        }
+
+        // Store balances for comparison
+        _storeTokenBalance(treasuryAddress, usdcAddress);
+        _storeTokenBalance(treasuryAddress, ohmAddress);
+        _storeTokenBalance(policy, usdcAddress);
+        _storeTokenBalance(policy, ohmAddress);
+        _storeTokenBalance(alice, usdcAddress);
+        _storeTokenBalance(alice, ohmAddress);
+
+        // Warp forward
+        vm.warp(block.timestamp + HARVEST_FREQUENCY + elapsed);
+
+        // Determine the reward to be given
+        uint256 currentReward;
+        uint256 usdcFeeAmountBefore;
+        uint256 ohmFeeAmountBefore;
+        {
+            _recalculateFees(pool);
+            currentReward = bunniManager.getCurrentHarvestReward();
+
+            (uint256 usdcFeeAmountBefore_, uint256 ohmFeeAmountBefore_) = _getPoolFees(
+                token,
+                usdcAddress
+            );
+            usdcFeeAmountBefore = usdcFeeAmountBefore_;
+            ohmFeeAmountBefore = ohmFeeAmountBefore_;
+        }
+
+        // Reward should be non-zero
+        assertGt(currentReward, 0, "currentReward should be non-zero");
+
+        // Get current liquidity
+        uint128 liquidityBefore = pool.liquidity();
+
+        // Harvest
+        vm.prank(alice);
+        bunniManager.harvest();
 
         // Check that there are less owed fees
         {
@@ -2958,6 +3102,9 @@ contract BunniManagerTest is Test {
         _storeTokenBalance(alice, usdcAddress);
         _storeTokenBalance(alice, ohmAddress);
 
+        // Warp forward
+        vm.warp(block.timestamp + HARVEST_FREQUENCY);
+
         // Determine the reward to be given
         uint256 currentReward;
         uint256 poolOneUsdcFeeAmountBefore;
@@ -2989,13 +3136,8 @@ contract BunniManagerTest is Test {
         uint128 poolTwoLiquidityBefore = poolTwo.liquidity();
 
         // Harvest
-        {
-            // Warp forward
-            vm.warp(block.timestamp + HARVEST_FREQUENCY);
-
-            vm.prank(alice);
-            bunniManager.harvest();
-        }
+        vm.prank(alice);
+        bunniManager.harvest();
 
         // Check that there are less owed fees for the first pool
         {
@@ -3160,24 +3302,97 @@ contract BunniManagerTest is Test {
 
     function test_getCurrentHarvestReward_beforeFrequency(uint48 elapsed_) public {
         uint48 elapsed = uint48(bound(elapsed_, 0, HARVEST_FREQUENCY - 1));
+
+        IBunniToken token;
+        {
+            uint256 USDC_DEPOSIT = (10_000_000e6 * OHM_USDC_PRICE) / 1e18; // Ensures that the token amounts are in the correct ratio
+            uint256 OHM_DEPOSIT = 10_000_000e9;
+
+            // Deploy the token
+            vm.prank(policy);
+            token = bunniManager.deployPoolToken(address(pool));
+
+            // Mint the non-OHM token to the TRSRY
+            usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+            // Deposit
+            vm.prank(policy);
+            bunniManager.deposit(
+                address(pool),
+                ohmAddress,
+                OHM_DEPOSIT,
+                USDC_DEPOSIT,
+                SLIPPAGE_DEFAULT
+            );
+        }
+
+        // Perform the swap
+        {
+            uint256 swapAmountUsdcIn = 1_000_000e6;
+
+            // Mint USDC into another wallet
+            usdc.mint(alice, swapAmountUsdcIn);
+
+            // Swap USDC for OHM
+            uint256 ohmAmountOut = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
+
+            // Swap OHM for USDC
+            _swap(pool, ohmAddress, usdcAddress, alice, ohmAmountOut, OHM_USDC_PRICE);
+        }
+
+        _recalculateFees(pool);
+
         // Simulate time passing
         vm.warp(block.timestamp + elapsed);
 
         uint256 currentReward = bunniManager.getCurrentHarvestReward();
 
         // Should remain 0
-        assertEq(currentReward, 0);
+        assertEq(currentReward, 0, "current reward");
     }
 
     function test_getCurrentHarvestReward_noFees() public {
+        IBunniToken token;
+        {
+            uint256 USDC_DEPOSIT = (10_000_000e6 * OHM_USDC_PRICE) / 1e18; // Ensures that the token amounts are in the correct ratio
+            uint256 OHM_DEPOSIT = 10_000_000e9;
+
+            // Deploy the token
+            vm.prank(policy);
+            token = bunniManager.deployPoolToken(address(pool));
+
+            // Mint the non-OHM token to the TRSRY
+            usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+            // Deposit
+            vm.prank(policy);
+            bunniManager.deposit(
+                address(pool),
+                ohmAddress,
+                OHM_DEPOSIT,
+                USDC_DEPOSIT,
+                SLIPPAGE_DEFAULT
+            );
+        }
+
+        // No swap
+
         // Call
         uint256 currentReward = bunniManager.getCurrentHarvestReward();
 
         // As no swaps have been done, there are no fees
-        assertEq(currentReward, 0);
+        assertEq(currentReward, 0, "current reward");
     }
 
-    function test_getCurrentHarvestReward(uint256 swapAmount_) public {
+    function test_getCurrentHarvestReward(uint48 elapsed_, uint256 swapAmount_) public {
+        uint48 elapsed = uint48(bound(elapsed_, HARVEST_FREQUENCY, HARVEST_FREQUENCY * 2));
         uint256 swapAmountUsdcIn = bound(swapAmount_, 100_000e6, 5_000_000e6);
 
         IBunniToken token;
@@ -3246,11 +3461,14 @@ contract BunniManagerTest is Test {
             expectedRewardOhm = HARVEST_REWARD;
         }
 
+        // Warp forward
+        vm.warp(block.timestamp + elapsed);
+
         // Call
         uint256 currentReward = bunniManager.getCurrentHarvestReward();
 
         // Check that the value is consistent
-        assertEq(currentReward, expectedRewardOhm);
+        assertEq(currentReward, expectedRewardOhm, "expected reward");
     }
 
     // [X] harvestFrequency
