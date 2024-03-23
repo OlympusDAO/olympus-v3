@@ -138,9 +138,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice         Emitted if the position is not managed by this policy
     ///
+    /// @param pool_        The address of the Uniswap V3 pool
+    /// @param lowerTick_   The lower tick of the position
+    /// @param upperTick_   The upper tick of the position
+    error BunniManager_PositionNotFound(address pool_, int24 lowerTick_, int24 upperTick_);
+
+    /// @notice         Emitted if the position is not managed by this policy
+    ///
     /// @param pool_    The address of the Uniswap V3 pool
     /// @param id_      The id of the position
-    error BunniManager_PositionNotFound(address pool_, uint256 id_);
+    error BunniManager_PositionIdNotFound(address pool_, uint256 id_);
 
     /// @notice         Emitted if the position has no liquidity (when it should)
     ///
@@ -766,7 +773,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             BunniKey memory key = positions[pool_][i];
             if (key.tickLower == tickLower_ && key.tickUpper == tickUpper_) return i;
         }
-        revert BunniManager_PositionNotFound(pool_, 0);
+        revert BunniManager_PositionNotFound(pool_, tickLower_, tickUpper_);
     }
 
     /// @inheritdoc IBunniManager
@@ -948,7 +955,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         IBunniToken token = bunniHub.getBunniToken(key_);
 
         // Ensure the token exists
-        if (address(token) == address(0)) revert BunniManager_PositionNotFound(pool_, id_);
+        if (address(token) == address(0)) revert BunniManager_PositionIdNotFound(pool_, id_);
 
         return token;
     }
@@ -961,7 +968,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param id_      The ID representing the position in the pool
     /// @return         The BunniKey for the position
     function _getPositionKey(address pool_, uint256 id_) internal view returns (BunniKey memory) {
-        if (positionCount[pool_] <= id_) revert BunniManager_PositionNotFound(pool_, id_);
+        if (positionCount[pool_] <= id_) revert BunniManager_PositionIdNotFound(pool_, id_);
 
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = positions[pool_][id_];

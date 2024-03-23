@@ -351,9 +351,23 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
-    function _expectRevert_positionNotFound(address pool_, uint256 id_) internal {
+    function _expectRevert_positionNotFound(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    ) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniManager.BunniManager_PositionNotFound.selector,
+            pool_,
+            tickLower_,
+            tickUpper_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_positionIdNotFound(address pool_, uint256 id_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_PositionIdNotFound.selector,
             pool_,
             id_
         );
@@ -774,7 +788,7 @@ contract BunniManagerTest is Test {
         newBunniManager.setBunniLens(bunniLensAddress);
 
         // Expect an error, as no token has been deployed against the old manager
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         // Register the pool with the new policy
         vm.prank(policy);
@@ -1516,7 +1530,7 @@ contract BunniManagerTest is Test {
     }
 
     function testRevert_activatePoolToken_tokenNotDeployed() public {
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         vm.prank(policy);
         bunniManager.activatePositionToken(
@@ -2035,7 +2049,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_deactivatePoolToken_tokenNotDeployedReverts() public {
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         vm.prank(policy);
         bunniManager.deactivatePositionToken(address(pool), 0);
@@ -2237,7 +2251,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_deposit_tokenNotDeployedReverts() public {
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         vm.prank(policy);
         bunniManager.deposit(address(pool), 0, ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
@@ -2534,7 +2548,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_withdraw_tokenNotDeployedReverts() public {
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         vm.prank(policy);
         bunniManager.withdraw(address(pool), 0, 1e18, SLIPPAGE_DEFAULT);
@@ -2740,7 +2754,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_getPoolToken_tokenNotDeployedReverts() public {
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         bunniManager.getPositionToken(address(pool), 0);
     }
@@ -2781,7 +2795,7 @@ contract BunniManagerTest is Test {
     //  [X] returns token struct
     //  [X] returns even if inactive
 
-    function test_getPositionID_tokenNotDeployedReverts() public {
+    function testRevert_getPositionID_tokenNotDeployed() public {
         // Create a new BunniManager policy, without the BunniHub set
         BunniManager newBunniManager = _setUpNewBunniManager();
 
@@ -2791,7 +2805,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniLens(bunniLensAddress);
 
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionNotFound(address(pool), -TICK, TICK);
 
         newBunniManager.getPositionId(address(pool), -TICK, TICK);
     }
@@ -2845,7 +2859,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_getPoolTokenBalance_tokenNotDeployedReverts() public {
-        _expectRevert_positionNotFound(address(pool), 0);
+        _expectRevert_positionIdNotFound(address(pool), 0);
 
         bunniManager.getPositionTokenBalance(address(pool), 0);
     }
