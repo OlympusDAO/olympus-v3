@@ -2776,6 +2776,59 @@ contract BunniManagerTest is Test {
         assertEq(token.tickUpper(), TICK);
     }
 
+    // [X] getPoolToken
+    //  [X] token is not deployed
+    //  [X] returns token struct
+    //  [X] returns even if inactive
+
+    function test_getPositionID_tokenNotDeployedReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniLens(bunniLensAddress);
+
+        _expectRevert_positionNotFound(address(pool), 0);
+
+        newBunniManager.getPositionId(address(pool), -TICK, TICK);
+    }
+
+    function test_getPositionID() public {
+        int24 CONC_TICK = ((TICK / 2) / pool.tickSpacing()) * pool.tickSpacing();
+
+        // Deploy the tokens
+        vm.startPrank(policy);
+        bunniManager.deployFullRangeToken(address(pool));
+        bunniManager.deployConcentratedToken(address(pool), -CONC_TICK, CONC_TICK);
+        vm.stopPrank();
+
+        // Check return values
+        assertEq(bunniManager.getPositionId(address(pool), -TICK, TICK), 0);
+
+        assertEq(bunniManager.getPositionId(address(pool), -CONC_TICK, CONC_TICK), 1);
+    }
+
+    function test_getPositionID_inactive() public {
+        int24 CONC_TICK = ((TICK / 2) / pool.tickSpacing()) * pool.tickSpacing();
+
+        // Deploy the tokens
+        vm.startPrank(policy);
+        bunniManager.deployFullRangeToken(address(pool));
+        bunniManager.deployConcentratedToken(address(pool), -CONC_TICK, CONC_TICK);
+        vm.stopPrank();
+
+        // Disable the policy
+        kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
+
+        // Check return values
+        assertEq(bunniManager.getPositionId(address(pool), -TICK, TICK), 0);
+
+        assertEq(bunniManager.getPositionId(address(pool), -CONC_TICK, CONC_TICK), 1);
+    }
+
     // [X] getPoolTokenBalance
     //  [X] bunniHub is not set
     //  [X] token is not deployed

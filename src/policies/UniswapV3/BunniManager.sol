@@ -755,6 +755,22 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
+    /// @dev        - The position (combination of pool and tick range) is not found
+    function getPositionId(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    ) external view returns (uint256) {
+        uint256 numPositions = positionCount[pool_];
+        for (uint256 i = 0; i < numPositions; i++) {
+            BunniKey memory key = positions[pool_][i];
+            if (key.tickLower == tickLower_ && key.tickUpper == tickUpper_) return i;
+        }
+        revert BunniManager_PositionNotFound(pool_, 0);
+    }
+
+    /// @inheritdoc IBunniManager
+    /// @dev        This function reverts if:
     /// @dev        - The `bunniHub` state variable is not set
     /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
     function getPositionTokenBalance(

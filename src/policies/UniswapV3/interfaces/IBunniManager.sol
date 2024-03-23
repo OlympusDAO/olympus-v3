@@ -160,6 +160,18 @@ interface IBunniManager {
     /// @return token   The ERC20-compatible BunniToken
     function getPositionToken(address pool_, uint256 id_) external view returns (IBunniToken token);
 
+    /// @notice             Get the position ID for the given Uniswap V3 pool and its tick range
+    ///
+    /// @param pool_        The address of the Uniswap V3 pool
+    /// @param tickLower_   The lower tick of the position
+    /// @param tickUpper_   The upper tick of the position
+    /// @return id          The id of the position within the pool
+    function getPositionId(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    ) external view returns (uint256 id);
+
     /// @notice         Gets the balance in TRSRY of the ERC20 token for the given Uniswap V3 pool address
     ///
     /// @param pool_    The address of the Uniswap V3 pool
