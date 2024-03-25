@@ -10,7 +10,7 @@ import {MockStaking} from "test/mocks/MockStaking.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-import {RolesAdmin, Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "olympus-v3/policies/RolesAdmin.sol";
+import {RolesAdmin, Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusMinter, MINTRv1} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury, TRSRYv1} from "modules/TRSRY/OlympusTreasury.sol";
