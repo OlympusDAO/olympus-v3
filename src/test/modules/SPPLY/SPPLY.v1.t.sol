@@ -1439,15 +1439,24 @@ contract SupplyTest is Test {
         assertEq(supply, 100e9);
     }
 
-    function test_getSupplyByCategory_maxAge_zero_reverts() public {
-        uint48 maxAge = 0;
+    function test_getSupplyByCategory_maxAge_zero() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
 
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
-        vm.expectRevert(err);
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
 
-        // Get supply
-        moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), maxAge);
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Check supply - should not use the cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 0);
+        assertEq(supply, 200e9);
     }
 
     function test_getSupplyByCategory_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
@@ -2170,17 +2179,29 @@ contract SupplyTest is Test {
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
     }
 
-    function test_getMetric_maxAge_zero_reverts() public {
-        uint48 maxAge = 0;
-
+    function test_getMetric_maxAge_zero() public {
         _setupMetricLocations();
 
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
-        vm.expectRevert(err);
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.TOTAL_SUPPLY);
+        vm.stopPrank();
 
         // Get metric
-        moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, maxAge);
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.TOTAL_SUPPLY, 0);
+        assertEq(metric, TOTAL_OHM);
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Get metric
+        metric = moduleSupply.getMetric(SPPLYv1.Metric.TOTAL_SUPPLY, 0);
+
+        // Should NOT use the cached value
+        assertEq(metric, TOTAL_OHM + 100e9);
     }
 
     function test_getMetric_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
