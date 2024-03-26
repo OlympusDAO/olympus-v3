@@ -111,14 +111,12 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     /// @dev        Will revert if:
-    /// @dev        - The max age is zero
     /// @dev        - The max age is greater than the current timestamp
     function getAssetValue(
         address asset_,
         uint48 maxAge_
     ) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ == 0) revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
         if (maxAge_ >= uint48(block.timestamp))
             revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
 
@@ -182,14 +180,12 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     /// @dev        Will revert if:
-    /// @dev        - The max age is zero
     /// @dev        - The max age is greater than the current timestamp
     function getCategoryValue(
         TreasuryCategory category_,
         uint48 maxAge_
     ) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ == 0) revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
         if (maxAge_ >= uint48(block.timestamp))
             revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
 
@@ -263,11 +259,9 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     /// @dev        Will revert if:
-    /// @dev        - The max age is zero
     /// @dev        - The max age is greater than the current timestamp
     function getMetric(Metric metric_, uint48 maxAge_) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ == 0) revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
         if (maxAge_ >= uint48(block.timestamp))
             revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
 
