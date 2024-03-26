@@ -88,7 +88,9 @@ interface IBondAuctioneer {
     /// @return quoteToken      Quote Token (token received) for the Market
     /// @return vesting         Timestamp or duration for vesting, implementation-dependent
     /// @return maxPayout       Maximum amount of payout tokens you can purchase in one transaction
-    function getMarketInfoForPurchase(uint256 id_)
+    function getMarketInfoForPurchase(
+        uint256 id_
+    )
         external
         view
         returns (

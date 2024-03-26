@@ -92,9 +92,10 @@ interface IOperator {
     /// @notice Set the wall and cushion spreads
     /// @notice Access restricted
     /// @dev    Interface for externally setting these values on the RANGE module
+    /// @param  high_ - Whether to set the spreads for the high or low side (true = high, false = low)
     /// @param  cushionSpread_ - Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%)
     /// @param  wallSpread_ - Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%)
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external;
+    function setSpreads(bool high_, uint256 cushionSpread_, uint256 wallSpread_) external;
 
     /// @notice Set the threshold factor for when a wall is considered "down"
     /// @notice Access restricted
@@ -129,11 +130,7 @@ interface IOperator {
     /// @param  threshold_ - Number of price points on other side of moving average to reinstate a wall
     /// @param  observe_ - Number of price points to observe to determine regeneration
     /// @dev    We must see Threshold number of price points that meet our criteria within the last Observe number of price points to regenerate a wall.
-    function setRegenParams(
-        uint32 wait_,
-        uint32 threshold_,
-        uint32 observe_
-    ) external;
+    function setRegenParams(uint32 wait_, uint32 threshold_, uint32 observe_) external;
 
     /// @notice Set the contracts that the Operator deploys bond markets with.
     /// @notice Access restricted

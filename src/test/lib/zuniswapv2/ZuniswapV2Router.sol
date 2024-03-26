@@ -26,14 +26,7 @@ contract ZuniswapV2Router {
         uint256 amountAMin,
         uint256 amountBMin,
         address to
-    )
-        public
-        returns (
-            uint256 amountA,
-            uint256 amountB,
-            uint256 liquidity
-        )
-    {
+    ) public returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
         if (factory.pairs(tokenA, tokenB) == address(0)) {
             factory.createPair(tokenA, tokenB);
         }
@@ -108,11 +101,7 @@ contract ZuniswapV2Router {
     //
     //
     //
-    function _swap(
-        uint256[] memory amounts,
-        address[] memory path,
-        address to_
-    ) internal {
+    function _swap(uint256[] memory amounts, address[] memory path, address to_) internal {
         for (uint256 i; i < path.length - 1; i++) {
             (address input, address output) = (path[i], path[i + 1]);
             (address token0, ) = ZuniswapV2Library.sortTokens(input, output);
@@ -167,12 +156,7 @@ contract ZuniswapV2Router {
         }
     }
 
-    function _safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 value
-    ) private {
+    function _safeTransferFrom(address token, address from, address to, uint256 value) private {
         (bool success, bytes memory data) = token.call(
             abi.encodeWithSignature("transferFrom(address,address,uint256)", from, to, value)
         );

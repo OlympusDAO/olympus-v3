@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {RANGEv1} from "src/modules/RANGE/RANGE.v1.sol";
+import {RANGEv2} from "src/modules/RANGE/RANGE.v2.sol";
 import "src/Kernel.sol";
 
 /// @notice Olympus Range data storage module
@@ -10,7 +10,7 @@ import "src/Kernel.sol";
 ///         It provides a standard interface for Range data, including range prices and capacities of each range side.
 ///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
-contract OlympusRange is RANGEv1 {
+contract OlympusRange is RANGEv2 {
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
     uint256 public constant ONE_PERCENT = 1e2;
 
@@ -23,16 +23,16 @@ contract OlympusRange is RANGEv1 {
         ERC20 ohm_,
         ERC20 reserve_,
         uint256 thresholdFactor_,
-        uint256 cushionSpread_,
-        uint256 wallSpread_
+        uint256[2] memory lowSpreads_, // [cushion, wall]
+        uint256[2] memory highSpreads_ // [cushion, wall]
     ) Module(kernel_) {
         // Validate parameters
         if (
-            wallSpread_ >= ONE_HUNDRED_PERCENT ||
-            wallSpread_ < ONE_PERCENT ||
-            cushionSpread_ >= ONE_HUNDRED_PERCENT ||
-            cushionSpread_ < ONE_PERCENT ||
-            cushionSpread_ > wallSpread_ ||
+            lowSpreads_[0] < ONE_PERCENT ||
+            lowSpreads_[1] >= ONE_HUNDRED_PERCENT ||
+            lowSpreads_[0] > lowSpreads_[1] ||
+            highSpreads_[0] < ONE_PERCENT ||
+            highSpreads_[0] > highSpreads_[1] ||
             thresholdFactor_ >= ONE_HUNDRED_PERCENT ||
             thresholdFactor_ < ONE_PERCENT
         ) revert RANGE_InvalidParams();
@@ -43,24 +43,27 @@ contract OlympusRange is RANGEv1 {
                 lastActive: uint48(block.timestamp),
                 capacity: 0,
                 threshold: 0,
-                market: type(uint256).max
+                market: type(uint256).max,
+                cushion: Line({price: 0, spread: lowSpreads_[0]}),
+                wall: Line({price: 0, spread: lowSpreads_[1]})
             }),
             high: Side({
                 active: false,
                 lastActive: uint48(block.timestamp),
                 capacity: 0,
                 threshold: 0,
-                market: type(uint256).max
-            }),
-            cushion: Band({low: Line({price: 0}), high: Line({price: 0}), spread: cushionSpread_}),
-            wall: Band({low: Line({price: 0}), high: Line({price: 0}), spread: wallSpread_})
+                market: type(uint256).max,
+                cushion: Line({price: 0, spread: highSpreads_[0]}),
+                wall: Line({price: 0, spread: highSpreads_[1]})
+            })
         });
 
         thresholdFactor = thresholdFactor_;
         ohm = ohm_;
         reserve = reserve_;
 
-        emit SpreadsChanged(cushionSpread_, wallSpread_);
+        emit SpreadsChanged(false, lowSpreads_[0], lowSpreads_[1]);
+        emit SpreadsChanged(true, highSpreads_[0], highSpreads_[1]);
         emit ThresholdFactorChanged(thresholdFactor_);
     }
 
@@ -71,7 +74,7 @@ contract OlympusRange is RANGEv1 {
 
     /// @inheritdoc Module
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        major = 1;
+        major = 2;
         minor = 0;
     }
 
@@ -79,7 +82,7 @@ contract OlympusRange is RANGEv1 {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function updateCapacity(bool high_, uint256 capacity_) external override permissioned {
         if (high_) {
             // Update capacity
@@ -108,63 +111,52 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
-    function updatePrices(uint256 movingAverage_) external override permissioned {
-        // Cache the spreads
-        uint256 wallSpread = _range.wall.spread;
-        uint256 cushionSpread = _range.cushion.spread;
-
-        // Calculate new wall and cushion values from moving average and spread
-        _range.wall.low.price =
-            (movingAverage_ * (ONE_HUNDRED_PERCENT - wallSpread)) /
+    /// @inheritdoc RANGEv2
+    function updatePrices(uint256 target_) external override permissioned {
+        // Calculate new wall and cushion values from target and spreads
+        _range.low.wall.price =
+            (target_ * (ONE_HUNDRED_PERCENT - _range.low.wall.spread)) /
             ONE_HUNDRED_PERCENT;
-        _range.wall.high.price =
-            (movingAverage_ * (ONE_HUNDRED_PERCENT + wallSpread)) /
+        _range.low.cushion.price =
+            (target_ * (ONE_HUNDRED_PERCENT - _range.low.cushion.spread)) /
             ONE_HUNDRED_PERCENT;
-
-        _range.cushion.low.price =
-            (movingAverage_ * (ONE_HUNDRED_PERCENT - cushionSpread)) /
+        _range.high.cushion.price =
+            (target_ * (ONE_HUNDRED_PERCENT + _range.high.cushion.spread)) /
             ONE_HUNDRED_PERCENT;
-        _range.cushion.high.price =
-            (movingAverage_ * (ONE_HUNDRED_PERCENT + cushionSpread)) /
+        _range.high.wall.price =
+            (target_ * (ONE_HUNDRED_PERCENT + _range.high.wall.spread)) /
             ONE_HUNDRED_PERCENT;
 
         emit PricesChanged(
-            _range.wall.low.price,
-            _range.cushion.low.price,
-            _range.cushion.high.price,
-            _range.wall.high.price
+            _range.low.wall.price,
+            _range.low.cushion.price,
+            _range.high.cushion.price,
+            _range.high.wall.price
         );
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function regenerate(bool high_, uint256 capacity_) external override permissioned {
         uint256 threshold = (capacity_ * thresholdFactor) / ONE_HUNDRED_PERCENT;
 
         if (high_) {
             // Re-initialize the high side
-            _range.high = Side({
-                active: true,
-                lastActive: uint48(block.timestamp),
-                capacity: capacity_,
-                threshold: threshold,
-                market: _range.high.market
-            });
+            _range.high.active = true;
+            _range.high.lastActive = uint48(block.timestamp);
+            _range.high.capacity = capacity_;
+            _range.high.threshold = threshold;
         } else {
             // Reinitialize the low side
-            _range.low = Side({
-                active: true,
-                lastActive: uint48(block.timestamp),
-                capacity: capacity_,
-                threshold: threshold,
-                market: _range.low.market
-            });
+            _range.low.active = true;
+            _range.low.lastActive = uint48(block.timestamp);
+            _range.low.capacity = capacity_;
+            _range.low.threshold = threshold;
         }
 
         emit WallUp(high_, block.timestamp, capacity_);
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function updateMarket(
         bool high_,
         uint256 market_,
@@ -187,29 +179,35 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
-        external
-        override
-        permissioned
-    {
+    /// @inheritdoc RANGEv2
+    function setSpreads(
+        bool high_,
+        uint256 cushionSpread_,
+        uint256 wallSpread_
+    ) external override permissioned {
         // Confirm spreads are within allowed values
-        if (
-            wallSpread_ >= ONE_HUNDRED_PERCENT ||
-            wallSpread_ < ONE_PERCENT ||
-            cushionSpread_ >= ONE_HUNDRED_PERCENT ||
-            cushionSpread_ < ONE_PERCENT ||
-            cushionSpread_ > wallSpread_
-        ) revert RANGE_InvalidParams();
+        if (cushionSpread_ < ONE_PERCENT || cushionSpread_ > wallSpread_)
+            revert RANGE_InvalidParams();
 
-        // Set spreads
-        _range.wall.spread = wallSpread_;
-        _range.cushion.spread = cushionSpread_;
+        if (high_) {
+            // No upper limit on high side
 
-        emit SpreadsChanged(cushionSpread_, wallSpread_);
+            // Set spreads
+            _range.high.wall.spread = wallSpread_;
+            _range.high.cushion.spread = cushionSpread_;
+        } else {
+            // Confirm spreads are within allowed values
+            if (wallSpread_ >= ONE_HUNDRED_PERCENT) revert RANGE_InvalidParams();
+
+            // Set spreads
+            _range.low.wall.spread = wallSpread_;
+            _range.low.cushion.spread = cushionSpread_;
+        }
+
+        emit SpreadsChanged(high_, cushionSpread_, wallSpread_);
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function setThresholdFactor(uint256 thresholdFactor_) external override permissioned {
         if (thresholdFactor_ >= ONE_HUNDRED_PERCENT || thresholdFactor_ < ONE_PERCENT)
             revert RANGE_InvalidParams();
@@ -222,12 +220,12 @@ contract OlympusRange is RANGEv1 {
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function range() external view override returns (Range memory) {
         return _range;
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function capacity(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.capacity;
@@ -236,7 +234,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function active(bool high_) external view override returns (bool) {
         if (high_) {
             return _range.high.active;
@@ -245,33 +243,41 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
-    function price(bool wall_, bool high_) external view override returns (uint256) {
-        if (wall_) {
-            if (high_) {
-                return _range.wall.high.price;
+    /// @inheritdoc RANGEv2
+    function price(bool high_, bool wall_) external view override returns (uint256) {
+        if (high_) {
+            if (wall_) {
+                return _range.high.wall.price;
             } else {
-                return _range.wall.low.price;
+                return _range.high.cushion.price;
             }
         } else {
-            if (high_) {
-                return _range.cushion.high.price;
+            if (wall_) {
+                return _range.low.wall.price;
             } else {
-                return _range.cushion.low.price;
+                return _range.low.cushion.price;
             }
         }
     }
 
-    /// @inheritdoc RANGEv1
-    function spread(bool wall_) external view override returns (uint256) {
-        if (wall_) {
-            return _range.wall.spread;
+    /// @inheritdoc RANGEv2
+    function spread(bool high_, bool wall_) external view override returns (uint256) {
+        if (high_) {
+            if (wall_) {
+                return _range.high.wall.spread;
+            } else {
+                return _range.high.cushion.spread;
+            }
         } else {
-            return _range.cushion.spread;
+            if (wall_) {
+                return _range.low.wall.spread;
+            } else {
+                return _range.low.cushion.spread;
+            }
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function market(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.market;
@@ -280,7 +286,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function lastActive(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.lastActive;

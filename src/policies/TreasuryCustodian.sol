@@ -18,7 +18,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
     // =========  ERRORS ========= //
 
-    error PolicyStillActive();
+    error Custodian_PolicyStillActive();
 
     // =========  STATE ========= //
 
@@ -38,6 +38,14 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1]);
+        if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -124,11 +132,11 @@ contract TreasuryCustodian is Policy, RolesConsumer {
     }
 
     /// @notice Anyone can call to revoke a deactivated policy's approvals.
-    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_)
-        external
-        onlyRole("custodian")
-    {
-        if (Policy(policy_).isActive()) revert PolicyStillActive();
+    function revokePolicyApprovals(
+        address policy_,
+        ERC20[] memory tokens_
+    ) external onlyRole("custodian") {
+        if (Policy(policy_).isActive()) revert Custodian_PolicyStillActive();
 
         uint256 len = tokens_.length;
         for (uint256 j; j < len; ) {

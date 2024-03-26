@@ -110,9 +110,9 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(from_), 0);
     }
 
-    function testRevert_ApprovedAddressCannotBurnFromAddressWithoutApproval(uint256 amount_)
-        public
-    {
+    function testRevert_ApprovedAddressCannotBurnFromAddressWithoutApproval(
+        uint256 amount_
+    ) public {
         vm.assume(amount_ != 0);
 
         // Setup: mint ohm into user0

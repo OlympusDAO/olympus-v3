@@ -42,7 +42,7 @@ contract OlympusPrice is PRICEv1 {
 
         uint256 exponent = decimals + reserveEthDecimals - ohmEthDecimals;
         if (exponent > 38) revert Price_InvalidParams();
-        _scaleFactor = 10**exponent;
+        _scaleFactor = 10 ** exponent;
 
         // Set parameters and calculate number of observations
         observationFrequency = observationFrequency_;
@@ -103,11 +103,10 @@ contract OlympusPrice is PRICEv1 {
     }
 
     /// @inheritdoc PRICEv1
-    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
-        external
-        override
-        permissioned
-    {
+    function initialize(
+        uint256[] memory startObservations_,
+        uint48 lastObservationTime_
+    ) external override permissioned {
         if (initialized) revert Price_AlreadyInitialized();
 
         // Cache numObservations to save gas.
@@ -135,11 +134,9 @@ contract OlympusPrice is PRICEv1 {
     }
 
     /// @inheritdoc PRICEv1
-    function changeMovingAverageDuration(uint48 movingAverageDuration_)
-        external
-        override
-        permissioned
-    {
+    function changeMovingAverageDuration(
+        uint48 movingAverageDuration_
+    ) external override permissioned {
         // Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
             revert Price_InvalidParams();
@@ -162,11 +159,9 @@ contract OlympusPrice is PRICEv1 {
     }
 
     /// @inheritdoc PRICEv1
-    function changeObservationFrequency(uint48 observationFrequency_)
-        external
-        override
-        permissioned
-    {
+    function changeObservationFrequency(
+        uint48 observationFrequency_
+    ) external override permissioned {
         // Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (observationFrequency_ == 0 || movingAverageDuration % observationFrequency_ != 0)
             revert Price_InvalidParams();

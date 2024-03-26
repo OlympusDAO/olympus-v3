@@ -108,8 +108,10 @@ abstract contract Module is KernelAdapter {
 
     /// @notice Modifier to restrict which policies have access to module functions.
     modifier permissioned() {
-        if (!kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig))
-            revert Module_PolicyNotPermitted(msg.sender);
+        if (
+            msg.sender == address(kernel) ||
+            !kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig)
+        ) revert Module_PolicyNotPermitted(msg.sender);
         _;
     }
 
@@ -132,6 +134,7 @@ abstract contract Module is KernelAdapter {
 /// @dev    Module dependencies and function permissions must be defined in appropriate functions.
 abstract contract Policy is KernelAdapter {
     error Policy_ModuleDoesNotExist(Keycode keycode_);
+    error Policy_WrongModuleVersion(bytes expected_);
 
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 

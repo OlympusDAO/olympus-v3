@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
@@ -34,6 +35,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     mapping(address => mapping(uint256 => bool)) public approvedMarkets;
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;
     mapping(ERC20 => uint256) public priorBalances;
+    mapping(address => address) public wrapped;
 
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
@@ -47,11 +49,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(
-        Kernel kernel_,
-        IBondAggregator aggregator_,
-        ERC20 ohm_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, IBondAggregator aggregator_, ERC20 ohm_) Policy(kernel_) {
         aggregator = aggregator_;
         ohm = ohm_;
     }
@@ -66,6 +64,16 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
@@ -89,11 +97,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IBondCallback
-    function whitelist(address teller_, uint256 id_)
-        external
-        override
-        onlyRole("callback_whitelist")
-    {
+    function whitelist(
+        address teller_,
+        uint256 id_
+    ) external override onlyRole("callback_whitelist") {
         // Check that the teller matches the aggregator provided teller for the market ID
         if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
@@ -143,12 +150,22 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
         uint256 toApprove = capacityInQuote ? capacity.mulDiv(scale, minPrice) : capacity;
 
-        // If payout token is in OHM, request mint approval for the capacity in OHM
+        // If payout token is OHM, request mint approval for the capacity in OHM
         // Otherwise, request withdrawal approval for the capacity from the TRSRY
         if (address(payoutToken) == address(ohm)) {
             MINTR.increaseMintApproval(address(this), toApprove);
         } else {
-            TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
+            if (address(wrappedPayoutToken) == address(0)) {
+                TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
+            } else {
+                // Since TRSRY hold a wrapped version of the payoutToken, a conversion must take place.
+                TRSRY.increaseWithdrawApproval(
+                    address(this),
+                    wrappedPayoutToken,
+                    wrappedPayoutToken.previewWithdraw(toApprove)
+                );
+            }
         }
     }
 
@@ -156,11 +173,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @dev    Shutdown function in case there's an issue with the teller
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
-    function blacklist(address teller_, uint256 id_)
-        external
-        override
-        onlyRole("callback_whitelist")
-    {
+    function blacklist(
+        address teller_,
+        uint256 id_
+    ) external override onlyRole("callback_whitelist") {
         // Check that the teller matches the aggregator provided teller for the market ID
         if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
@@ -193,8 +209,21 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             MINTR.burnOhm(address(this), inputAmount_);
             MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
             // If inverse bond (buying ohm), transfer payout tokens to sender
-            TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+            if (address(wrappedPayoutToken) == address(0)) {
+                TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+            } else {
+                // Since TRSRY hold a wrapped version of the payoutToken, it must be unwrapped first.
+                TRSRY.withdrawReserves(
+                    address(this),
+                    wrappedPayoutToken,
+                    wrappedPayoutToken.previewWithdraw(outputAmount_)
+                );
+
+                // Unwrap reserves and transfer to sender
+                wrappedPayoutToken.withdraw(outputAmount_, msg.sender, address(this));
+            }
 
             // Burn OHM received from sender
             MINTR.burnOhm(address(this), inputAmount_);
@@ -247,17 +276,26 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         operator = operator_;
     }
 
+    /// @notice Inform whether the TRSRY holds the payout token in a naked or a wrapped version
+    /// @dev    Must be called before whitelisting to ensure a proper TRSRY withdraw approval
+    /// @param  payoutToken_ Address of the payout token
+    /// @param  wrappedToken_ Address of the token wrapper held by the TRSRY. If the TRSRY moves
+    ///                       back to the naked token, input address(0) as the wrapped version.
+    function useWrappedVersion(
+        address payoutToken_,
+        address wrappedToken_
+    ) external onlyRole("callback_admin") {
+        wrapped[payoutToken_] = wrappedToken_;
+    }
+
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
     /// @inheritdoc IBondCallback
-    function amountsForMarket(uint256 id_)
-        external
-        view
-        override
-        returns (uint256 in_, uint256 out_)
-    {
+    function amountsForMarket(
+        uint256 id_
+    ) external view override returns (uint256 in_, uint256 out_) {
         uint256[2] memory marketAmounts = _amountsPerMarket[id_];
         return (marketAmounts[0], marketAmounts[1]);
     }
