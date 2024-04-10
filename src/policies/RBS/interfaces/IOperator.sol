@@ -172,7 +172,7 @@ interface IOperator {
     function deactivateCushion(bool high_) external;
 
     /// @notice Set the manual target price
-    /// @dev    If `manualTargetPrice` is 0, the operator will use the manual target price
+    /// @dev    If `manualTargetPrice` is greater than 0, the operator will use the manual target price
     ///
     /// @param  targetPrice_    The new target price
     function setManualTargetPrice(uint256 targetPrice_) external;
@@ -181,7 +181,7 @@ interface IOperator {
 
     /// @notice Returns the Operator's target price
     /// @notice Target price is the maximum of liquid backing per backed ohm and the moving average of OHM against the reserve.
-    /// @dev    If `manualTargetPrice` is 0, the operator will use the manual target price. Otherwise it will use the automated target price determined as above.
+    /// @dev    If `manualTargetPrice` is greater than 0, the operator will use the manual target price. Otherwise it will use the automated target price determined as above.
     /// @dev    During an operate transaction, it is expected that the metric will be updated in the same block, prior to the call.
     ///
     /// @return targetPrice_    The target price
