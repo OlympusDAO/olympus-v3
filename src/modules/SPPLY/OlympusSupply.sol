@@ -659,7 +659,7 @@ contract OlympusSupply is SPPLYv1 {
         // Remove the submodule from the list of submodules for observation
         for (uint256 i; i < submodulesForObservationCount; ) {
             if (fromSubKeycode(submodulesForObservation[i]) == fromSubKeycode(subKeycode_)) {
-                submodulesForObservation[i] = submodulesForObservation[submodules.length - 1];
+                submodulesForObservation[i] = submodulesForObservation[submodulesForObservation.length - 1];
                 submodulesForObservation.pop();
                 break;
             }

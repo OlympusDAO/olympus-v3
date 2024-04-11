@@ -2658,22 +2658,34 @@ contract SupplyTest is Test {
         vm.stopPrank();
     }
 
-    function test_unregisterFromObservations() public {
+    function test_unregisterFromObservations(uint8 index_) public {
+        uint8 index = uint8(bound(index_, 0, 1));
+
+        _setUpSubmodules();
         _installMockSubmodule();
         SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
 
         // Register for observations
         vm.startPrank(writer);
         moduleSupply.registerForObservations(subKeycode);
+        moduleSupply.registerForObservations(submoduleAuraBalancerSupply.SUBKEYCODE());
         vm.stopPrank();
+
+        SubKeycode keycodeToUnregister = index == 0
+            ? subKeycode
+            : submoduleAuraBalancerSupply.SUBKEYCODE();
 
         // Unregister from observations
         vm.startPrank(writer);
-        moduleSupply.unregisterFromObservations(subKeycode);
+        moduleSupply.unregisterFromObservations(keycodeToUnregister);
         vm.stopPrank();
 
         // Check the registration
-        assertEq(moduleSupply.submodulesForObservationCount(), 0);
+        assertEq(moduleSupply.submodulesForObservationCount(), 1);
+        assertEq(
+            fromSubKeycode(moduleSupply.submodulesForObservation(0)),
+            fromSubKeycode(index == 0 ? submoduleAuraBalancerSupply.SUBKEYCODE() : subKeycode)
+        );
     }
 
     // storeObservations
