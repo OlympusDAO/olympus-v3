@@ -122,9 +122,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             revert Policy_WrongModuleVersion(expected);
 
         // Sync heartbeat with staking contract
-        (uint256 epochLength, , uint256 epochEnd, ) = IStaking(distributor.staking()).epoch();
-        if (frequency() != epochLength) revert Heart_InvalidFrequency();
-        lastBeat = uint48(epochEnd - epochLength);
+        if (msg.sender == address(kernel)) _syncBeatWithDistributor();
     }
 
     /// @inheritdoc Policy
@@ -196,6 +194,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
+    function _syncBeatWithDistributor() internal {
+        (uint256 epochLength, , uint256 epochEnd, ) = IStaking(distributor.staking()).epoch();
+        if (frequency() != epochLength) revert Heart_InvalidFrequency();
+        lastBeat = uint48(epochEnd - epochLength);
+    }
+
     function _resetBeat() internal {
         lastBeat = uint48(block.timestamp) - frequency();
     }
@@ -229,6 +233,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function setDistributor(address distributor_) external onlyRole("heart_admin") {
         distributor = IDistributor(distributor_);
+        _syncBeatWithDistributor();
     }
 
     modifier notWhileBeatAvailable() {
