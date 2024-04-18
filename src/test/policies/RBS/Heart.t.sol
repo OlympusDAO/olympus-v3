@@ -233,10 +233,12 @@ contract HeartTest is Test {
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );
 
+        vm.startPrank(address(kernel));
         // Since the staking frequency is different, the call to configureDependencies reverts
         bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidFrequency.selector);
         vm.expectRevert(err);
         heart.configureDependencies();
+        vm.stopPrank();
     }
 
     function test_requestPermissions() public {
@@ -421,6 +423,8 @@ contract HeartTest is Test {
     // DONE
     // [X] resetBeat
     // [X] activate and deactivate
+    // [X] setDistributor
+    //  [X] reverts if unable to sync frequencies
     // [X] setOperator
     // [X] setAppraiser
     // [X] setRewardAuctionParams
@@ -478,6 +482,32 @@ contract HeartTest is Test {
         // Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
         assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
+    }
+
+    function testRevert_setDistributor_invalidFrequency() public {
+        // Deploy mock staking with different frequency
+        staking = new MockStakingZD(7 hours, 0, block.timestamp);
+        distributor = new ZeroDistributor(address(staking));
+        staking.setDistributor(address(distributor));
+
+        vm.startPrank(policy);
+        // Since the staking frequency is different, the call to configureDependencies reverts
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidFrequency.selector);
+        vm.expectRevert(err);
+        heart.setDistributor(address(distributor));
+        vm.stopPrank();
+    }
+
+    function testCorrectness_setDistributor() public {
+        // Use same staking contract for the new distributor
+        address newDistributor = address(new ZeroDistributor(address(staking)));
+        staking.setDistributor(newDistributor);
+
+        vm.prank(policy);
+        heart.setDistributor(newDistributor);
+
+        // Check that the distributor has been updated
+        assertEq(address(heart.distributor()), newDistributor);
     }
 
     function testCorrectness_setOperator(address newOperator) public {
@@ -589,7 +619,7 @@ contract HeartTest is Test {
         assertEq(newHeart.getMovingAverageAssetsCount(), 3, "asset count");
     }
 
-    function testReverts_constructor_movingAverageAssets_duplicate() public {
+    function testRevert_constructor_movingAverageAssets_duplicate() public {
         address[] memory movingAverageAssets = new address[](3);
         movingAverageAssets[0] = address(ohm);
         movingAverageAssets[1] = address(reserve);
@@ -610,7 +640,7 @@ contract HeartTest is Test {
         );
     }
 
-    function testReverts_constructor_movingAverageAssets_zeroAddress() public {
+    function testRevert_constructor_movingAverageAssets_zeroAddress() public {
         address[] memory movingAverageAssets = new address[](3);
         movingAverageAssets[0] = address(ohm);
         movingAverageAssets[1] = address(reserve);
@@ -631,7 +661,7 @@ contract HeartTest is Test {
         );
     }
 
-    function testReverts_addMovingAverageAsset_duplicate() public {
+    function testRevert_addMovingAverageAsset_duplicate() public {
         bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
         vm.expectRevert(err);
 
@@ -640,7 +670,7 @@ contract HeartTest is Test {
         heart.addMovingAverageAsset(address(ohm));
     }
 
-    function testReverts_addMovingAverageAsset_zeroAddress() public {
+    function testRevert_addMovingAverageAsset_zeroAddress() public {
         bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
         vm.expectRevert(err);
 
@@ -649,7 +679,7 @@ contract HeartTest is Test {
         heart.addMovingAverageAsset(address(0));
     }
 
-    function testReverts_addMovingAverageAsset_unauthorized() public {
+    function testRevert_addMovingAverageAsset_unauthorized() public {
         MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
 
         bytes memory err = abi.encodeWithSelector(
@@ -677,7 +707,7 @@ contract HeartTest is Test {
         assertEq(heart.getMovingAverageAssetsCount(), 3, "asset count");
     }
 
-    function testReverts_removeMovingAverageAsset_doesNotExist() public {
+    function testRevert_removeMovingAverageAsset_doesNotExist() public {
         MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
 
         bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
@@ -688,7 +718,7 @@ contract HeartTest is Test {
         heart.removeMovingAverageAsset(address(wrappedReserve));
     }
 
-    function testReverts_removeMovingAverageAsset_zeroAddress() public {
+    function testRevert_removeMovingAverageAsset_zeroAddress() public {
         bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
         vm.expectRevert(err);
 
@@ -697,7 +727,7 @@ contract HeartTest is Test {
         heart.removeMovingAverageAsset(address(0));
     }
 
-    function testReverts_removeMovingAverageAsset_unauthorized() public {
+    function testRevert_removeMovingAverageAsset_unauthorized() public {
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             bytes32("heart_admin")
