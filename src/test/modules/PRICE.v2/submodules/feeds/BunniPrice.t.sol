@@ -4,7 +4,6 @@ pragma solidity >=0.8.0;
 import {FullMath} from "libraries/FullMath.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {Test, stdError} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 
 import {fromKeycode, Module} from "src/Kernel.sol";
 import {fromSubKeycode} from "src/Submodules.sol";
@@ -35,10 +34,8 @@ import {BunniSetup} from "test/policies/UniswapV3/BunniSetup.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
-import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
-import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
 import {PoolHelper} from "test/policies/UniswapV3/PoolHelper.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -381,13 +378,7 @@ contract BunniPriceTest is Test {
     //  [X] Correctly handles different output decimals
 
     function test_getBunniTokenPrice_zeroBunniLensReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: address(0),
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(0)}));
 
         _expectRevert_invalidBunniLens(address(0));
 
@@ -395,13 +386,7 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_invalidBunniLensReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: address(bunniHub),
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(bunniHub)}));
 
         _expectRevert_invalidBunniLens(address(bunniHub));
 
@@ -409,13 +394,7 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_zeroBunniTokenReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
 
         _expectRevert_invalidBunniToken(address(0));
 
@@ -423,13 +402,7 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_invalidBunniTokenReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
 
         _expectRevert_invalidBunniToken(address(bunniHub));
 
@@ -455,11 +428,7 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: address(newBunniLens),
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
+            BunniPrice.BunniParams({bunniLens: address(newBunniLens)})
         );
 
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
@@ -479,13 +448,7 @@ contract BunniPriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
 
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
@@ -504,13 +467,7 @@ contract BunniPriceTest is Test {
             ); // Scale: PRICE_DECIMALS
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             PRICE_DECIMALS,
@@ -574,13 +531,7 @@ contract BunniPriceTest is Test {
             ); // Scale: PRICE_DECIMALS
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             PRICE_DECIMALS,
@@ -590,93 +541,6 @@ contract BunniPriceTest is Test {
         // Check values
         assertTrue(price > 0, "should be non-zero");
         assertApproxEqAbs(price, expectedPrice, 1e9);
-    }
-
-    function test_getBunniTokenPrice_noLiquidity() public {
-        // Create another pool
-        address pool_ = bunniSetup.setUpPool(OHM, USDC, 3000, POOL_SQRTPRICEX96);
-
-        // Deploy a token for the pool, but don't deposit liquidity
-        vm.startPrank(policy);
-        IBunniToken poolToken_ = bunniManager.deployPoolToken(pool_);
-        vm.stopPrank();
-
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
-
-        // Expect the TWAP ratio check to fail
-        bytes memory err = abi.encodeWithSelector(
-            UniswapV3OracleHelper.UniswapV3OracleHelper_InvalidObservation.selector,
-            pool_,
-            TWAP_OBSERVATION_WINDOW
-        );
-        vm.expectRevert(err);
-
-        // Call
-        submoduleBunniPrice.getBunniTokenPrice(address(poolToken_), PRICE_DECIMALS, params);
-    }
-
-    function test_getBunniTokenPrice_twapDeviationReverts() public {
-        // Determine the amount of reserves in the pool, which should be consistent with the lens value
-        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
-        // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
-
-        // Mock the pool returning a TWAP that deviates enough to revert
-        int56 tickCumulative0_ = -2416639538393;
-        int56 tickCumulative1_ = -2416640880953;
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = tickCumulative0_;
-        tickCumulatives[1] = tickCumulative1_;
-        bunniSetup.mockPoolObservations(
-            address(uniswapPool),
-            TWAP_OBSERVATION_WINDOW,
-            tickCumulative0_,
-            tickCumulative1_
-        );
-
-        // Calculate the expected TWAP price
-        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
-            int32(TWAP_OBSERVATION_WINDOW);
-        // Adjust for negative rounding
-        if (
-            tickCumulative1_ < tickCumulative0_ &&
-            (tickCumulative1_ - tickCumulative0_) % int56(int32(TWAP_OBSERVATION_WINDOW)) != 0
-        ) {
-            timeWeightedTick -= 1;
-        }
-
-        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick),
-            uint128(10 ** 9), // token0 (OHM) decimals
-            OHM,
-            USDC
-        ); // USDC decimals: 6
-
-        // Set up revert
-        // Will revert as the TWAP deviates from the reserves ratio
-        bytes memory err = abi.encodeWithSelector(
-            BunniPrice.BunniPrice_PriceMismatch.selector,
-            address(uniswapPool),
-            twapRatio,
-            reservesRatio
-        );
-        vm.expectRevert(err);
-
-        // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
-        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 
     function test_getBunniTokenPrice_outputDecimalsFuzz(uint256 outputDecimals_) public {
@@ -701,13 +565,7 @@ contract BunniPriceTest is Test {
             ); // Scale: outputDecimals
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             outputDecimals,
@@ -731,13 +589,7 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress,
-                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
-                twapObservationWindow: TWAP_OBSERVATION_WINDOW
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 }

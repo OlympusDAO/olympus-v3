@@ -94,6 +94,11 @@ contract BrickedSupply is CustomSupply {
         return brickedOhm;
     }
 
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice     Set the addresses of tokens to check for bricked supply that are denominated in OHM

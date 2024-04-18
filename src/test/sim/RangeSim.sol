@@ -414,18 +414,12 @@ abstract contract RangeSim is Test {
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);
 
-
-            address[] memory movingAverageAssets = new address[](2);
-            movingAverageAssets[0] = address(ohm);
-            movingAverageAssets[1] = address(reserve);
-
             // Deploy Heart
             heart = new OlympusHeart(
                 kernel,
                 operator,
                 IAppraiser(address(appraiser)),
                 distributor,
-                movingAverageAssets,
                 new IAppraiser.Metric[](0),
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim

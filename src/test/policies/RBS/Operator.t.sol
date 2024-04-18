@@ -122,7 +122,7 @@ contract OperatorTest is Test {
             ROLES = new OlympusRoles(kernel);
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            SPPLY = new OlympusSupply(kernel, olympusTokens, 0);
+            SPPLY = new OlympusSupply(kernel, olympusTokens, 0, uint32(8 hours));
             PRICE = new MockPrice(kernel, DECIMALS, OBSERVATION_FREQUENCY);
             RANGE = new OlympusRange(
                 kernel,

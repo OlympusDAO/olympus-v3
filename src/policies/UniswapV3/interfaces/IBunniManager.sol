@@ -40,13 +40,23 @@ interface IBunniManager {
     ///
     /// @notice         This function will register the pool token with TRSRY, PRICE and SPPLY.
     ///
-    /// @param pool_                    The address of the Uniswap V3 pool
-    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
-    /// @param twapObservationWindow_   The TWAP observation window
+    /// @param pool_                            The address of the Uniswap V3 pool
+    /// @param priceMovingAverageDuration_      The duration of the moving average for the pool price observations
+    /// @param priceLastObservationTime_        The last observation time for the pool price observations
+    /// @param priceObservations_               The observations for the pool price
+    /// @param reserveMovingAverageDuration_    The duration of the moving average for the pool reserve observations
+    /// @param reserveLastObservationTime_      The last observation time for the pool reserve observations
+    /// @param reserveToken0Observations_       The observations for token0
+    /// @param reserveToken1Observations_       The observations for token1
     function activatePoolToken(
         address pool_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint32 priceMovingAverageDuration_,
+        uint48 priceLastObservationTime_,
+        uint256[] memory priceObservations_,
+        uint32 reserveMovingAverageDuration_,
+        uint48 reserveLastObservationTime_,
+        uint256[] memory reserveToken0Observations_,
+        uint256[] memory reserveToken1Observations_
     ) external;
 
     /// @notice         Deactivates the ERC20 token for the given Uniswap V3 pool
@@ -117,6 +127,9 @@ interface IBunniManager {
     ///
     /// @return reward  The amount of OHM that would be rewarded from harvesting fees
     function getCurrentHarvestReward() external view returns (uint256 reward);
+
+    /// @notice         Returns the number of registered pools
+    function getPoolCount() external view returns (uint256);
 
     // =========  ADMIN FUNCTIONS ========= //
 

@@ -13,3 +13,7 @@ clones/=lib/clones-with-immutable-args/src/
 @uniswap/v3-core/=lib/uniswap-v3-core/
 @uniswap/v3-periphery/=lib/uniswap-v3-periphery/
 cooler/=lib/Cooler/src/
+proposal-sim=lib/forge-proposal-simulator/
+proposal-sim/proposals/=lib/forge-proposal-simulator/proposals/
+proposals/=src/proposals/
+openzeppelin/=lib/openzeppelin-contracts/contracts

@@ -242,21 +242,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Add observations to regeneration counters
         _addObservation(currentPrice);
 
-        // Cache config in memory
-        Config memory config_ = _config;
-
         // Check if walls can regenerate capacity
         if (
-            uint48(block.timestamp) >= RANGE.lastActive(true) + uint48(config_.regenWait) &&
-            _status.high.count >= config_.regenThreshold
+            uint48(block.timestamp) >= RANGE.lastActive(true) + uint48(_config.regenWait) &&
+            _status.high.count >= _config.regenThreshold
         ) {
             _regenerate(true);
         }
         // For the lower side, we can regenerate if the regen count is above the threshold OR
         // if the current price is below LBBO and the capacity is below 20% of the full capacity for the side
         if (
-            (uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(config_.regenWait) &&
-                _status.low.count >= config_.regenThreshold) ||
+            (uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(_config.regenWait) &&
+                _status.low.count >= _config.regenThreshold) ||
             (currentPrice < _getLBBO() && RANGE.capacity(false) < (fullCapacity(false) * 20) / 100)
         ) {
             _regenerate(false);
@@ -325,10 +322,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             amountOut = getAmountOut(tokenIn_, amountIn_);
 
             // Decrement wall capacity
-            _updateCapacity(false, amountOut);
-
             // If wall is down after swap, deactive the cushion as well
-            _checkCushion(false);
+            _updateCapacityAndCheckCushion(false, amountOut);
 
             // Transfer OHM from sender
             _ohm.safeTransferFrom(msg.sender, address(this), amountIn_);
@@ -356,10 +351,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             amountOut = getAmountOut(tokenIn_, amountIn_);
 
             // Decrement wall capacity
-            _updateCapacity(true, amountOut);
-
             // If wall is down after swap, deactive the cushion as well
-            _checkCushion(true);
+            _updateCapacityAndCheckCushion(true, amountOut);
 
             // Transfer reserves to this contract from sender
             _reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
@@ -396,12 +389,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _onlyWhileActive();
 
         if (id_ == RANGE.market(true)) {
-            _updateCapacity(true, amountOut_);
-            _checkCushion(true);
+            _updateCapacityAndCheckCushion(true, amountOut_);
         }
         if (id_ == RANGE.market(false)) {
-            _updateCapacity(false, amountOut_);
-            _checkCushion(false);
+            _updateCapacityAndCheckCushion(false, amountOut_);
         }
     }
 
@@ -416,10 +407,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Initialize common variables
         ERC20 quoteToken;
         ERC20 payoutToken;
-        int8 priceDecimals;
         int8 scaleAdjustment;
-        uint256 bondScale;
-        uint256 oracleScale;
         uint256 initialPrice;
         uint256 minimumPrice;
         uint256 marketCapacity;
@@ -432,23 +420,22 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            priceDecimals = _getPriceDecimals(range.high.cushion.price);
+            int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
             scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
             // Avoid wrap-around due to casting
             if (priceDecimals > int8(_oracleDecimals)) revert Operator_InvalidParams();
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            bondScale =
-                10 **
-                    uint8(
-                        36 +
-                            scaleAdjustment +
-                            int8(_reserveDecimals) -
-                            int8(_ohmDecimals) -
-                            priceDecimals
-                    );
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+            uint256 bondScale = 10 **
+                uint8(
+                    36 +
+                        scaleAdjustment +
+                        int8(_reserveDecimals) -
+                        int8(_ohmDecimals) -
+                        priceDecimals
+                );
             initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
             minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
 
@@ -461,31 +448,32 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Calculate inverse prices from the oracle feed for the low side
             uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
-            uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / currentPrice_;
 
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            priceDecimals = _getPriceDecimals(invCushionPrice);
+            int8 priceDecimals = _getPriceDecimals(invCushionPrice);
             scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
 
             // Avoid wrap-around due to casting
             if (priceDecimals > int8(_oracleDecimals)) revert Operator_InvalidParams();
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            bondScale =
-                10 **
-                    uint8(
-                        36 +
-                            scaleAdjustment +
-                            int8(_ohmDecimals) -
-                            int8(_reserveDecimals) -
-                            priceDecimals
-                    );
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+            uint256 bondScale = 10 **
+                uint8(
+                    36 +
+                        scaleAdjustment +
+                        int8(_ohmDecimals) -
+                        int8(_reserveDecimals) -
+                        priceDecimals
+                );
 
-            initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
+            initialPrice = (10 ** (_oracleDecimals * 2) / currentPrice_).mulDiv(
+                bondScale,
+                oracleScale
+            );
             minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
@@ -564,14 +552,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ) revert Operator_InvalidParams();
 
         return lbbo;
-    }
-
-    /// @notice          Update the capacity on the RANGE module.
-    /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
-    /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
-    function _updateCapacity(bool high_, uint256 reduceBy_) internal {
-        // Decrement capacity if a reduceBy amount is provided
-        RANGE.updateCapacity(high_, RANGE.capacity(high_) - reduceBy_);
     }
 
     /// @notice Update the prices on the RANGE module
@@ -683,9 +663,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /// @notice      Takes down cushions (if active) when a wall is taken down or if available capacity drops below cushion capacity
-    /// @param high_ Whether to check the high side or low side cushion (true = high, false = low)
-    function _checkCushion(bool high_) internal {
+    /// @notice             Update the capacity on the RANGE module.
+    /// @notice             Takes down cushions (if active) when a wall is taken down or if available capacity drops below cushion capacity
+    /// @param high_        Whether to check the high side or low side cushion (true = high, false = low)
+    /// @param reduceBy_    The amount to reduce the capacity by
+    function _updateCapacityAndCheckCushion(bool high_, uint256 reduceBy_) internal {
+        // Update capacity
+        uint256 newCapacity = RANGE.capacity(high_) - reduceBy_;
+        RANGE.updateCapacity(high_, newCapacity);
+
         // Check if the wall is down, if so ensure the cushion is also down
         // Additionally, if wall is not down, but the wall capacity has dropped below the cushion capacity, take the cushion down
         bool sideActive = RANGE.active(high_);
@@ -694,7 +680,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             !sideActive ||
             (sideActive &&
                 auctioneer.isLive(market) &&
-                RANGE.capacity(high_) < auctioneer.currentCapacity(market))
+                newCapacity < auctioneer.currentCapacity(market))
         ) {
             _deactivate(high_);
         }
@@ -895,9 +881,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         );
 
         // Return the max of LBBO and the moving average
-        uint256 target = average < lbbo ? lbbo : average;
-
-        return target;
+        return average < lbbo ? lbbo : average;
     }
 
     /// @inheritdoc IOperator

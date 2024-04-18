@@ -119,7 +119,7 @@ contract AppraiserTest is Test {
             kernel = new Kernel();
             PRICE = new MockPrice(kernel, DECIMALS, OBSERVATION_FREQUENCY);
             TRSRY = new OlympusTreasury(kernel);
-            SPPLY = new OlympusSupply(kernel, tokens, 0);
+            SPPLY = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
             ROLES = new OlympusRoles(kernel);
         }
 

@@ -18,6 +18,7 @@
 [submodule "lib/clones-with-immutable-args"]
 	path = lib/clones-with-immutable-args
 	url = https://github.com/wighawag/clones-with-immutable-args
+	branch = v1.0.0
 [submodule "lib/uniswap-v3-core"]
 	path = lib/uniswap-v3-core
 	url = https://github.com/uniswap/v3-core
@@ -29,3 +30,6 @@
 [submodule "lib/Cooler"]
 	path = lib/Cooler
 	url = https://github.com/ohmzeus/Cooler
+[submodule "lib/forge-proposal-simulator"]
+	path = lib/forge-proposal-simulator
+	url = https://github.com/OlympusDAO/forge-proposal-simulator

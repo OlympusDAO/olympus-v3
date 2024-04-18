@@ -164,6 +164,15 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
         uint256[] balances;
     }
 
+    /// @notice    The frequency at which observations are stored
+    uint32 public observationFrequency;
+
+    /// @notice    The submodules that are registered for observation
+    SubKeycode[] public submodulesForObservation;
+
+    /// @notice    The count of submodules that are registered for observation
+    uint256 public submodulesForObservationCount;
+
     //============================================================================================//
     //                                       CROSS-CHAIN SUPPLY                                   //
     //============================================================================================//
@@ -277,6 +286,23 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ) external view virtual returns (Reserves[] memory);
 
     //============================================================================================//
+    //                                       SUPPLY OBSERVATIONS                                  //
+    //============================================================================================//
+
+    /// @notice                 Registers the submodule to be called when storing observations
+    ///
+    /// @param subKeycode_      The submodule to register
+    function registerForObservations(SubKeycode subKeycode_) external virtual;
+
+    /// @notice                 Unregisters the submodule from being called when storing observations
+    ///
+    /// @param subKeycode_      The submodule to unregister
+    function unregisterFromObservations(SubKeycode subKeycode_) external virtual;
+
+    /// @notice     Stores reserve observations for the configured submodules
+    function storeObservations() external virtual;
+
+    //============================================================================================//
     //                                       SUPPLY METRICS                                       //
     //============================================================================================//
 
@@ -364,4 +390,7 @@ abstract contract SupplySubmodule is Submodule {
     ///
     /// @return     Number of supply sources monitored by the submodule
     function getSourceCount() external view virtual returns (uint256);
+
+    /// @notice     Stores reserve observations for the configured assets
+    function storeObservations() external virtual;
 }

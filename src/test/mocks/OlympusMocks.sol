@@ -20,6 +20,8 @@ contract MockSohm is MockERC20 {
 contract MockGohm is MockERC20 {
     uint256 public index;
 
+    mapping(address => uint256) public votes;
+
     constructor(uint256 index_) MockERC20("gOHM", "gOHM", 18) {
         index = index_;
     }
@@ -30,6 +32,15 @@ contract MockGohm is MockERC20 {
 
     function balanceTo(uint256 amount_) public view returns (uint256) {
         return (amount_ * 10 ** decimals) / index;
+    }
+
+    function getPriorVotes(address account, uint256 blockNumber) public view returns (uint256) {
+        require(blockNumber < block.number, "gOHM::getPriorVotes: not yet determined");
+        return votes[account];
+    }
+
+    function checkpointVotes(address account) public {
+        votes[account] = MockERC20(address(this)).balanceOf(account);
     }
 }
 
