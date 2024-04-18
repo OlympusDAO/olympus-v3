@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 import {FullMath} from "libraries/FullMath.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {Test, stdError} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 
 import {fromKeycode, Module} from "src/Kernel.sol";
 import {fromSubKeycode} from "src/Submodules.sol";
@@ -34,12 +35,14 @@ import {BunniSetup} from "test/policies/UniswapV3/BunniSetup.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
+import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
 import {PoolHelper} from "test/policies/UniswapV3/PoolHelper.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract BunniPriceTest is Test {
+contract BunniPriceTestSetUp is Test {
     using FullMath for uint256;
 
     IUniswapV3Pool internal uniswapPool;
@@ -73,7 +76,7 @@ contract BunniPriceTest is Test {
     address writePRICE;
     address writeSPPLY;
 
-    uint24 private constant POOL_FEE = 500;
+    uint24 internal constant POOL_FEE = 500;
 
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
 
@@ -95,131 +98,12 @@ contract BunniPriceTest is Test {
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
     uint32 internal constant TWAP_OBSERVATION_WINDOW = 600;
 
-    int24 private constant TICK = 887270; // (887272/(500/50))*(500/50)
+    int24 internal constant TICK = 887270; // (887272/(500/50))*(500/50)
 
-    uint16 private constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint16 internal constant SLIPPAGE_DEFAULT = 100; // 1%
 
     uint256 internal constant OHM_AMOUNT = 100_000e9;
     uint256 internal USDC_AMOUNT = OHM_AMOUNT.mulDiv(OHM_PRICE, 1e18).mulDiv(1e6, 1e9);
-
-    function setUp() public {
-        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
-
-        // Tokens
-        {
-            ohmToken = new MockOhm("OHM", "OHM", OHM_DECIMALS);
-
-            // The USDC address needs to be higher than ohm, so generate a salt to ensure that
-            bytes32 usdcSalt = ComputeAddress.generateSalt(
-                address(ohmToken),
-                true,
-                type(MockERC20).creationCode,
-                abi.encode("USDC", "USDC", USDC_DECIMALS),
-                address(this)
-            );
-            usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", USDC_DECIMALS);
-
-            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
-            bytes32 wethSalt = ComputeAddress.generateSalt(
-                address(ohmToken),
-                true,
-                type(MockERC20).creationCode,
-                abi.encode("Wrapped Ether", "wETH", 18),
-                address(this)
-            );
-            wethToken = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
-
-            gohmToken = new MockGohm(GOHM_INDEX);
-
-            OHM = address(ohmToken);
-            USDC = address(usdcToken);
-        }
-
-        // Locations
-        {
-            userFactory = new UserFactory();
-            address[] memory users = userFactory.create(1);
-            policy = users[0];
-        }
-
-        // Deploy BunniSetup
-        {
-            bunniSetup = new BunniSetup(OHM, address(gohmToken), address(this), policy);
-
-            bunniManager = bunniSetup.bunniManager();
-            bunniHub = bunniSetup.bunniHub();
-            bunniLens = bunniSetup.bunniLens();
-            bunniLensAddress = address(bunniLens);
-            uniswapFactory = bunniSetup.uniswapFactory();
-            swapRouter = new SwapRouter(address(uniswapFactory), address(wethToken));
-        }
-
-        // Deploy writer policies
-        {
-            (address writePRICE_, address writeSPPLY_, ) = bunniSetup.createWriterPolicies();
-
-            writePRICE = writePRICE_;
-            writeSPPLY = writeSPPLY_;
-        }
-
-        // Set up the submodule(s)
-        {
-            (address price_, ) = bunniSetup.createSubmodules(writePRICE, writeSPPLY);
-
-            submoduleBunniPrice = BunniPrice(price_);
-        }
-
-        // Set up the UniV3 pool
-        {
-            address pool_ = bunniSetup.setUpPool(OHM, USDC, POOL_FEE, POOL_SQRTPRICEX96);
-
-            uniswapPool = IUniswapV3Pool(pool_);
-        }
-
-        // Mock observations for the Uniswap V3 pool
-        {
-            bunniSetup.mockPoolObservations(
-                address(uniswapPool),
-                TWAP_OBSERVATION_WINDOW,
-                OHM_USDC_TICK_CUMULATIVE_0,
-                OHM_USDC_TICK_CUMULATIVE_1
-            );
-        }
-
-        // Mock values, to avoid having to set up all of PRICEv2 and submodules
-        {
-            bunniSetup.mockGetPrice(OHM, OHM_PRICE);
-            bunniSetup.mockGetPrice(USDC, USDC_PRICE);
-        }
-
-        // Deploy a pool token
-        {
-            // Deploy the token
-            vm.startPrank(policy);
-            poolToken = bunniManager.deployPoolToken(address(uniswapPool));
-            vm.stopPrank();
-
-            poolTokenAddress = address(poolToken);
-            poolTokenKey = _getBunniKey(uniswapPool, poolToken);
-        }
-
-        // Deposit into the pool
-        {
-            // Mint USDC
-            usdcToken.mint(address(bunniSetup.TRSRY()), USDC_AMOUNT);
-
-            // Deposit
-            vm.startPrank(policy);
-            bunniManager.deposit(
-                address(uniswapPool),
-                OHM,
-                OHM_AMOUNT,
-                USDC_AMOUNT,
-                SLIPPAGE_DEFAULT
-            );
-            vm.stopPrank();
-        }
-    }
 
     // =========  HELPER METHODS ========= //
 
@@ -320,6 +204,525 @@ contract BunniPriceTest is Test {
         swapRouter.exactInputSingle(params);
 
         return params.amountOutMinimum;
+    }
+}
+
+contract BunniPriceFullRangeTest is BunniPriceTestSetUp {
+    using FullMath for uint256;
+
+    function setUp() public {
+        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
+
+        // Tokens
+        {
+            ohmToken = new MockOhm("OHM", "OHM", OHM_DECIMALS);
+
+            // The USDC address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 usdcSalt = ComputeAddress.generateSalt(
+                address(ohmToken),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("USDC", "USDC", USDC_DECIMALS),
+                address(this)
+            );
+            usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", USDC_DECIMALS);
+
+            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 wethSalt = ComputeAddress.generateSalt(
+                address(ohmToken),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("Wrapped Ether", "wETH", 18),
+                address(this)
+            );
+            wethToken = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
+
+            gohmToken = new MockGohm(GOHM_INDEX);
+
+            OHM = address(ohmToken);
+            USDC = address(usdcToken);
+        }
+
+        // Locations
+        {
+            userFactory = new UserFactory();
+            address[] memory users = userFactory.create(1);
+            policy = users[0];
+        }
+
+        // Deploy BunniSetup
+        {
+            bunniSetup = new BunniSetup(OHM, address(gohmToken), address(this), policy);
+
+            bunniManager = bunniSetup.bunniManager();
+            bunniHub = bunniSetup.bunniHub();
+            bunniLens = bunniSetup.bunniLens();
+            bunniLensAddress = address(bunniLens);
+            uniswapFactory = bunniSetup.uniswapFactory();
+            swapRouter = new SwapRouter(address(uniswapFactory), address(wethToken));
+        }
+
+        // Deploy writer policies
+        {
+            (address writePRICE_, address writeSPPLY_, ) = bunniSetup.createWriterPolicies();
+
+            writePRICE = writePRICE_;
+            writeSPPLY = writeSPPLY_;
+        }
+
+        // Set up the submodule(s)
+        {
+            (address price_, ) = bunniSetup.createSubmodules(writePRICE, writeSPPLY);
+
+            submoduleBunniPrice = BunniPrice(price_);
+        }
+
+        // Set up the UniV3 pool
+        {
+            address pool_ = bunniSetup.setUpPool(OHM, USDC, POOL_FEE, POOL_SQRTPRICEX96);
+
+            uniswapPool = IUniswapV3Pool(pool_);
+        }
+
+        // Mock observations for the Uniswap V3 pool
+        {
+            bunniSetup.mockPoolObservations(
+                address(uniswapPool),
+                TWAP_OBSERVATION_WINDOW,
+                OHM_USDC_TICK_CUMULATIVE_0,
+                OHM_USDC_TICK_CUMULATIVE_1
+            );
+        }
+
+        // Mock values, to avoid having to set up all of PRICEv2 and submodules
+        {
+            bunniSetup.mockGetPrice(OHM, OHM_PRICE);
+            bunniSetup.mockGetPrice(USDC, USDC_PRICE);
+        }
+
+        // Deploy a pool token
+        {
+            // Deploy the token
+            vm.startPrank(policy);
+            poolToken = bunniManager.deployFullRangeToken(address(uniswapPool));
+            vm.stopPrank();
+
+            poolTokenAddress = address(poolToken);
+            poolTokenKey = _getBunniKey(uniswapPool, poolToken);
+        }
+
+        // Deposit into the pool
+        {
+            // Mint USDC
+            usdcToken.mint(address(bunniSetup.TRSRY()), USDC_AMOUNT);
+
+            // Deposit
+            vm.startPrank(policy);
+            bunniManager.deposit(
+                address(uniswapPool),
+                0,
+                OHM,
+                OHM_AMOUNT,
+                USDC_AMOUNT,
+                SLIPPAGE_DEFAULT
+            );
+            vm.stopPrank();
+        }
+    }
+
+    // ========= TESTS ========= //
+
+    // [X] Submodule
+    //  [X] Version
+    //  [X] Subkeycode
+
+    function test_submodule_version() public {
+        uint8 major;
+        uint8 minor;
+        (major, minor) = submoduleBunniPrice.VERSION();
+        assertEq(major, 1);
+        assertEq(minor, 0);
+    }
+
+    function test_submodule_parent() public {
+        assertEq(fromKeycode(submoduleBunniPrice.PARENT()), "PRICE");
+    }
+
+    function test_submodule_subkeycode() public {
+        assertEq(fromSubKeycode(submoduleBunniPrice.SUBKEYCODE()), "PRICE.BNI");
+    }
+
+    // [X] Constructor
+    //  [X] Incorrect parent
+
+    function test_submodule_parent_notModule_reverts() public {
+        // Feed in a different address
+        address[] memory newLocations = userFactory.create(1);
+
+        // There's no error message, so just check that a revert happens when attempting to call the module
+        vm.expectRevert();
+
+        new BunniPrice(Module(newLocations[0]));
+    }
+
+    function test_submodule_parent_notPrice_reverts() public {
+        Module parent = bunniSetup.MINTR();
+
+        bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
+        vm.expectRevert(err);
+
+        new BunniPrice(parent);
+    }
+
+    // [X] getBunniTokenPrice
+    //  [X] Reverts if params.bunniLens is zero
+    //  [X] Reverts if params.bunniLens is not a valid BunniLens
+    //  [X] Reverts if bunniToken is zero
+    //  [X] Reverts if bunniToken is not a valid BunniToken
+    //  [X] Reverts if bunniToken and bunniLens do not have the same BunniHub
+    //  [X] Reverts if any of the reserve assets are not defined as assets in PRICE
+    //  [X] Reverts if the reserves deviate from the TWAP
+    //  [X] Correctly calculates balances for different decimal scale
+    //  [X] Correctly handles different output decimals
+
+    function test_getBunniTokenPrice_zeroBunniLensReverts() public {
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(0)}));
+
+        _expectRevert_invalidBunniLens(address(0));
+
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+    }
+
+    function test_getBunniTokenPrice_invalidBunniLensReverts() public {
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(bunniHub)}));
+
+        _expectRevert_invalidBunniLens(address(bunniHub));
+
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+    }
+
+    function test_getBunniTokenPrice_zeroBunniTokenReverts() public {
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+
+        _expectRevert_invalidBunniToken(address(0));
+
+        submoduleBunniPrice.getBunniTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getBunniTokenPrice_invalidBunniTokenReverts() public {
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+
+        _expectRevert_invalidBunniToken(address(bunniHub));
+
+        submoduleBunniPrice.getBunniTokenPrice(address(bunniHub), PRICE_DECIMALS, params);
+    }
+
+    function test_getBunniTokenPrice_hubMismatchReverts() public {
+        // Deploy a new hub
+        BunniHub newBunniHub = new BunniHub(
+            uniswapFactory,
+            policy,
+            0 // No protocol fee
+        );
+
+        // Deploy a new lens
+        BunniLens newBunniLens = new BunniLens(newBunniHub);
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniPrice.BunniPrice_Params_HubMismatch.selector,
+            address(bunniHub),
+            address(newBunniHub)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({bunniLens: address(newBunniLens)})
+        );
+
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+    }
+
+    function test_getBunniTokenPrice_zeroPriceReverts(uint256 tokenIndex_) public {
+        uint8 tokenIndex = uint8(bound(tokenIndex_, 0, 1));
+
+        // Mock the price of the token to be zero
+        address zeroPriceAddress = tokenIndex == 0 ? OHM : USDC;
+        bunniSetup.mockGetPriceZero(zeroPriceAddress);
+
+        // Expect a revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_PriceZero.selector,
+            zeroPriceAddress
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+    }
+
+    function test_getBunniTokenPrice() public {
+        uint256 outputScale = 10 ** PRICE_DECIMALS;
+
+        // Calculate the expected price
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
+        uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
+        uint256 expectedPrice = (ohmReserve.mulDiv(OHM_PRICE, outputScale) +
+            usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: PRICE_DECIMALS
+
+        // Call
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        uint256 price = submoduleBunniPrice.getBunniTokenPrice(
+            poolTokenAddress,
+            PRICE_DECIMALS,
+            params
+        );
+
+        // Check values
+        assertTrue(price > 0, "should be non-zero");
+        assertApproxEqAbs(price, expectedPrice, 1e9);
+    }
+
+    function test_getBunniTokenPrice_uncollectedFeesFuzz(uint256 usdcSwapAmount_) public {
+        // Swap enough to generate fees, but not enough to trigger a TWAP deviation
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1_000e6, 10_000e6));
+
+        // Swap USDC for OHM
+        uint256 swapOneAmountOut;
+        {
+            // Mint the USDC
+            usdcToken.mint(address(this), usdcSwapAmount);
+
+            // Swap
+            swapOneAmountOut = _swap(
+                uniswapPool,
+                USDC,
+                OHM,
+                address(this),
+                usdcSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // Update the swap fees, so that fees are re-calculated
+        vm.prank(policy);
+        bunniManager.updateSwapFees();
+
+        // Swap OHM for USDC
+        {
+            // Swap
+            _swap(uniswapPool, OHM, USDC, address(this), swapOneAmountOut, OHM_PRICE);
+        }
+
+        // There should now be fees that are not yet calculated
+
+        // There should now be uncollected fees
+        // If getUncollectedFees() does not include the calculated fees, then this will fail
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertGt(fee0, 0);
+        assertGt(fee1, 0);
+
+        uint256 outputScale = 10 ** PRICE_DECIMALS;
+
+        // Calculate the expected price (which includes fees)
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
+        uint256 ohmReserve = (ohmReserve_ + fee0).mulDiv(outputScale, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = (usdcReserve_ + fee1).mulDiv(outputScale, 10 ** USDC_DECIMALS);
+        uint256 expectedPrice = (ohmReserve.mulDiv(OHM_PRICE, outputScale) +
+            usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: PRICE_DECIMALS
+
+        // Call
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        uint256 price = submoduleBunniPrice.getBunniTokenPrice(
+            poolTokenAddress,
+            PRICE_DECIMALS,
+            params
+        );
+
+        // Check values
+        assertTrue(price > 0, "should be non-zero");
+        assertApproxEqAbs(price, expectedPrice, 1e9);
+    }
+
+    function test_getBunniTokenPrice_outputDecimalsFuzz(uint256 outputDecimals_) public {
+        uint8 outputDecimals = uint8(bound(outputDecimals_, 6, 30));
+        uint256 outputScale = 10 ** outputDecimals;
+
+        uint256 ohmPrice = 11 * outputScale;
+        uint256 usdcPrice = 1 * outputScale;
+
+        // Mock the PRICE decimals
+        bunniSetup.mockGetPrice(OHM, ohmPrice);
+        bunniSetup.mockGetPrice(USDC, usdcPrice);
+
+        // Calculate the expected price
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
+        uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
+        uint256 expectedPrice = (ohmReserve.mulDiv(ohmPrice, outputScale) +
+            usdcReserve.mulDiv(usdcPrice, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: outputDecimals
+
+        // Call
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        uint256 price = submoduleBunniPrice.getBunniTokenPrice(
+            poolTokenAddress,
+            outputDecimals,
+            params
+        );
+
+        // Check values
+        assertTrue(price > 0, "should be non-zero");
+        assertEq(price, expectedPrice);
+    }
+
+    function test_getBunniTokenPrice_reentrancyReverts() public {
+        // Set the UniV3 pair to be locked, which indicates re-entrancy
+        _mockPoolUnlocked(false);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniLens.BunniLens_Reentrant.selector,
+            address(uniswapPool)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+    }
+}
+
+contract BunniPriceConcentratedTest is BunniPriceTestSetUp {
+    using FullMath for uint256;
+
+    function setUp() public {
+        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
+
+        // Tokens
+        {
+            ohmToken = new MockOhm("OHM", "OHM", OHM_DECIMALS);
+
+            // The USDC address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 usdcSalt = ComputeAddress.generateSalt(
+                address(ohmToken),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("USDC", "USDC", USDC_DECIMALS),
+                address(this)
+            );
+            usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", USDC_DECIMALS);
+
+            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 wethSalt = ComputeAddress.generateSalt(
+                address(ohmToken),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("Wrapped Ether", "wETH", 18),
+                address(this)
+            );
+            wethToken = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
+
+            gohmToken = new MockGohm(GOHM_INDEX);
+
+            OHM = address(ohmToken);
+            USDC = address(usdcToken);
+        }
+
+        // Locations
+        {
+            userFactory = new UserFactory();
+            address[] memory users = userFactory.create(1);
+            policy = users[0];
+        }
+
+        // Deploy BunniSetup
+        {
+            bunniSetup = new BunniSetup(OHM, address(gohmToken), address(this), policy);
+
+            bunniManager = bunniSetup.bunniManager();
+            bunniHub = bunniSetup.bunniHub();
+            bunniLens = bunniSetup.bunniLens();
+            bunniLensAddress = address(bunniLens);
+            uniswapFactory = bunniSetup.uniswapFactory();
+            swapRouter = new SwapRouter(address(uniswapFactory), address(wethToken));
+        }
+
+        // Deploy writer policies
+        {
+            (address writePRICE_, address writeSPPLY_, ) = bunniSetup.createWriterPolicies();
+
+            writePRICE = writePRICE_;
+            writeSPPLY = writeSPPLY_;
+        }
+
+        // Set up the submodule(s)
+        {
+            (address price_, ) = bunniSetup.createSubmodules(writePRICE, writeSPPLY);
+
+            submoduleBunniPrice = BunniPrice(price_);
+        }
+
+        // Set up the UniV3 pool
+        {
+            address pool_ = bunniSetup.setUpPool(OHM, USDC, POOL_FEE, POOL_SQRTPRICEX96);
+
+            uniswapPool = IUniswapV3Pool(pool_);
+        }
+
+        // Mock observations for the Uniswap V3 pool
+        {
+            bunniSetup.mockPoolObservations(
+                address(uniswapPool),
+                TWAP_OBSERVATION_WINDOW,
+                OHM_USDC_TICK_CUMULATIVE_0,
+                OHM_USDC_TICK_CUMULATIVE_1
+            );
+        }
+
+        // Mock values, to avoid having to set up all of PRICEv2 and submodules
+        {
+            bunniSetup.mockGetPrice(OHM, OHM_PRICE);
+            bunniSetup.mockGetPrice(USDC, USDC_PRICE);
+        }
+
+        // Deploy a pool token
+        {
+            // Deploy the token
+            vm.startPrank(policy);
+            poolToken = bunniManager.deployConcentratedToken(address(uniswapPool), -444444, 444444);
+            vm.stopPrank();
+
+            poolTokenAddress = address(poolToken);
+            poolTokenKey = _getBunniKey(uniswapPool, poolToken);
+        }
+
+        // Deposit into the pool
+        {
+            // Mint USDC
+            usdcToken.mint(address(bunniSetup.TRSRY()), USDC_AMOUNT);
+
+            // Deposit
+            vm.startPrank(policy);
+            bunniManager.deposit(
+                address(uniswapPool),
+                0,
+                OHM,
+                OHM_AMOUNT,
+                USDC_AMOUNT,
+                SLIPPAGE_DEFAULT
+            );
+            vm.stopPrank();
+        }
     }
 
     // ========= TESTS ========= //

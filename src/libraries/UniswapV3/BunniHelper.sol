@@ -43,6 +43,29 @@ library BunniHelper {
             });
     }
 
+    /// @notice           Convenience method to create a BunniKey identifier representing a concentrated position.
+    ///
+    /// @param pool_      The address of the Uniswap V3 pool
+    /// @param tickLower_ The lowest tick of the range
+    /// @param tickUpper_ The highest tick of the range
+    /// @return           The BunniKey identifier
+    function getConcentratedBunniKey(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    ) public view returns (BunniKey memory) {
+        int24 tickSpacing = IUniswapV3Pool(pool_).tickSpacing();
+
+        return
+            BunniKey({
+                pool: IUniswapV3Pool(pool_),
+                // The ticks need to be divisible by the tick spacing
+                // Source: https://github.com/Aboudoc/Uniswap-v3/blob/7aa9db0d0bf3d188a8a53a1dbe542adf7483b746/contracts/UniswapV3Liquidity.sol#L49C23-L49C23
+                tickLower: (tickLower_ / tickSpacing) * tickSpacing,
+                tickUpper: (tickUpper_ / tickSpacing) * tickSpacing
+            });
+    }
+
     /// @notice         Convenience method to generate BunniHub withdaw parameters
     function getWithdrawParams(
         uint256 shares_,
