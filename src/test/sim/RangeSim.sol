@@ -377,7 +377,7 @@ abstract contract RangeSim is Test {
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
             roles = new OlympusRoles(kernel);
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, 8 hours);
         }
 
         {
@@ -414,18 +414,13 @@ abstract contract RangeSim is Test {
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);
 
-
-            address[] memory movingAverageAssets = new address[](2);
-            movingAverageAssets[0] = address(ohm);
-            movingAverageAssets[1] = address(reserve);
-
             // Deploy Heart
             heart = new OlympusHeart(
                 kernel,
                 operator,
                 IAppraiser(address(appraiser)),
                 distributor,
-                movingAverageAssets,
+                new IAppraiser.Metric[](0),
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );

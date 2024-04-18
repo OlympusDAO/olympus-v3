@@ -44,7 +44,7 @@ contract BrickedSupplyTest is Test {
             kernel = new Kernel();
 
             address[2] memory tokens = [address(ohm), address(gOhm)];
-            spply = new OlympusSupply(kernel, tokens, 0);
+            spply = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
         }
 
         // Create submodule

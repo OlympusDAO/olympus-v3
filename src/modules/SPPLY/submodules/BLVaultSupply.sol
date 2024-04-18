@@ -166,6 +166,11 @@ contract BLVaultSupply is SupplySubmodule {
         return vaultManagers.length;
     }
 
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
+
     // =========== ADMIN FUNCTIONS =========== //
 
     /// @notice                 Add a BLVaultManager to the list of managers

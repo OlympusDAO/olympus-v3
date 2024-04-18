@@ -25,4 +25,8 @@ interface IgOHM is IERC20 {
     function balanceTo(uint256 _amount) external view returns (uint256);
 
     function migrate(address _staking, address _sOHM) external;
+
+    function getPriorVotes(address account, uint256 blockNumber) external view returns (uint256);
+
+    function totalSupply() external view override returns (uint256);
 }

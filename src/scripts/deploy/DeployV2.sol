@@ -20,7 +20,12 @@ import {IVault as IBalancerVault} from "src/libraries/Balancer/interfaces/IVault
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Cooler Loans
-import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
+import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+
+// Governance
+import {Timelock} from "src/external/governance/Timelock.sol";
+import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
+import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 
 // Bophades
 import "src/Kernel.sol";
@@ -46,7 +51,7 @@ import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
-import {Appraiser} from "policies/OCA/Appraiser.sol";
+import {Appraiser, IAppraiser} from "policies/OCA/Appraiser.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 
@@ -156,6 +161,11 @@ contract OlympusDeploy is Script {
     // External contracts
     BunniHub public bunniHub;
     BunniLens public bunniLens;
+
+    // Governance
+    Timelock public timelock;
+    GovernorBravoDelegate public governorBravoDelegate;
+    GovernorBravoDelegator public governorBravoDelegator;
 
     // Construction variables
 
@@ -274,6 +284,11 @@ contract OlympusDeploy is Script {
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
         selectorMap["BrickedSupply"] = this._deployBrickedSupply.selector;
 
+        // Governance
+        selectorMap["Timelock"] = this._deployTimelock.selector;
+        selectorMap["GovernorBravoDelegator"] = this._deployGovernorBravoDelegator.selector;
+        selectorMap["GovernorBravoDelegate"] = this._deployGovernorBravoDelegate.selector;
+
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
@@ -390,6 +405,15 @@ contract OlympusDeploy is Script {
         // External contracts
         bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
         bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
+
+        // Governance
+        timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
+        governorBravoDelegator = GovernorBravoDelegator(
+            payable(envAddress("olympus.governance.GovernorBravoDelegator"))
+        );
+        governorBravoDelegate = GovernorBravoDelegate(
+            envAddress("olympus.governance.GovernorBravoDelegate")
+        );
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath_);
@@ -585,7 +609,7 @@ contract OlympusDeploy is Script {
 
         // Deploy Appraiser module
         vm.broadcast();
-        appraiser = new Appraiser(kernel);
+        appraiser = new Appraiser(kernel, 8 hours);
         console2.log("Appraiser deployed at:", address(appraiser));
 
         return address(appraiser);
@@ -778,14 +802,12 @@ contract OlympusDeploy is Script {
         if (address(reserve) == address(0)) revert("Reserve address not set");
 
         // Check the version of Operator
-        (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
+        (uint8 operatorMajor, ) = operatorV2.VERSION();
         if (operatorMajor != 2) revert("OperatorV2 is not version 2");
 
-        // Bare minimum required for Heart to function
-        // Will be updated according to the treasury composition during activation
-        address[] memory movingAverageAssets = new address[](2);
-        movingAverageAssets[0] = address(ohm);
-        movingAverageAssets[1] = address(reserve);
+        // Metrics to track
+        IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
+        movingAverageMetrics[0] = IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM;
 
         console2.log("Deploying Heart V2 policy");
         console2.log("    kernel", address(kernel));
@@ -802,7 +824,7 @@ contract OlympusDeploy is Script {
             operatorV2,
             appraiser,
             zeroDistributor,
-            movingAverageAssets,
+            movingAverageMetrics,
             maxReward,
             auctionDuration
         );
@@ -1317,11 +1339,15 @@ contract OlympusDeploy is Script {
     function _deploySupply(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
+        (uint256 initialCrossChainSupply, uint32 observationFrequency) = abi.decode(
+            args,
+            (uint256, uint32)
+        );
 
         // TODO fill in the initialCrossChainSupply value
 
         console2.log("    initialCrossChainSupply", initialCrossChainSupply);
+        console2.log("    observationFrequency", observationFrequency);
 
         // Check that environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
@@ -1334,7 +1360,7 @@ contract OlympusDeploy is Script {
         vm.broadcast();
 
         // Deploy the module
-        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
+        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply, observationFrequency);
 
         console2.log("SPPLY deployed at:", address(SPPLY));
 
@@ -1481,6 +1507,66 @@ contract OlympusDeploy is Script {
         console2.log("CHREG deployed at:", address(CHREG));
 
         return address(CHREG);
+    }
+
+    // ========== GOVERNANCE ========== //
+
+    function _deployTimelock(bytes calldata args) public returns (address) {
+        (address admin, uint256 delay) = abi.decode(args, (address, uint256));
+
+        console2.log("Timelock admin:", admin);
+        console2.log("Timelock delay:", delay);
+
+        // Deploy Timelock
+        vm.broadcast();
+        timelock = new Timelock(admin, delay);
+        console2.log("Timelock deployed at:", address(timelock));
+
+        return address(timelock);
+    }
+
+    function _deployGovernorBravoDelegate(bytes calldata args) public returns (address) {
+        // No additional arguments for Governor Bravo Delegate
+
+        // Deploy Governor Bravo Delegate
+        vm.broadcast();
+        governorBravoDelegate = new GovernorBravoDelegate();
+        console2.log("Governor Bravo Delegate deployed at:", address(governorBravoDelegate));
+
+        return address(governorBravoDelegate);
+    }
+
+    function _deployGovernorBravoDelegator(bytes calldata args) public returns (address) {
+        (
+            uint256 activationGracePeriod,
+            uint256 proposalThreshold,
+            address vetoGuardian,
+            uint256 votingDelay,
+            uint256 votingPeriod
+        ) = abi.decode(args, (uint256, uint256, address, uint256, uint256));
+
+        console2.log("Governor Bravo Delegator vetoGuardian:", vetoGuardian);
+        console2.log("Governor Bravo Delegator votingPeriod:", votingPeriod);
+        console2.log("Governor Bravo Delegator votingDelay:", votingDelay);
+        console2.log("Governor Bravo Delegator activationGracePeriod:", activationGracePeriod);
+        console2.log("Governor Bravo Delegator proposalThreshold:", proposalThreshold);
+
+        // Deploy Governor Bravo Delegator
+        vm.broadcast();
+        governorBravoDelegator = new GovernorBravoDelegator(
+            address(timelock),
+            address(gOHM),
+            address(kernel),
+            vetoGuardian,
+            address(governorBravoDelegate),
+            votingPeriod,
+            votingDelay,
+            activationGracePeriod,
+            proposalThreshold
+        );
+        console2.log("Governor Bravo Delegator deployed at:", address(governorBravoDelegator));
+
+        return address(governorBravoDelegator);
     }
 
     // ========== VERIFICATION ========== //

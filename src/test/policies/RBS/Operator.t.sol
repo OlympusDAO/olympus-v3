@@ -19,6 +19,7 @@ import {MockOhm} from "test/mocks/MockOhm.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
+import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -121,7 +122,7 @@ contract OperatorTest is Test {
             ROLES = new OlympusRoles(kernel);
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            SPPLY = new OlympusSupply(kernel, olympusTokens, 0);
+            SPPLY = new OlympusSupply(kernel, olympusTokens, 0, uint32(8 hours));
             PRICE = new MockPrice(kernel, DECIMALS, OBSERVATION_FREQUENCY);
             RANGE = new OlympusRange(
                 kernel,
@@ -148,7 +149,7 @@ contract OperatorTest is Test {
             // Deploy new TreasuryConfig
             treasuryConfig = new TreasuryConfig(kernel);
             // Deploy new appraiser
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, 8 hours);
             /// Deploy operator
             operator = new Operator(
                 kernel,
@@ -208,6 +209,10 @@ contract OperatorTest is Test {
             rolesAdmin.grantRole("callback_whitelist", address(operator));
             rolesAdmin.grantRole("callback_whitelist", guardian);
             rolesAdmin.grantRole("callback_admin", guardian);
+
+            // Appraiser roles
+            rolesAdmin.grantRole("appraiser_admin", policy);
+            rolesAdmin.grantRole("appraiser_store", address(heart));
         }
 
         /// Configure treasury assets
@@ -251,8 +256,32 @@ contract OperatorTest is Test {
         reserve.approve(address(teller), testReserve * 20);
         vm.stopPrank();
 
-        // Initialize appraiser liquid backing calculation
-        appraiser.storeMetric(IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        // Initialise metrics on the Appraiser
+        {
+            // Initialize appraiser liquid backing calculation
+            vm.prank(address(heart));
+            appraiser.storeMetric(IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+
+            // Get the metric value
+            uint256 liquidBacking = appraiser.getMetric(
+                IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM
+            );
+
+            // Create a dummy moving average history
+            uint256[] memory values = new uint256[](30 * 3);
+            for (uint256 i = 0; i < 90; i++) {
+                values[i] = liquidBacking;
+            }
+
+            // Configure the metric moving average
+            vm.prank(policy);
+            appraiser.updateMetricMovingAverage(
+                IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                30 days,
+                uint48(block.timestamp),
+                values
+            );
+        }
     }
 
     // ======== SETUP DEPENDENCIES ======= //
@@ -1811,6 +1840,7 @@ contract OperatorTest is Test {
     /// [X] activate
     /// [X] deactivate
     /// [X] deactivateCushion
+    /// [X] setManualTargetPrice
 
     function testCorrectness_setSpreads() public {
         /// Initialize operator
@@ -2398,6 +2428,50 @@ contract OperatorTest is Test {
         assertEq(type(uint256).max, RANGE.market(false));
     }
 
+    function test_setManualTargetPrice() public {
+        // Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Set the value
+        uint256 newPrice = 100e18;
+        vm.prank(policy);
+        operator.setManualTargetPrice(newPrice);
+
+        // Assert the value
+        assertEq(operator.manualTargetPrice(), newPrice);
+    }
+
+    function test_setManualTargetPrice_zero() public {
+        // Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Set the value
+        uint256 newPrice = 0;
+        vm.prank(policy);
+        operator.setManualTargetPrice(newPrice);
+
+        // Assert the value
+        assertEq(operator.manualTargetPrice(), newPrice);
+    }
+
+    function test_setManualTargetPrice_nonGuardianReverts() public {
+        // Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Set the value as non-policy
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_policy")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        operator.setManualTargetPrice(100e18);
+    }
+
     // =========  ´TESTS ========= //
 
     /// DONE
@@ -2469,6 +2543,131 @@ contract OperatorTest is Test {
     function testFuzz_targetPrice(uint256 priceMA_) public {
         // Ensure non-zero price and no overflow
         priceMA_ = bound(priceMA_, 1, type(uint256).max / 1e18);
+
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Get liquid backing per backed ohm from appraiser
+        uint256 lbbo = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+
+        /// Update moving average upwards and trigger the operator
+        PRICE.setMovingAverage(address(ohm), priceMA_);
+
+        // Get the target price from the operator
+        uint256 target = operator.targetPrice();
+
+        // Check that the target price is the max of the moving average and the liquid backing per ohm backed
+        if (priceMA_ > lbbo) {
+            assertEq(target, priceMA_);
+        } else {
+            assertEq(target, lbbo);
+        }
+    }
+
+    function test_targetPrice_zeroMetric_reverts() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Mock the appraiser to return a 0 value for liquid backing per backed ohm
+        vm.mockCall(
+            address(appraiser),
+            abi.encodeWithSignature(
+                "getMetric(uint8,uint8)",
+                uint8(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM),
+                uint8(IAppraiser.Variant.MOVINGAVERAGE)
+            ),
+            abi.encode(uint256(0), uint48(0))
+        );
+
+        // Try to get the target price and expect a revert
+        bytes memory err = abi.encodeWithSelector(IOperator.Operator_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Call
+        operator.targetPrice();
+    }
+
+    function test_targetPrice_staleMetric_reverts() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Mock the appraiser to return a stale value for liquid backing per backed ohm
+        vm.mockCall(
+            address(appraiser),
+            abi.encodeWithSignature(
+                "getMetric(uint8,uint8)",
+                uint8(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM),
+                uint8(IAppraiser.Variant.MOVINGAVERAGE)
+            ),
+            abi.encode(uint256(11e18), uint48(block.timestamp - 1 days))
+        );
+
+        // Try to get the target price and expect a revert
+        bytes memory err = abi.encodeWithSelector(IOperator.Operator_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Call
+        operator.targetPrice();
+    }
+
+    function test_targetPrice_usesMetricMovingAverage() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Mock the appraiser to return a moving average value for LBBO that is far from the current value
+        vm.mockCall(
+            address(appraiser),
+            abi.encodeWithSignature(
+                "getMetric(uint8,uint8)",
+                uint8(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM),
+                uint8(IAppraiser.Variant.MOVINGAVERAGE)
+            ),
+            abi.encode(uint256(20e18), uint48(block.timestamp))
+        );
+
+        // Mock a lower moving average value for OHM
+        PRICE.setMovingAverage(address(ohm), 10e18);
+
+        // Get the target price from the operator
+        uint256 target = operator.targetPrice();
+
+        // Check that the target price is the liquid backing per ohm backed
+        assertEq(target, 20e18);
+    }
+
+    function testFuzz_targetPrice_manualTargetPriceNonZero(uint256 priceMA_) public {
+        // Ensure non-zero price and no overflow
+        priceMA_ = bound(priceMA_, 1, type(uint256).max / 1e18);
+
+        // Set the manual target price
+        vm.prank(policy);
+        operator.setManualTargetPrice(1e18);
+
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Update moving average upwards and trigger the operator
+        PRICE.setMovingAverage(address(ohm), priceMA_);
+
+        // Get the target price from the operator
+        uint256 target = operator.targetPrice();
+
+        // Target price will be the manual value
+        assertEq(target, 1e18);
+    }
+
+    function testFuzz_targetPrice_manualTargetPriceZero(uint256 priceMA_) public {
+        // Ensure non-zero price and no overflow
+        priceMA_ = bound(priceMA_, 1, type(uint256).max / 1e18);
+
+        // Set the manual target price to be zero, which means it will not be used
+        vm.prank(policy);
+        operator.setManualTargetPrice(0);
 
         /// Initialize operator
         vm.prank(guardian);

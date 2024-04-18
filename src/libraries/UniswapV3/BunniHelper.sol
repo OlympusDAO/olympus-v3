@@ -5,9 +5,14 @@ pragma solidity 0.8.15;
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
+import {UniswapV3Positions} from "libraries/UniswapV3/Positions.sol";
+import {UniswapV3PoolLibrary} from "libraries/UniswapV3/PoolLibrary.sol";
+
 // Bunni
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
+import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
+import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 
 // Standard libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -38,25 +43,68 @@ library BunniHelper {
             });
     }
 
-    /// @notice         Returns the ratio of token1 to token0 based on the position reserves
-    /// @dev            This function checks only for the reserves in the position, and excludes
-    /// @dev            any uncollected fees. This is to mitigate an attack vector where an attacker
-    /// @dev            performs swaps to adjust the reserves ratio.
+    /// @notice           Convenience method to create a BunniKey identifier representing a concentrated position.
     ///
-    /// @param key_     The BunniKey for the pool
-    /// @param lens_    The BunniLens contract
-    /// @return         The ratio of token1 to token0 in terms of token1 decimals
-    function getReservesRatio(BunniKey memory key_, BunniLens lens_) public view returns (uint256) {
-        IUniswapV3Pool pool = key_.pool;
-        uint8 token0Decimals = ERC20(pool.token0()).decimals();
+    /// @param pool_      The address of the Uniswap V3 pool
+    /// @param tickLower_ The lowest tick of the range
+    /// @param tickUpper_ The highest tick of the range
+    /// @return           The BunniKey identifier
+    function getConcentratedBunniKey(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    ) public view returns (BunniKey memory) {
+        int24 tickSpacing = IUniswapV3Pool(pool_).tickSpacing();
 
-        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        return
+            BunniKey({
+                pool: IUniswapV3Pool(pool_),
+                // The ticks need to be divisible by the tick spacing
+                // Source: https://github.com/Aboudoc/Uniswap-v3/blob/7aa9db0d0bf3d188a8a53a1dbe542adf7483b746/contracts/UniswapV3Liquidity.sol#L49C23-L49C23
+                tickLower: (tickLower_ / tickSpacing) * tickSpacing,
+                tickUpper: (tickUpper_ / tickSpacing) * tickSpacing
+            });
+    }
 
-        // If the denominator is 0
-        if (reserve0 == 0) {
-            return 0;
+    /// @notice         Convenience method to generate BunniHub withdaw parameters
+    function getWithdrawParams(
+        uint256 shares_,
+        uint16 slippageBps_,
+        BunniKey memory key_,
+        IBunniToken existingToken_,
+        address positionOwner_,
+        address recipient_
+    ) public view returns (IBunniHub.WithdrawParams memory) {
+        // Determine the minimum amounts
+        uint256 amount0Min;
+        uint256 amount1Min;
+        {
+            (uint256 amount0, uint256 amount1) = UniswapV3Positions.getPositionAmounts(
+                key_.pool,
+                key_.tickLower,
+                key_.tickUpper,
+                positionOwner_
+            );
+
+            // Adjust for proportion of total supply
+            uint256 totalSupply = existingToken_.totalSupply();
+            amount0 = amount0.mulDiv(shares_, totalSupply);
+            amount1 = amount1.mulDiv(shares_, totalSupply);
+
+            amount0Min = UniswapV3PoolLibrary.getAmountMin(amount0, slippageBps_);
+            amount1Min = UniswapV3PoolLibrary.getAmountMin(amount1, slippageBps_);
         }
 
-        return uint256(reserve1).mulDiv(10 ** token0Decimals, reserve0);
+        // Construct the parameters
+        IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
+            key: key_,
+            recipient: recipient_,
+            shares: shares_,
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            deadline: block.timestamp // Ensures that the action be executed in this block or reverted
+        });
+
+        return params;
     }
 }

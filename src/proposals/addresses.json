@@ -1,0 +1,72 @@
+[
+    {
+        "addr": "0x0000000000000000000000000000000000000001",
+        "name": "proposer",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0941233c964e7d7Efeb05D253176E5E634cEFfcD",
+        "name": "olympus-governor",
+        "chainId": 1
+    },
+    {
+        "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
+        "name": "olympus-multisig-dao",
+        "chainId": 1
+    },
+    {
+        "addr": "0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55",
+        "name": "olympus-multisig-emergency",
+        "chainId": 1
+    },
+    {
+        "addr": "0x2286d7f9639e8158FaD1169e76d1FbC38247f54b",
+        "name": "olympus-kernel",
+        "chainId": 1
+    },
+    {
+        "addr": "0xb216d714d91eeC4F7120a732c11428857C659eC8",
+        "name": "olympus-policy-roles-admin",
+        "chainId": 1
+    },
+    {
+        "addr": "0xB63cac384247597756545b500253ff8E607a8020",
+        "name": "olympus-legacy-staking",
+        "chainId": 1
+    },
+    {
+        "addr": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
+        "name": "olympus-legacy-ohm",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0ab87046fBb341D058F17CBC4c1133F25a20a52f",
+        "name": "olympus-legacy-gohm",
+        "chainId": 1
+    },
+    {
+        "addr": "0x04906695D6D12CF5459975d7C3C03356E4Ccd460",
+        "name": "olympus-legacy-sohm",
+        "chainId": 1
+    },
+    {
+        "addr": "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "name": "external-tokens-dai",
+        "chainId": 1
+    },
+    {
+        "addr": "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+        "name": "external-tokens-sdai",
+        "chainId": 1
+    },
+    {
+        "addr": "0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216",
+        "name": "external-coolers-factory",
+        "chainId": 1
+    },
+    {
+        "addr": "0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c",
+        "name": "olympus-policy-clearinghouse",
+        "chainId": 1
+    }
+]

@@ -42,4 +42,11 @@ contract SentimentArbSupply is CustomSupply {
 
     /// @inheritdoc Submodule
     function INIT() external override onlyParent {}
+
+    // ========== DATA FUNCTIONS ========== //
+
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
 }

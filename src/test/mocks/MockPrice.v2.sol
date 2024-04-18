@@ -9,6 +9,8 @@ contract MockPrice is PRICEv2 {
     mapping(address => uint256[]) internal observations;
     uint48 internal timestamp;
 
+    address[] internal _assets;
+
     constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
         timestamp = uint48(block.timestamp);
         observationFrequency = observationFrequency_;
@@ -36,6 +38,19 @@ contract MockPrice is PRICEv2 {
 
     function setPrice(address asset, uint256 price) public {
         prices[asset] = price;
+
+        // Add to the assets array
+        bool exists = false;
+        for (uint256 i = 0; i < _assets.length; i++) {
+            if (_assets[i] == asset) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists) {
+            _assets.push(asset);
+        }
     }
 
     function setMovingAverage(address asset, uint256 movingAverage) public {
@@ -139,6 +154,10 @@ contract MockPrice is PRICEv2 {
             });
     }
 
+    function isAssetApproved(address asset_) external view override returns (bool) {
+        return true;
+    }
+
     function storePrice(address asset_) external override {
         getPrice(asset_, Variant.CURRENT);
     }
@@ -171,4 +190,14 @@ contract MockPrice is PRICEv2 {
         uint48 lastObservationTime_,
         uint256[] memory observations_
     ) external override {}
+
+    function storeObservations() external virtual override {
+        // Iterate over all assets
+        for (uint256 i = 0; i < _assets.length; i++) {
+            address asset = _assets[i];
+            if (asset == address(0)) continue;
+
+            getPrice(asset, Variant.CURRENT);
+        }
+    }
 }

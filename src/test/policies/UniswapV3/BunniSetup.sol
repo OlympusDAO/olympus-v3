@@ -81,7 +81,7 @@ contract BunniSetup is Test {
             PRICE = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
 
             address[2] memory tokens = [ohm_, gOHM_];
-            SPPLY = new OlympusSupply(kernel, tokens, 0);
+            SPPLY = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
         }
 
         // Deploy the BunniManager policy
