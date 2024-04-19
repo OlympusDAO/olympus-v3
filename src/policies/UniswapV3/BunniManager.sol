@@ -783,12 +783,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         address pool_,
         uint256 id_
     ) public view override bunniHubSet returns (uint256) {
-        // Get the token
-        // `getPositionToken` will revert if the pool is not found
-        IBunniToken token = getPositionToken(pool_, id_);
-
         // Get the balance of the token in TRSRY
-        return token.balanceOf(address(TRSRY));
+        // `getPositionToken` will revert if the pool is not found
+        return getPositionToken(pool_, id_).balanceOf(address(TRSRY));
     }
 
     /// @inheritdoc IBunniManager
