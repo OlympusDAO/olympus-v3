@@ -1552,7 +1552,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployFullRangeToken(address(pool));
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PositionHasNoLiquidity.selector,
+            BunniManager.BunniManager_PositionLiquidity_IncorrectState.selector,
             address(pool),
             0
         );
@@ -2080,7 +2080,7 @@ contract BunniManagerTest is Test {
         );
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PositionHasLiquidity.selector,
+            BunniManager.BunniManager_PositionLiquidity_IncorrectState.selector,
             address(pool),
             0
         );
@@ -3357,7 +3357,7 @@ contract BunniManagerTest is Test {
 
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
             usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -3366,6 +3366,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3803,7 +3804,7 @@ contract BunniManagerTest is Test {
 
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
             usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -3812,6 +3813,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,
@@ -3859,7 +3861,7 @@ contract BunniManagerTest is Test {
 
             // Deploy the token
             vm.prank(policy);
-            token = bunniManager.deployPoolToken(address(pool));
+            token = bunniManager.deployFullRangeToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
             usdc.mint(treasuryAddress, USDC_DEPOSIT);
@@ -3868,6 +3870,7 @@ contract BunniManagerTest is Test {
             vm.prank(policy);
             bunniManager.deposit(
                 address(pool),
+                0,
                 ohmAddress,
                 OHM_DEPOSIT,
                 USDC_DEPOSIT,

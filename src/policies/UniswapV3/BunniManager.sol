@@ -149,15 +149,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param id_      The id of the position
     error BunniManager_PositionIdNotFound(address pool_, uint256 id_);
 
-    /// @notice         Emitted if the position has no liquidity (when it should)
+    /// @notice         Emitted if the position has incorrect liquidity
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PositionHasNoLiquidity(address pool_, uint256 id_);
-
-    /// @notice         Emitted if the position has liquidity (when it should not)
-    ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PositionHasLiquidity(address pool_, uint256 id_);
+    /// @param id_      The id of the position
+    error BunniManager_PositionLiquidity_IncorrectState(address pool_, uint256 id_);
 
     /// @notice         Emitted if the position has already been deployed as a token
     ///
@@ -231,7 +227,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice     The pools that have been deployed by this policy
     address[] public pools;
-    uint256 public poolCount;
 
     // The positions that have been deployed by this policy for a given pool
     /// @notice     Maps a pool address to an array of BunniKeys
@@ -341,6 +336,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     // =========  POOL REGISTRATION ========= //
 
+    function _revertIfTokenDeployed(address token_, address pool_) internal view {
+        uint256 numPositions = positionCount[pool_];
+        for (uint256 i = 0; i < numPositions; i++) {
+            BunniKey memory key = positions[pool_][i];
+            if (address(_getPositionToken(pool_, i, key)) == token_)
+                revert BunniManager_TokenDeployed(token_, pool_, i);
+        }
+    }
+
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     /// @dev        - The policy is inactive
@@ -372,12 +376,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = prevManager.getPositionKey(pool_, prevId_);
 
         // Check if the position is already registered
-        uint256 numPositions = positionCount[pool_];
-        for (uint256 i = 0; i < numPositions; i++) {
-            BunniKey memory check = positions[pool_][i];
-            if (check.tickLower == key.tickLower && check.tickUpper == key.tickUpper)
-                revert BunniManager_TokenDeployed(address(token), pool_, i);
-        }
+        _revertIfTokenDeployed(address(token), pool_);
 
         // Update the pool (if necessary) and position registries and emit the event
         _updatePoolAndPositionRegistry(pool_, key);
@@ -476,7 +475,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PositionHasNoLiquidity(pool_, id_);
+        ) revert BunniManager_PositionLiquidity_IncorrectState(pool_, id_);
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
         _addPositionTokenToPRICE(
@@ -528,7 +527,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PositionHasLiquidity(pool_, id_);
+        ) revert BunniManager_PositionLiquidity_IncorrectState(pool_, id_);
 
         // De-register the pool token
         _removePositionTokenFromPRICE(positionToken);
@@ -714,7 +713,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Determine the award amount
         uint256 currentHarvestReward = getCurrentHarvestReward();
-        uint256 numPools = poolCount;
+        uint256 numPools = pools.length;
         for (uint256 i = 0; i < numPools; i++) {
             address poolAddress = pools[i];
             uint256 numPositions = positionCount[poolAddress];
@@ -795,12 +794,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         address pool_,
         uint256 id_
     ) public view override bunniHubSet returns (uint256) {
-        // Get the token
-        // `getPositionToken` will revert if the pool is not found
-        IBunniToken token = getPositionToken(pool_, id_);
-
         // Get the balance of the token in TRSRY
-        return token.balanceOf(address(TRSRY));
+        // `getPositionToken` will revert if the pool is not found
+        return getPositionToken(pool_, id_).balanceOf(address(TRSRY));
     }
 
     /// @inheritdoc IBunniManager
@@ -818,7 +814,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         uint256 feeUsdValue; // Scale: PRICE decimals
         uint256 priceScale = 10 ** PRICE.decimals();
-        uint256 numPools = poolCount;
+        uint256 numPools = pools.length;
         for (uint256 i = 0; i < numPools; i++) {
             address poolAddress = pools[i];
 
@@ -828,49 +824,58 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             );
             uint256 price0 = PRICE.getPrice(token0Address);
             uint256 price1 = PRICE.getPrice(token1Address);
+            uint256 token0Scale = 10 ** ERC20(token0Address).decimals();
+            uint256 token1Scale = 10 ** ERC20(token1Address).decimals();
 
             uint256 numPositions = positionCount[poolAddress];
             for (uint256 j = 0; j < numPositions; j++) {
-                // Skip if no shares have been minted
-                if (getPositionTokenBalance(poolAddress, j) == 0) continue;
+                (uint256 token0Fees, uint256 token1Fees) = _calculatePositionFees(poolAddress, j);
 
-                BunniKey memory key = positions[poolAddress][j];
-
-                uint256 token0Fees;
-                uint256 token1Fees;
-                {
-                    // Get the fees
-                    (uint128 fees0, uint128 fees1) = UniswapV3Positions.getPositionFees(
-                        key.pool,
-                        key.tickLower,
-                        key.tickUpper,
-                        address(bunniHub)
-                    );
-                    // Convert fees from native into PRICE decimals
-                    token0Fees = uint256(fees0).mulDiv(
-                        priceScale,
-                        10 ** ERC20(token0Address).decimals()
-                    );
-                    token1Fees = uint256(fees1).mulDiv(
-                        priceScale,
-                        10 ** ERC20(token1Address).decimals()
-                    );
-                }
                 // Get the USD value of the fees
-                feeUsdValue += price0.mulDiv(token0Fees, priceScale);
-                feeUsdValue += price1.mulDiv(token1Fees, priceScale);
+                feeUsdValue += price0.mulDiv(
+                    uint256(token0Fees).mulDiv(priceScale, token0Scale),
+                    priceScale
+                );
+                feeUsdValue += price1.mulDiv(
+                    uint256(token1Fees).mulDiv(priceScale, token1Scale),
+                    priceScale
+                );
             }
         }
 
-        // Calculate the reward value
-        uint256 rewardUsdValue = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX);
-
         // Convert in terms of OHM
-        uint256 ohmPrice = PRICE.getPrice(ohm); // This will revert if the asset is not defined or 0
-        uint256 ohmAmount = rewardUsdValue.mulDiv(1e9, ohmPrice); // Scale: OHM decimals
+        uint256 ohmAmount = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX).mulDiv(
+            1e9,
+            PRICE.getPrice(ohm) // This will revert if the asset is not defined or 0
+        ); // Scale: OHM decimals
 
         // Returns the minimum
         return ohmAmount < harvestRewardMax ? ohmAmount : harvestRewardMax;
+    }
+
+    function _calculatePositionFees(
+        address pool_,
+        uint256 id_
+    ) internal view returns (uint256 token0Fees, uint256 token1Fees) {
+        // Skip if no shares have been minted
+        if (getPositionTokenBalance(pool_, id_) == 0) return (0, 0);
+
+        BunniKey memory key = _getPositionKey(pool_, id_);
+
+        // Get the fees
+        (uint128 fees0, uint128 fees1) = UniswapV3Positions.getPositionFees(
+            key.pool,
+            key.tickLower,
+            key.tickUpper,
+            address(bunniHub)
+        );
+
+        return (uint256(fees0), uint256(fees1));
+    }
+
+    /// @notice     Returns the number of pools that have been deployed by this policy
+    function poolCount() public view returns (uint256) {
+        return pools.length;
     }
 
     //============================================================================================//
@@ -982,9 +987,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         if (positionCount[pool_] <= id_) revert BunniManager_PositionIdNotFound(pool_, id_);
 
         // Get the appropriate BunniKey representing the position
-        BunniKey memory key = positions[pool_][id_];
-
-        return key;
+        return positions[pool_][id_];
     }
 
     /// @notice         Deploys a BunniToken for the given pool and BunniKey
@@ -1001,21 +1004,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check if a token for the pool has been deployed already
         address token = address(bunniHub.getBunniToken(key_));
         if (token != address(0)) {
-            uint256 numPositions = positionCount[pool_];
-            for (uint256 i = 0; i < numPositions; i++) {
-                BunniKey memory check = positions[pool_][i];
-                if (check.tickLower == key_.tickLower && check.tickUpper == key_.tickUpper)
-                    revert BunniManager_TokenDeployed(token, pool_, i);
-            }
+            _revertIfTokenDeployed(token, pool_);
+
             // Should never happen, as if there is a token, the position must be registered.
             revert BunniManager_TokenDeployed(token, pool_, 0);
         }
 
         // Update the pool (if necessary) and position registries and deploy the token
         _updatePoolAndPositionRegistry(pool_, key_);
-        IBunniToken deployedToken = bunniHub.deployBunniToken(key_);
 
-        return deployedToken;
+        return bunniHub.deployBunniToken(key_);
     }
 
     /// @notice         Updates the pool and position registries to store the new BunniKey
@@ -1036,7 +1034,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
             // Update the pool registry
             pools.push(pool_);
-            poolCount++;
         }
 
         // Update the position registry
@@ -1107,7 +1104,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        (such as `harvest()`) need to use this functionality, but would
     /// @dev        run into re-entrancy issues using the external/public function.
     function _updateSwapFees() internal {
-        uint256 numPools = poolCount;
+        uint256 numPools = pools.length;
         for (uint256 i = 0; i < numPools; i++) {
             address poolAddress = pools[i];
             uint256 numPositions = positionCount[poolAddress];
