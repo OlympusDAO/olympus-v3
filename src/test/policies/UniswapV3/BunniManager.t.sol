@@ -1552,7 +1552,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployFullRangeToken(address(pool));
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PositionHasNoLiquidity.selector,
+            BunniManager.BunniManager_PositionLiquidity_IncorrectState.selector,
             address(pool),
             0
         );
@@ -2080,7 +2080,7 @@ contract BunniManagerTest is Test {
         );
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PositionHasLiquidity.selector,
+            BunniManager.BunniManager_PositionLiquidity_IncorrectState.selector,
             address(pool),
             0
         );
