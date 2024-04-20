@@ -149,15 +149,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param id_      The id of the position
     error BunniManager_PositionIdNotFound(address pool_, uint256 id_);
 
-    /// @notice         Emitted if the position has no liquidity (when it should)
+    /// @notice         Emitted if the position has incorrect liquidity
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PositionHasNoLiquidity(address pool_, uint256 id_);
-
-    /// @notice         Emitted if the position has liquidity (when it should not)
-    ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PositionHasLiquidity(address pool_, uint256 id_);
+    /// @param id_      The id of the position
+    error BunniManager_PositionLiquidity_IncorrectState(address pool_, uint256 id_);
 
     /// @notice         Emitted if the position has already been deployed as a token
     ///
@@ -340,6 +336,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     // =========  POOL REGISTRATION ========= //
 
+    function _revertIfTokenDeployed(address token_, address pool_) internal view {
+        uint256 numPositions = positionCount[pool_];
+        for (uint256 i = 0; i < numPositions; i++) {
+            BunniKey memory key = positions[pool_][i];
+            if (address(_getPositionToken(pool_, i, key)) == token_)
+                revert BunniManager_TokenDeployed(token_, pool_, i);
+        }
+    }
+
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     /// @dev        - The policy is inactive
@@ -371,12 +376,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = prevManager.getPositionKey(pool_, prevId_);
 
         // Check if the position is already registered
-        uint256 numPositions = positionCount[pool_];
-        for (uint256 i = 0; i < numPositions; i++) {
-            BunniKey memory check = positions[pool_][i];
-            if (check.tickLower == key.tickLower && check.tickUpper == key.tickUpper)
-                revert BunniManager_TokenDeployed(address(token), pool_, i);
-        }
+        _revertIfTokenDeployed(address(token), pool_);
 
         // Update the pool (if necessary) and position registries and emit the event
         _updatePoolAndPositionRegistry(pool_, key);
@@ -475,7 +475,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PositionHasNoLiquidity(pool_, id_);
+        ) revert BunniManager_PositionLiquidity_IncorrectState(pool_, id_);
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
         _addPositionTokenToPRICE(
@@ -527,7 +527,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PositionHasLiquidity(pool_, id_);
+        ) revert BunniManager_PositionLiquidity_IncorrectState(pool_, id_);
 
         // De-register the pool token
         _removePositionTokenFromPRICE(positionToken);
@@ -993,12 +993,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check if a token for the pool has been deployed already
         address token = address(bunniHub.getBunniToken(key_));
         if (token != address(0)) {
-            uint256 numPositions = positionCount[pool_];
-            for (uint256 i = 0; i < numPositions; i++) {
-                BunniKey memory check = positions[pool_][i];
-                if (check.tickLower == key_.tickLower && check.tickUpper == key_.tickUpper)
-                    revert BunniManager_TokenDeployed(token, pool_, i);
-            }
+            _revertIfTokenDeployed(token, pool_);
+
             // Should never happen, as if there is a token, the position must be registered.
             revert BunniManager_TokenDeployed(token, pool_, 0);
         }
