@@ -32,7 +32,7 @@ contract Distributor is IDistributor, Policy, RolesConsumer {
 
     /// Olympus contract dependencies
     ERC20 private immutable ohm; // OHM Token
-    address private immutable staking; // OHM Staking Contract
+    IStaking public immutable staking; // OHM Staking Contract
 
     /// Policy state
     address[] public pools; // Liquidity pools to receive rewards
@@ -61,7 +61,7 @@ contract Distributor is IDistributor, Policy, RolesConsumer {
         ) revert Distributor_InvalidConstruction();
 
         ohm = ERC20(ohm_);
-        staking = staking_;
+        staking = IStaking(staking_);
         rewardRate = initialRate_;
     }
 
@@ -111,7 +111,7 @@ contract Distributor is IDistributor, Policy, RolesConsumer {
     ///         function.
     function triggerRebase() external {
         unlockRebase = true;
-        IStaking(staking).unstake(msg.sender, 0, true, true); // Give the caller the bounty OHM
+        staking.unstake(msg.sender, 0, true, true); // Give the caller the bounty OHM
         if (unlockRebase) revert Distributor_NoRebaseOccurred();
     }
 
@@ -122,14 +122,14 @@ contract Distributor is IDistributor, Policy, RolesConsumer {
     ///         NOTE: This does not add additional emissions (user could be staked instead and get the
     ///         same tokens).
     function distribute() external {
-        if (msg.sender != staking) revert Distributor_OnlyStaking();
+        if (msg.sender != address(staking)) revert Distributor_OnlyStaking();
         if (!unlockRebase) revert Distributor_NotUnlocked();
 
         // Open minter approval by requesting max approval
         MINTR.increaseMintApproval(address(this), type(uint256).max);
 
         // Mint enough for rebase
-        MINTR.mintOhm(staking, nextRewardFor(staking));
+        MINTR.mintOhm(address(staking), nextRewardFor(address(staking)));
 
         // Mint OHM for mint&sync pools
         uint256 poolLength = pools.length;
@@ -156,9 +156,9 @@ contract Distributor is IDistributor, Policy, RolesConsumer {
     /// @notice Mints the bounty (if > 0) to the staking contract for distribution.
     /// @return uint256 The amount of OHM minted as a bounty.
     function retrieveBounty() external returns (uint256) {
-        if (msg.sender != staking) revert Distributor_OnlyStaking();
+        if (msg.sender != address(staking)) revert Distributor_OnlyStaking();
 
-        if (bounty > 0) MINTR.mintOhm(staking, bounty);
+        if (bounty > 0) MINTR.mintOhm(address(staking), bounty);
 
         return bounty;
     }

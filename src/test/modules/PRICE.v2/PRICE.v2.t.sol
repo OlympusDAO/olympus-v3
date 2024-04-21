@@ -2052,13 +2052,8 @@ contract PriceV2Test is Test {
         vm.warp(uint256(start) + 1);
         ethUsdPriceFeed.setLatestAnswer(int256(2001e8));
 
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_InsufficientTimeElapsed(address,uint48)",
-            address(weth),
-            uint48(start)
-        );
-        vm.expectRevert(err);
-
+        // Call the function
+        // Should not revert
         vm.prank(writer);
         price.storePrice(address(weth));
     }
@@ -2346,6 +2341,59 @@ contract PriceV2Test is Test {
             (t1_expectedPrice + t2_expectedPrice) / 2,
             "t2: moving average did not match"
         );
+    }
+
+    function _addWEth() internal {
+        // Add one asset to the price module
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        vm.prank(writer);
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_ // don't track WETH MA
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function test_storeObservations(uint256 nonce_) public {
+        // Add a non-MA asset
+        _addWEth();
+
+        // Add an MA asset
+        _addOneMAAsset(nonce_, 10);
+
+        uint48 start = uint48(block.timestamp);
+
+        // Warp forward in time and store a new price
+        vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
+        onemaUsdPriceFeed.setLatestAnswer(int256(50e8));
+        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+
+        vm.prank(writer);
+        price.storeObservations();
+
+        // Non-MA assets should not have any effect
+        PRICEv2.Asset memory asset = price.getAssetData(address(weth));
+        assertEq(asset.lastObservationTime, start);
+
+        // MA asset should have been updated
+        asset = price.getAssetData(address(onema));
+        assertEq(asset.lastObservationTime, uint48(start + OBSERVATION_FREQUENCY));
     }
 
     // ========== addAsset ========== //

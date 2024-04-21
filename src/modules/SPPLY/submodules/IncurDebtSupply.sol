@@ -126,6 +126,11 @@ contract IncurDebtSupply is SupplySubmodule {
         return 1;
     }
 
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice             Set the address of the IncurDebt contract

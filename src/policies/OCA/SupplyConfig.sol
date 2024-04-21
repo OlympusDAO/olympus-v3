@@ -48,7 +48,7 @@ contract SupplyConfig is Policy, RolesConsumer {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
 
-        requests = new Permissions[](6);
+        requests = new Permissions[](8);
         // SPPLY Permissions
         requests[0] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
         requests[1] = Permissions(SPPLY_KEYCODE, SPPLY.removeCategory.selector);
@@ -56,6 +56,8 @@ contract SupplyConfig is Policy, RolesConsumer {
         requests[3] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
         requests[4] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
         requests[5] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
+        requests[6] = Permissions(SPPLY_KEYCODE, SPPLY.registerForObservations.selector);
+        requests[7] = Permissions(SPPLY_KEYCODE, SPPLY.unregisterFromObservations.selector);
     }
 
     /// @notice     Returns the current version of the policy
@@ -104,6 +106,24 @@ contract SupplyConfig is Policy, RolesConsumer {
         SupplyCategory category_
     ) external onlyRole("supplyconfig_policy") {
         SPPLY.categorize(location_, category_);
+    }
+
+    //==================================================================================================//
+    //                                      OBSERVATION MANAGEMENT                                      //
+    //==================================================================================================//
+
+    /// @notice     Register a submodule for observations
+    function registerForObservations(
+        SubKeycode subKeycode_
+    ) external onlyRole("supplyconfig_policy") {
+        SPPLY.registerForObservations(subKeycode_);
+    }
+
+    /// @notice     Unregister a submodule for observations
+    function unregisterFromObservations(
+        SubKeycode subKeycode_
+    ) external onlyRole("supplyconfig_policy") {
+        SPPLY.unregisterFromObservations(subKeycode_);
     }
 
     //==================================================================================================//

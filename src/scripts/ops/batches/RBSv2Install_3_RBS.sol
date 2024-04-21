@@ -296,6 +296,15 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     BunniSupply(bunniSupply)
                 )
             );
+
+            console2.log("Register BunniSupply for observations");
+            addToBatch(
+                supplyConfig,
+                abi.encodeWithSelector(
+                    SupplyConfig.registerForObservations.selector,
+                    BunniSupply(bunniSupply).SUBKEYCODE()
+                )
+            );
         }
 
         console2.log("*** END SIMULATION SETUP ***");
@@ -625,7 +634,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime");
+            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
             uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
             console2.log("Adding veFXS price feed to PRICE");
@@ -667,7 +676,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime");
+            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
             uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
             console2.log("Adding FXS price feed to PRICE");
@@ -710,7 +719,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256 ohmLastObsTime_ = argData.readUint(".ohmLastObsTime");
+            uint256 ohmLastObsTime_ = argData.readUint(".ohmLastObsTime"); // Should be within the last 8 hours
             uint256[] memory ohmObs_ = argData.readUintArray(".ohmObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
             console2.log("Adding OHM price feed to PRICE");
@@ -951,10 +960,10 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         // 6. Deploy an LP token for the pool using BunniManager
         {
-            console2.log("Deploying LP token for Uniswap V3 OHM-wETH pool");
+            console2.log("Deploying LP token for full range position Uniswap V3 OHM-wETH pool");
             addToBatch(
                 bunniManager,
-                abi.encodeWithSelector(BunniManager.deployPoolToken.selector, ohmWethUniV3Pool)
+                abi.encodeWithSelector(BunniManager.deployFullRangeToken.selector, ohmWethUniV3Pool)
             );
         }
 
@@ -983,14 +992,40 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 8. Activate the LP token
         // This will also register the LP token with TRSRY, PRICE and SPPLY
         {
+            uint32 ohmWethPriceMovingAverageDuration = 1 days;
+            uint48 ohmWethPriceLastObservationTime = uint48(
+                argData.readUint(".ohmWethPriceLastObsTime")
+            );
+            // This loads the price per share for the OHM-wETH position
+            // To calculate: (OHM balance * OHM price + wETH balance * wETH price) / liquidity
+            // See BunniHub._mintShares() for more information
+            uint256[] memory ohmWethPriceObservations = argData.readUintArray(".ohmWethPriceObs"); // 1 day * 24 hours / 8 hours = 3 observations
+
+            uint32 ohmWethReserveMovingAverageDuration = 1 days;
+            uint48 ohmWethReserveLastObservationTime = uint48(
+                argData.readUint(".ohmWethReserveLastObsTime")
+            ); // Should be within the last 8 hours
+            uint256[] memory ohmWethReserveToken0Observations = argData.readUintArray(
+                ".ohmWethReserveToken0Observations"
+            );
+            uint256[] memory ohmWethReserveToken1Observations = argData.readUintArray(
+                ".ohmWethReserveToken1Observations"
+            );
+
             console2.log("Activating LP token for Uniswap V3 OHM-wETH pool");
             addToBatch(
                 bunniManager,
                 abi.encodeWithSelector(
-                    BunniManager.activatePoolToken.selector,
+                    BunniManager.activatePositionToken.selector,
                     ohmWethUniV3Pool,
-                    twapMaxDeviationBps,
-                    twapObservationWindow
+                    0,
+                    ohmWethPriceMovingAverageDuration,
+                    ohmWethPriceLastObservationTime,
+                    ohmWethPriceObservations,
+                    ohmWethReserveMovingAverageDuration,
+                    ohmWethReserveLastObservationTime,
+                    ohmWethReserveToken0Observations,
+                    ohmWethReserveToken1Observations
                 )
             );
         }
@@ -1001,8 +1036,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 1. Activates Appraiser policy
         // 2. Activates Operator policy
         // 3. Activates Heart policy
-        // 4. Add moving average assets to Heart
-        // 5. Check that the assets with moving average tracking are configured in Heart
+        // 4. Add DAO MS to the Appraiser role
+        // 5. Configure metric moving average assets on Heart
         // 6. Sets operator address on bond callback
         // 7. Set roles for policy access control
         // 8. Initializes the operator policy
@@ -1033,78 +1068,38 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heartV2)
         );
 
-        // 4. Add moving average assets to Heart
+        // 4. Add DAO MS to the Appraiser role
         {
-            console2.log("Adding FXS as a moving average asset in Heart");
+            //      - Give DAO MS the appraiser_admin role
+            console2.log("Granting appraiser_admin role for Appraiser policy to DAO MS");
             addToBatch(
-                heartV2,
-                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, fxs)
-            );
-
-            console2.log("Adding veFXS as a moving average asset in Heart");
-            addToBatch(
-                heartV2,
-                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, veFXS)
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("appraiser_admin"),
+                    daoMS
+                )
             );
         }
 
-        // 5. Check that the assets with moving average tracking are configured in Heart
+        // 5. Configure metric moving average assets on Heart
+        //  - 30 days
         {
-            console2.log("Checking Heart tracked assets");
-            OlympusPricev2 PRICE = OlympusPricev2(priceV2);
+            uint32 movingAverageDuration = uint32(30 days);
+            uint256 lastObsTime_ = argData.readUint(".lbboLastObsTime"); // Should be within the last 8 hours
+            uint256[] memory obs_ = argData.readUintArray(".lbboObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
-            // Get the assets from PRICE
-            address[] memory priceAssets = PRICE.getAssets();
-
-            // Determine the number of tracked assets
-            console2.log("    Getting PRICE assets");
-            uint256 trackedAssetsCount = 0;
-            for (uint256 i = 0; i < priceAssets.length; i++) {
-                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
-
-                if (!assetData.storeMovingAverage) {
-                    continue;
-                }
-
-                trackedAssetsCount++;
-            }
-
-            // Filter the assets with tracked moving averages
-            address[] memory trackedAssets = new address[](trackedAssetsCount);
-            uint256 trackedAssetsIndex = 0;
-            for (uint256 i = 0; i < priceAssets.length; i++) {
-                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
-
-                if (!assetData.storeMovingAverage) {
-                    continue;
-                }
-
-                trackedAssets[trackedAssetsIndex] = priceAssets[i];
-                trackedAssetsIndex++;
-            }
-
-            // Get the assets from Heart
-            console2.log("    Getting Heart tracked assets");
-            address[] memory heartAssets = OlympusHeart(heartV2).getMovingAverageAssets();
-
-            // Check that the assets match
-            console2.log("    Checking that assets match");
-            for (uint256 i = 0; i < heartAssets.length; i++) {
-                bool found = false;
-                console2.log("    Checking asset %s", heartAssets[i]);
-
-                for (uint256 j = 0; j < trackedAssets.length; j++) {
-                    if (heartAssets[i] == trackedAssets[j]) {
-                        found = true;
-                        break;
-                    }
-                }
-
-                assertEq(found, true, "Asset not configured in Heart");
-            }
-            assertEq(heartAssets.length, trackedAssets.length, "Assets do not match");
-
-            console2.log("    Assets match");
+            console2.log("Configure LBBO moving average on Appraiser");
+            addToBatch(
+                appraiser,
+                abi.encodeWithSelector(
+                    Appraiser.updateMetricMovingAverage.selector,
+                    IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                    movingAverageDuration,
+                    uint48(lastObsTime_),
+                    obs_
+                )
+            );
         }
 
         // 6. Set operator address on bond callback
@@ -1117,12 +1112,23 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 7. Set roles for policy access control
         // Operator policy
         //     - Give Heart the operator_operate role
-        console2.log("Granting operator_operate role for Operator policy");
+        console2.log("Granting operator_operate role for Operator policy to Heart");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
                 bytes32("operator_operate"),
+                heartV2
+            )
+        );
+        // Appraiser policy
+        //      - Give Heart the appraiser_store role
+        console2.log("Granting appraiser_store role for Appraiser policy to Heart");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("appraiser_store"),
                 heartV2
             )
         );

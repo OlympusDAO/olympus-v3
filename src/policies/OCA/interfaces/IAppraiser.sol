@@ -7,7 +7,8 @@ interface IAppraiser {
     // ========== DATA STRUCTURES ========== //
     enum Variant {
         CURRENT,
-        LAST
+        LAST,
+        MOVINGAVERAGE
     }
 
     enum Metric {
@@ -23,6 +24,15 @@ interface IAppraiser {
     struct Cache {
         uint256 value;
         uint48 timestamp;
+    }
+
+    struct MovingAverage {
+        uint32 movingAverageDuration; // the duration of the moving average
+        uint16 nextObsIndex; // the index of obs at which the next observation will be stored
+        uint16 numObservations;
+        uint48 lastObservationTime;
+        uint256 cumulativeObs;
+        uint256[] obs;
     }
 
     //============================================================================================//
@@ -120,4 +130,89 @@ interface IAppraiser {
     ///
     /// @param metric_  The Metric to cache the value of
     function storeMetric(Metric metric_) external;
+
+    //============================================================================================//
+    //                                       MOVING AVERAGES                                      //
+    //============================================================================================//
+
+    /// @notice         Updates the configuration for an asset value moving average
+    ///
+    /// @param asset_   The address of the asset to update the moving average configuration for
+    /// @param movingAverageDuration_ The duration of the moving average
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The observations to set
+    function updateAssetMovingAverage(
+        address asset_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external;
+
+    /// @notice         Stores observation for asset value moving average
+    ///
+    /// @param asset_   The address of the asset to store the observation for
+    function storeAssetObservation(address asset_) external;
+
+    /// @notice         Gets the moving average configuration for an asset
+    ///
+    /// @param asset_   The address of the asset to get the moving average configuration for
+    /// @return         The moving average configuration
+    function getAssetMovingAverageData(address asset_) external view returns (MovingAverage memory);
+
+    /// @notice         Updates the configuration for a category value moving average
+    ///
+    /// @param category_   The category to update the moving average configuration for
+    /// @param movingAverageDuration_ The duration of the moving average
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The observations to set
+    function updateCategoryMovingAverage(
+        Category category_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external;
+
+    /// @notice             Stores observation for category value moving average
+    ///
+    /// @param category_    The TRSRY category to store the observation for
+    function storeCategoryObservation(Category category_) external;
+
+    /// @notice         Gets the moving average configuration for a category
+    ///
+    /// @param category_   The category to get the moving average configuration for
+    /// @return         The moving average configuration
+    function getCategoryMovingAverageData(
+        Category category_
+    ) external view returns (MovingAverage memory);
+
+    /// @notice         Updates the configuration for a metric value moving average
+    ///
+    /// @param metric_   The metric to update the moving average configuration for
+    /// @param movingAverageDuration_ The duration of the moving average
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The observations to set
+    function updateMetricMovingAverage(
+        Metric metric_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external;
+
+    /// @notice         Stores observation for metric moving average
+    ///
+    /// @param metric_ The Metric to store the observation for
+    function storeMetricObservation(Metric metric_) external;
+
+    /// @notice         Gets the moving average configuration for a metric
+    ///
+    /// @param metric_   The metric to get the moving average configuration for
+    /// @return         The moving average configuration
+    function getMetricMovingAverageData(
+        Metric metric_
+    ) external view returns (MovingAverage memory);
+
+    /// @notice         Gets the observation frequency for the moving average
+    ///
+    /// @return         uint32      The observation frequency
+    function getObservationFrequency() external view returns (uint32);
 }

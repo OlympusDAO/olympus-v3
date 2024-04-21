@@ -65,6 +65,11 @@ contract OlympusPricev2 is PRICEv2 {
         return _assetData[asset_];
     }
 
+    /// @inheritdoc PRICEv2
+    function isAssetApproved(address asset_) external view override returns (bool) {
+        return _assetData[asset_].approved;
+    }
+
     // ========== ASSET PRICES ========== //
 
     /// @inheritdoc PRICEv2
@@ -181,6 +186,7 @@ contract OlympusPricev2 is PRICEv2 {
         // If moving average is used and it is meant to be included, add to end of prices array
         if (asset.useMovingAverage && includeMovingAverage_) {
             // Check if the moving average is stale
+            // If the observation frequency has passed (including in the current block), it is stale and should be updated
             if (asset.lastObservationTime + observationFrequency <= block.timestamp)
                 revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
 
@@ -347,17 +353,11 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev        - The asset is not approved
     /// @dev        - The caller is not permissioned
     /// @dev        - The price was not able to be determined
-    /// @dev        - The time elapsed since the last observation is less than the configured observation frequency
     function storePrice(address asset_) public override permissioned {
         Asset storage asset = _assetData[asset_];
 
         // Check if asset is approved
         if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
-
-        // Check that sufficient time has passed to record a new observation
-        uint48 lastObservationTime = asset.lastObservationTime;
-        if (lastObservationTime + observationFrequency > block.timestamp)
-            revert PRICE_InsufficientTimeElapsed(asset_, lastObservationTime);
 
         // Get the current price for the asset
         (uint256 price, uint48 currentTime, ) = _getCurrentPrice(asset_, false);
@@ -376,6 +376,30 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Emit event
         emit PriceStored(asset_, price, currentTime);
+    }
+
+    /// @inheritdoc PRICEv2
+    /// @dev        Implements the following logic:
+    /// @dev        - Iterate over all assets
+    /// @dev        - Ignores assets that do not store the moving average
+    /// @dev        - Store the price for each asset using `storePrice()`
+    function storeObservations() public override permissioned {
+        // Iterate through assets and store the price for each
+        uint256 len = assets.length;
+
+        for (uint256 i; i < len; ) {
+            address currentAsset = assets[i];
+            Asset memory asset = _assetData[currentAsset];
+
+            // Only process if the moving average is stored
+            if (asset.approved && asset.storeMovingAverage) {
+                storePrice(currentAsset);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     // ========== ASSET MANAGEMENT ========== //

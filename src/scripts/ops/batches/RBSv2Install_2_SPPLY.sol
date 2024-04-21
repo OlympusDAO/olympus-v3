@@ -168,11 +168,25 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
 
         // 5. Install the BunniSupply submodule on the OlympusSupply module
         // No configuration needed - will be performed by BunniManager
-        console2.log("Installing BunniSupply submodule");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(SupplyConfig.installSubmodule.selector, BunniSupply(bunniSupply))
-        );
+        {
+            console2.log("Installing BunniSupply submodule");
+            addToBatch(
+                supplyConfig,
+                abi.encodeWithSelector(
+                    SupplyConfig.installSubmodule.selector,
+                    BunniSupply(bunniSupply)
+                )
+            );
+
+            console2.log("Register BunniSupply for observations");
+            addToBatch(
+                supplyConfig,
+                abi.encodeWithSelector(
+                    SupplyConfig.registerForObservations.selector,
+                    BunniSupply(bunniSupply).SUBKEYCODE()
+                )
+            );
+        }
 
         // 6. Install the MigrationOffsetSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment

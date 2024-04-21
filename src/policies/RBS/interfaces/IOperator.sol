@@ -171,13 +171,20 @@ interface IOperator {
     /// @dev    Emergency shutdown function for Cushions
     function deactivateCushion(bool high_) external;
 
+    /// @notice Set the manual target price
+    /// @dev    If `manualTargetPrice` is greater than 0, the operator will use the manual target price
+    ///
+    /// @param  targetPrice_    The new target price
+    function setManualTargetPrice(uint256 targetPrice_) external;
+
     // =========  VIEW FUNCTIONS ========= //
 
-    /// @notice Returns the Operator's target price. Target Price is the maximum of liquid backing per backed ohm and
-    /// @notice the moving average of OHM against the reserve (duration and frequency configured on PRICE).
-    /// @dev This function calculates the target price based on the liquid backing per backed ohm and the moving average
-    /// @dev During an operate transaction, it is expected that it will be updated in the same block prior to the call.
-    /// @return targetPrice_ - The target price
+    /// @notice Returns the Operator's target price
+    /// @notice Target price is the maximum of liquid backing per backed ohm and the moving average of OHM against the reserve.
+    /// @dev    If `manualTargetPrice` is greater than 0, the operator will use the manual target price. Otherwise it will use the automated target price determined as above.
+    /// @dev    During an operate transaction, it is expected that the metric will be updated in the same block, prior to the call.
+    ///
+    /// @return targetPrice_    The target price
     function targetPrice() external view returns (uint256);
 
     /// @notice Returns the full capacity of the specified wall (if it was regenerated now)

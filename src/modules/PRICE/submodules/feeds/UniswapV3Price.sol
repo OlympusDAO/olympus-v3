@@ -5,7 +5,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
 import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {Deviation} from "libraries/Deviation.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 // Uniswap V3
@@ -43,8 +42,6 @@ contract UniswapV3Price is PriceSubmodule {
     int24 internal constant MIN_TICK = -887272;
     /// @notice     The maximum tick that can be used in a pool, as defined by UniswapV3 libraries
     int24 internal constant MAX_TICK = -MIN_TICK;
-    /// @notice     Represents a deviation of 100% from the TWAP
-    uint16 internal constant DEVIATION_BASE = 10_000;
 
     // ========== ERRORS ========== //
 
@@ -90,17 +87,6 @@ contract UniswapV3Price is PriceSubmodule {
     ///
     /// @param pool_    The address of the affected Uniswap V3 pool
     error UniswapV3_PoolReentrancy(address pool_);
-
-    /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
-    ///
-    /// @param pool_              The address of the pool
-    /// @param baseInQuoteTWAP_   The calculated TWAP price in terms of the quote token
-    /// @param baseInQuotePrice_  The calculated current price in terms of the quote token
-    error UniswapV3_PriceMismatch(
-        address pool_,
-        uint256 baseInQuoteTWAP_,
-        uint256 baseInQuotePrice_
-    );
 
     // ========== STATE VARIABLES ========== //
 
@@ -171,7 +157,6 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice                 Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
     /// @dev                    This function will revert if:
-    ///                         - The current price differs from the TWAP by more than `maxDeviationBps_`
     ///                         - The value of `params.observationWindowSeconds` is less than `TWAP_MINIMUM_OBSERVATION_SECONDS`
     ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
     ///                         - Any tokens in the pool are not set
@@ -198,15 +183,6 @@ contract UniswapV3Price is PriceSubmodule {
             uint8 lookupTokenDecimals
         ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
 
-        // Get the TWAP price of the lookup token in terms of the quote token
-        uint256 baseInQuoteTWAP = OracleHelper.getTWAPRatio(
-            address(params.pool),
-            params.observationWindowSeconds,
-            lookupToken_,
-            quoteToken,
-            lookupTokenDecimals
-        );
-
         // Get the current price of the lookup token in terms of the quote token
         (, int24 currentTick, , , , , bool unlocked) = params.pool.slot0();
 
@@ -219,20 +195,6 @@ contract UniswapV3Price is PriceSubmodule {
             lookupToken_,
             quoteToken
         );
-
-        // Check if the absolute deviation between the lookup and reserves price differs by more than reservesDeviationBps
-        // If so, the reserves may be manipulated
-        if (
-            // `isDeviatingWithBpsCheck()` will revert if `deviationBps` is invalid.
-            Deviation.isDeviatingWithBpsCheck(
-                baseInQuotePrice,
-                baseInQuoteTWAP,
-                params.maxDeviationBps,
-                DEVIATION_BASE
-            )
-        ) {
-            revert UniswapV3_PriceMismatch(address(params.pool), baseInQuoteTWAP, baseInQuotePrice);
-        }
 
         // Get the price of {quoteToken} in USD
         // Decimals: outputDecimals_

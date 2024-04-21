@@ -91,15 +91,19 @@ contract CrossChainBridgeForkTest is Test {
 
             MINTR = new OlympusMinter(kernel, address(ohm1));
             ROLES = new OlympusRoles(kernel);
-            SPPLY = new OlympusSupply(kernel, tokens, 0);
+            SPPLY = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
 
             // Enable counter
             bridge = new CrossChainBridge(kernel, L1_lzEndpoint);
             rolesAdmin = new RolesAdmin(kernel);
 
+            console2.log("Installing modules on L1 Kernel");
+
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, address(SPPLY));
+
+            console2.log("Activating policies on L1 Kernel");
 
             kernel.executeAction(Actions.ActivatePolicy, address(bridge));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
@@ -111,6 +115,8 @@ contract CrossChainBridgeForkTest is Test {
         // Setup L2 system
         {
             L2_FORK_ID = vm.createSelectFork(RPC_POLYGON_MAINNET);
+            // Forge also seems to need an explicit call to change the chain ID
+            vm.chainId(L2_CHAIN_ID);
 
             address[] memory users2 = (new UserFactory()).create(2);
             user2 = users2[0];
@@ -127,8 +133,12 @@ contract CrossChainBridgeForkTest is Test {
             bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
+            console2.log("Installing modules on L2 Kernel");
+
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));
             kernel_l2.executeAction(Actions.InstallModule, address(ROLES_l2));
+
+            console2.log("Activating policies on L2 Kernel");
 
             kernel_l2.executeAction(Actions.ActivatePolicy, address(bridge_l2));
             kernel_l2.executeAction(Actions.ActivatePolicy, address(rolesAdmin_l2));
@@ -139,6 +149,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // Mainnet setup
         vm.selectFork(L1_FORK_ID);
+        vm.chainId(MAINNET_CHAIN_ID);
         vm.startPrank(guardian1);
         //bridge.becomeOwner();
         bytes memory path1 = abi.encodePacked(address(bridge_l2), address(bridge));
@@ -147,6 +158,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // L2 setup
         vm.selectFork(L2_FORK_ID);
+        vm.chainId(L2_CHAIN_ID);
         vm.startPrank(guardian2);
         //bridge_l2.becomeOwner();
         bytes memory path2 = abi.encodePacked(address(bridge), address(bridge_l2));
@@ -160,6 +172,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // L1 transfer
         vm.selectFork(L1_FORK_ID);
+        vm.chainId(MAINNET_CHAIN_ID);
         vm.recordLogs();
 
         // get fee
@@ -177,6 +190,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // Verify ohm balance on L2 is correct
         vm.selectFork(L2_FORK_ID);
+        vm.chainId(L2_CHAIN_ID);
         assertEq(ohm2.balanceOf(user2), amount_);
     }
 
@@ -186,6 +200,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // Block next message, then attempt sending OHM crosschain
         vm.selectFork(L2_FORK_ID);
+        vm.chainId(L2_CHAIN_ID);
         endpoint_l2.blockNextMsg();
 
         vm.startPrank(user);

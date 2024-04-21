@@ -17,6 +17,7 @@ import {TRSRYv1, TRSRYv1_1, toCategory as toTreasuryCategory} from "modules/TRSR
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
+import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
 // Libraries
 import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
@@ -85,23 +86,33 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param newFee_          The new fee
     event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
 
-    /// @notice                 Emitted when a pool with an already-deployed token is registered
+    /// @notice                 Emitted when a BunniToken (ERC20-compatible) token is activated/deactivated for `pool_`
     ///
-    /// @param pool_            The address of the Uniswap V3 pool
     /// @param token_           The address of the existing BunniToken
-    event PoolTokenRegistered(address indexed pool_, address indexed token_);
-
-    /// @notice                 Emitted when a BunniToken (ERC20-compatible) token is activated for `pool_`
-    ///
     /// @param pool_            The address of the Uniswap V3 pool
-    /// @param token_           The address of the BunniToken
-    event PoolTokenActivated(address indexed pool_, address indexed token_);
+    /// @param tickLower_       The lower tick of the Uniswap V3 position
+    /// @param tickUpper_       The upper tick of the Uniswap V3 position
+    event PositionTokenRegistered(
+        address indexed token_,
+        address indexed pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    );
 
-    /// @notice                 Emitted when a BunniToken (ERC20-compatible) token is deactivated for `pool_`
+    /// @notice                 Emitted when a BunniToken (ERC20-compatible) is de/activated for a position
     ///
-    /// @param pool_            The address of the Uniswap V3 pool
     /// @param token_           The address of the BunniToken
-    event PoolTokenDeactivated(address indexed pool_, address indexed token_);
+    /// @param pool_            The address of the Uniswap V3 pool
+    /// @param tickLower_       The lower tick of the Uniswap V3 position
+    /// @param tickUpper_       The upper tick of the Uniswap V3 position
+    /// @param activated        Whether the token was activated or deactivated
+    event PositionTokenStatusChanged(
+        address indexed token_,
+        address indexed pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
+        bool indexed activated
+    );
 
     /// @notice                 Emitted when the swap fees of a pool are updated
     ///
@@ -125,27 +136,38 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param pool_    The address of the Uniswap V3 pool
     error BunniManager_PoolNotFound(address pool_);
 
-    /// @notice         Emitted if the pool has no liquidity (when it should)
+    /// @notice         Emitted if the position is not managed by this policy
     ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PoolHasNoLiquidity(address pool_);
+    /// @param pool_        The address of the Uniswap V3 pool
+    /// @param lowerTick_   The lower tick of the position
+    /// @param upperTick_   The upper tick of the position
+    error BunniManager_PositionNotFound(address pool_, int24 lowerTick_, int24 upperTick_);
 
-    /// @notice         Emitted if the pool has liquidity (when it should not)
+    /// @notice         Emitted if the position is not managed by this policy
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PoolHasLiquidity(address pool_);
+    /// @param id_      The id of the position
+    error BunniManager_PositionIdNotFound(address pool_, uint256 id_);
 
-    /// @notice         Emitted if the pool has already been deployed as a token
+    /// @notice         Emitted if the position has incorrect liquidity
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    /// @param token_   The address of the existing BunniToken
-    error BunniManager_TokenDeployed(address pool_, address token_);
+    /// @param id_      The id of the position
+    error BunniManager_PositionLiquidity_IncorrectState(address pool_, uint256 id_);
+
+    /// @notice         Emitted if the position has already been deployed as a token
+    ///
+    /// @param token_  The address of the BunniToken deployed for the position
+    /// @param pool_   The address of the Uniswap V3 pool
+    /// @param id_     The id of the Bunni position
+    error BunniManager_TokenDeployed(address token_, address pool_, uint256 id_);
 
     /// @notice         Emitted if the token for the pool has already been activated in modules
     ///
     /// @param pool_    The address of the Uniswap V3 pool
+    /// @param id_      The id of the Bunni position
     /// @param module_  The Keycode of the module that has already activated the token
-    error BunniManager_TokenActivated(address pool_, Keycode module_);
+    error BunniManager_TokenActivated(address pool_, uint256 id_, Keycode module_);
 
     /// @notice                 Emitted if the caller does not have sufficient balance to deposit
     ///
@@ -181,11 +203,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param maxMultipier_    The maximum allowed multiplier
     error BunniManager_Params_InvalidHarvestFee(uint16 newMultiplier_, uint16 maxMultipier_);
 
-    /// @notice                 Emitted if the given token (used for determining the order) is not in the pool
-    ///
-    /// @param token_           The address of the token
-    error BunniManager_Params_InvalidUnderlyingToken(address token_);
-
     //============================================================================================//
     //                                      STATE                                                 //
     //============================================================================================//
@@ -210,11 +227,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice     The pools that have been deployed by this policy
     address[] public pools;
-    uint256 public poolCount;
+
+    // The positions that have been deployed by this policy for a given pool
+    /// @notice     Maps a pool address to an array of BunniKeys
+    mapping(address => BunniKey[]) public positions;
+    /// @notice     Maps a pool address to its number of positions
+    mapping(address => uint256) public positionCount;
 
     /// @notice     An array of unique tokens that have been used in the pools
     ERC20[] internal poolUnderlyingTokens;
-    uint256 internal poolUnderlyingTokenCount;
 
     address internal ohm;
 
@@ -226,14 +247,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     // Constants
     uint16 private constant BPS_MAX = 10_000; // 100%
-
-    /// @notice     The default maximum deviation for Uniswap V3 TWAPs
-    /// @dev        This is used when configuring a pool token with SPPLY and PRICE
-    uint16 public constant TWAP_DEFAULT_MAX_DEVIATION_BPS = 100; // 1%
-
-    /// @notice     The default observation window for Uniswap V3 TWAPs
-    /// @dev        This is used when configuring a pool token with SPPLY and PRICE
-    uint32 public constant TWAP_DEFAULT_OBSERVATION_WINDOW = 600; // 10 minutes
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -323,17 +336,28 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     // =========  POOL REGISTRATION ========= //
 
+    function _revertIfTokenDeployed(address token_, address pool_) internal view {
+        uint256 numPositions = positionCount[pool_];
+        for (uint256 i = 0; i < numPositions; i++) {
+            BunniKey memory key = positions[pool_][i];
+            if (address(_getPositionToken(pool_, i, key)) == token_)
+                revert BunniManager_TokenDeployed(token_, pool_, i);
+        }
+    }
+
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     /// @dev        - The policy is inactive
     /// @dev        - The caller is unauthorized
     /// @dev        - The `bunniHub` state variable is not set
     /// @dev        - The pool is already registered with this policy
-    /// @dev        - No BunniToken has been deployed for the pool
+    /// @dev        - No BunniToken has been deployed for the position
     /// @dev        - `pool_` is not a Uniswap V3 pool
     /// @dev        - A price cannot be accessed for either token in the pool
-    function registerPool(
-        address pool_
+    function registerPosition(
+        address pool_,
+        address prevManager_,
+        uint256 prevId_
     )
         external
         override
@@ -347,27 +371,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         _assertIsValidPool(pool_);
 
         // Get the BunniToken or revert
-        IBunniToken token = getPoolToken(pool_);
+        IBunniManager prevManager = IBunniManager(prevManager_);
+        IBunniToken token = prevManager.getPositionToken(pool_, prevId_);
+        BunniKey memory key = prevManager.getPositionKey(pool_, prevId_);
 
-        // Check if the pool is already registered
-        for (uint256 i = 0; i < poolCount; i++) {
-            if (pools[i] == pool_) revert BunniManager_TokenDeployed(pool_, address(token));
-        }
+        // Check if the position is already registered
+        _revertIfTokenDeployed(address(token), pool_);
 
-        // Check that both tokens from the pool have prices (else PRICE will revert)
-        (address poolToken0, address poolToken1) = UniswapV3PoolLibrary.getPoolTokens(pool_);
-        PRICE.getPrice(poolToken0);
-        PRICE.getPrice(poolToken1);
-
-        // Add the underlying tokens to the list
-        _addUnderlyingToken(poolToken0);
-        _addUnderlyingToken(poolToken1);
-
-        // Add the pool to the registry
-        pools.push(pool_);
-        poolCount++;
-
-        emit PoolTokenRegistered(pool_, address(token));
+        // Update the pool (if necessary) and position registries and emit the event
+        _updatePoolAndPositionRegistry(pool_, key);
+        emit PositionTokenRegistered(address(token), pool_, key.tickLower, key.tickUpper);
 
         return token;
     }
@@ -378,9 +391,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        - The caller is unauthorized
     /// @dev        - The `bunniHub` state variable is not set
     /// @dev        - `pool_` is not a Uniswap V3 pool
-    /// @dev        - A BunniToken has already been deployed for the pool
+    /// @dev        - A BunniToken has already been deployed for the pool and the full range
     /// @dev        - A price cannot be accessed for either token in the pool
-    function deployPoolToken(
+    function deployFullRangeToken(
         address pool_
     )
         external
@@ -394,33 +407,38 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
 
-        // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+        return _deployPositionToken(pool_, BunniHelper.getFullRangeBunniKey(pool_));
+    }
 
-        // Check if a token for the pool has been deployed already
-        {
-            IBunniToken existingToken = bunniHub.getBunniToken(key);
-            if (address(existingToken) != address(0))
-                revert BunniManager_TokenDeployed(pool_, address(existingToken));
-        }
+    /// @inheritdoc IBunniManager
+    /// @dev        This function reverts if:
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - `pool_` is not a Uniswap V3 pool
+    /// @dev        - A BunniToken has already been deployed for the pool and the given tick range
+    /// @dev        - A price cannot be accessed for either token in the pool
+    function deployConcentratedToken(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    )
+        external
+        override
+        nonReentrant
+        onlyIfActive
+        onlyRole("bunni_admin")
+        bunniHubSet
+        returns (IBunniToken)
+    {
+        // Check that `pool_` is an actual Uniswap V3 pool
+        _assertIsValidPool(pool_);
 
-        // Check that both tokens from the pool have prices (else PRICE will revert)
-        (address poolToken0, address poolToken1) = UniswapV3PoolLibrary.getPoolTokens(pool_);
-        PRICE.getPrice(poolToken0);
-        PRICE.getPrice(poolToken1);
-
-        // Add the underlying tokens to the list
-        _addUnderlyingToken(poolToken0);
-        _addUnderlyingToken(poolToken1);
-
-        // Deploy
-        IBunniToken deployedToken = bunniHub.deployBunniToken(key);
-
-        // Update the pools variable
-        pools.push(pool_);
-        poolCount++;
-
-        return deployedToken;
+        return
+            _deployPositionToken(
+                pool_,
+                BunniHelper.getConcentratedBunniKey(pool_, tickLower_, tickUpper_)
+            );
     }
 
     // =========  POOL ACTIVATION ========= //
@@ -433,17 +451,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev                            - An ERC20 token for `pool_` has not been deployed/registered
     /// @dev                            - The position representing `pool_` has no liquidity
     /// @dev                            - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
-    function activatePoolToken(
+    function activatePositionToken(
         address pool_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint256 id_,
+        uint32 priceMovingAverageDuration_,
+        uint48 priceLastObservationTime_,
+        uint256[] memory priceObservations_,
+        uint32 reserveMovingAverageDuration_,
+        uint48 reserveLastObservationTime_,
+        uint256[] memory reserveToken0Observations_,
+        uint256[] memory reserveToken1Observations_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
-        // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+        BunniKey memory key = _getPositionKey(pool_, id_);
 
         // Check that the token has been deployed
-        IBunniToken poolToken = _getPoolToken(pool_, key);
-        address poolTokenAddress = address(poolToken);
+        address positionToken = address(_getPositionToken(pool_, id_, key));
 
         // Check that the position has liquidity
         if (
@@ -453,14 +475,29 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PoolHasNoLiquidity(pool_);
+        ) revert BunniManager_PositionLiquidity_IncorrectState(pool_, id_);
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
-        _addPoolTokenToPRICE(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
-        _addPoolTokenToTRSRY(pool_, poolTokenAddress);
-        _addPoolTokenToSPPLY(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
+        _addPositionTokenToPRICE(
+            positionToken,
+            pool_,
+            id_,
+            priceMovingAverageDuration_,
+            priceLastObservationTime_,
+            priceObservations_
+        );
+        _addPositionTokenToTRSRY(positionToken, pool_, id_);
+        _addPositionTokenToSPPLY(
+            positionToken,
+            pool_,
+            id_,
+            reserveMovingAverageDuration_,
+            reserveLastObservationTime_,
+            reserveToken0Observations_,
+            reserveToken1Observations_
+        );
 
-        emit PoolTokenActivated(pool_, poolTokenAddress);
+        emit PositionTokenStatusChanged(positionToken, pool_, key.tickLower, key.tickUpper, true);
     }
 
     /// @inheritdoc IBunniManager
@@ -473,17 +510,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        - The `bunniHub` state variable is not set
     /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
     /// @dev        - The position representing `pool_` has liquidity
-    function deactivatePoolToken(
-        address pool_
+    function deactivatePositionToken(
+        address pool_,
+        uint256 id_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
-        // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+        BunniKey memory key = _getPositionKey(pool_, id_);
 
         // Check that the token has been deployed
-        IBunniToken poolToken = _getPoolToken(pool_, key);
-        address poolTokenAddress = address(poolToken);
+        address positionToken = address(_getPositionToken(pool_, id_, key));
 
-        // Check that the position has NO liquidity
+        // Check that the position does NOT have liquidity
         if (
             UniswapV3Positions.positionHasLiquidity(
                 key.pool,
@@ -491,14 +527,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PoolHasLiquidity(pool_);
+        ) revert BunniManager_PositionLiquidity_IncorrectState(pool_, id_);
 
         // De-register the pool token
-        _removePoolTokenFromPRICE(poolTokenAddress);
-        _removePoolTokenFromTRSRY(poolTokenAddress);
-        _removePoolTokenFromSPPLY(poolTokenAddress);
+        _removePositionTokenFromPRICE(positionToken);
+        _removePositionTokenFromTRSRY(positionToken);
+        _removePositionTokenFromSPPLY(positionToken);
 
-        emit PoolTokenDeactivated(pool_, poolTokenAddress);
+        emit PositionTokenStatusChanged(positionToken, pool_, key.tickLower, key.tickUpper, false);
     }
 
     // =========  LIQUIDITY ========= //
@@ -523,6 +559,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        - The BunniHub instance reverts
     function deposit(
         address pool_,
+        uint256 id_,
         address tokenA_,
         uint256 amountA_,
         uint256 amountB_,
@@ -537,38 +574,26 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         returns (uint256)
     {
         // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+        BunniKey memory key = _getPositionKey(pool_, id_);
 
         // Check that the token has been deployed
-        _getPoolToken(pool_, key);
-
-        // Move non-OHM tokens from TRSRY to this contract
-        (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(pool_);
+        _getPositionToken(pool_, id_, key);
 
         // Determine token amounts
-        uint256 token0Amount;
-        uint256 token1Amount;
-        {
-            // Double-check that the given token (used for determining the order) is actually contained in the pool
-            if (tokenA_ != token0Address && tokenA_ != token1Address)
-                revert BunniManager_Params_InvalidUnderlyingToken(tokenA_);
+        (
+            address token0Address,
+            address token1Address,
+            uint256 token0Amount,
+            uint256 token1Amount
+        ) = UniswapV3PoolLibrary.getPoolTokenAmounts(pool_, tokenA_, amountA_, amountB_);
 
-            if (token0Address == tokenA_) {
-                token0Amount = amountA_;
-                token1Amount = amountB_;
-            } else {
-                token0Amount = amountB_;
-                token1Amount = amountA_;
-            }
+        // Move tokens into the policy
+        _transferOrMint(token0Address, token0Amount);
+        _transferOrMint(token1Address, token1Amount);
 
-            // Move tokens into the policy
-            _transferOrMint(token0Address, token0Amount);
-            _transferOrMint(token1Address, token1Amount);
-
-            // Approve BunniHub to use the tokens
-            ERC20(token0Address).approve(address(bunniHub), token0Amount);
-            ERC20(token1Address).approve(address(bunniHub), token1Amount);
-        }
+        // Approve BunniHub to use the tokens
+        ERC20(token0Address).approve(address(bunniHub), token0Amount);
+        ERC20(token1Address).approve(address(bunniHub), token1Amount);
 
         // Construct the parameters
         IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
@@ -582,7 +607,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         });
 
         // Deposit
-        (uint256 shares, , , ) = bunniHub.deposit(params);
+        (uint256 shares, , uint256 depositAmount0, uint256 depositAmount1) = bunniHub.deposit(
+            params
+        );
+
+        // Reset approval to 0
+        // Avoids having a dangling approval
+        if (depositAmount0 < token0Amount) {
+            ERC20(token0Address).approve(address(bunniHub), 0);
+        }
+        if (depositAmount1 < token1Amount) {
+            ERC20(token1Address).approve(address(bunniHub), 0);
+        }
 
         // Return/burn remaining tokens
         _transferOrBurn(token0Address, ERC20(token0Address).balanceOf(address(this)));
@@ -607,47 +643,28 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        - The BunniHub instance reverts
     function withdraw(
         address pool_,
+        uint256 id_,
         uint256 shares_,
         uint16 slippageBps_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
         // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+        BunniKey memory key = _getPositionKey(pool_, id_);
 
         // Get the existing token (or revert)
-        IBunniToken existingToken = _getPoolToken(pool_, key);
+        IBunniToken existingToken = _getPositionToken(pool_, id_, key);
 
-        // Determine the minimum amounts
-        uint256 amount0Min;
-        uint256 amount1Min;
-        {
-            (uint256 amount0, uint256 amount1) = UniswapV3Positions.getPositionAmounts(
-                key.pool,
-                key.tickLower,
-                key.tickUpper,
-                address(bunniHub)
-            );
-
-            // Adjust for proportion of total supply
-            uint256 totalSupply = existingToken.totalSupply();
-            amount0 = amount0.mulDiv(shares_, totalSupply);
-            amount1 = amount1.mulDiv(shares_, totalSupply);
-
-            amount0Min = UniswapV3PoolLibrary.getAmountMin(amount0, slippageBps_);
-            amount1Min = UniswapV3PoolLibrary.getAmountMin(amount1, slippageBps_);
-        }
+        // Construct the parameters
+        IBunniHub.WithdrawParams memory params = BunniHelper.getWithdrawParams(
+            shares_,
+            slippageBps_,
+            key,
+            existingToken,
+            address(bunniHub),
+            address(this)
+        );
 
         // Move the tokens into the policy
         _transferOrMint(address(existingToken), shares_);
-
-        // Construct the parameters
-        IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
-            key: key,
-            recipient: address(this),
-            shares: shares_,
-            amount0Min: amount0Min,
-            amount1Min: amount1Min,
-            deadline: block.timestamp // Ensures that the action be executed in this block or reverted
-        });
 
         // Withdraw
         (, uint256 withdrawnAmount0, uint256 withdrawnAmount1) = bunniHub.withdraw(params);
@@ -696,15 +713,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Determine the award amount
         uint256 currentHarvestReward = getCurrentHarvestReward();
-
-        for (uint256 i = 0; i < poolCount; i++) {
+        uint256 numPools = pools.length;
+        for (uint256 i = 0; i < numPools; i++) {
             address poolAddress = pools[i];
-
-            // Skip if no shares have been minted
-            if (getPoolTokenBalance(poolAddress) == 0) continue;
-
-            BunniKey memory key = BunniHelper.getFullRangeBunniKey(poolAddress);
-            bunniHub.compound(key);
+            uint256 numPositions = positionCount[poolAddress];
+            for (uint256 j = 0; j < numPositions; j++) {
+                // Skip if no shares have been minted
+                if (getPositionTokenBalance(poolAddress, j) == 0) continue;
+                // Compound the position
+                bunniHub.compound(positions[poolAddress][j]);
+            }
         }
 
         // Sweep tokens from the BunniHub
@@ -713,7 +731,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         bunniHub.sweepTokens(poolUnderlyingTokens, address(this));
 
         // Burn/transfer any swept tokens
-        for (uint256 i = 0; i < poolUnderlyingTokens.length; i++) {
+        uint256 numTokens = poolUnderlyingTokens.length;
+        for (uint256 i = 0; i < numTokens; i++) {
             ERC20 poolUnderlyingToken = poolUnderlyingTokens[i];
             _transferOrBurn(
                 address(poolUnderlyingToken),
@@ -739,24 +758,45 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        This function reverts if:
     /// @dev        - The `bunniHub` state variable is not set
     /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
-    function getPoolToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
-        // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+    function getPositionToken(
+        address pool_,
+        uint256 id_
+    ) public view override bunniHubSet returns (IBunniToken) {
+        return _getPositionToken(pool_, id_, _getPositionKey(pool_, id_));
+    }
 
-        return _getPoolToken(pool_, key);
+    /// @inheritdoc IBunniManager
+    function getPositionKey(address pool_, uint256 id_) external view returns (BunniKey memory) {
+        return positions[pool_][id_];
+    }
+
+    /// @inheritdoc IBunniManager
+    /// @dev        This function reverts if:
+    /// @dev        - The position (combination of pool and tick range) is not found
+    function getPositionId(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_
+    ) external view returns (uint256) {
+        uint256 numPositions = positionCount[pool_];
+        for (uint256 i = 0; i < numPositions; i++) {
+            BunniKey memory key = positions[pool_][i];
+            if (key.tickLower == tickLower_ && key.tickUpper == tickUpper_) return i;
+        }
+        revert BunniManager_PositionNotFound(pool_, tickLower_, tickUpper_);
     }
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     /// @dev        - The `bunniHub` state variable is not set
     /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
-    function getPoolTokenBalance(address pool_) public view override bunniHubSet returns (uint256) {
-        // Get the token
-        // `getPoolToken` will revert if the pool is not found
-        IBunniToken token = getPoolToken(pool_);
-
+    function getPositionTokenBalance(
+        address pool_,
+        uint256 id_
+    ) public view override bunniHubSet returns (uint256) {
         // Get the balance of the token in TRSRY
-        return token.balanceOf(address(TRSRY));
+        // `getPositionToken` will revert if the pool is not found
+        return getPositionToken(pool_, id_).balanceOf(address(TRSRY));
     }
 
     /// @inheritdoc IBunniManager
@@ -770,49 +810,72 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        functions should update the pending fees before calling this function using `updateSwapFees()`.
     function getCurrentHarvestReward() public view override bunniHubSet returns (uint256 reward) {
         // 0 if enough time has not elapsed
-        if (lastHarvest + harvestFrequency < block.timestamp) return 0;
+        if (lastHarvest + harvestFrequency > block.timestamp) return 0;
 
         uint256 feeUsdValue; // Scale: PRICE decimals
         uint256 priceScale = 10 ** PRICE.decimals();
-        for (uint256 i = 0; i < poolCount; i++) {
-            address currentPool = pools[i];
-            BunniKey memory key = BunniHelper.getFullRangeBunniKey(currentPool);
+        uint256 numPools = pools.length;
+        for (uint256 i = 0; i < numPools; i++) {
+            address poolAddress = pools[i];
 
-            // Get the fees
-            (uint128 fees0, uint128 fees1) = UniswapV3Positions.getPositionFees(
-                key.pool,
-                key.tickLower,
-                key.tickUpper,
-                address(bunniHub)
-            );
-
-            // Convert fees from native into PRICE decimals
+            // Get token prices from PRICE (cached outside of position loop for gas-efficiency)
             (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(
-                currentPool
+                poolAddress
             );
-            uint256 token0Fees = uint256(fees0).mulDiv(
-                priceScale,
-                10 ** ERC20(token0Address).decimals()
-            );
-            uint256 token1Fees = uint256(fees1).mulDiv(
-                priceScale,
-                10 ** ERC20(token1Address).decimals()
-            );
+            uint256 price0 = PRICE.getPrice(token0Address);
+            uint256 price1 = PRICE.getPrice(token1Address);
+            uint256 token0Scale = 10 ** ERC20(token0Address).decimals();
+            uint256 token1Scale = 10 ** ERC20(token1Address).decimals();
 
-            // Get the USD value of the fees
-            feeUsdValue += PRICE.getPrice(token0Address).mulDiv(token0Fees, priceScale);
-            feeUsdValue += PRICE.getPrice(token1Address).mulDiv(token1Fees, priceScale);
+            uint256 numPositions = positionCount[poolAddress];
+            for (uint256 j = 0; j < numPositions; j++) {
+                (uint256 token0Fees, uint256 token1Fees) = _calculatePositionFees(poolAddress, j);
+
+                // Get the USD value of the fees
+                feeUsdValue += price0.mulDiv(
+                    uint256(token0Fees).mulDiv(priceScale, token0Scale),
+                    priceScale
+                );
+                feeUsdValue += price1.mulDiv(
+                    uint256(token1Fees).mulDiv(priceScale, token1Scale),
+                    priceScale
+                );
+            }
         }
 
-        // Calculate the reward value
-        uint256 rewardUsdValue = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX);
-
         // Convert in terms of OHM
-        uint256 ohmPrice = PRICE.getPrice(ohm); // This will revert if the asset is not defined or 0
-        uint256 ohmAmount = rewardUsdValue.mulDiv(1e9, ohmPrice); // Scale: OHM decimals
+        uint256 ohmAmount = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX).mulDiv(
+            1e9,
+            PRICE.getPrice(ohm) // This will revert if the asset is not defined or 0
+        ); // Scale: OHM decimals
 
         // Returns the minimum
         return ohmAmount < harvestRewardMax ? ohmAmount : harvestRewardMax;
+    }
+
+    function _calculatePositionFees(
+        address pool_,
+        uint256 id_
+    ) internal view returns (uint256 token0Fees, uint256 token1Fees) {
+        // Skip if no shares have been minted
+        if (getPositionTokenBalance(pool_, id_) == 0) return (0, 0);
+
+        BunniKey memory key = _getPositionKey(pool_, id_);
+
+        // Get the fees
+        (uint128 fees0, uint128 fees1) = UniswapV3Positions.getPositionFees(
+            key.pool,
+            key.tickLower,
+            key.tickUpper,
+            address(bunniHub)
+        );
+
+        return (uint256(fees0), uint256(fees1));
+    }
+
+    /// @notice     Returns the number of pools that have been deployed by this policy
+    function poolCount() public view returns (uint256) {
+        return pools.length;
     }
 
     //============================================================================================//
@@ -900,16 +963,82 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param pool_    The address of the pool
     /// @param key_     The BunniKey representing the position
     /// @return         The BunniToken for the pool
-    function _getPoolToken(
+    function _getPositionToken(
         address pool_,
+        uint256 id_,
         BunniKey memory key_
     ) internal view returns (IBunniToken) {
         IBunniToken token = bunniHub.getBunniToken(key_);
 
         // Ensure the token exists
-        if (address(token) == address(0)) revert BunniManager_PoolNotFound(pool_);
+        if (address(token) == address(0)) revert BunniManager_PositionIdNotFound(pool_, id_);
 
         return token;
+    }
+
+    /// @notice         Obtains the BunniKey for the given pool and position id
+    /// @dev            This function reverts if:
+    /// @dev            - A BunniKey for the combination of `pool_` and `id_` cannot be found
+    ///
+    /// @param pool_    The address of the pool
+    /// @param id_      The ID representing the position in the pool
+    /// @return         The BunniKey for the position
+    function _getPositionKey(address pool_, uint256 id_) internal view returns (BunniKey memory) {
+        if (positionCount[pool_] <= id_) revert BunniManager_PositionIdNotFound(pool_, id_);
+
+        // Get the appropriate BunniKey representing the position
+        return positions[pool_][id_];
+    }
+
+    /// @notice         Deploys a BunniToken for the given pool and BunniKey
+    /// @dev            This function reverts if:
+    /// @dev            - A BunniToken has already been deployed for that BunniKey
+    ///
+    /// @param pool_    The address of the pool
+    /// @param key_     The BunniKey for the position
+    /// @return         The BunniToken for the position
+    function _deployPositionToken(
+        address pool_,
+        BunniKey memory key_
+    ) internal returns (IBunniToken) {
+        // Check if a token for the pool has been deployed already
+        address token = address(bunniHub.getBunniToken(key_));
+        if (token != address(0)) {
+            _revertIfTokenDeployed(token, pool_);
+
+            // Should never happen, as if there is a token, the position must be registered.
+            revert BunniManager_TokenDeployed(token, pool_, 0);
+        }
+
+        // Update the pool (if necessary) and position registries and deploy the token
+        _updatePoolAndPositionRegistry(pool_, key_);
+
+        return bunniHub.deployBunniToken(key_);
+    }
+
+    /// @notice         Updates the pool and position registries to store the new BunniKey
+    ///
+    /// @param pool_    The address of the pool
+    /// @param key_     The BunniKey for the position
+    function _updatePoolAndPositionRegistry(address pool_, BunniKey memory key_) internal {
+        // Update the pool registry if necessary
+        if (positionCount[pool_] == 0) {
+            // Check that both tokens from the pool have prices (else PRICE will revert)
+            (address poolToken0, address poolToken1) = UniswapV3PoolLibrary.getPoolTokens(pool_);
+            PRICE.getPrice(poolToken0);
+            PRICE.getPrice(poolToken1);
+
+            // Add the underlying tokens to the list
+            _addUnderlyingToken(poolToken0);
+            _addUnderlyingToken(poolToken1);
+
+            // Update the pool registry
+            pools.push(pool_);
+        }
+
+        // Update the position registry
+        positions[pool_].push(key_);
+        positionCount[pool_]++;
     }
 
     /// @notice         Transfers the tokens from TRSRY or mints them if the token is OHM
@@ -961,97 +1090,102 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        Duplicate tokens are skipped
     function _addUnderlyingToken(address token_) internal {
         // Check if the token has already been added
-        for (uint256 i = 0; i < poolUnderlyingTokenCount; i++) {
+        uint256 numTokens = poolUnderlyingTokens.length;
+        for (uint256 i = 0; i < numTokens; i++) {
             if (address(poolUnderlyingTokens[i]) == token_) return;
         }
 
         // Add the token
         poolUnderlyingTokens.push(ERC20(token_));
-        poolUnderlyingTokenCount++;
     }
 
-    /// @notice     Updates the swap fees for all pools
+    /// @notice     Updates the swap fees for all positions
     /// @dev        This internal function is provided as external/public functions
     /// @dev        (such as `harvest()`) need to use this functionality, but would
     /// @dev        run into re-entrancy issues using the external/public function.
     function _updateSwapFees() internal {
-        for (uint256 i = 0; i < poolCount; i++) {
+        uint256 numPools = pools.length;
+        for (uint256 i = 0; i < numPools; i++) {
             address poolAddress = pools[i];
+            uint256 numPositions = positionCount[poolAddress];
+            for (uint256 j = 0; j < numPositions; j++) {
+                // Skip if no shares have been minted
+                if (getPositionTokenBalance(poolAddress, j) == 0) continue;
 
-            // Skip if no shares have been minted
-            if (getPoolTokenBalance(poolAddress) == 0) continue;
+                BunniKey memory key = positions[poolAddress][j];
+                bunniHub.updateSwapFees(key);
 
-            BunniKey memory key = BunniHelper.getFullRangeBunniKey(poolAddress);
-            bunniHub.updateSwapFees(key);
-
-            emit PoolSwapFeesUpdated(poolAddress);
+                emit PoolSwapFeesUpdated(poolAddress);
+            }
         }
     }
 
-    /// @notice                         Registers `poolToken_` as an asset in the PRICE module
+    /// @notice                         Registers `positionToken_` as an asset in the PRICE module
     /// @dev                            This function performs the following:
     /// @dev                            - Checks if the asset is already registered, and reverts if so
     /// @dev                            - Calls `PRICE.addAsset`
     ///
     /// @param pool_                    The pool to register
-    /// @param poolToken_               The pool token to register
-    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
-    /// @param twapObservationWindow_   The TWAP observation window
-    function _addPoolTokenToPRICE(
+    /// @param id_                      The id of the Bunni position
+    /// @param positionToken_           The pool token to register
+    /// @param movingAverageDuration_   The moving average duration
+    /// @param lastObservationTime_     The last observation time
+    /// @param observations_            The observations
+    function _addPositionTokenToPRICE(
+        address positionToken_,
         address pool_,
-        address poolToken_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint256 id_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
     ) internal {
-        PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
-        if (assetData.approved == true)
-            revert BunniManager_TokenActivated(pool_, toKeycode("PRICE"));
+        if (PRICE.isAssetApproved(positionToken_))
+            revert BunniManager_TokenActivated(pool_, id_, toKeycode("PRICE"));
 
         // Prepare price feeds
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
-                address(bunniLens),
-                twapMaxDeviationBps_,
-                twapObservationWindow_
-            );
-
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
                 BunniPrice.getBunniTokenPrice.selector, // Selector
-                abi.encode(params) // Params
+                abi.encode(BunniPrice.BunniParams(address(bunniLens))) // Params
             );
         }
 
         // Add asset
         {
             PRICE.addAsset(
-                poolToken_, // address asset_
-                false, // bool storeMovingAverage_
-                false, // bool useMovingAverage_
-                uint32(0), // uint32 movingAverageDuration_
-                uint48(0), // uint48 lastObservationTime_
-                new uint256[](0), // uint256[] memory observations_
-                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+                positionToken_, // address asset_
+                true, // bool storeMovingAverage_
+                true, // bool useMovingAverage_
+                movingAverageDuration_, // uint32 movingAverageDuration_
+                lastObservationTime_, // uint48 lastObservationTime_
+                observations_, // uint256[] memory observations_
+                PRICEv2.Component(
+                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                    SimplePriceFeedStrategy.getAveragePrice.selector,
+                    abi.encode(0)
+                ), // Average of values
                 feeds // Component[] memory feeds_
             );
         }
     }
 
-    /// @notice             Registers `poolToken_` as an asset in the TRSRY module
+    /// @notice             Registers `positionToken_` as an asset in the TRSRY module
     /// @dev                This function performs the following:
     /// @dev                - Checks if the asset is already registered, and reverts if so
     /// @dev                - Adds the asset to TRSRY (if needed)
     /// @dev                - Adds the TRSRY location to the asset
     /// @dev                - Categorizes the asset
     ///
-    /// @param pool_        The pool to register
-    /// @param poolToken_   The pool token to register
-    function _addPoolTokenToTRSRY(address pool_, address poolToken_) internal {
-        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(poolToken_);
+    /// @param positionToken_   The pool token to register
+    /// @param pool_            The pool to register
+    /// @param id_              The id of the Bunni position
+    function _addPositionTokenToTRSRY(address positionToken_, address pool_, uint256 id_) internal {
+        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(positionToken_);
         // Revert if the asset exists and the location is already registered (which would indicate an inconsistent activation state)
-        if (assetData.approved == true) {
+        if (assetData.approved) {
             bool locationExists = false;
             for (uint256 i = 0; i < assetData.locations.length; i++) {
                 if (assetData.locations[i] == address(TRSRY)) {
@@ -1060,110 +1194,118 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 }
             }
 
-            if (locationExists) revert BunniManager_TokenActivated(pool_, toKeycode("TRSRY"));
+            if (locationExists) revert BunniManager_TokenActivated(pool_, id_, toKeycode("TRSRY"));
         } else {
             // Add the asset to TRSRY
-            TRSRY.addAsset(poolToken_, new address[](0));
+            TRSRY.addAsset(positionToken_, new address[](0));
         }
 
         // Add TRSRY as a location
-        TRSRY.addAssetLocation(poolToken_, address(TRSRY));
+        TRSRY.addAssetLocation(positionToken_, address(TRSRY));
 
         // Categorize the asset
-        TRSRY.categorize(poolToken_, toTreasuryCategory("liquid"));
-        TRSRY.categorize(poolToken_, toTreasuryCategory("volatile"));
-        TRSRY.categorize(poolToken_, toTreasuryCategory("protocol-owned-liquidity"));
+        TRSRY.categorize(positionToken_, toTreasuryCategory("liquid"));
+        TRSRY.categorize(positionToken_, toTreasuryCategory("volatile"));
+        TRSRY.categorize(positionToken_, toTreasuryCategory("protocol-owned-liquidity"));
     }
 
-    /// @notice                         Registers `poolToken_` as an asset in the SPPLY module
+    /// @notice                         Registers `positionToken_` as an asset in the SPPLY module
     /// @dev                            This function performs the following:
     /// @dev                            - Checks if the asset is already registered, and reverts if so
     /// @dev                            - Calls `SPPLY.categorize`
     ///
+    /// @param positionToken_           The pool token to register
     /// @param pool_                    The pool to register
-    /// @param poolToken_               The pool token to register
-    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
-    /// @param twapObservationWindow_   The TWAP observation window
-    function _addPoolTokenToSPPLY(
+    /// @param id_                      The id of the Bunni position
+    /// @param movingAverageDuration_   The moving average duration
+    /// @param lastObservationTime_     The last observation time
+    /// @param token0Observations_      The observations for token0
+    /// @param token1Observations_      The observations for token1
+    function _addPositionTokenToSPPLY(
+        address positionToken_,
         address pool_,
-        address poolToken_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint256 id_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory token0Observations_,
+        uint256[] memory token1Observations_
     ) internal {
-        bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
-            toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
-        );
-        bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
         // Revert if already activated
-        if (hasBunniToken) revert BunniManager_TokenActivated(pool_, toKeycode("SPPLY"));
+        if (_isPoolTokenRegisteredInSPPLY(positionToken_))
+            revert BunniManager_TokenActivated(pool_, id_, toKeycode("SPPLY"));
 
         // Register the asset with SPPLY submodule
         SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
             abi.encodeWithSelector(
                 BunniSupply.addBunniToken.selector,
-                poolToken_,
+                positionToken_,
                 address(bunniLens),
-                twapMaxDeviationBps_,
-                twapObservationWindow_
+                movingAverageDuration_,
+                lastObservationTime_,
+                token0Observations_,
+                token1Observations_
             )
         );
     }
 
-    /// @notice             Deregisters `poolToken_` as an asset in the PRICE module
+    /// @notice             Deregisters `positionToken_` as an asset in the PRICE module
     /// @dev                This function performs the following:
     /// @dev                - Checks if the asset is registered, or exits if not
     /// @dev                - Calls `PRICE.removeAsset`
     ///
-    /// @param poolToken_   The pool token to deregister
-    function _removePoolTokenFromPRICE(address poolToken_) internal {
-        PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
+    /// @param positionToken_   The pool token to deregister
+    function _removePositionTokenFromPRICE(address positionToken_) internal {
         // Exit if not activated
-        if (assetData.approved == false) return;
+        if (!PRICE.isAssetApproved(positionToken_)) return;
 
         // Remove the asset
-        PRICE.removeAsset(poolToken_);
+        PRICE.removeAsset(positionToken_);
     }
 
-    /// @notice             Deregisters `poolToken_` as an asset in the TRSRY module
+    /// @notice             Deregisters `positionToken_` as an asset in the TRSRY module
     /// @dev                This function performs the following:
     /// @dev                - Checks if the asset is registered, or exits if not
     /// @dev                - Removes the TRSRY location from the asset
     /// @dev                - Removes the categorization of the asset
     ///
-    /// @param poolToken_   The pool token to deregister
-    function _removePoolTokenFromTRSRY(address poolToken_) internal {
-        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(poolToken_);
+    /// @param positionToken_   The pool token to deregister
+    function _removePositionTokenFromTRSRY(address positionToken_) internal {
         // Exit if not activated
-        if (assetData.approved == false) return;
+        if (!TRSRY.isAssetApproved(positionToken_)) return;
 
         // Remove the TRSRY location from the asset
-        TRSRY.removeAssetLocation(poolToken_, address(TRSRY));
+        TRSRY.removeAssetLocation(positionToken_, address(TRSRY));
 
         // Cannot remove the categorization of the asset
     }
 
-    /// @notice             Deregisters `poolToken_` as an asset in the SPPLY module
+    /// @notice             Deregisters `positionToken_` as an asset in the SPPLY module
     /// @dev                This function performs the following:
     /// @dev                - Checks if the asset is registered, or exits if not
     /// @dev                - Calls `BunniSupply.removeBunniToken`
     ///
-    /// @param poolToken_   The pool token to deregister
-    function _removePoolTokenFromSPPLY(address poolToken_) internal {
-        bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
-            toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
-        );
-        bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
+    /// @param positionToken_   The pool token to deregister
+    function _removePositionTokenFromSPPLY(address positionToken_) internal {
         // Exit if not activated
-        if (!hasBunniToken) return;
+        if (!_isPoolTokenRegisteredInSPPLY(positionToken_)) return;
 
         // Remove the asset
         SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(BunniSupply.removeBunniToken.selector, poolToken_)
+            abi.encodeWithSelector(BunniSupply.removeBunniToken.selector, positionToken_)
         );
+    }
+
+    function _isPoolTokenRegisteredInSPPLY(address positionToken_) internal returns (bool) {
+        return
+            abi.decode(
+                SPPLY.execOnSubmodule(
+                    toSubKeycode("SPPLY.BNI"),
+                    abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, positionToken_)
+                ),
+                (bool)
+            );
     }
 
     //============================================================================================//
@@ -1174,13 +1316,23 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev            The `bunniHub` state variable is set after deployment, so this
     /// @dev            modifier is needed to check that the configuration is valid.
     modifier bunniHubSet() {
-        if (address(bunniHub) == address(0)) revert BunniManager_HubNotSet();
+        // An internal function is used to reduce bytecode size
+        _bunniHubSet();
         _;
+    }
+
+    function _bunniHubSet() internal view {
+        if (address(bunniHub) == address(0)) revert BunniManager_HubNotSet();
     }
 
     /// @notice         Modifier to assert that the policy is active
     modifier onlyIfActive() {
-        if (!kernel.isPolicyActive(this)) revert BunniManager_Inactive();
+        // An internal function is used to reduce bytecode size
+        _onlyIfActive();
         _;
+    }
+
+    function _onlyIfActive() internal view {
+        if (!kernel.isPolicyActive(this)) revert BunniManager_Inactive();
     }
 }
