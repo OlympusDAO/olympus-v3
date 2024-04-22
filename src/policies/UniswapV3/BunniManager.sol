@@ -844,9 +844,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Convert in terms of OHM
+        (uint256 ohmPrice, ) = PRICE.getPrice(ohm, PRICEv2.Variant.CURRENT);
         uint256 ohmAmount = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX).mulDiv(
             1e9,
-            PRICE.getPrice(ohm, PRICEv2.Variant.CURRENT) // This will revert if the asset is not defined or 0
+            ohmPrice // This will revert if the asset is not defined or 0
         ); // Scale: OHM decimals
 
         // Returns the minimum
