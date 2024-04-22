@@ -1140,6 +1140,7 @@ contract AppraiserTest is Test {
             BALANCER_POOL_TOTAL_SUPPLY;
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Get metric value
@@ -1161,6 +1162,7 @@ contract AppraiserTest is Test {
         ohm.mint(address(TRSRY), 100e9);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING);
 
         // GFet metric value
@@ -1182,6 +1184,7 @@ contract AppraiserTest is Test {
         PRICE.setPrice(address(gohm), 10e18);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING);
 
         // GFet metric value
