@@ -740,6 +740,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             console2.log("    Depositing withdrawn DAI from DAO MS to TRSRY v1.1: %s", balance);
             addToBatch(dai, abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance));
+
+            // Validate the balance
+            uint256 balanceAfter = ERC20(dai).balanceOf(address(treasuryV1_1));
+            if (balanceAfter != balance) {
+                revert("DAI balance in TRSRY v1.1 does not match the deposited amount");
+            }
         }
 
         // 1b. sDAI
@@ -761,6 +767,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 sdai,
                 abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance)
             );
+
+            // Validate the balance
+            uint256 balanceAfter = ERC20(sdai).balanceOf(address(treasuryV1_1));
+            if (balanceAfter != balance) {
+                revert("sDAI balance in TRSRY v1.1 does not match the deposited amount");
+            }
         }
 
         // 2. Activates the Operator
