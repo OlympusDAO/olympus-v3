@@ -393,8 +393,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     abi.encode(
                         UniswapV3Price.UniswapV3Params({
                             pool: IUniswapV3Pool(daiWethUniV3Pool),
-                            observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW,
-                            maxDeviationBps: 0
+                            observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW
                         })
                     )
                 );
@@ -552,8 +551,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 abi.encode(
                     UniswapV3Price.UniswapV3Params({
                         pool: IUniswapV3Pool(ohmWethUniV3Pool),
-                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW,
-                        maxDeviationBps: 0
+                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW
                     })
                 )
             );
@@ -593,8 +591,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 abi.encode(
                     UniswapV3Price.UniswapV3Params({
                         pool: IUniswapV3Pool(btrflyWethUniV3Pool),
-                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW,
-                        maxDeviationBps: 0
+                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW
                     })
                 )
             );
