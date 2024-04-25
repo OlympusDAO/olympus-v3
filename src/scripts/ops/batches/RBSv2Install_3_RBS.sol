@@ -13,15 +13,11 @@ import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "modules/PRICE/OlympusPrice.v2.sol";
 
 // PRICE submodules
-import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
-
-// SPPLY submodules
-import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 
 // Bophades policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
@@ -31,7 +27,6 @@ import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {Operator} from "policies/RBS/Operator.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
-import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 
@@ -40,10 +35,7 @@ import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.so
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // UniswapV3
-import {INonfungiblePositionManager} from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
-import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 /// @notice     Activates and configures PRICE v2
 /// @notice     Configures TRSRY assets
@@ -81,35 +73,23 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     // Uniswap V3 Pools
     address daiWethUniV3Pool;
     address btrflyWethUniV3Pool;
-
-    // Uniswap V3 POL
     address ohmWethUniV3Pool;
-    uint256 ohmWethTokenId;
-    int24 ohmWethTickLower;
-    int24 ohmWethTickUpper;
-    address positionManager;
-
-    // BunniManager configuration
-    uint16 twapMaxDeviationBps;
-    uint32 twapObservationWindow;
 
     // Allocators
     address veFXSAllocator;
 
     // New Olympus Contracts
     address priceV2;
-    address bunniPrice;
     address chainlinkPriceFeeds;
     address erc4626Price;
     address uniswapV2PoolTokenPrice;
     address uniswapV3Price;
     address simplePriceFeedStrategy;
+
     address appraiser;
     address priceConfigV2;
     address heartV2;
     address operatorV2;
-    address bunniManager;
-    address bunniLens;
     address treasuryConfig;
     address supplyConfig;
 
@@ -119,6 +99,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     uint32 internal constant DEFAULT_RESERVE_TWAP_OBSERVATION_WINDOW = 30 days;
     uint32 internal constant DEFAULT_TWAP_OBSERVATION_WINDOW = 7 days;
     uint32 internal constant DEFAULT_CHAINLINK_UPDATE_THRESHOLD = 24 hours;
+    uint32 internal constant DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW = 24 hours;
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
@@ -152,22 +133,10 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         daiWethUniV3Pool = envAddress("current", "external.uniswapV3.DaiWethPool");
         btrflyWethUniV3Pool = envAddress("current", "external.uniswapV3.BtrflyWethPool");
         ohmWethUniV3Pool = envAddress("current", "external.uniswapV3.OhmWethPool");
-        ohmWethTokenId = envUint("current", "external.UniswapV3LegacyPOL.OhmWethTokenId");
-        ohmWethTickLower = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethMinTick"));
-        ohmWethTickUpper = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethMaxTick"));
-        positionManager = envAddress(
-            "current",
-            "external.UniswapV3LegacyPOL.NonfungiblePositionManager"
-        );
-        bunniLens = envAddress("current", "external.Bunni.BunniLens");
-
-        twapMaxDeviationBps = uint16(envUint("current", "external.Bunni.TwapMaxDeviationBps"));
-        twapObservationWindow = uint32(envUint("current", "external.Bunni.TwapObservationWindow"));
 
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
 
         priceV2 = envAddress("current", "olympus.modules.OlympusPriceV2");
-        bunniPrice = envAddress("current", "olympus.submodules.PRICE.BunniPrice");
         chainlinkPriceFeeds = envAddress("current", "olympus.submodules.PRICE.ChainlinkPriceFeeds");
         erc4626Price = envAddress("current", "olympus.submodules.PRICE.ERC4626Price");
         uniswapV2PoolTokenPrice = envAddress(
@@ -183,132 +152,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         priceConfigV2 = envAddress("current", "olympus.policies.PriceConfigV2");
         heartV2 = envAddress("current", "olympus.policies.OlympusHeartV2");
         operatorV2 = envAddress("current", "olympus.policies.OperatorV2");
-        bunniManager = envAddress("current", "olympus.policies.BunniManager");
 
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
-    }
-
-    function _bunniManagerTestSetup() internal {
-        console2.log("\n");
-        console2.log("*** SIMULATION SETUP (NOT FOR PRODUCTION) ***");
-
-        // The following are needed when simulating on a fork, as batches cannot be signed
-        // Install TRSRY v1.1
-        {
-            console2.log("Upgrading TRSRY module to new version at %s", treasuryV1_1);
-
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.UpgradeModule,
-                    treasuryV1_1
-                )
-            );
-            console2.log("    Upgraded OlympusTreasury to new version");
-        }
-
-        // Activate TreasuryConfig
-        {
-            console2.log("Activating TreasuryConfig policy");
-
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.ActivatePolicy,
-                    treasuryConfig
-                )
-            );
-
-            console2.log("Granting policy role for TreasuryConfig policy");
-            addToBatch(
-                rolesAdmin,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    bytes32("treasuryconfig_policy"),
-                    daoMS
-                )
-            );
-        }
-
-        // Configure TRSRY v1.1 to track wETH
-        {
-            console2.log("Adding WETH to TRSRY");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(TreasuryConfig.addAsset.selector, weth, new address[](0))
-            );
-        }
-
-        // Install SPPLY
-        {
-            address spply = envAddress("current", "olympus.modules.OlympusSupply");
-            console2.log("Installing OlympusSupply module");
-
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply)
-            );
-        }
-
-        // Activate SupplyConfig
-        {
-            console2.log("Installing SupplyConfig policy");
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.ActivatePolicy,
-                    supplyConfig
-                )
-            );
-
-            console2.log("Granting admin role for SupplyConfig policy");
-            addToBatch(
-                rolesAdmin,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    bytes32("supplyconfig_admin"),
-                    daoMS
-                )
-            );
-            console2.log("Granting policy role for SupplyConfig policy");
-            addToBatch(
-                rolesAdmin,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    bytes32("supplyconfig_policy"),
-                    daoMS
-                )
-            );
-        }
-
-        // Install BunniSupply
-        {
-            address bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
-
-            console2.log("Installing BunniSupply submodule");
-            addToBatch(
-                supplyConfig,
-                abi.encodeWithSelector(
-                    SupplyConfig.installSubmodule.selector,
-                    BunniSupply(bunniSupply)
-                )
-            );
-
-            console2.log("Register BunniSupply for observations");
-            addToBatch(
-                supplyConfig,
-                abi.encodeWithSelector(
-                    SupplyConfig.registerForObservations.selector,
-                    BunniSupply(bunniSupply).SUBKEYCODE()
-                )
-            );
-        }
-
-        console2.log("*** END SIMULATION SETUP ***");
-        console2.log("\n");
     }
 
     function install() public {
@@ -406,17 +251,11 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         );
 
         // 6. Install submodules on PRICEv2
-        //     - Install BunniPrice submodule
         //     - Install ChainlinkPriceFeeds submodule
         //     - Install ERC4626Price submodule
         //     - Install UniswapV2PoolTokenPrice submodule
         //     - Install UniswapV3Price submodule
         //     - Install SimplePriceFeedStrategy submodule
-        console2.log("Installing BunniPrice submodule");
-        addToBatch(
-            priceConfigV2,
-            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, bunniPrice)
-        );
         console2.log("Installing ChainlinkPriceFeeds submodule");
         addToBatch(
             priceConfigV2,
@@ -554,8 +393,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     abi.encode(
                         UniswapV3Price.UniswapV3Params({
                             pool: IUniswapV3Pool(daiWethUniV3Pool),
-                            observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
-                            maxDeviationBps: twapMaxDeviationBps
+                            observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW,
+                            maxDeviationBps: 0
                         })
                     )
                 );
@@ -713,8 +552,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 abi.encode(
                     UniswapV3Price.UniswapV3Params({
                         pool: IUniswapV3Pool(ohmWethUniV3Pool),
-                        observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
-                        maxDeviationBps: twapMaxDeviationBps
+                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW,
+                        maxDeviationBps: 0
                     })
                 )
             );
@@ -754,8 +593,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 abi.encode(
                     UniswapV3Price.UniswapV3Params({
                         pool: IUniswapV3Pool(btrflyWethUniV3Pool),
-                        observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
-                        maxDeviationBps: twapMaxDeviationBps
+                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW,
+                        maxDeviationBps: 0
                     })
                 )
             );
@@ -782,255 +621,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    BTRFLY price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(btrfly));
         }
 
-        // ==================== SECTION 3: BunniManager Migration ==================== //
-
-        // NOTE: Only enable during fork testing
-        // _bunniManagerTestSetup();
-
-        // This DAO MS batch:
-        // 1. Set roles for policy access control (bunni_admin)
-        // 2. Activates the BunniManager policy
-        // 3. Sets the BunniLens variable on the BunniManager policy
-        // 4. Withdraws liquidity from the existing Uniswap V3 pool
-        // 5. Transfers withdrawn wETH to TRSRY v1.1
-        // 6. Deploys an LP token for pool
-        // 7. Deposits liquidity into the poll
-        // 8. Activates the LP token
-
-        // 1. Set roles for policy access control
-        // BunniManager policy
-        //     - Give DAO MS the bunni_admin role
-        console2.log("Granting admin role for BunniManager policy");
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("bunni_admin"), daoMS)
-        );
-
-        // 2. Activate the BunniManager policy
-        console2.log("Activating BunniManager policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                bunniManager
-            )
-        );
-
-        // 3. Sets the BunniLens variable on the BunniManager policy
-        // This cannot be performed at deployment-time
-        // It also needs to be performed after policy activation
-        console2.log("Setting BunniLens variable on BunniManager policy: %s", bunniLens);
-        addToBatch(
-            bunniManager,
-            abi.encodeWithSelector(BunniManager.setBunniLens.selector, bunniLens)
-        );
-
-        // 4. Withdraw liquidity from the existing Uniswap V3 pool into the DAO MS
-        uint256 ohmBalanceWithdrawn;
-        uint256 wethBalanceWithdrawn;
-        {
-            // Determine token ordering
-            uint8 ohmIndex;
-            {
-                address token0 = IUniswapV3Pool(ohmWethUniV3Pool).token0();
-
-                if (token0 == ohm) {
-                    ohmIndex = 0;
-                } else if (token0 == weth) {
-                    ohmIndex = 1;
-                } else {
-                    revert("Invalid token0");
-                }
-            }
-
-            // Determine the liquidity and token amounts
-            uint128 liquidity;
-            uint256 token0AmountMin;
-            uint256 token1AmountMin;
-            {
-                (, , , , , , , uint128 _liquidity, , , , ) = INonfungiblePositionManager(
-                    positionManager
-                ).positions(ohmWethTokenId);
-                liquidity = _liquidity;
-
-                (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(ohmWethUniV3Pool).slot0();
-                (uint256 token0Amount, uint256 token1Amount) = LiquidityAmounts
-                    .getAmountsForLiquidity(
-                        sqrtPriceX96,
-                        TickMath.getSqrtRatioAtTick(ohmWethTickLower),
-                        TickMath.getSqrtRatioAtTick(ohmWethTickUpper),
-                        liquidity
-                    );
-
-                // Account for slippage
-                token0AmountMin = (token0Amount * (10000 - 100)) / 10000;
-                token1AmountMin = (token1Amount * (10000 - 100)) / 10000;
-            }
-
-            // Decrease liquidity (which should also collect fees)
-            {
-                INonfungiblePositionManager.DecreaseLiquidityParams
-                    memory decreaseLiquidityParams = INonfungiblePositionManager
-                        .DecreaseLiquidityParams(
-                            ohmWethTokenId,
-                            liquidity,
-                            token0AmountMin,
-                            token1AmountMin,
-                            block.timestamp
-                        );
-
-                console2.log("Decreasing liquidity for existing Uniswap V3 OHM-wETH pool");
-                console2.log("    Liquidity is", liquidity);
-
-                addToBatch(
-                    positionManager,
-                    abi.encodeWithSelector(
-                        INonfungiblePositionManager.decreaseLiquidity.selector,
-                        decreaseLiquidityParams
-                    )
-                );
-            }
-
-            // Collect liquidity
-            {
-                INonfungiblePositionManager.CollectParams
-                    memory collectParams = INonfungiblePositionManager.CollectParams(
-                        ohmWethTokenId,
-                        address(daoMS),
-                        type(uint128).max,
-                        type(uint128).max
-                    );
-
-                console2.log("Collecting liquidity for existing Uniswap V3 OHM-wETH pool");
-                (uint256 collectAmount0, uint256 collectAmount1) = abi.decode(
-                    addToBatch(
-                        positionManager,
-                        abi.encodeWithSelector(
-                            INonfungiblePositionManager.collect.selector,
-                            collectParams
-                        )
-                    ),
-                    (uint256, uint256)
-                );
-
-                {
-                    (
-                        ,
-                        ,
-                        ,
-                        ,
-                        ,
-                        ,
-                        ,
-                        uint128 remainingLiquidity,
-                        ,
-                        ,
-                        uint128 tokensOwed0,
-                        uint128 tokensOwed1
-                    ) = INonfungiblePositionManager(positionManager).positions(ohmWethTokenId);
-                    assertEq(remainingLiquidity, 0, "Remaining liquidity should be 0");
-                    assertEq(tokensOwed0, 0, "tokensOwed0 should be 0");
-                    assertEq(tokensOwed1, 0, "tokensOwed1 should be 0");
-                }
-
-                ohmBalanceWithdrawn += ohmIndex == 0 ? collectAmount0 : collectAmount1;
-                wethBalanceWithdrawn += ohmIndex == 0 ? collectAmount1 : collectAmount0;
-            }
-
-            console2.log("    Withdrawn OHM balance (9dp) is", ohmBalanceWithdrawn);
-            console2.log("    Withdrawn WETH balance (18dp) is", wethBalanceWithdrawn);
-            console2.log("    NOTE: Withdrawn OHM needs to be burnt manually");
-        }
-
-        // 5. Transfer the withdrawn wETH to TRSRY v1.1
-        {
-            console2.log("Approving withdrawn WETH for transfer to TRSRY v1.1");
-            addToBatch(
-                weth,
-                abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, wethBalanceWithdrawn)
-            );
-
-            console2.log("Transferring withdrawn WETH to TRSRY v1.1");
-            addToBatch(
-                weth,
-                abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, wethBalanceWithdrawn)
-            );
-        }
-
-        // 6. Deploy an LP token for the pool using BunniManager
-        {
-            console2.log("Deploying LP token for full range position Uniswap V3 OHM-wETH pool");
-            addToBatch(
-                bunniManager,
-                abi.encodeWithSelector(BunniManager.deployFullRangeToken.selector, ohmWethUniV3Pool)
-            );
-        }
-
-        // 7. Deposit liquidity into the pool using BunniManager
-        //  The pool token shares are deposited into TRSRY
-        {
-            console2.log("Depositing liquidity into Uniswap V3 OHM-wETH pool");
-            uint256 poolTokenAmount = abi.decode(
-                addToBatch(
-                    bunniManager,
-                    abi.encodeWithSelector(
-                        BunniManager.deposit.selector,
-                        ohmWethUniV3Pool,
-                        ohm,
-                        ohmBalanceWithdrawn,
-                        wethBalanceWithdrawn,
-                        100 // 1%
-                    )
-                ),
-                (uint256)
-            );
-
-            console2.log("    Pool token amount/liquidity is", poolTokenAmount);
-        }
-
-        // 8. Activate the LP token
-        // This will also register the LP token with TRSRY, PRICE and SPPLY
-        {
-            uint32 ohmWethPriceMovingAverageDuration = 1 days;
-            uint48 ohmWethPriceLastObservationTime = uint48(
-                argData.readUint(".ohmWethPriceLastObsTime")
-            );
-            // This loads the price per share for the OHM-wETH position
-            // To calculate: (OHM balance * OHM price + wETH balance * wETH price) / liquidity
-            // See BunniHub._mintShares() for more information
-            uint256[] memory ohmWethPriceObservations = argData.readUintArray(".ohmWethPriceObs"); // 1 day * 24 hours / 8 hours = 3 observations
-
-            uint32 ohmWethReserveMovingAverageDuration = 1 days;
-            uint48 ohmWethReserveLastObservationTime = uint48(
-                argData.readUint(".ohmWethReserveLastObsTime")
-            ); // Should be within the last 8 hours
-            uint256[] memory ohmWethReserveToken0Observations = argData.readUintArray(
-                ".ohmWethReserveToken0Observations"
-            );
-            uint256[] memory ohmWethReserveToken1Observations = argData.readUintArray(
-                ".ohmWethReserveToken1Observations"
-            );
-
-            console2.log("Activating LP token for Uniswap V3 OHM-wETH pool");
-            addToBatch(
-                bunniManager,
-                abi.encodeWithSelector(
-                    BunniManager.activatePositionToken.selector,
-                    ohmWethUniV3Pool,
-                    0,
-                    ohmWethPriceMovingAverageDuration,
-                    ohmWethPriceLastObservationTime,
-                    ohmWethPriceObservations,
-                    ohmWethReserveMovingAverageDuration,
-                    ohmWethReserveLastObservationTime,
-                    ohmWethReserveToken0Observations,
-                    ohmWethReserveToken1Observations
-                )
-            );
-        }
-
-        // ==================== SECTION 4: RBS v2 Activation ==================== //
+        // ==================== SECTION 3: RBS v2 Activation ==================== //
 
         // This DAO MS batch:
         // 1. Activates Appraiser policy
@@ -1143,6 +734,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 "    LBBO (18dp)",
                 Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM)
             );
+
+            (uint256 lbbo, ) = Appraiser(appraiser).getMetric(
+                IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                IAppraiser.Variant.MOVINGAVERAGE
+            );
+            console2.log("    LBBO Moving Average (18dp)", lbbo);
             console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
         }
     }
@@ -1155,7 +752,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         install();
     }
 
-    function RBSv2Install_3_TEST(bool send_) external {
+    function RBSv2Install_3_TEST(bool) external {
         initTestBatch();
         install();
     }

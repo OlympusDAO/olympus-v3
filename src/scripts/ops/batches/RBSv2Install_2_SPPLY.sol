@@ -19,7 +19,6 @@ import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // SPPLY submodules
-import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
 
@@ -32,13 +31,10 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     address rolesAdmin;
     address arbBridge;
     address opBridge;
-    address blVaultManagerLido;
-    address blVaultManagerLusd;
 
     // New Contracts
     address spply;
     address supplyConfig;
-    address bunniSupply;
     address migrationOffsetSupply;
     address brickedSupply;
     address crossChainBridgeV1_1;
@@ -55,14 +51,10 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         arbBridge = envAddressWithChain("arbitrum", "current", "olympus.policies.CrossChainBridge");
         opBridge = envAddressWithChain("optimism", "current", "olympus.policies.CrossChainBridge");
 
-        blVaultManagerLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
-        blVaultManagerLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
-
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         supplyConfig = envAddress("current", "olympus.policies.SupplyConfig");
-        bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
         migrationOffsetSupply = envAddress(
             "current",
             "olympus.submodules.SPPLY.MigrationOffsetSupply"
@@ -94,13 +86,12 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 1. Installs the OlympusSupply module
         // 2. Installs the SupplyConfig policy
         // 3. Set roles for policy access control
-        // 4. Installs the BunniSupply submodule on the OlympusSupply module
-        // 5. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
-        // 6. Installs the BrickedSupply submodule on the OlympusSupply module
-        // 7. Categorizes protocol-owned-treasury supply
-        // 8. Categorizes DAO supply
-        // 9. Activates the new CrossChainBridge policy
-        // 10. Set trusted remotes on the new CrossChainBridge policy
+        // 4. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 5. Installs the BrickedSupply submodule on the OlympusSupply module
+        // 6. Categorizes protocol-owned-treasury supply
+        // 7. Categorizes DAO supply
+        // 8. Activates the new CrossChainBridge policy
+        // 9. Set trusted remotes on the new CrossChainBridge policy
 
         // 1. Install the OlympusSupply module
         console2.log("Installing OlympusSupply module");
@@ -151,29 +142,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 4. Install the BunniSupply submodule on the OlympusSupply module
-        // No configuration needed - will be performed by BunniManager
-        {
-            console2.log("Installing BunniSupply submodule");
-            addToBatch(
-                supplyConfig,
-                abi.encodeWithSelector(
-                    SupplyConfig.installSubmodule.selector,
-                    BunniSupply(bunniSupply)
-                )
-            );
-
-            console2.log("Register BunniSupply for observations");
-            addToBatch(
-                supplyConfig,
-                abi.encodeWithSelector(
-                    SupplyConfig.registerForObservations.selector,
-                    BunniSupply(bunniSupply).SUBKEYCODE()
-                )
-            );
-        }
-
-        // 5. Install the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 4. Install the MigrationOffsetSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         console2.log("Installing MigrationOffsetSupply submodule");
         addToBatch(
@@ -184,7 +153,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 6. Install the BrickedSupply submodule on the OlympusSupply module
+        // 5. Install the BrickedSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         console2.log("Installing BrickedSupply submodule");
         addToBatch(
@@ -195,7 +164,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 7. Categorize protocol-owned-treasury supply
+        // 6. Categorize protocol-owned-treasury supply
         console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
         addToBatch(
             supplyConfig,
@@ -206,7 +175,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 8. Categorize DAO supply
+        // 7. Categorize DAO supply
         console2.log("Categorizing DAO working wallet as DAO supply");
         addToBatch(
             supplyConfig,
@@ -217,7 +186,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 9. Activate the new CrossChainBridge policy
+        // 8. Activate the new CrossChainBridge policy
         //  - No need to set the admin role, as it was already set when the first version of the policy was installed
         console2.log("Activating new CrossChainBridge policy");
         addToBatch(
@@ -229,7 +198,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 10. Set trusted remotes on the new CrossChainBridge policy
+        // 9. Set trusted remotes on the new CrossChainBridge policy
         console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             crossChainBridgeV1_1,
@@ -298,7 +267,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         install();
     }
 
-    function RBSv2Install_2_TEST(bool send_) external {
+    function RBSv2Install_2_TEST(bool) external {
         // For testing purposes only
         initTestBatch();
         disable_crosschainbridge();

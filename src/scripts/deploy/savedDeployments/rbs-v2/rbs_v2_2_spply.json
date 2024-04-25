@@ -12,14 +12,6 @@
             "args": {}
         },
         {
-            "name": "BLVaultSupply",
-            "args": {}
-        },
-        {
-            "name": "BunniSupply",
-            "args": {}
-        },
-        {
             "name": "MigrationOffsetSupply",
             "args": {
                 "gOhmOffset": 2013000000000000000000
