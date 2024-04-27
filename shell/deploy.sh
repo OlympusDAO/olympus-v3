@@ -47,7 +47,14 @@ if [ "$VERIFY" = "true" ] || [ "$VERIFY" = "TRUE" ]; then
     exit 1
   fi
 
-  VERIFY_FLAG="--verify --etherscan-api-key $ETHERSCAN_KEY"
+  if [ -n "$VERIFIER_URL" ]; then
+    echo "Using verifier at URL: $VERIFIER_URL"
+    VERIFY_FLAG="--verify --etherscan-api-key $ETHERSCAN_KEY --verifier-url $VERIFIER_URL"
+  else
+    echo "Using standard verififer"
+    VERIFY_FLAG="--verify --etherscan-api-key $ETHERSCAN_KEY"
+  fi
+
   echo "Verification is enabled"
 fi
 
