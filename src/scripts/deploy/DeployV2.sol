@@ -78,6 +78,7 @@ import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
+import {LiquiditySupply} from "modules/SPPLY/submodules/LiquiditySupply.sol";
 
 // Cooler
 import {Clearinghouse} from "policies/Clearinghouse.sol";
@@ -128,6 +129,7 @@ contract OlympusDeploy is Script {
     BunniSupply public bunniSupply;
     MigrationOffsetSupply public migrationOffsetSupply;
     BrickedSupply public brickedSupply;
+    LiquiditySupply public liquiditySupply;
 
     // Policies
     Operator public operator;
@@ -280,6 +282,7 @@ contract OlympusDeploy is Script {
         selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
         selectorMap["BrickedSupply"] = this._deployBrickedSupply.selector;
+        selectorMap["LiquiditySupply"] = this._deployLiquiditySupply.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -397,6 +400,7 @@ contract OlympusDeploy is Script {
             envAddress("olympus.submodules.SPPLY.MigrationOffsetSupply")
         );
         brickedSupply = BrickedSupply(envAddress("olympus.submodules.SPPLY.BrickedSupply"));
+        liquiditySupply = LiquiditySupply(envAddress("olympus.submodules.SPPLY.LiquiditySupply"));
 
         // External contracts
         bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
@@ -1442,6 +1446,25 @@ contract OlympusDeploy is Script {
         console2.log("BrickedSupply deployed at:", address(brickedSupply));
 
         return address(brickedSupply);
+    }
+
+    function _deployLiquiditySupply(bytes memory args) public returns (address) {
+        // Decode arguments for LiquiditySupply submodule
+        (uint256 quantity, address source) = abi.decode(args, (uint256, address));
+
+        // Check that the environment variables are loaded
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+
+        // Print out values
+        console2.log("    quantity (1e9)", quantity);
+        console2.log("    source", source);
+
+        // Deploy LiquiditySupply submodule
+        vm.broadcast();
+        liquiditySupply = new LiquiditySupply(SPPLY, quantity, source);
+        console2.log("LiquiditySupply deployed at:", address(liquiditySupply));
+
+        return address(liquiditySupply);
     }
 
     // ========== COOLER LOANS ========== //
