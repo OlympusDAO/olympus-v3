@@ -144,11 +144,81 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         console2.log("    %s balance in TRSRY v1 after: %s (18dp)", assetName_, trsryAfter);
         console2.log("    %s balance in DAO MS: %s (18dp)", assetName_, daoMSAfter);
-        console2.log("    Difference in %s balance in DAO MS: %s (18dp)", assetName_, daoMSAfter - daoMSBefore);
+        console2.log(
+            "    Difference in %s balance in DAO MS: %s (18dp)",
+            assetName_,
+            daoMSAfter - daoMSBefore
+        );
 
         if (trsryAfter > 0) {
             revert("%s balance in TRSRY v1 is not 0");
         }
+    }
+
+    function _depositToTrsry(string memory assetName_, address asset_) internal {
+        uint256 balance = ERC20(asset_).balanceOf(daoMS);
+        console2.log("Depositing %s to TRSRY v1.1", assetName_);
+        console2.log("    %s balance in DAO MS: %s (18dp)", assetName_, balance);
+
+        if (balance == 0) {
+            console2.log("    %s balance in DAO MS is 0. Skipping.", assetName_);
+            return;
+        }
+
+        console2.log("    Approving withdrawn %s for transfer to TRSRY v1.1", assetName_);
+        addToBatch(asset_, abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, balance));
+
+        console2.log("    Depositing withdrawn %s from DAO MS to TRSRY v1.1", assetName_);
+        addToBatch(asset_, abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance));
+        console2.log("    Deposited %s: %s (18dp)", assetName_, balance);
+
+        // Validate
+        uint256 balanceAfter = ERC20(asset_).balanceOf(treasuryV1_1);
+        if (balanceAfter != balance) {
+            revert("%s balance in TRSRY v1.1 does not match the deposited amount");
+        }
+    }
+
+    function _addTreasuryAsset(
+        string memory assetName_,
+        address asset_,
+        string memory category1_,
+        string memory category2_,
+        string memory category3_,
+        address[] memory locations_
+    ) internal {
+        console2.log("Adding %s (%s) to TRSRY", assetName_, asset_);
+        addToBatch(
+            treasuryConfig,
+            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, asset_, locations_)
+        );
+        console2.log("    Categorizing %s as %s", assetName_, category1_);
+        addToBatch(
+            treasuryConfig,
+            abi.encodeWithSelector(
+                TreasuryConfig.categorizeAsset.selector,
+                asset_,
+                AssetCategory.wrap(bytes32(bytes(category1_)))
+            )
+        );
+        console2.log("    Categorizing %s as %s", assetName_, category2_);
+        addToBatch(
+            treasuryConfig,
+            abi.encodeWithSelector(
+                TreasuryConfig.categorizeAsset.selector,
+                asset_,
+                AssetCategory.wrap(bytes32(bytes(category2_)))
+            )
+        );
+        console2.log("    Categorizing %s as %s", assetName_, category3_);
+        addToBatch(
+            treasuryConfig,
+            abi.encodeWithSelector(
+                TreasuryConfig.categorizeAsset.selector,
+                asset_,
+                AssetCategory.wrap(bytes32(bytes(category3_)))
+            )
+        );
     }
 
     function withdrawAllAssets() public {
@@ -427,108 +497,16 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         address[] memory locations = new address[](2);
         locations[0] = daoWorkingWallet;
         locations[1] = daoMS;
-        console2.log("Adding DAI to TRSRY");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, dai, locations)
-        );
-        console2.log("    Categorizing DAI as liquid");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                dai,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("    Categorizing DAI as stable");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                dai,
-                AssetCategory.wrap("stable")
-            )
-        );
-        console2.log("    Categorizing DAI as reserves");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                dai,
-                AssetCategory.wrap("reserves")
-            )
-        );
+
+        _addTreasuryAsset("DAI", dai, "liquid", "stable", "reserves", locations);
 
         // 7. Add and categorize sDAI on TreasuryCustodian
         //      - liquid, stable, reserves
-        console2.log("Adding sDAI to TRSRY");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, sdai, locations)
-        );
-        console2.log("    Categorizing sDAI as liquid");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                sdai,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("    Categorizing sDAI as stable");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                sdai,
-                AssetCategory.wrap("stable")
-            )
-        );
-        console2.log("    Categorizing sDAI as reserves");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                sdai,
-                AssetCategory.wrap("reserves")
-            )
-        );
+        _addTreasuryAsset("sDAI", sdai, "liquid", "stable", "reserves", locations);
 
         // 8. Add and categorize WETH
         //      - liquid, volatile, strategic
-        console2.log("Adding WETH to TRSRY");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, weth, locations)
-        );
-        console2.log("    Categorizing WETH as liquid");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                weth,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("    Categorizing WETH as volatile");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                weth,
-                AssetCategory.wrap("volatile")
-            )
-        );
-        console2.log("    Categorizing WETH as strategic");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                weth,
-                AssetCategory.wrap("strategic")
-            )
-        );
+        _addTreasuryAsset("WETH", weth, "liquid", "volatile", "strategic", locations);
 
         // 9. Add and categorize veFXS
         //      - illiquid, volatile, strategic
@@ -536,110 +514,16 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         address[] memory veFXSLocations = new address[](2);
         veFXSLocations[0] = daoMS;
         veFXSLocations[1] = daoWorkingWallet;
-        console2.log("Adding veFXS to TRSRY");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, veFXS, veFXSLocations)
-        );
-        console2.log("    Categorizing veFXS as illiquid");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                veFXS,
-                AssetCategory.wrap("illiquid")
-            )
-        );
-        console2.log("    Categorizing veFXS as volatile");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                veFXS,
-                AssetCategory.wrap("volatile")
-            )
-        );
-        console2.log("    Categorizing veFXS as strategic");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                veFXS,
-                AssetCategory.wrap("strategic")
-            )
-        );
+
+        _addTreasuryAsset("veFXS", veFXS, "illiquid", "volatile", "strategic", veFXSLocations);
 
         // 10. Add and categorize FXS
         //      - liquid, volatile, strategic
-        console2.log("Adding FXS to TRSRY");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, fxs, veFXSLocations)
-        );
-        console2.log("    Categorizing FXS as liquid");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                fxs,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("    Categorizing FXS as volatile");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                fxs,
-                AssetCategory.wrap("volatile")
-            )
-        );
-        console2.log("    Categorizing FXS as strategic");
-        addToBatch(
-            treasuryConfig,
-            abi.encodeWithSelector(
-                TreasuryConfig.categorizeAsset.selector,
-                fxs,
-                AssetCategory.wrap("strategic")
-            )
-        );
+        _addTreasuryAsset("FXS", fxs, "liquid", "volatile", "strategic", veFXSLocations);
 
         // 11. Add and categorize BTRFLY
         //      - liquid, volatile, strategic
-        {
-            console2.log("Adding BTRFLY to TRSRY");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(TreasuryConfig.addAsset.selector, btrfly, locations)
-            );
-            console2.log("    Categorizing BTRFLY as liquid");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(
-                    TreasuryConfig.categorizeAsset.selector,
-                    btrfly,
-                    AssetCategory.wrap("liquid")
-                )
-            );
-            console2.log("    Categorizing BTRFLY as volatile");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(
-                    TreasuryConfig.categorizeAsset.selector,
-                    btrfly,
-                    AssetCategory.wrap("volatile")
-                )
-            );
-            console2.log("    Categorizing BTRFLY as strategic");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(
-                    TreasuryConfig.categorizeAsset.selector,
-                    btrfly,
-                    AssetCategory.wrap("strategic")
-                )
-            );
-        }
+        _addTreasuryAsset("BTRFLY", btrfly, "liquid", "volatile", "strategic", veFXSLocations);
 
         // Reporting
         console2.log("Testing TRSRY v1.1 (pre-deposit)");
@@ -668,55 +552,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         console2.log("TRSRY v1.1: %s", treasuryV1_1);
 
         // 1a. DAI
-        {
-            console2.log("Depositing DAI");
-
-            // Get the balance in the DAO MS
-            uint256 balance = ERC20(dai).balanceOf(daoMS);
-            console2.log("    DAO MS DAI balance: %s", balance);
-            if (balance == 0) {
-                revert("DAO MS DAI balance should be greater than 0");
-            }
-
-            console2.log("    Approving withdrawn DAI for transfer to TRSRY v1.1");
-            addToBatch(dai, abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, balance));
-
-            console2.log("    Depositing withdrawn DAI from DAO MS to TRSRY v1.1: %s", balance);
-            addToBatch(dai, abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance));
-
-            // Validate the balance
-            uint256 balanceAfter = ERC20(dai).balanceOf(address(treasuryV1_1));
-            if (balanceAfter != balance) {
-                revert("DAI balance in TRSRY v1.1 does not match the deposited amount");
-            }
-        }
+        _depositToTrsry("DAI", dai);
 
         // 1b. sDAI
-        {
-            console2.log("Depositing sDAI");
+        _depositToTrsry("sDAI", sdai);
 
-            // Get the balance in the DAO MS
-            uint256 balance = ERC20(sdai).balanceOf(daoMS);
-            console2.log("    DAO MS sDAI balance: %s", balance);
-            if (balance == 0) {
-                revert("DAO MS sDAI balance should be greater than 0");
-            }
-
-            console2.log("    Approving withdrawn sDAI for transfer to TRSRY v1.1");
-            addToBatch(sdai, abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, balance));
-
-            console2.log("    Depositing withdrawn sDAI from DAO MS to TRSRY v1.1: %s", balance);
-            addToBatch(
-                sdai,
-                abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance)
-            );
-
-            // Validate the balance
-            uint256 balanceAfter = ERC20(sdai).balanceOf(address(treasuryV1_1));
-            if (balanceAfter != balance) {
-                revert("sDAI balance in TRSRY v1.1 does not match the deposited amount");
-            }
-        }
+        // Other assets are not deposited and remain in the DAO MS
 
         // 2. Activates the Operator
         {
