@@ -506,24 +506,28 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // 8. Add and categorize WETH
         //      - liquid, volatile, strategic
-        _addTreasuryAsset("WETH", weth, "liquid", "volatile", "strategic", locations);
+        //      - disabled, as a TRSRY asset without a PRICE configuration will cause Appraiser to revert
+        // _addTreasuryAsset("WETH", weth, "liquid", "volatile", "strategic", locations);
 
         // 9. Add and categorize veFXS
         //      - illiquid, volatile, strategic
         //      - excludes the veFXS allocator balance, since the deployed amount is accounted for in debt
-        address[] memory veFXSLocations = new address[](2);
-        veFXSLocations[0] = daoMS;
-        veFXSLocations[1] = daoWorkingWallet;
+        //      - disabled, as a TRSRY asset without a PRICE configuration will cause Appraiser to revert
+        // address[] memory veFXSLocations = new address[](2);
+        // veFXSLocations[0] = daoMS;
+        // veFXSLocations[1] = daoWorkingWallet;
 
-        _addTreasuryAsset("veFXS", veFXS, "illiquid", "volatile", "strategic", veFXSLocations);
+        // _addTreasuryAsset("veFXS", veFXS, "illiquid", "volatile", "strategic", veFXSLocations);
 
         // 10. Add and categorize FXS
         //      - liquid, volatile, strategic
-        _addTreasuryAsset("FXS", fxs, "liquid", "volatile", "strategic", veFXSLocations);
+        //      - disabled, as a TRSRY asset without a PRICE configuration will cause Appraiser to revert
+        // _addTreasuryAsset("FXS", fxs, "liquid", "volatile", "strategic", veFXSLocations);
 
         // 11. Add and categorize BTRFLY
         //      - liquid, volatile, strategic
-        _addTreasuryAsset("BTRFLY", btrfly, "liquid", "volatile", "strategic", veFXSLocations);
+        //      - disabled, as a TRSRY asset without a PRICE configuration will cause Appraiser to revert
+        // _addTreasuryAsset("BTRFLY", btrfly, "liquid", "volatile", "strategic", locations);
 
         // Reporting
         console2.log("Testing TRSRY v1.1 (pre-deposit)");
