@@ -65,7 +65,7 @@ library UniswapV3OracleHelper {
     /// @param pool_       The address of the Uniswap V3 pool
     /// @param period_     The period (in seconds) over which to calculate the time-weighted tick
     /// @return            The time-weighted tick
-    function getTimeWeightedTick(address pool_, uint32 period_) public view returns (int56) {
+    function getTimeWeightedTick(address pool_, uint32 period_) internal view returns (int56) {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
 
         // Ensure the observation window is long enough
@@ -117,7 +117,7 @@ library UniswapV3OracleHelper {
     /// @param pool_            The Uniswap V3 pool
     /// @param period_          The period of the TWAP in seconds
     /// @return                 The ratio of token1 to token0 in the scale of token1 decimals
-    function getTWAPRatio(address pool_, uint32 period_) public view returns (uint256) {
+    function getTWAPRatio(address pool_, uint32 period_) internal view returns (uint256) {
         int56 timeWeightedTick = getTimeWeightedTick(pool_, period_);
 
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
@@ -150,7 +150,7 @@ library UniswapV3OracleHelper {
         address baseToken_,
         address quoteToken_,
         uint8 baseTokenDecimals_
-    ) public view returns (uint256) {
+    ) internal view returns (uint256) {
         int56 timeWeightedTick = getTimeWeightedTick(pool_, period_);
 
         // Quantity of quoteToken_ for 1 unit of baseToken_ at the time-weighted tick
