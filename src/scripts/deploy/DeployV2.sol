@@ -50,7 +50,7 @@ import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVault
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
-import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
+// import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {Appraiser, IAppraiser} from "policies/OCA/Appraiser.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
@@ -153,14 +153,16 @@ contract OlympusDeploy is Script {
     CrossChainBridge public crossChainBridgeV1;
     CrossChainBridge public crossChainBridgeV1_1;
     PriceConfigV2 public priceConfigV2;
-    BunniManager public bunniManager;
+    // NOTE: BunniManager/BunniHub/BunniLens are commented out as they are not currently in use, and importing them causes the deployment of their linked libraries in EVERY deployment
+    // Source: https://github.com/foundry-rs/foundry/issues/3295
+    // BunniManager public bunniManager;
     Appraiser public appraiser;
     SupplyConfig public supplyConfig;
     TreasuryConfig public treasuryConfig;
 
     // External contracts
-    BunniHub public bunniHub;
-    BunniLens public bunniLens;
+    // BunniHub public bunniHub;
+    // BunniLens public bunniLens;
 
     // Governance
     Timelock public timelock;
@@ -261,14 +263,14 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
         selectorMap["PriceConfigV2"] = this._deployPriceConfigV2.selector;
-        selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
+        // selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
         selectorMap["Appraiser"] = this._deployAppraiser.selector;
         selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
         selectorMap["TreasuryConfig"] = this._deployTreasuryConfig.selector;
 
         // Bunni
-        selectorMap["BunniHub"] = this._deployBunniHub.selector;
-        selectorMap["BunniLens"] = this._deployBunniLens.selector;
+        // selectorMap["BunniHub"] = this._deployBunniHub.selector;
+        // selectorMap["BunniLens"] = this._deployBunniLens.selector;
 
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
@@ -374,11 +376,11 @@ contract OlympusDeploy is Script {
         appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
         supplyConfig = SupplyConfig(envAddress("olympus.policies.SupplyConfig"));
         treasuryConfig = TreasuryConfig(envAddress("olympus.policies.TreasuryConfig"));
-        bunniManager = BunniManager(envAddress("olympus.policies.BunniManager"));
+        // bunniManager = BunniManager(envAddress("olympus.policies.BunniManager"));
 
         // Bunni
-        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
-        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
+        // bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
+        // bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
@@ -401,10 +403,6 @@ contract OlympusDeploy is Script {
         );
         brickedSupply = BrickedSupply(envAddress("olympus.submodules.SPPLY.BrickedSupply"));
         liquiditySupply = LiquiditySupply(envAddress("olympus.submodules.SPPLY.LiquiditySupply"));
-
-        // External contracts
-        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
-        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1164,74 +1162,74 @@ contract OlympusDeploy is Script {
 
     // ========== BUNNI MANAGER POLICY ========== //
 
-    function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
-        // Arguments
-        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        (uint48 harvestFrequency, uint16 harvestRewardFee, uint256 harvestRewardMax) = abi.decode(
-            args,
-            (uint48, uint16, uint256)
-        );
+    // function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
+    //     // Arguments
+    //     // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
+    //     (uint48 harvestFrequency, uint16 harvestRewardFee, uint256 harvestRewardMax) = abi.decode(
+    //         args,
+    //         (uint48, uint16, uint256)
+    //     );
 
-        console2.log("    harvestFrequency", harvestFrequency);
-        console2.log("    harvestRewardFee", harvestRewardFee);
-        console2.log("    harvestRewardMax", harvestRewardMax);
+    //     console2.log("    harvestFrequency", harvestFrequency);
+    //     console2.log("    harvestRewardFee", harvestRewardFee);
+    //     console2.log("    harvestRewardMax", harvestRewardMax);
 
-        // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert("Kernel address not set");
+    //     // Check that the environment variables are loaded
+    //     if (address(kernel) == address(0)) revert("Kernel address not set");
 
-        // Deploy the policy
-        vm.broadcast();
-        bunniManager = new BunniManager(
-            kernel,
-            harvestRewardMax,
-            harvestRewardFee,
-            harvestFrequency
-        );
-        console2.log("BunniManager deployed at:", address(bunniManager));
+    //     // Deploy the policy
+    //     vm.broadcast();
+    //     bunniManager = new BunniManager(
+    //         kernel,
+    //         harvestRewardMax,
+    //         harvestRewardFee,
+    //         harvestFrequency
+    //     );
+    //     console2.log("BunniManager deployed at:", address(bunniManager));
 
-        // BunniManager/Hub/Lens post-deployment steps (requiring permissions):
-        // - Call BunniManager.setBunniLens
-        // - Create the "bunni_admin" role and assign it
-        // - Activate the BunniManager policy
+    //     // BunniManager/Hub/Lens post-deployment steps (requiring permissions):
+    //     // - Call BunniManager.setBunniLens
+    //     // - Create the "bunni_admin" role and assign it
+    //     // - Activate the BunniManager policy
 
-        return address(bunniManager);
-    }
+    //     return address(bunniManager);
+    // }
 
-    function _deployBunniHub(bytes memory args) public returns (address) {
-        // Arguments
-        address uniswapFactory = abi.decode(args, (address));
+    // function _deployBunniHub(bytes memory args) public returns (address) {
+    //     // Arguments
+    //     address uniswapFactory = abi.decode(args, (address));
 
-        console2.log("    uniswapFactory", uniswapFactory);
+    //     console2.log("    uniswapFactory", uniswapFactory);
 
-        // Check that the environment variables are loaded
-        if (address(bunniManager) == address(0)) revert("BunniManager address not set");
-        if (address(uniswapFactory) == address(0)) revert("UniswapFactory address not set");
+    //     // Check that the environment variables are loaded
+    //     if (address(bunniManager) == address(0)) revert("BunniManager address not set");
+    //     if (address(uniswapFactory) == address(0)) revert("UniswapFactory address not set");
 
-        // Deploy the BunniHub
-        vm.broadcast();
-        bunniHub = new BunniHub(
-            IUniswapV3Factory(uniswapFactory),
-            address(bunniManager),
-            0 // No protocol fee
-        );
-        console2.log("BunniHub deployed at:", address(bunniHub));
+    //     // Deploy the BunniHub
+    //     vm.broadcast();
+    //     bunniHub = new BunniHub(
+    //         IUniswapV3Factory(uniswapFactory),
+    //         address(bunniManager),
+    //         0 // No protocol fee
+    //     );
+    //     console2.log("BunniHub deployed at:", address(bunniHub));
 
-        return address(bunniHub);
-    }
+    //     return address(bunniHub);
+    // }
 
-    function _deployBunniLens(bytes memory) public returns (address) {
-        // No additional arguments for BunniLens policy
+    // function _deployBunniLens(bytes memory) public returns (address) {
+    //     // No additional arguments for BunniLens policy
 
-        // Check that the environment variables are loaded
-        if (address(bunniHub) == address(0)) revert("BunniHub address not set");
+    //     // Check that the environment variables are loaded
+    //     if (address(bunniHub) == address(0)) revert("BunniHub address not set");
 
-        // Deploy the BunniLens
-        vm.broadcast();
-        bunniLens = new BunniLens(bunniHub);
-        console2.log("BunniLens deployed at:", address(bunniLens));
+    //     // Deploy the BunniLens
+    //     vm.broadcast();
+    //     bunniLens = new BunniLens(bunniHub);
+    //     console2.log("BunniLens deployed at:", address(bunniLens));
 
-        return address(bunniLens);
-    }
+    //     return address(bunniLens);
+    // }
 
     // ========== PRICE AND SUBMODULES ========== //
 
