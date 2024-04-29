@@ -93,18 +93,65 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     }
 
     function RBSv2Install_1_TRSRY_1(bool send_) public isDaoBatch(send_) {
-        withdraw();
+        withdrawAllAssets();
     }
 
     function RBSv2Install_1_TRSRY_2(bool send_) public isDaoBatch(send_) {
-        setup();
+        setupTreasury();
     }
 
     function RBSv2Install_1_TRSRY_3(bool send_) public isDaoBatch(send_) {
         deposit();
     }
 
-    function withdraw() public {
+    function _withdrawToDaoMs(string memory assetName_, address asset_) internal {
+        uint256 trsryBefore = ERC20(asset_).balanceOf(treasuryV1);
+        uint256 daoMSBefore = ERC20(asset_).balanceOf(daoMS);
+        console2.log("Transferring %s from TRSRY v1 to DAO MS", assetName_);
+        if (trsryBefore == 0) {
+            console2.log("    %s balance in TRSRY v1 is 0. Skipping.", assetName_);
+            return;
+        }
+
+        console2.log("    %s balance in DAO MS before: %s (18dp)", assetName_, daoMSBefore);
+
+        // Approval
+        addToBatch(
+            treasuryCustodian,
+            abi.encodeWithSelector(
+                TreasuryCustodian.grantWithdrawerApproval.selector,
+                treasuryCustodian,
+                asset_,
+                trsryBefore
+            )
+        );
+
+        // Withdraw
+        addToBatch(
+            treasuryCustodian,
+            abi.encodeWithSelector(
+                TreasuryCustodian.withdrawReservesTo.selector,
+                daoMS,
+                asset_,
+                trsryBefore
+            )
+        );
+        console2.log("    Transfered %s: %s (18dp)", assetName_, trsryBefore);
+
+        // Validate
+        uint256 trsryAfter = ERC20(asset_).balanceOf(treasuryV1);
+        uint256 daoMSAfter = ERC20(asset_).balanceOf(daoMS);
+
+        console2.log("    %s balance in TRSRY v1 after: %s (18dp)", assetName_, trsryAfter);
+        console2.log("    %s balance in DAO MS: %s (18dp)", assetName_, daoMSAfter);
+        console2.log("    Difference in %s balance in DAO MS: %s (18dp)", assetName_, daoMSAfter - daoMSBefore);
+
+        if (trsryAfter > 0) {
+            revert("%s balance in TRSRY v1 is not 0");
+        }
+    }
+
+    function withdrawAllAssets() public {
         // This DAO MS batch:
         // 1. Transfers all tokens from the old treasury to the DAO MS
         // 2. Disables the Operator
@@ -116,126 +163,22 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // 1. Transfers all tokens from the old treasury to the DAO MS
         // DAI
-        {
-            uint256 trsryV1Before = ERC20(dai).balanceOf(treasuryV1);
-            uint256 daoMSBefore = ERC20(dai).balanceOf(daoMS);
-            console2.log("Transferring DAI from TRSRY v1 to DAO MS");
-            console2.log("    DAI balance in DAO MS before: %s (18dp)", daoMSBefore);
-            addToBatch(
-                treasuryCustodian,
-                abi.encodeWithSelector(
-                    TreasuryCustodian.grantWithdrawerApproval.selector,
-                    treasuryCustodian,
-                    dai,
-                    trsryV1Before
-                )
-            );
-            addToBatch(
-                treasuryCustodian,
-                abi.encodeWithSelector(
-                    TreasuryCustodian.withdrawReservesTo.selector,
-                    daoMS,
-                    dai,
-                    trsryV1Before
-                )
-            );
-            console2.log("    Transfered DAI: %s (18dp)", trsryV1Before);
-
-            uint256 trsryV1After = ERC20(dai).balanceOf(treasuryV1);
-            uint256 daoMSAfter = ERC20(dai).balanceOf(daoMS);
-
-            console2.log("    DAI balance in TRSRY v1 after: %s (18dp)", trsryV1After);
-            console2.log("    DAI balance in DAO MS: %s (18dp)", ERC20(dai).balanceOf(daoMS));
-            console2.log(
-                "    Difference in DAI balance in DAO MS: %s (18dp)",
-                daoMSAfter - daoMSBefore
-            );
-
-            if (trsryV1After > 0) {
-                revert("DAI balance in TRSRY v1 is not 0");
-            }
-        }
+        _withdrawToDaoMs("DAI", dai);
 
         // sDAI
-        {
-            uint256 trsryV1Before = ERC20(sdai).balanceOf(treasuryV1);
-            uint256 daoMSBefore = ERC20(sdai).balanceOf(daoMS);
-            console2.log("Transferring sDAI from TRSRY v1 to DAO MS");
-            console2.log("    sDAI balance in DAO MS before: %s (18dp)", daoMSBefore);
-            addToBatch(
-                treasuryCustodian,
-                abi.encodeWithSelector(
-                    TreasuryCustodian.grantWithdrawerApproval.selector,
-                    treasuryCustodian,
-                    sdai,
-                    trsryV1Before
-                )
-            );
-            addToBatch(
-                treasuryCustodian,
-                abi.encodeWithSelector(
-                    TreasuryCustodian.withdrawReservesTo.selector,
-                    daoMS,
-                    sdai,
-                    trsryV1Before
-                )
-            );
-            console2.log("    Transfered sDAI: %s (18dp)", trsryV1Before);
-
-            uint256 trsryV1After = ERC20(sdai).balanceOf(treasuryV1);
-            uint256 daoMSAfter = ERC20(sdai).balanceOf(daoMS);
-
-            console2.log("    sDAI balance in TRSRY v1 after: %s (18dp)", trsryV1After);
-            console2.log("    sDAI balance in DAO MS: %s (18dp)", ERC20(sdai).balanceOf(daoMS));
-            console2.log(
-                "    Difference in sDAI balance in DAO MS: %s (18dp)",
-                daoMSAfter - daoMSBefore
-            );
-
-            if (trsryV1After > 0) {
-                revert("sDAI balance in TRSRY v1 is not 0");
-            }
-        }
+        _withdrawToDaoMs("sDAI", sdai);
 
         // LUSD
-        {
-            uint256 lusdBalance = ERC20(lusd).balanceOf(treasuryV1);
-            console2.log("LUSD balance in treasury v1: %s (18dp)", lusdBalance);
-
-            if (lusdBalance > 0) {
-                revert("LUSD balance in treasury v1 is not 0");
-            }
-        }
+        _withdrawToDaoMs("LUSD", lusd);
 
         // wstETH
-        {
-            uint256 wstethBalance = ERC20(wsteth).balanceOf(treasuryV1);
-            console2.log("wstETH balance in treasury v1: %s (18dp)", wstethBalance);
-
-            if (wstethBalance > 0) {
-                revert("wstETH balance in treasury v1 is not 0");
-            }
-        }
+        _withdrawToDaoMs("wstETH", wsteth);
 
         // Balancer
-        {
-            uint256 balBalance = ERC20(bal).balanceOf(treasuryV1);
-            console2.log("BAL balance in treasury v1: %s (18dp)", balBalance);
-
-            if (balBalance > 0) {
-                revert("BAL balance in treasury v1 is not 0");
-            }
-        }
+        _withdrawToDaoMs("BAL", bal);
 
         // Aura
-        {
-            uint256 auraBalance = ERC20(aura).balanceOf(treasuryV1);
-            console2.log("AURA balance in treasury v1: %s (18dp)", auraBalance);
-
-            if (auraBalance > 0) {
-                revert("AURA balance in treasury v1 is not 0");
-            }
-        }
+        _withdrawToDaoMs("AURA", aura);
 
         // 2. Disables the Operator
         // This is to avoid having any bond markets open while TRSRY v1 and v1.1 is without funds
@@ -262,7 +205,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     }
 
     /// @notice     This function is separate from the DAO batch, so it can be called externally while testing
-    function setup() public {
+    function setupTreasury() public {
         // This DAO MS batch:
         // 1. Records the current debt of the old treasury
         // 2. Upgrades the OlympusTreasury contract to the new version
@@ -808,11 +751,11 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         console2.log("*** Complete\n\n");
     }
 
-    function RBSv2Install_1_TRSRY_TEST(bool send_) external {
+    function RBSv2Install_1_TRSRY_TEST(bool) external {
         // For testing purposes only
         initTestBatch();
-        withdraw();
-        setup();
+        withdrawAllAssets();
+        setupTreasury();
         deposit();
     }
 }

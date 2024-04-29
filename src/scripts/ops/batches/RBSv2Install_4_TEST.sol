@@ -44,8 +44,8 @@ contract RBSv2Install_4_TEST is OlyBatch {
     function RBSv2Install_4(bool send_) external isDaoBatch(send_) {
         RBSv2Install_1_TRSRY trsryScript = new RBSv2Install_1_TRSRY();
         trsryScript.initTestBatch();
-        trsryScript.withdraw();
-        trsryScript.setup();
+        trsryScript.withdrawAllAssets();
+        trsryScript.setupTreasury();
         trsryScript.deposit();
 
         RBSv2Install_2_SPPLY spplyScript = new RBSv2Install_2_SPPLY();
