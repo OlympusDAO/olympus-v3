@@ -72,7 +72,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
     // Uniswap V3 Pools
     address daiWethUniV3Pool;
-    address btrflyWethUniV3Pool;
+    // address btrflyWethUniV3Pool;
     address ohmWethUniV3Pool;
 
     // Allocators
@@ -131,7 +131,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         usdPerBtcPriceFeed = envAddress("current", "external.chainlink.btcUsdPriceFeed");
 
         daiWethUniV3Pool = envAddress("current", "external.uniswapV3.DaiWethPool");
-        btrflyWethUniV3Pool = envAddress("current", "external.uniswapV3.BtrflyWethPool");
+        // btrflyWethUniV3Pool = envAddress("current", "external.uniswapV3.BtrflyWethPool");
         ohmWethUniV3Pool = envAddress("current", "external.uniswapV3.OhmWethPool");
 
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
