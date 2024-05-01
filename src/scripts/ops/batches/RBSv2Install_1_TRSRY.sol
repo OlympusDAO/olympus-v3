@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Libraries
@@ -26,6 +27,8 @@ import {Operator} from "policies/RBS/Operator.sol";
 
 /// @notice     Migrates to TRSRY v1.1
 contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
+    using stdJson for string;
+
     // Existing Olympus contracts
     address kernel;
     address rolesAdmin;
@@ -289,6 +292,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 10. Add and categorize FXS in TRSRY
         // 11. Add and categorize BTRFLY in TRSRY
 
+        string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_1_TRSRY.json");
+
         console2.log("*** TRSRY v1.1 setup");
         console2.log("TRSRY v1.1: %s", treasuryV1_1);
         console2.log("DAI: %s", dai);
@@ -348,6 +353,21 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             }
             if (sdaiToken.balanceOf(treasuryV1) > 0) {
                 revert("sDAI balance in TRSRY v1 is not 0");
+            }
+        }
+
+        // wETH
+        {
+            console2.log("Getting WETH debt");
+
+            ERC20 wethToken = ERC20(weth);
+            uint256 wethTotalDebt = trsryModule.totalDebt(wethToken);
+            console2.log("    Total WETH debt: %s", wethTotalDebt);
+            if (wethTotalDebt > 0) {
+                revert("WETH debt is not 0");
+            }
+            if (wethToken.balanceOf(treasuryV1) > 0) {
+                revert("WETH balance in TRSRY v1 is not 0");
             }
         }
 
@@ -441,6 +461,26 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("No sDAI debt");
         }
 
+        // wETH
+        {
+            console2.log("Setting wETH debt on new TRSRY");
+
+            // Read in the quantity of wETH deployed in POL
+            uint256 polMainnetQuantity = argData.readUint("ethPolMainnetQuantity");
+            console2.log("    Mainnet POL debt: %s (18dp)", polMainnetQuantity);
+
+            ERC20 wEthToken = ERC20(weth);
+            addToBatch(
+                treasuryCustodian,
+                abi.encodeWithSelector(
+                    TreasuryCustodian.increaseDebt.selector,
+                    wEthToken,
+                    daoMS, // Withdrawn by DAO MS before depositing into LP
+                    polMainnetQuantity
+                )
+            );
+        }
+
         // FXS: no debt
         {
             console2.log("No FXS debt");
@@ -448,7 +488,9 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // veFXS
         {
-            console2.log("Setting veFXS debt on new TRSRY is being skipped, as veFXS is not being tracked.");
+            console2.log(
+                "Setting veFXS debt on new TRSRY is being skipped, as veFXS is not being tracked."
+            );
             // console2.log("Setting veFXS debt on new TRSRY: %s (18dp)", vefxsAllocatorBalance);
 
             // ERC20 vefxsToken = ERC20(veFXS);
