@@ -448,18 +448,19 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // veFXS
         {
-            console2.log("Setting veFXS debt on new TRSRY: %s (18dp)", vefxsAllocatorBalance);
+            console2.log("Setting veFXS debt on new TRSRY is being skipped, as veFXS is not being tracked.");
+            // console2.log("Setting veFXS debt on new TRSRY: %s (18dp)", vefxsAllocatorBalance);
 
-            ERC20 vefxsToken = ERC20(veFXS);
-            addToBatch(
-                treasuryCustodian,
-                abi.encodeWithSelector(
-                    TreasuryCustodian.increaseDebt.selector,
-                    vefxsToken,
-                    veFXSAllocator,
-                    vefxsAllocatorBalance
-                )
-            );
+            // ERC20 vefxsToken = ERC20(veFXS);
+            // addToBatch(
+            //     treasuryCustodian,
+            //     abi.encodeWithSelector(
+            //         TreasuryCustodian.increaseDebt.selector,
+            //         vefxsToken,
+            //         veFXSAllocator,
+            //         vefxsAllocatorBalance
+            //     )
+            // );
         }
 
         // 4. Install the new TreasuryConfig

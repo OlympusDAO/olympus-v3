@@ -456,89 +456,89 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    sDAI price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(sdai));
         }
 
-        // 4. Configure veFXS price feed and moving average data on PRICE
-        // - Uses the Chainlink price feed with the standard observation window
-        // - Track and store the moving average, so that a broken price feed doesn't brick the system
-        {
-            PRICEv2.Component[] memory veFXSFeeds = new PRICEv2.Component[](1);
-            veFXSFeeds[0] = PRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"),
-                ChainlinkPriceFeeds.getOneFeedPrice.selector,
-                abi.encode(
-                    ChainlinkPriceFeeds.OneFeedParams(
-                        AggregatorV2V3Interface(usdPerFxsPriceFeed),
-                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD
-                    )
-                )
-            );
+        // // 4. Configure veFXS price feed and moving average data on PRICE
+        // // - Uses the Chainlink price feed with the standard observation window
+        // // - Track and store the moving average, so that a broken price feed doesn't brick the system
+        // {
+        //     PRICEv2.Component[] memory veFXSFeeds = new PRICEv2.Component[](1);
+        //     veFXSFeeds[0] = PRICEv2.Component(
+        //         toSubKeycode("PRICE.CHAINLINK"),
+        //         ChainlinkPriceFeeds.getOneFeedPrice.selector,
+        //         abi.encode(
+        //             ChainlinkPriceFeeds.OneFeedParams(
+        //                 AggregatorV2V3Interface(usdPerFxsPriceFeed),
+        //                 DEFAULT_CHAINLINK_UPDATE_THRESHOLD
+        //             )
+        //         )
+        //     );
 
-            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
-            uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
+        //     uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
+        //     uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
-            console2.log("Adding veFXS price feed to PRICE");
-            addToBatch(
-                priceConfigV2,
-                abi.encodeWithSelector(
-                    PriceConfigV2.addAssetPrice.selector,
-                    veFXS,
-                    true, // store moving average
-                    true, // use the moving average as part of price strategy
-                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average duration
-                    fxsLastObsTime_, // needs to be > block.timestamp - observation frequency
-                    fxsObs_,
-                    PRICEv2.Component(
-                        toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                        SimplePriceFeedStrategy.getAveragePrice.selector,
-                        abi.encode(0)
-                    ),
-                    veFXSFeeds
-                )
-            );
+        //     console2.log("Adding veFXS price feed to PRICE");
+        //     addToBatch(
+        //         priceConfigV2,
+        //         abi.encodeWithSelector(
+        //             PriceConfigV2.addAssetPrice.selector,
+        //             veFXS,
+        //             true, // store moving average
+        //             true, // use the moving average as part of price strategy
+        //             DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average duration
+        //             fxsLastObsTime_, // needs to be > block.timestamp - observation frequency
+        //             fxsObs_,
+        //             PRICEv2.Component(
+        //                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
+        //                 SimplePriceFeedStrategy.getAveragePrice.selector,
+        //                 abi.encode(0)
+        //             ),
+        //             veFXSFeeds
+        //         )
+        //     );
 
-            console2.log("    veFXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(veFXS));
-        }
+        //     console2.log("    veFXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(veFXS));
+        // }
 
-        // 5. Configure FXS price feed and moving average data on PRICE
-        // - Uses the Chainlink price feed with the standard observation window
-        // - Track and store the moving average, so that a broken price feed doesn't brick the system
-        {
-            PRICEv2.Component[] memory fxsFeeds = new PRICEv2.Component[](1);
-            fxsFeeds[0] = PRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"),
-                ChainlinkPriceFeeds.getOneFeedPrice.selector,
-                abi.encode(
-                    ChainlinkPriceFeeds.OneFeedParams(
-                        AggregatorV2V3Interface(usdPerFxsPriceFeed),
-                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD
-                    )
-                )
-            );
+        // // 5. Configure FXS price feed and moving average data on PRICE
+        // // - Uses the Chainlink price feed with the standard observation window
+        // // - Track and store the moving average, so that a broken price feed doesn't brick the system
+        // {
+        //     PRICEv2.Component[] memory fxsFeeds = new PRICEv2.Component[](1);
+        //     fxsFeeds[0] = PRICEv2.Component(
+        //         toSubKeycode("PRICE.CHAINLINK"),
+        //         ChainlinkPriceFeeds.getOneFeedPrice.selector,
+        //         abi.encode(
+        //             ChainlinkPriceFeeds.OneFeedParams(
+        //                 AggregatorV2V3Interface(usdPerFxsPriceFeed),
+        //                 DEFAULT_CHAINLINK_UPDATE_THRESHOLD
+        //             )
+        //         )
+        //     );
 
-            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
-            uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
+        //     uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
+        //     uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
-            console2.log("Adding FXS price feed to PRICE");
-            addToBatch(
-                priceConfigV2,
-                abi.encodeWithSelector(
-                    PriceConfigV2.addAssetPrice.selector,
-                    fxs,
-                    true, // store moving average
-                    true, // use the moving average as part of price strategy
-                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
-                    fxsLastObsTime_, // needs to be > block.timestamp - observation frequency
-                    fxsObs_,
-                    PRICEv2.Component(
-                        toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                        SimplePriceFeedStrategy.getAveragePrice.selector,
-                        abi.encode(0)
-                    ),
-                    fxsFeeds
-                )
-            );
+        //     console2.log("Adding FXS price feed to PRICE");
+        //     addToBatch(
+        //         priceConfigV2,
+        //         abi.encodeWithSelector(
+        //             PriceConfigV2.addAssetPrice.selector,
+        //             fxs,
+        //             true, // store moving average
+        //             true, // use the moving average as part of price strategy
+        //             DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
+        //             fxsLastObsTime_, // needs to be > block.timestamp - observation frequency
+        //             fxsObs_,
+        //             PRICEv2.Component(
+        //                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
+        //                 SimplePriceFeedStrategy.getAveragePrice.selector,
+        //                 abi.encode(0)
+        //             ),
+        //             fxsFeeds
+        //         )
+        //     );
 
-            console2.log("    FXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(fxs));
-        }
+        //     console2.log("    FXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(fxs));
+        // }
 
         // 6. Configure OHM on PRICE
         // - Uses a TWAP from the Uniswap V3 pool with the configured observation window
@@ -580,43 +580,43 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    OHM price: %s (9 dp)", OlympusPricev2(priceV2).getPrice(ohm));
         }
 
-        // 7. Configure BTRFLY on PRICE
-        // - Uses a Uniswap V3 TWAP with the configured observation window
-        // - Does not require an internal moving average, as the Uniswap V3 is resilient
-        {
-            PRICEv2.Component[] memory btrflyFeeds = new PRICEv2.Component[](1);
-            btrflyFeeds[0] = PRICEv2.Component(
-                toSubKeycode("PRICE.UNIV3"),
-                UniswapV3Price.getTokenTWAP.selector,
-                abi.encode(
-                    UniswapV3Price.UniswapV3Params({
-                        pool: IUniswapV3Pool(btrflyWethUniV3Pool),
-                        observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW
-                    })
-                )
-            );
+        // // 7. Configure BTRFLY on PRICE
+        // // - Uses a Uniswap V3 TWAP with the configured observation window
+        // // - Does not require an internal moving average, as the Uniswap V3 is resilient
+        // {
+        //     PRICEv2.Component[] memory btrflyFeeds = new PRICEv2.Component[](1);
+        //     btrflyFeeds[0] = PRICEv2.Component(
+        //         toSubKeycode("PRICE.UNIV3"),
+        //         UniswapV3Price.getTokenTWAP.selector,
+        //         abi.encode(
+        //             UniswapV3Price.UniswapV3Params({
+        //                 pool: IUniswapV3Pool(btrflyWethUniV3Pool),
+        //                 observationWindowSeconds: DEFAULT_UNISWAPV3_TWAP_OBSERVATION_WINDOW
+        //             })
+        //         )
+        //     );
 
-            uint256 btrflyLastObsTime_ = 0;
-            uint256[] memory btrflyObs_ = new uint256[](0);
+        //     uint256 btrflyLastObsTime_ = 0;
+        //     uint256[] memory btrflyObs_ = new uint256[](0);
 
-            console2.log("Adding BTRFLY price feed to PRICE");
-            addToBatch(
-                priceConfigV2,
-                abi.encodeWithSelector(
-                    PriceConfigV2.addAssetPrice.selector,
-                    btrfly,
-                    false, // store moving average
-                    false, // use the moving average as part of price strategy
-                    0,
-                    btrflyLastObsTime_,
-                    btrflyObs_,
-                    PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
-                    btrflyFeeds
-                )
-            );
+        //     console2.log("Adding BTRFLY price feed to PRICE");
+        //     addToBatch(
+        //         priceConfigV2,
+        //         abi.encodeWithSelector(
+        //             PriceConfigV2.addAssetPrice.selector,
+        //             btrfly,
+        //             false, // store moving average
+        //             false, // use the moving average as part of price strategy
+        //             0,
+        //             btrflyLastObsTime_,
+        //             btrflyObs_,
+        //             PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+        //             btrflyFeeds
+        //         )
+        //     );
 
-            console2.log("    BTRFLY price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(btrfly));
-        }
+        //     console2.log("    BTRFLY price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(btrfly));
+        // }
 
         // ==================== SECTION 3: RBS v2 Activation ==================== //
 
