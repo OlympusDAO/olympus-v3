@@ -464,12 +464,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // wETH
         {
             console2.log("Setting wETH debt on new TRSRY");
+            ERC20 wEthToken = ERC20(weth);
 
-            // Read in the quantity of wETH deployed in POL
+            // Quantity deployed in mainnet POL
             uint256 polMainnetQuantity = argData.readUint("ethPolMainnetQuantity");
             console2.log("    Mainnet POL debt: %s (18dp)", polMainnetQuantity);
 
-            ERC20 wEthToken = ERC20(weth);
             addToBatch(
                 treasuryCustodian,
                 abi.encodeWithSelector(
@@ -477,6 +477,21 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     wEthToken,
                     daoMS, // Withdrawn by DAO MS before depositing into LP
                     polMainnetQuantity
+                )
+            );
+
+            // Quantity deployed in Arbitrum POL
+            // https://arbiscan.io/tx/0x16ac1ba3fb9806a01f5fe2e1601d4df55a22379b2d07e52938e77b9a34080d56
+            uint256 polArbitrumQuantity = argData.readUint("ethPolArbitrumQuantity");
+            console2.log("    Arbitrum POL debt: %s (18dp)", polArbitrumQuantity);
+
+            addToBatch(
+                treasuryCustodian,
+                abi.encodeWithSelector(
+                    TreasuryCustodian.increaseDebt.selector,
+                    wEthToken,
+                    daoMS, // Withdrawn by DAO MS before bridging to Arbitrum
+                    polArbitrumQuantity
                 )
             );
         }
