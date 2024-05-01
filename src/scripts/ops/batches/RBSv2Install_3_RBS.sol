@@ -649,6 +649,18 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             )
         );
 
+        // 2a. Set the target price on the Operator
+        {
+            // Sourced from: https://etherscan.io/address/0xd6C4D723fdadCf0D171eF9A2a3Bfa870675b282f#readContract#F8
+            uint256 operatorTargetPrice = argData.readUint(".operatorTargetPrice");
+
+            console2.log("Setting target price on Operator to: %s (18dp)", operatorTargetPrice);
+            addToBatch(
+                operatorV2,
+                abi.encodeWithSelector(Operator.setManualTargetPrice.selector, operatorTargetPrice)
+            );
+        }
+
         // 3. Activate new heart policy
         console2.log("Activating Heart policy");
         addToBatch(
