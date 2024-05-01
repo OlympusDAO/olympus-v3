@@ -66,7 +66,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address usdPerEthPriceFeed;
     address ethPerDaiPriceFeed;
     address usdPerDaiPriceFeed;
-    address usdPerFxsPriceFeed;
+    // address usdPerFxsPriceFeed;
     address ethPerBtcPriceFeed;
     address usdPerBtcPriceFeed;
 
@@ -126,7 +126,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         usdPerEthPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
         ethPerDaiPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
         usdPerDaiPriceFeed = envAddress("current", "external.chainlink.daiUsdPriceFeed");
-        usdPerFxsPriceFeed = envAddress("current", "external.chainlink.fxsUsdPriceFeed");
+        // usdPerFxsPriceFeed = envAddress("current", "external.chainlink.fxsUsdPriceFeed");
         ethPerBtcPriceFeed = envAddress("current", "external.chainlink.btcEthPriceFeed");
         usdPerBtcPriceFeed = envAddress("current", "external.chainlink.btcUsdPriceFeed");
 
