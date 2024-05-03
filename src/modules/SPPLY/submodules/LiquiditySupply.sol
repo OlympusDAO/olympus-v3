@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {SupplySubmodule} from "src/modules/SPPLY/SPPLY.v1.sol";
 
 import {CustomSupply} from "modules/SPPLY/submodules/CustomSupply.sol";
@@ -22,6 +23,22 @@ contract LiquiditySupply is CustomSupply {
     ) CustomSupply(parent_, 0, 0, protocolOwnedLiquidityOhm_, 0, source_) {
         // Nothing to do
     }
+
+    // ========== SUBMODULE SETUP ========== //
+
+    /// @inheritdoc Submodule
+    function SUBKEYCODE() public pure override returns (SubKeycode) {
+        return toSubKeycode("SPPLY.LIQSPPLY");
+    }
+
+    /// @inheritdoc Submodule
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
+    /// @inheritdoc Submodule
+    function INIT() external override onlyParent {}
 
     // ========== SUBMODULE FUNCTIONS ========== //
 
