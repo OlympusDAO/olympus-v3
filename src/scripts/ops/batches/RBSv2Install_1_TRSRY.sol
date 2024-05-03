@@ -565,7 +565,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 8. Add and categorize WETH
         //      - liquid, volatile, strategic
         //      - disabled, as a TRSRY asset without a PRICE configuration will cause Appraiser to revert
-        // _addTreasuryAsset("WETH", weth, "liquid", "volatile", "strategic", locations);
+        _addTreasuryAsset("WETH", weth, "liquid", "volatile", "strategic", locations);
 
         // 9. Add and categorize veFXS
         //      - illiquid, volatile, strategic
