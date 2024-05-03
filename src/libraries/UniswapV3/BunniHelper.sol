@@ -5,9 +5,14 @@ pragma solidity 0.8.15;
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
+import {UniswapV3Positions} from "libraries/UniswapV3/Positions.sol";
+import {UniswapV3PoolLibrary} from "libraries/UniswapV3/PoolLibrary.sol";
+
 // Bunni
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
+import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
+import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 
 // Standard libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -38,25 +43,45 @@ library BunniHelper {
             });
     }
 
-    /// @notice         Returns the ratio of token1 to token0 based on the position reserves
-    /// @dev            This function checks only for the reserves in the position, and excludes
-    /// @dev            any uncollected fees. This is to mitigate an attack vector where an attacker
-    /// @dev            performs swaps to adjust the reserves ratio.
-    ///
-    /// @param key_     The BunniKey for the pool
-    /// @param lens_    The BunniLens contract
-    /// @return         The ratio of token1 to token0 in terms of token1 decimals
-    function getReservesRatio(BunniKey memory key_, BunniLens lens_) public view returns (uint256) {
-        IUniswapV3Pool pool = key_.pool;
-        uint8 token0Decimals = ERC20(pool.token0()).decimals();
+    /// @notice         Convenience method to generate BunniHub withdaw parameters
+    function getWithdrawParams(
+        uint256 shares_,
+        uint16 slippageBps_,
+        BunniKey memory key_,
+        IBunniToken existingToken_,
+        address positionOwner_,
+        address recipient_
+    ) public view returns (IBunniHub.WithdrawParams memory) {
+        // Determine the minimum amounts
+        uint256 amount0Min;
+        uint256 amount1Min;
+        {
+            (uint256 amount0, uint256 amount1) = UniswapV3Positions.getPositionAmounts(
+                key_.pool,
+                key_.tickLower,
+                key_.tickUpper,
+                positionOwner_
+            );
 
-        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+            // Adjust for proportion of total supply
+            uint256 totalSupply = existingToken_.totalSupply();
+            amount0 = amount0.mulDiv(shares_, totalSupply);
+            amount1 = amount1.mulDiv(shares_, totalSupply);
 
-        // If the denominator is 0
-        if (reserve0 == 0) {
-            return 0;
+            amount0Min = UniswapV3PoolLibrary.getAmountMin(amount0, slippageBps_);
+            amount1Min = UniswapV3PoolLibrary.getAmountMin(amount1, slippageBps_);
         }
 
-        return uint256(reserve1).mulDiv(10 ** token0Decimals, reserve0);
+        // Construct the parameters
+        IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
+            key: key_,
+            recipient: recipient_,
+            shares: shares_,
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            deadline: block.timestamp // Ensures that the action be executed in this block or reverted
+        });
+
+        return params;
     }
 }

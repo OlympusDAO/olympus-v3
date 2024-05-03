@@ -91,7 +91,7 @@ contract CrossChainBridgeForkTest is Test {
 
             MINTR = new OlympusMinter(kernel, address(ohm1));
             ROLES = new OlympusRoles(kernel);
-            SPPLY = new OlympusSupply(kernel, tokens, 0);
+            SPPLY = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
 
             // Enable counter
             bridge = new CrossChainBridge(kernel, L1_lzEndpoint);

@@ -190,12 +190,6 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
 
-    /// @notice                     An insufficient amount of time has passed since the last stored observation
-    ///
-    /// @param asset_               The address of the asset
-    /// @param lastObservationTime_ The timestamp of the last observation
-    error PRICE_InsufficientTimeElapsed(address asset_, uint48 lastObservationTime_);
-
     // ========== STATE ========== //
 
     /// @notice         Struct to hold the configuration for calling a function on a contract
@@ -257,6 +251,9 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     /// @return         The asset configuration as an `Asset` struct
     function getAssetData(address asset_) external view virtual returns (Asset memory);
+
+    /// @notice         Indicates whether `asset_` has been registered
+    function isAssetApproved(address asset_) external view virtual returns (bool);
 
     // ========== ASSET PRICES ========== //
 
@@ -320,6 +317,9 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     ///
     /// @param asset_   The address of the asset
     function storePrice(address asset_) external virtual;
+
+    /// @notice         Calculates and stores the current price of assets that track a moving average
+    function storeObservations() external virtual;
 
     // ========== ASSET MANAGEMENT ========== //
 

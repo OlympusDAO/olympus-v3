@@ -119,7 +119,7 @@ contract AppraiserTest is Test {
             kernel = new Kernel();
             PRICE = new MockPrice(kernel, DECIMALS, OBSERVATION_FREQUENCY);
             TRSRY = new OlympusTreasury(kernel);
-            SPPLY = new OlympusSupply(kernel, tokens, 0);
+            SPPLY = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
             ROLES = new OlympusRoles(kernel);
         }
 
@@ -287,6 +287,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getAssetValueAddressCurrentTimestamp() public {
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Assert value is in cache
@@ -306,6 +307,7 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Now update price and timestamp
@@ -338,6 +340,7 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Now update price and timestamp
@@ -366,6 +369,7 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Now update price and timestamp
@@ -396,6 +400,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getAssetValueAddressVariantInvalid() public {
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Directly call getAssetValue with invalid variant
@@ -411,6 +416,7 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Now update price and timestamp
@@ -446,6 +452,7 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Now update price and timestamp
@@ -519,9 +526,11 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getCategoryValueCategoryCurrentTimestamp() public {
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Assert category values are in cache
         (uint256 liquidCacheValue, uint48 liquidTimestamp) = appraiser.categoryValueCache(
@@ -570,9 +579,11 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
@@ -632,9 +643,11 @@ contract AppraiserTest is Test {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ - 1);
@@ -686,9 +699,11 @@ contract AppraiserTest is Test {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ + 1);
@@ -744,9 +759,11 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getCategoryValueCategoryVariantInvalid() public {
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Directly call getCategoryValue with invalid variant
         (bool liquidSuccess, ) = address(appraiser).call(
@@ -781,9 +798,11 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
@@ -839,9 +858,11 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getCategoryValueCategoryVariantCurrent() public {
         // Cache current category value and timestamp
+        vm.startPrank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
         appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+        vm.stopPrank();
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
@@ -945,6 +966,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricCurrentTimestamp() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Get metric value
@@ -962,6 +984,7 @@ contract AppraiserTest is Test {
         supplyConfig.installSubmodule(submoduleIncurDebtSupply);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Get metric value
@@ -982,6 +1005,7 @@ contract AppraiserTest is Test {
         supplyConfig.installSubmodule(submoduleBLVaultSupply);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Get metric value
@@ -997,6 +1021,7 @@ contract AppraiserTest is Test {
         supplyConfig.installSubmodule(submoduleSiloSupply);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Get metric value
@@ -1008,6 +1033,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricPreviousTimestamp() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Now update price and timestamp
@@ -1026,6 +1052,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetric_backing_POL() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Get metric value
@@ -1036,6 +1063,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricPreviousTimestamp_backing_POL() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Now update price and timestamp
@@ -1059,6 +1087,7 @@ contract AppraiserTest is Test {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Now update price and timestamp
@@ -1079,6 +1108,7 @@ contract AppraiserTest is Test {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Now update price and timestamp
@@ -1106,6 +1136,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricVariantInvalid() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Directly call getMetric with invalid variant
@@ -1119,6 +1150,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricVariantInvalidMetric() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Directly call getMetric with invalid metric
@@ -1134,6 +1166,7 @@ contract AppraiserTest is Test {
         uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Now update price and timestamp
@@ -1161,6 +1194,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricVariantCurrent() public {
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Now update price and timestamp
@@ -1378,12 +1412,24 @@ contract AppraiserTest is Test {
         assertEq(timestamp, 0);
 
         // Cache current asset value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeAssetValue(address(reserve));
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
         assertEq(cacheValue, RESERVE_VALUE_AT_1);
         assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function testReverts_storeAssetValue_unauthorized() public {
+        // Call storeAssetValue with unauthorized user
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_store")
+        );
+        vm.expectRevert(err);
+
+        appraiser.storeAssetValue(address(reserve));
     }
 
     /// [X]  storeCategoryValue(Category category_)
@@ -1398,12 +1444,24 @@ contract AppraiserTest is Test {
         assertEq(timestamp, 0);
 
         // Cache current category value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.categoryValueCache(AssetCategory.wrap("liquid"));
         assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
         assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function testReverts_storeCategoryValue_unauthorized() public {
+        // Call storeCategoryValue with unauthorized user
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_store")
+        );
+        vm.expectRevert(err);
+
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
     }
 
     /// [X]  storeMetric(Metric metric_)
@@ -1416,12 +1474,24 @@ contract AppraiserTest is Test {
         assertEq(timestamp, 0);
 
         // Cache current metric value and timestamp
+        vm.prank(mockHeart);
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.metricCache(IAppraiser.Metric.BACKING);
         assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
         assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function testReverts_storeMetric_unauthorized() public {
+        // Call storeMetric with unauthorized user
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_store")
+        );
+        vm.expectRevert(err);
+
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
     }
 
     //============================================================================================//

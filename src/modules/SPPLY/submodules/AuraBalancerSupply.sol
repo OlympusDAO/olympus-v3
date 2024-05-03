@@ -367,4 +367,9 @@ contract AuraBalancerSupply is SupplySubmodule {
         reserves.balances = balances;
         return reserves;
     }
+
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
 }

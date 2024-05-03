@@ -151,7 +151,7 @@ contract BondCallbackTest is Test {
             );
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            SPPLY = new OlympusSupply(kernel, [address(ohm), address(gohm)], 0);
+            SPPLY = new OlympusSupply(kernel, [address(ohm), address(gohm)], 0, uint32(8 hours));
             ROLES = new OlympusRoles(kernel);
 
             /// Configure mocks

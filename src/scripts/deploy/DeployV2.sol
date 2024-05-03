@@ -802,14 +802,8 @@ contract OlympusDeploy is Script {
         if (address(reserve) == address(0)) revert("Reserve address not set");
 
         // Check the version of Operator
-        (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
+        (uint8 operatorMajor, ) = operatorV2.VERSION();
         if (operatorMajor != 2) revert("OperatorV2 is not version 2");
-
-        // Bare minimum required for Heart to function
-        // Will be updated according to the treasury composition during activation
-        address[] memory movingAverageAssets = new address[](2);
-        movingAverageAssets[0] = address(ohm);
-        movingAverageAssets[1] = address(reserve);
 
         // Metrics to track
         IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
@@ -830,7 +824,6 @@ contract OlympusDeploy is Script {
             operatorV2,
             appraiser,
             zeroDistributor,
-            movingAverageAssets,
             movingAverageMetrics,
             maxReward,
             auctionDuration
@@ -1346,11 +1339,15 @@ contract OlympusDeploy is Script {
     function _deploySupply(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
+        (uint256 initialCrossChainSupply, uint32 observationFrequency) = abi.decode(
+            args,
+            (uint256, uint32)
+        );
 
         // TODO fill in the initialCrossChainSupply value
 
         console2.log("    initialCrossChainSupply", initialCrossChainSupply);
+        console2.log("    observationFrequency", observationFrequency);
 
         // Check that environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
@@ -1363,7 +1360,7 @@ contract OlympusDeploy is Script {
         vm.broadcast();
 
         // Deploy the module
-        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
+        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply, observationFrequency);
 
         console2.log("SPPLY deployed at:", address(SPPLY));
 

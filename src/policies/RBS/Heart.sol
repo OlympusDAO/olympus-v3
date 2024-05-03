@@ -15,6 +15,7 @@ import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -42,15 +43,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
 
-    /// @notice Addresses of assets that use the moving average
-    address[] public movingAverageAssets;
-
     /// @notice Metrics to record the moving average of
     IAppraiser.Metric[] public movingAverageMetrics;
 
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
+    SPPLYv1 internal SPPLY;
 
     // Policies
     IOperator public operator;
@@ -68,7 +67,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IOperator operator_,
         IAppraiser appraiser_,
         IDistributor distributor_,
-        address[] memory movingAverageAssets_,
         IAppraiser.Metric[] memory movingAverageMetrics_,
         uint256 maxReward_,
         uint48 auctionDuration_
@@ -83,25 +81,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         maxReward = maxReward_;
 
         emit RewardUpdated(maxReward_, auctionDuration_);
-
-        // Add moving average assets
-        uint256 assetsLen = movingAverageAssets_.length;
-        for (uint256 i = 0; i < assetsLen; i++) {
-            address currentAsset = movingAverageAssets_[i];
-
-            // Check for zero address
-            if (currentAsset == address(0)) revert Heart_InvalidParams();
-
-            // Check for duplicates in the existing array
-            uint256 existingAssetsLen = movingAverageAssets.length;
-            for (uint256 j = 0; j < existingAssetsLen; j++) {
-                if (currentAsset == movingAverageAssets[j]) revert Heart_InvalidParams();
-            }
-
-            movingAverageAssets.push(currentAsset);
-
-            emit MovingAverageAssetAdded(currentAsset);
-        }
 
         // Add moving average metrics
         uint256 metricsLen = movingAverageMetrics_.length;
@@ -122,23 +101,26 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
+        dependencies[3] = toKeycode("SPPLY");
 
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
+        SPPLY = SPPLYv1(getModuleAddress(dependencies[3]));
 
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 2, 1]);
-        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1)
+        bytes memory expected = abi.encode([1, 2, 1, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
     }
 
@@ -151,10 +133,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](3);
-        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
+        permissions = new Permissions[](4);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.storeObservations.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(SPPLY.KEYCODE(), SPPLY.storeObservations.selector);
     }
 
     /// @notice     Returns the current version of the policy
@@ -174,12 +157,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
-        // Store the current price for assets that track and use the moving average (otherwise metrics will fail)
-        address[] memory cachedMovingAverageAssets = movingAverageAssets;
-        uint256 assetsLen = cachedMovingAverageAssets.length;
-        for (uint256 i = 0; i < assetsLen; i++) {
-            PRICE.storePrice(cachedMovingAverageAssets[i]);
-        }
+        // Store PRICE observations
+        PRICE.storeObservations();
+
+        // Store SPPLY observations
+        SPPLY.storeObservations();
 
         // Store the current values for metrics that use the moving average
         IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
@@ -271,64 +253,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         maxReward = maxReward_;
         auctionDuration = auctionDuration_;
         emit RewardUpdated(maxReward_, auctionDuration_);
-    }
-
-    /// @notice     Adds `asset_` to have the moving average refreshed
-    /// @dev        This function reverts if:
-    ///             - The sender is not the heart admin
-    ///             - The asset is a duplicate
-    ///             - The asset is the zero address
-    ///
-    /// @param      asset_  The asset to add
-    function addMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
-        if (asset_ == address(0)) revert Heart_InvalidParams();
-
-        // Cache the moving average assets to avoid multiple SLOADs
-        address[] memory cachedMovingAverageAssets = movingAverageAssets;
-        uint256 assetsLen = cachedMovingAverageAssets.length;
-        for (uint256 i = 0; i < assetsLen; i++) {
-            if (cachedMovingAverageAssets[i] == asset_) revert Heart_InvalidParams();
-        }
-
-        movingAverageAssets.push(asset_);
-        emit MovingAverageAssetAdded(asset_);
-    }
-
-    /// @notice     Removes `asset_` from having the moving average refreshed
-    /// @dev        This function reverts if:
-    ///             - The sender is not the heart admin
-    ///             - The asset is not present
-    ///             - The asset is the zero address
-    ///
-    /// @param      asset_  The asset to remove
-    function removeMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
-        if (asset_ == address(0)) revert Heart_InvalidParams();
-
-        address[] storage cachedMovingAverageAssets = movingAverageAssets;
-        uint256 assetsLen = cachedMovingAverageAssets.length;
-        bool foundAsset = false;
-        for (uint256 i = 0; i < assetsLen; i++) {
-            if (cachedMovingAverageAssets[i] == asset_) {
-                cachedMovingAverageAssets[i] = cachedMovingAverageAssets[assetsLen - 1];
-                cachedMovingAverageAssets.pop();
-                foundAsset = true;
-                break;
-            }
-        }
-
-        if (!foundAsset) revert Heart_InvalidParams();
-
-        emit MovingAverageAssetRemoved(asset_);
-    }
-
-    /// @notice    Gets the array of moving average assets
-    function getMovingAverageAssets() external view returns (address[] memory) {
-        return movingAverageAssets;
-    }
-
-    /// @notice    Gets the number of moving average assets
-    function getMovingAverageAssetsCount() external view returns (uint256) {
-        return movingAverageAssets.length;
     }
 
     /// @notice     Adds `metric_` to have the moving average refreshed

@@ -193,6 +193,9 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     /// @return Asset   Struct of the asset's data
     function getAssetData(address asset_) external view virtual returns (Asset memory);
 
+    /// @notice         Indicates whether an asset is approved
+    function isAssetApproved(address asset_) external view virtual returns (bool);
+
     /// @notice             Gets all the assets in a specific category
     /// @param  category_   Category to get the assets of
     /// @return address[]   Array of assets in the category

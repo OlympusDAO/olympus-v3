@@ -122,7 +122,7 @@ contract OperatorTest is Test {
             ROLES = new OlympusRoles(kernel);
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            SPPLY = new OlympusSupply(kernel, olympusTokens, 0);
+            SPPLY = new OlympusSupply(kernel, olympusTokens, 0, uint32(8 hours));
             PRICE = new MockPrice(kernel, DECIMALS, OBSERVATION_FREQUENCY);
             RANGE = new OlympusRange(
                 kernel,
@@ -259,6 +259,7 @@ contract OperatorTest is Test {
         // Initialise metrics on the Appraiser
         {
             // Initialize appraiser liquid backing calculation
+            vm.prank(address(heart));
             appraiser.storeMetric(IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM);
 
             // Get the metric value

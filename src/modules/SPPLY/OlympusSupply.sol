@@ -42,14 +42,19 @@ contract OlympusSupply is SPPLYv1 {
     /// @param kernel_                      The address of the Kernel contract
     /// @param tokens_                      The addresses of the OHM and gOHM tokens (in that order)
     /// @param initialCrossChainSupply_     The initial cross-chain supply of OHM
+    /// @param observationFrequency_        The frequency at which observations should be stored
     constructor(
         Kernel kernel_,
         address[2] memory tokens_, // [ohm, gOHM]
-        uint256 initialCrossChainSupply_
+        uint256 initialCrossChainSupply_,
+        uint32 observationFrequency_
     ) Module(kernel_) {
+        if (observationFrequency_ == 0) revert SPPLY_InvalidParams();
+
         ohm = OHM(tokens_[0]);
         gohm = IgOHM(tokens_[1]);
         totalCrossChainSupply = initialCrossChainSupply_;
+        observationFrequency = observationFrequency_;
 
         // Add categories that are required for the metrics functions
         _addCategory(toCategory("protocol-owned-treasury"), true, 0xb600c5e2, 0x00000000); // getProtocolOwnedTreasuryOhm()
@@ -592,6 +597,98 @@ contract OlympusSupply is SPPLYv1 {
     function storeCategorySupply(Category category_) external override permissioned {
         (uint256 supply, uint48 timestamp) = getSupplyByCategory(category_, Variant.CURRENT);
         categoryData[category_].total = Cache(supply, timestamp);
+    }
+
+    //============================================================================================//
+    //                                       SUPPLY OBSERVATIONS                                  //
+    //============================================================================================//
+
+    /// @inheritdoc SPPLYv1
+    /// @dev        This functions reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The `subKeycode_` is invalid
+    /// @dev        - A submodule for the `subKeycode_` is not installed
+    /// @dev        - The `subKeycode_` is already registered for observations
+    function registerForObservations(SubKeycode subKeycode_) external override permissioned {
+        // Check if the submodule is valid and installed
+        _getSubmoduleIfInstalled(subKeycode_);
+
+        // Check if the submodule is already registered for observations
+        bool registered;
+        for (uint256 i; i < submodulesForObservationCount; ) {
+            if (fromSubKeycode(submodulesForObservation[i]) == fromSubKeycode(subKeycode_)) {
+                registered = true;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // If it is already registered, revert
+        if (registered) revert SPPLY_InvalidParams();
+
+        // Add the submodule to the list of submodules for observation
+        submodulesForObservation.push(subKeycode_);
+        unchecked {
+            ++submodulesForObservationCount;
+        }
+    }
+
+    /// @inheritdoc SPPLYv1
+    /// @dev        This functions reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The `subKeycode_` is invalid
+    /// @dev        - The `subKeycode_` is not registered for observations
+    function unregisterFromObservations(SubKeycode subKeycode_) external override permissioned {
+        // Check if the submodule is already registered for observations
+        bool registered;
+        for (uint256 i; i < submodulesForObservationCount; ) {
+            if (fromSubKeycode(submodulesForObservation[i]) == fromSubKeycode(subKeycode_)) {
+                registered = true;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // If it is not registered, revert
+        if (!registered) revert SPPLY_InvalidParams();
+
+        // Remove the submodule from the list of submodules for observation
+        for (uint256 i; i < submodulesForObservationCount; ) {
+            if (fromSubKeycode(submodulesForObservation[i]) == fromSubKeycode(subKeycode_)) {
+                submodulesForObservation[i] = submodulesForObservation[
+                    submodulesForObservation.length - 1
+                ];
+                submodulesForObservation.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        unchecked {
+            --submodulesForObservationCount;
+        }
+    }
+
+    /// @inheritdoc SPPLYv1
+    /// @dev        Submodules implementing `storeObservations()` should not check if it is too early to store observations.
+    /// @dev        This is to be handled by the upstream policy. Otherwise, the policy may not be able to store observations.
+    function storeObservations() external override permissioned {
+        // Iterate over all submodules
+        for (uint256 i; i < submodulesForObservationCount; ) {
+            SupplySubmodule submodule = SupplySubmodule(
+                address(_getSubmoduleIfInstalled(submodulesForObservation[i]))
+            );
+            submodule.storeObservations();
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     //============================================================================================//

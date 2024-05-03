@@ -15,9 +15,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
-import {Deviation} from "libraries/Deviation.sol";
-import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
 
 /// @title      BunniPrice
 /// @author     0xJem
@@ -31,8 +28,6 @@ contract BunniPrice is PriceSubmodule {
     /// @notice     Struct containing parameters for the submodule
     struct BunniParams {
         address bunniLens;
-        uint16 twapMaxDeviationsBps;
-        uint32 twapObservationWindow;
     }
 
     // ========== ERRORS ========== //
@@ -50,20 +45,7 @@ contract BunniPrice is PriceSubmodule {
     /// @param bunniLensHub_    The address of the BunniHub configured in the BunniLens
     error BunniPrice_Params_HubMismatch(address bunniTokenHub_, address bunniLensHub_);
 
-    /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
-    ///
-    /// @param pool_              The address of the pool
-    /// @param baseInQuoteTWAP_   The calculated TWAP price in terms of the quote token
-    /// @param baseInQuotePrice_  The calculated current price in terms of the quote token
-    error BunniPrice_PriceMismatch(
-        address pool_,
-        uint256 baseInQuoteTWAP_,
-        uint256 baseInQuotePrice_
-    );
-
     // ========== STATE VARIABLES ========== //
-
-    uint16 internal constant TWAP_MAX_DEVIATION_BASE = 10_000; // 100%
 
     // ========== CONSTRUCTOR ========== //
 
@@ -101,7 +83,6 @@ contract BunniPrice is PriceSubmodule {
     /// @dev                    - The token is not a valid BunniToken
     /// @dev                    - The lens (from `params_`) is not a valid BunniLens
     /// @dev                    - The token and lens do not have the same BunniHub address
-    /// @dev                    - The reserves of the pool deviate from the TWAP by more than the maximum deviation
     /// @dev                    - Any of the reserve assets are not defined as assets in PRICE
     ///
     /// @param bunniToken_      The address of the BunniToken contract
@@ -151,14 +132,6 @@ contract BunniPrice is PriceSubmodule {
                 revert BunniPrice_Params_HubMismatch(tokenHub, lensHub);
             }
         }
-
-        // Validate reserves
-        _validateReserves(
-            _getBunniKey(token),
-            lens,
-            params.twapMaxDeviationsBps,
-            params.twapObservationWindow
-        );
 
         uint256 pricePerShare; // Scale: outputDecimals
         {
@@ -261,38 +234,5 @@ contract BunniPrice is PriceSubmodule {
         totalValue += _PRICE().getPrice(token1).mulDiv(reserve1 + fee1, outputScale);
 
         return totalValue;
-    }
-
-    /// @notice                         Validates that the reserves of the pool represented by `key_` are within
-    /// @notice                         the maximum deviation from the pool's TWAP.
-    ///
-    /// @param key_                     The BunniKey for the pool
-    /// @param lens_                    The BunniLens contract
-    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP in basis points
-    /// @param twapObservationWindow_   The TWAP observation window in seconds
-    function _validateReserves(
-        BunniKey memory key_,
-        BunniLens lens_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
-    ) internal view {
-        uint256 reservesTokenRatio = BunniHelper.getReservesRatio(key_, lens_);
-        uint256 twapTokenRatio = UniswapV3OracleHelper.getTWAPRatio(
-            address(key_.pool),
-            twapObservationWindow_
-        );
-
-        // Revert if the relative deviation is greater than the maximum.
-        if (
-            // `isDeviatingWithBpsCheck()` will revert if `deviationBps` is invalid.
-            Deviation.isDeviatingWithBpsCheck(
-                reservesTokenRatio,
-                twapTokenRatio,
-                twapMaxDeviationBps_,
-                TWAP_MAX_DEVIATION_BASE
-            )
-        ) {
-            revert BunniPrice_PriceMismatch(address(key_.pool), twapTokenRatio, reservesTokenRatio);
-        }
     }
 }

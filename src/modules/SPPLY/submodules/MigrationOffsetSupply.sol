@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";
@@ -53,6 +54,11 @@ contract MigrationOffsetSupply is CustomSupply {
         IgOHM gOHM = IgOHM(address(SPPLYv1(address(parent)).gohm()));
 
         return gOHM.balanceFrom(gOhmOffset);
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
     }
 
     // ========== ADMIN FUNCTIONS ========== //
