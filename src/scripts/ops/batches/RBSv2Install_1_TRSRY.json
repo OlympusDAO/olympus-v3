@@ -1,4 +1,7 @@
 {
     "ethPolArbitrumQuantity": 32550000000000000000,
+    "ethPolArbitrumLocation": "0x012bbf0481b97170577745d2167ee14f63e2ad4c",
+    "ethPolBaseQuantity": 0,
+    "ethPolBaseLocation": "0x18a390bd45bcc92652b9a91ad51aed7f1c1358f5",
     "ethPolMainnetQuantity": 922416719953350125011
 }
