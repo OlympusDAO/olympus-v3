@@ -45,6 +45,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Addresses of assets that use the moving average
     address[] public movingAverageAssets;
 
+    /// @notice Metrics to record the moving average of
+    IAppraiser.Metric[] public movingAverageMetrics;
+
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
@@ -66,6 +69,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IAppraiser appraiser_,
         IDistributor distributor_,
         address[] memory movingAverageAssets_,
+        IAppraiser.Metric[] memory movingAverageMetrics_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
@@ -97,6 +101,22 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             movingAverageAssets.push(currentAsset);
 
             emit MovingAverageAssetAdded(currentAsset);
+        }
+
+        // Add moving average metrics
+        uint256 metricsLen = movingAverageMetrics_.length;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            IAppraiser.Metric currentMetric = movingAverageMetrics_[i];
+
+            // Check for duplicates in the existing array
+            uint256 existingMetricsLen = movingAverageMetrics.length;
+            for (uint256 j = 0; j < existingMetricsLen; j++) {
+                if (currentMetric == movingAverageMetrics[j]) revert Heart_InvalidParams();
+            }
+
+            movingAverageMetrics.push(currentMetric);
+
+            emit MovingAverageMetricAdded(uint8(currentMetric));
         }
     }
 
@@ -161,8 +181,16 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             PRICE.storePrice(cachedMovingAverageAssets[i]);
         }
 
-        // Update the liquid backing calculation
-        appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        // Store the current values for metrics that use the moving average
+        IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
+        uint256 metricsLen = cachedMovingAverageMetrics.length;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            // Store the current metric value
+            appraiser.storeMetric(cachedMovingAverageMetrics[i]);
+
+            // Store the moving average
+            appraiser.storeMetricObservation(cachedMovingAverageMetrics[i]);
+        }
 
         // Trigger price range update and market operations
         operator.operate();
@@ -276,14 +304,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function removeMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
         if (asset_ == address(0)) revert Heart_InvalidParams();
 
-        // Cache the moving average assets to avoid multiple SLOADs
-        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        address[] storage cachedMovingAverageAssets = movingAverageAssets;
         uint256 assetsLen = cachedMovingAverageAssets.length;
         bool foundAsset = false;
         for (uint256 i = 0; i < assetsLen; i++) {
             if (cachedMovingAverageAssets[i] == asset_) {
                 cachedMovingAverageAssets[i] = cachedMovingAverageAssets[assetsLen - 1];
-                movingAverageAssets.pop();
+                cachedMovingAverageAssets.pop();
                 foundAsset = true;
                 break;
             }
@@ -302,6 +329,58 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice    Gets the number of moving average assets
     function getMovingAverageAssetsCount() external view returns (uint256) {
         return movingAverageAssets.length;
+    }
+
+    /// @notice     Adds `metric_` to have the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The metric is a duplicate
+    ///
+    /// @param      metric_  The metric to add
+    function addMovingAverageMetric(IAppraiser.Metric metric_) external onlyRole("heart_admin") {
+        // Cache the moving average metrics to avoid multiple SLOADs
+        IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
+        uint256 metricsLen = cachedMovingAverageMetrics.length;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            if (cachedMovingAverageMetrics[i] == metric_) revert Heart_InvalidParams();
+        }
+
+        movingAverageMetrics.push(metric_);
+        emit MovingAverageMetricAdded(uint8(metric_));
+    }
+
+    /// @notice     Removes `metric_` from having the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The metric is not present
+    ///
+    /// @param      metric_  The metric to remove
+    function removeMovingAverageMetric(IAppraiser.Metric metric_) external onlyRole("heart_admin") {
+        IAppraiser.Metric[] storage cachedMovingAverageMetrics = movingAverageMetrics;
+        uint256 metricsLen = cachedMovingAverageMetrics.length;
+        bool foundMetric = false;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            if (cachedMovingAverageMetrics[i] == metric_) {
+                cachedMovingAverageMetrics[i] = cachedMovingAverageMetrics[metricsLen - 1];
+                cachedMovingAverageMetrics.pop();
+                foundMetric = true;
+                break;
+            }
+        }
+
+        if (!foundMetric) revert Heart_InvalidParams();
+
+        emit MovingAverageMetricRemoved(uint8(metric_));
+    }
+
+    /// @notice    Gets the array of moving average metrics
+    function getMovingAverageMetrics() external view returns (IAppraiser.Metric[] memory) {
+        return movingAverageMetrics;
+    }
+
+    /// @notice    Gets the number of moving average metrics
+    function getMovingAverageMetricsCount() external view returns (uint256) {
+        return movingAverageMetrics.length;
     }
 
     //============================================================================================//

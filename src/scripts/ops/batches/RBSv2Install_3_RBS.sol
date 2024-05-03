@@ -1003,10 +1003,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 3. Activates Heart policy
         // 4. Add moving average assets to Heart
         // 5. Check that the assets with moving average tracking are configured in Heart
-        // 6. Sets operator address on bond callback
-        // 7. Set roles for policy access control
-        // 8. Initializes the operator policy
-        // 9. Test the output
+        // 6. Add DAO MS to the Appraiser role
+        // 7. Configure metric moving average assets on Heart
+        // 8. Sets operator address on bond callback
+        // 9. Set roles for policy access control
+        // 10. Initializes the operator policy
+        // 11. Test the output
 
         // 1. Activate appraiser policy
         console2.log("Activating Appraiser policy");
@@ -1107,17 +1109,52 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    Assets match");
         }
 
-        // 6. Set operator address on bond callback
+        // 6. Add DAO MS to the Appraiser role
+        {
+            //      - Give DAO MS the appraiser_admin role
+            console2.log("Granting appraiser_admin role for Appraiser policy to DAO MS");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("appraiser_admin"),
+                    daoMS
+                )
+            );
+        }
+
+        // 7. Configure metric moving average assets on Heart
+        //  - 30 days
+        {
+            uint32 movingAverageDuration = 30 days /
+                IAppraiser(appraiser).getObservationFrequency();
+            uint256 lastObsTime_ = argData.readUint(".lbboLastObsTime");
+            uint256[] memory obs_ = argData.readUintArray(".lbboObs"); // 30 days * 24 hours / 8 hours = 90 observations
+
+            console2.log("Configure LBBO moving average on Appraiser");
+            addToBatch(
+                appraiser,
+                abi.encodeWithSelector(
+                    Appraiser.updateMetricMovingAverage.selector,
+                    IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                    movingAverageDuration,
+                    uint48(lastObsTime_),
+                    obs_
+                )
+            );
+        }
+
+        // 8. Set operator address on bond callback
         console2.log("Setting operator address on bond callback");
         addToBatch(
             bondCallback,
             abi.encodeWithSelector(BondCallback.setOperator.selector, operatorV2)
         );
 
-        // 7. Set roles for policy access control
+        // 9. Set roles for policy access control
         // Operator policy
         //     - Give Heart the operator_operate role
-        console2.log("Granting operator_operate role for Operator policy");
+        console2.log("Granting operator_operate role for Operator policy to Heart");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -1126,12 +1163,23 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 heartV2
             )
         );
+        // Appraiser policy
+        //      - Give Heart the appraiser_store role
+        console2.log("Granting appraiser_store role for Appraiser policy to Heart");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("appraiser_store"),
+                heartV2
+            )
+        );
 
-        // 8. Initialize the operator policy
+        // 10. Initialize the operator policy
         console2.log("Initializing Operator policy");
         addToBatch(operatorV2, abi.encodeWithSelector(Operator.initialize.selector));
 
-        // 9. Test the output
+        // 11. Test the output
         {
             console2.log(
                 "    LBBO (18dp)",

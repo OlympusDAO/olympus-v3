@@ -76,6 +76,10 @@ contract MockAppraiser is Policy {
         if (!result) revert Appraiser_CustomError();
     }
 
+    function storeMetricObservation(IAppraiser.Metric metric_) external view {
+        if (!result) revert Appraiser_CustomError();
+    }
+
     function setResult(bool result_) external {
         result = result_;
     }
@@ -159,6 +163,9 @@ contract HeartTest is Test {
             movingAverageAssets[0] = address(ohm);
             movingAverageAssets[1] = address(reserve);
 
+            IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
+            movingAverageMetrics[0] = IAppraiser.Metric.BACKING;
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
@@ -166,6 +173,7 @@ contract HeartTest is Test {
                 IAppraiser(address(appraiser)),
                 IDistributor(address(distributor)),
                 movingAverageAssets,
+                movingAverageMetrics,
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -548,6 +556,7 @@ contract HeartTest is Test {
             IAppraiser(address(appraiser)),
             IDistributor(address(distributor)),
             movingAverageAssets,
+            new IAppraiser.Metric[](0),
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );
@@ -575,6 +584,7 @@ contract HeartTest is Test {
             IAppraiser(address(appraiser)),
             IDistributor(address(distributor)),
             movingAverageAssets,
+            new IAppraiser.Metric[](0),
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );
@@ -596,6 +606,7 @@ contract HeartTest is Test {
             IAppraiser(address(appraiser)),
             IDistributor(address(distributor)),
             movingAverageAssets,
+            new IAppraiser.Metric[](0),
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );
@@ -687,5 +698,228 @@ contract HeartTest is Test {
         // Check that the asset was removed
         assertEq(heart.movingAverageAssets(0), address(ohm));
         assertEq(heart.getMovingAverageAssetsCount(), 1, "asset count");
+
+        // Add two more assets
+        vm.startPrank(policy);
+        heart.addMovingAverageAsset(address(reserve));
+        heart.addMovingAverageAsset(address(1));
+
+        // Remove an asset
+        heart.removeMovingAverageAsset(address(ohm));
+        vm.stopPrank();
+
+        address[] memory assets = heart.getMovingAverageAssets();
+        assertEq(assets[0], address(1), "1");
+        assertEq(assets[1], address(reserve), "reserve");
+    }
+
+    //  []  constructor moving average metrics
+    //      []  reverts if duplicates
+    //      []  adds metrics
+
+    function testReverts_constructor_movingAverageMetrics_duplicate() public {
+        IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](3);
+        movingAverageMetrics[0] = IAppraiser.Metric.BACKING;
+        movingAverageMetrics[1] = IAppraiser.Metric.LIQUID_BACKING;
+        movingAverageMetrics[2] = IAppraiser.Metric.BACKING;
+
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Deploy heart with moving average metrics containing a duplicate
+        new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            new address[](0),
+            movingAverageMetrics,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+    }
+
+    function testCorrectness_constructor_movingAverageMetrics() public {
+        IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](3);
+        movingAverageMetrics[0] = IAppraiser.Metric.BACKING;
+        movingAverageMetrics[1] = IAppraiser.Metric.LIQUID_BACKING;
+        movingAverageMetrics[2] = IAppraiser.Metric.MARKET_VALUE;
+
+        // Deploy heart with moving average metrics
+        OlympusHeart newHeart = new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            new address[](0),
+            movingAverageMetrics,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+
+        // Check that the moving average metrics are set correctly
+        IAppraiser.Metric[] memory metrics = newHeart.getMovingAverageMetrics();
+        assertEq(uint8(metrics[0]), 0, "backing");
+        assertEq(uint8(metrics[1]), 1, "liquid backing");
+        assertEq(uint8(metrics[2]), 3, "market value");
+        assertEq(newHeart.getMovingAverageMetricsCount(), 3, "metric count");
+    }
+
+    //  [X]  addMovingAverageMetric
+    //      [X]  can only be called by heart_admin
+    //      [X]  reverts if metric already tracked
+    //      [X]  adds metric to tracked metrics
+
+    function testCorrectness_addMovingAverageMetricCallableOnlyByAdmin(address user_) public {
+        vm.assume(user_ != policy);
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
+        vm.expectRevert(err);
+
+        // Add a metric as non-policy
+        vm.prank(user_);
+        heart.addMovingAverageMetric(IAppraiser.Metric.BACKING);
+    }
+
+    function testReverts_addMovingAverageMetric_duplicate() public {
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Add a duplicate metric
+        vm.prank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.BACKING);
+    }
+
+    function testCorrectness_addMovingAverageMetric() public {
+        // Add a metric
+        vm.prank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // Check that the metric was added
+        IAppraiser.Metric[] memory metrics = heart.getMovingAverageMetrics();
+        assertEq(uint8(metrics[0]), 0);
+        assertEq(uint8(metrics[1]), 1);
+        assertEq(metrics.length, 2, "metric count");
+    }
+
+    //  [X]  removeMovingAverageMetric
+    //      [X]  can only be called by heart_admin
+    //      [X]  reverts if metric not tracked
+    //      [X]  removes metric from tracked metrics
+
+    function testCorrectness_removeMovingAverageMetricCallableOnlyByAdmin(address user_) public {
+        vm.assume(user_ != policy);
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
+        vm.expectRevert(err);
+
+        // Remove a metric as non-policy
+        vm.prank(user_);
+        heart.removeMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+    }
+
+    function testReverts_removeMovingAverageMetric_doesNotExist() public {
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Remove a metric that does not exist
+        vm.prank(policy);
+        heart.removeMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+    }
+
+    function testCorrectness_removeMovingAverageMetric() public {
+        // Remove a metric
+        vm.prank(policy);
+        heart.removeMovingAverageMetric(IAppraiser.Metric.BACKING);
+
+        // Check that the metric was removed
+        IAppraiser.Metric[] memory metrics = heart.getMovingAverageMetrics();
+        assertEq(metrics.length, 0, "metric count");
+
+        // Add three metrics
+        vm.startPrank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.BACKING);
+        heart.addMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+        heart.addMovingAverageMetric(IAppraiser.Metric.MARKET_VALUE);
+
+        // Remove a metric
+        heart.removeMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+        vm.stopPrank();
+
+        IAppraiser.Metric[] memory newMetrics = heart.getMovingAverageMetrics();
+        assertEq(uint8(newMetrics[0]), 0, "backing");
+        assertEq(uint8(newMetrics[1]), 3, "market value");
+    }
+
+    //  [X]  getMovingAverageMetrics
+
+    function testCorrectness_getMovingAverageMetrics() public {
+        IAppraiser.Metric[] memory metrics = heart.getMovingAverageMetrics();
+        assertEq(uint8(metrics[0]), 0, "backing");
+        assertEq(metrics.length, 1, "metric count");
+
+        // Add a metric
+        vm.prank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.MARKET_VALUE);
+
+        // Check that the metric was added
+        metrics = heart.getMovingAverageMetrics();
+        assertEq(uint8(metrics[0]), 0, "backing");
+        assertEq(uint8(metrics[1]), 3, "market value");
+        assertEq(metrics.length, 2, "metric count");
+
+        // Add a metric
+        vm.prank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // Check that the metric was added
+        metrics = heart.getMovingAverageMetrics();
+        assertEq(uint8(metrics[0]), 0, "backing");
+        assertEq(uint8(metrics[1]), 3, "market value");
+        assertEq(uint8(metrics[2]), 1, "liquid backing");
+        assertEq(metrics.length, 3, "metric count");
+
+        // Remove a metric
+        vm.prank(policy);
+        heart.removeMovingAverageMetric(IAppraiser.Metric.BACKING);
+
+        // Check that the metric was removed
+        metrics = heart.getMovingAverageMetrics();
+        assertEq(uint8(metrics[0]), 1, "liquid backing");
+        assertEq(uint8(metrics[1]), 3, "market value");
+        assertEq(metrics.length, 2, "metric count");
+    }
+
+    //  [X]  getMovingAverageMetricsCount
+
+    function testCorrectness_getMovingAverageMetricsCount() public {
+        assertEq(heart.getMovingAverageMetricsCount(), 1, "metric count");
+
+        // Add a metric
+        vm.prank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.MARKET_VALUE);
+
+        // Check that the metric was added
+        assertEq(heart.getMovingAverageMetricsCount(), 2, "metric count");
+
+        // Add a metric
+        vm.prank(policy);
+        heart.addMovingAverageMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // Check that the metric was added
+        assertEq(heart.getMovingAverageMetricsCount(), 3, "metric count");
+
+        // Remove a metric
+        vm.prank(policy);
+        heart.removeMovingAverageMetric(IAppraiser.Metric.BACKING);
+
+        // Check that the metric was removed
+        assertEq(heart.getMovingAverageMetricsCount(), 2, "metric count");
     }
 }

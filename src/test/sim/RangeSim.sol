@@ -377,7 +377,7 @@ abstract contract RangeSim is Test {
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
             roles = new OlympusRoles(kernel);
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, 8 hours);
         }
 
         {
@@ -426,6 +426,7 @@ abstract contract RangeSim is Test {
                 IAppraiser(address(appraiser)),
                 distributor,
                 movingAverageAssets,
+                new IAppraiser.Metric[](0),
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
