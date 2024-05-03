@@ -1343,7 +1343,7 @@ contract OlympusDeploy is Script {
         );
 
         // TODO fill in the initialCrossChainSupply value
-
+        // Initial value fetched from: https://arbiscan.io/address/0xf0cb2dc0db5e6c66B9a70Ac27B06b878da017028#readContract#F9
         console2.log("    initialCrossChainSupply", initialCrossChainSupply);
         console2.log("    observationFrequency", observationFrequency);
 
