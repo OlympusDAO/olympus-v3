@@ -468,7 +468,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             {
                 // Quantity deployed in mainnet POL
-                uint256 polMainnetQuantity = argData.readUint("ethPolMainnetQuantity");
+                uint256 polMainnetQuantity = argData.readUint(".ethPolMainnetQuantity");
                 console2.log("    Mainnet POL debt: %s (18dp)", polMainnetQuantity);
 
                 addToBatch(
@@ -485,8 +485,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             {
                 // Quantity deployed in Arbitrum POL
                 // TX: https://arbiscan.io/tx/0x16ac1ba3fb9806a01f5fe2e1601d4df55a22379b2d07e52938e77b9a34080d56
-                uint256 polArbitrumQuantity = argData.readUint("ethPolArbitrumQuantity");
-                address polArbitrumLocation = argData.readAddress("ethPolArbitrumLocation");
+                uint256 polArbitrumQuantity = argData.readUint(".ethPolArbitrumQuantity");
+                address polArbitrumLocation = argData.readAddress(".ethPolArbitrumLocation");
                 console2.log("    Arbitrum POL debt: %s (18dp)", polArbitrumQuantity);
 
                 addToBatch(
@@ -503,8 +503,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             {
                 // Quantity deployed in Base POL
                 // TX: TBC
-                uint256 polBaseQuantity = argData.readUint("ethPolBaseQuantity");
-                address polBaseLocation = argData.readAddress("ethPolBaseLocation");
+                uint256 polBaseQuantity = argData.readUint(".ethPolBaseQuantity");
+                address polBaseLocation = argData.readAddress(".ethPolBaseLocation");
                 console2.log("    Base POL debt: %s (18dp)", polBaseQuantity);
 
                 addToBatch(
