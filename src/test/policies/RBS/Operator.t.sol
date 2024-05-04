@@ -1840,6 +1840,7 @@ contract OperatorTest is Test {
     /// [X] activate
     /// [X] deactivate
     /// [X] deactivateCushion
+    /// [X] setManualTargetPrice
 
     function testCorrectness_setSpreads() public {
         /// Initialize operator
@@ -2427,6 +2428,50 @@ contract OperatorTest is Test {
         assertEq(type(uint256).max, RANGE.market(false));
     }
 
+    function test_setManualTargetPrice() public {
+        // Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Set the value
+        uint256 newPrice = 100e18;
+        vm.prank(policy);
+        operator.setManualTargetPrice(newPrice);
+
+        // Assert the value
+        assertEq(operator.manualTargetPrice(), newPrice);
+    }
+
+    function test_setManualTargetPrice_zero() public {
+        // Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Set the value
+        uint256 newPrice = 0;
+        vm.prank(policy);
+        operator.setManualTargetPrice(newPrice);
+
+        // Assert the value
+        assertEq(operator.manualTargetPrice(), newPrice);
+    }
+
+    function test_setManualTargetPrice_nonGuardianReverts() public {
+        // Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Set the value as non-policy
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_policy")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        operator.setManualTargetPrice(100e18);
+    }
+
     // =========  ´TESTS ========= //
 
     /// DONE
@@ -2592,6 +2637,57 @@ contract OperatorTest is Test {
 
         // Check that the target price is the liquid backing per ohm backed
         assertEq(target, 20e18);
+    }
+
+    function testFuzz_targetPrice_manualTargetPriceNonZero(uint256 priceMA_) public {
+        // Ensure non-zero price and no overflow
+        priceMA_ = bound(priceMA_, 1, type(uint256).max / 1e18);
+
+        // Set the manual target price
+        vm.prank(policy);
+        operator.setManualTargetPrice(1e18);
+
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Update moving average upwards and trigger the operator
+        PRICE.setMovingAverage(address(ohm), priceMA_);
+
+        // Get the target price from the operator
+        uint256 target = operator.targetPrice();
+
+        // Target price will be the manual value
+        assertEq(target, 1e18);
+    }
+
+    function testFuzz_targetPrice_manualTargetPriceZero(uint256 priceMA_) public {
+        // Ensure non-zero price and no overflow
+        priceMA_ = bound(priceMA_, 1, type(uint256).max / 1e18);
+
+        // Set the manual target price to be zero, which means it will not be used
+        vm.prank(policy);
+        operator.setManualTargetPrice(0);
+
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        // Get liquid backing per backed ohm from appraiser
+        uint256 lbbo = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+
+        /// Update moving average upwards and trigger the operator
+        PRICE.setMovingAverage(address(ohm), priceMA_);
+
+        // Get the target price from the operator
+        uint256 target = operator.targetPrice();
+
+        // Check that the target price is the max of the moving average and the liquid backing per ohm backed
+        if (priceMA_ > lbbo) {
+            assertEq(target, priceMA_);
+        } else {
+            assertEq(target, lbbo);
+        }
     }
 
     // =========  INTERNAL FUNCTION TESTS ========= //

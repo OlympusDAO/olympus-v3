@@ -70,6 +70,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev _wrappedReserveDecimals == _reserveDecimals
     ERC4626 public immutable _wrappedReserve;
 
+    /// @notice The manual target price
+    uint256 public manualTargetPrice;
+
     /// @notice Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 internal constant ONE_PERCENT = 1e2;
@@ -164,21 +167,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
-        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
-        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
-        (uint8 RANGE_MAJOR, ) = RANGE.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 2, 2, 1, 1]);
         if (
-            MINTR_MAJOR != 1 ||
-            PRICE_MAJOR != 2 ||
-            RANGE_MAJOR != 2 ||
-            ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1
+            _getModuleMajorVersion(MINTR) != 1 ||
+            _getModuleMajorVersion(PRICE) != 2 ||
+            _getModuleMajorVersion(RANGE) != 2 ||
+            _getModuleMajorVersion(ROLES) != 1 ||
+            _getModuleMajorVersion(TRSRY) != 1
         ) revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
@@ -700,6 +697,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             revert Operator_Inactive();
     }
 
+    function _getModuleMajorVersion(Module module_) internal view returns (uint8) {
+        (uint8 major, ) = module_.VERSION();
+        return major;
+    }
+
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
@@ -864,16 +866,28 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (factor_ > ONE_HUNDRED_PERCENT || factor_ < ONE_PERCENT) revert Operator_InvalidParams();
     }
 
+    /// @inheritdoc IOperator
+    function setManualTargetPrice(uint256 price_) external onlyRole("operator_policy") {
+        manualTargetPrice = price_;
+    }
+
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
     /// @inheritdoc IOperator
     function targetPrice() public view override returns (uint256) {
+        // If manual target price is non-zero, return it
+        if (manualTargetPrice > 0) return manualTargetPrice;
+
         // Get liquid backing per backed ohm from appraiser
         uint256 lbbo = _getLBBO();
 
         // Get moving average of OHM against the reserve
+        // `average` is OHM in terms of reserve (DAI), while `lbbo` is in terms of USD.
+        // Strictly speaking, `lbbo` should be in terms of reserve (DAI) as well.
+        // However, if DAI were to de-peg, the value of the entire treasury would tank,
+        // so it doesn't really matter anyway.
         (uint256 average, ) = PRICE.getPriceIn(
             address(_ohm),
             address(_reserve),
