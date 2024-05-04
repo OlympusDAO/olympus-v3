@@ -2371,6 +2371,10 @@ contract BunniManagerTest is Test {
 
         // No OHM was minted
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
+
+        // Assert approvals
+        assertEq(dai.allowance(bunniManagerAddress, bunniHubAddress), 0, "dai allowance");
+        assertEq(usdc.allowance(bunniManagerAddress, bunniHubAddress), 0, "usdc allowance");
     }
 
     function test_deposit_invalidUnderlyingTokenReverts() public {
@@ -2431,6 +2435,10 @@ contract BunniManagerTest is Test {
 
         // Tolerant of rounding
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
+
+        // Assert approvals
+        assertEq(ohm.allowance(bunniManagerAddress, bunniHubAddress), 0, "dai allowance");
+        assertEq(usdc.allowance(bunniManagerAddress, bunniHubAddress), 0, "usdc allowance");
     }
 
     function test_deposit_slippage_fuzz(uint256 amount_, uint256 slippage_) public {
@@ -2489,6 +2497,10 @@ contract BunniManagerTest is Test {
         // Tolerant of rounding
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
         assertApproxEqAbs(usdcReserve, USDC_DEPOSIT, 1);
+
+        // Assert approvals
+        assertEq(ohm.allowance(bunniManagerAddress, bunniHubAddress), 0, "dai allowance");
+        assertEq(usdc.allowance(bunniManagerAddress, bunniHubAddress), 0, "usdc allowance");
     }
 
     function test_deposit_invalidSlippage() public {

@@ -607,7 +607,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         });
 
         // Deposit
-        (uint256 shares, , , ) = bunniHub.deposit(params);
+        (uint256 shares, , uint256 depositAmount0, uint256 depositAmount1) = bunniHub.deposit(
+            params
+        );
+
+        // Reset approval to 0
+        // Avoids having a dangling approval
+        if (depositAmount0 < token0Amount) {
+            ERC20(token0Address).approve(address(bunniHub), 0);
+        }
+        if (depositAmount1 < token1Amount) {
+            ERC20(token1Address).approve(address(bunniHub), 0);
+        }
 
         // Return/burn remaining tokens
         _transferOrBurn(token0Address, ERC20(token0Address).balanceOf(address(this)));
