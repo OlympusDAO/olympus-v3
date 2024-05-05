@@ -6,6 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+import {IStaking} from "src/interfaces/IStaking.sol";
 import {IDistributor} from "policies/RBS/interfaces/IDistributor.sol";
 import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 import {IHeart} from "policies/RBS/interfaces/IHeart.sol";
@@ -76,7 +77,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         distributor = distributor_;
 
         active = true;
-        lastBeat = uint48(block.timestamp);
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
@@ -122,6 +122,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         bytes memory expected = abi.encode([1, 2, 1, 1]);
         if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
+
+        // Sync heartbeat with staking contract
+        if (msg.sender == address(kernel)) _syncBeatWithDistributor();
     }
 
     /// @inheritdoc Policy
@@ -201,6 +204,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
+    function _syncBeatWithDistributor() internal {
+        (uint256 epochLength, , uint256 epochEnd, ) = IStaking(distributor.staking()).epoch();
+        if (frequency() != epochLength) revert Heart_InvalidFrequency();
+        lastBeat = uint48(epochEnd - epochLength);
+    }
+
     function _resetBeat() internal {
         lastBeat = uint48(block.timestamp) - frequency();
     }
@@ -234,6 +243,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function setDistributor(address distributor_) external onlyRole("heart_admin") {
         distributor = IDistributor(distributor_);
+        _syncBeatWithDistributor();
     }
 
     modifier notWhileBeatAvailable() {

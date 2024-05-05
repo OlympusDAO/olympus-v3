@@ -203,6 +203,9 @@ contract HeartTest is Test {
 
             // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
+
+            // Do initial heart beat
+            heart.beat();
         }
     }
 
@@ -222,6 +225,38 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
         assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
+    }
+
+    function testRevert_configureDependencies_invalidFrequency() public {
+        // Deploy mock staking with different frequency
+        staking = new MockStakingZD(7 hours, 0, block.timestamp);
+        distributor = new ZeroDistributor(address(staking));
+        staking.setDistributor(address(distributor));
+
+        address[] memory movingAverageAssets = new address[](2);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+
+        IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
+        movingAverageMetrics[0] = IAppraiser.Metric.BACKING;
+
+        // Deploy heart
+        heart = new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            movingAverageMetrics,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+
+        vm.startPrank(address(kernel));
+        // Since the staking frequency is different, the call to configureDependencies reverts
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidFrequency.selector);
+        vm.expectRevert(err);
+        heart.configureDependencies();
+        vm.stopPrank();
     }
 
     function test_requestPermissions() public {
@@ -454,6 +489,32 @@ contract HeartTest is Test {
         // Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
         assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
+    }
+
+    function testRevert_setDistributor_invalidFrequency() public {
+        // Deploy mock staking with different frequency
+        staking = new MockStakingZD(7 hours, 0, block.timestamp);
+        distributor = new ZeroDistributor(address(staking));
+        staking.setDistributor(address(distributor));
+
+        vm.startPrank(policy);
+        // Since the staking frequency is different, the call to configureDependencies reverts
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidFrequency.selector);
+        vm.expectRevert(err);
+        heart.setDistributor(address(distributor));
+        vm.stopPrank();
+    }
+
+    function testCorrectness_setDistributor() public {
+        // Use same staking contract for the new distributor
+        address newDistributor = address(new ZeroDistributor(address(staking)));
+        staking.setDistributor(newDistributor);
+
+        vm.prank(policy);
+        heart.setDistributor(newDistributor);
+
+        // Check that the distributor has been updated
+        assertEq(address(heart.distributor()), newDistributor);
     }
 
     function testCorrectness_setOperator(address newOperator) public {
