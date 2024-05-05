@@ -297,8 +297,12 @@ contract BunniSetup is Test {
     function mockGetPrice(address asset_, uint256 price_) public {
         vm.mockCall(
             address(PRICE),
-            abi.encodeWithSignature("getPrice(address)", address(asset_)),
-            abi.encode(price_)
+            abi.encodeWithSignature(
+                "getPrice(address,uint8)",
+                address(asset_),
+                uint8(PRICEv2.Variant.CURRENT)
+            ),
+            abi.encode(price_, block.timestamp)
         );
     }
 
@@ -307,7 +311,11 @@ contract BunniSetup is Test {
 
         vm.mockCallRevert(
             address(PRICE),
-            abi.encodeWithSignature("getPrice(address)", asset_),
+            abi.encodeWithSignature(
+                "getPrice(address,uint8)",
+                address(asset_),
+                uint8(PRICEv2.Variant.CURRENT)
+            ),
             err
         );
     }

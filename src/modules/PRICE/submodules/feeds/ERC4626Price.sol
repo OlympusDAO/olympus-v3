@@ -130,7 +130,10 @@ contract ERC4626Price is PriceSubmodule {
         // Get the price of the underlying asset
         // We assume that getPrice() returns in outputDecimals
         // If the underlying price is not set, PRICE will revert
-        uint256 underlyingPrice = _PRICE().getPrice(underlying);
+        (uint256 underlyingPrice, ) = PRICEv2(_PRICE()).getPrice(
+            underlying,
+            PRICEv2.Variant.CURRENT
+        );
 
         // Calculate the price of the asset
         // Scale: output decimals

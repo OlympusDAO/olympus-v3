@@ -822,8 +822,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(
                 poolAddress
             );
-            uint256 price0 = PRICE.getPrice(token0Address);
-            uint256 price1 = PRICE.getPrice(token1Address);
+            (uint256 price0, ) = PRICE.getPrice(token0Address, PRICEv2.Variant.CURRENT);
+            (uint256 price1, ) = PRICE.getPrice(token1Address, PRICEv2.Variant.CURRENT);
             uint256 token0Scale = 10 ** ERC20(token0Address).decimals();
             uint256 token1Scale = 10 ** ERC20(token1Address).decimals();
 
@@ -844,9 +844,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Convert in terms of OHM
+        (uint256 ohmPrice, ) = PRICE.getPrice(ohm, PRICEv2.Variant.CURRENT);
         uint256 ohmAmount = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX).mulDiv(
             1e9,
-            PRICE.getPrice(ohm) // This will revert if the asset is not defined or 0
+            ohmPrice // This will revert if the asset is not defined or 0
         ); // Scale: OHM decimals
 
         // Returns the minimum
@@ -1025,8 +1026,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         if (positionCount[pool_] == 0) {
             // Check that both tokens from the pool have prices (else PRICE will revert)
             (address poolToken0, address poolToken1) = UniswapV3PoolLibrary.getPoolTokens(pool_);
-            PRICE.getPrice(poolToken0);
-            PRICE.getPrice(poolToken1);
+            PRICE.getPrice(poolToken0, PRICEv2.Variant.CURRENT);
+            PRICE.getPrice(poolToken1, PRICEv2.Variant.CURRENT);
 
             // Add the underlying tokens to the list
             _addUnderlyingToken(poolToken0);
