@@ -269,10 +269,16 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
+    /// @dev        Will revert if:
+    /// @dev        - The max age is greater than the current timestamp
     function getAssetValue(
         address asset_,
         uint48 maxAge_
     ) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ >= uint48(block.timestamp))
+            revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
+
         // Get the cached asset value
         (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.LAST);
 
@@ -350,10 +356,16 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
+    /// @dev        Will revert if:
+    /// @dev        - The max age is greater than the current timestamp
     function getCategoryValue(
         TreasuryCategory category_,
         uint48 maxAge_
     ) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ >= uint48(block.timestamp))
+            revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
+
         // Get the cached category value
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.LAST);
 
@@ -443,7 +455,13 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
+    /// @dev        Will revert if:
+    /// @dev        - The max age is greater than the current timestamp
     function getMetric(Metric metric_, uint48 maxAge_) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ >= uint48(block.timestamp))
+            revert Appraiser_InvalidParams(1, abi.encode(maxAge_));
+
         // Get the cached value of the metric
         (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.LAST);
 

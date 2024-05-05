@@ -364,7 +364,7 @@ contract AppraiserTest is Test {
     }
 
     function testCorrectness_getAssetValueAddressAgeOutdatedTimestamp(uint48 maxAge_) public {
-        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+        vm.assume(maxAge_ >= 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         uint48 timestampBefore = uint48(block.timestamp);
 
@@ -390,6 +390,21 @@ contract AppraiserTest is Test {
         assertEq(value, RESERVE_VALUE_AT_2);
         assertEq(cacheValue, RESERVE_VALUE_AT_1);
         assertEq(timestamp, timestampBefore);
+    }
+
+    function test_getAssetValue_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getAssetValue(address(reserve), maxAge);
     }
 
     /// [X]  getAssetValue(address asset_, Variant variant_)
@@ -696,7 +711,7 @@ contract AppraiserTest is Test {
     }
 
     function testCorrectness_getCategoryValueCategoryAgeOutdatedTimestamp(uint48 maxAge_) public {
-        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+        vm.assume(maxAge_ >= 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current category value and timestamp
         vm.startPrank(mockHeart);
@@ -749,6 +764,21 @@ contract AppraiserTest is Test {
         assertEq(liquidValue, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
         assertEq(stableValue, RESERVE_VALUE_AT_2);
         assertEq(reservesValue, RESERVE_VALUE_AT_2);
+    }
+
+    function test_getCategoryValue_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getCategoryValue(AssetCategory.wrap("liquid"), maxAge);
     }
 
     /// [X]  getCategoryValue(Category category_, Variant variant_)
@@ -1105,7 +1135,7 @@ contract AppraiserTest is Test {
     }
 
     function testCorrectness_getMetricAgeOutdatedTimestamp(uint48 maxAge_) public {
-        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+        vm.assume(maxAge_ >= 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current metric value and timestamp
         vm.prank(mockHeart);
@@ -1123,6 +1153,21 @@ contract AppraiserTest is Test {
 
         // Assert that metric value is correct
         assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
+    }
+
+    function test_getMetric_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge);
     }
 
     /// [X]  getMetric(Metric metric_, Variant variant_)

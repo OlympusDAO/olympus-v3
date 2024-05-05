@@ -93,7 +93,11 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
+    /// @dev        - The max age is >= the block timestamp
     function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ >= uint48(block.timestamp)) revert PRICEv2.PRICE_ParamsMaxAgeInvalid(maxAge_);
+
         // Try to use the last price, must be updated more recently than maxAge
         // getPrice checks if asset is approved
         (uint256 price, uint48 timestamp) = getPrice(asset_, Variant.LAST);
@@ -283,11 +287,21 @@ contract OlympusPricev2 is PRICEv2 {
     }
 
     /// @inheritdoc PRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is not approved
+    /// @dev        - `base_` is not approved
+    /// @dev        - No price could be determined
+    /// @dev        - The max age is 0 (as that would return a current value)
+    /// @dev        - The max age is >= the block timestamp
     function getPriceIn(
         address asset_,
         address base_,
         uint48 maxAge_
     ) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ == 0) revert PRICEv2.PRICE_ParamsMaxAgeInvalid(maxAge_);
+        if (maxAge_ >= uint48(block.timestamp)) revert PRICEv2.PRICE_ParamsMaxAgeInvalid(maxAge_);
+
         // Get the last price of each asset (getPrice checks if asset is approved)
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, Variant.LAST);
         (uint256 basePrice, uint48 baseTime) = getPrice(base_, Variant.LAST);

@@ -80,6 +80,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param lastObservationTime_     The timestamp of the last observation
     error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
 
+    /// @notice         The max age is invalid
+    ///
+    /// @param maxAge_  The max age that was provided
+    error PRICE_ParamsMaxAgeInvalid(uint48 maxAge_);
+
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
     ///
