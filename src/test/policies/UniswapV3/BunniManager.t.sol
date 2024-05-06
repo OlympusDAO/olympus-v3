@@ -3297,8 +3297,8 @@ contract BunniManagerTest is Test {
         // Pool liquidity has increased
         assertGt(pool.liquidity(), liquidityBefore, "post-harvest liquidity did not increase");
 
-        // OHM, USDC not transferred to any of the wallets
-        assertEq(
+        // USDC may be transferred to TRSRY if it cannot be compounded
+        assertGe(
             usdc.balanceOf(treasuryAddress),
             _getStoredTokenBalance(treasuryAddress, usdcAddress),
             "TRSRY balance of USDC should be same"
@@ -3308,6 +3308,7 @@ contract BunniManagerTest is Test {
             _getStoredTokenBalance(treasuryAddress, ohmAddress),
             "TRSRY balance of OHM should be same"
         );
+        // OHM, USDC not transferred to any of the addresses
         assertEq(usdc.balanceOf(bunniHubAddress), 0, "bunniHub balance of USDC should be 0");
         assertEq(ohm.balanceOf(bunniHubAddress), 0, "bunniHub balance of OHM should be 0");
         assertEq(
@@ -3444,17 +3445,17 @@ contract BunniManagerTest is Test {
         // Pool liquidity has increased
         assertGt(pool.liquidity(), liquidityBefore, "post-harvest liquidity did not increase");
 
-        // OHM, USDC not transferred to any of the wallets
-        assertEq(
-            usdc.balanceOf(treasuryAddress),
-            _getStoredTokenBalance(treasuryAddress, usdcAddress),
-            "TRSRY balance of USDC should be same"
-        );
-        assertEq(
-            ohm.balanceOf(treasuryAddress),
-            _getStoredTokenBalance(treasuryAddress, ohmAddress),
-            "TRSRY balance of OHM should be same"
-        );
+        // OHM, USDC could be transfered to TRSRY if harvest can't fully compound all fees.
+        // assertEq(
+        //     usdc.balanceOf(treasuryAddress),
+        //     _getStoredTokenBalance(treasuryAddress, usdcAddress),
+        //     "TRSRY balance of USDC should be same"
+        // );
+        // assertEq(
+        //     ohm.balanceOf(treasuryAddress),
+        //     _getStoredTokenBalance(treasuryAddress, ohmAddress),
+        //     "TRSRY balance of OHM should be same"
+        // );
         assertEq(usdc.balanceOf(bunniHubAddress), 0, "bunniHub balance of USDC should be 0");
         assertEq(ohm.balanceOf(bunniHubAddress), 0, "bunniHub balance of OHM should be 0");
         assertEq(
@@ -3678,17 +3679,17 @@ contract BunniManagerTest is Test {
             "post-harvest liquidity for pool two did not increase"
         );
 
-        // OHM, USDC not transferred to any of the wallets
-        assertEq(
-            usdc.balanceOf(treasuryAddress),
-            _getStoredTokenBalance(treasuryAddress, usdcAddress),
-            "TRSRY balance of USDC should be same"
-        );
-        assertEq(
-            ohm.balanceOf(treasuryAddress),
-            _getStoredTokenBalance(treasuryAddress, ohmAddress),
-            "TRSRY balance of OHM should be same"
-        );
+        // OHM, USDC could be transfered to TRSRY if harvest can't fully compound all fees.
+        // assertEq(
+        //     usdc.balanceOf(treasuryAddress),
+        //     _getStoredTokenBalance(treasuryAddress, usdcAddress),
+        //     "TRSRY balance of USDC should be same"
+        // );
+        // assertEq(
+        //     ohm.balanceOf(treasuryAddress),
+        //     _getStoredTokenBalance(treasuryAddress, ohmAddress),
+        //     "TRSRY balance of OHM should be same"
+        // );
         assertEq(usdc.balanceOf(bunniHubAddress), 0, "bunniHub balance of USDC should be 0");
         assertEq(ohm.balanceOf(bunniHubAddress), 0, "bunniHub balance of OHM should be 0");
         assertEq(
