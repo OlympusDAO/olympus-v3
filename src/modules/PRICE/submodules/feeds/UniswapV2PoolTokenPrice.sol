@@ -279,7 +279,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         uint256 poolValue; // outputDecimals_
         {
             uint256 priceMultiple = FixedPointMathLib.sqrt(
-                price0.mulDiv(price1, 10 ** outputDecimals_) * k
+                price0.mulDiv(price1 * k, 10 ** outputDecimals_)
             ); // sqrt(price * price) = outputDecimals_
 
             uint256 two = 2 * 10 ** outputDecimals_;
