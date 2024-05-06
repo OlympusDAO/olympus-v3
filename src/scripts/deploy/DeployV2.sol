@@ -75,7 +75,6 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 
 // SPPLY Submodules
-import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
@@ -126,7 +125,6 @@ contract OlympusDeploy is Script {
     BunniPrice public bunniPrice;
 
     // SPPLY Submodules
-    BLVaultSupply public blVaultSupply;
     BunniSupply public bunniSupply;
     MigrationOffsetSupply public migrationOffsetSupply;
     BrickedSupply public brickedSupply;
@@ -279,7 +277,6 @@ contract OlympusDeploy is Script {
         selectorMap["BunniPrice"] = this._deployBunniPrice.selector;
 
         // SPPLY Submodules
-        selectorMap["BLVaultSupply"] = this._deployBLVaultSupply.selector;
         selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
         selectorMap["BrickedSupply"] = this._deployBrickedSupply.selector;
@@ -395,7 +392,6 @@ contract OlympusDeploy is Script {
         bunniPrice = BunniPrice(envAddress("olympus.submodules.PRICE.BunniPrice"));
 
         // SPPLY submodules
-        blVaultSupply = BLVaultSupply(envAddress("olympus.submodules.SPPLY.BLVaultSupply"));
         bunniSupply = BunniSupply(envAddress("olympus.submodules.SPPLY.BunniSupply"));
         migrationOffsetSupply = MigrationOffsetSupply(
             envAddress("olympus.submodules.SPPLY.MigrationOffsetSupply")
@@ -1379,27 +1375,6 @@ contract OlympusDeploy is Script {
         console2.log("SupplyConfig deployed at:", address(supplyConfig));
 
         return address(supplyConfig);
-    }
-
-    function _deployBLVaultSupply(bytes memory) public returns (address) {
-        // No additional arguments for BLVaultSupply submodule
-
-        // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
-        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
-        if (address(lidoVaultManager) == address(0)) revert("lidoVaultManager address not set");
-        if (address(lusdVaultManager) == address(0)) revert("lusdVaultManager address not set");
-
-        address[] memory vaultManagers = new address[](2);
-        vaultManagers[0] = address(lidoVaultManager);
-        vaultManagers[1] = address(lusdVaultManager);
-
-        // Deploy BLVaultSupply submodule
-        vm.broadcast();
-        blVaultSupply = new BLVaultSupply(SPPLY, address(balancerVault), vaultManagers);
-        console2.log("BLVaultSupply deployed at:", address(blVaultSupply));
-
-        return address(blVaultSupply);
     }
 
     function _deployBunniSupply(bytes memory) public returns (address) {

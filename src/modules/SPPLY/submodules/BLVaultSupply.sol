@@ -12,6 +12,9 @@ interface IBLVaultManager {
 /// @title      BLVaultSupply
 /// @author     Oighty
 /// @notice     A SPPLY submodule that provides data on OHM deployed into the specified BLVaults
+/// @dev        The pools underlying BLV are open to reserves manipulation, which can in turn affect this submodule's data.
+///             The issue is not being fixed, as BLV is discontinued and the submodule will not be deployed.
+///             In case BLV is re-activated, the issue would need to be addressed: https://github.com/OlympusDAO/bophades/issues/316
 contract BLVaultSupply is SupplySubmodule {
     // Requirements
     // [X] All OHM in the BLVault is circulating supply since it's in an LP pool
