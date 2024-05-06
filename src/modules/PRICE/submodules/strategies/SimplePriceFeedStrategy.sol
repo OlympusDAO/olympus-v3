@@ -101,6 +101,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @dev            This function will calculate the median of all values in the array.
     /// @dev            It assumes that the price array is sorted in ascending order.
     /// @dev            The function assumes there are at least 3 prices in the array.
+    /// @dev            If there are only two prices, the average of the two will be returned.
     /// @dev            If non-zero values should not be included in the median, filter them prior.
     ///
     /// @param prices_  Array of prices

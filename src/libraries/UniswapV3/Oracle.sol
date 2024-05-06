@@ -136,30 +136,30 @@ library UniswapV3OracleHelper {
         return baseInQuote;
     }
 
-    /// @notice                 Returns the ratio of token1 to token0 based on the TWAP
+    /// @notice                 Returns the ratio of the quote token to the base token based on the TWAP
     ///
-    /// @param pool_            The Uniswap V3 pool
-    /// @param period_          The period of the TWAP in seconds
-    /// @param token0_          The `token0` of the pool
-    /// @param token1_          The `token1` of the pool
-    /// @param token0Decimals_  The decimals of `token0_`
-    /// @return                 The ratio of token1 to token0 in the scale of token1 decimals
+    /// @param pool_                The Uniswap V3 pool
+    /// @param period_              The period of the TWAP in seconds
+    /// @param baseToken_           The base token
+    /// @param quoteToken_          The quote token
+    /// @param baseTokenDecimals_   The decimals of `baseToken_`
+    /// @return                     The ratio of the quote token to the base token in the scale of the quote token decimals
     function getTWAPRatio(
         address pool_,
         uint32 period_,
-        address token0_,
-        address token1_,
-        uint8 token0Decimals_
+        address baseToken_,
+        address quoteToken_,
+        uint8 baseTokenDecimals_
     ) public view returns (uint256) {
         int56 timeWeightedTick = getTimeWeightedTick(pool_, period_);
 
-        // Quantity of token1 for 1 unit of token0 at the time-weighted tick
+        // Quantity of quoteToken_ for 1 unit of baseToken_ at the time-weighted tick
         // Scale: token1 decimals
         uint256 baseInQuote = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
-            uint128(10 ** token0Decimals_), // 1 unit of token0
-            token0_,
-            token1_
+            uint128(10 ** baseTokenDecimals_), // 1 unit of baseToken_
+            baseToken_,
+            quoteToken_
         );
 
         return baseInQuote;

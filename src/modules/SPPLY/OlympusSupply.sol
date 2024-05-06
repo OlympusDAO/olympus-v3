@@ -57,10 +57,25 @@ contract OlympusSupply is SPPLYv1 {
         observationFrequency = observationFrequency_;
 
         // Add categories that are required for the metrics functions
-        _addCategory(toCategory("protocol-owned-treasury"), true, 0xb600c5e2, 0x00000000); // getProtocolOwnedTreasuryOhm()
+        _addCategory(
+            toCategory("protocol-owned-treasury"),
+            true,
+            SupplySubmodule.getProtocolOwnedTreasuryOhm.selector,
+            0x00000000
+        );
         _addCategory(toCategory("dao"), false, 0x00000000, 0x00000000);
-        _addCategory(toCategory("protocol-owned-liquidity"), true, 0x8ebf7278, 0x55bdad01); // getProtocolOwnedLiquidityOhm(), getProtocolOwnedLiquidityReserves()
-        _addCategory(toCategory("protocol-owned-borrowable"), true, 0x117fb54a, 0x00000000); // getProtocolOwnedBorrowableOhm()
+        _addCategory(
+            toCategory("protocol-owned-liquidity"),
+            true,
+            SupplySubmodule.getProtocolOwnedLiquidityOhm.selector,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
+        _addCategory(
+            toCategory("protocol-owned-borrowable"),
+            true,
+            SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
+            0x00000000
+        );
     }
 
     /// @inheritdoc Module
