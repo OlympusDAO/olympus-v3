@@ -45,18 +45,18 @@ contract UniswapV3PriceTest is Test {
 
     uint256 internal USDC_PRICE = 10 ** PRICE_DECIMALS;
 
-    uint32 internal OBSERVATION_SECONDS = 60;
+    uint32 internal OBSERVATION_SECONDS = 600;
     uint16 internal DEVIATION_BASE = 10_000;
 
     // Live value taken from https://etherscan.io/address/0x4e0924d3a751be199c426d52fb1f2337fa96f736#readContract
     uint160 internal uniSqrtPrice = 79406181270273404968401;
-    // 60 seconds
-    int56[] internal uniTickCumulatives = [-15895885013372, -15895901590172];
+    // 600 seconds
+    int56[] internal uniTickCumulatives = [-158958850133720, -158959015901720];
 
     uint8 internal MIN_DECIMALS = 6;
     uint8 internal MAX_DECIMALS = 30;
-    // Mirror of TWAP_MINIMUM_OBSERVATION_SECONDS
-    uint32 internal MIN_OBSERVATION_SECONDS = 19;
+    // Mirror of UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW
+    uint32 internal MIN_OBSERVATION_SECONDS = 600;
 
     // Uniswap V3 ticks
     int24 internal constant MIN_TICK = -887272;
@@ -270,8 +270,8 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
         int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = -3080970025126;
-        tickCumulatives[1] = -3080973330766;
+        tickCumulatives[0] = -30809700251260;
+        tickCumulatives[1] = -30809733307660;
         mockUniPair.setTickCumulatives(tickCumulatives);
 
         // Mock wETH as $1500 exactly
@@ -755,8 +755,8 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
         int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = -3080970025126;
-        tickCumulatives[1] = -3080973330766;
+        tickCumulatives[0] = -30809700251260;
+        tickCumulatives[1] = -30809733307660;
         mockUniPair.setTickCumulatives(tickCumulatives);
         mockUniPair.setTick(int24(-55094));
 
@@ -778,8 +778,8 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
         int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = -3080970025126;
-        tickCumulatives[1] = -3080973330766;
+        tickCumulatives[0] = -30809700251260;
+        tickCumulatives[1] = -30809733307660;
         mockUniPair.setTickCumulatives(tickCumulatives);
         mockUniPair.setTick(int24(-55094));
 

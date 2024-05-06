@@ -17,7 +17,8 @@ library UniswapV3OracleHelper {
 
     /// @notice     The minimum length of the TWAP observation window in seconds
     ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
-    uint32 internal constant TWAP_MIN_OBSERVATION_WINDOW = 19; // seconds
+    ///             A value of 600 seconds is used to ensure the observation window is long enough to mitigate manipulation
+    uint32 internal constant TWAP_MIN_OBSERVATION_WINDOW = 600; // seconds
 
     // ========  Errors  ======== //
 
