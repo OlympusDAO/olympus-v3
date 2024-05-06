@@ -507,8 +507,6 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
                 return (_marketCap(), uint48(block.timestamp));
             } else if (metric_ == Metric.PREMIUM) {
                 return (_premium(), uint48(block.timestamp));
-            } else if (metric_ == Metric.THIRTY_DAY_OHM_VOLATILITY) {
-                return (_thirtyDayOhmVolatility(), uint48(block.timestamp));
             } else {
                 revert Appraiser_InvalidParams(0, abi.encode(metric_));
             }
@@ -697,54 +695,6 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
         // Divide market cap by market value of treasury
         return marketCap.mulDivDown(priceScale, marketValue);
-    }
-
-    /// @notice         Calculates the 30 day volatility of OHM
-    /// @notice         Volatility is defined as:
-    /// @notice         - The standard deviation of the percent change in price over the last 30 days
-    ///
-    /// @return         The 30 day volatility (in terms of `decimals`)
-    function _thirtyDayOhmVolatility() internal view returns (uint256) {
-        // Get OHM price data from price module
-        PRICEv2.Asset memory data = PRICE.getAssetData(ohm);
-
-        // Check that the number of observations (90) and duration (30 days) is correct (30 days, 8 hour increments)
-        if (
-            !data.storeMovingAverage ||
-            data.numObservations != 90 ||
-            data.movingAverageDuration != uint32(30 days)
-        ) {
-            revert Appraiser_ValueCallFailed(ohm);
-        }
-
-        // Calculate percent changes for each observation to the next
-        uint256 len = data.numObservations - 1;
-        uint256[] memory changes = new uint256[](len);
-        uint256 sum; // used for mean calculation
-        for (uint256 i; i < len; i++) {
-            uint256 obsIndex = (data.nextObsIndex + i) % data.numObservations;
-            changes[i] =
-                (data.obs[(obsIndex + 1) % data.numObservations] * priceScale) /
-                data.obs[obsIndex];
-            sum += changes[i];
-        }
-
-        // Calculate mean of percent changes
-        uint256 meanChange = sum / len;
-
-        // Calculate standard deviation of percent changes
-        uint256 stdDev;
-        for (uint256 i; i < len; i++) {
-            if (changes[i] >= meanChange) {
-                stdDev += ((changes[i] - meanChange) ** 2);
-            } else {
-                stdDev += ((meanChange - changes[i]) ** 2);
-            }
-        }
-        stdDev = FixedPointMathLib.sqrt(stdDev / len);
-
-        // Calculate and return annual volatility
-        return stdDev * 33; // annual std dev = period std dev * sqrt(periods per year), in this case there are 365 * 3 = 1095 periods per year. sqrt(1095) = 33.097...
     }
 
     //============================================================================================//

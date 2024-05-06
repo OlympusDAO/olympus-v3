@@ -17,8 +17,7 @@ interface IAppraiser {
         LIQUID_BACKING_PER_BACKED_OHM,
         MARKET_VALUE,
         MARKET_CAP,
-        PREMIUM,
-        THIRTY_DAY_OHM_VOLATILITY
+        PREMIUM
     }
 
     struct Cache {
