@@ -1091,6 +1091,108 @@ contract AppraiserTest is Test {
         assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
     }
 
+    function testCorrectness_getMetric_backing_POL_gOHM() public {
+        // Set up a balancer pool with reserve and gOHM
+        bytes32 poolId = "pool2";
+        address[] memory poolTokens = new address[](2);
+        poolTokens[0] = address(reserve);
+        poolTokens[1] = address(gohm);
+        MockMultiplePoolBalancerVault(balancerVaultAddress).setTokens(poolId, poolTokens);
+
+        uint256 poolBalanceReserve = 10e18;
+        uint256 poolBalancegOHM = 1e18;
+
+        uint256[] memory poolBalances = new uint256[](2);
+        poolBalances[0] = poolBalanceReserve;
+        poolBalances[1] = poolBalancegOHM;
+        MockMultiplePoolBalancerVault(balancerVaultAddress).setBalances(poolId, poolBalances);
+
+        // Mint tokens to the pool
+        reserve.mint(address(balancerVaultAddress), poolBalanceReserve);
+        gohm.mint(address(balancerVaultAddress), poolBalancegOHM);
+
+        MockBalancerPool balancerPool = new MockBalancerPool(poolId);
+        balancerPool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        balancerPool.setBalance(address(bytes20("POL")), BPT_BALANCE);
+        balancerPool.setDecimals(uint8(18));
+
+        // Configure modules
+        address[] memory locations = new address[](1);
+        locations[0] = address(bytes20("POL"));
+        treasuryConfig.addAsset(address(balancerPool), locations);
+        treasuryConfig.addAsset(address(gohm), locations);
+        treasuryConfig.categorizeAsset(
+            address(balancerPool),
+            AssetCategory.wrap("protocol-owned-liquidity")
+        );
+        PRICE.setPrice(address(balancerPool), 3e18);
+        PRICE.setPrice(address(gohm), 10e18);
+        supplyConfig.execOnSubmodule(
+            submoduleAuraBalancerSupply.SUBKEYCODE(),
+            abi.encodeWithSelector(
+                AuraBalancerSupply.addPool.selector,
+                address(balancerPool),
+                address(0)
+            )
+        );
+
+        uint256 polReserveExpectedValue = (BPT_BALANCE * poolBalanceReserve) /
+            BALANCER_POOL_TOTAL_SUPPLY;
+
+        // Cache current metric value and timestamp
+        vm.prank(mockHeart);
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+        // Assert that metric value is correct
+        assertEq(
+            value,
+            RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1 + polReserveExpectedValue
+        );
+    }
+
+    function testCorrectness_getMetric_liquidBacking_OHM() public {
+        // Define OHM as in illiquid asset
+        address[] memory assetLocations = new address[](0);
+        treasuryConfig.addAsset(address(ohm), assetLocations);
+        treasuryConfig.categorizeAsset(address(ohm), AssetCategory.wrap("illiquid"));
+
+        // Mint OHM into the treasury
+        ohm.mint(address(TRSRY), 100e9);
+
+        // Cache current metric value and timestamp
+        vm.prank(mockHeart);
+        appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // GFet metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING);
+        // Assert that metric value is correct (and does not include OHM)
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
+    function testCorrectness_getMetric_liquidBacking_gOHM() public {
+        // Define gOHM as in illiquid asset
+        address[] memory assetLocations = new address[](0);
+        treasuryConfig.addAsset(address(gohm), assetLocations);
+        treasuryConfig.categorizeAsset(address(gohm), AssetCategory.wrap("illiquid"));
+
+        // Mint gOHM into the treasury
+        gohm.mint(address(TRSRY), 100e18);
+
+        // Define a price for gOHM
+        PRICE.setPrice(address(gohm), 10e18);
+
+        // Cache current metric value and timestamp
+        vm.prank(mockHeart);
+        appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // GFet metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING);
+        // Assert that metric value is correct (and does not include OHM)
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
     function testCorrectness_getMetricPreviousTimestamp_backing_POL() public {
         // Cache current metric value and timestamp
         vm.prank(mockHeart);

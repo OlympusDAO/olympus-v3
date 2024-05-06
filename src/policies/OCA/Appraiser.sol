@@ -17,6 +17,8 @@ import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v
 ///             - appraiser_admin: The role that can update moving averages
 ///             - appraiser_store: The role that can store observations
 contract Appraiser is IAppraiser, Policy, RolesConsumer {
+    using FixedPointMathLib for uint256;
+
     // ========== EVENTS ========== //
 
     event AssetObservation(address indexed asset, uint256 value, uint48 timestamp);
@@ -188,6 +190,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
     // Storage of protocol variables to avoid extra external calls
     address internal ohm;
+    address internal gohm;
     uint256 internal constant OHM_SCALE = 1e9;
     uint256 internal priceScale;
     uint32 public observationFrequency;
@@ -239,6 +242,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
 
         ohm = address(SPPLY.ohm());
+        gohm = address(SPPLY.gohm());
         decimals = PRICE.decimals();
         priceScale = 10 ** decimals;
     }
@@ -299,7 +303,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         if (variant_ == Variant.LAST) {
             return (assetValueCache[asset_].value, assetValueCache[asset_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
-            return _assetValue(asset_);
+            return _assetValue(asset_, false);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             return _assetMovingAverage(asset_);
         } else {
@@ -307,12 +311,17 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         }
     }
 
-    /// @notice         Calculates the value of the protocols holdings of `asset_`
+    /// @notice             Calculates the value of the protocols holdings of `asset_`
     ///
-    /// @param asset_   The address of the asset to get the value of
-    /// @return         The value of the asset (in terms of `decimals`)
-    /// @return         The timestamp at which the value was calculated
-    function _assetValue(address asset_) internal view returns (uint256, uint48) {
+    /// @param asset_       The address of the asset to get the value of
+    /// @param excludeOhm_  Whether to exclude OHM from the value calculation
+    /// @return             uint256     The value of the asset (in terms of `decimals`)
+    /// @return             uint48      The timestamp at which the value was calculated
+    function _assetValue(address asset_, bool excludeOhm_) internal view returns (uint256, uint48) {
+        if (excludeOhm_ == true && (asset_ == ohm || asset_ == gohm)) {
+            return (0, uint48(block.timestamp));
+        }
+
         // Get current asset price, should be in price decimals configured on PRICE
         (uint256 price, ) = PRICE.getPrice(asset_, PRICEv2.Variant.CURRENT);
 
@@ -320,7 +329,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         (uint256 balance, ) = TRSRY.getAssetBalance(asset_, TRSRYv1_1.Variant.CURRENT);
 
         // Calculate the value of the protocols holdings of the asset
-        uint256 value = (price * balance) / (10 ** ERC20(asset_).decimals());
+        uint256 value = price.mulDivDown(balance, 10 ** ERC20(asset_).decimals());
 
         return (value, uint48(block.timestamp));
     }
@@ -386,7 +395,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         if (variant_ == Variant.LAST) {
             return (categoryValueCache[category_].value, categoryValueCache[category_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
-            return _categoryValue(category_);
+            return _categoryValue(category_, false);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             return _categoryMovingAverage(category_);
         } else {
@@ -397,9 +406,13 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @notice             Calculates the value of the asset holdings in `category_`
     ///
     /// @param category_    The TRSRY category to get the value of
+    /// @param excludeOhm_  Whether to exclude OHM from the value calculation
     /// @return             The value of the assets in the category (in terms of `decimals`)
     /// @return             The timestamp at which the value was calculated
-    function _categoryValue(TreasuryCategory category_) internal view returns (uint256, uint48) {
+    function _categoryValue(
+        TreasuryCategory category_,
+        bool excludeOhm_
+    ) internal view returns (uint256, uint48) {
         // Get the assets in the category
         address[] memory assets = TRSRY.getAssetsByCategory(category_);
 
@@ -407,7 +420,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         uint256 value;
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            (uint256 assetValue, ) = _assetValue(assets[i]);
+            (uint256 assetValue, ) = _assetValue(assets[i], excludeOhm_);
             value += assetValue;
             unchecked {
                 ++i;
@@ -542,8 +555,8 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         uint256 value;
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            if (assets[i] != ohm) {
-                (uint256 assetValue, ) = _assetValue(assets[i]);
+            if (assets[i] != ohm && assets[i] != gohm) {
+                (uint256 assetValue, ) = _assetValue(assets[i], true);
                 if (!_inArray(assets[i], polAssets)) {
                     value += assetValue;
                 }
@@ -562,16 +575,17 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         for (uint256 i; i < len; ) {
             uint256 tokens = reserves[i].tokens.length;
             for (uint256 j; j < tokens; ) {
-                if (reserves[i].tokens[j] != ohm) {
+                if (reserves[i].tokens[j] != ohm && reserves[i].tokens[j] != gohm) {
                     // Get current asset price
                     (uint256 price, ) = PRICE.getPrice(
                         reserves[i].tokens[j],
                         PRICEv2.Variant.CURRENT
                     );
                     // Calculate current asset valuation
-                    value +=
-                        (price * reserves[i].balances[j]) /
-                        (10 ** ERC20(reserves[i].tokens[j]).decimals());
+                    value += price.mulDivDown(
+                        reserves[i].balances[j],
+                        10 ** ERC20(reserves[i].tokens[j]).decimals()
+                    );
                 }
                 unchecked {
                     ++j;
@@ -595,7 +609,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         uint256 backing = _backing();
 
         // Get value of assets categorized as illiquid
-        (uint256 illiquidValue, ) = _categoryValue(toTreasuryCategory("illiquid"));
+        (uint256 illiquidValue, ) = _categoryValue(toTreasuryCategory("illiquid"), true);
 
         // Subtract illiquid value from total backing
         return backing - illiquidValue;
@@ -619,7 +633,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
         // Divide liquid backing by backed supply
         // and correct scale
-        return ((liquidBacking * priceScale) / backedSupply) / OHM_SCALE;
+        return liquidBacking.mulDivDown(priceScale, backedSupply) / OHM_SCALE;
     }
 
     /// @notice         Calculates the market value of the treasury
@@ -637,7 +651,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         uint256 value;
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            (uint256 assetValue, ) = _assetValue(assets[i]);
+            (uint256 assetValue, ) = _assetValue(assets[i], false);
             value += assetValue;
             unchecked {
                 ++i;
@@ -665,7 +679,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
         // Multiply supply by price
         // and correct scale
-        return (supply * price) / OHM_SCALE;
+        return supply.mulDivDown(price, OHM_SCALE);
     }
 
     /// @notice         Calculates the premium of OHM
@@ -682,7 +696,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         uint256 marketValue = _marketValue();
 
         // Divide market cap by market value of treasury
-        return (marketCap * priceScale) / marketValue;
+        return marketCap.mulDivDown(priceScale, marketValue);
     }
 
     /// @notice         Calculates the 30 day volatility of OHM
