@@ -209,12 +209,12 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             MINTR.burnOhm(address(this), inputAmount_);
             MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
-            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
             // If inverse bond (buying ohm), transfer payout tokens to sender
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
             if (address(wrappedPayoutToken) == address(0)) {
                 TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
             } else {
-                // Since TRSRY hold a wrapped version of the payoutToken, it must be unwrapped first.
+                // Since TRSRY holds a wrapped version of the payoutToken, it must be unwrapped first.
                 TRSRY.withdrawReserves(
                     address(this),
                     wrappedPayoutToken,
@@ -228,7 +228,16 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             // Burn OHM received from sender
             MINTR.burnOhm(address(this), inputAmount_);
         } else if (payoutToken == ohm) {
-            // Else (selling ohm), mint OHM to sender
+            // Else (selling ohm), send quote tokens to TRSRY
+            ERC4626 wrappedQuoteToken = ERC4626(wrapped[address(quoteToken)]);
+            if (address(wrappedQuoteToken) == address(0)) {
+                ERC20(quoteToken).safeTransfer(address(TRSRY), inputAmount_);
+            } else {
+                // Since TRSRY holds a wrapped version of the quote token, it must be wrapped first.
+                ERC20(quoteToken).approve(address(wrappedQuoteToken), inputAmount_);
+                wrappedQuoteToken.deposit(inputAmount_, address(TRSRY));
+            }
+            // Mint OHM to sender
             MINTR.mintOhm(msg.sender, outputAmount_);
         } else {
             // Revert since this callback only handles OHM bonds
