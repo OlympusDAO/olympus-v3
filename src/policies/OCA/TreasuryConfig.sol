@@ -50,13 +50,16 @@ contract TreasuryConfig is Policy, RolesConsumer {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        requests = new Permissions[](6);
+        requests = new Permissions[](9);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
         requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
-        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
-        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.removeCategoryGroup.selector);
+        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.removeCategory.selector);
+        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        requests[8] = Permissions(TRSRY_KEYCODE, TRSRY.uncategorize.selector);
     }
 
     /// @notice     Returns the current version of the policy
@@ -112,6 +115,15 @@ contract TreasuryConfig is Policy, RolesConsumer {
         TRSRY.addCategoryGroup(categoryGroup_);
     }
 
+    /// @notice                 Remove a category group from the treasury for tracking
+    ///
+    /// @param categoryGroup_   The category group to remove
+    function removeAssetCategoryGroup(
+        AssetCategoryGroup categoryGroup_
+    ) external onlyRole("treasuryconfig_policy") {
+        TRSRY.removeCategoryGroup(categoryGroup_);
+    }
+
     /// @notice                 Add a new category to a specific category group on the treasury for tracking
     ///
     /// @param category_        The category to add
@@ -121,6 +133,15 @@ contract TreasuryConfig is Policy, RolesConsumer {
         AssetCategoryGroup categoryGroup_
     ) external onlyRole("treasuryconfig_policy") {
         TRSRY.addCategory(category_, categoryGroup_);
+    }
+
+    /// @notice             Remove a category from the treasury for tracking
+    ///
+    /// @param category_    The category to remove
+    function removeAssetCategory(
+        AssetCategory category_
+    ) external onlyRole("treasuryconfig_policy") {
+        TRSRY.removeCategory(category_);
     }
 
     /// @notice             Categorize a location in a category
@@ -136,5 +157,16 @@ contract TreasuryConfig is Policy, RolesConsumer {
         AssetCategory category_
     ) external onlyRole("treasuryconfig_policy") {
         TRSRY.categorize(asset_, category_);
+    }
+
+    /// @notice             Remove a location from a category
+    ///
+    /// @param asset_       The address of the asset to uncategorize
+    /// @param category_    The category to remove the asset from
+    function uncategorizeAsset(
+        address asset_,
+        AssetCategory category_
+    ) external onlyRole("treasuryconfig_policy") {
+        TRSRY.uncategorize(asset_, category_);
     }
 }

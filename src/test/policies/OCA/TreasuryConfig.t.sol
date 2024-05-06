@@ -67,15 +67,18 @@ contract TreasuryConfigTest is Test {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](6);
+        Permissions[] memory expectedPerms = new Permissions[](9);
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
 
         expectedPerms[0] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
         expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
         expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
         expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
-        expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
-        expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.removeCategoryGroup.selector);
+        expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        expectedPerms[6] = Permissions(TRSRY_KEYCODE, TRSRY.removeCategory.selector);
+        expectedPerms[7] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPerms[8] = Permissions(TRSRY_KEYCODE, TRSRY.uncategorize.selector);
 
         Permissions[] memory perms = custodian.requestPermissions();
         // Check: permission storage
@@ -203,7 +206,7 @@ contract TreasuryConfigTest is Test {
         custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
     }
 
-    function test_addAssetCategoryGroup(address user_) public {
+    function test_addAssetCategoryGroup() public {
         vm.prank(guardian);
         custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
 
@@ -216,6 +219,33 @@ contract TreasuryConfigTest is Test {
         assertEq(AssetCategoryGroup.unwrap(group2), bytes32("market-sensitivity"));
         AssetCategoryGroup group3 = TRSRY.categoryGroups(3);
         assertEq(AssetCategoryGroup.unwrap(group3), bytes32("test-asset-category-group"));
+    }
+
+    function testRevert_removeAssetCategoryGroup_onlyPolicy(address user_) public {
+        vm.assume(user_ != guardian);
+
+        // Add the category group
+        vm.prank(guardian);
+        custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+
+        // Try to remove category from SPPLYv1 with non-guardian account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("treasuryconfig_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        custodian.removeAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+    }
+
+    function test_removeAssetCategoryGroup() public {
+        // Add the category group
+        vm.prank(guardian);
+        custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+
+        // Remove the category group
+        vm.prank(guardian);
+        custodian.removeAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
     }
 
     function testRevert_addAssetCategory_onlyPolicy(address user_) public {
@@ -234,17 +264,62 @@ contract TreasuryConfigTest is Test {
         );
     }
 
-    function test_addAssetCategory(address user_) public {
+    function test_addAssetCategory() public {
         vm.startPrank(guardian);
         custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
         custodian.addAssetCategory(
             AssetCategory.wrap("test-asset-category"),
             AssetCategoryGroup.wrap("test-asset-category-group")
         );
+        vm.stopPrank();
 
         // Check TRSRY asset category for a given category group
         AssetCategoryGroup group = TRSRY.categoryToGroup(AssetCategory.wrap("test-asset-category"));
         assertEq(AssetCategoryGroup.unwrap(group), bytes32("test-asset-category-group"));
+    }
+
+    function testRevert_removeAssetCategory_onlyPolicy(address user_) public {
+        vm.assume(user_ != guardian);
+
+        // Add category
+        vm.startPrank(guardian);
+        custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+        custodian.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+        vm.stopPrank();
+
+        // Try to remove category with non-guardian account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("treasuryconfig_policy")
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(user_);
+        custodian.removeAssetCategory(AssetCategory.wrap("test-asset-category"));
+        vm.stopPrank();
+    }
+
+    function test_removeAssetCategory() public {
+        // Add category
+        vm.startPrank(guardian);
+        custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+        custodian.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+        vm.stopPrank();
+
+        // Remove category
+        vm.startPrank(guardian);
+        custodian.removeAssetCategory(AssetCategory.wrap("test-asset-category"));
+        vm.stopPrank();
+
+        // Check TRSRY asset category for a given category group
+        AssetCategoryGroup group = TRSRY.categoryToGroup(AssetCategory.wrap("test-asset-category"));
+        assertEq(AssetCategoryGroup.unwrap(group), bytes32(""));
     }
 
     function testRevert_categorizeAsset_onlyPolicy(address user_) public {
@@ -273,6 +348,7 @@ contract TreasuryConfigTest is Test {
         );
         custodian.addAsset(address(ngmi), locations);
         custodian.categorizeAsset(address(ngmi), AssetCategory.wrap("test-asset-category"));
+        vm.stopPrank();
 
         // Check TRSRY asset by category
         address[] memory assets = TRSRY.getAssetsByCategory(
@@ -280,5 +356,61 @@ contract TreasuryConfigTest is Test {
         );
         assertEq(assets.length, 1);
         assertEq(assets[0], address(ngmi));
+    }
+
+    function testRevert_uncategorizeAsset_onlyPolicy(address user_) public {
+        vm.assume(user_ != guardian);
+
+        // Categorize asset
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        vm.startPrank(guardian);
+        custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+        custodian.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+        custodian.addAsset(address(ngmi), locations);
+        custodian.categorizeAsset(address(ngmi), AssetCategory.wrap("test-asset-category"));
+        vm.stopPrank();
+
+        // Try to remove categorization with non-guardian account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("treasuryconfig_policy")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        custodian.uncategorizeAsset(address(ngmi), AssetCategory.wrap("test-asset-category"));
+    }
+
+    function test_uncategorizeAsset() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        vm.startPrank(guardian);
+        custodian.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+        custodian.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+        custodian.addAsset(address(ngmi), locations);
+        custodian.categorizeAsset(address(ngmi), AssetCategory.wrap("test-asset-category"));
+        vm.stopPrank();
+
+        // Remove categorization
+        vm.startPrank(guardian);
+        custodian.uncategorizeAsset(address(ngmi), AssetCategory.wrap("test-asset-category"));
+        vm.stopPrank();
+
+        // Check TRSRY asset by category
+        address[] memory assets = TRSRY.getAssetsByCategory(
+            AssetCategory.wrap("test-asset-category")
+        );
+        assertEq(assets.length, 0);
     }
 }

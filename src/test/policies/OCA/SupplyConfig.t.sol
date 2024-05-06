@@ -493,7 +493,7 @@ contract SupplyConfigTest is Test {
         supplyConfig.categorizeSupply(address(0), SupplyCategory.wrap("test_supply_category"));
     }
 
-    function test_categorizeSupply(address user_) public {
+    function test_categorizeSupply() public {
         vm.startPrank(policy);
         supplyConfig.addSupplyCategory(
             SupplyCategory.wrap("test_supply_category"),
@@ -502,6 +502,7 @@ contract SupplyConfigTest is Test {
             bytes4(0)
         );
         supplyConfig.categorizeSupply(address(1), SupplyCategory.wrap("test_supply_category"));
+        vm.stopPrank();
 
         // Check SPPLY category locations
         address[] memory locations = SPPLY.getLocationsByCategory(
@@ -509,6 +510,28 @@ contract SupplyConfigTest is Test {
         );
         assertEq(locations.length, 1);
         assertEq(locations[0], address(1));
+    }
+
+    function test_categorizeSupply_removes() public {
+        vm.startPrank(policy);
+        supplyConfig.addSupplyCategory(
+            SupplyCategory.wrap("test_supply_category"),
+            false,
+            bytes4(0),
+            bytes4(0)
+        );
+        supplyConfig.categorizeSupply(address(1), SupplyCategory.wrap("test_supply_category"));
+        vm.stopPrank();
+
+        // Remove location from category
+        vm.prank(policy);
+        supplyConfig.categorizeSupply(address(1), SupplyCategory.wrap(""));
+
+        // Check SPPLY category locations
+        address[] memory locations = SPPLY.getLocationsByCategory(
+            SupplyCategory.wrap("test_supply_category")
+        );
+        assertEq(locations.length, 0);
     }
 
     function _installMockSubmodule() internal returns (MockSupplySubmodule) {
