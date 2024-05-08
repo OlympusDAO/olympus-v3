@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 
 // Bophades
 import "src/Kernel.sol";
@@ -26,6 +27,8 @@ import {LiquiditySupply} from "modules/SPPLY/submodules/LiquiditySupply.sol";
 /// @notice     Activates and configures SPPLY v1
 /// @notice     Migrates to CrossChainBridge v1.1
 contract RBSv2Install_2_SPPLY is OlyBatch {
+    using stdJson for string;
+
     // Existing Olympus Contracts
     address kernel;
     address crossChainBridgeV1;
@@ -169,7 +172,6 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         );
 
         // 6. Install the LiquiditySupply submodule on the OlympusSupply module
-        // No configuration needed - already done at deployment
         console2.log("Installing LiquiditySupply submodule");
         addToBatch(
             supplyConfig,
@@ -178,6 +180,57 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
                 LiquiditySupply(liquiditySupply)
             )
         );
+
+        // 6a. Add protocol-owned liquidity OHM
+        console2.log("Adding protocol-owned liquidity OHM");
+        string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_2_SPPLY.json");
+
+        // Mainnet
+        {
+            uint256 polQuantity = argData.readUint(".ethPolMainnetQuantity");
+            address polLocation = argData.readAddress(".ethPolMainnetLocation");
+
+            addToBatch(
+                liquiditySupply,
+                abi.encodeWithSelector(
+                    LiquiditySupply.addLiquiditySupply.selector,
+                    polQuantity,
+                    polLocation
+                )
+            );
+        }
+
+        // Arbitrum
+        // TX: https://arbiscan.io/tx/0x16ac1ba3fb9806a01f5fe2e1601d4df55a22379b2d07e52938e77b9a34080d56
+        {
+            uint256 polQuantity = argData.readUint(".ethPolArbitrumQuantity");
+            address polLocation = argData.readAddress(".ethPolArbitrumLocation");
+
+            addToBatch(
+                liquiditySupply,
+                abi.encodeWithSelector(
+                    LiquiditySupply.addLiquiditySupply.selector,
+                    polQuantity,
+                    polLocation
+                )
+            );
+        }
+
+        // Base
+        // TX: TBC
+        {
+            uint256 polQuantity = argData.readUint(".ethPolBaseQuantity");
+            address polLocation = argData.readAddress(".ethPolBaseLocation");
+
+            addToBatch(
+                liquiditySupply,
+                abi.encodeWithSelector(
+                    LiquiditySupply.addLiquiditySupply.selector,
+                    polQuantity,
+                    polLocation
+                )
+            );
+        }
 
         // 7. Categorize protocol-owned-treasury supply
         console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
