@@ -1446,16 +1446,12 @@ contract OlympusDeploy is Script {
         return address(brickedSupply);
     }
 
-    function _deployLiquiditySupply(bytes memory args) public returns (address) {
-        // Decode arguments for LiquiditySupply submodule
-        (uint256 quantity, address source) = abi.decode(args, (uint256, address));
-
+    function _deployLiquiditySupply(bytes memory) public returns (address) {
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
 
-        // Print out values
-        console2.log("    quantity (1e9)", quantity);
-        console2.log("    source", source);
+        uint256[] memory quantity = new uint256[](0);
+        address[] memory source = new address[](0);
 
         // Deploy LiquiditySupply submodule
         vm.broadcast();
