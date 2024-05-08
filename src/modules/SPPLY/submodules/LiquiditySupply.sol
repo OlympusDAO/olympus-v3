@@ -112,7 +112,7 @@ contract LiquiditySupply is SupplySubmodule {
         uint256 len = protocolOwnedLiquiditySources.length;
         reserves = new SPPLYv1.Reserves[](len);
 
-        for (uint256 i; i < len; ) {
+        for (uint256 i; i < len; i++) {
             address[] memory tokens = new address[](1);
             tokens[0] = ohm;
 
