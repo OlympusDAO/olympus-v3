@@ -332,7 +332,7 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(CALLER_NOT_PARENT);
-        submoduleLiquiditySupply.removeLiquiditySupply(1, POL_LOCATION_3);
+        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_3);
     }
 
     function test_removeLiquiditySupply_whenSourceIsNotInSourcesArray() public {
@@ -344,16 +344,16 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(1, POL_LOCATION_3);
+        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_3);
     }
 
     function test_removeLiquiditySupply_whenLastSourceIsRemoved() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_AMOUNT_2, POL_LOCATION_2);
+        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_2);
 
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_AMOUNT_1, POL_LOCATION_1);
+        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_1);
 
         // Assert
         assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), 0);
@@ -368,7 +368,7 @@ contract LiquiditySupplyTest is Test {
     function test_removeLiquiditySupply_indexOne() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_AMOUNT_2, POL_LOCATION_2);
+        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_2);
 
         // Assert
         assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_1);
@@ -389,7 +389,7 @@ contract LiquiditySupplyTest is Test {
     function test_removeLiquiditySupply_indexZero() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_AMOUNT_1, POL_LOCATION_1);
+        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_1);
 
         // Assert
         assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_2);

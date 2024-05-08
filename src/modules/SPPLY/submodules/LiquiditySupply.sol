@@ -149,7 +149,7 @@ contract LiquiditySupply is SupplySubmodule {
         emit LiquiditySupplyAdded(amount_, source_);
     }
 
-    function removeLiquiditySupply(uint256 amount_, address source_) external onlyParent {
+    function removeLiquiditySupply(address source_) external onlyParent {
         // Check that the address is not 0
         if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
 
@@ -158,8 +158,11 @@ contract LiquiditySupply is SupplySubmodule {
         if (!found) revert LiquiditySupply_InvalidParams();
 
         // Remove the source
+        uint256 foundAmount;
         for (uint256 i = 0; i < protocolOwnedLiquiditySources.length; i++) {
             if (protocolOwnedLiquiditySources[i] == source_) {
+                foundAmount = protocolOwnedLiquidityAmounts[i];
+
                 protocolOwnedLiquidityAmounts[i] = protocolOwnedLiquidityAmounts[
                     protocolOwnedLiquidityAmounts.length - 1
                 ];
@@ -174,9 +177,9 @@ contract LiquiditySupply is SupplySubmodule {
             }
         }
 
-        _polOhmTotalAmount -= amount_;
+        _polOhmTotalAmount -= foundAmount;
 
-        emit LiquiditySupplyRemoved(amount_, source_);
+        emit LiquiditySupplyRemoved(foundAmount, source_);
     }
 
     // =========== HELPER FUNCTIONS =========== //
