@@ -85,22 +85,31 @@ contract LiquiditySupply is SupplySubmodule {
         // Nothing to do
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        This function always returns 0.
     function getCollateralizedOhm() external view virtual override returns (uint256) {
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        This function always returns 0.
     function getProtocolOwnedBorrowableOhm() external view virtual override returns (uint256) {
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        This function always returns 0.
     function getProtocolOwnedTreasuryOhm() external view virtual override returns (uint256) {
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        This function returns the total configured amount of OHM in protocol-owned liquidity.
     function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
         return _polOhmTotalAmount;
     }
 
+    /// @inheritdoc SupplySubmodule
     function getProtocolOwnedLiquidityReserves()
         external
         view
@@ -127,12 +136,22 @@ contract LiquiditySupply is SupplySubmodule {
         }
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        This function returns the number of configured sources.
     function getSourceCount() external view virtual override returns (uint256) {
         return protocolOwnedLiquiditySources.length;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
 
+    /// @notice Add a new source of protocol-owned liquidity
+    /// @dev    This function reverts if:
+    ///         - The caller is not the parent module
+    ///         - The source is the zero address
+    ///         - The source is already present
+    ///
+    /// @param  amount_     The amount of OHM in the liquidity
+    /// @param  source_     The address of the liquidity source
     function addLiquiditySupply(uint256 amount_, address source_) external onlyParent {
         // Check that the address is not 0
         if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
@@ -149,6 +168,13 @@ contract LiquiditySupply is SupplySubmodule {
         emit LiquiditySupplyAdded(amount_, source_);
     }
 
+    /// @notice Remove a source of protocol-owned liquidity
+    /// @dev    This function reverts if:
+    ///         - The caller is not the parent module
+    ///         - The source is the zero address
+    ///         - The source is not present
+    ///
+    /// @param  source_     The address of the liquidity source
     function removeLiquiditySupply(address source_) external onlyParent {
         // Check that the address is not 0
         if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
