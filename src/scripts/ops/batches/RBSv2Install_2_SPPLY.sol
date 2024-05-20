@@ -193,7 +193,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             addToBatch(
                 liquiditySupply,
                 abi.encodeWithSelector(
-                    LiquiditySupply.addLiquiditySupply.selector,
+                    LiquiditySupply.addOhmLiquidity.selector,
                     polQuantity,
                     polLocation
                 )
@@ -209,7 +209,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             addToBatch(
                 liquiditySupply,
                 abi.encodeWithSelector(
-                    LiquiditySupply.addLiquiditySupply.selector,
+                    LiquiditySupply.addOhmLiquidity.selector,
                     polQuantity,
                     polLocation
                 )
@@ -225,7 +225,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             addToBatch(
                 liquiditySupply,
                 abi.encodeWithSelector(
-                    LiquiditySupply.addLiquiditySupply.selector,
+                    LiquiditySupply.addOhmLiquidity.selector,
                     polQuantity,
                     polLocation
                 )

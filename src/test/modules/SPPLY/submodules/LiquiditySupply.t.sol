@@ -229,7 +229,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
     }
 
-    // ========= addLiquiditySupply ========= //
+    // ========= addOhmLiquidity ========= //
 
     // [X] if called by a non-parent
     //  [X] it reverts
@@ -239,7 +239,7 @@ contract LiquiditySupplyTest is Test {
     //  [X] it reverts
     // [X] it adds the source and balance, and the total amount is accurate
 
-    function test_addLiquiditySupply_whenCalledByNonParent() public {
+    function test_addOhmLiquidity_whenCalledByNonParent() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             Submodule.Submodule_OnlyParent.selector,
@@ -249,10 +249,10 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(CALLER_NOT_PARENT);
-        submoduleLiquiditySupply.addLiquiditySupply(1, POL_LOCATION_3);
+        submoduleLiquiditySupply.addOhmLiquidity(1, POL_LOCATION_3);
     }
 
-    function test_addLiquiditySupply_whenSourceIsZeroAddress() public {
+    function test_addOhmLiquidity_whenSourceIsZeroAddress() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             LiquiditySupply.LiquiditySupply_InvalidParams.selector
@@ -261,10 +261,10 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.addLiquiditySupply(1, address(0));
+        submoduleLiquiditySupply.addOhmLiquidity(1, address(0));
     }
 
-    function test_addLiquiditySupply_whenSourceIsDuplicated() public {
+    function test_addOhmLiquidity_whenSourceIsDuplicated() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             LiquiditySupply.LiquiditySupply_InvalidParams.selector
@@ -273,13 +273,13 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.addLiquiditySupply(1, POL_LOCATION_1);
+        submoduleLiquiditySupply.addOhmLiquidity(1, POL_LOCATION_1);
     }
 
-    function test_addLiquiditySupply() public {
+    function test_addOhmLiquidity() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.addLiquiditySupply(POL_AMOUNT_3, POL_LOCATION_3);
+        submoduleLiquiditySupply.addOhmLiquidity(POL_AMOUNT_3, POL_LOCATION_3);
 
         // Assert
         assertEq(
@@ -312,7 +312,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].balances[0], POL_AMOUNT_3);
     }
 
-    // ========= removeLiquiditySupply ========= //
+    // ========= removeOhmLiquidity ========= //
 
     // [X] if called by a non-parent
     //  [X] it reverts
@@ -322,7 +322,7 @@ contract LiquiditySupplyTest is Test {
     //  [X] it removes the source and balance, and the total amount is accurate
     // [X] it removes the source and balance, and the total amount is accurate
 
-    function test_removeLiquiditySupply_whenCalledByNonParent() public {
+    function test_removeOhmLiquidity_whenCalledByNonParent() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             Submodule.Submodule_OnlyParent.selector,
@@ -332,10 +332,10 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(CALLER_NOT_PARENT);
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_3);
+        submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_3);
     }
 
-    function test_removeLiquiditySupply_whenSourceIsNotInSourcesArray() public {
+    function test_removeOhmLiquidity_whenSourceIsNotInSourcesArray() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             LiquiditySupply.LiquiditySupply_InvalidParams.selector
@@ -344,16 +344,16 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_3);
+        submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_3);
     }
 
-    function test_removeLiquiditySupply_whenLastSourceIsRemoved() public {
+    function test_removeOhmLiquidity_whenLastSourceIsRemoved() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_2);
+        submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_2);
 
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_1);
+        submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_1);
 
         // Assert
         assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), 0);
@@ -365,10 +365,10 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves.length, 0);
     }
 
-    function test_removeLiquiditySupply_indexOne() public {
+    function test_removeOhmLiquidity_indexOne() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_2);
+        submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_2);
 
         // Assert
         assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_1);
@@ -386,10 +386,10 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[0].balances[0], POL_AMOUNT_1);
     }
 
-    function test_removeLiquiditySupply_indexZero() public {
+    function test_removeOhmLiquidity_indexZero() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.removeLiquiditySupply(POL_LOCATION_1);
+        submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_1);
 
         // Assert
         assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_2);

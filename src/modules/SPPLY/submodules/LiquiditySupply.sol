@@ -26,13 +26,13 @@ contract LiquiditySupply is SupplySubmodule {
     // ========== STATE VARIABLES ========== //
 
     /// @notice The amount of OHM in protocol-owned liquidity
-    uint256[] public protocolOwnedLiquidityAmounts;
+    uint256[] public ohmAmounts;
 
     /// @notice The total amount of OHM in protocol-owned liquidity
     uint256 internal _polOhmTotalAmount;
 
     /// @notice The sources of the OHM in protocol-owned liquidity
-    address[] public protocolOwnedLiquiditySources;
+    address[] public ohmSources;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -50,11 +50,11 @@ contract LiquiditySupply is SupplySubmodule {
             if (polSources_[i] == address(0)) revert LiquiditySupply_InvalidParams();
 
             // Check that the source is not already present
-            bool found = _inArray(polSources_[i]);
+            bool found = _inArray(polSources_[i], ohmSources);
             if (found) revert LiquiditySupply_InvalidParams();
 
-            protocolOwnedLiquidityAmounts.push(polOhmAmounts_[i]);
-            protocolOwnedLiquiditySources.push(polSources_[i]);
+            ohmAmounts.push(polOhmAmounts_[i]);
+            ohmSources.push(polSources_[i]);
 
             _polOhmTotalAmount += polOhmAmounts_[i];
 
@@ -118,7 +118,7 @@ contract LiquiditySupply is SupplySubmodule {
         returns (SPPLYv1.Reserves[] memory reserves)
     {
         address ohm = address(SPPLYv1(address(parent)).ohm());
-        uint256 len = protocolOwnedLiquiditySources.length;
+        uint256 len = ohmSources.length;
         reserves = new SPPLYv1.Reserves[](len);
 
         for (uint256 i; i < len; i++) {
@@ -126,10 +126,10 @@ contract LiquiditySupply is SupplySubmodule {
             tokens[0] = ohm;
 
             uint256[] memory balances = new uint256[](1);
-            balances[0] = protocolOwnedLiquidityAmounts[i];
+            balances[0] = ohmAmounts[i];
 
             reserves[i] = SPPLYv1.Reserves({
-                source: protocolOwnedLiquiditySources[i],
+                source: ohmSources[i],
                 tokens: tokens,
                 balances: balances
             });
@@ -139,7 +139,7 @@ contract LiquiditySupply is SupplySubmodule {
     /// @inheritdoc SupplySubmodule
     /// @dev        This function returns the number of configured sources.
     function getSourceCount() external view virtual override returns (uint256) {
-        return protocolOwnedLiquiditySources.length;
+        return ohmSources.length;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -152,16 +152,16 @@ contract LiquiditySupply is SupplySubmodule {
     ///
     /// @param  amount_     The amount of OHM in the liquidity
     /// @param  source_     The address of the liquidity source
-    function addLiquiditySupply(uint256 amount_, address source_) external onlyParent {
+    function addOhmLiquidity(uint256 amount_, address source_) external onlyParent {
         // Check that the address is not 0
         if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
 
         // Check that the source is not already present
-        bool found = _inArray(source_);
+        bool found = _inArray(source_, ohmSources);
         if (found) revert LiquiditySupply_InvalidParams();
 
-        protocolOwnedLiquidityAmounts.push(amount_);
-        protocolOwnedLiquiditySources.push(source_);
+        ohmAmounts.push(amount_);
+        ohmSources.push(source_);
 
         _polOhmTotalAmount += amount_;
 
@@ -175,29 +175,25 @@ contract LiquiditySupply is SupplySubmodule {
     ///         - The source is not present
     ///
     /// @param  source_     The address of the liquidity source
-    function removeLiquiditySupply(address source_) external onlyParent {
+    function removeOhmLiquidity(address source_) external onlyParent {
         // Check that the address is not 0
         if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
 
         // Check that the source is present
-        bool found = _inArray(source_);
+        bool found = _inArray(source_, ohmSources);
         if (!found) revert LiquiditySupply_InvalidParams();
 
         // Remove the source
         uint256 foundAmount;
-        for (uint256 i = 0; i < protocolOwnedLiquiditySources.length; i++) {
-            if (protocolOwnedLiquiditySources[i] == source_) {
-                foundAmount = protocolOwnedLiquidityAmounts[i];
+        for (uint256 i = 0; i < ohmSources.length; i++) {
+            if (ohmSources[i] == source_) {
+                foundAmount = ohmAmounts[i];
 
-                protocolOwnedLiquidityAmounts[i] = protocolOwnedLiquidityAmounts[
-                    protocolOwnedLiquidityAmounts.length - 1
-                ];
-                protocolOwnedLiquidityAmounts.pop();
+                ohmAmounts[i] = ohmAmounts[ohmAmounts.length - 1];
+                ohmAmounts.pop();
 
-                protocolOwnedLiquiditySources[i] = protocolOwnedLiquiditySources[
-                    protocolOwnedLiquiditySources.length - 1
-                ];
-                protocolOwnedLiquiditySources.pop();
+                ohmSources[i] = ohmSources[ohmSources.length - 1];
+                ohmSources.pop();
 
                 break;
             }
@@ -214,10 +210,10 @@ contract LiquiditySupply is SupplySubmodule {
     ///
     /// @param      source_  The address of a liquidity source
     /// @return     True if the address is in the array, false otherwise
-    function _inArray(address source_) internal view returns (bool) {
-        uint256 len = protocolOwnedLiquiditySources.length;
+    function _inArray(address source_, address[] memory array_) internal view returns (bool) {
+        uint256 len = ohmSources.length;
         for (uint256 i; i < len; ) {
-            if (source_ == address(protocolOwnedLiquiditySources[i])) {
+            if (source_ == array_[i]) {
                 return true;
             }
             unchecked {
