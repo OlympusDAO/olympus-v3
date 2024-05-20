@@ -37,10 +37,12 @@ contract LiquiditySupplyTest is Test {
     address internal constant POL_LOCATION_1 = address(0x1);
     address internal constant POL_LOCATION_2 = address(0x2);
     address internal constant POL_LOCATION_3 = address(0x3);
+    address internal constant POL_LOCATION_4 = address(0x4);
 
-    uint256 internal constant POL_AMOUNT_1 = 1e9;
-    uint256 internal constant POL_AMOUNT_2 = 2e9;
-    uint256 internal constant POL_AMOUNT_3 = 3e9;
+    uint256 internal constant OHM_AMOUNT_1 = 1e9;
+    uint256 internal constant OHM_AMOUNT_2 = 2e9;
+    uint256 internal constant GOHM_AMOUNT_1 = 3e18;
+    uint256 internal constant GOHM_AMOUNT_2 = 4e18;
 
     function setUp() public {
         // Create tokens
@@ -60,14 +62,26 @@ contract LiquiditySupplyTest is Test {
         // Create submodule
         {
             uint256[] memory polOhmAmounts = new uint256[](2);
-            polOhmAmounts[0] = POL_AMOUNT_1;
-            polOhmAmounts[1] = POL_AMOUNT_2;
+            polOhmAmounts[0] = OHM_AMOUNT_1;
+            polOhmAmounts[1] = OHM_AMOUNT_2;
 
-            address[] memory polSources = new address[](2);
-            polSources[0] = POL_LOCATION_1;
-            polSources[1] = POL_LOCATION_2;
+            address[] memory polOhmSources = new address[](2);
+            polOhmSources[0] = POL_LOCATION_1;
+            polOhmSources[1] = POL_LOCATION_2;
 
-            submoduleLiquiditySupply = new LiquiditySupply(spply, polOhmAmounts, polSources);
+            uint256[] memory gOhmAmounts = new uint256[](1);
+            gOhmAmounts[0] = GOHM_AMOUNT_1;
+
+            address[] memory gOhmSources = new address[](1);
+            gOhmSources[0] = POL_LOCATION_3;
+
+            submoduleLiquiditySupply = new LiquiditySupply(
+                spply,
+                polOhmAmounts,
+                polOhmSources,
+                gOhmAmounts,
+                gOhmSources
+            );
         }
 
         // Create godmode
@@ -114,33 +128,18 @@ contract LiquiditySupplyTest is Test {
     //  [X] it reverts
     // [X] it adds the sources and balances
 
-    function test_constructor_whenSourceIsZeroAddress() public {
-        uint256[] memory polOhmAmounts = new uint256[](2);
-        polOhmAmounts[0] = POL_AMOUNT_1;
-        polOhmAmounts[1] = POL_AMOUNT_2;
+    function test_constructor_whenOhmSourceIsZeroAddress() public {
+        uint256[] memory ohmAmounts = new uint256[](2);
+        ohmAmounts[0] = OHM_AMOUNT_1;
+        ohmAmounts[1] = OHM_AMOUNT_2;
 
-        address[] memory polSources = new address[](2);
-        polSources[0] = POL_LOCATION_1;
-        polSources[1] = address(0);
+        address[] memory ohmSources = new address[](2);
+        ohmSources[0] = POL_LOCATION_1;
+        ohmSources[1] = address(0);
 
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            LiquiditySupply.LiquiditySupply_InvalidParams.selector
-        );
-        vm.expectRevert(err);
+        uint256[] memory gOhmAmounts = new uint256[](0);
 
-        // Call function
-        new LiquiditySupply(spply, polOhmAmounts, polSources);
-    }
-
-    function test_constructor_whenSourceIsDuplicated() public {
-        uint256[] memory polOhmAmounts = new uint256[](2);
-        polOhmAmounts[0] = POL_AMOUNT_1;
-        polOhmAmounts[1] = POL_AMOUNT_2;
-
-        address[] memory polSources = new address[](2);
-        polSources[0] = POL_LOCATION_1;
-        polSources[1] = POL_LOCATION_1;
+        address[] memory gOhmSources = new address[](0);
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -149,24 +148,165 @@ contract LiquiditySupplyTest is Test {
         vm.expectRevert(err);
 
         // Call function
-        new LiquiditySupply(spply, polOhmAmounts, polSources);
+        new LiquiditySupply(spply, ohmAmounts, ohmSources, gOhmAmounts, gOhmSources);
     }
 
-    function test_constructor() public {
-        uint256[] memory polOhmAmounts = new uint256[](2);
-        polOhmAmounts[0] = POL_AMOUNT_1;
-        polOhmAmounts[1] = POL_AMOUNT_2;
+    function test_constructor_whenOhmSourceIsDuplicated() public {
+        uint256[] memory ohmAmounts = new uint256[](2);
+        ohmAmounts[0] = OHM_AMOUNT_1;
+        ohmAmounts[1] = OHM_AMOUNT_2;
 
-        address[] memory polSources = new address[](2);
-        polSources[0] = POL_LOCATION_1;
-        polSources[1] = POL_LOCATION_2;
+        address[] memory ohmSources = new address[](2);
+        ohmSources[0] = POL_LOCATION_1;
+        ohmSources[1] = POL_LOCATION_1;
+
+        uint256[] memory gOhmAmounts = new uint256[](0);
+
+        address[] memory gOhmSources = new address[](0);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
 
         // Call function
-        LiquiditySupply liquiditySupply = new LiquiditySupply(spply, polOhmAmounts, polSources);
+        new LiquiditySupply(spply, ohmAmounts, ohmSources, gOhmAmounts, gOhmSources);
+    }
+
+    function test_constructor_whenGOhmSourceIsZeroAddress() public {
+        uint256[] memory ohmAmounts = new uint256[](0);
+
+        address[] memory ohmSources = new address[](0);
+
+        uint256[] memory gOhmAmounts = new uint256[](2);
+        gOhmAmounts[0] = OHM_AMOUNT_1;
+        gOhmAmounts[1] = OHM_AMOUNT_2;
+
+        address[] memory gOhmSources = new address[](2);
+        gOhmSources[0] = POL_LOCATION_1;
+        gOhmSources[1] = address(0);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        new LiquiditySupply(spply, ohmAmounts, ohmSources, gOhmAmounts, gOhmSources);
+    }
+
+    function test_constructor_whenGOhmSourceIsDuplicated() public {
+        uint256[] memory ohmAmounts = new uint256[](0);
+
+        address[] memory ohmSources = new address[](0);
+
+        uint256[] memory gOhmAmounts = new uint256[](2);
+        gOhmAmounts[0] = OHM_AMOUNT_1;
+        gOhmAmounts[1] = OHM_AMOUNT_2;
+
+        address[] memory gOhmSources = new address[](2);
+        gOhmSources[0] = POL_LOCATION_1;
+        gOhmSources[1] = POL_LOCATION_1;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        new LiquiditySupply(spply, ohmAmounts, ohmSources, gOhmAmounts, gOhmSources);
+    }
+
+    function test_constructor_ohm() public {
+        uint256[] memory ohmAmounts = new uint256[](2);
+        ohmAmounts[0] = OHM_AMOUNT_1;
+        ohmAmounts[1] = OHM_AMOUNT_2;
+
+        address[] memory ohmSources = new address[](2);
+        ohmSources[0] = POL_LOCATION_1;
+        ohmSources[1] = POL_LOCATION_2;
+
+        uint256[] memory gOhmAmounts = new uint256[](0);
+
+        address[] memory gOhmSources = new address[](0);
+
+        // Call function
+        LiquiditySupply liquiditySupply = new LiquiditySupply(
+            spply,
+            ohmAmounts,
+            ohmSources,
+            gOhmAmounts,
+            gOhmSources
+        );
 
         // Assert
-        assertEq(liquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_1 + POL_AMOUNT_2);
+        assertEq(liquiditySupply.getProtocolOwnedLiquidityOhm(), OHM_AMOUNT_1 + OHM_AMOUNT_2);
         assertEq(liquiditySupply.getSourceCount(), 2);
+    }
+
+    function test_constructor_gOhm() public {
+        uint256[] memory ohmAmounts = new uint256[](0);
+
+        address[] memory ohmSources = new address[](0);
+
+        uint256[] memory gOhmAmounts = new uint256[](2);
+        gOhmAmounts[0] = OHM_AMOUNT_1;
+        gOhmAmounts[1] = OHM_AMOUNT_2;
+
+        address[] memory gOhmSources = new address[](2);
+        gOhmSources[0] = POL_LOCATION_1;
+        gOhmSources[1] = POL_LOCATION_2;
+
+        // Call function
+        LiquiditySupply liquiditySupply = new LiquiditySupply(
+            spply,
+            ohmAmounts,
+            ohmSources,
+            gOhmAmounts,
+            gOhmSources
+        );
+
+        // Assert
+        assertEq(
+            liquiditySupply.getProtocolOwnedLiquidityOhm(),
+            ((OHM_AMOUNT_1 + OHM_AMOUNT_2) * GOHM_INDEX) / 1e18
+        );
+        assertEq(liquiditySupply.getSourceCount(), 2);
+    }
+
+    function test_constructor_ohmAndGOhm() public {
+        uint256[] memory ohmAmounts = new uint256[](1);
+        ohmAmounts[0] = OHM_AMOUNT_1;
+
+        address[] memory ohmSources = new address[](1);
+        ohmSources[0] = POL_LOCATION_1;
+
+        uint256[] memory gOhmAmounts = new uint256[](2);
+        gOhmAmounts[0] = GOHM_AMOUNT_1;
+        gOhmAmounts[1] = GOHM_AMOUNT_2;
+
+        address[] memory gOhmSources = new address[](2);
+        gOhmSources[0] = POL_LOCATION_3;
+        gOhmSources[1] = POL_LOCATION_4;
+
+        // Call function
+        LiquiditySupply liquiditySupply = new LiquiditySupply(
+            spply,
+            ohmAmounts,
+            ohmSources,
+            gOhmAmounts,
+            gOhmSources
+        );
+
+        // Assert
+        assertEq(
+            liquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + ((GOHM_AMOUNT_1 + GOHM_AMOUNT_2) * GOHM_INDEX) / 1e18
+        );
+        assertEq(liquiditySupply.getSourceCount(), 3);
     }
 
     // ========= getProtocolOwnedTreasuryOhm ========= //
@@ -192,7 +332,7 @@ contract LiquiditySupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm() public {
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            POL_AMOUNT_1 + POL_AMOUNT_2
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
         );
     }
 
@@ -206,19 +346,25 @@ contract LiquiditySupplyTest is Test {
             .getProtocolOwnedLiquidityReserves();
 
         // Assert
-        assertEq(reserves.length, 2);
+        assertEq(reserves.length, 3);
 
         assertEq(reserves[0].source, POL_LOCATION_1);
         assertEq(reserves[0].tokens.length, 1);
         assertEq(reserves[0].tokens[0], address(ohm));
         assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], POL_AMOUNT_1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
 
         assertEq(reserves[1].source, POL_LOCATION_2);
         assertEq(reserves[1].tokens.length, 1);
         assertEq(reserves[1].tokens[0], address(ohm));
         assertEq(reserves[1].balances.length, 1);
-        assertEq(reserves[1].balances[0], POL_AMOUNT_2);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
+
+        assertEq(reserves[2].source, POL_LOCATION_3);
+        assertEq(reserves[2].tokens.length, 1);
+        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].balances.length, 1);
+        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
 
     // ========= getSourceCount ========= //
@@ -226,7 +372,7 @@ contract LiquiditySupplyTest is Test {
     // [X] it returns the length of the sources array
 
     function test_getSourceCount() public {
-        assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
     }
 
     // ========= addOhmLiquidity ========= //
@@ -279,37 +425,133 @@ contract LiquiditySupplyTest is Test {
     function test_addOhmLiquidity() public {
         // Call function
         vm.prank(address(spply));
-        submoduleLiquiditySupply.addOhmLiquidity(POL_AMOUNT_3, POL_LOCATION_3);
+        submoduleLiquiditySupply.addOhmLiquidity(3e9, POL_LOCATION_3);
 
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            POL_AMOUNT_1 + POL_AMOUNT_2 + POL_AMOUNT_3
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + 3e9 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
         );
-        assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 4);
 
         SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
             .getProtocolOwnedLiquidityReserves();
 
-        assertEq(reserves.length, 3);
+        assertEq(reserves.length, 4);
 
         assertEq(reserves[0].source, POL_LOCATION_1);
         assertEq(reserves[0].tokens.length, 1);
         assertEq(reserves[0].tokens[0], address(ohm));
         assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], POL_AMOUNT_1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
 
         assertEq(reserves[1].source, POL_LOCATION_2);
         assertEq(reserves[1].tokens.length, 1);
         assertEq(reserves[1].tokens[0], address(ohm));
         assertEq(reserves[1].balances.length, 1);
-        assertEq(reserves[1].balances[0], POL_AMOUNT_2);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
 
         assertEq(reserves[2].source, POL_LOCATION_3);
         assertEq(reserves[2].tokens.length, 1);
         assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
-        assertEq(reserves[2].balances[0], POL_AMOUNT_3);
+        assertEq(reserves[2].balances[0], 3e9);
+
+        assertEq(reserves[3].source, POL_LOCATION_3);
+        assertEq(reserves[3].tokens.length, 1);
+        assertEq(reserves[3].tokens[0], address(gOhm));
+        assertEq(reserves[3].balances.length, 1);
+        assertEq(reserves[3].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+    }
+
+    // ========= addGOhmLiquidity ========= //
+
+    // [X] if called by a non-parent
+    //  [X] it reverts
+    // [X] if the source is the zero address
+    //  [X] it reverts
+    // [X] if the source is duplicated
+    //  [X] it reverts
+    // [X] it adds the source and balance, and the total amount is accurate
+
+    function test_addGOhmLiquidity_whenCalledByNonParent() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Submodule.Submodule_OnlyParent.selector,
+            CALLER_NOT_PARENT
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(CALLER_NOT_PARENT);
+        submoduleLiquiditySupply.addGOhmLiquidity(1, POL_LOCATION_3);
+    }
+
+    function test_addGOhmLiquidity_whenSourceIsZeroAddress() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(1, address(0));
+    }
+
+    function test_addGOhmLiquidity_whenSourceIsDuplicated() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(1, POL_LOCATION_3);
+    }
+
+    function test_addGOhmLiquidity() public {
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(GOHM_AMOUNT_2, POL_LOCATION_4);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + ((GOHM_AMOUNT_1 + GOHM_AMOUNT_2) * GOHM_INDEX) / 1e18,
+            "POL OHM"
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 4, "source count");
+
+        SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 4, "reserves length");
+
+        assertEq(reserves[0].source, POL_LOCATION_1, "source 1");
+        assertEq(reserves[0].tokens.length, 1, "tokens length 1");
+        assertEq(reserves[0].tokens[0], address(ohm), "tokens 1");
+        assertEq(reserves[0].balances.length, 1, "balances length 1");
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1, "balances 1");
+
+        assertEq(reserves[1].source, POL_LOCATION_2, "source 2");
+        assertEq(reserves[1].tokens.length, 1, "tokens length 2");
+        assertEq(reserves[1].tokens[0], address(ohm), "tokens 2");
+        assertEq(reserves[1].balances.length, 1, "balances length 2");
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2, "balances 2");
+
+        assertEq(reserves[2].source, POL_LOCATION_3, "source 3");
+        assertEq(reserves[2].tokens.length, 1, "tokens length 3");
+        assertEq(reserves[2].tokens[0], address(gOhm), "tokens 3");
+        assertEq(reserves[2].balances.length, 1, "balances length 3");
+        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18, "balances 3");
+
+        assertEq(reserves[3].source, POL_LOCATION_4, "source 4");
+        assertEq(reserves[3].tokens.length, 1, "tokens length 4");
+        assertEq(reserves[3].tokens[0], address(gOhm), "tokens 4");
+        assertEq(reserves[3].balances.length, 1, "balances length 4");
+        assertEq(reserves[3].balances[0], (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18, "balances 4");
     }
 
     // ========= removeOhmLiquidity ========= //
@@ -356,13 +598,22 @@ contract LiquiditySupplyTest is Test {
         submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_1);
 
         // Assert
-        assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), 0);
-        assertEq(submoduleLiquiditySupply.getSourceCount(), 0);
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 1);
 
         SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
             .getProtocolOwnedLiquidityReserves();
 
-        assertEq(reserves.length, 0);
+        assertEq(reserves.length, 1);
+
+        assertEq(reserves[0].source, POL_LOCATION_3);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(gOhm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
 
     function test_removeOhmLiquidity_indexOne() public {
@@ -371,19 +622,28 @@ contract LiquiditySupplyTest is Test {
         submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_2);
 
         // Assert
-        assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_1);
-        assertEq(submoduleLiquiditySupply.getSourceCount(), 1);
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
 
         SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
             .getProtocolOwnedLiquidityReserves();
 
-        assertEq(reserves.length, 1);
+        assertEq(reserves.length, 2);
 
         assertEq(reserves[0].source, POL_LOCATION_1);
         assertEq(reserves[0].tokens.length, 1);
         assertEq(reserves[0].tokens[0], address(ohm));
         assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], POL_AMOUNT_1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
+
+        assertEq(reserves[1].source, POL_LOCATION_3);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(gOhm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
 
     function test_removeOhmLiquidity_indexZero() public {
@@ -392,18 +652,170 @@ contract LiquiditySupplyTest is Test {
         submoduleLiquiditySupply.removeOhmLiquidity(POL_LOCATION_1);
 
         // Assert
-        assertEq(submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(), POL_AMOUNT_2);
-        assertEq(submoduleLiquiditySupply.getSourceCount(), 1);
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
 
         SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
             .getProtocolOwnedLiquidityReserves();
 
-        assertEq(reserves.length, 1);
+        assertEq(reserves.length, 2);
 
         assertEq(reserves[0].source, POL_LOCATION_2);
         assertEq(reserves[0].tokens.length, 1);
         assertEq(reserves[0].tokens[0], address(ohm));
         assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], POL_AMOUNT_2);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_2);
+
+        assertEq(reserves[1].source, POL_LOCATION_3);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(gOhm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+    }
+
+    // ========= removeGOhmLiquidity ========= //
+
+    // [X] if called by a non-parent
+    //  [X] it reverts
+    // [X] if the source is not in the sources array
+    //  [X] it reverts
+    // [X] if the last source is removed
+    //  [X] it removes the source and balance, and the total amount is accurate
+    // [X] it removes the source and balance, and the total amount is accurate
+
+    function test_removeGOhmLiquidity_whenCalledByNonParent() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Submodule.Submodule_OnlyParent.selector,
+            CALLER_NOT_PARENT
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(CALLER_NOT_PARENT);
+        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_3);
+    }
+
+    function test_removeGOhmLiquidity_whenSourceIsNotInSourcesArray() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_1);
+    }
+
+    function test_removeGOhmLiquidity_whenLastSourceIsRemoved() public {
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_3);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 2);
+
+        assertEq(reserves[0].source, POL_LOCATION_1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
+
+        assertEq(reserves[1].source, POL_LOCATION_2);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(ohm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
+    }
+
+    function test_removeGOhmLiquidity_indexZero() public {
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(GOHM_AMOUNT_2, POL_LOCATION_4);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_3);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 3);
+
+        assertEq(reserves[0].source, POL_LOCATION_1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
+
+        assertEq(reserves[1].source, POL_LOCATION_2);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(ohm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
+
+        assertEq(reserves[2].source, POL_LOCATION_4);
+        assertEq(reserves[2].tokens.length, 1);
+        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].balances.length, 1);
+        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18);
+    }
+
+    function test_removeGOhmLiquidity_indexOne() public {
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(GOHM_AMOUNT_2, POL_LOCATION_4);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_4);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 3);
+
+        assertEq(reserves[0].source, POL_LOCATION_1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
+
+        assertEq(reserves[1].source, POL_LOCATION_2);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(ohm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
+
+        assertEq(reserves[2].source, POL_LOCATION_3);
+        assertEq(reserves[2].tokens.length, 1);
+        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].balances.length, 1);
+        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
 }

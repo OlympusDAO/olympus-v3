@@ -4,19 +4,21 @@ pragma solidity 0.8.15;
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {SupplySubmodule, SPPLYv1} from "src/modules/SPPLY/SPPLY.v1.sol";
+import {OlympusERC20Token as OHM} from "src/external/OlympusERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 /// @title      LiquiditySupply
 /// @author     0xJem
-/// @notice     SPPLY submodule representing an admin-defined amount of OHM in protocol-owned liquidity.
-///             This can be used in instances where the OHM is deployed in liquidity pools,
+/// @notice     SPPLY submodule representing an admin-defined amount of OHM and/or gOHM in protocol-owned liquidity.
+///             This can be used in instances where the OHM and/or gOHM is deployed in liquidity pools,
 ///             but the LP token or position is not managed by the on-chain accounting system
 ///             and hence not accounted for.
 contract LiquiditySupply is SupplySubmodule {
     // ========== EVENTS ========== //
 
-    event LiquiditySupplyAdded(uint256 amount, address source);
+    event LiquiditySupplyAdded(uint256 amount, address source, bool gOhm);
 
-    event LiquiditySupplyRemoved(uint256 amount, address source);
+    event LiquiditySupplyRemoved(uint256 amount, address source, bool gOhm);
 
     // ========== ERRORS ========== //
 
@@ -25,41 +27,80 @@ contract LiquiditySupply is SupplySubmodule {
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice The OHM token
+    OHM internal _ohm;
+
+    /// @notice The gOHM token
+    IgOHM internal _gOhm;
+
     /// @notice The amount of OHM in protocol-owned liquidity
     uint256[] public ohmAmounts;
+
+    /// @notice The amount of gOHM in protocol-owned liquidity
+    uint256[] public gOhmAmounts;
 
     /// @notice The total amount of OHM in protocol-owned liquidity
     uint256 internal _polOhmTotalAmount;
 
+    /// @notice The total amount of gOHM in protocol-owned liquidity
+    uint256 internal _polGOhmTotalAmount;
+
     /// @notice The sources of the OHM in protocol-owned liquidity
     address[] public ohmSources;
+
+    /// @notice The sources of the gOHM in protocol-owned liquidity
+    address[] public gOhmSources;
 
     // ========== CONSTRUCTOR ========== //
 
     constructor(
         Module parent_,
-        uint256[] memory polOhmAmounts_,
-        address[] memory polSources_
+        uint256[] memory ohmAmounts_,
+        address[] memory ohmSources_,
+        uint256[] memory gOhmAmounts_,
+        address[] memory gOhmSources_
     ) Submodule(parent_) {
         // Assert that the arrays have the same length
-        if (polOhmAmounts_.length != polSources_.length) revert LiquiditySupply_InvalidParams();
+        if (ohmAmounts_.length != ohmSources_.length) revert LiquiditySupply_InvalidParams();
 
-        // Add to the arrays
-        for (uint256 i = 0; i < polOhmAmounts_.length; i++) {
+        if (gOhmAmounts_.length != gOhmSources_.length) revert LiquiditySupply_InvalidParams();
+
+        // Add to the OHM arrays
+        for (uint256 i = 0; i < ohmAmounts_.length; i++) {
             // Check that the source is not 0
-            if (polSources_[i] == address(0)) revert LiquiditySupply_InvalidParams();
+            if (ohmSources_[i] == address(0)) revert LiquiditySupply_InvalidParams();
 
             // Check that the source is not already present
-            bool found = _inArray(polSources_[i], ohmSources);
+            bool found = _inArray(ohmSources_[i], ohmSources);
             if (found) revert LiquiditySupply_InvalidParams();
 
-            ohmAmounts.push(polOhmAmounts_[i]);
-            ohmSources.push(polSources_[i]);
+            ohmAmounts.push(ohmAmounts_[i]);
+            ohmSources.push(ohmSources_[i]);
 
-            _polOhmTotalAmount += polOhmAmounts_[i];
+            _polOhmTotalAmount += ohmAmounts_[i];
 
-            emit LiquiditySupplyAdded(polOhmAmounts_[i], polSources_[i]);
+            emit LiquiditySupplyAdded(ohmAmounts_[i], ohmSources_[i], false);
         }
+
+        // Add to the gOHM arrays
+        for (uint256 i = 0; i < gOhmAmounts_.length; i++) {
+            // Check that the source is not 0
+            if (gOhmSources_[i] == address(0)) revert LiquiditySupply_InvalidParams();
+
+            // Check that the source is not already present
+            bool found = _inArray(gOhmSources_[i], gOhmSources);
+            if (found) revert LiquiditySupply_InvalidParams();
+
+            gOhmAmounts.push(gOhmAmounts_[i]);
+            gOhmSources.push(gOhmSources_[i]);
+
+            _polGOhmTotalAmount += gOhmAmounts_[i];
+
+            emit LiquiditySupplyAdded(gOhmAmounts_[i], gOhmSources_[i], true);
+        }
+
+        _ohm = SPPLYv1(address(parent)).ohm();
+        _gOhm = SPPLYv1(address(parent)).gohm();
     }
 
     // ========== SUBMODULE SETUP ========== //
@@ -106,7 +147,10 @@ contract LiquiditySupply is SupplySubmodule {
     /// @inheritdoc SupplySubmodule
     /// @dev        This function returns the total configured amount of OHM in protocol-owned liquidity.
     function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
-        return _polOhmTotalAmount;
+        // Get the quantity of gOHM in OHM terms
+        uint256 gOhmInOhm = _gOhm.balanceFrom(_polGOhmTotalAmount);
+
+        return _polOhmTotalAmount + gOhmInOhm;
     }
 
     /// @inheritdoc SupplySubmodule
@@ -117,11 +161,13 @@ contract LiquiditySupply is SupplySubmodule {
         override
         returns (SPPLYv1.Reserves[] memory reserves)
     {
-        address ohm = address(SPPLYv1(address(parent)).ohm());
-        uint256 len = ohmSources.length;
-        reserves = new SPPLYv1.Reserves[](len);
+        address ohm = address(_ohm);
+        address gOhm = address(_gOhm);
+        uint256 ohmLen = ohmSources.length;
+        uint256 gOhmLen = gOhmSources.length;
+        reserves = new SPPLYv1.Reserves[](ohmLen + gOhmLen);
 
-        for (uint256 i; i < len; i++) {
+        for (uint256 i; i < ohmLen; i++) {
             address[] memory tokens = new address[](1);
             tokens[0] = ohm;
 
@@ -134,17 +180,31 @@ contract LiquiditySupply is SupplySubmodule {
                 balances: balances
             });
         }
+
+        for (uint256 i; i < gOhmLen; i++) {
+            address[] memory tokens = new address[](1);
+            tokens[0] = gOhm;
+
+            uint256[] memory balances = new uint256[](1);
+            balances[0] = _gOhm.balanceFrom(gOhmAmounts[i]);
+
+            reserves[ohmLen + i] = SPPLYv1.Reserves({
+                source: gOhmSources[i],
+                tokens: tokens,
+                balances: balances
+            });
+        }
     }
 
     /// @inheritdoc SupplySubmodule
     /// @dev        This function returns the number of configured sources.
     function getSourceCount() external view virtual override returns (uint256) {
-        return ohmSources.length;
+        return ohmSources.length + gOhmSources.length;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice Add a new source of protocol-owned liquidity
+    /// @notice Add a new source of OHM protocol-owned liquidity
     /// @dev    This function reverts if:
     ///         - The caller is not the parent module
     ///         - The source is the zero address
@@ -165,10 +225,34 @@ contract LiquiditySupply is SupplySubmodule {
 
         _polOhmTotalAmount += amount_;
 
-        emit LiquiditySupplyAdded(amount_, source_);
+        emit LiquiditySupplyAdded(amount_, source_, false);
     }
 
-    /// @notice Remove a source of protocol-owned liquidity
+    /// @notice Add a new source of gOHM protocol-owned liquidity
+    /// @dev    This function reverts if:
+    ///         - The caller is not the parent module
+    ///         - The source is the zero address
+    ///         - The source is already present
+    ///
+    /// @param  amount_     The amount of gOHM in the liquidity
+    /// @param  source_     The address of the liquidity source
+    function addGOhmLiquidity(uint256 amount_, address source_) external onlyParent {
+        // Check that the address is not 0
+        if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
+
+        // Check that the source is not already present
+        bool found = _inArray(source_, gOhmSources);
+        if (found) revert LiquiditySupply_InvalidParams();
+
+        gOhmAmounts.push(amount_);
+        gOhmSources.push(source_);
+
+        _polGOhmTotalAmount += amount_;
+
+        emit LiquiditySupplyAdded(amount_, source_, true);
+    }
+
+    /// @notice Remove a source of OHM protocol-owned liquidity
     /// @dev    This function reverts if:
     ///         - The caller is not the parent module
     ///         - The source is the zero address
@@ -201,17 +285,53 @@ contract LiquiditySupply is SupplySubmodule {
 
         _polOhmTotalAmount -= foundAmount;
 
-        emit LiquiditySupplyRemoved(foundAmount, source_);
+        emit LiquiditySupplyRemoved(foundAmount, source_, false);
+    }
+
+    /// @notice Remove a source of gOHM protocol-owned liquidity
+    /// @dev    This function reverts if:
+    ///         - The caller is not the parent module
+    ///         - The source is the zero address
+    ///         - The source is not present
+    ///
+    /// @param  source_     The address of the liquidity source
+    function removeGOhmLiquidity(address source_) external onlyParent {
+        // Check that the address is not 0
+        if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
+
+        // Check that the source is present
+        bool found = _inArray(source_, gOhmSources);
+        if (!found) revert LiquiditySupply_InvalidParams();
+
+        // Remove the source
+        uint256 foundAmount;
+        for (uint256 i = 0; i < gOhmSources.length; i++) {
+            if (gOhmSources[i] == source_) {
+                foundAmount = gOhmAmounts[i];
+
+                gOhmAmounts[i] = gOhmAmounts[gOhmAmounts.length - 1];
+                gOhmAmounts.pop();
+
+                gOhmSources[i] = gOhmSources[gOhmSources.length - 1];
+                gOhmSources.pop();
+
+                break;
+            }
+        }
+
+        _polGOhmTotalAmount -= foundAmount;
+
+        emit LiquiditySupplyRemoved(foundAmount, source_, true);
     }
 
     // =========== HELPER FUNCTIONS =========== //
 
-    /// @notice     Determines if `source_` is contained in the `_polSources` array
+    /// @notice     Determines if `source_` is contained in the `array_` array
     ///
     /// @param      source_  The address of a liquidity source
     /// @return     True if the address is in the array, false otherwise
-    function _inArray(address source_, address[] memory array_) internal view returns (bool) {
-        uint256 len = ohmSources.length;
+    function _inArray(address source_, address[] memory array_) internal pure returns (bool) {
+        uint256 len = array_.length;
         for (uint256 i; i < len; ) {
             if (source_ == array_[i]) {
                 return true;

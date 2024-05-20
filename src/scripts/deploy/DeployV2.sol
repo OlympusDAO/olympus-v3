@@ -1450,12 +1450,20 @@ contract OlympusDeploy is Script {
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
 
-        uint256[] memory quantity = new uint256[](0);
-        address[] memory source = new address[](0);
+        uint256[] memory ohmQuantity = new uint256[](0);
+        address[] memory ohmSource = new address[](0);
+        uint256[] memory gOhmQuantity = new uint256[](0);
+        address[] memory gOhmSource = new address[](0);
 
         // Deploy LiquiditySupply submodule
         vm.broadcast();
-        liquiditySupply = new LiquiditySupply(SPPLY, quantity, source);
+        liquiditySupply = new LiquiditySupply(
+            SPPLY,
+            ohmQuantity,
+            ohmSource,
+            gOhmQuantity,
+            gOhmSource
+        );
         console2.log("LiquiditySupply deployed at:", address(liquiditySupply));
 
         return address(liquiditySupply);
