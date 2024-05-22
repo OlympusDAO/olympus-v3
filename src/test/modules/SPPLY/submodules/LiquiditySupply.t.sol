@@ -696,7 +696,7 @@ contract LiquiditySupplyTest is Test {
 
         // Call function
         vm.prank(CALLER_NOT_PARENT);
-        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_3);
+        submoduleLiquiditySupply.removeGOhmLiquidity(POL_LOCATION_1);
     }
 
     function test_removeGOhmLiquidity_whenSourceIsNotInSourcesArray() public {
@@ -817,5 +817,245 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens[0], address(gOhm));
         assertEq(reserves[2].balances.length, 1);
         assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+    }
+
+    // ========= adjustOhmLiquidity ========= //
+
+    // [X] when called by a non-parent
+    //  [X] it reverts
+    // [X] when the source is the zero address
+    //  [X] it reverts
+    // [X] when the source is not an existing OHM source
+    //  [X] it reverts
+    // [X] when the adjusted amount is less than 0
+    //  [X] it reverts
+    // [X] when the adjusted amount is greater than uint256 max
+    //  [X] it reverts
+    // [X] it adjusts the OHM amount for the source and updates the total OHM amount
+
+    function test_adjustOhmLiquidity_calledByNonParent() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Submodule.Submodule_OnlyParent.selector,
+            CALLER_NOT_PARENT
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(CALLER_NOT_PARENT);
+        submoduleLiquiditySupply.adjustOhmLiquidity(1, true, POL_LOCATION_1);
+    }
+
+    function test_adjustOhmLiquidity_sourceIsZeroAddress() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustOhmLiquidity(1, true, address(0));
+    }
+
+    function test_adjustOhmLiquidity_sourceDoesNotExist() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustOhmLiquidity(1, true, POL_LOCATION_3);
+    }
+
+    function test_adjustOhmLiquidity_adjustedAmountLessThanZero(uint256 amount_) public {
+        uint256 amount = bound(amount_, OHM_AMOUNT_1 + 1, type(uint256).max);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustOhmLiquidity(amount, false, POL_LOCATION_1);
+    }
+
+    function test_adjustOhmLiquidity_adjustedAmountGreaterThanMax(uint256 amount_) public {
+        uint256 amount = bound(amount_, type(uint256).max - OHM_AMOUNT_1, type(uint256).max);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustOhmLiquidity(amount, true, POL_LOCATION_1);
+    }
+
+    function test_adjustOhmLiquidity(uint256 amount_, bool positive_) public {
+        // Will result in a positive or negative adjustment, never below 0
+        uint256 amount = bound(amount_, 1, OHM_AMOUNT_1);
+
+        uint256 adjustedOhmAmount = positive_ ? OHM_AMOUNT_1 + amount : OHM_AMOUNT_1 - amount;
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustOhmLiquidity(amount, positive_, POL_LOCATION_1);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            adjustedOhmAmount + OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 3);
+
+        assertEq(reserves[0].source, POL_LOCATION_1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], adjustedOhmAmount);
+
+        assertEq(reserves[1].source, POL_LOCATION_2);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(ohm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
+
+        assertEq(reserves[2].source, POL_LOCATION_3);
+        assertEq(reserves[2].tokens.length, 1);
+        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].balances.length, 1);
+        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+    }
+
+    // ========= adjustGOhmLiquidity ========= //
+
+    // [X] when called by a non-parent
+    //  [X] it reverts
+    // [X] when the source is the zero address
+    //  [X] it reverts
+    // [X] when the source is not an existing gOHM source
+    //  [X] it reverts
+    // [X] when the adjusted amount is less than 0
+    //  [X] it reverts
+    // [X] when the adjusted amount is greater than uint256 max
+    //  [X] it reverts
+    // [X] it adjusts the gOHM amount for the source and updates the total gOHM amount
+
+    function test_adjustGOhmLiquidity_calledByNonParent() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Submodule.Submodule_OnlyParent.selector,
+            CALLER_NOT_PARENT
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(CALLER_NOT_PARENT);
+        submoduleLiquiditySupply.adjustGOhmLiquidity(1, true, POL_LOCATION_3);
+    }
+
+    function test_adjustGOhmLiquidity_sourceIsZeroAddress() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustGOhmLiquidity(1, true, address(0));
+    }
+
+    function test_adjustGOhmLiquidity_sourceDoesNotExist() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustGOhmLiquidity(1, true, POL_LOCATION_1);
+    }
+
+    function test_adjustGOhmLiquidity_adjustedAmountLessThanZero(uint256 amount_) public {
+        uint256 amount = bound(amount_, GOHM_AMOUNT_1 + 1, type(uint256).max);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustGOhmLiquidity(amount, false, POL_LOCATION_3);
+    }
+
+    function test_adjustGOhmLiquidity_adjustedAmountGreaterThanMax(uint256 amount_) public {
+        uint256 amount = bound(amount_, type(uint256).max - GOHM_AMOUNT_1, type(uint256).max);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustGOhmLiquidity(amount, true, POL_LOCATION_3);
+    }
+
+    function test_adjustGOhmLiquidity(uint256 amount_, bool positive_) public {
+        // Will result in a positive or negative adjustment, never below 0
+        uint256 amount = bound(amount_, 1, GOHM_AMOUNT_1);
+
+        uint256 adjustedGhmAmount = positive_ ? GOHM_AMOUNT_1 + amount : GOHM_AMOUNT_1 - amount;
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.adjustGOhmLiquidity(amount, positive_, POL_LOCATION_3);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (adjustedGhmAmount * GOHM_INDEX) / 1e18
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleLiquiditySupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 3);
+
+        assertEq(reserves[0].source, POL_LOCATION_1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], OHM_AMOUNT_1);
+
+        assertEq(reserves[1].source, POL_LOCATION_2);
+        assertEq(reserves[1].tokens.length, 1);
+        assertEq(reserves[1].tokens[0], address(ohm));
+        assertEq(reserves[1].balances.length, 1);
+        assertEq(reserves[1].balances[0], OHM_AMOUNT_2);
+
+        assertEq(reserves[2].source, POL_LOCATION_3);
+        assertEq(reserves[2].tokens.length, 1);
+        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].balances.length, 1);
+        assertEq(reserves[2].balances[0], (adjustedGhmAmount * GOHM_INDEX) / 1e18);
     }
 }
