@@ -502,7 +502,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             {
                 // Quantity deployed in Base POL
-                // TX: TBC
+                // TX: https://basescan.org/tx/0xb1eb4b77079b4fd234b12ae930860683fdae61bdf16766960dc8635247ad1c8f
                 uint256 polBaseQuantity = argData.readUint(".ethPolBaseQuantity");
                 address polBaseLocation = argData.readAddress(".ethPolBaseLocation");
                 console2.log("    Base POL debt: %s (18dp)", polBaseQuantity);

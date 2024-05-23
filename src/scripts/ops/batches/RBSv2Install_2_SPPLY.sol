@@ -217,7 +217,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         }
 
         // Base
-        // TX: TBC
+        // TX: https://basescan.org/tx/0xb1eb4b77079b4fd234b12ae930860683fdae61bdf16766960dc8635247ad1c8f
         {
             uint256 polQuantity = argData.readUint(".ethPolBaseQuantity");
             address polLocation = argData.readAddress(".ethPolBaseLocation");
