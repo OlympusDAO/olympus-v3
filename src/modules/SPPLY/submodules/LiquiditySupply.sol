@@ -20,14 +20,6 @@ contract LiquiditySupply is SupplySubmodule {
 
     event LiquiditySupplyRemoved(uint256 amount, address source, bool gOhm);
 
-    event LiquiditySupplyUpdated(
-        bool positive_,
-        uint256 adjustment,
-        uint256 updatedAmount,
-        address source,
-        bool gOhm
-    );
-
     // ========== ERRORS ========== //
 
     /// @notice     Invalid parameters were passed to a function
@@ -331,104 +323,6 @@ contract LiquiditySupply is SupplySubmodule {
         _polGOhmTotalAmount -= foundAmount;
 
         emit LiquiditySupplyRemoved(foundAmount, source_, true);
-    }
-
-    /// @notice Adjust the amount of OHM in protocol-owned liquidity for the specified source
-    /// @dev    This function reverts if:
-    ///         - The caller is not the parent module
-    ///         - The source is the zero address
-    ///         - The source is not present
-    ///         - The new amount is less than 0 or greater than uint256 max
-    ///
-    /// @param  amount_     The amount to increase or decrease the OHM liquidity by
-    /// @param  add_        True if the adjustment is addition, false if subtraction
-    /// @param  source_     The address of the liquidity source
-    function adjustOhmLiquidity(uint256 amount_, bool add_, address source_) external onlyParent {
-        // Check that the address is not 0
-        if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
-
-        // Check that the source is present
-        bool found = _inArray(source_, ohmSources);
-        if (!found) revert LiquiditySupply_InvalidParams();
-
-        // Find the source
-        uint256 updatedAmount;
-        for (uint256 i = 0; i < ohmSources.length; i++) {
-            if (ohmSources[i] != source_) continue;
-
-            uint256 foundAmount = ohmAmounts[i];
-
-            // If a negative number, ensure it is not greater than the existing amount and would result in an underflow
-            if (!add_) {
-                if (amount_ > foundAmount) revert LiquiditySupply_InvalidParams();
-
-                ohmAmounts[i] -= amount_;
-                _polOhmTotalAmount -= amount_;
-            }
-            // If a positive number, ensure it would not result in an overflow
-            else {
-                if (amount_ >= type(uint256).max - foundAmount)
-                    revert LiquiditySupply_InvalidParams();
-
-                ohmAmounts[i] += amount_;
-                _polOhmTotalAmount += amount_;
-            }
-
-            updatedAmount = ohmAmounts[i];
-
-            break;
-        }
-
-        emit LiquiditySupplyUpdated(add_, amount_, updatedAmount, source_, false);
-    }
-
-    /// @notice Adjust the amount of gOHM in protocol-owned liquidity for the specified source
-    /// @dev    This function reverts if:
-    ///         - The caller is not the parent module
-    ///         - The source is the zero address
-    ///         - The source is not present
-    ///         - The new amount is less than 0 or greater than uint256 max
-    ///
-    /// @param  amount_     The amount to increase or decrease the gOHM liquidity by
-    /// @param  add_        True if the adjustment is addition, false if subtraction
-    /// @param  source_     The address of the liquidity source
-    function adjustGOhmLiquidity(uint256 amount_, bool add_, address source_) external onlyParent {
-        // Check that the address is not 0
-        if (source_ == address(0)) revert LiquiditySupply_InvalidParams();
-
-        // Check that the source is present
-        bool found = _inArray(source_, gOhmSources);
-        if (!found) revert LiquiditySupply_InvalidParams();
-
-        // Find the source
-        uint256 updatedAmount;
-        for (uint256 i = 0; i < gOhmSources.length; i++) {
-            if (gOhmSources[i] != source_) continue;
-
-            uint256 foundAmount = gOhmAmounts[i];
-
-            // If a negative number, ensure it is not greater than the existing amount and would result in an underflow
-            if (!add_) {
-                if (amount_ > foundAmount) revert LiquiditySupply_InvalidParams();
-
-                gOhmAmounts[i] -= amount_;
-                _polGOhmTotalAmount -= amount_;
-            }
-            // If a positive number, ensure it would not result in an overflow
-            else {
-                if (amount_ >= type(uint256).max - foundAmount)
-                    revert LiquiditySupply_InvalidParams();
-
-                gOhmAmounts[i] += amount_;
-                _polGOhmTotalAmount += amount_;
-            }
-
-            updatedAmount = gOhmAmounts[i];
-
-            break;
-        }
-
-        emit LiquiditySupplyUpdated(add_, amount_, updatedAmount, source_, true);
     }
 
     // =========== HELPER FUNCTIONS =========== //
