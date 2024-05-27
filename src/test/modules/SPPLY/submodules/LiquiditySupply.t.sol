@@ -100,7 +100,7 @@ contract LiquiditySupplyTest is Test {
     }
 
     function _getGOhmInOhm(uint256 gOhmAmount) internal pure returns (uint256) {
-        return gOhmAmount * GOHM_INDEX / 1e18;
+        return (gOhmAmount * GOHM_INDEX) / 1e18;
     }
 
     // ========= Module Information ========= //
