@@ -387,6 +387,8 @@ contract LiquiditySupplyTest is Test {
     //  [X] it reverts
     // [X] if the source is duplicated
     //  [X] it reverts
+    // [ ] if the new OHM total results in an overflow of the OHM and gOHM total
+    //  [ ] it reverts
     // [X] it adds the source and balance, and the total amount is accurate
 
     function test_addOhmLiquidity_whenCalledByNonParent() public {
@@ -476,6 +478,8 @@ contract LiquiditySupplyTest is Test {
     //  [X] it reverts
     // [X] if the source is duplicated
     //  [X] it reverts
+    // [ ] if the new gOHM total results in an overflow of the OHM and gOHM total
+    //  [ ] it reverts
     // [X] it adds the source and balance, and the total amount is accurate
 
     function test_addGOhmLiquidity_whenCalledByNonParent() public {
