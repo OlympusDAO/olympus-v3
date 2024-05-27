@@ -99,6 +99,10 @@ contract LiquiditySupplyTest is Test {
         }
     }
 
+    function _getGOhmInOhm(uint256 gOhmAmount) internal pure returns (uint256) {
+        return gOhmAmount * GOHM_INDEX / 1e18;
+    }
+
     // ========= Module Information ========= //
 
     // [X]  VERSION
@@ -272,7 +276,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             liquiditySupply.getProtocolOwnedLiquidityOhm(),
-            ((OHM_AMOUNT_1 + OHM_AMOUNT_2) * GOHM_INDEX) / 1e18
+            _getGOhmInOhm(OHM_AMOUNT_1 + OHM_AMOUNT_2)
         );
         assertEq(liquiditySupply.getSourceCount(), 2);
     }
@@ -304,7 +308,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             liquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + ((GOHM_AMOUNT_1 + GOHM_AMOUNT_2) * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + _getGOhmInOhm(GOHM_AMOUNT_1 + GOHM_AMOUNT_2)
         );
         assertEq(liquiditySupply.getSourceCount(), 3);
     }
@@ -332,7 +336,7 @@ contract LiquiditySupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm() public {
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_1)
         );
     }
 
@@ -364,7 +368,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens.length, 1);
         assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
-        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[2].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     // ========= getSourceCount ========= //
@@ -430,7 +434,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + OHM_AMOUNT_2 + 3e9 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + 3e9 + _getGOhmInOhm(GOHM_AMOUNT_1)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 4);
 
@@ -461,7 +465,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[3].tokens.length, 1);
         assertEq(reserves[3].tokens[0], address(ohm));
         assertEq(reserves[3].balances.length, 1);
-        assertEq(reserves[3].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[3].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     // ========= addGOhmLiquidity ========= //
@@ -519,7 +523,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + OHM_AMOUNT_2 + ((GOHM_AMOUNT_1 + GOHM_AMOUNT_2) * GOHM_INDEX) / 1e18,
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_1 + GOHM_AMOUNT_2),
             "POL OHM"
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 4, "source count");
@@ -545,13 +549,13 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens.length, 1, "tokens length 3");
         assertEq(reserves[2].tokens[0], address(ohm), "tokens 3");
         assertEq(reserves[2].balances.length, 1, "balances length 3");
-        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18, "balances 3");
+        assertEq(reserves[2].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1), "balances 3");
 
         assertEq(reserves[3].source, POL_LOCATION_4, "source 4");
         assertEq(reserves[3].tokens.length, 1, "tokens length 4");
         assertEq(reserves[3].tokens[0], address(ohm), "tokens 4");
         assertEq(reserves[3].balances.length, 1, "balances length 4");
-        assertEq(reserves[3].balances[0], (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18, "balances 4");
+        assertEq(reserves[3].balances[0], _getGOhmInOhm(GOHM_AMOUNT_2), "balances 4");
     }
 
     // ========= removeOhmLiquidity ========= //
@@ -600,7 +604,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            _getGOhmInOhm(GOHM_AMOUNT_1)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 1);
 
@@ -613,7 +617,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[0].tokens.length, 1);
         assertEq(reserves[0].tokens[0], address(ohm));
         assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[0].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     function test_removeOhmLiquidity_indexOne() public {
@@ -624,7 +628,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + _getGOhmInOhm(GOHM_AMOUNT_1)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
 
@@ -643,7 +647,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[1].tokens.length, 1);
         assertEq(reserves[1].tokens[0], address(ohm));
         assertEq(reserves[1].balances.length, 1);
-        assertEq(reserves[1].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[1].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     function test_removeOhmLiquidity_indexZero() public {
@@ -654,7 +658,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_1)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 2);
 
@@ -673,7 +677,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[1].tokens.length, 1);
         assertEq(reserves[1].tokens[0], address(ohm));
         assertEq(reserves[1].balances.length, 1);
-        assertEq(reserves[1].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[1].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     // ========= removeGOhmLiquidity ========= //
@@ -752,7 +756,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_2)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
 
@@ -777,7 +781,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens.length, 1);
         assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
-        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[2].balances[0], _getGOhmInOhm(GOHM_AMOUNT_2));
     }
 
     function test_removeGOhmLiquidity_indexOne() public {
@@ -791,7 +795,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_1)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
 
@@ -816,7 +820,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens.length, 1);
         assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
-        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[2].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     // ========= adjustOhmLiquidity ========= //
@@ -911,7 +915,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            adjustedOhmAmount + OHM_AMOUNT_2 + (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18
+            adjustedOhmAmount + OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_1)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
 
@@ -936,7 +940,7 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens.length, 1);
         assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
-        assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
+        assertEq(reserves[2].balances[0], _getGOhmInOhm(GOHM_AMOUNT_1));
     }
 
     // ========= adjustGOhmLiquidity ========= //
@@ -1031,7 +1035,7 @@ contract LiquiditySupplyTest is Test {
         // Assert
         assertEq(
             submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
-            OHM_AMOUNT_1 + OHM_AMOUNT_2 + (adjustedGhmAmount * GOHM_INDEX) / 1e18
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + _getGOhmInOhm(adjustedGhmAmount)
         );
         assertEq(submoduleLiquiditySupply.getSourceCount(), 3);
 
@@ -1056,6 +1060,6 @@ contract LiquiditySupplyTest is Test {
         assertEq(reserves[2].tokens.length, 1);
         assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
-        assertEq(reserves[2].balances[0], (adjustedGhmAmount * GOHM_INDEX) / 1e18);
+        assertEq(reserves[2].balances[0], _getGOhmInOhm(adjustedGhmAmount));
     }
 }
