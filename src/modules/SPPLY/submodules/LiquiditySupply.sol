@@ -170,7 +170,6 @@ contract LiquiditySupply is SupplySubmodule {
         returns (SPPLYv1.Reserves[] memory reserves)
     {
         address ohm = address(_ohm);
-        address gOhm = address(_gOhm);
         uint256 ohmLen = ohmSources.length;
         uint256 gOhmLen = gOhmSources.length;
         reserves = new SPPLYv1.Reserves[](ohmLen + gOhmLen);
@@ -189,9 +188,11 @@ contract LiquiditySupply is SupplySubmodule {
             });
         }
 
+        // Iterate over all gOHM sources
         for (uint256 i; i < gOhmLen; i++) {
+            // Reports the gOHM balance in terms of OHM, for simplicity
             address[] memory tokens = new address[](1);
-            tokens[0] = gOhm;
+            tokens[0] = ohm;
 
             uint256[] memory balances = new uint256[](1);
             balances[0] = _gOhm.balanceFrom(gOhmAmounts[i]);

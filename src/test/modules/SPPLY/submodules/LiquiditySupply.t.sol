@@ -362,7 +362,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[2].source, POL_LOCATION_3);
         assertEq(reserves[2].tokens.length, 1);
-        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
         assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -459,7 +459,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[3].source, POL_LOCATION_3);
         assertEq(reserves[3].tokens.length, 1);
-        assertEq(reserves[3].tokens[0], address(gOhm));
+        assertEq(reserves[3].tokens[0], address(ohm));
         assertEq(reserves[3].balances.length, 1);
         assertEq(reserves[3].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -543,13 +543,13 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[2].source, POL_LOCATION_3, "source 3");
         assertEq(reserves[2].tokens.length, 1, "tokens length 3");
-        assertEq(reserves[2].tokens[0], address(gOhm), "tokens 3");
+        assertEq(reserves[2].tokens[0], address(ohm), "tokens 3");
         assertEq(reserves[2].balances.length, 1, "balances length 3");
         assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18, "balances 3");
 
         assertEq(reserves[3].source, POL_LOCATION_4, "source 4");
         assertEq(reserves[3].tokens.length, 1, "tokens length 4");
-        assertEq(reserves[3].tokens[0], address(gOhm), "tokens 4");
+        assertEq(reserves[3].tokens[0], address(ohm), "tokens 4");
         assertEq(reserves[3].balances.length, 1, "balances length 4");
         assertEq(reserves[3].balances[0], (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18, "balances 4");
     }
@@ -611,7 +611,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[0].source, POL_LOCATION_3);
         assertEq(reserves[0].tokens.length, 1);
-        assertEq(reserves[0].tokens[0], address(gOhm));
+        assertEq(reserves[0].tokens[0], address(ohm));
         assertEq(reserves[0].balances.length, 1);
         assertEq(reserves[0].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -641,7 +641,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[1].source, POL_LOCATION_3);
         assertEq(reserves[1].tokens.length, 1);
-        assertEq(reserves[1].tokens[0], address(gOhm));
+        assertEq(reserves[1].tokens[0], address(ohm));
         assertEq(reserves[1].balances.length, 1);
         assertEq(reserves[1].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -671,7 +671,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[1].source, POL_LOCATION_3);
         assertEq(reserves[1].tokens.length, 1);
-        assertEq(reserves[1].tokens[0], address(gOhm));
+        assertEq(reserves[1].tokens[0], address(ohm));
         assertEq(reserves[1].balances.length, 1);
         assertEq(reserves[1].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -775,7 +775,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[2].source, POL_LOCATION_4);
         assertEq(reserves[2].tokens.length, 1);
-        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
         assertEq(reserves[2].balances[0], (GOHM_AMOUNT_2 * GOHM_INDEX) / 1e18);
     }
@@ -814,7 +814,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[2].source, POL_LOCATION_3);
         assertEq(reserves[2].tokens.length, 1);
-        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
         assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -934,7 +934,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[2].source, POL_LOCATION_3);
         assertEq(reserves[2].tokens.length, 1);
-        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
         assertEq(reserves[2].balances[0], (GOHM_AMOUNT_1 * GOHM_INDEX) / 1e18);
     }
@@ -1054,7 +1054,7 @@ contract LiquiditySupplyTest is Test {
 
         assertEq(reserves[2].source, POL_LOCATION_3);
         assertEq(reserves[2].tokens.length, 1);
-        assertEq(reserves[2].tokens[0], address(gOhm));
+        assertEq(reserves[2].tokens[0], address(ohm));
         assertEq(reserves[2].balances.length, 1);
         assertEq(reserves[2].balances[0], (adjustedGhmAmount * GOHM_INDEX) / 1e18);
     }
