@@ -101,6 +101,11 @@ contract LiquiditySupply is SupplySubmodule {
 
         _ohm = SPPLYv1(address(parent)).ohm();
         _gOhm = SPPLYv1(address(parent)).gohm();
+
+        // Check that adding the liquidity would not result in an overflow when reporting the total
+        // uint192 max is used here as gOHM balances are increasing
+        if (_polOhmTotalAmount + _gOhm.balanceFrom(_polGOhmTotalAmount) > type(uint192).max)
+            revert LiquiditySupply_InvalidParams();
     }
 
     // ========== SUBMODULE SETUP ========== //
@@ -235,6 +240,13 @@ contract LiquiditySupply is SupplySubmodule {
         bool found = _inArray(source_, ohmSources);
         if (found) revert LiquiditySupply_InvalidParams();
 
+        // Check that adding the liquidity would not result in an overflow when reporting the total
+        // uint192 max is used here as gOHM balances are increasing
+        if (
+            amount_ >
+            type(uint192).max - _polOhmTotalAmount - _gOhm.balanceFrom(_polGOhmTotalAmount)
+        ) revert LiquiditySupply_InvalidParams();
+
         ohmAmounts.push(amount_);
         ohmSources.push(source_);
 
@@ -258,6 +270,13 @@ contract LiquiditySupply is SupplySubmodule {
         // Check that the source is not already present
         bool found = _inArray(source_, gOhmSources);
         if (found) revert LiquiditySupply_InvalidParams();
+
+        // Check that adding the liquidity would not result in an overflow when reporting the total
+        // uint192 max is used here as gOHM balances are increasing
+        if (
+            _gOhm.balanceFrom(amount_) >
+            type(uint192).max - _polOhmTotalAmount - _gOhm.balanceFrom(_polGOhmTotalAmount)
+        ) revert LiquiditySupply_InvalidParams();
 
         gOhmAmounts.push(amount_);
         gOhmSources.push(source_);

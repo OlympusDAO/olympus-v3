@@ -16,6 +16,8 @@ import {SPPLYv1} from "src/modules/SPPLY/SPPLY.v1.sol";
 import {OlympusSupply} from "src/modules/SPPLY/OlympusSupply.sol";
 import {LiquiditySupply} from "src/modules/SPPLY/submodules/LiquiditySupply.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 contract LiquiditySupplyTest is Test {
     using ModuleTestFixtureGenerator for OlympusSupply;
 
@@ -313,6 +315,64 @@ contract LiquiditySupplyTest is Test {
         assertEq(liquiditySupply.getSourceCount(), 3);
     }
 
+    function test_constructor_ohmOverflow(uint256 ohmAmount_) public {
+        uint256 ohmAmount = bound(
+            ohmAmount_,
+            type(uint192).max - _getGOhmInOhm(GOHM_AMOUNT_1) + 1,
+            type(uint192).max
+        );
+
+        uint256[] memory ohmAmounts = new uint256[](1);
+        ohmAmounts[0] = ohmAmount;
+
+        address[] memory ohmSources = new address[](1);
+        ohmSources[0] = POL_LOCATION_1;
+
+        uint256[] memory gOhmAmounts = new uint256[](1);
+        gOhmAmounts[0] = GOHM_AMOUNT_1;
+
+        address[] memory gOhmSources = new address[](1);
+        gOhmSources[0] = POL_LOCATION_3;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        new LiquiditySupply(spply, ohmAmounts, ohmSources, gOhmAmounts, gOhmSources);
+    }
+
+    function test_constructor_gOhmOverflow(uint256 ohmAmount_) public {
+        uint256 ohmAmount = bound(
+            ohmAmount_,
+            type(uint192).max - OHM_AMOUNT_1 + 1000,
+            type(uint192).max
+        );
+
+        uint256[] memory ohmAmounts = new uint256[](1);
+        ohmAmounts[0] = OHM_AMOUNT_1;
+
+        address[] memory ohmSources = new address[](1);
+        ohmSources[0] = POL_LOCATION_1;
+
+        uint256[] memory gOhmAmounts = new uint256[](1);
+        gOhmAmounts[0] = gOhm.balanceTo(ohmAmount);
+
+        address[] memory gOhmSources = new address[](1);
+        gOhmSources[0] = POL_LOCATION_3;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        new LiquiditySupply(spply, ohmAmounts, ohmSources, gOhmAmounts, gOhmSources);
+    }
+
     // ========= getProtocolOwnedTreasuryOhm ========= //
 
     // [X] it returns 0
@@ -387,8 +447,8 @@ contract LiquiditySupplyTest is Test {
     //  [X] it reverts
     // [X] if the source is duplicated
     //  [X] it reverts
-    // [ ] if the new OHM total results in an overflow of the OHM and gOHM total
-    //  [ ] it reverts
+    // [X] if the new OHM total results in an overflow of the OHM and gOHM total
+    //  [X] it reverts
     // [X] it adds the source and balance, and the total amount is accurate
 
     function test_addOhmLiquidity_whenCalledByNonParent() public {
@@ -426,6 +486,43 @@ contract LiquiditySupplyTest is Test {
         // Call function
         vm.prank(address(spply));
         submoduleLiquiditySupply.addOhmLiquidity(1, POL_LOCATION_1);
+    }
+
+    function test_addOhmLiquidity_overflow(uint256 amount_) public {
+        uint256 amount = bound(
+            amount_,
+            type(uint192).max - OHM_AMOUNT_1 - OHM_AMOUNT_2 - _getGOhmInOhm(GOHM_AMOUNT_1) + 1,
+            type(uint192).max
+        );
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addOhmLiquidity(amount, POL_LOCATION_3);
+    }
+
+    function test_addOhmLiquidity_beforeOverflow(uint256 amount_) public {
+        uint256 amount = bound(
+            amount_,
+            1,
+            type(uint192).max - OHM_AMOUNT_1 - OHM_AMOUNT_2 - _getGOhmInOhm(GOHM_AMOUNT_1)
+        );
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addOhmLiquidity(amount, POL_LOCATION_3);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + amount + _getGOhmInOhm(GOHM_AMOUNT_1)
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 4);
     }
 
     function test_addOhmLiquidity() public {
@@ -478,8 +575,8 @@ contract LiquiditySupplyTest is Test {
     //  [X] it reverts
     // [X] if the source is duplicated
     //  [X] it reverts
-    // [ ] if the new gOHM total results in an overflow of the OHM and gOHM total
-    //  [ ] it reverts
+    // [X] if the new gOHM total results in an overflow of the OHM and gOHM total
+    //  [X] it reverts
     // [X] it adds the source and balance, and the total amount is accurate
 
     function test_addGOhmLiquidity_whenCalledByNonParent() public {
@@ -517,6 +614,47 @@ contract LiquiditySupplyTest is Test {
         // Call function
         vm.prank(address(spply));
         submoduleLiquiditySupply.addGOhmLiquidity(1, POL_LOCATION_3);
+    }
+
+    function test_addGOhmLiquidity_overflow(uint256 ohmAmount_) public {
+        uint256 ohmAmount = bound(
+            ohmAmount_,
+            type(uint192).max - OHM_AMOUNT_1 - OHM_AMOUNT_2 - _getGOhmInOhm(GOHM_AMOUNT_1) + 1000,
+            type(uint192).max
+        );
+
+        uint256 gOhmAmount = gOhm.balanceTo(ohmAmount);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            LiquiditySupply.LiquiditySupply_InvalidParams.selector
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(gOhmAmount, POL_LOCATION_4);
+    }
+
+    function test_addGOhmLiquidity_beforeOverflow(uint256 ohmAmount_) public {
+        uint256 ohmAmount = bound(
+            ohmAmount_,
+            1,
+            type(uint192).max - OHM_AMOUNT_1 - OHM_AMOUNT_2 - _getGOhmInOhm(GOHM_AMOUNT_1)
+        );
+
+        uint256 gOhmAmount = gOhm.balanceTo(ohmAmount);
+
+        // Call function
+        vm.prank(address(spply));
+        submoduleLiquiditySupply.addGOhmLiquidity(gOhmAmount, POL_LOCATION_4);
+
+        // Assert
+        assertEq(
+            submoduleLiquiditySupply.getProtocolOwnedLiquidityOhm(),
+            OHM_AMOUNT_1 + OHM_AMOUNT_2 + _getGOhmInOhm(GOHM_AMOUNT_1 + gOhmAmount)
+        );
+        assertEq(submoduleLiquiditySupply.getSourceCount(), 4);
     }
 
     function test_addGOhmLiquidity() public {
