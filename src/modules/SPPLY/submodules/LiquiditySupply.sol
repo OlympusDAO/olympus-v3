@@ -203,6 +203,20 @@ contract LiquiditySupply is SupplySubmodule {
         return ohmSources.length + gOhmSources.length;
     }
 
+    /// @notice Get the number of OHM sources
+    ///
+    /// @return The number of OHM sources
+    function getOhmSourceCount() external view returns (uint256) {
+        return ohmSources.length;
+    }
+
+    /// @notice Get the number of gOHM sources
+    ///
+    /// @return The number of gOHM sources
+    function getGOhmSourceCount() external view returns (uint256) {
+        return gOhmSources.length;
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice Add a new source of OHM protocol-owned liquidity
