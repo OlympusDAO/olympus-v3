@@ -12,14 +12,6 @@
             "args": {}
         },
         {
-            "name": "BLVaultSupply",
-            "args": {}
-        },
-        {
-            "name": "BunniSupply",
-            "args": {}
-        },
-        {
             "name": "MigrationOffsetSupply",
             "args": {
                 "gOhmOffset": 2013000000000000000000
@@ -43,6 +35,9 @@
             "args": {
                 "lzEndpoint": "0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675"
             }
+        },
+        {
+            "name": "LiquiditySupply"
         }
     ]
 }

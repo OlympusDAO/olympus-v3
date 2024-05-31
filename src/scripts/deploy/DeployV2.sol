@@ -50,7 +50,6 @@ import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVault
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
-import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {Appraiser, IAppraiser} from "policies/OCA/Appraiser.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
@@ -72,21 +71,15 @@ import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPrice
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
-import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 
 // SPPLY Submodules
-import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
+import {LiquiditySupply} from "modules/SPPLY/submodules/LiquiditySupply.sol";
 
 // Cooler
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-
-// External contracts
-import {BunniHub} from "src/external/bunni/BunniHub.sol";
-import {BunniLens} from "src/external/bunni/BunniLens.sol";
-import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 
 // Mocks
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
@@ -122,12 +115,11 @@ contract OlympusDeploy is Script {
     ERC4626Price public erc4626Price;
     UniswapV2PoolTokenPrice public uniswapV2PoolTokenPrice;
     UniswapV3Price public uniswapV3Price;
-    BunniPrice public bunniPrice;
 
     // SPPLY Submodules
-    BunniSupply public bunniSupply;
     MigrationOffsetSupply public migrationOffsetSupply;
     BrickedSupply public brickedSupply;
+    LiquiditySupply public liquiditySupply;
 
     // Policies
     Operator public operator;
@@ -151,14 +143,9 @@ contract OlympusDeploy is Script {
     CrossChainBridge public crossChainBridgeV1;
     CrossChainBridge public crossChainBridgeV1_1;
     PriceConfigV2 public priceConfigV2;
-    BunniManager public bunniManager;
     Appraiser public appraiser;
     SupplyConfig public supplyConfig;
     TreasuryConfig public treasuryConfig;
-
-    // External contracts
-    BunniHub public bunniHub;
-    BunniLens public bunniLens;
 
     // Governance
     Timelock public timelock;
@@ -259,14 +246,9 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
         selectorMap["PriceConfigV2"] = this._deployPriceConfigV2.selector;
-        selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
         selectorMap["Appraiser"] = this._deployAppraiser.selector;
         selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
         selectorMap["TreasuryConfig"] = this._deployTreasuryConfig.selector;
-
-        // Bunni
-        selectorMap["BunniHub"] = this._deployBunniHub.selector;
-        selectorMap["BunniLens"] = this._deployBunniLens.selector;
 
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
@@ -274,12 +256,11 @@ contract OlympusDeploy is Script {
         selectorMap["ERC4626Price"] = this._deployERC4626Price.selector;
         selectorMap["UniswapV2PoolTokenPrice"] = this._deployUniswapV2PoolTokenPrice.selector;
         selectorMap["UniswapV3Price"] = this._deployUniswapV3Price.selector;
-        selectorMap["BunniPrice"] = this._deployBunniPrice.selector;
 
         // SPPLY Submodules
-        selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
         selectorMap["BrickedSupply"] = this._deployBrickedSupply.selector;
+        selectorMap["LiquiditySupply"] = this._deployLiquiditySupply.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -371,11 +352,6 @@ contract OlympusDeploy is Script {
         appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
         supplyConfig = SupplyConfig(envAddress("olympus.policies.SupplyConfig"));
         treasuryConfig = TreasuryConfig(envAddress("olympus.policies.TreasuryConfig"));
-        bunniManager = BunniManager(envAddress("olympus.policies.BunniManager"));
-
-        // Bunni
-        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
-        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
@@ -389,18 +365,13 @@ contract OlympusDeploy is Script {
             envAddress("olympus.submodules.PRICE.UniswapV2PoolTokenPrice")
         );
         uniswapV3Price = UniswapV3Price(envAddress("olympus.submodules.PRICE.UniswapV3Price"));
-        bunniPrice = BunniPrice(envAddress("olympus.submodules.PRICE.BunniPrice"));
 
         // SPPLY submodules
-        bunniSupply = BunniSupply(envAddress("olympus.submodules.SPPLY.BunniSupply"));
         migrationOffsetSupply = MigrationOffsetSupply(
             envAddress("olympus.submodules.SPPLY.MigrationOffsetSupply")
         );
         brickedSupply = BrickedSupply(envAddress("olympus.submodules.SPPLY.BrickedSupply"));
-
-        // External contracts
-        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
-        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
+        liquiditySupply = LiquiditySupply(envAddress("olympus.submodules.SPPLY.LiquiditySupply"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1158,77 +1129,6 @@ contract OlympusDeploy is Script {
         return address(treasuryConfig);
     }
 
-    // ========== BUNNI MANAGER POLICY ========== //
-
-    function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
-        // Arguments
-        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        (uint48 harvestFrequency, uint16 harvestRewardFee, uint256 harvestRewardMax) = abi.decode(
-            args,
-            (uint48, uint16, uint256)
-        );
-
-        console2.log("    harvestFrequency", harvestFrequency);
-        console2.log("    harvestRewardFee", harvestRewardFee);
-        console2.log("    harvestRewardMax", harvestRewardMax);
-
-        // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert("Kernel address not set");
-
-        // Deploy the policy
-        vm.broadcast();
-        bunniManager = new BunniManager(
-            kernel,
-            harvestRewardMax,
-            harvestRewardFee,
-            harvestFrequency
-        );
-        console2.log("BunniManager deployed at:", address(bunniManager));
-
-        // BunniManager/Hub/Lens post-deployment steps (requiring permissions):
-        // - Call BunniManager.setBunniLens
-        // - Create the "bunni_admin" role and assign it
-        // - Activate the BunniManager policy
-
-        return address(bunniManager);
-    }
-
-    function _deployBunniHub(bytes memory args) public returns (address) {
-        // Arguments
-        address uniswapFactory = abi.decode(args, (address));
-
-        console2.log("    uniswapFactory", uniswapFactory);
-
-        // Check that the environment variables are loaded
-        if (address(bunniManager) == address(0)) revert("BunniManager address not set");
-        if (address(uniswapFactory) == address(0)) revert("UniswapFactory address not set");
-
-        // Deploy the BunniHub
-        vm.broadcast();
-        bunniHub = new BunniHub(
-            IUniswapV3Factory(uniswapFactory),
-            address(bunniManager),
-            0 // No protocol fee
-        );
-        console2.log("BunniHub deployed at:", address(bunniHub));
-
-        return address(bunniHub);
-    }
-
-    function _deployBunniLens(bytes memory) public returns (address) {
-        // No additional arguments for BunniLens policy
-
-        // Check that the environment variables are loaded
-        if (address(bunniHub) == address(0)) revert("BunniHub address not set");
-
-        // Deploy the BunniLens
-        vm.broadcast();
-        bunniLens = new BunniLens(bunniHub);
-        console2.log("BunniLens deployed at:", address(bunniLens));
-
-        return address(bunniLens);
-    }
-
     // ========== PRICE AND SUBMODULES ========== //
 
     function _deployPricev2(bytes memory args) public returns (address) {
@@ -1316,20 +1216,6 @@ contract OlympusDeploy is Script {
         return address(uniswapV3Price);
     }
 
-    function _deployBunniPrice(bytes memory) public returns (address) {
-        // No additional arguments for BunniPrice submodule
-
-        // Check that the environment variables are loaded
-        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
-
-        // Deploy BunniPrice submodule
-        vm.broadcast();
-        bunniPrice = new BunniPrice(PRICEv2);
-        console2.log("BunniPrice deployed at:", address(bunniPrice));
-
-        return address(bunniPrice);
-    }
-
     // ========== SPPLY AND SUBMODULES ========== //
 
     function _deploySupply(bytes memory args) public returns (address) {
@@ -1341,7 +1227,7 @@ contract OlympusDeploy is Script {
         );
 
         // TODO fill in the initialCrossChainSupply value
-
+        // Initial value fetched from: https://arbiscan.io/address/0xf0cb2dc0db5e6c66B9a70Ac27B06b878da017028#readContract#F9
         console2.log("    initialCrossChainSupply", initialCrossChainSupply);
         console2.log("    observationFrequency", observationFrequency);
 
@@ -1375,20 +1261,6 @@ contract OlympusDeploy is Script {
         console2.log("SupplyConfig deployed at:", address(supplyConfig));
 
         return address(supplyConfig);
-    }
-
-    function _deployBunniSupply(bytes memory) public returns (address) {
-        // No additional arguments for BunniSupply submodule
-
-        // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
-
-        // Deploy BunniSupply submodule
-        vm.broadcast();
-        bunniSupply = new BunniSupply(SPPLY);
-        console2.log("BunniSupply deployed at:", address(bunniSupply));
-
-        return address(bunniSupply);
     }
 
     function _deployMigrationOffsetSupply(bytes memory args) public returns (address) {
@@ -1442,6 +1314,29 @@ contract OlympusDeploy is Script {
         console2.log("BrickedSupply deployed at:", address(brickedSupply));
 
         return address(brickedSupply);
+    }
+
+    function _deployLiquiditySupply(bytes memory) public returns (address) {
+        // Check that the environment variables are loaded
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+
+        uint256[] memory ohmQuantity = new uint256[](0);
+        address[] memory ohmSource = new address[](0);
+        uint256[] memory gOhmQuantity = new uint256[](0);
+        address[] memory gOhmSource = new address[](0);
+
+        // Deploy LiquiditySupply submodule
+        vm.broadcast();
+        liquiditySupply = new LiquiditySupply(
+            SPPLY,
+            ohmQuantity,
+            ohmSource,
+            gOhmQuantity,
+            gOhmSource
+        );
+        console2.log("LiquiditySupply deployed at:", address(liquiditySupply));
+
+        return address(liquiditySupply);
     }
 
     // ========== COOLER LOANS ========== //

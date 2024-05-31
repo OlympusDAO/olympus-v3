@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Usage:
-# ./deploy.sh <deploy-file> <broadcast=false> <verify=false>
+# ./deploy.sh <deploy-file> <broadcast=false> <verify=false> <resume=false>
 
 # Load environment variables, but respect overrides
 curenv=$(declare -p -x)
@@ -12,6 +12,7 @@ eval "$curenv"
 DEPLOY_FILE=$1
 BROADCAST=${2:-false}
 VERIFY=${3:-false}
+RESUME=${4:-false}
 
 # Check if DEPLOY_FILE is set
 if [ -z "$DEPLOY_FILE" ]
@@ -47,8 +48,24 @@ if [ "$VERIFY" = "true" ] || [ "$VERIFY" = "TRUE" ]; then
     exit 1
   fi
 
-  VERIFY_FLAG="--verify --etherscan-api-key $ETHERSCAN_KEY"
+  if [ -n "$VERIFIER_URL" ]; then
+    echo "Using verifier at URL: $VERIFIER_URL"
+    VERIFY_FLAG="--verify --etherscan-api-key $ETHERSCAN_KEY --verifier-url $VERIFIER_URL"
+  else
+    echo "Using standard verififer"
+    VERIFY_FLAG="--verify --etherscan-api-key $ETHERSCAN_KEY"
+  fi
+
   echo "Verification is enabled"
+fi
+
+# Set RESUME_FLAG based on RESUME
+RESUME_FLAG=""
+if [ "$RESUME" = "true" ] || [ "$RESUME" = "TRUE" ]; then
+  RESUME_FLAG="--resume"
+  echo "Resuming is enabled"
+else
+  echo "Resuming is disabled"
 fi
 
 # Deploy using script
@@ -58,4 +75,4 @@ forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
 --with-gas-price $GAS_PRICE \
 $BROADCAST_FLAG \
 $VERIFY_FLAG \
-# --resume # uncomment to resume from a previous deployment
+$RESUME_FLAG

@@ -8,10 +8,6 @@
             }
         },
         {
-            "name": "BunniPrice",
-            "args": {}
-        },
-        {
             "name": "ChainlinkPriceFeeds",
             "args": {}
         },
@@ -29,24 +25,6 @@
         },
         {
             "name": "SimplePriceFeedStrategy",
-            "args": {}
-        },
-        {
-            "name": "BunniManager",
-            "args": {
-                "harvestFrequency": 86400,
-                "harvestRewardFee": 1000,
-                "harvestRewardMax": 10000000000
-            }
-        },
-        {
-            "name": "BunniHub",
-            "args": {
-                "uniswapFactory": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
-            }
-        },
-        {
-            "name": "BunniLens",
             "args": {}
         },
         {

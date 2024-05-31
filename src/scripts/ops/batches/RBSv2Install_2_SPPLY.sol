@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 
 // Bophades
 import "src/Kernel.sol";
@@ -19,28 +20,28 @@ import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // SPPLY submodules
-import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
+import {LiquiditySupply} from "modules/SPPLY/submodules/LiquiditySupply.sol";
 
 /// @notice     Activates and configures SPPLY v1
 /// @notice     Migrates to CrossChainBridge v1.1
 contract RBSv2Install_2_SPPLY is OlyBatch {
+    using stdJson for string;
+
     // Existing Olympus Contracts
     address kernel;
     address crossChainBridgeV1;
     address rolesAdmin;
     address arbBridge;
     address opBridge;
-    address blVaultManagerLido;
-    address blVaultManagerLusd;
 
     // New Contracts
     address spply;
     address supplyConfig;
-    address bunniSupply;
     address migrationOffsetSupply;
     address brickedSupply;
+    address liquiditySupply;
     address crossChainBridgeV1_1;
 
     // Wallets
@@ -55,19 +56,16 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         arbBridge = envAddressWithChain("arbitrum", "current", "olympus.policies.CrossChainBridge");
         opBridge = envAddressWithChain("optimism", "current", "olympus.policies.CrossChainBridge");
 
-        blVaultManagerLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
-        blVaultManagerLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
-
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         supplyConfig = envAddress("current", "olympus.policies.SupplyConfig");
-        bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
         migrationOffsetSupply = envAddress(
             "current",
             "olympus.submodules.SPPLY.MigrationOffsetSupply"
         );
         brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
+        liquiditySupply = envAddress("current", "olympus.submodules.SPPLY.LiquiditySupply");
     }
 
     function disable_crosschainbridge() public {
@@ -94,9 +92,9 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 1. Installs the OlympusSupply module
         // 2. Installs the SupplyConfig policy
         // 3. Set roles for policy access control
-        // 4. Installs the BunniSupply submodule on the OlympusSupply module
-        // 5. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
-        // 6. Installs the BrickedSupply submodule on the OlympusSupply module
+        // 4. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 5. Installs the BrickedSupply submodule on the OlympusSupply module
+        // 6. Installs the LiquiditySupply submodule on the OlympusSupply module
         // 7. Categorizes protocol-owned-treasury supply
         // 8. Categorizes DAO supply
         // 9. Activates the new CrossChainBridge policy
@@ -151,29 +149,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 4. Install the BunniSupply submodule on the OlympusSupply module
-        // No configuration needed - will be performed by BunniManager
-        {
-            console2.log("Installing BunniSupply submodule");
-            addToBatch(
-                supplyConfig,
-                abi.encodeWithSelector(
-                    SupplyConfig.installSubmodule.selector,
-                    BunniSupply(bunniSupply)
-                )
-            );
-
-            console2.log("Register BunniSupply for observations");
-            addToBatch(
-                supplyConfig,
-                abi.encodeWithSelector(
-                    SupplyConfig.registerForObservations.selector,
-                    BunniSupply(bunniSupply).SUBKEYCODE()
-                )
-            );
-        }
-
-        // 5. Install the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 4. Install the MigrationOffsetSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         console2.log("Installing MigrationOffsetSupply submodule");
         addToBatch(
@@ -184,7 +160,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 6. Install the BrickedSupply submodule on the OlympusSupply module
+        // 5. Install the BrickedSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         console2.log("Installing BrickedSupply submodule");
         addToBatch(
@@ -194,6 +170,67 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
                 BrickedSupply(brickedSupply)
             )
         );
+
+        // 6. Install the LiquiditySupply submodule on the OlympusSupply module
+        console2.log("Installing LiquiditySupply submodule");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.installSubmodule.selector,
+                LiquiditySupply(liquiditySupply)
+            )
+        );
+
+        // 6a. Add protocol-owned liquidity OHM
+        console2.log("Adding protocol-owned liquidity OHM");
+        string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_2_SPPLY.json");
+
+        // Mainnet
+        {
+            uint256 polQuantity = argData.readUint(".ethPolMainnetQuantity");
+            address polLocation = argData.readAddress(".ethPolMainnetLocation");
+
+            addToBatch(
+                liquiditySupply,
+                abi.encodeWithSelector(
+                    LiquiditySupply.addOhmLiquidity.selector,
+                    polQuantity,
+                    polLocation
+                )
+            );
+        }
+
+        // Arbitrum
+        // TX: https://arbiscan.io/tx/0x16ac1ba3fb9806a01f5fe2e1601d4df55a22379b2d07e52938e77b9a34080d56
+        {
+            uint256 polQuantity = argData.readUint(".ethPolArbitrumQuantity");
+            address polLocation = argData.readAddress(".ethPolArbitrumLocation");
+
+            addToBatch(
+                liquiditySupply,
+                abi.encodeWithSelector(
+                    LiquiditySupply.addOhmLiquidity.selector,
+                    polQuantity,
+                    polLocation
+                )
+            );
+        }
+
+        // Base
+        // TX: https://basescan.org/tx/0xb1eb4b77079b4fd234b12ae930860683fdae61bdf16766960dc8635247ad1c8f
+        {
+            uint256 polQuantity = argData.readUint(".ethPolBaseQuantity");
+            address polLocation = argData.readAddress(".ethPolBaseLocation");
+
+            addToBatch(
+                liquiditySupply,
+                abi.encodeWithSelector(
+                    LiquiditySupply.addOhmLiquidity.selector,
+                    polQuantity,
+                    polLocation
+                )
+            );
+        }
 
         // 7. Categorize protocol-owned-treasury supply
         console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
@@ -298,7 +335,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         install();
     }
 
-    function RBSv2Install_2_TEST(bool send_) external {
+    function RBSv2Install_2_TEST(bool) external {
         // For testing purposes only
         initTestBatch();
         disable_crosschainbridge();

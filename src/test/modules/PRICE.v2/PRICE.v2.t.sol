@@ -193,6 +193,7 @@ contract PriceV2Test is Test {
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
+    uint32 internal constant TWAP_PERIOD = 24 hours;
 
     // Re-declare events from PRICE.v2.sol
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
@@ -306,13 +307,15 @@ contract PriceV2Test is Test {
             bool ohmFirst = address(ohm) < address(weth);
             ohmEthUniV3Pool.setToken0(ohmFirst ? address(ohm) : address(weth));
             ohmEthUniV3Pool.setToken1(ohmFirst ? address(weth) : address(ohm));
-            // Create ticks for a 60 second observation period
+            // Create ticks for a 24 hour second observation period
             // Set to a price of 1 OHM = 0.005 ETH
             // Weighted tick needs to be 154257 (if OHM is token0) or -154257 (if OHM is token1) (as if 5,000,000 ETH per OHM because of the decimal difference)
-            // Therefore, we need a tick difference of 9255432 (if OHM is token0) or -9255432 (if OHM is token1)
+            // 154257 * 24 * 60 * 60 = 13_327_804_800
+            // Therefore, we need a tick difference of 13_327_804_800 (if OHM is token0) or -13_327_804_800 (if OHM is token1)
+            uint56 cumulativeValue = 1_000_000_000 + 13_327_804_800;
             int56[] memory tickCumulatives = new int56[](2);
             tickCumulatives[0] = ohmFirst ? int56(1000000000) : -int56(1000000000);
-            tickCumulatives[1] = ohmFirst ? int56(1092554320) : -int56(1092554320);
+            tickCumulatives[1] = ohmFirst ? int56(cumulativeValue) : -int56(cumulativeValue);
             ohmEthUniV3Pool.setTickCumulatives(tickCumulatives);
         }
 
@@ -509,7 +512,7 @@ contract PriceV2Test is Test {
                 );
 
             UniswapV3Price.UniswapV3Params memory ohmFeedThreeParams = UniswapV3Price
-                .UniswapV3Params(ohmEthUniV3Pool, uint32(600 seconds), 0);
+                .UniswapV3Params(ohmEthUniV3Pool, TWAP_PERIOD);
 
             PRICEv2.Component[] memory feeds = new PRICEv2.Component[](3);
             feeds[0] = PRICEv2.Component(
@@ -801,7 +804,7 @@ contract PriceV2Test is Test {
         assertEq(feeds[2].selector, UniswapV3Price.getTokenTWAP.selector);
         assertEq(
             feeds[2].params,
-            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(600 seconds), 0))
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, TWAP_PERIOD))
         );
     }
 
@@ -1011,7 +1014,7 @@ contract PriceV2Test is Test {
         uint256 expectedPrice = univ3Price.getTokenTWAP(
             address(ohm),
             price.decimals(),
-            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(600), 0))
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, TWAP_PERIOD))
         );
         assertEq(price_, expectedPrice);
     }

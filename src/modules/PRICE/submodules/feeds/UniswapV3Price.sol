@@ -31,7 +31,6 @@ contract UniswapV3Price is PriceSubmodule {
     struct UniswapV3Params {
         IUniswapV3Pool pool;
         uint32 observationWindowSeconds;
-        uint16 maxDeviationBps;
     }
 
     /// @notice     The minimum tick that can be used in a pool, as defined by UniswapV3 libraries
@@ -153,7 +152,6 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice                 Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
     /// @dev                    This function will revert if:
-    ///                         - The current price differs from the TWAP by more than `maxDeviationBps_`
     ///                         - The value of `params.observationWindowSeconds` is less than `UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW`
     ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
     ///                         - Any tokens in the pool are not set
