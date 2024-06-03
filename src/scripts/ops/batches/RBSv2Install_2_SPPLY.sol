@@ -191,11 +191,15 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             address polLocation = argData.readAddress(".ethPolMainnetLocation");
 
             addToBatch(
-                liquiditySupply,
+                supplyConfig,
                 abi.encodeWithSelector(
-                    LiquiditySupply.addOhmLiquidity.selector,
-                    polQuantity,
-                    polLocation
+                    SupplyConfig.execOnSubmodule.selector,
+                    toSubKeycode("SPPLY.LIQSPPLY"),
+                    abi.encodeWithSelector(
+                        LiquiditySupply.addOhmLiquidity.selector,
+                        polQuantity,
+                        polLocation
+                    )
                 )
             );
         }
@@ -207,11 +211,15 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             address polLocation = argData.readAddress(".ethPolArbitrumLocation");
 
             addToBatch(
-                liquiditySupply,
+                supplyConfig,
                 abi.encodeWithSelector(
-                    LiquiditySupply.addOhmLiquidity.selector,
-                    polQuantity,
-                    polLocation
+                    SupplyConfig.execOnSubmodule.selector,
+                    toSubKeycode("SPPLY.LIQSPPLY"),
+                    abi.encodeWithSelector(
+                        LiquiditySupply.addOhmLiquidity.selector,
+                        polQuantity,
+                        polLocation
+                    )
                 )
             );
         }
@@ -223,11 +231,15 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             address polLocation = argData.readAddress(".ethPolBaseLocation");
 
             addToBatch(
-                liquiditySupply,
+                supplyConfig,
                 abi.encodeWithSelector(
-                    LiquiditySupply.addOhmLiquidity.selector,
-                    polQuantity,
-                    polLocation
+                    SupplyConfig.execOnSubmodule.selector,
+                    toSubKeycode("SPPLY.LIQSPPLY"),
+                    abi.encodeWithSelector(
+                        LiquiditySupply.addOhmLiquidity.selector,
+                        polQuantity,
+                        polLocation
+                    )
                 )
             );
         }
