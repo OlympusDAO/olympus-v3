@@ -18,6 +18,7 @@ interface IOperator {
     event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
     event ReserveFactorChanged(uint32 reserveFactor_);
     event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
+    event ManualTargetPriceSet(uint256 targetPrice_);
 
     // =========  ERRORS ========= //
 

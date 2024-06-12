@@ -869,6 +869,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setManualTargetPrice(uint256 price_) external onlyRole("operator_policy") {
         manualTargetPrice = price_;
+        emit ManualTargetPriceSet(price_);
     }
 
     //============================================================================================//
