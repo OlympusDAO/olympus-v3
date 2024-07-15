@@ -93,3 +93,20 @@ result in broadcasting of the batches to the Safe API.
 
 After each batch is published, it will need to be signed and executed by
 the DAO MS.
+
+## Emergency Shutdown
+
+If there is an issue with the Heart or Operator policies that requires a shutdown,
+the following command can be issued:
+
+```shell
+RPC_URL=<RPC_URL> src/scripts/ops/batch.sh RBSv2EmergencyShutdown deactivate false
+```
+
+This requires the `EMERGENCY_MS` variable to be defined in `.env`.
+
+To re-activate the RBS v2 system:
+
+```shell
+RPC_URL=<RPC_URL> src/scripts/ops/batch.sh RBSv2EmergencyShutdown activate false
+```
