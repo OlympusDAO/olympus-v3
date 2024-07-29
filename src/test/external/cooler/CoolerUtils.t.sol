@@ -84,6 +84,31 @@ contract CoolerUtilsTest is Test {
         vm.stopPrank();
     }
 
+    // ===== TESTS ===== //
+
+    // consolidateWithFlashLoan
+    // given the caller has no loans
+    //  [ ] it reverts
+    // given the caller has 1 loan
+    //  [ ] it reverts
+    // given the caller is not the cooler owner
+    //  [ ] it reverts
+    // when useFunds is non-zero
+    //  when the protocol fee is non-zero
+    //   when sDAI is true
+    //    given sDAI spending approval has not been given to CoolerUtils
+    //     [ ] it reverts
+    //    [ ] it redeems the specified amount of sDAI into DAI, and reduces the flashloan amount by the balance
+    //   when sDAI is false
+    //    given DAI spending approval has not been given to CoolerUtils
+    //     [ ] it reverts
+    //    [ ] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
+    // when the protocol fee is zero
+    //  [ ] it suceeds, but does not transfer additional DAI for the fee
+    // given gOHM spending approval has not been given to CoolerUtils
+    //  [ ] it reverts
+    // [ ] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
+
     // --- consolidateWithFlashLoan --------------------------------------------
 
     function test_consolidateWithFlashLoan_DAI_funding() public {
@@ -146,6 +171,31 @@ contract CoolerUtilsTest is Test {
         assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18);
         assertEq(gohm.balanceOf(address(utils)), 0);
     }
+
+    // setFeePercentage
+    // when the caller is not the owner
+    //  [ ] it reverts
+    // when the fee is > 100%
+    //  [ ] it reverts
+    // [ ] it sets the fee percentage
+
+    // setCollector
+    // when the caller is not the owner
+    //  [ ] it reverts
+    // when the new collector is the zero address
+    //  [ ] it reverts
+    // [ ] it sets the collector
+
+    // requiredApprovals
+    // when the caller has no loans
+    //  [ ] it reverts
+    // when the caller has 1 loan
+    //  [ ] it reverts
+    // when the protocol fee is zero
+    //  [ ] it returns the correct values
+    // when the protocol fee is non-zero
+    //  [ ] it returns the correct values
+    // [ ] it returns the correct values for owner, gOHM amount, DAI amount and sDAI amount
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
 

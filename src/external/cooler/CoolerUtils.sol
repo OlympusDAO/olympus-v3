@@ -35,7 +35,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
     // --- IMMUTABLES AND STATE VARIABLES ------------------------------------------
 
-    // relevant contracts
+    /// @notice FlashLender contract used to take flashloans
     IERC3156FlashLender public immutable lender;
     IERC20 public immutable gohm;
     IERC4626 public immutable sdai;
@@ -48,6 +48,8 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
     // protocol fees
     uint256 public feePercentage;
+
+    /// @notice Address permitted to collect protocol fees
     address public collector;
 
     // --- INITIALIZATION ----------------------------------------------------------
