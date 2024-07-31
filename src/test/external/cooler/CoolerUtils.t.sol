@@ -84,13 +84,44 @@ contract CoolerUtilsTest is Test {
         vm.stopPrank();
     }
 
+    // ===== MODIFIERS ===== //
+
+    function _grantCallerApprovals(uint256[] memory ids) internal {
+        // Will revert if there are less than 2 loans
+        if (ids.length < 2) {
+            return;
+        }
+
+        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+            address(coolerA),
+            ids
+        );
+
+        vm.startPrank(walletA);
+        dai.approve(address(utils), totalDebt);
+        gohm.approve(address(utils), gohmApproval);
+        vm.stopPrank();
+    }
+
+    function _grantCallerApprovals(uint256 gOhmAmount_, uint256 daiAmount_) internal {
+        vm.startPrank(walletA);
+        dai.approve(address(utils), daiAmount_);
+        gohm.approve(address(utils), gOhmAmount_);
+        vm.stopPrank();
+    }
+
+    function _consolidate(uint256[] memory ids_) internal {
+        vm.prank(walletA);
+        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), ids_, 0, false);
+    }
+
     // ===== TESTS ===== //
 
     // consolidateWithFlashLoan
     // given the caller has no loans
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the caller has 1 loan
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the caller is not the cooler owner
     //  [ ] it reverts
     // when useFunds is non-zero
@@ -132,7 +163,7 @@ contract CoolerUtilsTest is Test {
         //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
         // -------------------------------------------------------------------------
 
-        // Ensure that walletA grants gOHM approval
+        // Grant approvals
         (address coolerOwner, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
             address(coolerA),
             idsA
@@ -142,16 +173,12 @@ contract CoolerUtilsTest is Test {
         // Ensure that owner has enough DAI to consolidate and grant necessary approval
         deal(address(dai), walletA, totalDebt);
 
-        vm.startPrank(walletA);
-        dai.approve(address(utils), totalDebt);
-        gohm.approve(address(utils), gohmApproval);
-        vm.stopPrank();
+        _grantCallerApprovals(gohmApproval, totalDebt);
 
         // -------------------------------------------------------------------------
 
         // Consolidate loans for coolers A, B, and C into coolerC
-        vm.prank(walletA);
-        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), idsA, 0, false);
+        _consolidate(idsA);
 
         // Check that coolerA has a single open loan
         loan = coolerA.getLoan(0);
@@ -170,6 +197,37 @@ contract CoolerUtilsTest is Test {
         assertEq(dai.balanceOf(walletA), initPrincipal);
         assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18);
         assertEq(gohm.balanceOf(address(utils)), 0);
+    }
+
+    function test_noLoans_reverts() public {
+        // Grant approvals
+        _grantCallerApprovals(type(uint256).max, type(uint256).max);
+
+        // Expect revert since no loan ids are given
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans, but give no ids
+        uint256[] memory ids = new uint256[](0);
+        _consolidate(ids);
+    }
+
+    function test_oneLoan_reverts() public {
+        // Grant approvals
+        _grantCallerApprovals(type(uint256).max, type(uint256).max);
+
+        // Expect revert since no loan ids are given
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans, but give one id
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        _consolidate(ids);
+    }
+
+    function test_callerNotOwner_reverts() public {
+        //
     }
 
     // setFeePercentage
@@ -195,7 +253,7 @@ contract CoolerUtilsTest is Test {
     //  [ ] it returns the correct values
     // when the protocol fee is non-zero
     //  [ ] it returns the correct values
-    // [ ] it returns the correct values for owner, gOHM amount, DAI amount and sDAI amount
+    // [ ] it returns the correct values for owner, gOHM amount, total DAI debt and sDAI amount
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
 

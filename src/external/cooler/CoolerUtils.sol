@@ -26,6 +26,9 @@ contract CoolerUtils is IERC3156FlashBorrower {
     error OnlyLender();
     error OnlyCoolerOwner();
 
+    /// @notice Thrown when the caller attempts to consolidate too few cooler loans. The minimum is two.
+    error InsufficientCoolerCount();
+
     // --- DATA STRUCTURES ---------------------------------------------------------
 
     struct Batch {
