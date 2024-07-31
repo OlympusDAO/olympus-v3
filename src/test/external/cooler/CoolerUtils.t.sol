@@ -117,13 +117,17 @@ contract CoolerUtilsTest is Test {
 
     // ===== TESTS ===== //
 
+    // TODO use funds more than the fee?
+    // TODO check for dangling approvals
+    // TODO check for residual balance
+
     // consolidateWithFlashLoan
     // given the caller has no loans
     //  [X] it reverts
     // given the caller has 1 loan
     //  [X] it reverts
     // given the caller is not the cooler owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // when useFunds is non-zero
     //  when the protocol fee is non-zero
     //   when sDAI is true
@@ -148,6 +152,7 @@ contract CoolerUtilsTest is Test {
 
         // Pretend that owners wallets doen't have enough funds to consolidate so they have to use a flashloan
         deal(address(dai), walletA, 0);
+        // TODO needed?
 
         // Check that coolerA has 3 open loans
         Cooler.Loan memory loan = coolerA.getLoan(0);
@@ -227,7 +232,26 @@ contract CoolerUtilsTest is Test {
     }
 
     function test_callerNotOwner_reverts() public {
-        //
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Ensure that owner has enough DAI to consolidate and grant necessary approval
+        deal(address(dai), walletA, totalDebt);
+
+        _grantCallerApprovals(gohmApproval, totalDebt);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyCoolerOwner.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        // Do not perform as the cooler owner
+        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), idsA, 0, false);
     }
 
     // setFeePercentage
