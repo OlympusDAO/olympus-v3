@@ -113,6 +113,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
         if (cooler.owner() != msg.sender) revert OnlyCoolerOwner();
 
         // Transfer in necessary funds to repay the fee
+        // This can also reduce the flashloan fee
         if (useFunds_ != 0) {
             if (sdai_) {
                 sdai.redeem(useFunds_, address(this), msg.sender);
@@ -128,13 +129,14 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
         bytes memory params = abi.encode(clearinghouse_, cooler_, ids_, totalPrincipal, fee);
 
-        // Take flashloan.
+        // Take flashloan
+        // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
         lender.flashLoan(this, address(dai), flashloan, params);
     }
 
     function onFlashLoan(
         address initiator_,
-        address token_,
+        address,
         uint256 amount_,
         uint256 fee_,
         bytes calldata params_
@@ -152,15 +154,18 @@ contract CoolerUtils is IERC3156FlashBorrower {
         if (msg.sender != address(lender)) revert OnlyLender();
         if (initiator_ != address(this)) revert OnlyThis();
 
-        // Iterate over all batches
+        // Iterate over all batches, repay the debt and collect the collateral
         _repayDebtForLoans(coolerAddress, ids);
 
-        // Take a new loan with all the received collateral
+        // Take a new Cooler loan with all the received collateral
         gohm.approve(clearinghouse, gohm.balanceOf(address(this)));
         Clearinghouse(clearinghouse).lendToCooler(cooler, principal);
 
-        // Repay flashloan
+        // The cooler owner will receive DAI for the consolidated loan
+        // Transfer this amount, plus the fee, to this contract
+        // Approval must have already been granted by the Cooler owner
         dai.transferFrom(cooler.owner(), address(this), amount_ + fee_);
+        // Approve the flash loan provider to collect the flashloan amount and fee
         dai.approve(address(lender), amount_ + fee_);
         // Pay protocol fee
         if (fee != 0) dai.transferFrom(cooler.owner(), collector, fee);
@@ -199,19 +204,29 @@ contract CoolerUtils is IERC3156FlashBorrower {
         return (totalDebt, totalPrincipal);
     }
 
+    /// @notice Repay the debt for a given set of loans and collect the collateral.
+    /// @dev    This function assumes:
+    ///         - The cooler owner has granted approval for this contract to spend the gOHM collateral
+    ///
+    /// @param  cooler_ Cooler contract that issued the loans
+    /// @param  ids_    Array of loan ids to be repaid
     function _repayDebtForLoans(address cooler_, uint256[] memory ids_) internal {
         uint256 totalCollateral;
         Cooler cooler = Cooler(cooler_);
 
+        // Iterate over all loans in the cooler and repay
         uint256 numLoans = ids_.length;
         for (uint256 i; i < numLoans; i++) {
             (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = cooler.loans(
                 ids_[i]
             );
+
+            // Repay. This also releases the collateral to the owner.
             cooler.repayLoan(ids_[i], principal + interestDue);
             totalCollateral += collateral;
         }
 
+        // Transfers all of the gOHM collateral to this contract
         gohm.transferFrom(cooler.owner(), address(this), totalCollateral);
     }
 
