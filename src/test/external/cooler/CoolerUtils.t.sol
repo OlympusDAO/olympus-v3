@@ -111,8 +111,18 @@ contract CoolerUtilsTest is Test {
     }
 
     function _consolidate(uint256[] memory ids_) internal {
+        _consolidate(ids_, 0, false);
+    }
+
+    function _consolidate(uint256[] memory ids_, uint256 useFunds_, bool sDai_) internal {
         vm.prank(walletA);
-        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), ids_, 0, false);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
+            address(coolerA),
+            ids_,
+            useFunds_,
+            sDai_
+        );
     }
 
     // ===== TESTS ===== //
@@ -120,6 +130,7 @@ contract CoolerUtilsTest is Test {
     // TODO use funds more than the fee?
     // TODO check for dangling approvals
     // TODO check for residual balance
+    // TODO flashloan fee
 
     // consolidateWithFlashLoan
     // given the caller has no loans
@@ -132,16 +143,16 @@ contract CoolerUtilsTest is Test {
     //  when the protocol fee is non-zero
     //   when sDAI is true
     //    given sDAI spending approval has not been given to CoolerUtils
-    //     [ ] it reverts
+    //     [X] it reverts
     //    [ ] it redeems the specified amount of sDAI into DAI, and reduces the flashloan amount by the balance
     //   when sDAI is false
     //    given DAI spending approval has not been given to CoolerUtils
-    //     [ ] it reverts
+    //     [X] it reverts
     //    [ ] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
     // when the protocol fee is zero
-    //  [ ] it suceeds, but does not transfer additional DAI for the fee
+    //  [ ] it succeeds, but does not transfer additional DAI for the fee
     // given gOHM spending approval has not been given to CoolerUtils
-    //  [ ] it reverts
+    //  [X] it reverts
     // [ ] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
@@ -204,7 +215,7 @@ contract CoolerUtilsTest is Test {
         assertEq(gohm.balanceOf(address(utils)), 0);
     }
 
-    function test_noLoans_reverts() public {
+    function test_consolidate_noLoans_reverts() public {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
@@ -217,7 +228,7 @@ contract CoolerUtilsTest is Test {
         _consolidate(ids);
     }
 
-    function test_oneLoan_reverts() public {
+    function test_consolidate_oneLoan_reverts() public {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
@@ -231,7 +242,7 @@ contract CoolerUtilsTest is Test {
         _consolidate(ids);
     }
 
-    function test_callerNotOwner_reverts() public {
+    function test_consolidate_callerNotOwner_reverts() public {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -252,6 +263,109 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         // Do not perform as the cooler owner
         utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), idsA, 0, false);
+    }
+
+    function test_consolidate_insufficientGOhmApproval_reverts() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Ensure that owner has enough DAI to consolidate and grant necessary approval
+        deal(address(dai), walletA, totalDebt);
+
+        _grantCallerApprovals(gohmApproval - 1, totalDebt);
+
+        // Expect revert
+        vm.expectRevert("ERC20: transfer amount exceeds allowance");
+
+        _consolidate(idsA);
+    }
+
+    function test_consolidate_insufficientDaiApproval_reverts() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Ensure that owner has enough DAI to consolidate and grant necessary approval
+        deal(address(dai), walletA, totalDebt);
+
+        _grantCallerApprovals(gohmApproval, 1);
+
+        // Expect revert
+        vm.expectRevert("Dai/insufficient-allowance");
+
+        _consolidate(idsA, 2, false);
+    }
+
+    function test_consolidate_insufficientSdaiApproval_reverts() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Ensure that owner has enough DAI to consolidate and grant necessary approval
+        deal(address(dai), walletA, totalDebt);
+
+        _grantCallerApprovals(gohmApproval, 0);
+        vm.prank(walletA);
+        sdai.approve(address(utils), 1);
+
+        // Expect revert
+        vm.expectRevert("SavingsDai/insufficient-balance");
+
+        _consolidate(idsA, 2, true);
+    }
+
+    function test_consolidate_success() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+
+        // Ensure that owner has enough DAI to consolidate and grant necessary approval
+        // deal(address(dai), walletA, totalDebt);
+
+        _grantCallerApprovals(gohmApproval, totalDebt);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA);
+
+        // Check that coolerA has a single open loan
+        Cooler.Loan memory loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 0, "loan 0: collateral");
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 0, "loan 1: collateral");
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 0, "loan 2: collateral");
+        loan = coolerA.getLoan(3);
+        assertEq(loan.collateral, 3_333 * 1e18, "loan 3: collateral");
+        vm.expectRevert();
+        loan = coolerA.getLoan(4);
+
+        // Check token balances
+        assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
+        assertEq(dai.balanceOf(walletA), initPrincipal, "dai: walletA");
+        assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
+        assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
+        assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
+        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
     }
 
     // setFeePercentage
