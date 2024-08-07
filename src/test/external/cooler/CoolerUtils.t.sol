@@ -125,6 +125,17 @@ contract CoolerUtilsTest is Test {
         );
     }
 
+    function _getInterestDue(uint256[] memory ids_) internal view returns (uint256) {
+        uint256 interestDue;
+
+        for (uint256 i = 0; i < ids_.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids_[i]);
+            interestDue += loan.interestDue;
+        }
+
+        return interestDue;
+    }
+
     // ===== TESTS ===== //
 
     // TODO use funds more than the fee?
@@ -156,64 +167,6 @@ contract CoolerUtilsTest is Test {
     // [ ] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
-
-    function test_consolidateWithFlashLoan_DAI_funding() public {
-        uint256[] memory idsA = _idsA();
-        uint256 initPrincipal = dai.balanceOf(walletA);
-
-        // Pretend that owners wallets doen't have enough funds to consolidate so they have to use a flashloan
-        deal(address(dai), walletA, 0);
-        // TODO needed?
-
-        // Check that coolerA has 3 open loans
-        Cooler.Loan memory loan = coolerA.getLoan(0);
-        assertEq(loan.collateral, 2_000 * 1e18);
-        loan = coolerA.getLoan(1);
-        assertEq(loan.collateral, 1_000 * 1e18);
-        loan = coolerA.getLoan(2);
-        assertEq(loan.collateral, 333 * 1e18);
-        vm.expectRevert();
-        loan = coolerA.getLoan(3);
-
-        // -------------------------------------------------------------------------
-        //                 NECESSARY USER SETUP BEFORE CONSOLIDATING
-        // -------------------------------------------------------------------------
-
-        // Grant approvals
-        (address coolerOwner, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
-            address(coolerA),
-            idsA
-        );
-        assertEq(coolerOwner, walletA);
-
-        // Ensure that owner has enough DAI to consolidate and grant necessary approval
-        deal(address(dai), walletA, totalDebt);
-
-        _grantCallerApprovals(gohmApproval, totalDebt);
-
-        // -------------------------------------------------------------------------
-
-        // Consolidate loans for coolers A, B, and C into coolerC
-        _consolidate(idsA);
-
-        // Check that coolerA has a single open loan
-        loan = coolerA.getLoan(0);
-        assertEq(loan.collateral, 0);
-        loan = coolerA.getLoan(1);
-        assertEq(loan.collateral, 0);
-        loan = coolerA.getLoan(2);
-        assertEq(loan.collateral, 0);
-        loan = coolerA.getLoan(3);
-        assertEq(loan.collateral, 3_333 * 1e18);
-        vm.expectRevert();
-        loan = coolerA.getLoan(4);
-
-        // Check token balances
-        assertEq(dai.balanceOf(address(utils)), 0);
-        assertEq(dai.balanceOf(walletA), initPrincipal);
-        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18);
-        assertEq(gohm.balanceOf(address(utils)), 0);
-    }
 
     function test_consolidate_noLoans_reverts() public {
         // Grant approvals
@@ -251,9 +204,6 @@ contract CoolerUtilsTest is Test {
             idsA
         );
 
-        // Ensure that owner has enough DAI to consolidate and grant necessary approval
-        deal(address(dai), walletA, totalDebt);
-
         _grantCallerApprovals(gohmApproval, totalDebt);
 
         // Expect revert
@@ -274,9 +224,6 @@ contract CoolerUtilsTest is Test {
             idsA
         );
 
-        // Ensure that owner has enough DAI to consolidate and grant necessary approval
-        deal(address(dai), walletA, totalDebt);
-
         _grantCallerApprovals(gohmApproval - 1, totalDebt);
 
         // Expect revert
@@ -289,13 +236,7 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
-            address(coolerA),
-            idsA
-        );
-
-        // Ensure that owner has enough DAI to consolidate and grant necessary approval
-        deal(address(dai), walletA, totalDebt);
+        (, uint256 gohmApproval, , ) = utils.requiredApprovals(address(coolerA), idsA);
 
         _grantCallerApprovals(gohmApproval, 1);
 
@@ -309,13 +250,7 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
-            address(coolerA),
-            idsA
-        );
-
-        // Ensure that owner has enough DAI to consolidate and grant necessary approval
-        deal(address(dai), walletA, totalDebt);
+        (, uint256 gohmApproval, , ) = utils.requiredApprovals(address(coolerA), idsA);
 
         _grantCallerApprovals(gohmApproval, 0);
         vm.prank(walletA);
@@ -338,9 +273,7 @@ contract CoolerUtilsTest is Test {
 
         // Record the amount of DAI in the wallet
         uint256 initPrincipal = dai.balanceOf(walletA);
-
-        // Ensure that owner has enough DAI to consolidate and grant necessary approval
-        // deal(address(dai), walletA, totalDebt);
+        uint256 interestDue = _getInterestDue(idsA);
 
         _grantCallerApprovals(gohmApproval, totalDebt);
 
@@ -361,7 +294,7 @@ contract CoolerUtilsTest is Test {
 
         // Check token balances
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
-        assertEq(dai.balanceOf(walletA), initPrincipal, "dai: walletA");
+        assertEq(dai.balanceOf(walletA), initPrincipal - interestDue, "dai: walletA");
         assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
         assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
         assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
