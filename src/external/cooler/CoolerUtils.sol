@@ -138,7 +138,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
         address initiator_,
         address,
         uint256 amount_,
-        uint256 fee_,
+        uint256 lenderFee_,
         bytes calldata params_
     ) external override returns (bytes32) {
         (
@@ -146,7 +146,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
             address coolerAddress,
             uint256[] memory ids,
             uint256 principal,
-            uint256 fee
+            uint256 protocolFee
         ) = abi.decode(params_, (address, address, uint256[], uint256, uint256));
         Cooler cooler = Cooler(coolerAddress);
 
@@ -164,11 +164,12 @@ contract CoolerUtils is IERC3156FlashBorrower {
         // The cooler owner will receive DAI for the consolidated loan
         // Transfer this amount, plus the fee, to this contract
         // Approval must have already been granted by the Cooler owner
-        dai.transferFrom(cooler.owner(), address(this), amount_ + fee_);
+        dai.transferFrom(cooler.owner(), address(this), amount_ + lenderFee_);
         // Approve the flash loan provider to collect the flashloan amount and fee
-        dai.approve(address(lender), amount_ + fee_);
+        dai.approve(address(lender), amount_ + lenderFee_);
+
         // Pay protocol fee
-        if (fee != 0) dai.transferFrom(cooler.owner(), collector, fee);
+        if (protocolFee != 0) dai.transfer(collector, protocolFee);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
@@ -235,36 +236,37 @@ contract CoolerUtils is IERC3156FlashBorrower {
     /// @notice View function to compute the required approval amounts that the owner of a given Cooler
     ///         must give to this contract in order to consolidate the loans.
     ///
-    /// @param  cooler_ Contract which issued the loans.
-    /// @param  ids_    Array of loan ids to be consolidated.
-    /// @return         Tuple with the following values:
-    ///                  - Owner of the Cooler (address that should grant the approval).
-    ///                  - gOHM amount to be approved.
-    ///                  - DAI amount to be approved (if sDAI option will be set to false).
-    ///                  - sDAI amount to be approved (if sDAI option will be set to true).
+    /// @param  cooler_         Contract which issued the loans.
+    /// @param  ids_            Array of loan ids to be consolidated.
+    /// @return owner           Owner of the Cooler (address that should grant the approval).
+    /// @return collateral      gOHM amount to be approved.
+    /// @return debtWithFee     Total debt to be approved in DAI, including the protocol fee (if sDAI option will be set to false).
+    /// @return sDaiDebtWithFee Total debt to be approved in sDAI, including the protocol fee (is sDAI option will be set to true).
+    /// @return protocolFee     Fee to be paid to the protocol.
     function requiredApprovals(
         address cooler_,
         uint256[] calldata ids_
-    ) external view returns (address, uint256, uint256, uint256) {
+    ) external view returns (address, uint256, uint256, uint256, uint256) {
         uint256 totalDebt;
         uint256 totalCollateral;
         uint256 numLoans = ids_.length;
-        Cooler cooler = Cooler(cooler_);
 
         for (uint256 i; i < numLoans; i++) {
-            (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = cooler.loans(
-                ids_[i]
-            );
+            (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = Cooler(cooler_)
+                .loans(ids_[i]);
             totalDebt += principal + interestDue;
             totalCollateral += collateral;
         }
-        uint256 totalDebtWithFee = totalDebt + (totalDebt * feePercentage) / DENOMINATOR;
+
+        uint256 protocolFee = (totalDebt * feePercentage) / DENOMINATOR;
+        uint256 totalDebtWithFee = totalDebt + protocolFee;
 
         return (
-            cooler.owner(),
+            Cooler(cooler_).owner(),
             totalCollateral,
             totalDebtWithFee,
-            sdai.previewWithdraw(totalDebtWithFee)
+            sdai.previewWithdraw(totalDebtWithFee),
+            protocolFee
         );
     }
 }

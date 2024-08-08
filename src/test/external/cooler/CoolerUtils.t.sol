@@ -92,13 +92,13 @@ contract CoolerUtilsTest is Test {
             return;
         }
 
-        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
             address(coolerA),
             ids
         );
 
         vm.startPrank(walletA);
-        dai.approve(address(utils), totalDebt);
+        dai.approve(address(utils), totalDebtWithFee);
         gohm.approve(address(utils), gohmApproval);
         vm.stopPrank();
     }
@@ -161,10 +161,10 @@ contract CoolerUtilsTest is Test {
     //     [X] it reverts
     //    [ ] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
     // when the protocol fee is zero
-    //  [ ] it succeeds, but does not transfer additional DAI for the fee
+    //  [X] it succeeds, but does not transfer additional DAI for the fee
     // given gOHM spending approval has not been given to CoolerUtils
     //  [X] it reverts
-    // [ ] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
+    // [X] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
 
@@ -199,12 +199,12 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
             address(coolerA),
             idsA
         );
 
-        _grantCallerApprovals(gohmApproval, totalDebt);
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyCoolerOwner.selector);
@@ -219,12 +219,12 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
             address(coolerA),
             idsA
         );
 
-        _grantCallerApprovals(gohmApproval - 1, totalDebt);
+        _grantCallerApprovals(gohmApproval - 1, totalDebtWithFee);
 
         // Expect revert
         vm.expectRevert("ERC20: transfer amount exceeds allowance");
@@ -236,7 +236,7 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, , ) = utils.requiredApprovals(address(coolerA), idsA);
+        (, uint256 gohmApproval, , , ) = utils.requiredApprovals(address(coolerA), idsA);
 
         _grantCallerApprovals(gohmApproval, 1);
 
@@ -250,7 +250,7 @@ contract CoolerUtilsTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, , ) = utils.requiredApprovals(address(coolerA), idsA);
+        (, uint256 gohmApproval, , , ) = utils.requiredApprovals(address(coolerA), idsA);
 
         _grantCallerApprovals(gohmApproval, 0);
         vm.prank(walletA);
@@ -262,11 +262,11 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, 2, true);
     }
 
-    function test_consolidate_success() public {
+    function test_consolidate_noProtocolFee() public {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
-        (, uint256 gohmApproval, uint256 totalDebt, ) = utils.requiredApprovals(
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
             address(coolerA),
             idsA
         );
@@ -275,7 +275,7 @@ contract CoolerUtilsTest is Test {
         uint256 initPrincipal = dai.balanceOf(walletA);
         uint256 interestDue = _getInterestDue(idsA);
 
-        _grantCallerApprovals(gohmApproval, totalDebt);
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
 
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA);
@@ -296,6 +296,56 @@ contract CoolerUtilsTest is Test {
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
         assertEq(dai.balanceOf(walletA), initPrincipal - interestDue, "dai: walletA");
         assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
+        assertEq(dai.balanceOf(lender), 0, "dai: lender");
+        assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
+        assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
+        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
+    }
+
+    function test_consolidate_protocolFee() public {
+        uint256[] memory idsA = _idsA();
+
+        // Create a new CoolerUtils with the protocol fee set
+        utils = new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            owner,
+            lender,
+            collector,
+            1000 // 1%
+        );
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA);
+
+        // Check that coolerA has a single open loan
+        Cooler.Loan memory loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 0, "loan 0: collateral");
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 0, "loan 1: collateral");
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 0, "loan 2: collateral");
+        loan = coolerA.getLoan(3);
+        assertEq(loan.collateral, 3_333 * 1e18, "loan 3: collateral");
+        vm.expectRevert();
+        loan = coolerA.getLoan(4);
+
+        // Check token balances
+        assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
+        assertEq(dai.balanceOf(walletA), initPrincipal - interestDue - protocolFee, "dai: walletA");
+        assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
+        assertEq(dai.balanceOf(lender), 0, "dai: lender");
         assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
         assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
         assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
