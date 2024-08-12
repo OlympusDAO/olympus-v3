@@ -87,6 +87,7 @@ contract CoolerUtilsTest is Test {
     // ===== MODIFIERS ===== //
 
     modifier givenProtocolFee(uint256 fee_) {
+        vm.prank(owner);
         utils.setFeePercentage(fee_);
         _;
     }
@@ -389,7 +390,7 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA);
 
         _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFee, protocolFee, 0);
+        _assertTokenBalances(initPrincipal - interestDue - protocolFee, 0, protocolFee);
         _assertApprovals();
     }
 
