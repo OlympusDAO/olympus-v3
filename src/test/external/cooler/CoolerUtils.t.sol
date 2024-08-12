@@ -86,6 +86,11 @@ contract CoolerUtilsTest is Test {
 
     // ===== MODIFIERS ===== //
 
+    modifier givenProtocolFee(uint256 fee_) {
+        utils.setFeePercentage(fee_);
+        _;
+    }
+
     function _grantCallerApprovals(uint256[] memory ids) internal {
         // Will revert if there are less than 2 loans
         if (ids.length < 2) {
@@ -136,12 +141,80 @@ contract CoolerUtilsTest is Test {
         return interestDue;
     }
 
-    // ===== TESTS ===== //
+    // ===== ASSERTIONS ===== //
 
-    // TODO use funds more than the fee?
-    // TODO check for dangling approvals
-    // TODO check for residual balance
-    // TODO flashloan fee
+    function _assertCoolerLoans() internal {
+        // Check that coolerA has a single open loan
+        Cooler.Loan memory loan = coolerA.getLoan(0);
+        assertEq(loan.collateral, 0, "loan 0: collateral");
+        loan = coolerA.getLoan(1);
+        assertEq(loan.collateral, 0, "loan 1: collateral");
+        loan = coolerA.getLoan(2);
+        assertEq(loan.collateral, 0, "loan 2: collateral");
+        loan = coolerA.getLoan(3);
+        assertEq(loan.collateral, 3_333 * 1e18, "loan 3: collateral");
+        vm.expectRevert();
+        loan = coolerA.getLoan(4);
+    }
+
+    function _assertTokenBalances(
+        uint256 walletABalance,
+        uint256 lenderBalance,
+        uint256 collectorBalance
+    ) internal {
+        assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
+        assertEq(dai.balanceOf(walletA), walletABalance, "dai: walletA");
+        assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
+        assertEq(dai.balanceOf(lender), lenderBalance, "dai: lender");
+        assertEq(dai.balanceOf(collector), collectorBalance, "dai: collector");
+        assertEq(sdai.balanceOf(address(utils)), 0, "sdai: utils");
+        assertEq(sdai.balanceOf(walletA), 0, "sdai: walletA");
+        assertEq(sdai.balanceOf(address(coolerA)), 0, "sdai: coolerA");
+        assertEq(sdai.balanceOf(lender), 0, "sdai: lender");
+        assertEq(sdai.balanceOf(collector), 0, "sdai: collector");
+        assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
+        assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
+        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
+        assertEq(gohm.balanceOf(lender), 0, "gohm: lender");
+        assertEq(gohm.balanceOf(collector), 0, "gohm: collector");
+    }
+
+    function _assertApprovals() internal {
+        assertEq(dai.allowance(walletA, address(utils)), 0, "dai allowance: walletA -> utils");
+        assertEq(
+            dai.allowance(address(utils), address(coolerA)),
+            0,
+            "dai allowance: utils -> coolerA"
+        );
+        assertEq(
+            dai.allowance(address(utils), address(clearinghouse)),
+            0,
+            "dai allowance: utils -> clearinghouse"
+        );
+        assertEq(
+            dai.allowance(address(utils), address(lender)),
+            0,
+            "dai allowance: utils -> lender"
+        );
+        assertEq(gohm.allowance(walletA, address(utils)), 0, "gohm allowance: walletA -> utils");
+        assertEq(
+            gohm.allowance(address(utils), address(coolerA)),
+            0,
+            "gohm allowance: utils -> coolerA"
+        );
+        assertEq(
+            gohm.allowance(address(utils), address(clearinghouse)),
+            0,
+            "gohm allowance: utils -> clearinghouse"
+        );
+        assertEq(
+            gohm.allowance(address(utils), address(lender)),
+            0,
+            "gohm allowance: utils -> lender"
+        );
+    }
+
+    // ===== TESTS ===== //
 
     // consolidateWithFlashLoan
     // given the caller has no loans
@@ -150,20 +223,31 @@ contract CoolerUtilsTest is Test {
     //  [X] it reverts
     // given the caller is not the cooler owner
     //  [X] it reverts
-    // when useFunds is non-zero
-    //  when the protocol fee is non-zero
-    //   when sDAI is true
-    //    given sDAI spending approval has not been given to CoolerUtils
-    //     [X] it reverts
-    //    [ ] it redeems the specified amount of sDAI into DAI, and reduces the flashloan amount by the balance
-    //   when sDAI is false
-    //    given DAI spending approval has not been given to CoolerUtils
-    //     [X] it reverts
-    //    [ ] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
-    // when the protocol fee is zero
-    //  [X] it succeeds, but does not transfer additional DAI for the fee
+    // given DAI spending approval has not been given to CoolerUtils
+    //  [X] it reverts
     // given gOHM spending approval has not been given to CoolerUtils
     //  [X] it reverts
+    // given the protocol fee is non-zero
+    //  [X] it transfers the protocol fee to the collector
+    // given the lender fee is non-zero
+    //  [ ] it transfers the lender fee to the lender
+    // when useFunds is non-zero
+    //  when sDAI is true
+    //   given sDAI spending approval has not been given to CoolerUtils
+    //    [X] it reverts
+    //   given the sDAI amount is greater than required for fees
+    //    [ ] it returns the surplus as DAI to the caller
+    //   given the sDAI amount is less than required for fees
+    //    [ ] it reduces the flashloan amount by the redeemed DAI amount
+    //   [ ] it redeems the specified amount of sDAI into DAI, and reduces the flashloan amount by the amount
+    //  when sDAI is false
+    //   given the DAI amount is greater than required for fees
+    //    [ ] it returns the surplus as DAI to the caller
+    //   given the DAI amount is less than required for fees
+    //    [ ] it reduces the flashloan amount by the redeemed DAI amount
+    //   [ ] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
+    // when the protocol fee is zero
+    //  [X] it succeeds, but does not transfer additional DAI for the fee
     // [X] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
@@ -280,41 +364,16 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA);
 
-        // Check that coolerA has a single open loan
-        Cooler.Loan memory loan = coolerA.getLoan(0);
-        assertEq(loan.collateral, 0, "loan 0: collateral");
-        loan = coolerA.getLoan(1);
-        assertEq(loan.collateral, 0, "loan 1: collateral");
-        loan = coolerA.getLoan(2);
-        assertEq(loan.collateral, 0, "loan 2: collateral");
-        loan = coolerA.getLoan(3);
-        assertEq(loan.collateral, 3_333 * 1e18, "loan 3: collateral");
-        vm.expectRevert();
-        loan = coolerA.getLoan(4);
-
-        // Check token balances
-        assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
-        assertEq(dai.balanceOf(walletA), initPrincipal - interestDue, "dai: walletA");
-        assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
-        assertEq(dai.balanceOf(lender), 0, "dai: lender");
-        assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
-        assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
-        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertApprovals();
     }
 
-    function test_consolidate_protocolFee() public {
+    function test_consolidate_protocolFee()
+        public
+        givenProtocolFee(1000) // 1%
+    {
         uint256[] memory idsA = _idsA();
-
-        // Create a new CoolerUtils with the protocol fee set
-        utils = new CoolerUtils(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            1000 // 1%
-        );
 
         // Grant approvals
         (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
@@ -329,26 +388,9 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA);
 
-        // Check that coolerA has a single open loan
-        Cooler.Loan memory loan = coolerA.getLoan(0);
-        assertEq(loan.collateral, 0, "loan 0: collateral");
-        loan = coolerA.getLoan(1);
-        assertEq(loan.collateral, 0, "loan 1: collateral");
-        loan = coolerA.getLoan(2);
-        assertEq(loan.collateral, 0, "loan 2: collateral");
-        loan = coolerA.getLoan(3);
-        assertEq(loan.collateral, 3_333 * 1e18, "loan 3: collateral");
-        vm.expectRevert();
-        loan = coolerA.getLoan(4);
-
-        // Check token balances
-        assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
-        assertEq(dai.balanceOf(walletA), initPrincipal - interestDue - protocolFee, "dai: walletA");
-        assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
-        assertEq(dai.balanceOf(lender), 0, "dai: lender");
-        assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
-        assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
-        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFee, protocolFee, 0);
+        _assertApprovals();
     }
 
     // setFeePercentage
