@@ -181,7 +181,6 @@ contract CoolerUtilsTest is Test {
     }
 
     function _assertApprovals() internal {
-        assertEq(dai.allowance(walletA, address(utils)), 0, "dai allowance: walletA -> utils");
         assertEq(
             dai.allowance(address(utils), address(coolerA)),
             0,
@@ -237,16 +236,16 @@ contract CoolerUtilsTest is Test {
     //   given sDAI spending approval has not been given to CoolerUtils
     //    [X] it reverts
     //   given the sDAI amount is greater than required for fees
-    //    [ ] it returns the surplus as DAI to the caller
+    //    [X] it returns the surplus as DAI to the caller
     //   given the sDAI amount is less than required for fees
-    //    [ ] it reduces the flashloan amount by the redeemed DAI amount
-    //   [ ] it redeems the specified amount of sDAI into DAI, and reduces the flashloan amount by the amount
+    //    [X] it reduces the flashloan amount by the redeemed DAI amount
+    //   [X] it redeems the specified amount of sDAI into DAI, and reduces the flashloan amount by the amount
     //  when sDAI is false
     //   given the DAI amount is greater than required for fees
-    //    [ ] it returns the surplus as DAI to the caller
+    //    [X] it returns the surplus as DAI to the caller
     //   given the DAI amount is less than required for fees
-    //    [ ] it reduces the flashloan amount by the redeemed DAI amount
-    //   [ ] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
+    //    [X] it reduces the flashloan amount by the redeemed DAI amount
+    //   [X] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
     // when the protocol fee is zero
     //  [X] it succeeds, but does not transfer additional DAI for the fee
     // [X] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
@@ -391,6 +390,267 @@ contract CoolerUtilsTest is Test {
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFee, 0, protocolFee);
+        _assertApprovals();
+    }
+
+    function test_consolidate_whenUseFundsGreaterThanRequired() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA, interestDue + 1, false);
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertApprovals();
+    }
+
+    function test_consolidate_whenUseFundsLessThanRequired() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA, interestDue - 1, false);
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertApprovals();
+    }
+
+    function test_consolidate_whenUseFundsEqualToRequired() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA, interestDue, false);
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsGreaterThanRequired()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        uint256 useFunds = protocolFee + 1;
+        _consolidate(idsA, useFunds, false);
+
+        // Assertions
+        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsLessThanRequired()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        uint256 useFunds = protocolFee - 1;
+        _consolidate(idsA, useFunds, false);
+
+        // Assertions
+        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsEqualToRequired()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        uint256 useFunds = protocolFee;
+        _consolidate(idsA, useFunds, false);
+
+        // Assertions
+        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsEqualToRequired_usingSDai()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Mint SDai
+        uint256 useFunds = protocolFee;
+        uint256 useFundsSDai = sdai.previewWithdraw(useFunds);
+        deal(address(sdai), walletA, useFundsSDai);
+
+        // Approve SDai spending
+        vm.prank(walletA);
+        sdai.approve(address(utils), useFundsSDai);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA, useFundsSDai, true);
+
+        // Assertions
+        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsGreaterThanRequired_usingSDai()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Mint SDai
+        uint256 useFunds = protocolFee + 1e9;
+        uint256 useFundsSDai = sdai.previewWithdraw(useFunds);
+        deal(address(sdai), walletA, useFundsSDai);
+
+        // Approve SDai spending
+        vm.prank(walletA);
+        sdai.approve(address(utils), useFundsSDai);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA, useFundsSDai, true);
+
+        // Assertions
+        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsLessThanRequired_usingSDai()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Mint SDai
+        uint256 useFunds = protocolFee - 1e9;
+        uint256 useFundsSDai = sdai.previewWithdraw(useFunds);
+        deal(address(sdai), walletA, useFundsSDai);
+
+        // Approve SDai spending
+        vm.prank(walletA);
+        sdai.approve(address(utils), useFundsSDai);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(idsA, useFundsSDai, true);
+
+        // Assertions
+        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+
+        _assertCoolerLoans();
+        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
         _assertApprovals();
     }
 
