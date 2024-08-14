@@ -32,6 +32,7 @@ contract CoolerUtilsTest is Test {
     Cooler public coolerA;
 
     uint256 internal constant _GOHM_AMOUNT = 3_333 * 1e18;
+    uint256 internal constant _ONE_HUNDRED_PERCENT = 100e2;
 
     function setUp() public {
         // Mainnet Fork at current block.
@@ -498,7 +499,7 @@ contract CoolerUtilsTest is Test {
 
         // Assertions
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
-            utils.feePercentage()) / 1e5;
+            utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
@@ -527,7 +528,7 @@ contract CoolerUtilsTest is Test {
 
         // Assertions
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
-            utils.feePercentage()) / 1e5;
+            utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
@@ -556,7 +557,7 @@ contract CoolerUtilsTest is Test {
 
         // Assertions
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
-            utils.feePercentage()) / 1e5;
+            utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
@@ -593,7 +594,7 @@ contract CoolerUtilsTest is Test {
 
         // Assertions
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
-            utils.feePercentage()) / 1e5;
+            utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
         _assertCoolerLoans();
         _assertTokenBalances(
@@ -634,7 +635,7 @@ contract CoolerUtilsTest is Test {
 
         // Assertions
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
-            utils.feePercentage()) / 1e5;
+            utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
         _assertCoolerLoans();
         _assertTokenBalances(
@@ -675,7 +676,7 @@ contract CoolerUtilsTest is Test {
 
         // Assertions
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
-            utils.feePercentage()) / 1e5;
+            utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
         _assertCoolerLoans();
         _assertTokenBalances(
@@ -710,11 +711,11 @@ contract CoolerUtilsTest is Test {
         vm.expectRevert(err);
 
         vm.prank(owner);
-        utils.setFeePercentage(1e5 + 1);
+        utils.setFeePercentage(_ONE_HUNDRED_PERCENT + 1);
     }
 
     function test_setFeePercentage(uint256 feePercentage_) public {
-        uint256 feePercentage = bound(feePercentage_, 0, 1e5);
+        uint256 feePercentage = bound(feePercentage_, 0, _ONE_HUNDRED_PERCENT);
 
         vm.prank(owner);
         utils.setFeePercentage(feePercentage);
@@ -830,7 +831,7 @@ contract CoolerUtilsTest is Test {
         }
 
         // Calculate protocol fee
-        uint256 protocolFeeActual = (expectedTotalDebtWithFee * 1000) / 1e5;
+        uint256 protocolFeeActual = (expectedTotalDebtWithFee * 1000) / _ONE_HUNDRED_PERCENT;
 
         assertEq(owner_, walletA, "owner");
         assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
@@ -860,7 +861,7 @@ contract CoolerUtilsTest is Test {
     //  [X] it reverts
     // when the collector address is the zero address
     //  [X] it reverts
-    // when the fee percentage is > 1e5
+    // when the fee percentage is > 100e2
     //  [X] it reverts
     // [X] it sets the values
 
@@ -942,12 +943,12 @@ contract CoolerUtilsTest is Test {
             owner,
             lender,
             collector,
-            1e5 + 1
+            _ONE_HUNDRED_PERCENT + 1
         );
     }
 
     function test_constructor(uint256 feePercentage_) public {
-        uint256 feePercentage = bound(feePercentage_, 0, 1e5);
+        uint256 feePercentage = bound(feePercentage_, 0, _ONE_HUNDRED_PERCENT);
 
         utils = new CoolerUtils(
             address(gohm),

@@ -33,7 +33,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
     error OnlyCoolerOwner();
 
     /// @notice Thrown when the fee percentage is out of range.
-    /// @dev    Valid values are 0 <= feePercentage <= 1e5
+    /// @dev    Valid values are 0 <= feePercentage <= 100e2
     error Params_FeePercentageOutOfRange();
 
     /// @notice Thrown when the address is invalid.
@@ -57,7 +57,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
     IERC4626 public immutable sdai;
     IERC20 public immutable dai;
 
-    uint256 public constant DENOMINATOR = 1e5;
+    uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     // ownership
     address public immutable owner;
@@ -80,7 +80,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
         uint256 feePercentage_
     ) {
         // Validation
-        if (feePercentage_ > DENOMINATOR) revert Params_FeePercentageOutOfRange();
+        if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
         if (collector_ == address(0)) revert Params_InvalidAddress();
         if (owner_ == address(0)) revert Params_InvalidAddress();
         if (lender_ == address(0)) revert Params_InvalidAddress();
@@ -149,7 +149,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
         // Calculate the required flashloan amount based on available funds and protocol fee.
         uint256 daiBalance = dai.balanceOf(address(this));
-        uint256 fee = ((totalDebt - daiBalance) * feePercentage) / DENOMINATOR;
+        uint256 fee = ((totalDebt - daiBalance) * feePercentage) / ONE_HUNDRED_PERCENT;
         uint256 flashloan = totalDebt - daiBalance + fee;
 
         bytes memory params = abi.encode(clearinghouse_, cooler_, ids_, totalPrincipal, fee);
@@ -203,7 +203,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
     function setFeePercentage(uint256 feePercentage_) external {
         if (msg.sender != owner) revert OnlyOwner();
-        if (feePercentage_ > DENOMINATOR) revert Params_FeePercentageOutOfRange();
+        if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
 
         feePercentage = feePercentage_;
     }
@@ -289,7 +289,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
             totalCollateral += collateral;
         }
 
-        uint256 protocolFee = (totalDebt * feePercentage) / DENOMINATOR;
+        uint256 protocolFee = (totalDebt * feePercentage) / ONE_HUNDRED_PERCENT;
         uint256 totalDebtWithFee = totalDebt + protocolFee;
 
         return (
