@@ -696,8 +696,7 @@ contract CoolerUtilsTest is Test {
 
     function test_setFeePercentage_notOwner_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyOwner.selector);
-        vm.expectRevert(err);
+        vm.expectRevert("UNAUTHORIZED");
 
         // Set the fee percentage as a non-owner
         utils.setFeePercentage(1000);
@@ -732,8 +731,7 @@ contract CoolerUtilsTest is Test {
 
     function test_setCollector_notOwner_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyOwner.selector);
-        vm.expectRevert(err);
+        vm.expectRevert("UNAUTHORIZED");
 
         utils.setCollector(owner);
     }

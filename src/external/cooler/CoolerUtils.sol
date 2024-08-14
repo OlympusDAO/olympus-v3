@@ -3,6 +3,7 @@ pragma solidity ^0.8.15;
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
+import {Owned} from "solmate/auth/Owned.sol";
 
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
@@ -18,13 +19,11 @@ import {Cooler} from "src/external/cooler/Cooler.sol";
 //    ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝     ╚═════╝    ╚═╝   ╚═╝╚══════╝╚══════╝
 //
 
-contract CoolerUtils is IERC3156FlashBorrower {
+contract CoolerUtils is IERC3156FlashBorrower, Owned {
     // --- ERRORS ------------------------------------------------------------------
 
     /// @notice Thrown when the caller is not the contract itself.
     error OnlyThis();
-
-    error OnlyOwner();
 
     /// @notice Thrown when the caller is not the flash lender.
     error OnlyLender();
@@ -59,9 +58,6 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
 
-    // ownership
-    address public immutable owner;
-
     // protocol fees
     uint256 public feePercentage;
 
@@ -78,7 +74,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
         address lender_,
         address collector_,
         uint256 feePercentage_
-    ) {
+    ) Owned(owner_) {
         // Validation
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
         if (collector_ == address(0)) revert Params_InvalidAddress();
@@ -201,15 +197,13 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
     // --- ADMIN ---------------------------------------------------
 
-    function setFeePercentage(uint256 feePercentage_) external {
-        if (msg.sender != owner) revert OnlyOwner();
+    function setFeePercentage(uint256 feePercentage_) external onlyOwner {
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
 
         feePercentage = feePercentage_;
     }
 
-    function setCollector(address collector_) external {
-        if (msg.sender != owner) revert OnlyOwner();
+    function setCollector(address collector_) external onlyOwner {
         if (collector_ == address(0)) revert Params_InvalidAddress();
 
         collector = collector_;
