@@ -167,6 +167,12 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
         lender.flashLoan(this, address(dai), flashloan, params);
+
+        // This shouldn't happen, but transfer any leftover funds back to the sender
+        uint256 daiBalanceAfter = dai.balanceOf(address(this));
+        if (daiBalanceAfter > 0) {
+            dai.transfer(msg.sender, daiBalanceAfter);
+        }
     }
 
     function onFlashLoan(
