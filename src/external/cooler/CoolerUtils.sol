@@ -145,10 +145,16 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
         // Calculate the required flashloan amount based on available funds and protocol fee.
         uint256 daiBalance = dai.balanceOf(address(this));
-        uint256 fee = ((totalDebt - daiBalance) * feePercentage) / ONE_HUNDRED_PERCENT;
-        uint256 flashloan = totalDebt - daiBalance + fee;
+        uint256 protocolFee = ((totalDebt - daiBalance) * feePercentage) / ONE_HUNDRED_PERCENT;
+        uint256 flashloan = totalDebt - daiBalance + protocolFee;
 
-        bytes memory params = abi.encode(clearinghouse_, cooler_, ids_, totalPrincipal, fee);
+        bytes memory params = abi.encode(
+            clearinghouse_,
+            cooler_,
+            ids_,
+            totalPrincipal,
+            protocolFee
+        );
 
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
