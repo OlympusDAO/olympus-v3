@@ -21,10 +21,23 @@ import {Cooler} from "src/external/cooler/Cooler.sol";
 contract CoolerUtils is IERC3156FlashBorrower {
     // --- ERRORS ------------------------------------------------------------------
 
+    /// @notice Thrown when the caller is not the contract itself.
     error OnlyThis();
+
     error OnlyOwner();
+
+    /// @notice Thrown when the caller is not the flash lender.
     error OnlyLender();
+
+    /// @notice Thrown when the caller is not the Cooler owner.
     error OnlyCoolerOwner();
+
+    /// @notice Thrown when the fee percentage is out of range.
+    /// @dev    Valid values are 0 <= feePercentage <= 1e5
+    error Params_FeePercentageOutOfRange();
+
+    /// @notice Thrown when the address is invalid.
+    error Params_InvalidAddress();
 
     /// @notice Thrown when the caller attempts to consolidate too few cooler loans. The minimum is two.
     error InsufficientCoolerCount();
@@ -44,7 +57,7 @@ contract CoolerUtils is IERC3156FlashBorrower {
     IERC4626 public immutable sdai;
     IERC20 public immutable dai;
 
-    uint256 constant DENOMINATOR = 1e5;
+    uint256 public constant DENOMINATOR = 1e5;
 
     // ownership
     address public immutable owner;
@@ -66,6 +79,15 @@ contract CoolerUtils is IERC3156FlashBorrower {
         address collector_,
         uint256 feePercentage_
     ) {
+        // Validation
+        if (feePercentage_ > DENOMINATOR) revert Params_FeePercentageOutOfRange();
+        if (collector_ == address(0)) revert Params_InvalidAddress();
+        if (owner_ == address(0)) revert Params_InvalidAddress();
+        if (lender_ == address(0)) revert Params_InvalidAddress();
+        if (gohm_ == address(0)) revert Params_InvalidAddress();
+        if (sdai_ == address(0)) revert Params_InvalidAddress();
+        if (dai_ == address(0)) revert Params_InvalidAddress();
+
         // store contracts
         gohm = IERC20(gohm_);
         sdai = IERC4626(sdai_);
@@ -181,11 +203,15 @@ contract CoolerUtils is IERC3156FlashBorrower {
 
     function setFeePercentage(uint256 feePercentage_) external {
         if (msg.sender != owner) revert OnlyOwner();
+        if (feePercentage_ > DENOMINATOR) revert Params_FeePercentageOutOfRange();
+
         feePercentage = feePercentage_;
     }
 
     function setCollector(address collector_) external {
         if (msg.sender != owner) revert OnlyOwner();
+        if (collector_ == address(0)) revert Params_InvalidAddress();
+
         collector = collector_;
     }
 
@@ -250,6 +276,8 @@ contract CoolerUtils is IERC3156FlashBorrower {
         address cooler_,
         uint256[] calldata ids_
     ) external view returns (address, uint256, uint256, uint256, uint256) {
+        if (ids_.length < 2) revert InsufficientCoolerCount();
+
         uint256 totalDebt;
         uint256 totalCollateral;
         uint256 numLoans = ids_.length;
