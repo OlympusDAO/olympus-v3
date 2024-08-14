@@ -408,30 +408,7 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_whenUseFundsGreaterThanRequired() public {
-        uint256[] memory idsA = _idsA();
-
-        // Grant approvals
-        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
-            address(coolerA),
-            idsA
-        );
-
-        // Record the amount of DAI in the wallet
-        uint256 initPrincipal = dai.balanceOf(walletA);
-        uint256 interestDue = _getInterestDue(idsA);
-
-        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
-
-        // Consolidate loans for coolers A, B, and C into coolerC
-        _consolidate(idsA, interestDue + 1, false);
-
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
-        _assertApprovals();
-    }
-
-    function test_consolidate_whenUseFundsLessThanRequired() public {
+    function test_consolidate_whenUseFundsLessThanTotalDebt() public {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -454,7 +431,7 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_whenUseFundsEqualToRequired() public {
+    function test_consolidate_whenUseFundsEqualToTotalDebt() public {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -464,20 +441,22 @@ contract CoolerUtilsTest is Test {
         );
 
         // Record the amount of DAI in the wallet
-        uint256 initPrincipal = dai.balanceOf(walletA);
         uint256 interestDue = _getInterestDue(idsA);
+
+        // Ensure the caller has enough DAI
+        deal(address(dai), walletA, totalDebtWithFee);
 
         _grantCallerApprovals(gohmApproval, totalDebtWithFee);
 
         // Consolidate loans for coolers A, B, and C into coolerC
-        _consolidate(idsA, interestDue, false);
+        _consolidate(idsA, totalDebtWithFee, false);
 
         _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertTokenBalances(totalDebtWithFee - interestDue, 0, 0);
         _assertApprovals();
     }
 
-    function test_consolidate_protocolFee_whenUseFundsGreaterThanRequired()
+    function test_consolidate_protocolFee_whenUseFundsGreaterThanProtocolFee()
         public
         givenProtocolFee(1000) // 1%
     {
@@ -506,7 +485,30 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_protocolFee_whenUseFundsLessThanRequired()
+    function test_consolidate_whenUseFundsGreaterThanTotalDebt_reverts() public {
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(coolerA),
+            idsA
+        );
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee + 1);
+
+        // Ensure the caller has more DAI that the total debt
+        deal(address(dai), walletA, totalDebtWithFee + 1);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_UseFundsOutOfBounds.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        uint256 useFunds = totalDebtWithFee + 1;
+        _consolidate(idsA, useFunds, false);
+    }
+
+    function test_consolidate_protocolFee_whenUseFundsLessThanProtocolFee()
         public
         givenProtocolFee(1000) // 1%
     {
@@ -535,7 +537,7 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_protocolFee_whenUseFundsEqualToRequired()
+    function test_consolidate_protocolFee_whenUseFundsEqualToProtocolFee()
         public
         givenProtocolFee(1000) // 1%
     {
@@ -564,7 +566,7 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_protocolFee_whenUseFundsEqualToRequired_usingSDai()
+    function test_consolidate_protocolFee_whenUseFundsEqualToProtocolFee_usingSDai()
         public
         givenProtocolFee(1000) // 1%
     {
@@ -605,7 +607,7 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_protocolFee_whenUseFundsGreaterThanRequired_usingSDai()
+    function test_consolidate_protocolFee_whenUseFundsGreaterThanProtocolFee_usingSDai()
         public
         givenProtocolFee(1000) // 1%
     {
@@ -646,7 +648,7 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_protocolFee_whenUseFundsLessThanRequired_usingSDai()
+    function test_consolidate_protocolFee_whenUseFundsLessThanProtocolFee_usingSDai()
         public
         givenProtocolFee(1000) // 1%
     {

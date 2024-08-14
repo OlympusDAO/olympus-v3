@@ -38,6 +38,9 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @notice Thrown when the address is invalid.
     error Params_InvalidAddress();
 
+    /// @notice Thrown when the caller attempts to provide more funds than are required.
+    error Params_UseFundsOutOfBounds();
+
     /// @notice Thrown when the caller attempts to consolidate too few cooler loans. The minimum is two.
     error InsufficientCoolerCount();
 
@@ -145,7 +148,12 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
         // Calculate the required flashloan amount based on available funds and protocol fee.
         uint256 daiBalance = dai.balanceOf(address(this));
-        uint256 protocolFee = ((totalDebt - daiBalance) * feePercentage) / ONE_HUNDRED_PERCENT;
+        // Prevent an underflow
+        if (daiBalance > totalDebt) {
+            revert Params_UseFundsOutOfBounds();
+        }
+
+        uint256 protocolFee = getProtocolFee(totalDebt - daiBalance);
         uint256 flashloan = totalDebt - daiBalance + protocolFee;
 
         bytes memory params = abi.encode(
@@ -262,6 +270,11 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
 
+    /// @notice View function to compute the protocol fee for a given total debt.
+    function getProtocolFee(uint256 totalDebt_) public view returns (uint256) {
+        return (totalDebt_ * feePercentage) / ONE_HUNDRED_PERCENT;
+    }
+
     /// @notice View function to compute the required approval amounts that the owner of a given Cooler
     ///         must give to this contract in order to consolidate the loans.
     ///
@@ -289,7 +302,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
             totalCollateral += collateral;
         }
 
-        uint256 protocolFee = (totalDebt * feePercentage) / ONE_HUNDRED_PERCENT;
+        uint256 protocolFee = getProtocolFee(totalDebt);
         uint256 totalDebtWithFee = totalDebt + protocolFee;
 
         return (
