@@ -103,6 +103,9 @@ contract CoolerUtils is IERC3156FlashBorrower {
     ) public {
         Cooler cooler = Cooler(cooler_);
 
+        // Ensure at least two loans are being consolidated
+        if (ids_.length < 2) revert InsufficientCoolerCount();
+
         // Cache batch debt and principal
         (uint256 totalDebt, uint256 totalPrincipal) = _getDebtForLoans(address(cooler), ids_);
 
