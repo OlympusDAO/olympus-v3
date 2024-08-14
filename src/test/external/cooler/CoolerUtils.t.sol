@@ -31,6 +31,8 @@ contract CoolerUtilsTest is Test {
     address public walletA;
     Cooler public coolerA;
 
+    uint256 internal constant _GOHM_AMOUNT = 3_333 * 1e18;
+
     function setUp() public {
         // Mainnet Fork at current block.
         vm.createSelectFork("https://eth.llamarpc.com", 18762666);
@@ -60,7 +62,7 @@ contract CoolerUtilsTest is Test {
         walletA = vm.addr(0xA);
 
         // Fund wallets with gOHM
-        deal(address(gohm), walletA, 3_333 * 1e18);
+        deal(address(gohm), walletA, _GOHM_AMOUNT);
 
         // Ensure Clearinghouse has enough DAI
         deal(address(dai), address(clearinghouse), 18_000_000 * 1e18);
@@ -71,7 +73,7 @@ contract CoolerUtilsTest is Test {
         coolerA = Cooler(coolerA_);
 
         // Approve clearinghouse to spend gOHM
-        gohm.approve(address(clearinghouse), 3_333 * 1e18);
+        gohm.approve(address(clearinghouse), _GOHM_AMOUNT);
         // Loan 0 for coolerA (collateral: 2,000 gOHM)
         (uint256 loan, ) = clearinghouse.getLoanForCollateral(2_000 * 1e18);
         clearinghouse.lendToCooler(coolerA, loan);
@@ -86,10 +88,22 @@ contract CoolerUtilsTest is Test {
 
     // ===== MODIFIERS ===== //
 
-    modifier givenProtocolFee(uint256 fee_) {
+    modifier givenProtocolFee(uint256 feePercent_) {
         vm.prank(owner);
-        utils.setFeePercentage(fee_);
+        utils.setFeePercentage(feePercent_);
         _;
+    }
+
+    function _setLenderFee(uint256 borrowAmount_, uint256 fee_) internal {
+        vm.mockCall(
+            lender,
+            abi.encodeWithSelector(
+                IERC3156FlashLender.flashFee.selector,
+                address(dai),
+                borrowAmount_
+            ),
+            abi.encode(fee_)
+        );
     }
 
     function _grantCallerApprovals(uint256[] memory ids) internal {
@@ -153,7 +167,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerA.getLoan(2);
         assertEq(loan.collateral, 0, "loan 2: collateral");
         loan = coolerA.getLoan(3);
-        assertEq(loan.collateral, 3_333 * 1e18, "loan 3: collateral");
+        assertEq(loan.collateral, _GOHM_AMOUNT, "loan 3: collateral");
         vm.expectRevert();
         loan = coolerA.getLoan(4);
     }
@@ -175,7 +189,7 @@ contract CoolerUtilsTest is Test {
         assertEq(sdai.balanceOf(collector), 0, "sdai: collector");
         assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
         assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
-        assertEq(gohm.balanceOf(address(coolerA)), 3_333 * 1e18, "gohm: coolerA");
+        assertEq(gohm.balanceOf(address(coolerA)), _GOHM_AMOUNT, "gohm: coolerA");
         assertEq(gohm.balanceOf(lender), 0, "gohm: lender");
         assertEq(gohm.balanceOf(collector), 0, "gohm: collector");
     }
@@ -674,28 +688,285 @@ contract CoolerUtilsTest is Test {
 
     // setFeePercentage
     // when the caller is not the owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the fee is > 100%
-    //  [ ] it reverts
-    // [ ] it sets the fee percentage
+    //  [X] it reverts
+    // [X] it sets the fee percentage
+
+    function test_setFeePercentage_notOwner_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyOwner.selector);
+        vm.expectRevert(err);
+
+        // Set the fee percentage as a non-owner
+        utils.setFeePercentage(1000);
+    }
+
+    function test_setFeePercentage_aboveMax_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.Params_FeePercentageOutOfRange.selector
+        );
+        vm.expectRevert(err);
+
+        vm.prank(owner);
+        utils.setFeePercentage(1e5 + 1);
+    }
+
+    function test_setFeePercentage(uint256 feePercentage_) public {
+        uint256 feePercentage = bound(feePercentage_, 0, 1e5);
+
+        vm.prank(owner);
+        utils.setFeePercentage(feePercentage);
+
+        assertEq(utils.feePercentage(), feePercentage, "fee percentage");
+    }
 
     // setCollector
     // when the caller is not the owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the new collector is the zero address
-    //  [ ] it reverts
-    // [ ] it sets the collector
+    //  [X] it reverts
+    // [X] it sets the collector
+
+    function test_setCollector_notOwner_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyOwner.selector);
+        vm.expectRevert(err);
+
+        utils.setCollector(owner);
+    }
+
+    function test_setCollector_zeroAddress_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        vm.prank(owner);
+        utils.setCollector(address(0));
+    }
+
+    function test_setCollector() public {
+        vm.prank(owner);
+        utils.setCollector(owner);
+
+        assertEq(utils.collector(), owner, "collector");
+    }
 
     // requiredApprovals
     // when the caller has no loans
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller has 1 loan
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the protocol fee is zero
-    //  [ ] it returns the correct values
+    //  [X] it returns the correct values
     // when the protocol fee is non-zero
-    //  [ ] it returns the correct values
-    // [ ] it returns the correct values for owner, gOHM amount, total DAI debt and sDAI amount
+    //  [X] it returns the correct values
+    // [X] it returns the correct values for owner, gOHM amount, total DAI debt and sDAI amount
+
+    function test_requiredApprovals_noLoans() public {
+        uint256[] memory ids = new uint256[](0);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        vm.expectRevert(err);
+
+        utils.requiredApprovals(address(coolerA), ids);
+    }
+
+    function test_requiredApprovals_oneLoan() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        vm.expectRevert(err);
+
+        utils.requiredApprovals(address(coolerA), ids);
+    }
+
+    function test_requiredApprovals_noProtocolFee() public {
+        uint256[] memory ids = _idsA();
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            uint256 totalDebtWithFee,
+            uint256 sDaiApproval,
+            uint256 protocolFee
+        ) = utils.requiredApprovals(address(coolerA), ids);
+
+        uint256 expectedTotalDebtWithFee;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+            expectedTotalDebtWithFee += loan.principal + loan.interestDue;
+        }
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(totalDebtWithFee, expectedTotalDebtWithFee, "total debt with fee");
+        assertEq(sDaiApproval, sdai.previewWithdraw(expectedTotalDebtWithFee), "sDai approval");
+        assertEq(protocolFee, 0, "protocol fee");
+    }
+
+    function test_requiredApprovals_ProtocolFee()
+        public
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory ids = _idsA();
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            uint256 totalDebtWithFee,
+            uint256 sDaiApproval,
+            uint256 protocolFee
+        ) = utils.requiredApprovals(address(coolerA), ids);
+
+        uint256 expectedTotalDebtWithFee;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+            expectedTotalDebtWithFee += loan.principal + loan.interestDue;
+        }
+
+        // Calculate protocol fee
+        uint256 protocolFeeActual = (expectedTotalDebtWithFee * 1000) / 1e5;
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(
+            totalDebtWithFee,
+            expectedTotalDebtWithFee + protocolFeeActual,
+            "total debt with fee"
+        );
+        assertEq(
+            sDaiApproval,
+            sdai.previewWithdraw(expectedTotalDebtWithFee + protocolFeeActual),
+            "sDai approval"
+        );
+        assertEq(protocolFee, protocolFeeActual, "protocol fee");
+    }
+
+    // constructor
+    // when the gOHM address is the zero address
+    //  [X] it reverts
+    // when the sDAI address is the zero address
+    //  [X] it reverts
+    // when the DAI address is the zero address
+    //  [X] it reverts
+    // when the owner address is the zero address
+    //  [X] it reverts
+    // when the lender address is the zero address
+    //  [X] it reverts
+    // when the collector address is the zero address
+    //  [X] it reverts
+    // when the fee percentage is > 1e5
+    //  [X] it reverts
+    // [X] it sets the values
+
+    function test_constructor_zeroGOhm_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(address(0), address(sdai), address(dai), owner, lender, collector, 0);
+    }
+
+    function test_constructor_zeroSDai_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(address(gohm), address(0), address(dai), owner, lender, collector, 0);
+    }
+
+    function test_constructor_zeroDai_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(address(gohm), address(sdai), address(0), owner, lender, collector, 0);
+    }
+
+    function test_constructor_zeroOwner_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            address(0),
+            lender,
+            collector,
+            0
+        );
+    }
+
+    function test_constructor_zeroLender_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            owner,
+            address(0),
+            collector,
+            0
+        );
+    }
+
+    function test_constructor_zeroCollector_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(address(gohm), address(sdai), address(dai), owner, lender, address(0), 0);
+    }
+
+    function test_constructor_feePercentageAboveMax_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.Params_FeePercentageOutOfRange.selector
+        );
+        vm.expectRevert(err);
+
+        new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            owner,
+            lender,
+            collector,
+            1e5 + 1
+        );
+    }
+
+    function test_constructor(uint256 feePercentage_) public {
+        uint256 feePercentage = bound(feePercentage_, 0, 1e5);
+
+        utils = new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            owner,
+            lender,
+            collector,
+            feePercentage
+        );
+
+        assertEq(address(utils.gohm()), address(gohm), "gOHM");
+        assertEq(address(utils.sdai()), address(sdai), "sDai");
+        assertEq(address(utils.dai()), address(dai), "DAI");
+        assertEq(utils.owner(), owner, "owner");
+        assertEq(address(utils.lender()), lender, "lender");
+        assertEq(utils.collector(), collector, "collector");
+        assertEq(utils.feePercentage(), feePercentage, "fee percentage");
+    }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
 
