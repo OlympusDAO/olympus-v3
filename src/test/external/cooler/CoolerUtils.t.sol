@@ -483,7 +483,8 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, useFunds, false);
 
         // Assertions
-        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+        uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
+            utils.feePercentage()) / 1e5;
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
@@ -511,7 +512,8 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, useFunds, false);
 
         // Assertions
-        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+        uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
+            utils.feePercentage()) / 1e5;
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
@@ -539,7 +541,8 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, useFunds, false);
 
         // Assertions
-        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+        uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
+            utils.feePercentage()) / 1e5;
 
         _assertCoolerLoans();
         _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
@@ -575,10 +578,15 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, useFundsSDai, true);
 
         // Assertions
-        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+        uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
+            utils.feePercentage()) / 1e5;
 
         _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertTokenBalances(
+            initPrincipal - interestDue + useFunds - protocolFeeActual,
+            0,
+            protocolFeeActual
+        );
         _assertApprovals();
     }
 
@@ -611,10 +619,15 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, useFundsSDai, true);
 
         // Assertions
-        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+        uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
+            utils.feePercentage()) / 1e5;
 
         _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertTokenBalances(
+            initPrincipal - interestDue + useFunds - protocolFeeActual,
+            0,
+            protocolFeeActual
+        );
         _assertApprovals();
     }
 
@@ -647,10 +660,15 @@ contract CoolerUtilsTest is Test {
         _consolidate(idsA, useFundsSDai, true);
 
         // Assertions
-        uint256 protocolFeeActual = (initPrincipal + interestDue - useFunds) * utils.feePercentage() / 1e5;
+        uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
+            utils.feePercentage()) / 1e5;
 
         _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertTokenBalances(
+            initPrincipal - interestDue + useFunds - protocolFeeActual,
+            0,
+            protocolFeeActual
+        );
         _assertApprovals();
     }
 
