@@ -61,6 +61,7 @@ import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualR
 import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
+import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -99,6 +100,7 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     Clearinghouse public clearinghouse;
+    CoolerUtils public coolerUtils;
 
     // Governance
     Timelock public timelock;
@@ -187,6 +189,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
+        selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -872,6 +875,38 @@ contract OlympusDeploy is Script {
         console2.log("CHREG deployed at:", address(CHREG));
 
         return address(CHREG);
+    }
+
+    function _deployCoolerUtils(bytes calldata args_) public returns (address) {
+        // Decode arguments from the sequence file
+        (address collector, uint256 feePercentage, address lender, address owner) = abi.decode(
+            args_,
+            (address, uint256, address, address)
+        );
+
+        // Print the arguments
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  SDAI:", address(wrappedReserve));
+        console2.log("  DAI:", address(reserve));
+        console2.log("  Collector:", collector);
+        console2.log("  Fee Percentage:", feePercentage);
+        console2.log("  Lender:", lender);
+        console2.log("  Owner:", owner);
+
+        // Deploy CoolerUtils
+        vm.broadcast();
+        coolerUtils = new CoolerUtils(
+            address(gohm),
+            address(wrappedReserve),
+            address(reserve),
+            owner,
+            lender,
+            collector,
+            feePercentage
+        );
+        console2.log("  CoolerUtils deployed at:", address(coolerUtils));
+
+        return address(coolerUtils);
     }
 
     // ========== GOVERNANCE ========== //
