@@ -159,7 +159,7 @@ contract CoolerUtilsTest is Test {
 
     // ===== ASSERTIONS ===== //
 
-    function _assertCoolerLoans() internal {
+    function _assertCoolerLoans(uint256 collateral_) internal {
         // Check that coolerA has a single open loan
         Cooler.Loan memory loan = coolerA.getLoan(0);
         assertEq(loan.collateral, 0, "loan 0: collateral");
@@ -168,7 +168,7 @@ contract CoolerUtilsTest is Test {
         loan = coolerA.getLoan(2);
         assertEq(loan.collateral, 0, "loan 2: collateral");
         loan = coolerA.getLoan(3);
-        assertEq(loan.collateral, _GOHM_AMOUNT, "loan 3: collateral");
+        assertEq(loan.collateral, collateral_, "loan 3: collateral");
         vm.expectRevert();
         loan = coolerA.getLoan(4);
     }
@@ -176,7 +176,8 @@ contract CoolerUtilsTest is Test {
     function _assertTokenBalances(
         uint256 walletABalance,
         uint256 lenderBalance,
-        uint256 collectorBalance
+        uint256 collectorBalance,
+        uint256 collateralBalance
     ) internal {
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
         assertEq(dai.balanceOf(walletA), walletABalance, "dai: walletA");
@@ -190,7 +191,7 @@ contract CoolerUtilsTest is Test {
         assertEq(sdai.balanceOf(collector), 0, "sdai: collector");
         assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
         assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
-        assertEq(gohm.balanceOf(address(coolerA)), _GOHM_AMOUNT, "gohm: coolerA");
+        assertEq(gohm.balanceOf(address(coolerA)), collateralBalance, "gohm: coolerA");
         assertEq(gohm.balanceOf(lender), 0, "gohm: lender");
         assertEq(gohm.balanceOf(collector), 0, "gohm: collector");
     }
@@ -379,8 +380,8 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA);
 
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(initPrincipal - interestDue, 0, 0, _GOHM_AMOUNT);
         _assertApprovals();
     }
 
@@ -403,8 +404,13 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA);
 
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFee, 0, protocolFee);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            initPrincipal - interestDue - protocolFee,
+            0,
+            protocolFee,
+            _GOHM_AMOUNT
+        );
         _assertApprovals();
     }
 
@@ -426,8 +432,8 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA, interestDue - 1, false);
 
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue, 0, 0);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(initPrincipal - interestDue, 0, 0, _GOHM_AMOUNT);
         _assertApprovals();
     }
 
@@ -451,8 +457,8 @@ contract CoolerUtilsTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         _consolidate(idsA, totalDebtWithFee, false);
 
-        _assertCoolerLoans();
-        _assertTokenBalances(totalDebtWithFee - interestDue, 0, 0);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(totalDebtWithFee - interestDue, 0, 0, _GOHM_AMOUNT);
         _assertApprovals();
     }
 
@@ -480,8 +486,13 @@ contract CoolerUtilsTest is Test {
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
             utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            initPrincipal - interestDue - protocolFeeActual,
+            0,
+            protocolFeeActual,
+            _GOHM_AMOUNT
+        );
         _assertApprovals();
     }
 
@@ -532,8 +543,13 @@ contract CoolerUtilsTest is Test {
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
             utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            initPrincipal - interestDue - protocolFeeActual,
+            0,
+            protocolFeeActual,
+            _GOHM_AMOUNT
+        );
         _assertApprovals();
     }
 
@@ -561,8 +577,13 @@ contract CoolerUtilsTest is Test {
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
             utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
-        _assertCoolerLoans();
-        _assertTokenBalances(initPrincipal - interestDue - protocolFeeActual, 0, protocolFeeActual);
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            initPrincipal - interestDue - protocolFeeActual,
+            0,
+            protocolFeeActual,
+            _GOHM_AMOUNT
+        );
         _assertApprovals();
     }
 
@@ -598,11 +619,12 @@ contract CoolerUtilsTest is Test {
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
             utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
-        _assertCoolerLoans();
+        _assertCoolerLoans(_GOHM_AMOUNT);
         _assertTokenBalances(
             initPrincipal - interestDue + useFunds - protocolFeeActual,
             0,
-            protocolFeeActual
+            protocolFeeActual,
+            _GOHM_AMOUNT
         );
         _assertApprovals();
     }
@@ -639,11 +661,12 @@ contract CoolerUtilsTest is Test {
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
             utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
-        _assertCoolerLoans();
+        _assertCoolerLoans(_GOHM_AMOUNT);
         _assertTokenBalances(
             initPrincipal - interestDue + useFunds - protocolFeeActual,
             0,
-            protocolFeeActual
+            protocolFeeActual,
+            _GOHM_AMOUNT
         );
         _assertApprovals();
     }
@@ -680,11 +703,12 @@ contract CoolerUtilsTest is Test {
         uint256 protocolFeeActual = ((initPrincipal + interestDue - useFunds) *
             utils.feePercentage()) / _ONE_HUNDRED_PERCENT;
 
-        _assertCoolerLoans();
+        _assertCoolerLoans(_GOHM_AMOUNT);
         _assertTokenBalances(
             initPrincipal - interestDue + useFunds - protocolFeeActual,
             0,
-            protocolFeeActual
+            protocolFeeActual,
+            _GOHM_AMOUNT
         );
         _assertApprovals();
     }
