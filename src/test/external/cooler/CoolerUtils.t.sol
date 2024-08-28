@@ -385,6 +385,99 @@ contract CoolerUtilsTest is Test {
         _assertApprovals();
     }
 
+    function test_consolidate_noProtocolFee_fuzz(
+        uint256 loanOneCollateral_,
+        uint256 loanTwoCollateral_
+    ) public {
+        // Bound the collateral values
+        loanOneCollateral_ = bound(loanOneCollateral_, 1, 1e18);
+        loanTwoCollateral_ = bound(loanTwoCollateral_, 1, 1e18);
+
+        // Set up a new wallet
+        address walletB = vm.addr(0xB);
+
+        // Fund the wallet with gOHM
+        deal(address(gohm), walletB, loanOneCollateral_ + loanTwoCollateral_);
+
+        // Deploy a cooler for walletB
+        vm.startPrank(walletB);
+        address coolerB_ = coolerFactory.generateCooler(gohm, dai);
+        Cooler coolerB = Cooler(coolerB_);
+
+        // Approve clearinghouse to spend gOHM
+        gohm.approve(address(clearinghouse), loanOneCollateral_ + loanTwoCollateral_);
+
+        // Take loans
+        {
+            // Loan 0 for coolerB
+            (uint256 loan, ) = clearinghouse.getLoanForCollateral(loanOneCollateral_);
+            clearinghouse.lendToCooler(coolerB, loan);
+            // Loan 1 for coolerB
+            (loan, ) = clearinghouse.getLoanForCollateral(loanTwoCollateral_);
+            clearinghouse.lendToCooler(coolerB, loan);
+            vm.stopPrank();
+        }
+
+        uint256[] memory loanIds = new uint256[](2);
+        loanIds[0] = 0;
+        loanIds[1] = 1;
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(coolerB),
+            loanIds
+        );
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletB);
+        uint256 interestDue = _getInterestDue(loanIds);
+
+        // Grant approvals
+        vm.startPrank(walletB);
+        dai.approve(address(utils), totalDebtWithFee);
+        gohm.approve(address(utils), gohmApproval);
+        vm.stopPrank();
+
+        // Consolidate loans for coolers 0 and 1 into 2
+        vm.startPrank(walletB);
+        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerB), loanIds, 0, false);
+        vm.stopPrank();
+
+        // Assert loan balances
+        Cooler.Loan memory loanOne = coolerB.getLoan(0);
+        assertEq(loanOne.collateral, 0, "loan 0: collateral");
+        Cooler.Loan memory loanTwo = coolerB.getLoan(1);
+        assertEq(loanTwo.collateral, 0, "loan 1: collateral");
+        Cooler.Loan memory consolidated = coolerB.getLoan(2);
+        assertEq(
+            consolidated.collateral,
+            loanOneCollateral_ + loanTwoCollateral_,
+            "consolidated: collateral"
+        );
+
+        // Assert token balances
+        assertEq(dai.balanceOf(walletB), initPrincipal - interestDue, "DAI balance");
+        assertEq(gohm.balanceOf(walletB), 0, "gOHM balance");
+        assertEq(dai.balanceOf(address(coolerB)), 0, "DAI balance: coolerB");
+        assertEq(
+            gohm.balanceOf(address(coolerB)),
+            loanOneCollateral_ + loanTwoCollateral_,
+            "gOHM balance: coolerB"
+        );
+
+        // Assert approvals
+        assertEq(
+            dai.allowance(address(utils), address(coolerB)),
+            0,
+            "DAI allowance: utils -> coolerB"
+        );
+        assertEq(
+            gohm.allowance(address(utils), address(coolerB)),
+            0,
+            "gOHM allowance: utils -> coolerB"
+        );
+    }
+
     function test_consolidate_protocolFee()
         public
         givenProtocolFee(1000) // 1%
