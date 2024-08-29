@@ -51,6 +51,14 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         uint256[] ids;
     }
 
+    struct FlashLoanData {
+        address clearinghouse;
+        address cooler;
+        uint256[] ids;
+        uint256 principal;
+        uint256 protocolFee;
+    }
+
     // --- IMMUTABLES AND STATE VARIABLES ------------------------------------------
 
     /// @notice FlashLender contract used to take flashloans
@@ -157,11 +165,13 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         uint256 flashloan = totalDebt - daiBalance + protocolFee;
 
         bytes memory params = abi.encode(
-            clearinghouse_,
-            cooler_,
-            ids_,
-            totalPrincipal,
-            protocolFee
+            FlashLoanData({
+                clearinghouse: clearinghouse_,
+                cooler: cooler_,
+                ids: ids_,
+                principal: totalPrincipal,
+                protocolFee: protocolFee
+            })
         );
 
         // Take flashloan
@@ -182,25 +192,33 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         uint256 lenderFee_,
         bytes calldata params_
     ) external override returns (bytes32) {
-        (
-            address clearinghouse,
-            address coolerAddress,
-            uint256[] memory ids,
-            uint256 principal,
-            uint256 protocolFee
-        ) = abi.decode(params_, (address, address, uint256[], uint256, uint256));
-        Cooler cooler = Cooler(coolerAddress);
+        FlashLoanData memory flashLoanData = abi.decode(params_, (FlashLoanData));
+        Cooler cooler = Cooler(flashLoanData.cooler);
 
         // perform sanity checks
         if (msg.sender != address(lender)) revert OnlyLender();
         if (initiator_ != address(this)) revert OnlyThis();
 
         // Iterate over all batches, repay the debt and collect the collateral
-        _repayDebtForLoans(coolerAddress, ids);
+        _repayDebtForLoans(flashLoanData.cooler, flashLoanData.ids);
 
-        // Take a new Cooler loan with all the received collateral
-        gohm.approve(clearinghouse, gohm.balanceOf(address(this)));
-        Clearinghouse(clearinghouse).lendToCooler(cooler, principal);
+        // Calculate the amount of collateral that will be needed for the consolidated loan
+        uint256 collateralRequired = Clearinghouse(flashLoanData.clearinghouse)
+            .getCollateralForLoan(flashLoanData.principal);
+
+        // If the collateral required is greater than the collateral that was returned, then transfer gOHM from the cooler owner
+        // This can happen as the collateral required for the consolidated loan can be greater than the sum of the collateral of the loans being consolidated
+        if (collateralRequired > gohm.balanceOf(address(this))) {
+            gohm.transferFrom(
+                cooler.owner(),
+                address(this),
+                collateralRequired - gohm.balanceOf(address(this))
+            );
+        }
+
+        // Take a new Cooler loan for the principal required
+        gohm.approve(flashLoanData.clearinghouse, collateralRequired);
+        Clearinghouse(flashLoanData.clearinghouse).lendToCooler(cooler, flashLoanData.principal);
 
         // The cooler owner will receive DAI for the consolidated loan
         // Transfer this amount, plus the fee, to this contract
@@ -210,7 +228,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         dai.approve(address(lender), amount_ + lenderFee_);
 
         // Pay protocol fee
-        if (protocolFee != 0) dai.transfer(collector, protocolFee);
+        if (flashLoanData.protocolFee != 0) dai.transfer(collector, flashLoanData.protocolFee);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
@@ -261,13 +279,11 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         // Iterate over all loans in the cooler and repay
         uint256 numLoans = ids_.length;
         for (uint256 i; i < numLoans; i++) {
-            (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = cooler.loans(
-                ids_[i]
-            );
+            (, uint256 principal, uint256 interestDue, , , , , ) = cooler.loans(ids_[i]);
 
             // Repay. This also releases the collateral to the owner.
-            cooler.repayLoan(ids_[i], principal + interestDue);
-            totalCollateral += collateral;
+            uint256 collateralReturned = cooler.repayLoan(ids_[i], principal + interestDue);
+            totalCollateral += collateralReturned;
         }
 
         // Transfers all of the gOHM collateral to this contract
@@ -292,28 +308,34 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @return sDaiDebtWithFee Total debt to be approved in sDAI, including the protocol fee (is sDAI option will be set to true).
     /// @return protocolFee     Fee to be paid to the protocol.
     function requiredApprovals(
+        address clearinghouse_,
         address cooler_,
         uint256[] calldata ids_
     ) external view returns (address, uint256, uint256, uint256, uint256) {
         if (ids_.length < 2) revert InsufficientCoolerCount();
 
-        uint256 totalDebt;
-        uint256 totalCollateral;
+        uint256 totalPrincipal;
+        uint256 totalDebtWithInterest;
         uint256 numLoans = ids_.length;
 
+        // Calculate the total debt and collateral for the loans
         for (uint256 i; i < numLoans; i++) {
-            (, uint256 principal, uint256 interestDue, uint256 collateral, , , , ) = Cooler(cooler_)
-                .loans(ids_[i]);
-            totalDebt += principal + interestDue;
-            totalCollateral += collateral;
+            (, uint256 principal, uint256 interestDue, , , , , ) = Cooler(cooler_).loans(ids_[i]);
+            totalPrincipal += principal;
+            totalDebtWithInterest += principal + interestDue;
         }
 
-        uint256 protocolFee = getProtocolFee(totalDebt);
-        uint256 totalDebtWithFee = totalDebt + protocolFee;
+        uint256 protocolFee = getProtocolFee(totalDebtWithInterest);
+        uint256 totalDebtWithFee = totalDebtWithInterest + protocolFee;
+
+        // Calculate the collateral required for the consolidated loan principal
+        uint256 collateralRequired = Clearinghouse(clearinghouse_).getCollateralForLoan(
+            totalPrincipal
+        );
 
         return (
             Cooler(cooler_).owner(),
-            totalCollateral,
+            collateralRequired,
             totalDebtWithFee,
             sdai.previewWithdraw(totalDebtWithFee),
             protocolFee
