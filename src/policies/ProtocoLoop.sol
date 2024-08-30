@@ -218,21 +218,6 @@ contract Protocoloop is Policy, RolesConsumer {
         emit ProtocolLoop(marketId, bidAmount);
     }
 
-    /// @notice         Helper function to calculate number of price decimals based on the value returned from the price feed.
-    /// @param price_   The price to calculate the number of decimals for
-    /// @return         The number of decimals
-    function _getPriceDecimals(uint256 price_) internal view returns (int8) {
-        int8 decimals;
-        while (price_ >= 10) {
-            price_ = price_ / 10;
-            decimals++;
-        }
-
-        // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
-        // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
-        return decimals - int8(_oracleDecimals);
-    }
-
     /// @notice internal function to burn ohm and retrieve backing
     function _getBackingForPurchased() internal {
         uint256 balance = ohm.balanceOf(address(this));
@@ -255,6 +240,21 @@ contract Protocoloop is Policy, RolesConsumer {
         // Approve and withdraw sDAI from TRSRY
         TRSRY.increaseWithdrawApproval(address(this), ERC20(address(sdai)), amountInSDAI);
         TRSRY.withdrawReserves(address(this), ERC20(address(sdai)), amountInSDAI);
+    }
+
+    /// @notice         Helper function to calculate number of price decimals based on the value returned from the price feed.
+    /// @param price_   The price to calculate the number of decimals for
+    /// @return         The number of decimals
+    function _getPriceDecimals(uint256 price_) internal view returns (int8) {
+        int8 decimals;
+        while (price_ >= 10) {
+            price_ = price_ / 10;
+            decimals++;
+        }
+
+        // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
+        // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
+        return decimals - int8(_oracleDecimals);
     }
 
     ///////////////////////// VIEW /////////////////////////
