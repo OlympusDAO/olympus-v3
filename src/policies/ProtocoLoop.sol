@@ -15,9 +15,12 @@ import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
+
+interface BurnableERC20 {
+    function burn(uint256 amount) external;
+}
 
 interface Clearinghouse {
     function principalReceivables() external view returns (uint256);
@@ -48,7 +51,6 @@ contract Protocoloop is Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
     RANGEv2 public RANGE;
-    MINTRv1 public MINTR;
 
     // Policies
     Clearinghouse public immutable clearinghouse =
@@ -89,13 +91,11 @@ contract Protocoloop is Policy, RolesConsumer {
         dependencies[1] = toKeycode("PRICE");
         dependencies[2] = toKeycode("RANGE");
         dependencies[3] = toKeycode("ROLES");
-        dependencies[4] = toKeycode("MINTR");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
         RANGE = RANGEv2(getModuleAddress(dependencies[2]));
         ROLES = ROLESv1(getModuleAddress(dependencies[3]));
-        MINTR = MINTRv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
     }
@@ -111,7 +111,6 @@ contract Protocoloop is Policy, RolesConsumer {
         permissions = new Permissions[](3);
         permissions[0] = Permissions(TRSRY_KEYCODE, TRSRYv1.withdrawReserves.selector);
         permissions[1] = Permissions(TRSRY_KEYCODE, TRSRYv1.increaseWithdrawApproval.selector);
-        permissions[2] = Permissions(MINTR.KEYCODE(), MINTRv1.burnOhm.selector);
     }
 
     ///////////////////////// EXTERNAL /////////////////////////
@@ -161,9 +160,7 @@ contract Protocoloop is Policy, RolesConsumer {
         isShutdown = true;
 
         // Burn OHM in contract
-        uint256 ohmBalance = ohm.balanceOf(address(this));
-        ohm.approve(address(MINTR), ohmBalance);
-        MINTR.burnOhm(address(this), ohmBalance);
+        BurnableERC20(address(ohm)).burn(ohm.balanceOf(address(this)));
 
         // Transfer all tokens to treasury
         for (uint256 i; i < tokensToTransfer.length; i++) {
@@ -242,8 +239,7 @@ contract Protocoloop is Policy, RolesConsumer {
         uint256 backingForBalance = balance * backingPerToken; // balance and backingPerToken are 9 decimals, dai amount is 18 decimals
 
         // Burn OHM in contract
-        ohm.approve(address(MINTR), balance);
-        MINTR.burnOhm(address(this), balance);
+        BurnableERC20(address(ohm)).burn(balance);
 
         // Withdraw backing for purchased ohm
         _withdraw(backingForBalance);
