@@ -132,11 +132,16 @@ contract Protocoloop is Policy, RolesConsumer {
             lastReserveBalance = getReserveBalance();
         }
 
-        _getBackingForPurchased(); // convert yesterdays ohm purchases into dai
+        _getBackingForPurchased(); // convert yesterdays ohm purchases into sdai
 
+        uint256 balanceInDAI = dai.balanceOf(address(this)) +
+            sdai.previewRedeem(sdai.balanceOf(address(this)));
         // use portion of dai balance based on day of the week
         // i.e. day one, use 1/7th; day two, use 1/6th; 1/5th; 1/4th; ...
-        uint256 bidAmount = dai.balanceOf(address(this)) / (7 - (epoch / 3));
+        uint256 bidAmount = balanceInDAI / (7 - (epoch / 3));
+
+        // contract holds funds in sDAI except for the day's inventory, so we need to redeem before opening a market
+        sdai.redeem(sdai.convertToShares(bidAmount), address(this), address(this));
 
         _createMarket(bidAmount);
     }
@@ -244,8 +249,8 @@ contract Protocoloop is Policy, RolesConsumer {
         _withdraw(backingForBalance);
     }
 
-    /// @notice internal function to withdraw DAI from treasury
-    /// @dev withdraws SDAI and converts to DAI
+    /// @notice internal function to withdraw sDAI from treasury
+    /// @dev note amount given is in DAI, not sDAI
     /// @param amount an amount to withdraw, in DAI
     function _withdraw(uint256 amount) internal {
         // Get the amount of sDAI to withdraw
@@ -254,9 +259,6 @@ contract Protocoloop is Policy, RolesConsumer {
         // Approve and withdraw sDAI from TRSRY
         TRSRY.increaseWithdrawApproval(address(this), ERC20(address(sdai)), amountInSDAI);
         TRSRY.withdrawReserves(address(this), ERC20(address(sdai)), amountInSDAI);
-
-        // Unwrap sDAI to DAI
-        sdai.redeem(sdai.balanceOf(address(this)), address(this), address(this));
     }
 
     ///////////////////////// VIEW /////////////////////////
