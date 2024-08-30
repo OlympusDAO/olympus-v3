@@ -272,7 +272,7 @@ contract Protocoloop is Policy, RolesConsumer {
         // add sDAI rewards accrued for week
         yield +=
             ((lastReserveBalance * sdai.previewRedeem(1e18)) / lastConversionRate) -
-            getReserveBalance();
+            lastReserveBalance;
         // add clearinghouse interest accrued for week (0.5% divided by 52 weeks)
         yield += (clearinghouse.principalReceivables() * 5) / 1000 / 52;
     }
