@@ -140,7 +140,7 @@ contract Protocoloop is Policy, RolesConsumer {
         uint256 bidAmount = balanceInDAI / (7 - (epoch / 3));
 
         // contract holds funds in sDAI except for the day's inventory, so we need to redeem before opening a market
-        sdai.redeem(sdai.convertToShares(bidAmount), address(this), address(this));
+        sdai.redeem(sdai.previewWithdraw(bidAmount), address(this), address(this));
 
         _createMarket(bidAmount);
     }
