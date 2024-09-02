@@ -39,11 +39,11 @@ contract Protocoloop is Policy, RolesConsumer {
     ///////////////////////// STATE /////////////////////////
 
     // Tokens
-    ERC4626 public constant sdai = ERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
-    ERC20 public constant dai = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
-    uint8 internal constant _daiDecimals = 18;
-    ERC20 public constant ohm = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
-    uint8 internal constant _ohmDecimals = 9;
+    ERC4626 public immutable sdai; // = ERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
+    ERC20 public immutable dai; // = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+    uint8 internal immutable _daiDecimals; // = 18;
+    ERC20 public immutable ohm; // = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
+    uint8 internal immutable _ohmDecimals; // = 9;
     uint8 internal _oracleDecimals;
 
     // Modules
@@ -52,12 +52,11 @@ contract Protocoloop is Policy, RolesConsumer {
     RANGEv2 public RANGE;
 
     // Policies
-    Clearinghouse public constant clearinghouse =
-        Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
+    Clearinghouse public immutable clearinghouse; // = Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
 
     // External contracts
-    address public constant teller = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
-    IBondSDA public constant auctioneer = IBondSDA(0x007F7A1cb838A872515c8ebd16bE4b14Ef43a222);
+    address public immutable teller; // = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
+    IBondSDA public immutable auctioneer; // = IBondSDA(0x007F7A1cb838A872515c8ebd16bE4b14Ef43a222);
 
     // System variables
     uint48 public epoch; // a running counter to keep time
@@ -75,17 +74,36 @@ contract Protocoloop is Policy, RolesConsumer {
     ///////////////////////// SETUP /////////////////////////
 
     constructor(
-        Kernel kernel,
+        Kernel kernel_,
+        address ohm_,
+        address dai_,
+        address sdai_,
+        address teller_,
+        address auctioneer_,
+        address clearinghouse_,
         uint256 initialReserveBalance,
         uint256 initialConversionRate
-    ) Policy(kernel) {
+    ) Policy(kernel_) {
+        // Set immutable variables
+        ohm = ERC20(ohm_);
+        dai = ERC20(dai_);
+        sdai = ERC4626(sdai_);
+        teller = teller_;
+        auctioneer = IBondSDA(auctioneer_);
+        clearinghouse = Clearinghouse(clearinghouse_);
+
+        // Cache token decimals
+        _daiDecimals = dai.decimals();
+        _ohmDecimals = ohm.decimals();
+
+        // Initialize system variables
         epoch = 20;
         lastReserveBalance = initialReserveBalance;
         lastConversionRate = initialConversionRate;
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
         dependencies[2] = toKeycode("RANGE");
@@ -107,7 +125,7 @@ contract Protocoloop is Policy, RolesConsumer {
     {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](2);
         permissions[0] = Permissions(TRSRY_KEYCODE, TRSRYv1.withdrawReserves.selector);
         permissions[1] = Permissions(TRSRY_KEYCODE, TRSRYv1.increaseWithdrawApproval.selector);
     }
