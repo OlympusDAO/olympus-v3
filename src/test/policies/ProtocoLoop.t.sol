@@ -28,6 +28,8 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Protocoloop} from "policies/ProtocoLoop.sol";
+import {Operator} from "policies/Operator.sol";
+import {BondCallback} from "policies/BondCallback.sol";
 
 // solhint-disable-next-line max-states-count
 contract ProtocoLoopTest is Test {
@@ -58,6 +60,8 @@ contract ProtocoLoopTest is Test {
     MockClearinghouse internal clearinghouse;
     Protocoloop internal protocoloop;
     RolesAdmin internal rolesAdmin;
+    BondCallback internal callback; // only used by operator, not by protocoloop
+    Operator internal operator;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -118,6 +122,28 @@ contract ProtocoLoopTest is Test {
             // Deploy mock clearinghouse
             clearinghouse = new MockClearinghouse(address(reserve), address(wrappedReserve));
 
+            /// Deploy bond callback
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+
+            /// Deploy operator
+            operator = new Operator(
+                kernel,
+                IBondSDA(address(auctioneer)),
+                callback,
+                [address(ohm), address(reserve), address(wrappedReserve)],
+                [
+                    uint32(2000), // cushionFactor
+                    uint32(5 days), // duration
+                    uint32(100_000), // debtBuffer
+                    uint32(1 hours), // depositInterval
+                    uint32(1000), // reserveFactor
+                    uint32(1 hours), // regenWait
+                    uint32(5), // regenThreshold
+                    uint32(7) // regenObserve
+                    // uint32(8 hours) // observationFrequency
+                ]
+            );
+
             /// Deploy protocol loop
             protocoloop = new Protocoloop(
                 kernel,
@@ -128,7 +154,8 @@ contract ProtocoLoopTest is Test {
                 address(auctioneer),
                 address(clearinghouse),
                 105_000_000e18, // initial reserve balance
-                1_05e16 // initial conversion rate (1 wrappedReserve = 1.05 reserve)
+                1_05e16, // initial conversion rate (1 wrappedReserve = 1.05 reserve)
+                50_000e18 // initial yield
             );
 
             /// Deploy ROLES administrator
@@ -147,6 +174,8 @@ contract ProtocoLoopTest is Test {
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(protocoloop));
+            kernel.executeAction(Actions.ActivatePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
@@ -155,6 +184,9 @@ contract ProtocoLoopTest is Test {
             /// Protocoloop ROLES
             rolesAdmin.grantRole("heart", address(heart));
             rolesAdmin.grantRole("loop_daddy", guardian);
+
+            /// Operator ROLES
+            rolesAdmin.grantRole("operator_admin", address(guardian));
         }
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
@@ -184,6 +216,10 @@ contract ProtocoLoopTest is Test {
         // Approve the bond teller for the tokens to swap
         vm.prank(alice);
         ohm.approve(address(teller), testOhm * 20);
+
+        // Initialise the operator so that the range prices are set
+        vm.prank(guardian);
+        operator.initialize();
     }
 
     function _mintYield() internal {
@@ -202,6 +238,7 @@ contract ProtocoLoopTest is Test {
     //   [X] addresses are set correctly
     //   [X] initial reserve balance is set correctly
     //   [X] initial conversion rate is set correctly
+    //   [X] initial yield is set correctly
     //   [X] epoch is set correctly
     // [ ] endEpoch
     //   [ ] when contract is shutdown
@@ -238,7 +275,20 @@ contract ProtocoLoopTest is Test {
         assertEq(protocoloop.lastConversionRate(), 1_05e16);
         assertEq((wrappedReserve.totalAssets() * 1e18) / wrappedReserve.totalSupply(), 1_05e16);
 
+        // initial yield is set correctly
+        assertEq(protocoloop.nextYield(), 50_000e18);
+
         // epoch is set correctly
         assertEq(protocoloop.epoch(), 20);
+    }
+
+    function test_endEpoch() public {
+        // Mint yield to the wrappedReserve
+        _mintYield();
+
+        // TODO actually test something
+        // This just shows we have the correct setup and can call the function without errors
+        vm.prank(heart);
+        protocoloop.endEpoch();
     }
 }
