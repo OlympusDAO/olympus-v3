@@ -82,7 +82,8 @@ contract Protocoloop is Policy, RolesConsumer {
         address auctioneer_,
         address clearinghouse_,
         uint256 initialReserveBalance,
-        uint256 initialConversionRate
+        uint256 initialConversionRate,
+        uint256 initialYield
     ) Policy(kernel_) {
         // Set immutable variables
         ohm = ERC20(ohm_);
@@ -100,6 +101,7 @@ contract Protocoloop is Policy, RolesConsumer {
         epoch = 20;
         lastReserveBalance = initialReserveBalance;
         lastConversionRate = initialConversionRate;
+        nextYield = initialYield;
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
