@@ -12,8 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
@@ -43,7 +42,7 @@ contract Protocoloop is Policy, RolesConsumer {
     ERC4626 public constant sdai = ERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
     ERC20 public constant dai = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
     uint8 internal constant _daiDecimals = 18;
-    ERC20 public immutable ohm = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
+    ERC20 public constant ohm = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
     uint8 internal constant _ohmDecimals = 9;
     uint8 internal _oracleDecimals;
 
@@ -53,12 +52,12 @@ contract Protocoloop is Policy, RolesConsumer {
     RANGEv2 public RANGE;
 
     // Policies
-    Clearinghouse public immutable clearinghouse =
+    Clearinghouse public constant clearinghouse =
         Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
 
     // External contracts
-    address public immutable teller = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
-    IBondSDA public immutable auctioneer = IBondSDA(0x007F7A1cb838A872515c8ebd16bE4b14Ef43a222);
+    address public constant teller = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
+    IBondSDA public constant auctioneer = IBondSDA(0x007F7A1cb838A872515c8ebd16bE4b14Ef43a222);
 
     // System variables
     uint48 public epoch; // a running counter to keep time
