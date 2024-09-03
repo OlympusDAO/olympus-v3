@@ -825,7 +825,7 @@ contract OlympusDeploy is Script {
         console2.log("ohm", address(ohm));
         console2.log("reserve", address(reserve));
         console2.log("gohm", address(gohm));
-        
+
         // Deploy ClaimTransfer contract
         vm.broadcast();
         claimTransfer = new ClaimTransfer(
@@ -904,11 +904,7 @@ contract OlympusDeploy is Script {
     }
 
     /// @dev Should be called by the deployer address after deployment
-    function verifyAndPushAuth(
-        address guardian_,
-        address policy_,
-        address emergency_
-    ) external {
+    function verifyAndPushAuth(address guardian_, address policy_, address emergency_) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
@@ -953,11 +949,7 @@ contract OlympusDeploy is Script {
     }
 
     /// @dev Should be called by the deployer address after deployment
-    function verifyAuth(
-        address guardian_,
-        address policy_,
-        address emergency_
-    ) external {
+    function verifyAuth(address guardian_, address policy_, address emergency_) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));

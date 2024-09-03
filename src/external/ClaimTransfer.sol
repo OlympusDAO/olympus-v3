@@ -40,12 +40,7 @@ contract ClaimTransfer {
     mapping(address => Term) public fractionalizedTerms;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    constructor(
-        address poly_,
-        address ohm_,
-        address dai_,
-        address gohm_
-    ) {
+    constructor(address poly_, address ohm_, address dai_, address gohm_) {
         pOLY = IPOLY(poly_);
         OHM = ERC20(ohm_);
         DAI = ERC20(dai_);
@@ -123,11 +118,7 @@ contract ClaimTransfer {
     ///         They claim 10 OHM, leaving 90 OHM claimable. If they transfer 50% of their claim (5_000), the recipient gets a
     ///         max value of 55 and the commensurate gClaimed so they have a true claimable amount of 50 OHM. The sender's
     ///         fractionalized claim is updated to reflect the transfer.
-    function transferFrom(
-        address from_,
-        address to_,
-        uint256 amount_
-    ) external returns (bool) {
+    function transferFrom(address from_, address to_, uint256 amount_) external returns (bool) {
         // Check that allowance is sufficient
         allowance[from_][msg.sender] -= amount_;
 
@@ -139,11 +130,7 @@ contract ClaimTransfer {
 
     // ========= INTERNAL FUNCTIONS ========= //
 
-    function _transfer(
-        address from_,
-        address to_,
-        uint256 amount_
-    ) internal {
+    function _transfer(address from_, address to_, uint256 amount_) internal {
         // Get fractionalized terms
         Term memory terms = fractionalizedTerms[from_];
 

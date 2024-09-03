@@ -388,10 +388,7 @@ contract pOLYTest is Test {
         vm.startPrank(alice);
         dai.approve(address(poly), 100_000e18);
 
-        bytes memory err = abi.encodeWithSignature(
-            "POLY_ClaimMoreThanVested(uint256)",
-            0
-        );
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 0);
         vm.expectRevert(err);
 
         poly.claim(alice, 100_000e18);

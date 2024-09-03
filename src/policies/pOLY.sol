@@ -193,11 +193,10 @@ contract pOLY is IPOLY, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IPOLY
-    function validateClaim(uint256 amount_, Term memory accountTerms_)
-        public
-        view
-        returns (uint256)
-    {
+    function validateClaim(
+        uint256 amount_,
+        Term memory accountTerms_
+    ) public view returns (uint256) {
         // Value OHM at 1 DAI. So convert 18 decimal DAI value to 9 decimal OHM value
         uint256 toSend = (amount_ * OHM_PRECISION) / DAI_PRECISION;
 
