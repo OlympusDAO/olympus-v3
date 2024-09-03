@@ -156,14 +156,19 @@ contract Protocoloop is Policy, RolesConsumer {
 
         _getBackingForPurchased(); // convert yesterdays ohm purchases into sdai
 
-        uint256 balanceInDAI = dai.balanceOf(address(this)) +
-            sdai.previewRedeem(sdai.balanceOf(address(this)));
+        uint256 daiBalance = dai.balanceOf(address(this));
+        uint256 totalBalanceInDAI = daiBalance + sdai.previewRedeem(sdai.balanceOf(address(this)));
+
         // use portion of dai balance based on day of the week
         // i.e. day one, use 1/7th; day two, use 1/6th; 1/5th; 1/4th; ...
-        uint256 bidAmount = balanceInDAI / (7 - (epoch / 3));
+        uint256 bidAmount = totalBalanceInDAI / (7 - (epoch / 3));
 
         // contract holds funds in sDAI except for the day's inventory, so we need to redeem before opening a market
-        sdai.redeem(sdai.previewWithdraw(bidAmount), address(this), address(this));
+        uint256 bidAmountFromSDAI = daiBalance < bidAmount
+            ? bidAmount - dai.balanceOf(address(this))
+            : 0;
+        if (bidAmountFromSDAI != 0)
+            sdai.redeem(sdai.previewWithdraw(bidAmountFromSDAI), address(this), address(this));
 
         _createMarket(bidAmount);
     }
