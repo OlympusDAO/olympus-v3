@@ -35,6 +35,8 @@ contract Protocoloop is Policy, RolesConsumer {
     ///////////////////////// EVENTS /////////////////////////
 
     event ProtocolLoop(uint256 marketId, uint256 bidAmount);
+    event NextYieldSet(uint256 nextYield);
+    event Shutdown();
 
     ///////////////////////// STATE /////////////////////////
 
@@ -102,6 +104,7 @@ contract Protocoloop is Policy, RolesConsumer {
         lastReserveBalance = initialReserveBalance;
         lastConversionRate = initialConversionRate;
         nextYield = initialYield;
+        emit NextYieldSet(initialYield);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -146,6 +149,7 @@ contract Protocoloop is Policy, RolesConsumer {
             _withdraw(nextYield);
 
             nextYield = getNextYield();
+            emit NextYieldSet(nextYield);
             lastConversionRate = sdai.previewRedeem(1e18);
             lastReserveBalance = getReserveBalance();
         }
@@ -171,12 +175,14 @@ contract Protocoloop is Policy, RolesConsumer {
             revert("Too much increase");
 
         nextYield = newNextYield;
+        emit NextYieldSet(nextYield);
     }
 
     /// @notice retire contract by burning ohm balance and transferring tokens to treasury
     /// @param tokensToTransfer list of tokens to transfer back to treasury (i.e. DAI)
     function shutdown(ERC20[] memory tokensToTransfer) external onlyRole("loop_daddy") {
         isShutdown = true;
+        emit Shutdown();
 
         // Burn OHM in contract
         BurnableERC20(address(ohm)).burn(ohm.balanceOf(address(this)));
