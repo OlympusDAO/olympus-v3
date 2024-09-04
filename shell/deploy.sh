@@ -18,6 +18,9 @@ then
 fi
 
 # Deploy using script
-forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy --sig "deploy(string)()" $CHAIN $DEPLOY_FILE --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvv \
+forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
+--sig "deploy(string,string)()" $CHAIN $DEPLOY_FILE \
+--rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvv \
+--with-gas-price $GAS_PRICE \
 # --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY #\ # uncomment to broadcast to the network
 # --resume # uncomment to resume from a previous deployment

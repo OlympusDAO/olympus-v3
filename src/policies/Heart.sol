@@ -6,12 +6,14 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -20,7 +22,8 @@ import "src/Kernel.sol";
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward
+///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward.
+///         Rewards are issued in OHM.
 contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
@@ -32,9 +35,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Duration of the reward auction (in seconds)
     uint48 public auctionDuration;
 
-    /// @notice Reward token address that users are sent for beating the Heart
-    ERC20 public rewardToken;
-
     /// @notice Max reward for beating the Heart (in reward token decimals)
     uint256 public maxReward;
 
@@ -43,9 +43,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     // Modules
     PRICEv1 internal PRICE;
+    MINTRv1 internal MINTR;
 
     // Policies
     IOperator public operator;
+    IDistributor public distributor;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -56,37 +58,41 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     constructor(
         Kernel kernel_,
         IOperator operator_,
-        ERC20 rewardToken_,
+        IDistributor distributor_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
+        distributor = distributor_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
         auctionDuration = auctionDuration_;
-        rewardToken = rewardToken_;
         maxReward = maxReward_;
 
-        emit RewardUpdated(rewardToken_, maxReward_, auctionDuration_);
+        emit RewardUpdated(maxReward_, auctionDuration_);
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
+        dependencies[2] = toKeycode("MINTR");
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[2]));
 
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1]);
-        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 1 || ROLES_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -96,8 +102,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](1);
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
+        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -116,7 +126,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger price range update and market operations
         operator.operate();
 
-        // Calculate the reward
+        // Trigger distributor rebase
+        distributor.triggerRebase();
+
+        // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
 
         // Update the last beat timestamp
@@ -124,8 +137,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         lastBeat = currentTime - ((currentTime - lastBeat) % frequency());
 
         // Issue the reward
-        rewardToken.safeTransfer(msg.sender, reward);
-        emit RewardIssued(msg.sender, reward);
+        if (reward > 0) {
+            MINTR.increaseMintApproval(address(this), reward);
+            MINTR.mintOhm(msg.sender, reward);
+            emit RewardIssued(msg.sender, reward);
+        }
 
         emit Beat(block.timestamp);
     }
@@ -159,6 +175,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         operator = IOperator(operator_);
     }
 
+    /// @inheritdoc IHeart
+    function setDistributor(address distributor_) external onlyRole("heart_admin") {
+        distributor = IDistributor(distributor_);
+    }
+
     modifier notWhileBeatAvailable() {
         // Prevent calling if a beat is available to avoid front-running a keeper
         if (uint48(block.timestamp) >= lastBeat + frequency()) revert Heart_BeatAvailable();
@@ -167,24 +188,15 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IHeart
     function setRewardAuctionParams(
-        ERC20 token_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) external onlyRole("heart_admin") notWhileBeatAvailable {
         // auction duration should be less than or equal to frequency, otherwise frequency will be used
         if (auctionDuration_ > frequency()) revert Heart_InvalidParams();
 
-        rewardToken = token_;
         maxReward = maxReward_;
         auctionDuration = auctionDuration_;
-        emit RewardUpdated(token_, maxReward_, auctionDuration_);
-    }
-
-    /// @inheritdoc IHeart
-    function withdrawUnspentRewards(
-        ERC20 token_
-    ) external onlyRole("heart_admin") notWhileBeatAvailable {
-        token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
+        emit RewardUpdated(maxReward_, auctionDuration_);
     }
 
     //============================================================================================//
@@ -207,11 +219,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         if (currentTime <= nextBeat) {
             return 0;
         } else {
-            uint256 auctionAmount = currentTime - nextBeat > duration
-                ? maxReward
-                : (uint256(currentTime - nextBeat) * maxReward) / uint256(duration);
-            uint256 balance = rewardToken.balanceOf(address(this));
-            return auctionAmount > balance ? balance : auctionAmount;
+            return
+                currentTime - nextBeat >= duration
+                    ? maxReward
+                    : (uint256(currentTime - nextBeat) * maxReward) / duration;
         }
     }
 }

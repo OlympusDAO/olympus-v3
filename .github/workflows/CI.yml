@@ -6,15 +6,15 @@ on:
     pull_request:
 
 env:
-  ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
-  POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
+    ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
+    POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
 
 jobs:
     run-ci:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
@@ -22,7 +22,7 @@ jobs:
 
             - uses: pnpm/action-setup@v2
               with:
-                version: 8
+                  version: 8
 
             - name: Install Node dependencies
               run: pnpm install
@@ -38,13 +38,18 @@ jobs:
             - name: Run lint check
               run: pnpm run lint:check
 
-            - name: Run non-fork tests
+            - name: Run unit tests
               run: pnpm run test:unit
+
+            - name: Run proposal simulation tests
+              run: pnpm run test:proposal
+              env:
+                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run fork tests
               run: pnpm run test:fork
               env:
-                FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
+                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
@@ -59,12 +64,12 @@ jobs:
             - name: Add Artifacts
               uses: actions/upload-artifact@v3
               with:
-                name: lcov.info
-                path: lcov.info
-              
+                  name: lcov.info
+                  path: lcov.info
+
             - name: Report Code Coverage
               uses: zgosalvez/github-actions-report-lcov@v3
               with:
-                coverage-files: lcov.info
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                update-comment: true
+                  coverage-files: lcov.info
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  update-comment: true

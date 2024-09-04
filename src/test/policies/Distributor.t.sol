@@ -7,7 +7,9 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 /// Import Distributor
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/Distributor/Distributor.sol";
+import {IDistributor} from "policies/interfaces/IDistributor.sol";
+
 import "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -170,13 +172,13 @@ contract DistributorTest is Test {
     ///     [X]  Can only be called by staking
     ///     [X]  Cannot be called if not unlocked
     function testCorrectness_distributeOnlyStaking() public {
-        bytes memory err = abi.encodeWithSelector(Distributor.Distributor_OnlyStaking.selector);
+        bytes memory err = abi.encodeWithSelector(IDistributor.Distributor_OnlyStaking.selector);
         vm.expectRevert(err);
         distributor.distribute();
     }
 
     function testCorrectness_distributeNotUnlocked() public {
-        bytes memory err = abi.encodeWithSelector(Distributor.Distributor_NotUnlocked.selector);
+        bytes memory err = abi.encodeWithSelector(IDistributor.Distributor_NotUnlocked.selector);
         vm.expectRevert(err);
 
         vm.prank(address(staking));
@@ -187,7 +189,7 @@ contract DistributorTest is Test {
     ///     [X]  Can only be called by staking
     ///     [X]  Bounty is zero and no OHM is minted
     function test_retrieveBountyOnlyStaking() public {
-        vm.expectRevert(abi.encodeWithSelector(Distributor.Distributor_OnlyStaking.selector));
+        vm.expectRevert(abi.encodeWithSelector(IDistributor.Distributor_OnlyStaking.selector));
         distributor.retrieveBounty();
     }
 
@@ -401,7 +403,7 @@ contract DistributorTest is Test {
 
         uint256 balanceBefore = ohm.balanceOf(address(staking));
         bytes memory err = abi.encodeWithSelector(
-            Distributor.Distributor_NoRebaseOccurred.selector
+            IDistributor.Distributor_NoRebaseOccurred.selector
         );
         vm.expectRevert(err);
 
@@ -434,7 +436,7 @@ contract DistributorTest is Test {
         /// Move forward a little bit
         vm.warp(2500);
         bytes memory err = abi.encodeWithSelector(
-            Distributor.Distributor_NoRebaseOccurred.selector
+            IDistributor.Distributor_NoRebaseOccurred.selector
         );
         vm.expectRevert(err);
 
