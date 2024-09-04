@@ -17,6 +17,13 @@ then
   exit 1
 fi
 
+echo "Deploying $DEPLOY_FILE"
+echo "Chain: $CHAIN"
+echo "Guardian: $GUARDIAN_ADDRESS"
+echo "Policy: $POLICY_ADDRESS"
+echo "Emergency: $EMERGENCY_ADDRESS"
+echo "RPC URL: $RPC_URL"
+
 # Deploy using script
 forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
 --sig "deploy(string,string)()" $CHAIN $DEPLOY_FILE \
