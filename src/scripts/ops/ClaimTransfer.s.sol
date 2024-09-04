@@ -48,9 +48,15 @@ contract ClaimTransferScript is Script {
 
         // Check the new terms
         (uint256 newPercent, uint256 newgClaimed, uint256 newMax) = pOLYContract.terms(user_);
-        console2.log("pOLY Percent After (1e6):", newPercent);
-        console2.log("pOLY gClaimed After (1e18):", newgClaimed);
-        console2.log("pOLY Max After (1e9):", newMax);
+        console2.log("pOLY Percent User (1e6):", newPercent);
+        console2.log("pOLY gClaimed User (1e18):", newgClaimed);
+        console2.log("pOLY Max User (1e9):", newMax);
+
+        // Check the ClaimTransfer claim
+        (newPercent, newgClaimed, newMax) = pOLYContract.terms(address(claimTransferContract));
+        console2.log("pOLY Percent ClaimTransfer (1e6):", newPercent);
+        console2.log("pOLY gClaimed ClaimTransfer (1e18):", newgClaimed);
+        console2.log("pOLY Max ClaimTransfer (1e9):", newMax);
 
         // Check the new terms on ClaimTransfer
         (
