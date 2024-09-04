@@ -886,6 +886,12 @@ contract OlympusDeploy is Script {
         console2.log("reserve", address(reserve));
         console2.log("gohm", address(gohm));
 
+        // Validate that the addresses are set
+        require(address(poly) != address(0), "poly is not set");
+        require(address(ohm) != address(0), "ohm is not set");
+        require(address(reserve) != address(0), "reserve is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+
         // Deploy ClaimTransfer contract
         vm.broadcast();
         claimTransfer = new ClaimTransfer(
