@@ -163,10 +163,17 @@ contract ClaimTransferTest is Test {
     }
 
     function testCorrectness_fractionalizeClaimSetsTerms() public {
+        uint256 redeemableBefore = poly.redeemableFor(alice);
+
         (uint256 percent, uint256 gClaimed, uint256 max) = claimTransfer.fractionalizedTerms(alice);
         assertEq(percent, 0);
         assertEq(gClaimed, 0);
         assertEq(max, 0);
+
+        // redeemableFor should be 0, no terms set yet
+        (uint256 redeemable, uint256 daiRequired) = claimTransfer.redeemableFor(alice);
+        assertEq(redeemable, 0, "claimTransfer: redeemableFor is not 0");
+        assertEq(daiRequired, 0, "claimTransfer: daiRequired is not 0");
 
         vm.startPrank(alice);
         poly.pushWalletChange(address(claimTransfer));
@@ -178,6 +185,11 @@ contract ClaimTransferTest is Test {
         assertEq(percent, 10_000);
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
+
+        // redeemableFor should be the same as before
+        (redeemable, daiRequired) = claimTransfer.redeemableFor(alice);
+        assertEq(redeemable, redeemableBefore, "claimTransfer: redeemableFor differs");
+        assertEq(daiRequired, 0, "claimTransfer: daiRequired is not 0");
     }
 
     /// [X]  claim
@@ -237,6 +249,8 @@ contract ClaimTransferTest is Test {
     }
 
     function testCorrectness_claimIncreasesGClaimed() public {
+        uint256 redeemableBefore = poly.redeemableFor(alice);
+
         vm.startPrank(alice);
         poly.pushWalletChange(address(claimTransfer));
 
@@ -251,6 +265,19 @@ contract ClaimTransferTest is Test {
         assertEq(percent, 10_000);
         assertEq(gClaimed, 10e18);
         assertEq(max, 100_000e9);
+
+        // redeemableFor should be adjusted
+        // 1 OHM = 1 DAI
+        uint256 redeemedExpected = (1_000e18 * 1e9) / 1e18;
+        uint256 daiRequiredExpected = ((redeemableBefore - redeemedExpected) * 1e18) / 1e9;
+
+        (uint256 redeemable, uint256 daiRequired) = claimTransfer.redeemableFor(alice);
+        assertEq(
+            redeemable,
+            redeemableBefore - redeemedExpected,
+            "claimTransfer: redeemableFor is not adjusted"
+        );
+        assertEq(daiRequired, daiRequiredExpected, "claimTransfer: daiRequired is not adjusted");
     }
 
     function testCorrectness_claimTransfersDaiFromUser() public {

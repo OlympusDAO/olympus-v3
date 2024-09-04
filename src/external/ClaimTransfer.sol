@@ -79,6 +79,26 @@ contract ClaimTransfer {
         pOLY.claim(msg.sender, amount_);
     }
 
+    /// @notice Calculate the amount of OHM that can be redeemed for a given address's fractionalized claim
+    /// @param user_ Address of the user
+    /// @return uint256 The amount of OHM the account can redeem
+    /// @return uint256 The amount of DAI required to claim the amount of OHM
+    function redeemableFor(address user_) external view returns (uint256, uint256) {
+        Term memory terms = fractionalizedTerms[user_];
+        // Convert fractionalized terms to pOLY terms
+        IPOLY.Term memory pOlyTerms = IPOLY.Term({
+            percent: terms.percent,
+            gClaimed: terms.gClaimed,
+            max: terms.max
+        });
+
+        uint256 redeemable = pOLY.redeemableFor(pOlyTerms);
+        // 1 OHM = 1 DAI, adjusted for precision
+        uint256 daiRequired = (redeemable * 1e18) / 1e9;
+
+        return (redeemable, daiRequired);
+    }
+
     // ========= TRANSFER FUNCTIONS ========= //
 
     /// @notice Approve a spender to spend a certain amount of your fractionalized claim (denominated in the `percent` value of a Term)
