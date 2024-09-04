@@ -47,16 +47,18 @@ contract ClaimTransferScript is Script {
         vm.stopPrank();
 
         // Check the new terms
-        (uint256 newPercent, uint256 newgClaimed, uint256 newMax) = pOLYContract.terms(user_);
-        console2.log("pOLY Percent User (1e6):", newPercent);
-        console2.log("pOLY gClaimed User (1e18):", newgClaimed);
-        console2.log("pOLY Max User (1e9):", newMax);
+        {
+            (uint256 newPercent, uint256 newgClaimed, uint256 newMax) = pOLYContract.terms(user_);
+            console2.log("pOLY Percent User (1e6):", newPercent);
+            console2.log("pOLY gClaimed User (1e18):", newgClaimed);
+            console2.log("pOLY Max User (1e9):", newMax);
 
-        // Check the ClaimTransfer claim
-        (newPercent, newgClaimed, newMax) = pOLYContract.terms(address(claimTransferContract));
-        console2.log("pOLY Percent ClaimTransfer (1e6):", newPercent);
-        console2.log("pOLY gClaimed ClaimTransfer (1e18):", newgClaimed);
-        console2.log("pOLY Max ClaimTransfer (1e9):", newMax);
+            // Check the ClaimTransfer claim
+            (newPercent, newgClaimed, newMax) = pOLYContract.terms(address(claimTransferContract));
+            console2.log("pOLY Percent ClaimTransfer (1e6):", newPercent);
+            console2.log("pOLY gClaimed ClaimTransfer (1e18):", newgClaimed);
+            console2.log("pOLY Max ClaimTransfer (1e9):", newMax);
+        }
 
         // Check the new terms on ClaimTransfer
         (
@@ -67,6 +69,13 @@ contract ClaimTransferScript is Script {
         console2.log("ClaimTransfer Percent After (1e6):", fractionalizedPercent);
         console2.log("ClaimTransfer gClaimed After (1e18):", fractionalizedgClaimed);
         console2.log("ClaimTransfer Max After (1e9):", fractionalizedMax);
+
+        // Check redeemable amount
+        {
+            (uint256 redeemableOHM, uint256 daiRequired) = claimTransferContract.redeemableFor(user_);
+            console2.log("Redeemable OHM:", redeemableOHM);
+            console2.log("DAI Required:", daiRequired);
+        }
 
         // Split the claim in half
         vm.startPrank(user_);
@@ -84,11 +93,25 @@ contract ClaimTransferScript is Script {
         console2.log("ClaimTransfer gClaimed User (1e18):", fractionalizedgClaimed);
         console2.log("ClaimTransfer Max User (1e9):", fractionalizedMax);
 
+        // Check redeemable amount
+        {
+            (uint256 redeemableOHM, uint256 daiRequired) = claimTransferContract.redeemableFor(user_);
+            console2.log("User: Redeemable OHM:", redeemableOHM);
+            console2.log("User: DAI Required:", daiRequired);
+        }
+
         // Check the recipient's terms on ClaimTransfer
         (fractionalizedPercent, fractionalizedgClaimed, fractionalizedMax) = claimTransferContract
             .fractionalizedTerms(recipient_);
         console2.log("ClaimTransfer Percent Recipient (1e6):", fractionalizedPercent);
         console2.log("ClaimTransfer gClaimed Recipient (1e18):", fractionalizedgClaimed);
         console2.log("ClaimTransfer Max Recipient (1e9):", fractionalizedMax);
+
+        // Check redeemable amount
+        {
+            (uint256 redeemableOHM, uint256 daiRequired) = claimTransferContract.redeemableFor(recipient_);
+            console2.log("Recipient: Redeemable OHM:", redeemableOHM);
+            console2.log("Recipient: DAI Required:", daiRequired);
+        }
     }
 }
