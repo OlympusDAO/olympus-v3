@@ -30,6 +30,33 @@ contract MockGohm is IgOHM {
     function balanceTo(uint256 ohmAmount_) public view returns (uint256) {
         return (ohmAmount_ * 1e18) / index;
     }
+
+    function totalSupply() external view override returns (uint256) {}
+
+    function balanceOf(address account) external view override returns (uint256) {}
+
+    function transfer(address recipient, uint256 amount) external override returns (bool) {}
+
+    function allowance(address owner, address spender) external view override returns (uint256) {}
+
+    function approve(address spender, uint256 amount) external override returns (bool) {}
+
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external override returns (bool) {}
+
+    function mint(address _to, uint256 _amount) external override {}
+
+    function burn(address _from, uint256 _amount) external override {}
+
+    function migrate(address _staking, address _sOHM) external override {}
+
+    function getPriorVotes(
+        address account,
+        uint256 blockNumber
+    ) external view override returns (uint256) {}
 }
 
 // solhint-disable-next-line max-states-count
