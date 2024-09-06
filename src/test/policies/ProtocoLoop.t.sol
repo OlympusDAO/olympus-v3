@@ -248,24 +248,24 @@ contract ProtocoLoopTest is Test {
     //   [X] initial conversion rate is set correctly
     //   [X] initial yield is set correctly
     //   [X] epoch is set correctly
-    // [ ] endEpoch
+    // [X] endEpoch
     //   [X] when contract is shutdown
     //     [X] nothing happens
     //   [X] when contract is not shutdown
     //     [X] when epoch is not divisible by 3
     //       [X] nothing happens
-    //     [ ] when epoch is divisible by 3
-    //       [ ] when epoch == epochLength
-    //         [ ] The yield earned on the wrapped reserves over the past 21 epochs is withdrawn from the TRSRY (affecting the balanceInDai and bidAmount)
-    //         [ ] OHM in the contract is burned and reserves are added at the backing rate
-    //         [ ] a new bond market is created with correct bid amount
-    //       [ ] when epoch != epochLength
-    //         [ ] OHM in the contract is burned and reserves are added at the backing rate
-    //         [ ] a new bond market is created with correct bid amount
-    // [ ] adjustNextYield
-    // [ ] shutdown
-    // [ ] getNextYield
-    // [ ] getReserveBalance
+    //     [X] when epoch is divisible by 3
+    //       [X] when epoch == epochLength
+    //         [X] The yield earned on the wrapped reserves over the past 21 epochs is withdrawn from the TRSRY (affecting the balanceInDai and bidAmount)
+    //         [X] OHM in the contract is burned and reserves are added at the backing rate
+    //         [X] a new bond market is created with correct bid amount
+    //       [X] when epoch != epochLength
+    //         [X] OHM in the contract is burned and reserves are added at the backing rate
+    //         [X] a new bond market is created with correct bid amount
+    // [X] adjustNextYield
+    // [X] shutdown
+    // [X] getNextYield
+    // [X] getReserveBalance
 
     function test_setup() public {
         // addresses are set correctly
@@ -289,16 +289,6 @@ contract ProtocoLoopTest is Test {
         // epoch is set correctly
         assertEq(protocoloop.epoch(), 20);
     }
-
-    // function test_endEpoch() public {
-    //     // Mint yield to the wrappedReserve
-    //     _mintYield();
-
-    //     // TODO actually test something
-    //     // This just shows we have the correct setup and can call the function without errors
-    //     vm.prank(heart);
-    //     protocoloop.endEpoch();
-    // }
 
     function test_endEpoch_firstCall() public {
         // Mint yield to the wrappedReserve
@@ -436,5 +426,280 @@ contract ProtocoLoopTest is Test {
 
         // Check that the epoch has been incremented
         assertEq(protocoloop.epoch(), 1);
+    }
+
+    function test_endEpoch_divisBy3_notEpochLength() public {
+        // Mint yield to the wrappedReserve
+        _mintYield();
+
+        // Make the initial call to get the epoch counter to reset
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Call end epoch twice to setup our test
+        vm.prank(heart);
+        protocoloop.endEpoch();
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Confirm that the epoch is 2
+        assertEq(protocoloop.epoch(), 2);
+
+        // Cache the protocoloop contract reserve balance before any bonds are issued
+        uint256 protocoloopReserveBalance = reserve.balanceOf(address(protocoloop));
+        uint256 protocoloopWrappedReserveBalance = wrappedReserve.balanceOf(address(protocoloop));
+
+        // Purchase a bond from the existing bond market
+        // So that there is some OHM in the contract to burn
+        vm.prank(alice);
+        (uint256 bondPayout, ) = teller.purchase(alice, address(0), 0, 100e9, 0);
+
+        // Confirm that the protocoloop balance is updated with the bond payout
+        assertEq(reserve.balanceOf(address(protocoloop)), protocoloopReserveBalance - bondPayout);
+        protocoloopReserveBalance -= bondPayout;
+
+        // Warp forward a day so that the initial bond market ends
+        vm.warp(block.timestamp + 1 days);
+
+        // Mint yield to the wrappedReserve
+        _mintYield();
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Cache the TRSRY sDAI balance
+        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        // Cache the OHM balance in the protocoloop contract
+        uint256 protocoloopOhmBalance = ohm.balanceOf(address(protocoloop));
+        assertEq(protocoloopOhmBalance, 100e9);
+
+        // Call end epoch again
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Check that a new bond market was created
+        assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
+
+        // Check that the protocoloop contract burned the OHM
+        assertEq(ohm.balanceOf(address(protocoloop)), 0);
+
+        // Check that the treasury balance has changed by the amount of backing withdrawn for the burnt OHM
+        uint256 daiFromBurnedOhm = 100e9 * protocoloop.backingPerToken();
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            trsryBalance - wrappedReserve.previewWithdraw(daiFromBurnedOhm)
+        );
+
+        // Check that the balance of the protocoloop contract has changed correctly
+        uint256 expectedBidAmount = (protocoloopReserveBalance +
+            wrappedReserve.previewRedeem(protocoloopWrappedReserveBalance) +
+            daiFromBurnedOhm) / 6;
+
+        // Check that the protocoloop contract reserve balances have changed correctly
+        assertEq(reserve.balanceOf(address(protocoloop)), expectedBidAmount);
+        assertGe(
+            wrappedReserve.balanceOf(address(protocoloop)),
+            protocoloopWrappedReserveBalance - wrappedReserve.previewWithdraw(expectedBidAmount)
+        );
+
+        // Confirm that the bond market has the correct configuration
+        {
+            uint256 marketPrice = auctioneer.marketPrice(nextBondMarketId);
+            (
+                ,
+                ,
+                ,
+                ,
+                ,
+                uint256 capacity,
+                ,
+                uint256 minPrice,
+                uint256 maxPayout,
+                ,
+                ,
+                uint256 scale
+            ) = auctioneer.markets(nextBondMarketId);
+
+            assertEq(capacity, expectedBidAmount);
+            assertEq(maxPayout, capacity / 6);
+
+            assertEq(scale, 10 ** uint8(36 + 18 - 9 + 0));
+            assertEq(
+                marketPrice,
+                ((uint256(1e36) / 10e18) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
+            );
+            assertEq(
+                minPrice,
+                (((uint256(1e36) / ((10e18 * 120e16) / 1e18))) * 10 ** uint8(36 + 1)) /
+                    10 ** uint8(18 + 1)
+            );
+        }
+    }
+
+    // error ROLES_RequireRole(bytes32 role_);
+
+    function test_adjustNextYield() public {
+        // Mint yield to the wrappedReserve
+        _mintYield();
+
+        // Call endEpoch to set the next yield
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Get the next yield value
+        uint256 nextYield = protocoloop.nextYield();
+
+        // Try to call adjustNextYield with an invalid caller
+        // Expect it to fail
+        vm.expectRevert(
+            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
+        );
+        vm.prank(alice);
+        protocoloop.adjustNextYield(nextYield);
+
+        // Call adjustNextYield with a value that is too high
+        // Expect it to fail
+        uint256 newNextYield = (nextYield * 12) / 10;
+
+        vm.expectRevert(abi.encodePacked("Too much increase"));
+        vm.prank(guardian);
+        protocoloop.adjustNextYield(newNextYield);
+
+        // Call adjustNextYield with a value greater than the current yield but only by 10%
+        // Expect it to succeed
+        newNextYield = (nextYield * 11) / 10;
+        vm.prank(guardian);
+        protocoloop.adjustNextYield(newNextYield);
+
+        // Check that the next yield has been adjusted
+        assertEq(protocoloop.nextYield(), newNextYield);
+
+        // Call adjustNextYield with a value that is lower than the current yield
+        // Expect it to succeed
+        newNextYield = (newNextYield * 9) / 10;
+        vm.prank(guardian);
+        protocoloop.adjustNextYield(newNextYield);
+
+        // Check that the next yield has been adjusted
+        assertEq(protocoloop.nextYield(), newNextYield);
+
+        // Call adjustNextYield with a value of zero next yield
+        // Expect it to succeed
+        vm.prank(guardian);
+        protocoloop.adjustNextYield(0);
+
+        // Check that the next yield has been adjusted
+        assertEq(protocoloop.nextYield(), 0);
+    }
+
+    function test_shutdown() public {
+        // Try to call shutdown as an invalid caller
+        // Expect it to fail
+        vm.expectRevert(
+            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
+        );
+        vm.prank(alice);
+        protocoloop.shutdown(new ERC20[](0));
+
+        // Mint yield
+        _mintYield();
+
+        // Call endEpoch initially to get tokens into the contract
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Cache the protocoloop contract reserve balances
+        uint256 protocoloopReserveBalance = reserve.balanceOf(address(protocoloop));
+        uint256 protocoloopWrappedReserveBalance = wrappedReserve.balanceOf(address(protocoloop));
+
+        // Cache the treasury balances of the reserve tokens
+        uint256 trsryReserveBalance = reserve.balanceOf(address(TRSRY));
+        uint256 trsryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        // Setup array of tokens to extract
+        ERC20[] memory tokens = new ERC20[](2);
+        tokens[0] = reserve;
+        tokens[1] = wrappedReserve;
+
+        // Call shutdown with an invalid caller
+        // Expect it to fail
+        vm.expectRevert(
+            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
+        );
+        vm.prank(bob);
+        protocoloop.shutdown(tokens);
+
+        // Call shutdown with a valid caller
+        // Expect it to succeed
+        vm.prank(guardian);
+        protocoloop.shutdown(tokens);
+
+        // Check that the contract is shutdown
+        assertEq(protocoloop.isShutdown(), true);
+
+        // Check that the protocoloop contract reserve balances have been transferred to the TRSRY
+        assertEq(reserve.balanceOf(address(protocoloop)), 0);
+        assertEq(wrappedReserve.balanceOf(address(protocoloop)), 0);
+        assertEq(
+            reserve.balanceOf(address(TRSRY)),
+            trsryReserveBalance + protocoloopReserveBalance
+        );
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            trsryWrappedReserveBalance + protocoloopWrappedReserveBalance
+        );
+    }
+
+    function test_getReserveBalance() public {
+        // Mint yield
+        _mintYield();
+
+        // Call endEpoch initially to get tokens into the contract
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Cache yield earning balances in the clearinghouse and treasury
+        uint256 clearinghouseWrappedReserveBalance = wrappedReserve.balanceOf(
+            address(clearinghouse)
+        );
+        uint256 trsryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        // Calculate the expected yield earning reserve balance, in reserves
+        uint256 expectedYieldEarningReserveBalance = wrappedReserve.previewRedeem(
+            clearinghouseWrappedReserveBalance + trsryWrappedReserveBalance
+        );
+
+        // Confirm the view function matches
+        assertEq(protocoloop.getReserveBalance(), expectedYieldEarningReserveBalance);
+    }
+
+    function test_getNextYield() public {
+        // Mint yield
+        _mintYield();
+
+        // Call endEpoch initially to get tokens into the contract
+        vm.prank(heart);
+        protocoloop.endEpoch();
+
+        // Get the "last values" from the protocoloop contract
+        uint256 lastReserveBalance = protocoloop.lastReserveBalance();
+        uint256 lastConversionRate = protocoloop.lastConversionRate();
+
+        // Get the principal receivables from the clearinghouse
+        uint256 principalReceivables = clearinghouse.principalReceivables();
+
+        // Mint additional yield to the wrappedReserve
+        _mintYield();
+
+        // Calculate the expected next yield
+        uint256 expectedNextYield = lastReserveBalance /
+            10000 +
+            (principalReceivables * 5) /
+            1000 /
+            52;
+
+        // Confirm the view function matches
+        assertEq(protocoloop.getNextYield(), expectedNextYield);
     }
 }
