@@ -12,6 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
+import {IProtocoloop} from "policies/interfaces/IProtocoloop.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
@@ -28,7 +29,7 @@ interface Clearinghouse {
 /// @notice the ProtocoLoop contract pulls a derived amount of yield from the Olympus treasury each week
 ///         and uses it, along with the backing of previously purchased OHM, to purchase OHM off the
 ///         market using a Bond Protocol SDA market.
-contract Protocoloop is Policy, RolesConsumer {
+contract Protocoloop is IProtocoloop, Policy, RolesConsumer {
     using FullMath for uint256;
     using TransferHelper for ERC20;
 
@@ -138,7 +139,7 @@ contract Protocoloop is Policy, RolesConsumer {
     ///////////////////////// EXTERNAL /////////////////////////
 
     /// @notice create a new bond market at the end of the day with some portion of remaining funds
-    function endEpoch() public onlyRole("heart") {
+    function endEpoch() public override onlyRole("heart") {
         if (isShutdown) return; // disabling this contract will not interfere with heartbeat
         epoch++;
 
@@ -290,7 +291,7 @@ contract Protocoloop is Policy, RolesConsumer {
     ///////////////////////// VIEW /////////////////////////
 
     /// @notice fetch combined sdai balance of clearinghouse and treasury, in DAI
-    function getReserveBalance() public view returns (uint256 balance) {
+    function getReserveBalance() public view override returns (uint256 balance) {
         uint256 sBalance = sdai.balanceOf(address(clearinghouse));
         sBalance += sdai.balanceOf(address(TRSRY));
 
@@ -298,7 +299,7 @@ contract Protocoloop is Policy, RolesConsumer {
     }
 
     /// @notice compute yield for the next week
-    function getNextYield() public view returns (uint256 yield) {
+    function getNextYield() public view override returns (uint256 yield) {
         // add sDAI rewards accrued for week
         yield +=
             ((lastReserveBalance * sdai.previewRedeem(1e18)) / lastConversionRate) -

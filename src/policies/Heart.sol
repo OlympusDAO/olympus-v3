@@ -8,10 +8,10 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IProtocoloop} from "policies/interfaces/IProtocoloop.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
@@ -48,6 +48,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator public operator;
     IDistributor public distributor;
+    IProtocoloop public protocoloop;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -59,11 +60,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IOperator operator_,
         IDistributor distributor_,
+        IProtocoloop protocoloop_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         distributor = distributor_;
+        protocoloop = protocoloop_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
@@ -126,6 +129,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger price range update and market operations
         operator.operate();
 
+        // Trigger protocol loop
+        protocoloop.endEpoch();
+
         // Trigger distributor rebase
         distributor.triggerRebase();
 
@@ -178,6 +184,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function setDistributor(address distributor_) external onlyRole("heart_admin") {
         distributor = IDistributor(distributor_);
+    }
+
+    /// @inheritdoc IHeart
+    function setProtocoloop(address protocoloop_) external onlyRole("heart_admin") {
+        protocoloop = IProtocoloop(protocoloop_);
     }
 
     modifier notWhileBeatAvailable() {

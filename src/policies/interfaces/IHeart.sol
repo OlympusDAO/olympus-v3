@@ -51,6 +51,11 @@ interface IHeart {
     /// @param  distributor_ The address of the new Distributor contract
     function setDistributor(address distributor_) external;
 
+    /// @notice Updates the Protocoloop contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  protocoloop_ The address of the new Protocoloop contract
+    function setProtocoloop(address protocoloop_) external;
+
     /// @notice Sets the max reward amount, and auction duration for the beat function
     /// @notice Access restricted
     /// @param  maxReward_ - New max reward amount, in units of the reward token
