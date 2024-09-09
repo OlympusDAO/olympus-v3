@@ -55,6 +55,7 @@ import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVault
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
+import {Protocoloop} from "policies/Protocoloop.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -99,6 +100,7 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     Clearinghouse public clearinghouse;
+    Protocoloop public protocoloop;
 
     // Governance
     Timelock public timelock;
@@ -121,6 +123,7 @@ contract OlympusDeploy is Script {
     IBondSDA public bondAuctioneer;
     IBondSDA public bondFixedExpiryAuctioneer;
     IBondTeller public bondFixedExpiryTeller;
+    IBondTeller public bondFixedTermTeller;
     IBondAggregator public bondAggregator;
 
     /// Chainlink price feed addresses
@@ -187,6 +190,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
+        selectorMap["Protocoloop"] = this._deployProtocoloop.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -212,6 +216,7 @@ contract OlympusDeploy is Script {
         bondFixedExpiryTeller = IBondTeller(
             envAddress("external.bond-protocol.BondFixedExpiryTeller")
         );
+        bondFixedTermTeller = IBondTeller(envAddress("external.bond-protocol.BondFixedTermTeller"));
         bondAggregator = IBondAggregator(envAddress("external.bond-protocol.BondAggregator"));
         ohmEthPriceFeed = AggregatorV2V3Interface(envAddress("external.chainlink.ohmEthPriceFeed"));
         reserveEthPriceFeed = AggregatorV2V3Interface(
@@ -261,6 +266,7 @@ contract OlympusDeploy is Script {
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
+        protocoloop = Protocoloop(envAddress("olympus.policies.Protocoloop"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -536,7 +542,14 @@ contract OlympusDeploy is Script {
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, zeroDistributor, maxReward, auctionDuration);
+        heart = new OlympusHeart(
+            kernel,
+            operator,
+            zeroDistributor,
+            protocoloop,
+            maxReward,
+            auctionDuration
+        );
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);
@@ -932,6 +945,36 @@ contract OlympusDeploy is Script {
         console2.log("Governor Bravo Delegator deployed at:", address(governorBravoDelegator));
 
         return address(governorBravoDelegator);
+    }
+
+    // ========== PROTOCOLOOP ========== //
+
+    function _deployProtocoloop(bytes calldata args) public returns (address) {
+        (uint256 initialReserveBalance, uint256 initialConversionRate, uint256 initialYield) = abi
+            .decode(args, (uint256, uint256, uint256));
+
+        console2.log("Protocoloop initialReserveBalance:", initialReserveBalance);
+        console2.log("Protocoloop initialConversionRate:", initialConversionRate);
+        console2.log("Protocoloop initialYield:", initialYield);
+
+        // Deploy Protocoloop
+        vm.broadcast();
+        protocoloop = new Protocoloop(
+            kernel,
+            address(ohm),
+            address(reserve),
+            address(wrappedReserve),
+            address(bondFixedTermTeller),
+            address(bondAuctioneer),
+            address(clearinghouse),
+            initialReserveBalance,
+            initialConversionRate,
+            initialYield
+        );
+
+        console2.log("Protocoloop deployed at:", address(protocoloop));
+
+        return address(protocoloop);
     }
 
     // ========== VERIFICATION ========== //

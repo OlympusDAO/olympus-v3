@@ -26,6 +26,7 @@ import {Distributor} from "policies/Distributor/Distributor.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
+import {Protocoloop} from "policies/Protocoloop.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -56,6 +57,7 @@ contract OlympusDeploy is Script {
     ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
+    Protocoloop public protocoloop;
 
     /// Construction variables
 
@@ -67,6 +69,7 @@ contract OlympusDeploy is Script {
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
+    address public bondTeller;
     IBondAggregator public bondAggregator;
 
     /// Chainlink price feed addresses
@@ -90,6 +93,7 @@ contract OlympusDeploy is Script {
 
         /// Bond system addresses
         bondAuctioneer = IBondSDA(vm.envAddress("BOND_SDA_ADDRESS"));
+        bondTeller = vm.envAddress("BOND_TELLER_ADDRESS");
         bondAggregator = IBondAggregator(vm.envAddress("BOND_AGGREGATOR_ADDRESS"));
 
         /// Chainlink price feed addresses
@@ -162,7 +166,27 @@ contract OlympusDeploy is Script {
         zeroDistributor = new ZeroDistributor(staking);
         console2.log("ZeroDistributor deployed at:", address(distributor));
 
-        heart = new OlympusHeart(kernel, operator, zeroDistributor, 10 * 1e9, uint48(12 * 25)); // TODO verify initial keeper reward and auction duration
+        protocoloop = new Protocoloop(
+            kernel,
+            address(ohm),
+            address(reserve),
+            address(wrappedReserve),
+            address(bondTeller),
+            address(bondAuctioneer),
+            address(0), // TODO clearinghouse
+            100_000_000e18, // TODO placeholder values
+            105e16,
+            50_000e18
+        );
+
+        heart = new OlympusHeart(
+            kernel,
+            operator,
+            zeroDistributor,
+            protocoloop,
+            10 * 1e9,
+            uint48(12 * 25)
+        ); // TODO verify initial keeper reward and auction duration
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
@@ -195,6 +219,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
         // kernel.executeAction(Actions.ActivatePolicy, address(distributor));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
+        kernel.executeAction(Actions.ActivatePolicy, address(protocoloop));
 
         /// Configure access control for policies
 
