@@ -213,10 +213,13 @@ contract ClaimTransferTest is Test {
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
 
+        // 1 OHM = 1 DAI, adjusted for decimal scale
+        uint256 redeemableExpected = (redeemableBefore * 1e18) / 1e9;
+
         // redeemableFor should be the same as before
         (redeemable, daiRequired) = claimTransfer.redeemableFor(alice);
         assertEq(redeemable, redeemableBefore, "claimTransfer: redeemableFor differs");
-        assertEq(daiRequired, 0, "claimTransfer: daiRequired is not 0");
+        assertEq(daiRequired, redeemableExpected, "claimTransfer: daiRequired differs");
     }
 
     /// [X]  claim
