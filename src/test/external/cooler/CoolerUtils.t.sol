@@ -34,9 +34,11 @@ contract CoolerUtilsTest is Test {
     uint256 internal constant _GOHM_AMOUNT = 3_333 * 1e18;
     uint256 internal constant _ONE_HUNDRED_PERCENT = 100e2;
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     function setUp() public {
         // Mainnet Fork at current block.
-        vm.createSelectFork("https://eth.llamarpc.com", 18762666);
+        vm.createSelectFork(RPC_URL);
 
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
