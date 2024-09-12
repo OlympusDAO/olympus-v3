@@ -450,8 +450,12 @@ contract pOLYTest is Test {
         address migratedUser1_,
         address migratedUser2_
     ) public {
-        vm.assume(migratedUser1_ != alice && migratedUser1_ != bob);
-        vm.assume(migratedUser2_ != alice && migratedUser2_ != bob);
+        vm.assume(
+            migratedUser1_ != alice && migratedUser1_ != bob && migratedUser1_ != migratedUser2_
+        );
+        vm.assume(
+            migratedUser2_ != alice && migratedUser2_ != bob && migratedUser2_ != migratedUser1_
+        );
 
         previous.setTerms(migratedUser1_, 10_000, 0, 100_000e9);
         previous.setTerms(migratedUser2_, 5_000, 1e18, 50_000e9);
