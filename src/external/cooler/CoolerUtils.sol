@@ -203,21 +203,21 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         _repayDebtForLoans(flashLoanData.cooler, flashLoanData.ids);
 
         // Calculate the amount of collateral that will be needed for the consolidated loan
-        uint256 collateralRequired = Clearinghouse(flashLoanData.clearinghouse)
+        uint256 consolidatedLoanCollateral = Clearinghouse(flashLoanData.clearinghouse)
             .getCollateralForLoan(flashLoanData.principal);
 
         // If the collateral required is greater than the collateral that was returned, then transfer gOHM from the cooler owner
         // This can happen as the collateral required for the consolidated loan can be greater than the sum of the collateral of the loans being consolidated
-        if (collateralRequired > gohm.balanceOf(address(this))) {
+        if (consolidatedLoanCollateral > gohm.balanceOf(address(this))) {
             gohm.transferFrom(
                 cooler.owner(),
                 address(this),
-                collateralRequired - gohm.balanceOf(address(this))
+                consolidatedLoanCollateral - gohm.balanceOf(address(this))
             );
         }
 
         // Take a new Cooler loan for the principal required
-        gohm.approve(flashLoanData.clearinghouse, collateralRequired);
+        gohm.approve(flashLoanData.clearinghouse, consolidatedLoanCollateral);
         Clearinghouse(flashLoanData.clearinghouse).lendToCooler(cooler, flashLoanData.principal);
 
         // The cooler owner will receive DAI for the consolidated loan
@@ -329,17 +329,63 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         uint256 totalDebtWithFee = totalDebtWithInterest + protocolFee;
 
         // Calculate the collateral required for the consolidated loan principal
-        uint256 collateralRequired = Clearinghouse(clearinghouse_).getCollateralForLoan(
+        uint256 consolidatedLoanCollateral = Clearinghouse(clearinghouse_).getCollateralForLoan(
             totalPrincipal
         );
 
         return (
             Cooler(cooler_).owner(),
-            collateralRequired,
+            consolidatedLoanCollateral,
             totalDebtWithFee,
             sdai.previewWithdraw(totalDebtWithFee),
             protocolFee
         );
+    }
+
+    /// @notice Calculates the collateral required to consolidate a set of loans.
+    /// @dev    Due to rounding, the collateral required for the consolidated loan may be greater than the collateral of the loans being consolidated.
+    ///         This function calculates the additional collateral required.
+    ///
+    /// @param  clearinghouse_      Clearinghouse contract used to issue the consolidated loan.
+    /// @param  cooler_             Cooler contract that issued the loans.
+    /// @param  ids_                Array of loan ids to be consolidated.
+    /// @return consolidatedLoanCollateral  Collateral required for the consolidated loan.
+    /// @return existingLoanCollateral      Collateral of the existing loans.
+    /// @return additionalCollateral        Additional collateral required to consolidate the loans. This will need to be supplied by the Cooler owner.
+    function collateralRequired(
+        address clearinghouse_,
+        address cooler_,
+        uint256[] memory ids_
+    )
+        public
+        view
+        returns (
+            uint256 consolidatedLoanCollateral,
+            uint256 existingLoanCollateral,
+            uint256 additionalCollateral
+        )
+    {
+        if (ids_.length == 0) revert InsufficientCoolerCount();
+
+        // Calculate the total principal of the existing loans
+        uint256 totalPrincipal;
+        for (uint256 i; i < ids_.length; i++) {
+            (, uint256 principal, , uint256 collateral, , , , ) = Cooler(cooler_).loans(ids_[i]);
+            totalPrincipal += principal;
+            existingLoanCollateral += collateral;
+        }
+
+        // Calculate the collateral required for the consolidated loan
+        consolidatedLoanCollateral = Clearinghouse(clearinghouse_).getCollateralForLoan(
+            totalPrincipal
+        );
+
+        // Calculate the additional collateral required
+        if (consolidatedLoanCollateral > existingLoanCollateral) {
+            additionalCollateral = consolidatedLoanCollateral - existingLoanCollateral;
+        }
+
+        return (consolidatedLoanCollateral, existingLoanCollateral, additionalCollateral);
     }
 
     /// @notice Version of the contract
