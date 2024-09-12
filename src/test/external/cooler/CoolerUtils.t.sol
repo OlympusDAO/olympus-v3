@@ -38,7 +38,7 @@ contract CoolerUtilsTest is Test {
 
     function setUp() public {
         // Mainnet Fork at current block.
-        vm.createSelectFork(RPC_URL);
+        vm.createSelectFork(RPC_URL, 18762666);
 
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
