@@ -341,4 +341,11 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
             protocolFee
         );
     }
+
+    /// @notice Version of the contract
+    ///
+    /// @return Version number
+    function VERSION() external pure returns (uint256) {
+        return 3;
+    }
 }
