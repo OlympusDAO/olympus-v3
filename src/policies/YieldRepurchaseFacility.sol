@@ -84,10 +84,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         address sdai_,
         address teller_,
         address auctioneer_,
-        address clearinghouse_,
-        uint256 initialReserveBalance,
-        uint256 initialConversionRate,
-        uint256 initialYield
+        address clearinghouse_
     ) Policy(kernel_) {
         // Set immutable variables
         ohm = ERC20(ohm_);
@@ -101,12 +98,24 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         _daiDecimals = dai.decimals();
         _ohmDecimals = ohm.decimals();
 
+        // Disable until initialization
+        isShutdown = true;
+    }
+
+    function initialize(
+        uint256 initialReserveBalance,
+        uint256 initialConversionRate,
+        uint256 initialYield
+    ) external onlyRole("loop_daddy") {
         // Initialize system variables
         epoch = 20;
         lastReserveBalance = initialReserveBalance;
         lastConversionRate = initialConversionRate;
         nextYield = initialYield;
         emit NextYieldSet(initialYield);
+
+        // Enable
+        isShutdown = false;
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
