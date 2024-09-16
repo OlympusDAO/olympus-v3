@@ -18,6 +18,8 @@ import {IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/inte
 // Aura
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
+import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
+
 // Cooler Loans
 import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
 
@@ -54,6 +56,7 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {LegacyBurner} from "policies/LegacyBurner.sol";
 import {pOLY} from "policies/pOLY.sol";
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
@@ -101,6 +104,13 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    LegacyBurner public legacyBurner;
+
+    /// Other Olympus contracts
+    OlympusAuthority public burnerReplacementAuthority;
+
+    /// Legacy Olympus contracts
+    address public inverseBondDepository;
     pOLY public poly;
     Clearinghouse public clearinghouse;
     CoolerUtils public coolerUtils;
@@ -194,6 +204,8 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["LegacyBurner"] = this._deployLegacyBurner.selector;
+        selectorMap["ReplacementAuthority"] = this._deployReplacementAuthority.selector;
         selectorMap["pOLY"] = this._deployPoly.selector;
         selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
@@ -244,6 +256,10 @@ contract OlympusDeploy is Script {
         auraMiningLib = IAuraMiningLib(envAddress("external.aura.AuraMiningLib"));
         ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
         ohmLusdRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmLusdRewardsPool"));
+        inverseBondDepository = envAddress("olympus.legacy.InverseBondDepository");
+        burnerReplacementAuthority = OlympusAuthority(
+            envAddress("olympus.legacy.LegacyBurnerReplacementAuthority")
+        );
         coolerFactory = CoolerFactory(envAddress("external.cooler.CoolerFactory"));
 
         // Bophades contracts
@@ -273,6 +289,7 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        legacyBurner = LegacyBurner(envAddress("olympus.policies.LegacyBurner"));
         poly = pOLY(envAddress("olympus.policies.pOLY"));
         claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
@@ -849,6 +866,48 @@ contract OlympusDeploy is Script {
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);
+    }
+
+    function _deployLegacyBurner(bytes memory args) public returns (address) {
+        uint256 reward = abi.decode(args, (uint256));
+
+        console2.log("kernel", address(kernel));
+        console2.log("ohm", address(ohm));
+        console2.log("bondManager", address(bondManager));
+        console2.log("inverseBondDepository", inverseBondDepository);
+        console2.log("reward", reward / 1e9);
+
+        // Deploy LegacyBurner policy
+        vm.broadcast();
+        legacyBurner = new LegacyBurner(
+            kernel,
+            address(ohm),
+            address(bondManager),
+            inverseBondDepository,
+            reward
+        );
+        console2.log("LegacyBurner deployed at:", address(legacyBurner));
+
+        return address(legacyBurner);
+    }
+
+    function _deployReplacementAuthority(bytes memory args) public returns (address) {
+        // No additional arguments for ReplacementAuthority policy
+
+        console2.log("legacyBurner", address(legacyBurner));
+        console2.log("MINTR", address(MINTR));
+
+        // Deploy ReplacementAuthority policy
+        vm.broadcast();
+        burnerReplacementAuthority = new OlympusAuthority(
+            0x245cc372C84B3645Bf0Ffe6538620B04a217988B,
+            0x245cc372C84B3645Bf0Ffe6538620B04a217988B,
+            address(legacyBurner),
+            address(MINTR)
+        );
+        console2.log("ReplacementAuthority deployed at:", address(burnerReplacementAuthority));
+
+        return address(burnerReplacementAuthority);
     }
 
     function _deployPoly(bytes memory args) public returns (address) {
