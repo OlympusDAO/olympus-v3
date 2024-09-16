@@ -54,6 +54,8 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {pOLY} from "policies/pOLY.sol";
+import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
@@ -99,6 +101,7 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    pOLY public poly;
     Clearinghouse public clearinghouse;
     CoolerUtils public coolerUtils;
 
@@ -135,6 +138,9 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
     address public gnosisEasyAuction;
+    address public previousPoly;
+    address public previousGenesis;
+    ClaimTransfer public claimTransfer;
 
     /// Balancer Contracts
     IVault public balancerVault;
@@ -188,6 +194,8 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["pOLY"] = this._deployPoly.selector;
+        selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
         selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
 
@@ -226,6 +234,8 @@ contract OlympusDeploy is Script {
         );
         staking = envAddress("olympus.legacy.Staking");
         gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
+        previousPoly = envAddress("olympus.legacy.OldPOLY");
+        previousGenesis = envAddress("olympus.legacy.GenesisClaim");
         balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
         balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
         ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
@@ -263,6 +273,8 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        poly = pOLY(envAddress("olympus.policies.pOLY"));
+        claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
 
         // Governance
@@ -837,6 +849,63 @@ contract OlympusDeploy is Script {
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);
+    }
+
+    function _deployPoly(bytes memory args) public returns (address) {
+        // Decode arguments for pOLY policy
+        (address dao, uint256 maximumAllocated) = abi.decode(args, (address, uint256));
+
+        console2.log("kernel", address(kernel));
+        console2.log("previousPoly", address(previousPoly));
+        console2.log("previousGenesis", address(previousGenesis));
+        console2.log("ohm", address(ohm));
+        console2.log("gohm", address(gohm));
+        console2.log("reserve", address(reserve));
+        console2.log("dao", dao);
+        console2.log("maximumAllocated", maximumAllocated);
+
+        // Deploy pOLY policy
+        vm.broadcast();
+        poly = new pOLY(
+            kernel,
+            previousPoly,
+            previousGenesis,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            dao,
+            maximumAllocated
+        );
+        console2.log("pOLY deployed at:", address(poly));
+
+        return address(poly);
+    }
+
+    function _deployClaimTransfer(bytes memory args) public returns (address) {
+        // Doesn't need extra args
+
+        console2.log("poly", address(poly));
+        console2.log("ohm", address(ohm));
+        console2.log("reserve", address(reserve));
+        console2.log("gohm", address(gohm));
+
+        // Validate that the addresses are set
+        require(address(poly) != address(0), "poly is not set");
+        require(address(ohm) != address(0), "ohm is not set");
+        require(address(reserve) != address(0), "reserve is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+
+        // Deploy ClaimTransfer contract
+        vm.broadcast();
+        claimTransfer = new ClaimTransfer(
+            address(poly),
+            address(ohm),
+            address(reserve),
+            address(gohm)
+        );
+        console2.log("ClaimTransfer deployed at:", address(claimTransfer));
+
+        return address(claimTransfer);
     }
 
     function _deployClearinghouse(bytes memory args) public returns (address) {

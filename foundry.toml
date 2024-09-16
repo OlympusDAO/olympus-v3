@@ -1,5 +1,6 @@
 [profile.default]
 ffi = true
+ast = true
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'forge-std/=lib/forge-std/src/',

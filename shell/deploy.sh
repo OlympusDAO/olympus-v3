@@ -28,6 +28,11 @@ then
   exit 1
 fi
 
+echo "Deploying $DEPLOY_FILE"
+echo "Chain: $CHAIN"
+echo "Guardian: $GUARDIAN_ADDRESS"
+echo "Policy: $POLICY_ADDRESS"
+echo "Emergency: $EMERGENCY_ADDRESS"
 echo "Using RPC at URL: $RPC_URL"
 
 # Set BROADCAST_FLAG based on BROADCAST

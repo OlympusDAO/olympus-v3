@@ -34,9 +34,11 @@ contract CoolerUtilsTest is Test {
     uint256 internal constant _GOHM_AMOUNT = 3_333 * 1e18;
     uint256 internal constant _ONE_HUNDRED_PERCENT = 100e2;
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     function setUp() public {
         // Mainnet Fork at current block.
-        vm.createSelectFork("https://eth.llamarpc.com", 18762666);
+        vm.createSelectFork(RPC_URL, 18762666);
 
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
@@ -448,8 +450,6 @@ contract CoolerUtilsTest is Test {
             address(coolerB),
             loanIds
         );
-
-        // TODO change the way gohmApproval is calculated to be fore the entire amount. Transfer the difference from the wallet?
 
         // Record the amount of DAI in the wallet
         uint256 initPrincipal = dai.balanceOf(walletB);
@@ -1042,6 +1042,84 @@ contract CoolerUtilsTest is Test {
         // The gOHM approval should be the amount of collateral required for the total principal
         // At small values, this may be slightly different due to rounding
         assertEq(gohmApproval, clearinghouse.getCollateralForLoan(totalPrincipal), "gOHM approval");
+    }
+
+    function test_collateralRequired_fuzz(
+        uint256 loanOneCollateral_,
+        uint256 loanTwoCollateral_
+    ) public {
+        // Bound the collateral values
+        loanOneCollateral_ = bound(loanOneCollateral_, 1, 1e18);
+        loanTwoCollateral_ = bound(loanTwoCollateral_, 1, 1e18);
+
+        // Set up a new wallet
+        address walletB = vm.addr(0xB);
+
+        // Fund the wallet with gOHM
+        deal(address(gohm), walletB, loanOneCollateral_ + loanTwoCollateral_);
+
+        // Deploy a cooler for walletB
+        vm.startPrank(walletB);
+        address coolerB_ = coolerFactory.generateCooler(gohm, dai);
+        Cooler coolerB = Cooler(coolerB_);
+
+        // Approve clearinghouse to spend gOHM
+        gohm.approve(address(clearinghouse), loanOneCollateral_ + loanTwoCollateral_);
+
+        // Take loans
+        uint256 totalPrincipal;
+        {
+            // Loan 0 for coolerB
+            (uint256 loanOnePrincipal, ) = clearinghouse.getLoanForCollateral(loanOneCollateral_);
+            clearinghouse.lendToCooler(coolerB, loanOnePrincipal);
+
+            // Loan 1 for coolerB
+            (uint256 loanTwoPrincipal, ) = clearinghouse.getLoanForCollateral(loanTwoCollateral_);
+            clearinghouse.lendToCooler(coolerB, loanTwoPrincipal);
+            vm.stopPrank();
+
+            totalPrincipal = loanOnePrincipal + loanTwoPrincipal;
+        }
+
+        // Get the amount of collateral for the loans
+        uint256 existingLoanCollateralExpected = coolerB.getLoan(0).collateral +
+            coolerB.getLoan(1).collateral;
+
+        // Get the amount of collateral required for the consolidated loan
+        uint256 consolidatedLoanCollateralExpected = Clearinghouse(clearinghouse)
+            .getCollateralForLoan(totalPrincipal);
+
+        // Get the amount of additional collateral required
+        uint256 additionalCollateralExpected;
+        if (consolidatedLoanCollateralExpected > existingLoanCollateralExpected) {
+            additionalCollateralExpected =
+                consolidatedLoanCollateralExpected -
+                existingLoanCollateralExpected;
+        }
+
+        // Call collateralRequired
+        uint256[] memory loanIds = new uint256[](2);
+        loanIds[0] = 0;
+        loanIds[1] = 1;
+
+        (
+            uint256 consolidatedLoanCollateral,
+            uint256 existingLoanCollateral,
+            uint256 additionalCollateral
+        ) = utils.collateralRequired(address(clearinghouse), address(coolerB), loanIds);
+
+        // Assertions
+        assertEq(
+            consolidatedLoanCollateral,
+            consolidatedLoanCollateralExpected,
+            "consolidated loan collateral"
+        );
+        assertEq(
+            existingLoanCollateral,
+            existingLoanCollateralExpected,
+            "existing loan collateral"
+        );
+        assertEq(additionalCollateral, additionalCollateralExpected, "additional collateral");
     }
 
     // constructor
