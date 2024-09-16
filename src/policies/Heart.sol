@@ -8,8 +8,9 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IProtocoloop} from "policies/interfaces/IProtocoloop.sol";
+import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
+import {IStaking} from "interfaces/IStaking.sol";
 
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
@@ -48,7 +49,8 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator public operator;
     IDistributor public distributor;
-    IProtocoloop public protocoloop;
+    IYieldRepo public protocoloop;
+    IStaking public staking;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -60,13 +62,15 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IOperator operator_,
         IDistributor distributor_,
-        IProtocoloop protocoloop_,
+        IYieldRepo protocoloop_,
+        IStaking staking_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         distributor = distributor_;
         protocoloop = protocoloop_;
+        staking = staking_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
@@ -132,8 +136,8 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger protocol loop
         protocoloop.endEpoch();
 
-        // Trigger distributor rebase
-        distributor.triggerRebase();
+        // Trigger rebase
+        staking.unstake(address(this), 0, true, true);
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
