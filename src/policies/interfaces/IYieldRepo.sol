@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
-interface IProtocoloop {
+interface IYieldRepo {
     // =========  CORE FUNCTIONS ========= //
 
-    /// @notice Triggers the protocol loop functionality
+    /// @notice Triggers the yield repurchase facility functionality
     ///         Access controlled to the "heart" role
     /// @dev    Increments the epoch and triggers various actions depending on the new epoch number
     ///         When epoch == epochLength (21), withdraws the last week's yield and interest from the treasury

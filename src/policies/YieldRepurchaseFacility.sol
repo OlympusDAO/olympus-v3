@@ -12,7 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
-import {IProtocoloop} from "policies/interfaces/IProtocoloop.sol";
+import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
@@ -26,16 +26,16 @@ interface Clearinghouse {
     function principalReceivables() external view returns (uint256);
 }
 
-/// @notice the ProtocoLoop contract pulls a derived amount of yield from the Olympus treasury each week
-///         and uses it, along with the backing of previously purchased OHM, to purchase OHM off the
-///         market using a Bond Protocol SDA market.
-contract Protocoloop is IProtocoloop, Policy, RolesConsumer {
+/// @notice the Yield Repurchase Facility (Yield Repo) contract pulls a derived amount of yield from
+///         the Olympus treasury each week and uses it, along with the backing of previously purchased
+///         OHM, to purchase OHM off the market using a Bond Protocol SDA market.
+contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     using FullMath for uint256;
     using TransferHelper for ERC20;
 
     ///////////////////////// EVENTS /////////////////////////
 
-    event ProtocolLoop(uint256 marketId, uint256 bidAmount);
+    event RepoMarket(uint256 marketId, uint256 bidAmount);
     event NextYieldSet(uint256 nextYield);
     event Shutdown();
 
@@ -68,11 +68,12 @@ contract Protocoloop is IProtocoloop, Policy, RolesConsumer {
     uint256 public lastConversionRate; // the SDAI conversion rate at the end of the last week
     // we use this to compute yield accrued
     // yield = last reserve balance * ((current conversion rate / last conversion rate) - 1)
+    //       + current clearinghouse principal receivables * clearinghouse APR / 52 weeks
     bool public isShutdown;
 
     // Constants
     uint48 public constant epochLength = 21; // one week
-    uint256 public constant backingPerToken = 114 * 1e8; // assume backing of $11.40, TODO could use PRICE.minimumTargetPrice(), which is in theory set to LB
+    uint256 public constant backingPerToken = 1133 * 1e7; // assume backing of $11.33
 
     ///////////////////////// SETUP /////////////////////////
 
@@ -246,7 +247,7 @@ contract Protocoloop is IProtocoloop, Policy, RolesConsumer {
             )
         );
 
-        emit ProtocolLoop(marketId, bidAmount);
+        emit RepoMarket(marketId, bidAmount);
     }
 
     /// @notice internal function to burn ohm and retrieve backing
