@@ -112,6 +112,14 @@ contract Parthenon is Policy {
 
         INSTR = INSTRv1(getModuleAddress(dependencies[0]));
         VOTES = VOTESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 INSTR_MAJOR, ) = INSTR.VERSION();
+        (uint8 VOTES_MAJOR, ) = VOTES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1]);
+        if (INSTR_MAJOR != 1 || VOTES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {

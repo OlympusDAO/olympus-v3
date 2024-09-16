@@ -1,0 +1,32 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusClearinghouseRegistry",
+            "args": {
+                "inactive": ["0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880"]
+            }
+        },
+            "name": "BondCallback"
+        },
+        {
+            "name": "Operator",
+            "args": {
+                "cushionDebtBuffer": 100000,
+                "cushionDepositInterval": 14400,
+                "cushionDuration": 259200,
+                "cushionFactor": 3000,
+                "regenObserve": 21,
+                "regenThreshold": 18,
+                "regenWait": 518400,
+                "reserveFactor": 1000
+            }
+        },
+        {
+            "name": "OlympusHeart",
+            "args": {
+                "auctionDuration": 1200,
+                "maxReward": 40000000000
+            }
+        }
+    ]
+}

@@ -12,6 +12,7 @@ import {IBondSDA as LibIBondSDA} from "test/lib/bonds/interfaces/IBondSDA.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -62,14 +63,16 @@ contract BondCallbackTest is Test {
     BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
+    MockERC4626 internal wrappedReserve;
+    MockERC20 internal nakedReserve;
     MockERC20 internal other;
 
     Kernel internal kernel;
-    MockPrice internal price;
-    OlympusRange internal range;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    MockPrice internal PRICE;
+    OlympusRange internal RANGE;
+    OlympusTreasury internal TRSRY;
+    OlympusMinter internal MINTR;
+    OlympusRoles internal ROLES;
 
     Operator internal operator;
     BondCallback internal callback;
@@ -78,6 +81,7 @@ contract BondCallbackTest is Test {
     // Bond market ids to reference
     uint256 internal regBond;
     uint256 internal invBond;
+    uint256 internal invBondNaked;
     uint256 internal internalBond;
     uint256 internal externalBond;
     uint256 internal nonWhitelistedBond;
@@ -108,6 +112,8 @@ contract BondCallbackTest is Test {
             /// Deploy mock tokens
             ohm = new MockOhm("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
+            wrappedReserve = new MockERC4626(reserve, "Wrapped Reserve", "sRSV");
+            nakedReserve = new MockERC20("Naked Reserve", "nRSV", 18);
             other = new MockERC20("Other", "OTH", 18);
         }
 
@@ -116,28 +122,28 @@ contract BondCallbackTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            range = new OlympusRange(
+            PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            RANGE = new OlympusRange(
                 kernel,
                 ERC20(ohm),
                 ERC20(reserve),
                 uint256(100),
-                uint256(1000),
-                uint256(2000)
+                [uint256(1000), uint256(2000)],
+                [uint256(1000), uint256(2000)]
             );
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            TRSRY = new OlympusTreasury(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
+            ROLES = new OlympusRoles(kernel);
 
             /// Configure mocks
-            price.setMovingAverage(100 * 1e18);
-            price.setLastPrice(100 * 1e18);
-            price.setDecimals(18);
-            price.setLastTime(uint48(block.timestamp));
+            PRICE.setMovingAverage(100 * 1e18);
+            PRICE.setLastPrice(100 * 1e18);
+            PRICE.setDecimals(18);
+            PRICE.setLastTime(uint48(block.timestamp));
         }
 
         {
-            /// Deploy roles admin
+            /// Deploy ROLES admin
             rolesAdmin = new RolesAdmin(kernel);
 
             /// Deploy bond callback
@@ -148,7 +154,7 @@ contract BondCallbackTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [address(ohm), address(reserve), address(wrappedReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -175,11 +181,11 @@ contract BondCallbackTest is Test {
             /// Initialize system and kernel
 
             /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(price));
-            kernel.executeAction(Actions.InstallModule, address(range));
-            kernel.executeAction(Actions.InstallModule, address(treasury));
-            kernel.executeAction(Actions.InstallModule, address(minter));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(PRICE));
+            kernel.executeAction(Actions.InstallModule, address(RANGE));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -189,13 +195,13 @@ contract BondCallbackTest is Test {
         {
             /// Configure access control
 
-            /// Operator roles
+            /// Operator ROLES
             rolesAdmin.grantRole("operator_operate", guardian);
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);
 
-            /// Bond callback roles
+            /// Bond callback ROLES
             rolesAdmin.grantRole("callback_whitelist", address(operator));
             rolesAdmin.grantRole("callback_whitelist", policy);
             rolesAdmin.grantRole("callback_admin", guardian);
@@ -204,41 +210,60 @@ contract BondCallbackTest is Test {
         /// Set operator on the callback
         vm.prank(guardian);
         callback.setOperator(operator);
+        // Signal that reserve is held as wrappedReserve in TRSRY
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
 
         /// Initialize the operator
         vm.prank(guardian);
         operator.initialize();
 
-        // Mint tokens to users and treasury for testing
+        // Mint tokens to users and TRSRY for testing
         uint256 testOhm = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
+        uint256 testNakedReserve = 1_000_000 * 1e18;
 
         ohm.mint(alice, testOhm * 20);
         reserve.mint(alice, testReserve * 20);
+        nakedReserve.mint(alice, testNakedReserve * 20);
 
-        reserve.mint(address(treasury), testReserve * 100);
+        reserve.mint(address(TRSRY), testReserve * 100);
+        nakedReserve.mint(address(TRSRY), testNakedReserve * 100);
+        // Deposit TRSRY reserves into wrappedReserve
+        vm.startPrank(address(TRSRY));
+        reserve.approve(address(wrappedReserve), testReserve * 100);
+        wrappedReserve.deposit(testReserve * 100, address(TRSRY));
+        vm.stopPrank();
+        // Simuilate yield generation on wrappedReserve
+        reserve.mint(address(wrappedReserve), testReserve * 1);
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
         ohm.approve(address(operator), testOhm * 20);
         vm.prank(alice);
         reserve.approve(address(operator), testReserve * 20);
+        vm.prank(alice);
+        nakedReserve.approve(address(operator), testNakedReserve * 20);
 
         vm.prank(alice);
         ohm.approve(address(teller), testOhm * 20);
         vm.prank(alice);
         reserve.approve(address(teller), testReserve * 20);
+        vm.prank(alice);
+        nakedReserve.approve(address(teller), testNakedReserve * 20);
 
-        // Create five markets in the bond system
-        // 0. Regular OHM bond (Reserve -> OHM)
+        // Create six markets in the bond system
+        // 1. Regular OHM bond (Reserve -> OHM)
         regBond = createMarket(reserve, ohm, 0, 1, 3);
-        // 1. Inverse bond (OHM -> Reserve)
+        // 2.1 Inverse bond (OHM -> Reserve held in wrapped form)
         invBond = createMarket(ohm, reserve, 1, 0, 3);
-        // 2. Internal bond (OHM -> OHM)
+        // 2.2 Inverse bond (OHM -> Reserve held in naked form)
+        invBondNaked = createMarket(ohm, nakedReserve, 1, 0, 3);
+        // 3. Internal bond (OHM -> OHM)
         internalBond = createMarket(ohm, ohm, 1, 0, 8);
-        // 3. Non-OHM bond (WETH -> Reserve)
+        // 4. Non-OHM bond (WETH -> Reserve)
         externalBond = createMarket(reserve, reserve, 0, -1, 8);
-        // 4. Regular OHM bond that will not be whitelisted
+        // 5. Regular OHM bond that will not be whitelisted
         nonWhitelistedBond = createMarket(reserve, ohm, 0, 1, 3);
 
         // Whitelist all markets except the last one
@@ -247,6 +272,9 @@ contract BondCallbackTest is Test {
 
         vm.prank(policy);
         callback.whitelist(address(teller), invBond);
+
+        vm.prank(policy);
+        callback.whitelist(address(teller), invBondNaked);
 
         vm.prank(policy);
         callback.whitelist(address(teller), internalBond);
@@ -313,18 +341,54 @@ contract BondCallbackTest is Test {
         return auctioneer.createMarket(abi.encode(params));
     }
 
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("TRSRY");
+        expectedDeps[1] = toKeycode("MINTR");
+        expectedDeps[2] = toKeycode("ROLES");
+
+        Keycode[] memory deps = callback.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](5);
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        expectedPerms[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPerms[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPerms[4] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+
+        Permissions[] memory perms = callback.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
+
     // =========  CALLBACK TESTS ========= //
 
     /// DONE
-    /// [X] Callback correctly handles payouts for the 4 market cases
+    /// [X] Callback correctly handles payouts for the 5 market cases
     /// [X] Only whitelisted markets can callback
 
     function testCorrectness_callback() public {
-        /// Ensure the callback handles payouts for the 4 market cases correctly
+        /// Ensure the callback handles payouts for the 5 market cases correctly
 
         /// Case 1: Regular Bond (Reserve -> OHM)
         /// OHM is minted for payout
-        /// Reserve is stored in callback until batched to treasury
+        /// Reserve is stored in callback until batched to TRSRY
+        console2.log("Case 1: Regular Bond (Reserve -> OHM)");
 
         /// Store start balances of teller and callback
         uint256 startBalTeller = ohm.balanceOf(address(teller));
@@ -341,13 +405,15 @@ contract BondCallbackTest is Test {
         assertEq(ohm.balanceOf(address(teller)), startBalTeller + 10);
         assertEq(reserve.balanceOf(address(callback)), startBalCallback + 300);
 
-        /// Case 2: Inverse Bond (OHM -> Reserve)
-        /// Reserve is withdrawn from the treasury to pay out teller
-        /// OHM received is held in the callback until batched to treasury
+        /// Case 2.1: Inverse Bond (OHM -> Reserve stored in wrapped form)
+        /// wrappedReserve is withdrawn from the TRSRY to pay out teller
+        /// OHM received is held in the callback until batched to TRSRY
+        console2.log("Case 2.1: Inverse Bond (OHM -> Reserve stored in wrapped form)");
 
-        /// Store start balances of teller and callback
+        /// Store start balances of TRSRY, teller and callback
         startBalTeller = reserve.balanceOf(address(teller));
         startBalCallback = ohm.balanceOf(address(callback));
+        uint256 startBalTRSRY = wrappedReserve.maxWithdraw(address(TRSRY));
 
         /// Mint tokens to the callback to simulate a purchase
         ohm.mint(address(callback), 10);
@@ -356,14 +422,39 @@ contract BondCallbackTest is Test {
         vm.prank(address(teller));
         callback.callback(invBond, 10, 300);
 
-        /// Expect the balances of the teller and callback to be updated
+        /// Expect the balances of TRSRY, teller and callback to be updated
         /// Callback should be the same as the start amount since the OHM is burned
+        assertEq(wrappedReserve.maxWithdraw(address(TRSRY)), startBalTRSRY - 300);
         assertEq(reserve.balanceOf(address(teller)), startBalTeller + 300);
+        assertEq(ohm.balanceOf(address(callback)), startBalCallback);
+
+        /// Case 2.2: Inverse Bond (OHM -> Reserve held in naked form)
+        /// Reserve is withdrawn from the TRSRY to pay out teller
+        /// OHM received is held in the callback until batched to TRSRY
+        console2.log("Case 2.2: Inverse Bond (OHM -> Reserve held in naked form)");
+
+        /// Store start balances of TRSRY, teller and callback
+        startBalTeller = nakedReserve.balanceOf(address(teller));
+        startBalCallback = ohm.balanceOf(address(callback));
+        startBalTRSRY = nakedReserve.balanceOf(address(TRSRY));
+
+        /// Mint tokens to the callback to simulate a purchase
+        ohm.mint(address(callback), 10);
+
+        /// Call the callback function from the teller
+        vm.prank(address(teller));
+        callback.callback(invBondNaked, 10, 300);
+
+        /// Expect the balances of TRSRY, teller and callback to be updated
+        /// Callback should be the same as the start amount since the OHM is burned
+        assertEq(nakedReserve.balanceOf(address(TRSRY)), startBalTRSRY - 300);
+        assertEq(nakedReserve.balanceOf(address(teller)), startBalTeller + 300);
         assertEq(ohm.balanceOf(address(callback)), startBalCallback);
 
         /// Case 3: Internal Bond (OHM -> OHM)
         /// OHM is received by the callback and the difference
         /// in the quote token and payout is minted to the callback to pay the teller
+        console2.log("Case 3: Internal Bond (OHM -> OHM)");
 
         /// Store start balances of teller and callback
         startBalTeller = ohm.balanceOf(address(teller));
@@ -482,9 +573,10 @@ contract BondCallbackTest is Test {
     /// [X] batchToTreasury
 
     function testCorrectness_whitelist() public {
-        // Create two new markets to test whitelist functionality
+        // Create three new markets to test whitelist functionality
         uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
-        uint256 wlTwo = createMarket(reserve, ohm, 0, 1, 3);
+        uint256 wlTwo = createMarket(ohm, nakedReserve, 1, 0, 3);
+        uint256 wlThree = createMarket(ohm, reserve, 1, 0, 3);
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -495,12 +587,67 @@ contract BondCallbackTest is Test {
         vm.expectRevert(err);
         callback.whitelist(address(teller), wlOne);
 
+        // -- Whitelist 1:
+        console2.log("Case 1: Regular Bond (Reserve -> OHM)");
+        // Cache initial approval
+        uint256 initApproval = MINTR.mintApproval(address(callback));
+
+        // Cache approvals
+        uint256 previousReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            reserve
+        );
+        uint256 previousNakedReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            nakedReserve
+        );
+        uint256 previousWrappedReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            wrappedReserve
+        );
+        uint256 previousMintApproval = MINTR.mintApproval(address(callback));
+
         // Whitelist the first bond market from the policy address
         vm.prank(policy);
         callback.whitelist(address(teller), wlOne);
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlOne));
+        assertEq(
+            MINTR.mintApproval(address(callback)),
+            previousMintApproval + auctioneer.currentCapacity(wlOne)
+        );
+
+        // Payout token is OHM, so no change in withdraw approval
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), reserve),
+            previousReserveWithdrawApproval
+        );
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), nakedReserve),
+            previousNakedReserveWithdrawApproval
+        );
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), wrappedReserve),
+            previousWrappedReserveWithdrawApproval
+        );
+
+        // -- Whitelist 2:
+        console2.log("Case 2: Regular Bond (OHM -> Reserve held in naked form)");
+        // Cache initial approval
+        initApproval = TRSRY.withdrawApproval(address(callback), nakedReserve);
+
+        // Cache approvals
+        previousReserveWithdrawApproval = TRSRY.withdrawApproval(address(callback), reserve);
+        previousNakedReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            nakedReserve
+        );
+        previousWrappedReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            wrappedReserve
+        );
+        previousMintApproval = MINTR.mintApproval(address(callback));
 
         // Whitelist the second bond market from the operator address
         vm.prank(address(operator));
@@ -508,6 +655,61 @@ contract BondCallbackTest is Test {
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlTwo));
+        assertEq(MINTR.mintApproval(address(callback)), previousMintApproval);
+
+        // Payout token is nakedReserve, so it has a change in withdraw approval
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), reserve),
+            previousReserveWithdrawApproval
+        );
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), nakedReserve),
+            previousNakedReserveWithdrawApproval + auctioneer.currentCapacity(wlTwo)
+        );
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), wrappedReserve),
+            previousWrappedReserveWithdrawApproval
+        );
+
+        // -- Whitelist 3:
+        console2.log("Case 3: Regular Bond (OHM -> Reserve stored in wrapped form)");
+        // Cache initial approval
+        initApproval = TRSRY.withdrawApproval(address(callback), wrappedReserve);
+
+        // Cache approvals
+        previousReserveWithdrawApproval = TRSRY.withdrawApproval(address(callback), reserve);
+        previousNakedReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            nakedReserve
+        );
+        previousWrappedReserveWithdrawApproval = TRSRY.withdrawApproval(
+            address(callback),
+            wrappedReserve
+        );
+        previousMintApproval = MINTR.mintApproval(address(callback));
+
+        // Whitelist the third bond market from the operator address
+        vm.prank(address(operator));
+        callback.whitelist(address(teller), wlThree);
+
+        // Check whitelist is applied
+        assert(callback.approvedMarkets(address(teller), wlThree));
+        assertEq(MINTR.mintApproval(address(callback)), previousMintApproval);
+
+        // Payout token is wrappedReserve, so it has a change in withdraw approval
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), reserve),
+            previousReserveWithdrawApproval
+        );
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), nakedReserve),
+            previousNakedReserveWithdrawApproval
+        );
+        assertEq(
+            TRSRY.withdrawApproval(address(callback), wrappedReserve),
+            previousWrappedReserveWithdrawApproval +
+                wrappedReserve.previewWithdraw(auctioneer.currentCapacity(wlThree))
+        );
     }
 
     function testCorrectness_blacklist() public {
@@ -544,6 +746,20 @@ contract BondCallbackTest is Test {
         assertEq(address(callback.operator()), alice);
     }
 
+    function testCorrectness_useWrappedVersion() public {
+        // Configure callback to use the naked reserve.
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(0));
+
+        assertEq(callback.wrapped(address(reserve)), address(0));
+
+        // Configure callback to use a wrapped reserve for reserve
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
+
+        assertEq(callback.wrapped(address(reserve)), address(wrappedReserve));
+    }
+
     function testCorrectness_batchToTreasury() public {
         /// Create an extra market with the other token as the quote token
         uint256 otherBond = createMarket(other, ohm, 2, 1, 5);
@@ -552,10 +768,10 @@ contract BondCallbackTest is Test {
         vm.prank(policy);
         callback.whitelist(address(teller), otherBond);
 
-        /// Store the initial balances of the treasury
+        /// Store the initial balances of the TRSRY
         uint256[2] memory startBalances = [
-            reserve.balanceOf(address(treasury)),
-            other.balanceOf(address(treasury))
+            reserve.balanceOf(address(TRSRY)),
+            other.balanceOf(address(TRSRY))
         ];
 
         /// Send other tokens and reserve tokens to callback to mimic bond purchase
@@ -573,11 +789,11 @@ contract BondCallbackTest is Test {
         assertEq(reserve.balanceOf(address(callback)), 30);
         assertEq(other.balanceOf(address(callback)), 10);
 
-        /// Call batch to treasury with each token separately
+        /// Call batch to TRSRY with each token separately
         ERC20[] memory tokens = new ERC20[](1);
         tokens[0] = reserve;
 
-        /// Try to call batch to treasury as non-policy, expect revert
+        /// Try to call batch to TRSRY as non-policy, expect revert
         {
             bytes memory err = abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
@@ -588,29 +804,29 @@ contract BondCallbackTest is Test {
             callback.batchToTreasury(tokens);
         }
 
-        /// Call batch to treasury as guardian
+        /// Call batch to TRSRY as guardian
         vm.prank(guardian);
         callback.batchToTreasury(tokens);
 
-        /// Expect the reserve balance of the callback and treasury to be updated
+        /// Expect the reserve balance of the callback and TRSRY to be updated
         assertEq(reserve.balanceOf(address(callback)), 0);
-        assertEq(reserve.balanceOf(address(treasury)), startBalances[0] + 30);
+        assertEq(reserve.balanceOf(address(TRSRY)), startBalances[0] + 30);
 
-        /// Test batch to treasury with the other token
+        /// Test batch to TRSRY with the other token
         tokens[0] = other;
 
-        /// Call batch to treasury as guardian
+        /// Call batch to TRSRY as guardian
         vm.prank(guardian);
         callback.batchToTreasury(tokens);
 
-        /// Expect the other balance of the callback and treasury to be updated
+        /// Expect the other balance of the callback and TRSRY to be updated
         assertEq(other.balanceOf(address(callback)), 0);
-        assertEq(other.balanceOf(address(treasury)), startBalances[1] + 10);
+        assertEq(other.balanceOf(address(TRSRY)), startBalances[1] + 10);
 
         /// Try with both tokens at once now
 
-        /// Store updated treasury balances
-        startBalances = [reserve.balanceOf(address(treasury)), other.balanceOf(address(treasury))];
+        /// Store updated TRSRY balances
+        startBalances = [reserve.balanceOf(address(TRSRY)), other.balanceOf(address(TRSRY))];
 
         /// Send other tokens and reserve tokens to callback to mimic bond purchase
         reserve.mint(address(callback), 30);
@@ -627,7 +843,7 @@ contract BondCallbackTest is Test {
         assertEq(reserve.balanceOf(address(callback)), 30);
         assertEq(other.balanceOf(address(callback)), 10);
 
-        /// Call batch to treasury with both tokens
+        /// Call batch to TRSRY with both tokens
         tokens = new ERC20[](2);
         tokens[0] = reserve;
         tokens[1] = other;
@@ -635,13 +851,13 @@ contract BondCallbackTest is Test {
         vm.prank(guardian);
         callback.batchToTreasury(tokens);
 
-        /// Expect the reserve balance of the callback and treasury to be updated
+        /// Expect the reserve balance of the callback and TRSRY to be updated
         assertEq(reserve.balanceOf(address(callback)), 0);
-        assertEq(reserve.balanceOf(address(treasury)), startBalances[0] + 30);
+        assertEq(reserve.balanceOf(address(TRSRY)), startBalances[0] + 30);
 
-        /// Expect the other balance of the callback and treasury to be updated
+        /// Expect the other balance of the callback and TRSRY to be updated
         assertEq(other.balanceOf(address(callback)), 0);
-        assertEq(other.balanceOf(address(treasury)), startBalances[1] + 10);
+        assertEq(other.balanceOf(address(TRSRY)), startBalances[1] + 10);
     }
 
     // =========  VIEW TESTS ========= //

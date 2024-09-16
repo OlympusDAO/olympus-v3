@@ -5,6 +5,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 // Bond Protocol
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -19,6 +20,14 @@ import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiq
 
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
 
+// Cooler Loans
+import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+
+// Governance
+import {Timelock} from "src/external/governance/Timelock.sol";
+import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
+import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
+
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
@@ -27,6 +36,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
@@ -34,7 +44,8 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/Distributor/Distributor.sol";
+import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
 import {Burner} from "policies/Burner.sol";
@@ -46,12 +57,16 @@ import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVault
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {LegacyBurner} from "policies/LegacyBurner.sol";
+import {pOLY} from "policies/pOLY.sol";
+import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
+import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
 import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
+import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -70,6 +85,7 @@ contract OlympusDeploy is Script {
     OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
+    OlympusClearinghouseRegistry public CHREG;
 
     /// Policies
     Operator public operator;
@@ -79,6 +95,7 @@ contract OlympusDeploy is Script {
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
+    ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
     Burner public burner;
@@ -94,12 +111,22 @@ contract OlympusDeploy is Script {
 
     /// Legacy Olympus contracts
     address public inverseBondDepository;
+    pOLY public poly;
+    Clearinghouse public clearinghouse;
+    CoolerUtils public coolerUtils;
+
+    // Governance
+    Timelock public timelock;
+    GovernorBravoDelegate public governorBravoDelegate;
+    GovernorBravoDelegator public governorBravoDelegator;
 
     /// Construction variables
 
     /// Token addresses
     ERC20 public ohm;
+    ERC20 public gohm;
     ERC20 public reserve;
+    ERC4626 public wrappedReserve;
     ERC20 public wsteth;
     ERC20 public lusd;
     ERC20 public aura;
@@ -121,6 +148,9 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
     address public gnosisEasyAuction;
+    address public previousPoly;
+    address public previousGenesis;
+    ClaimTransfer public claimTransfer;
 
     /// Balancer Contracts
     IVault public balancerVault;
@@ -134,6 +164,9 @@ contract OlympusDeploy is Script {
     IAuraRewardPool public ohmWstethRewardsPool;
     IAuraRewardPool public ohmLusdRewardsPool;
 
+    // Cooler Loan contracts
+    CoolerFactory public coolerFactory;
+
     // Deploy system storage
     string public chain;
     string public env;
@@ -142,7 +175,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
+    function _setUp(string calldata chain_, string calldata deployFilePath_) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -154,6 +187,7 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusBoostedLiquidityRegistry"] = this
             ._deployBoostedLiquidityRegistry
             .selector;
+        selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
@@ -161,6 +195,7 @@ contract OlympusDeploy is Script {
         selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
         selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
         selectorMap["Distributor"] = this._deployDistributor.selector;
+        selectorMap["ZeroDistributor"] = this._deployZeroDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
         selectorMap["Burner"] = this._deployBurner.selector;
@@ -171,16 +206,28 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["LegacyBurner"] = this._deployLegacyBurner.selector;
         selectorMap["ReplacementAuthority"] = this._deployReplacementAuthority.selector;
+        selectorMap["pOLY"] = this._deployPoly.selector;
+        selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
+        selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
+        selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
+
+        // Governance
+        selectorMap["Timelock"] = this._deployTimelock.selector;
+        selectorMap["GovernorBravoDelegator"] = this._deployGovernorBravoDelegator.selector;
+        selectorMap["GovernorBravoDelegate"] = this._deployGovernorBravoDelegate.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        gohm = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
+        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
+        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -199,6 +246,8 @@ contract OlympusDeploy is Script {
         );
         staking = envAddress("olympus.legacy.Staking");
         gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
+        previousPoly = envAddress("olympus.legacy.OldPOLY");
+        previousGenesis = envAddress("olympus.legacy.GenesisClaim");
         balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
         balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
         ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
@@ -211,11 +260,12 @@ contract OlympusDeploy is Script {
         burnerReplacementAuthority = OlympusAuthority(
             envAddress("olympus.legacy.LegacyBurnerReplacementAuthority")
         );
+        coolerFactory = CoolerFactory(envAddress("external.cooler.CoolerFactory"));
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
-        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
-        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRange"));
+        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV2"));
+        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
         TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
         INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
@@ -230,6 +280,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
         treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
+        zeroDistributor = ZeroDistributor(envAddress("olympus.policies.ZeroDistributor"));
         emergency = Emergency(envAddress("olympus.policies.Emergency"));
         bondManager = BondManager(envAddress("olympus.policies.BondManager"));
         burner = Burner(envAddress("olympus.policies.Burner"));
@@ -239,9 +290,21 @@ contract OlympusDeploy is Script {
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         legacyBurner = LegacyBurner(envAddress("olympus.policies.LegacyBurner"));
+        poly = pOLY(envAddress("olympus.policies.pOLY"));
+        claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
+        clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
+
+        // Governance
+        timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
+        governorBravoDelegator = GovernorBravoDelegator(
+            payable(envAddress("olympus.governance.GovernorBravoDelegator"))
+        );
+        governorBravoDelegate = GovernorBravoDelegate(
+            envAddress("olympus.governance.GovernorBravoDelegate")
+        );
 
         // Load deployment data
-        string memory data = vm.readFile(deployFilePath);
+        string memory data = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
         bytes memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes));
@@ -287,28 +350,9 @@ contract OlympusDeploy is Script {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
-    /// @dev Installs, upgrades, activations, and deactivations as well as access control settings must be done via olymsig batches since DAO MS is multisig executor on mainnet
-    /// @dev If we can get multisig batch functionality in foundry, then we can add to these scripts
-    // function _installModule(Module module_) internal {
-    //     // Check if module is installed on the kernel and determine which type of install to use
-    //     vm.startBroadcast();
-    //     if (address(kernel.getModuleForKeycode(module_.KEYCODE())) != address(0)) {
-    //         kernel.executeAction(Actions.UpgradeModule, address(module_));
-    //     } else {
-    //         kernel.executeAction(Actions.InstallModule, address(module_));
-    //     }
-    //     vm.stopBroadcast();
-    // }
-
-    // function _activatePolicy(Policy policy_) internal {
-    //     // Check if policy is activated on the kernel and determine which type of activation to use
-    //     vm.broadcast();
-    //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
-    // }
-
-    function deploy(string calldata chain_, string calldata deployFilePath) external {
+    function deploy(string calldata chain_, string calldata deployFilePath_) external {
         // Setup
-        _setUp(chain_, deployFilePath);
+        _setUp(chain_, deployFilePath_);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -375,14 +419,30 @@ contract OlympusDeploy is Script {
 
     function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
-        (uint256 thresholdFactor, uint256 cushionSpread, uint256 wallSpread) = abi.decode(
-            args,
-            (uint256, uint256, uint256)
-        );
+        (
+            uint256 highCushionSpread,
+            uint256 highWallSpread,
+            uint256 lowCushionSpread,
+            uint256 lowWallSpread,
+            uint256 thresholdFactor
+        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+
+        console2.log("   highCushionSpread", highCushionSpread);
+        console2.log("   highWallSpread", highWallSpread);
+        console2.log("   lowCushionSpread", lowCushionSpread);
+        console2.log("   lowWallSpread", lowWallSpread);
+        console2.log("   thresholdFactor", thresholdFactor);
 
         // Deploy Range module
         vm.broadcast();
-        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
+        RANGE = new OlympusRange(
+            kernel,
+            ohm,
+            reserve,
+            thresholdFactor,
+            [lowCushionSpread, lowWallSpread],
+            [highCushionSpread, highWallSpread]
+        );
         console2.log("Range deployed at:", address(RANGE));
 
         return address(RANGE);
@@ -435,22 +495,57 @@ contract OlympusDeploy is Script {
     // Policy deployment functions
     function _deployOperator(bytes memory args) public returns (address) {
         // Decode arguments for Operator policy
-        // Must use a dynamic array to parse correctly since the json lib defaults to this
-        uint32[] memory configParams_ = abi.decode(args, (uint32[]));
+        (
+            uint256 cushionDebtBuffer,
+            uint256 cushionDepositInterval,
+            uint256 cushionDuration,
+            uint256 cushionFactor,
+            uint256 regenObserve,
+            uint256 regenThreshold,
+            uint256 regenWait,
+            uint256 reserveFactor
+        ) = abi.decode(
+                args,
+                (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+            );
+
+        // Create config params array
+        // Order is not alphabetical. Copied from the constructor.
         uint32[8] memory configParams = [
-            configParams_[0],
-            configParams_[1],
-            configParams_[2],
-            configParams_[3],
-            configParams_[4],
-            configParams_[5],
-            configParams_[6],
-            configParams_[7]
+            uint32(cushionFactor),
+            uint32(cushionDuration),
+            uint32(cushionDebtBuffer),
+            uint32(cushionDepositInterval),
+            uint32(reserveFactor),
+            uint32(regenWait),
+            uint32(regenThreshold),
+            uint32(regenObserve)
         ];
+
+        console2.log("   kernel", address(kernel));
+        console2.log("   bondAuctioneer", address(bondAuctioneer));
+        console2.log("   callback", address(callback));
+        console2.log("   ohm", address(ohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("   cushionDepositInterval", cushionDepositInterval);
+        console2.log("   cushionDuration", cushionDuration);
+        console2.log("   cushionFactor", cushionFactor);
+        console2.log("   regenObserve", regenObserve);
+        console2.log("   regenThreshold", regenThreshold);
+        console2.log("   regenWait", regenWait);
+        console2.log("   reserveFactor", reserveFactor);
 
         // Deploy Operator policy
         vm.broadcast();
-        operator = new Operator(kernel, bondAuctioneer, callback, [ohm, reserve], configParams);
+        operator = new Operator(
+            kernel,
+            bondAuctioneer,
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve)],
+            configParams
+        );
         console2.log("Operator deployed at:", address(operator));
 
         return address(operator);
@@ -473,7 +568,7 @@ contract OlympusDeploy is Script {
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, ohm, maxReward, auctionDuration);
+        heart = new OlympusHeart(kernel, operator, zeroDistributor, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);
@@ -520,6 +615,15 @@ contract OlympusDeploy is Script {
         vm.broadcast();
         distributor = new Distributor(kernel, address(ohm), staking, initialRate);
         console2.log("Distributor deployed at:", address(distributor));
+
+        return address(distributor);
+    }
+
+    function _deployZeroDistributor(bytes memory args) public returns (address) {
+        // Deploy ZeroDistributor policy
+        vm.broadcast();
+        zeroDistributor = new ZeroDistributor(staking);
+        console2.log("ZeroDistributor deployed at:", address(distributor));
 
         return address(distributor);
     }
@@ -806,6 +910,195 @@ contract OlympusDeploy is Script {
         return address(burnerReplacementAuthority);
     }
 
+    function _deployPoly(bytes memory args) public returns (address) {
+        // Decode arguments for pOLY policy
+        (address dao, uint256 maximumAllocated) = abi.decode(args, (address, uint256));
+
+        console2.log("kernel", address(kernel));
+        console2.log("previousPoly", address(previousPoly));
+        console2.log("previousGenesis", address(previousGenesis));
+        console2.log("ohm", address(ohm));
+        console2.log("gohm", address(gohm));
+        console2.log("reserve", address(reserve));
+        console2.log("dao", dao);
+        console2.log("maximumAllocated", maximumAllocated);
+
+        // Deploy pOLY policy
+        vm.broadcast();
+        poly = new pOLY(
+            kernel,
+            previousPoly,
+            previousGenesis,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            dao,
+            maximumAllocated
+        );
+        console2.log("pOLY deployed at:", address(poly));
+
+        return address(poly);
+    }
+
+    function _deployClaimTransfer(bytes memory args) public returns (address) {
+        // Doesn't need extra args
+
+        console2.log("poly", address(poly));
+        console2.log("ohm", address(ohm));
+        console2.log("reserve", address(reserve));
+        console2.log("gohm", address(gohm));
+
+        // Validate that the addresses are set
+        require(address(poly) != address(0), "poly is not set");
+        require(address(ohm) != address(0), "ohm is not set");
+        require(address(reserve) != address(0), "reserve is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+
+        // Deploy ClaimTransfer contract
+        vm.broadcast();
+        claimTransfer = new ClaimTransfer(
+            address(poly),
+            address(ohm),
+            address(reserve),
+            address(gohm)
+        );
+        console2.log("ClaimTransfer deployed at:", address(claimTransfer));
+
+        return address(claimTransfer);
+    }
+
+    function _deployClearinghouse(bytes memory args) public returns (address) {
+        if (address(coolerFactory) == address(0)) {
+            // Deploy a new Cooler Factory implementation
+            vm.broadcast();
+            coolerFactory = new CoolerFactory();
+            console2.log("Cooler Factory deployed at:", address(coolerFactory));
+        } else {
+            // Use the input Cooler Factory implmentation
+            console2.log("Input Factory Implementation:", address(coolerFactory));
+        }
+
+        // Deploy Clearinghouse policy
+        vm.broadcast();
+        clearinghouse = new Clearinghouse({
+            ohm_: address(ohm),
+            gohm_: address(gohm),
+            staking_: address(staking),
+            sdai_: address(wrappedReserve),
+            coolerFactory_: address(coolerFactory),
+            kernel_: address(kernel)
+        });
+        console2.log("Clearinghouse deployed at:", address(clearinghouse));
+
+        return address(clearinghouse);
+    }
+
+    function _deployClearinghouseRegistry(bytes calldata args) public returns (address) {
+        // Necessary to truncate the first word (32 bytes) of args due to a potential bug in the JSON parser.
+        address[] memory inactive = abi.decode(args[32:], (address[]));
+
+        // Deploy Clearinghouse Registry module
+        vm.broadcast();
+        CHREG = new OlympusClearinghouseRegistry(kernel, address(clearinghouse), inactive);
+        console2.log("CHREG deployed at:", address(CHREG));
+
+        return address(CHREG);
+    }
+
+    function _deployCoolerUtils(bytes calldata args_) public returns (address) {
+        // Decode arguments from the sequence file
+        (address collector, uint256 feePercentage, address lender, address owner) = abi.decode(
+            args_,
+            (address, uint256, address, address)
+        );
+
+        // Print the arguments
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  SDAI:", address(wrappedReserve));
+        console2.log("  DAI:", address(reserve));
+        console2.log("  Collector:", collector);
+        console2.log("  Fee Percentage:", feePercentage);
+        console2.log("  Lender:", lender);
+        console2.log("  Owner:", owner);
+
+        // Deploy CoolerUtils
+        vm.broadcast();
+        coolerUtils = new CoolerUtils(
+            address(gohm),
+            address(wrappedReserve),
+            address(reserve),
+            owner,
+            lender,
+            collector,
+            feePercentage
+        );
+        console2.log("  CoolerUtils deployed at:", address(coolerUtils));
+
+        return address(coolerUtils);
+    }
+
+    // ========== GOVERNANCE ========== //
+
+    function _deployTimelock(bytes calldata args) public returns (address) {
+        (address admin, uint256 delay) = abi.decode(args, (address, uint256));
+
+        console2.log("Timelock admin:", admin);
+        console2.log("Timelock delay:", delay);
+
+        // Deploy Timelock
+        vm.broadcast();
+        timelock = new Timelock(admin, delay);
+        console2.log("Timelock deployed at:", address(timelock));
+
+        return address(timelock);
+    }
+
+    function _deployGovernorBravoDelegate(bytes calldata args) public returns (address) {
+        // No additional arguments for Governor Bravo Delegate
+
+        // Deploy Governor Bravo Delegate
+        vm.broadcast();
+        governorBravoDelegate = new GovernorBravoDelegate();
+        console2.log("Governor Bravo Delegate deployed at:", address(governorBravoDelegate));
+
+        return address(governorBravoDelegate);
+    }
+
+    function _deployGovernorBravoDelegator(bytes calldata args) public returns (address) {
+        (
+            uint256 activationGracePeriod,
+            uint256 proposalThreshold,
+            address vetoGuardian,
+            uint256 votingDelay,
+            uint256 votingPeriod
+        ) = abi.decode(args, (uint256, uint256, address, uint256, uint256));
+
+        console2.log("Governor Bravo Delegator vetoGuardian:", vetoGuardian);
+        console2.log("Governor Bravo Delegator votingPeriod:", votingPeriod);
+        console2.log("Governor Bravo Delegator votingDelay:", votingDelay);
+        console2.log("Governor Bravo Delegator activationGracePeriod:", activationGracePeriod);
+        console2.log("Governor Bravo Delegator proposalThreshold:", proposalThreshold);
+
+        // Deploy Governor Bravo Delegator
+        vm.broadcast();
+        governorBravoDelegator = new GovernorBravoDelegator(
+            address(timelock),
+            address(gohm),
+            address(kernel),
+            vetoGuardian,
+            address(governorBravoDelegate),
+            votingPeriod,
+            votingDelay,
+            activationGracePeriod,
+            proposalThreshold
+        );
+        console2.log("Governor Bravo Delegator deployed at:", address(governorBravoDelegator));
+
+        return address(governorBravoDelegator);
+    }
+
+    // ========== VERIFICATION ========== //
+
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
     function verifyKernelInstallation() external {
@@ -995,143 +1288,143 @@ contract OlympusDeploy is Script {
 }
 
 /// @notice Deploys mock Balancer and Aura contracts for testing on Goerli
-contract DependencyDeployLido is Script {
-    using stdJson for string;
+// contract DependencyDeployLido is Script {
+//     using stdJson for string;
 
-    // MockPriceFeed public ohmEthPriceFeed;
-    // MockPriceFeed public reserveEthPriceFeed;
-    ERC20 public bal;
-    ERC20 public aura;
-    ERC20 public ldo;
-    MockAuraStashToken public ldoStash;
+//     // MockPriceFeed public ohmEthPriceFeed;
+//     // MockPriceFeed public reserveEthPriceFeed;
+//     ERC20 public bal;
+//     ERC20 public aura;
+//     ERC20 public ldo;
+//     MockAuraStashToken public ldoStash;
 
-    IBasePool public ohmWstethPool;
-    MockAuraBooster public auraBooster;
-    MockAuraMiningLib public auraMiningLib;
-    MockAuraRewardPool public ohmWstethRewardPool;
-    MockAuraVirtualRewardPool public ohmWstethExtraRewardPool;
+//     IBasePool public ohmWstethPool;
+//     MockAuraBooster public auraBooster;
+//     MockAuraMiningLib public auraMiningLib;
+//     MockAuraRewardPool public ohmWstethRewardPool;
+//     MockAuraVirtualRewardPool public ohmWstethExtraRewardPool;
 
-    function deploy(string calldata chain_) external {
-        // Load environment addresses
-        string memory env = vm.readFile("./src/scripts/env.json");
-        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
-        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
-        ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
-        ohmWstethPool = IBasePool(
-            env.readAddress(string.concat(".", chain_, ".external.balancer.OhmWstethPool"))
-        );
+//     function deploy(string calldata chain_) external {
+//         // Load environment addresses
+//         string memory env = vm.readFile("./src/scripts/env.json");
+//         bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
+//         aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
+//         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
+//         ohmWstethPool = IBasePool(
+//             env.readAddress(string.concat(".", chain_, ".external.balancer.OhmWstethPool"))
+//         );
 
-        vm.startBroadcast();
+//         vm.startBroadcast();
 
-        // Deploy the mock tokens
-        // bal = new MockERC20("Balancer", "BAL", 18);
-        // console2.log("BAL deployed to:", address(bal));
+//         // Deploy the mock tokens
+//         // bal = new MockERC20("Balancer", "BAL", 18);
+//         // console2.log("BAL deployed to:", address(bal));
 
-        // aura = new MockERC20("Aura", "AURA", 18);
-        // console2.log("AURA deployed to:", address(aura));
+//         // aura = new MockERC20("Aura", "AURA", 18);
+//         // console2.log("AURA deployed to:", address(aura));
 
-        // ldo = new MockERC20("Lido", "LDO", 18);
-        // console2.log("LDO deployed to:", address(ldo));
+//         // ldo = new MockERC20("Lido", "LDO", 18);
+//         // console2.log("LDO deployed to:", address(ldo));
 
-        // Deploy the Aura Reward Pools for OHM-wstETH
-        ohmWstethRewardPool = new MockAuraRewardPool(
-            address(ohmWstethPool), // Goerli OHM-wstETH LP
-            address(bal), // Goerli BAL
-            address(aura) // Goerli AURA
-        );
-        console2.log("OHM-WSTETH Reward Pool deployed to:", address(ohmWstethRewardPool));
+//         // Deploy the Aura Reward Pools for OHM-wstETH
+//         ohmWstethRewardPool = new MockAuraRewardPool(
+//             address(ohmWstethPool), // Goerli OHM-wstETH LP
+//             address(bal), // Goerli BAL
+//             address(aura) // Goerli AURA
+//         );
+//         console2.log("OHM-WSTETH Reward Pool deployed to:", address(ohmWstethRewardPool));
 
-        // Deploy the extra rewards pool
-        ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
-        console2.log("Lido Stash deployed to:", address(ldoStash));
+//         // Deploy the extra rewards pool
+//         ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
+//         console2.log("Lido Stash deployed to:", address(ldoStash));
 
-        ohmWstethExtraRewardPool = new MockAuraVirtualRewardPool(
-            address(ohmWstethPool), // Goerli OHM-wstETH LP
-            address(ldoStash)
-        );
-        console2.log(
-            "OHM-WSTETH Extra Reward Pool deployed to:",
-            address(ohmWstethExtraRewardPool)
-        );
+//         ohmWstethExtraRewardPool = new MockAuraVirtualRewardPool(
+//             address(ohmWstethPool), // Goerli OHM-wstETH LP
+//             address(ldoStash)
+//         );
+//         console2.log(
+//             "OHM-WSTETH Extra Reward Pool deployed to:",
+//             address(ohmWstethExtraRewardPool)
+//         );
 
-        ohmWstethRewardPool.addExtraReward(address(ohmWstethExtraRewardPool));
-        console2.log("Added OHM-WSTETH Extra Reward Pool to OHM-WSTETH Reward Pool");
+//         ohmWstethRewardPool.addExtraReward(address(ohmWstethExtraRewardPool));
+//         console2.log("Added OHM-WSTETH Extra Reward Pool to OHM-WSTETH Reward Pool");
 
-        // Deploy Aura Booster
-        auraBooster = new MockAuraBooster(address(ohmWstethRewardPool));
-        console2.log("Aura Booster deployed to:", address(auraBooster));
+//         // Deploy Aura Booster
+//         auraBooster = new MockAuraBooster(address(ohmWstethRewardPool));
+//         console2.log("Aura Booster deployed to:", address(auraBooster));
 
-        // Deploy the Aura Mining Library
-        // auraMiningLib = new MockAuraMiningLib();
-        // console2.log("Aura Mining Library deployed to:", address(auraMiningLib));
+//         // Deploy the Aura Mining Library
+//         // auraMiningLib = new MockAuraMiningLib();
+//         // console2.log("Aura Mining Library deployed to:", address(auraMiningLib));
 
-        // // Deploy the price feeds
-        // ohmEthPriceFeed = new MockPriceFeed();
-        // console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
-        // reserveEthPriceFeed = new MockPriceFeed();
-        // console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
+//         // // Deploy the price feeds
+//         // ohmEthPriceFeed = new MockPriceFeed();
+//         // console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
+//         // reserveEthPriceFeed = new MockPriceFeed();
+//         // console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
 
-        // // Set the decimals of the price feeds
-        // ohmEthPriceFeed.setDecimals(18);
-        // reserveEthPriceFeed.setDecimals(18);
+//         // // Set the decimals of the price feeds
+//         // ohmEthPriceFeed.setDecimals(18);
+//         // reserveEthPriceFeed.setDecimals(18);
 
-        vm.stopBroadcast();
-    }
-}
+//         vm.stopBroadcast();
+//     }
+// }
 
-contract DependencyDeployLusd is Script {
-    using stdJson for string;
+// contract DependencyDeployLusd is Script {
+//     using stdJson for string;
 
-    ERC20 public bal;
-    ERC20 public aura;
-    ERC20 public ldo;
-    ERC20 public lusd;
+//     ERC20 public bal;
+//     ERC20 public aura;
+//     ERC20 public ldo;
+//     ERC20 public lusd;
 
-    MockAuraBooster public auraBooster;
+//     MockAuraBooster public auraBooster;
 
-    MockPriceFeed public lusdUsdPriceFeed;
-    IBasePool public ohmLusdPool;
-    MockAuraRewardPool public ohmLusdRewardPool;
+//     MockPriceFeed public lusdUsdPriceFeed;
+//     IBasePool public ohmLusdPool;
+//     MockAuraRewardPool public ohmLusdRewardPool;
 
-    MockAuraMiningLib public auraMiningLib;
+//     MockAuraMiningLib public auraMiningLib;
 
-    function deploy(string calldata chain_) external {
-        // Load environment addresses
-        string memory env = vm.readFile("./src/scripts/env.json");
-        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
-        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
-        ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
-        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
-        ohmLusdPool = IBasePool(
-            env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))
-        ); // Real pool, deployed separately as it's a little more complicated
-        auraBooster = MockAuraBooster(
-            env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster"))
-        ); // Requires DependencyDeployLido to be run first
+//     function deploy(string calldata chain_) external {
+//         // Load environment addresses
+//         string memory env = vm.readFile("./src/scripts/env.json");
+//         bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
+//         aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
+//         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
+//         lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
+//         ohmLusdPool = IBasePool(
+//             env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))
+//         ); // Real pool, deployed separately as it's a little more complicated
+//         auraBooster = MockAuraBooster(
+//             env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster"))
+//         ); // Requires DependencyDeployLido to be run first
 
-        vm.startBroadcast();
+//         vm.startBroadcast();
 
-        // Deploy the LUSD price feed
-        lusdUsdPriceFeed = new MockPriceFeed();
-        lusdUsdPriceFeed.setDecimals(8);
-        lusdUsdPriceFeed.setLatestAnswer(1e8);
-        lusdUsdPriceFeed.setRoundId(1);
-        lusdUsdPriceFeed.setAnsweredInRound(1);
-        lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
-        console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
+//         // Deploy the LUSD price feed
+//         lusdUsdPriceFeed = new MockPriceFeed();
+//         lusdUsdPriceFeed.setDecimals(8);
+//         lusdUsdPriceFeed.setLatestAnswer(1e8);
+//         lusdUsdPriceFeed.setRoundId(1);
+//         lusdUsdPriceFeed.setAnsweredInRound(1);
+//         lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
+//         console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
 
-        // Deploy the Aura Reward Pools for OHM-LUSD
-        ohmLusdRewardPool = new MockAuraRewardPool(
-            address(ohmLusdPool), // OHM-LUSD LP
-            address(bal), // BAL
-            address(aura) // AURA
-        );
-        console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
+//         // Deploy the Aura Reward Pools for OHM-LUSD
+//         ohmLusdRewardPool = new MockAuraRewardPool(
+//             address(ohmLusdPool), // OHM-LUSD LP
+//             address(bal), // BAL
+//             address(aura) // AURA
+//         );
+//         console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
 
-        // Add the pool to the aura booster
-        auraBooster.addPool(address(ohmLusdRewardPool));
-        console2.log("Added ohmLusdRewardPool to Aura Booster");
+//         // Add the pool to the aura booster
+//         auraBooster.addPool(address(ohmLusdRewardPool));
+//         console2.log("Added ohmLusdRewardPool to Aura Booster");
 
-        vm.stopBroadcast();
-    }
-}
+//         vm.stopBroadcast();
+//     }
+// }

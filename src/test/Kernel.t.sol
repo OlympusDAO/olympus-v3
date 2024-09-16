@@ -36,6 +36,17 @@ contract KernelTest is Test {
         vm.stopPrank();
     }
 
+    // ==========  HELPER FUNCTIONS  ========== //
+
+    function _initModuleAndPolicy() internal {
+        vm.startPrank(deployer);
+        kernel.executeAction(Actions.InstallModule, address(MOCKY));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
+        vm.stopPrank();
+    }
+
+    // ==========  KERNEL FUNCTIONS  ========== //
+
     function testCorrectness_InitializeKernel() public {
         Keycode keycode = Keycode.wrap(0);
 
@@ -190,7 +201,7 @@ contract KernelTest is Test {
         assertEq(address(kernel.activePolicies(0)), address(0));
     }
 
-    function testCorrectness_UpgradeModule() public {
+    function testCorrectness_UpgradeModule_sameMajor() public {
         UpgradedMockModule upgradedModule = new UpgradedMockModule(kernel, MOCKY);
 
         vm.startPrank(deployer);
@@ -214,7 +225,7 @@ contract KernelTest is Test {
 
         assertEq(MOCKY.permissionedState(), 1);
 
-        // Upgrade MOCKY
+        // Upgrade will work the policy is only configured to work with MOCKYv1
         vm.prank(deployer);
         kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
 
@@ -225,6 +236,60 @@ contract KernelTest is Test {
         policy.callPermissionedFunction();
 
         assertEq(upgradedModule.permissionedState(), 2);
+    }
+
+    function testRevert_UpgradeModule_newMajor_withoutUpgradingDependentPolicies() public {
+        UpgradedMockModuleNewMajor upgradedModule = new UpgradedMockModuleNewMajor(kernel, MOCKY);
+
+        vm.startPrank(deployer);
+
+        kernel.executeAction(Actions.InstallModule, address(MOCKY));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
+
+        vm.stopPrank();
+
+        vm.prank(multisig);
+        policy.callPermissionedFunction();
+
+        assertEq(MOCKY.permissionedState(), 1);
+
+        bytes memory expected = abi.encode([1]);
+        err = abi.encodeWithSignature("Policy_WrongModuleVersion(bytes)", expected);
+
+        // Upgrade will fail because the policy is only configured to work with MOCKYv1
+        vm.prank(deployer);
+        vm.expectRevert(err);
+        kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
+    }
+
+    function testCorrectness_UpgradeModule_newMajor() public {
+        UpgradedMockModuleNewMajor upgradedModule = new UpgradedMockModuleNewMajor(kernel, MOCKY);
+        MockPolicyUpgradedModule policyUpgradedModule = new MockPolicyUpgradedModule(kernel);
+
+        vm.startPrank(deployer);
+
+        kernel.executeAction(Actions.InstallModule, address(MOCKY));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
+        kernel.executeAction(Actions.DeactivatePolicy, address(policy));
+
+        vm.stopPrank();
+
+        // Upgrade will work there is no policy dependency with MOCKYv1
+        vm.prank(deployer);
+        kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
+
+        // Check state is reset
+        assertEq(upgradedModule.permissionedState(), 0);
+
+        // Policy for upgraded module can be activated because it works with MOCKYv2
+        vm.prank(deployer);
+        kernel.executeAction(Actions.ActivatePolicy, address(policyUpgradedModule));
+
+        vm.prank(multisig);
+        policyUpgradedModule.callPermissionedFunction();
+
+        // Check policy was able to perform a permissioned call
+        assertEq(upgradedModule.permissionedState(), 1);
     }
 
     function testCorrectness_ChangeExecutor() public {
@@ -266,12 +331,5 @@ contract KernelTest is Test {
 
         assertEq(address(newKernel.getModuleForKeycode(newKernel.allKeycodes(0))), address(MOCKY));
         assertEq(address(newKernel.activePolicies(0)), address(policy));
-    }
-
-    function _initModuleAndPolicy() internal {
-        vm.startPrank(deployer);
-        kernel.executeAction(Actions.InstallModule, address(MOCKY));
-        kernel.executeAction(Actions.ActivatePolicy, address(policy));
-        vm.stopPrank();
     }
 }
