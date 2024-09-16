@@ -869,13 +869,13 @@ contract OlympusDeploy is Script {
     }
 
     function _deployLegacyBurner(bytes memory args) public returns (address) {
-        (uint256 reward) = abi.decode(args, (uint256));
+        uint256 reward = abi.decode(args, (uint256));
 
         console2.log("kernel", address(kernel));
         console2.log("ohm", address(ohm));
         console2.log("bondManager", address(bondManager));
         console2.log("inverseBondDepository", inverseBondDepository);
-        console2.log("reward", reward/1e9);
+        console2.log("reward", reward / 1e9);
 
         // Deploy LegacyBurner policy
         vm.broadcast();
