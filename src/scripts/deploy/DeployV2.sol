@@ -18,6 +18,8 @@ import {IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/inte
 // Aura
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
+import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
+
 // Cooler Loans
 import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
 
@@ -54,6 +56,9 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {LegacyBurner} from "policies/LegacyBurner.sol";
+import {pOLY} from "policies/pOLY.sol";
+import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
@@ -62,6 +67,7 @@ import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualR
 import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
+import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -99,7 +105,16 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    LegacyBurner public legacyBurner;
+
+    /// Other Olympus contracts
+    OlympusAuthority public burnerReplacementAuthority;
+
+    /// Legacy Olympus contracts
+    address public inverseBondDepository;
+    pOLY public poly;
     Clearinghouse public clearinghouse;
+    CoolerUtils public coolerUtils;
     YieldRepurchaseFacility public yieldRepo;
 
     // Governance
@@ -136,6 +151,9 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
     address public gnosisEasyAuction;
+    address public previousPoly;
+    address public previousGenesis;
+    ClaimTransfer public claimTransfer;
 
     /// Balancer Contracts
     IVault public balancerVault;
@@ -189,7 +207,12 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["LegacyBurner"] = this._deployLegacyBurner.selector;
+        selectorMap["ReplacementAuthority"] = this._deployReplacementAuthority.selector;
+        selectorMap["pOLY"] = this._deployPoly.selector;
+        selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
+        selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
 
         // Governance
@@ -228,6 +251,8 @@ contract OlympusDeploy is Script {
         );
         staking = envAddress("olympus.legacy.Staking");
         gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
+        previousPoly = envAddress("olympus.legacy.OldPOLY");
+        previousGenesis = envAddress("olympus.legacy.GenesisClaim");
         balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
         balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
         ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
@@ -236,6 +261,10 @@ contract OlympusDeploy is Script {
         auraMiningLib = IAuraMiningLib(envAddress("external.aura.AuraMiningLib"));
         ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
         ohmLusdRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmLusdRewardsPool"));
+        inverseBondDepository = envAddress("olympus.legacy.InverseBondDepository");
+        burnerReplacementAuthority = OlympusAuthority(
+            envAddress("olympus.legacy.LegacyBurnerReplacementAuthority")
+        );
         coolerFactory = CoolerFactory(envAddress("external.cooler.CoolerFactory"));
 
         // Bophades contracts
@@ -265,6 +294,9 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        legacyBurner = LegacyBurner(envAddress("olympus.policies.LegacyBurner"));
+        poly = pOLY(envAddress("olympus.policies.pOLY"));
+        claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
 
@@ -281,7 +313,7 @@ contract OlympusDeploy is Script {
         string memory data = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
-        bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
+        bytes memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes));
         uint256 len = sequence.length;
         console2.log("Contracts to be deployed:", len);
 
@@ -849,6 +881,105 @@ contract OlympusDeploy is Script {
         return address(bridge);
     }
 
+    function _deployLegacyBurner(bytes memory args) public returns (address) {
+        uint256 reward = abi.decode(args, (uint256));
+
+        console2.log("kernel", address(kernel));
+        console2.log("ohm", address(ohm));
+        console2.log("bondManager", address(bondManager));
+        console2.log("inverseBondDepository", inverseBondDepository);
+        console2.log("reward", reward / 1e9);
+
+        // Deploy LegacyBurner policy
+        vm.broadcast();
+        legacyBurner = new LegacyBurner(
+            kernel,
+            address(ohm),
+            address(bondManager),
+            inverseBondDepository,
+            reward
+        );
+        console2.log("LegacyBurner deployed at:", address(legacyBurner));
+
+        return address(legacyBurner);
+    }
+
+    function _deployReplacementAuthority(bytes memory args) public returns (address) {
+        // No additional arguments for ReplacementAuthority policy
+
+        console2.log("legacyBurner", address(legacyBurner));
+        console2.log("MINTR", address(MINTR));
+
+        // Deploy ReplacementAuthority policy
+        vm.broadcast();
+        burnerReplacementAuthority = new OlympusAuthority(
+            0x245cc372C84B3645Bf0Ffe6538620B04a217988B,
+            0x245cc372C84B3645Bf0Ffe6538620B04a217988B,
+            address(legacyBurner),
+            address(MINTR)
+        );
+        console2.log("ReplacementAuthority deployed at:", address(burnerReplacementAuthority));
+
+        return address(burnerReplacementAuthority);
+    }
+
+    function _deployPoly(bytes memory args) public returns (address) {
+        // Decode arguments for pOLY policy
+        (address dao, uint256 maximumAllocated) = abi.decode(args, (address, uint256));
+
+        console2.log("kernel", address(kernel));
+        console2.log("previousPoly", address(previousPoly));
+        console2.log("previousGenesis", address(previousGenesis));
+        console2.log("ohm", address(ohm));
+        console2.log("gohm", address(gohm));
+        console2.log("reserve", address(reserve));
+        console2.log("dao", dao);
+        console2.log("maximumAllocated", maximumAllocated);
+
+        // Deploy pOLY policy
+        vm.broadcast();
+        poly = new pOLY(
+            kernel,
+            previousPoly,
+            previousGenesis,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            dao,
+            maximumAllocated
+        );
+        console2.log("pOLY deployed at:", address(poly));
+
+        return address(poly);
+    }
+
+    function _deployClaimTransfer(bytes memory args) public returns (address) {
+        // Doesn't need extra args
+
+        console2.log("poly", address(poly));
+        console2.log("ohm", address(ohm));
+        console2.log("reserve", address(reserve));
+        console2.log("gohm", address(gohm));
+
+        // Validate that the addresses are set
+        require(address(poly) != address(0), "poly is not set");
+        require(address(ohm) != address(0), "ohm is not set");
+        require(address(reserve) != address(0), "reserve is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+
+        // Deploy ClaimTransfer contract
+        vm.broadcast();
+        claimTransfer = new ClaimTransfer(
+            address(poly),
+            address(ohm),
+            address(reserve),
+            address(gohm)
+        );
+        console2.log("ClaimTransfer deployed at:", address(claimTransfer));
+
+        return address(claimTransfer);
+    }
+
     function _deployClearinghouse(bytes memory args) public returns (address) {
         if (address(coolerFactory) == address(0)) {
             // Deploy a new Cooler Factory implementation
@@ -885,6 +1016,38 @@ contract OlympusDeploy is Script {
         console2.log("CHREG deployed at:", address(CHREG));
 
         return address(CHREG);
+    }
+
+    function _deployCoolerUtils(bytes calldata args_) public returns (address) {
+        // Decode arguments from the sequence file
+        (address collector, uint256 feePercentage, address lender, address owner) = abi.decode(
+            args_,
+            (address, uint256, address, address)
+        );
+
+        // Print the arguments
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  SDAI:", address(wrappedReserve));
+        console2.log("  DAI:", address(reserve));
+        console2.log("  Collector:", collector);
+        console2.log("  Fee Percentage:", feePercentage);
+        console2.log("  Lender:", lender);
+        console2.log("  Owner:", owner);
+
+        // Deploy CoolerUtils
+        vm.broadcast();
+        coolerUtils = new CoolerUtils(
+            address(gohm),
+            address(wrappedReserve),
+            address(reserve),
+            owner,
+            lender,
+            collector,
+            feePercentage
+        );
+        console2.log("  CoolerUtils deployed at:", address(coolerUtils));
+
+        return address(coolerUtils);
     }
 
     // ========== GOVERNANCE ========== //
