@@ -29,7 +29,7 @@ interface IYieldRepo {
     ///         Therefore, it's only accurate when called close to the end of the epoch
     function getNextYield() external view returns (uint256);
 
-    /// @notice Returns DAI balance to be returned for OHM burnt
+    /// @notice Returns the contract's OHM balance and the DAI balance to be returned for burning the OHM
     /// @dev    This computes a DAI amount using contract ohm balance and backing of 11.33 DAI
-    function getBackingForPurchased() external view returns (uint256);
+    function getOhmBalanceAndBacking() external view returns (uint256, uint256);
 }

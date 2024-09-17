@@ -22,4 +22,8 @@ contract MockYieldRepo is IYieldRepo {
     function getNextYield() external pure override returns (uint256) {
         return 0;
     }
+
+    function getOhmBalanceAndBacking() external pure override returns (uint256, uint256) {
+        return (0, 0);
+    }
 }
