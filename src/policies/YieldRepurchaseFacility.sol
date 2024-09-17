@@ -261,14 +261,11 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
     /// @notice internal function to burn ohm and retrieve backing
     function _getBackingForPurchased() internal {
-        uint256 balance = ohm.balanceOf(address(this));
-        uint256 backingForBalance = balance * backingPerToken; // balance and backingPerToken are 9 decimals, dai amount is 18 decimals
-
         // Burn OHM in contract
-        BurnableERC20(address(ohm)).burn(balance);
+        BurnableERC20(address(ohm)).burn(ohm.balanceOf(address(this)));
 
         // Withdraw backing for purchased ohm
-        _withdraw(backingForBalance);
+        _withdraw(getBackingForPurchased());
     }
 
     /// @notice internal function to withdraw sDAI from treasury
@@ -316,5 +313,11 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
             lastReserveBalance;
         // add clearinghouse interest accrued for week (0.5% divided by 52 weeks)
         yield += (clearinghouse.principalReceivables() * 5) / 1000 / 52;
+    }
+
+    /// @notice compute backing for ohm balance
+    function getBackingForPurchased() public view override returns (uint256 backing) {
+        // balance and backingPerToken are 9 decimals, dai amount is 18 decimals
+        backing = ohm.balanceOf(address(this)) * backingPerToken;
     }
 }

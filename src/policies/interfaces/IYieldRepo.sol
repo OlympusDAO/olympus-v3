@@ -28,4 +28,8 @@ interface IYieldRepo {
     /// @dev    This value uses the current sDAI balance, but always assumes a week's worth of interest for the clearinghouse
     ///         Therefore, it's only accurate when called close to the end of the epoch
     function getNextYield() external view returns (uint256);
+
+    /// @notice Returns DAI balance to be returned for OHM burnt
+    /// @dev    This computes a DAI amount using contract ohm balance and backing of 11.33 DAI
+    function getBackingForPurchased() external view returns (uint256);
 }
