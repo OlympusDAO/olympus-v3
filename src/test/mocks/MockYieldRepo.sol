@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
-import {IProtocoloop} from "../../policies/interfaces/IProtocoloop.sol";
+import {IYieldRepo} from "../../policies/interfaces/IYieldRepo.sol";
 
-contract MockProtocoloop is IProtocoloop {
+contract MockYieldRepo is IYieldRepo {
     uint48 public epoch;
     bool public isShutdown;
 

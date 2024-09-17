@@ -27,12 +27,12 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Protocoloop} from "policies/ProtocoLoop.sol";
+import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 
 // solhint-disable-next-line max-states-count
-contract ProtocoLoopTest is Test {
+contract YieldRepurchaseFacilityTest is Test {
     using FullMath for uint256;
 
     UserFactory public userCreator;
@@ -58,9 +58,9 @@ contract ProtocoLoopTest is Test {
     OlympusRoles internal ROLES;
 
     MockClearinghouse internal clearinghouse;
-    Protocoloop internal protocoloop;
+    YieldRepurchaseFacility internal yieldRepo;
     RolesAdmin internal rolesAdmin;
-    BondCallback internal callback; // only used by operator, not by protocoloop
+    BondCallback internal callback; // only used by operator, not by yieldRepo
     Operator internal operator;
 
     uint256 initialReserves = 105_000_000e18;
@@ -150,17 +150,14 @@ contract ProtocoLoopTest is Test {
             );
 
             /// Deploy protocol loop
-            protocoloop = new Protocoloop(
+            yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
                 address(reserve),
                 address(wrappedReserve),
                 address(teller),
                 address(auctioneer),
-                address(clearinghouse),
-                initialReserves,
-                initialConversionRate,
-                initialYield
+                address(clearinghouse)
             );
 
             /// Deploy ROLES administrator
@@ -178,7 +175,7 @@ contract ProtocoLoopTest is Test {
             kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             /// Approve policies
-            kernel.executeAction(Actions.ActivatePolicy, address(protocoloop));
+            kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
@@ -186,7 +183,7 @@ contract ProtocoLoopTest is Test {
         {
             /// Configure access control
 
-            /// Protocoloop ROLES
+            /// YieldRepurchaseFacility ROLES
             rolesAdmin.grantRole("heart", address(heart));
             rolesAdmin.grantRole("loop_daddy", guardian);
 
@@ -228,6 +225,10 @@ contract ProtocoLoopTest is Test {
 
         // Set principal receivables for the clearinghouse
         clearinghouse.setPrincipalReceivables(uint256(100_000_000e18));
+
+        // Initialize the yield repo facility
+        vm.prank(guardian);
+        yieldRepo.initialize(initialReserves, initialConversionRate, initialYield);
     }
 
     function _mintYield() internal {
@@ -269,25 +270,25 @@ contract ProtocoLoopTest is Test {
 
     function test_setup() public {
         // addresses are set correctly
-        assertEq(address(protocoloop.ohm()), address(ohm));
-        assertEq(address(protocoloop.dai()), address(reserve));
-        assertEq(address(protocoloop.sdai()), address(wrappedReserve));
-        assertEq(address(protocoloop.teller()), address(teller));
-        assertEq(address(protocoloop.auctioneer()), address(auctioneer));
+        assertEq(address(yieldRepo.ohm()), address(ohm));
+        assertEq(address(yieldRepo.dai()), address(reserve));
+        assertEq(address(yieldRepo.sdai()), address(wrappedReserve));
+        assertEq(address(yieldRepo.teller()), address(teller));
+        assertEq(address(yieldRepo.auctioneer()), address(auctioneer));
 
         // initial reserve balance is set correctly
-        assertEq(protocoloop.lastReserveBalance(), initialReserves);
-        assertEq(protocoloop.getReserveBalance(), initialReserves);
+        assertEq(yieldRepo.lastReserveBalance(), initialReserves);
+        assertEq(yieldRepo.getReserveBalance(), initialReserves);
 
         // initial conversion rate is set correctly
-        assertEq(protocoloop.lastConversionRate(), initialConversionRate);
+        assertEq(yieldRepo.lastConversionRate(), initialConversionRate);
         assertEq((wrappedReserve.totalAssets() * 1e18) / wrappedReserve.totalSupply(), 1_05e16);
 
         // initial yield is set correctly
-        assertEq(protocoloop.nextYield(), initialYield);
+        assertEq(yieldRepo.nextYield(), initialYield);
 
         // epoch is set correctly
-        assertEq(protocoloop.epoch(), 20);
+        assertEq(yieldRepo.epoch(), 20);
     }
 
     function test_endEpoch_firstCall() public {
@@ -301,7 +302,7 @@ contract ProtocoLoopTest is Test {
         uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
 
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Check that the initial yield was withdrawn from the TRSRY
         assertEq(
@@ -309,10 +310,10 @@ contract ProtocoLoopTest is Test {
             trsryBalance - wrappedReserve.previewWithdraw(initialYield)
         );
 
-        // Check that the protocoloop contract has the correct reserve balance
-        assertEq(reserve.balanceOf(address(protocoloop)), initialYield / 7);
+        // Check that the yieldRepo contract has the correct reserve balance
+        assertEq(reserve.balanceOf(address(yieldRepo)), initialYield / 7);
         assertEq(
-            wrappedReserve.balanceOf(address(protocoloop)),
+            wrappedReserve.balanceOf(address(yieldRepo)),
             wrappedReserve.previewDeposit(initialYield - initialYield / 7)
         );
 
@@ -337,7 +338,7 @@ contract ProtocoLoopTest is Test {
                 uint256 scale
             ) = auctioneer.markets(nextBondMarketId);
 
-            assertEq(owner, address(protocoloop));
+            assertEq(owner, address(yieldRepo));
             assertEq(address(payoutToken), address(reserve));
             assertEq(address(quoteToken), address(ohm));
             assertEq(callbackAddr, address(0));
@@ -358,13 +359,13 @@ contract ProtocoLoopTest is Test {
         }
 
         // Check that the epoch has been incremented
-        assertEq(protocoloop.epoch(), 0);
+        assertEq(yieldRepo.epoch(), 0);
     }
 
     function test_endEpoch_isShutdown() public {
-        // Shutdown the protocoloop contract
+        // Shutdown the yieldRepo contract
         vm.prank(guardian);
-        protocoloop.shutdown(new ERC20[](0));
+        yieldRepo.shutdown(new ERC20[](0));
 
         // Mint yield to the wrappedReserve
         _mintYield();
@@ -376,14 +377,14 @@ contract ProtocoLoopTest is Test {
         uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
 
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Check that the initial yield was not withdrawn from the treasury
         assertEq(wrappedReserve.balanceOf(address(TRSRY)), trsryBalance);
 
-        // Check that the protocoloop contract has not received any funds
-        assertEq(reserve.balanceOf(address(protocoloop)), 0);
-        assertEq(wrappedReserve.balanceOf(address(protocoloop)), 0);
+        // Check that the yieldRepo contract has not received any funds
+        assertEq(reserve.balanceOf(address(yieldRepo)), 0);
+        assertEq(wrappedReserve.balanceOf(address(yieldRepo)), 0);
 
         // Check that the bond market was not created
         assertEq(aggregator.marketCounter(), nextBondMarketId);
@@ -395,7 +396,7 @@ contract ProtocoLoopTest is Test {
 
         // Make the initial call to get the epoch counter to reset
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Mint yield to the wrappedReserve
         _mintYield();
@@ -406,13 +407,13 @@ contract ProtocoLoopTest is Test {
         // Cache the TRSRY sDAI balance
         uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
 
-        // Cache the protocoloop contract reserve balance
-        uint256 protocoloopReserveBalance = reserve.balanceOf(address(protocoloop));
-        uint256 protocoloopWrappedReserveBalance = wrappedReserve.balanceOf(address(protocoloop));
+        // Cache the yieldRepo contract reserve balance
+        uint256 yieldRepoReserveBalance = reserve.balanceOf(address(yieldRepo));
+        uint256 yieldRepoWrappedReserveBalance = wrappedReserve.balanceOf(address(yieldRepo));
 
         // Call end epoch again
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Check that a new bond market was not created
         assertEq(aggregator.marketCounter(), nextBondMarketId);
@@ -420,12 +421,12 @@ contract ProtocoLoopTest is Test {
         // Check that the treasury balance has not changed
         assertEq(wrappedReserve.balanceOf(address(TRSRY)), trsryBalance);
 
-        // Check that the protocoloop contract reserve balance has not changed
-        assertEq(reserve.balanceOf(address(protocoloop)), protocoloopReserveBalance);
-        assertEq(wrappedReserve.balanceOf(address(protocoloop)), protocoloopWrappedReserveBalance);
+        // Check that the yieldRepo contract reserve balance has not changed
+        assertEq(reserve.balanceOf(address(yieldRepo)), yieldRepoReserveBalance);
+        assertEq(wrappedReserve.balanceOf(address(yieldRepo)), yieldRepoWrappedReserveBalance);
 
         // Check that the epoch has been incremented
-        assertEq(protocoloop.epoch(), 1);
+        assertEq(yieldRepo.epoch(), 1);
     }
 
     function test_endEpoch_divisBy3_notEpochLength() public {
@@ -434,29 +435,29 @@ contract ProtocoLoopTest is Test {
 
         // Make the initial call to get the epoch counter to reset
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Call end epoch twice to setup our test
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Confirm that the epoch is 2
-        assertEq(protocoloop.epoch(), 2);
+        assertEq(yieldRepo.epoch(), 2);
 
-        // Cache the protocoloop contract reserve balance before any bonds are issued
-        uint256 protocoloopReserveBalance = reserve.balanceOf(address(protocoloop));
-        uint256 protocoloopWrappedReserveBalance = wrappedReserve.balanceOf(address(protocoloop));
+        // Cache the yieldRepo contract reserve balance before any bonds are issued
+        uint256 yieldRepoReserveBalance = reserve.balanceOf(address(yieldRepo));
+        uint256 yieldRepoWrappedReserveBalance = wrappedReserve.balanceOf(address(yieldRepo));
 
         // Purchase a bond from the existing bond market
         // So that there is some OHM in the contract to burn
         vm.prank(alice);
         (uint256 bondPayout, ) = teller.purchase(alice, address(0), 0, 100e9, 0);
 
-        // Confirm that the protocoloop balance is updated with the bond payout
-        assertEq(reserve.balanceOf(address(protocoloop)), protocoloopReserveBalance - bondPayout);
-        protocoloopReserveBalance -= bondPayout;
+        // Confirm that the yieldRepo balance is updated with the bond payout
+        assertEq(reserve.balanceOf(address(yieldRepo)), yieldRepoReserveBalance - bondPayout);
+        yieldRepoReserveBalance -= bondPayout;
 
         // Warp forward a day so that the initial bond market ends
         vm.warp(block.timestamp + 1 days);
@@ -470,37 +471,37 @@ contract ProtocoLoopTest is Test {
         // Cache the TRSRY sDAI balance
         uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
 
-        // Cache the OHM balance in the protocoloop contract
-        uint256 protocoloopOhmBalance = ohm.balanceOf(address(protocoloop));
-        assertEq(protocoloopOhmBalance, 100e9);
+        // Cache the OHM balance in the yieldRepo contract
+        uint256 yieldRepoOhmBalance = ohm.balanceOf(address(yieldRepo));
+        assertEq(yieldRepoOhmBalance, 100e9);
 
         // Call end epoch again
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Check that a new bond market was created
         assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
 
-        // Check that the protocoloop contract burned the OHM
-        assertEq(ohm.balanceOf(address(protocoloop)), 0);
+        // Check that the yieldRepo contract burned the OHM
+        assertEq(ohm.balanceOf(address(yieldRepo)), 0);
 
         // Check that the treasury balance has changed by the amount of backing withdrawn for the burnt OHM
-        uint256 daiFromBurnedOhm = 100e9 * protocoloop.backingPerToken();
+        uint256 daiFromBurnedOhm = 100e9 * yieldRepo.backingPerToken();
         assertEq(
             wrappedReserve.balanceOf(address(TRSRY)),
             trsryBalance - wrappedReserve.previewWithdraw(daiFromBurnedOhm)
         );
 
-        // Check that the balance of the protocoloop contract has changed correctly
-        uint256 expectedBidAmount = (protocoloopReserveBalance +
-            wrappedReserve.previewRedeem(protocoloopWrappedReserveBalance) +
+        // Check that the balance of the yieldRepo contract has changed correctly
+        uint256 expectedBidAmount = (yieldRepoReserveBalance +
+            wrappedReserve.previewRedeem(yieldRepoWrappedReserveBalance) +
             daiFromBurnedOhm) / 6;
 
-        // Check that the protocoloop contract reserve balances have changed correctly
-        assertEq(reserve.balanceOf(address(protocoloop)), expectedBidAmount);
+        // Check that the yieldRepo contract reserve balances have changed correctly
+        assertEq(reserve.balanceOf(address(yieldRepo)), expectedBidAmount);
         assertGe(
-            wrappedReserve.balanceOf(address(protocoloop)),
-            protocoloopWrappedReserveBalance - wrappedReserve.previewWithdraw(expectedBidAmount)
+            wrappedReserve.balanceOf(address(yieldRepo)),
+            yieldRepoWrappedReserveBalance - wrappedReserve.previewWithdraw(expectedBidAmount)
         );
 
         // Confirm that the bond market has the correct configuration
@@ -545,10 +546,10 @@ contract ProtocoLoopTest is Test {
 
         // Call endEpoch to set the next yield
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Get the next yield value
-        uint256 nextYield = protocoloop.nextYield();
+        uint256 nextYield = yieldRepo.nextYield();
 
         // Try to call adjustNextYield with an invalid caller
         // Expect it to fail
@@ -556,7 +557,7 @@ contract ProtocoLoopTest is Test {
             abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
         );
         vm.prank(alice);
-        protocoloop.adjustNextYield(nextYield);
+        yieldRepo.adjustNextYield(nextYield);
 
         // Call adjustNextYield with a value that is too high
         // Expect it to fail
@@ -564,33 +565,33 @@ contract ProtocoLoopTest is Test {
 
         vm.expectRevert(abi.encodePacked("Too much increase"));
         vm.prank(guardian);
-        protocoloop.adjustNextYield(newNextYield);
+        yieldRepo.adjustNextYield(newNextYield);
 
         // Call adjustNextYield with a value greater than the current yield but only by 10%
         // Expect it to succeed
         newNextYield = (nextYield * 11) / 10;
         vm.prank(guardian);
-        protocoloop.adjustNextYield(newNextYield);
+        yieldRepo.adjustNextYield(newNextYield);
 
         // Check that the next yield has been adjusted
-        assertEq(protocoloop.nextYield(), newNextYield);
+        assertEq(yieldRepo.nextYield(), newNextYield);
 
         // Call adjustNextYield with a value that is lower than the current yield
         // Expect it to succeed
         newNextYield = (newNextYield * 9) / 10;
         vm.prank(guardian);
-        protocoloop.adjustNextYield(newNextYield);
+        yieldRepo.adjustNextYield(newNextYield);
 
         // Check that the next yield has been adjusted
-        assertEq(protocoloop.nextYield(), newNextYield);
+        assertEq(yieldRepo.nextYield(), newNextYield);
 
         // Call adjustNextYield with a value of zero next yield
         // Expect it to succeed
         vm.prank(guardian);
-        protocoloop.adjustNextYield(0);
+        yieldRepo.adjustNextYield(0);
 
         // Check that the next yield has been adjusted
-        assertEq(protocoloop.nextYield(), 0);
+        assertEq(yieldRepo.nextYield(), 0);
     }
 
     function test_shutdown() public {
@@ -600,18 +601,18 @@ contract ProtocoLoopTest is Test {
             abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
         );
         vm.prank(alice);
-        protocoloop.shutdown(new ERC20[](0));
+        yieldRepo.shutdown(new ERC20[](0));
 
         // Mint yield
         _mintYield();
 
         // Call endEpoch initially to get tokens into the contract
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
-        // Cache the protocoloop contract reserve balances
-        uint256 protocoloopReserveBalance = reserve.balanceOf(address(protocoloop));
-        uint256 protocoloopWrappedReserveBalance = wrappedReserve.balanceOf(address(protocoloop));
+        // Cache the yieldRepo contract reserve balances
+        uint256 yieldRepoReserveBalance = reserve.balanceOf(address(yieldRepo));
+        uint256 yieldRepoWrappedReserveBalance = wrappedReserve.balanceOf(address(yieldRepo));
 
         // Cache the treasury balances of the reserve tokens
         uint256 trsryReserveBalance = reserve.balanceOf(address(TRSRY));
@@ -628,26 +629,23 @@ contract ProtocoLoopTest is Test {
             abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
         );
         vm.prank(bob);
-        protocoloop.shutdown(tokens);
+        yieldRepo.shutdown(tokens);
 
         // Call shutdown with a valid caller
         // Expect it to succeed
         vm.prank(guardian);
-        protocoloop.shutdown(tokens);
+        yieldRepo.shutdown(tokens);
 
         // Check that the contract is shutdown
-        assertEq(protocoloop.isShutdown(), true);
+        assertEq(yieldRepo.isShutdown(), true);
 
-        // Check that the protocoloop contract reserve balances have been transferred to the TRSRY
-        assertEq(reserve.balanceOf(address(protocoloop)), 0);
-        assertEq(wrappedReserve.balanceOf(address(protocoloop)), 0);
-        assertEq(
-            reserve.balanceOf(address(TRSRY)),
-            trsryReserveBalance + protocoloopReserveBalance
-        );
+        // Check that the yieldRepo contract reserve balances have been transferred to the TRSRY
+        assertEq(reserve.balanceOf(address(yieldRepo)), 0);
+        assertEq(wrappedReserve.balanceOf(address(yieldRepo)), 0);
+        assertEq(reserve.balanceOf(address(TRSRY)), trsryReserveBalance + yieldRepoReserveBalance);
         assertEq(
             wrappedReserve.balanceOf(address(TRSRY)),
-            trsryWrappedReserveBalance + protocoloopWrappedReserveBalance
+            trsryWrappedReserveBalance + yieldRepoWrappedReserveBalance
         );
     }
 
@@ -657,7 +655,7 @@ contract ProtocoLoopTest is Test {
 
         // Call endEpoch initially to get tokens into the contract
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Cache yield earning balances in the clearinghouse and treasury
         uint256 clearinghouseWrappedReserveBalance = wrappedReserve.balanceOf(
@@ -671,7 +669,7 @@ contract ProtocoLoopTest is Test {
         );
 
         // Confirm the view function matches
-        assertEq(protocoloop.getReserveBalance(), expectedYieldEarningReserveBalance);
+        assertEq(yieldRepo.getReserveBalance(), expectedYieldEarningReserveBalance);
     }
 
     function test_getNextYield() public {
@@ -680,11 +678,11 @@ contract ProtocoLoopTest is Test {
 
         // Call endEpoch initially to get tokens into the contract
         vm.prank(heart);
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
-        // Get the "last values" from the protocoloop contract
-        uint256 lastReserveBalance = protocoloop.lastReserveBalance();
-        uint256 lastConversionRate = protocoloop.lastConversionRate();
+        // Get the "last values" from the yieldRepo contract
+        uint256 lastReserveBalance = yieldRepo.lastReserveBalance();
+        uint256 lastConversionRate = yieldRepo.lastConversionRate();
 
         // Get the principal receivables from the clearinghouse
         uint256 principalReceivables = clearinghouse.principalReceivables();
@@ -700,6 +698,6 @@ contract ProtocoLoopTest is Test {
             52;
 
         // Confirm the view function matches
-        assertEq(protocoloop.getNextYield(), expectedNextYield);
+        assertEq(yieldRepo.getNextYield(), expectedNextYield);
     }
 }

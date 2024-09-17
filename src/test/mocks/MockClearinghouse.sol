@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
-// mock clearinghouse to use with testing the protocoloop contract
+// mock clearinghouse to use with testing the yieldRepo contract
 // most functions / variables are omitted
 contract MockClearinghouse {
     ERC20 public reserve;

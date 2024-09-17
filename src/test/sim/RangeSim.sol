@@ -40,7 +40,7 @@ import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
-import {Protocoloop} from "policies/Protocoloop.sol";
+import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -198,7 +198,7 @@ abstract contract RangeSim is Test {
     OlympusPriceConfig public priceConfig;
     RolesAdmin public rolesAdmin;
     ZeroDistributor public distributor;
-    Protocoloop public protocoloop;
+    YieldRepurchaseFacility public yieldRepo;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
@@ -401,17 +401,14 @@ abstract contract RangeSim is Test {
 
             staking = new MockStakingZD(8 hours, 0, block.timestamp);
             distributor = new ZeroDistributor(address(staking));
-            protocoloop = new Protocoloop(
+            yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
                 address(reserve),
                 address(wrappedReserve),
                 address(teller),
                 address(auctioneer),
-                address(0), // no clearinghouse
-                100e18, // dummy values
-                1e18,
-                1e18
+                address(0) // no clearinghouse
             );
 
             // Deploy PriceConfig
@@ -422,7 +419,7 @@ abstract contract RangeSim is Test {
                 kernel,
                 operator,
                 distributor,
-                protocoloop,
+                yieldRepo,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
@@ -447,7 +444,7 @@ abstract contract RangeSim is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-            kernel.executeAction(Actions.ActivatePolicy, address(protocoloop));
+            kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
         }
         {
             // Configure access control
@@ -470,14 +467,14 @@ abstract contract RangeSim is Test {
             // PriceConfig roles
             rolesAdmin.grantRole("price_admin", guardian);
 
-            // Protocoloop roles
+            // YieldRepurchaseFacility roles
             rolesAdmin.grantRole("loop_daddy", guardian);
         }
 
         {
-            // Shutdown the protocoloop
+            // Shutdown the yieldRepo
             vm.prank(guardian);
-            protocoloop.shutdown(new ERC20[](0));
+            yieldRepo.shutdown(new ERC20[](0));
 
             // Set initial supply and liquidity balances
             uint256 initialSupply = vm.envUint("SUPPLY");

@@ -55,7 +55,7 @@ import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVault
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
-import {Protocoloop} from "policies/Protocoloop.sol";
+import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -100,7 +100,7 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     Clearinghouse public clearinghouse;
-    Protocoloop public protocoloop;
+    YieldRepurchaseFacility public yieldRepo;
 
     // Governance
     Timelock public timelock;
@@ -190,7 +190,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
-        selectorMap["Protocoloop"] = this._deployProtocoloop.selector;
+        selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -266,7 +266,7 @@ contract OlympusDeploy is Script {
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
-        protocoloop = Protocoloop(envAddress("olympus.policies.Protocoloop"));
+        yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -546,7 +546,7 @@ contract OlympusDeploy is Script {
             kernel,
             operator,
             zeroDistributor,
-            protocoloop,
+            yieldRepo,
             maxReward,
             auctionDuration
         );
@@ -949,32 +949,24 @@ contract OlympusDeploy is Script {
 
     // ========== PROTOCOLOOP ========== //
 
-    function _deployProtocoloop(bytes calldata args) public returns (address) {
-        (uint256 initialReserveBalance, uint256 initialConversionRate, uint256 initialYield) = abi
-            .decode(args, (uint256, uint256, uint256));
+    function _deployYieldRepurchaseFacility(bytes calldata args) public returns (address) {
+        // No additional arguments for YieldRepurchaseFacility
 
-        console2.log("Protocoloop initialReserveBalance:", initialReserveBalance);
-        console2.log("Protocoloop initialConversionRate:", initialConversionRate);
-        console2.log("Protocoloop initialYield:", initialYield);
-
-        // Deploy Protocoloop
+        // Deploy YieldRepurchaseFacility
         vm.broadcast();
-        protocoloop = new Protocoloop(
+        yieldRepo = new YieldRepurchaseFacility(
             kernel,
             address(ohm),
             address(reserve),
             address(wrappedReserve),
             address(bondFixedTermTeller),
             address(bondAuctioneer),
-            address(clearinghouse),
-            initialReserveBalance,
-            initialConversionRate,
-            initialYield
+            address(clearinghouse)
         );
 
-        console2.log("Protocoloop deployed at:", address(protocoloop));
+        console2.log("YieldRepurchaseFacility deployed at:", address(yieldRepo));
 
-        return address(protocoloop);
+        return address(yieldRepo);
     }
 
     // ========== VERIFICATION ========== //

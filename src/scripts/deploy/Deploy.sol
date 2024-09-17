@@ -26,7 +26,7 @@ import {Distributor} from "policies/Distributor/Distributor.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
-import {Protocoloop} from "policies/Protocoloop.sol";
+import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -57,7 +57,7 @@ contract OlympusDeploy is Script {
     ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
-    Protocoloop public protocoloop;
+    YieldRepurchaseFacility public yieldRepo;
 
     /// Construction variables
 
@@ -166,24 +166,21 @@ contract OlympusDeploy is Script {
         zeroDistributor = new ZeroDistributor(staking);
         console2.log("ZeroDistributor deployed at:", address(distributor));
 
-        protocoloop = new Protocoloop(
+        yieldRepo = new YieldRepurchaseFacility(
             kernel,
             address(ohm),
             address(reserve),
             address(wrappedReserve),
             address(bondTeller),
             address(bondAuctioneer),
-            address(0), // TODO clearinghouse
-            100_000_000e18, // TODO placeholder values
-            105e16,
-            50_000e18
+            address(0) // TODO clearinghouse
         );
 
         heart = new OlympusHeart(
             kernel,
             operator,
             zeroDistributor,
-            protocoloop,
+            yieldRepo,
             10 * 1e9,
             uint48(12 * 25)
         ); // TODO verify initial keeper reward and auction duration
@@ -219,7 +216,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
         // kernel.executeAction(Actions.ActivatePolicy, address(distributor));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
-        kernel.executeAction(Actions.ActivatePolicy, address(protocoloop));
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
 
         /// Configure access control for policies
 

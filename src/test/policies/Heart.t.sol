@@ -13,7 +13,7 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
-import {MockProtocoloop} from "test/mocks/MockProtocoloop.sol";
+import {MockYieldRepo} from "test/mocks/MockYieldRepo.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -74,7 +74,7 @@ contract HeartTest is Test {
     MockStakingZD internal staking;
     ZeroDistributor internal distributor;
 
-    MockProtocoloop internal protocoloop;
+    MockYieldRepo internal yieldRepo;
 
     uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
 
@@ -124,14 +124,14 @@ contract HeartTest is Test {
             distributor = new ZeroDistributor(address(staking));
             staking.setDistributor(address(distributor));
 
-            // Deploy mock protocoloop
+            // Deploy mock yieldRepo
 
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
                 IDistributor(address(distributor)),
-                protocoloop,
+                yieldRepo,
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
