@@ -15,11 +15,11 @@ contract MockYieldRepo is IYieldRepo {
         isShutdown = true;
     }
 
-    function getReserveBalance() external view override returns (uint256) {
+    function getReserveBalance() external pure override returns (uint256) {
         return 0;
     }
 
-    function getNextYield() external view override returns (uint256) {
+    function getNextYield() external pure override returns (uint256) {
         return 0;
     }
 }

@@ -16,6 +16,7 @@ interface IHeart {
     error Heart_BeatStopped();
     error Heart_InvalidParams();
     error Heart_BeatAvailable();
+    error Heart_InvalidFrequency();
 
     // =========  CORE FUNCTIONS ========= //
 
