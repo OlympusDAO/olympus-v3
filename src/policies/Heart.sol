@@ -49,8 +49,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator public operator;
     IDistributor public distributor;
-    IYieldRepo public protocoloop;
-    IStaking public staking;
+    IYieldRepo public yieldRepo;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -62,15 +61,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IOperator operator_,
         IDistributor distributor_,
-        IYieldRepo protocoloop_,
-        IStaking staking_,
+        IYieldRepo yieldRepo_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         distributor = distributor_;
-        protocoloop = protocoloop_;
-        staking = staking_;
+        yieldRepo = yieldRepo_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
@@ -134,10 +131,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         operator.operate();
 
         // Trigger protocol loop
-        protocoloop.endEpoch();
+        yieldRepo.endEpoch();
 
         // Trigger rebase
-        staking.unstake(address(this), 0, true, true);
+        distributor.triggerRebase();
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
@@ -191,8 +188,8 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function setProtocoloop(address protocoloop_) external onlyRole("heart_admin") {
-        protocoloop = IProtocoloop(protocoloop_);
+    function setYieldRepo(address yieldRepo_) external onlyRole("heart_admin") {
+        yieldRepo = IYieldRepo(yieldRepo_);
     }
 
     modifier notWhileBeatAvailable() {
