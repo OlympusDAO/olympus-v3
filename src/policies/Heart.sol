@@ -8,10 +8,10 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
@@ -48,6 +48,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator public operator;
     IDistributor public distributor;
+    IYieldRepo public yieldRepo;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -59,14 +60,15 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IOperator operator_,
         IDistributor distributor_,
+        IYieldRepo yieldRepo_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         distributor = distributor_;
+        yieldRepo = yieldRepo_;
 
         active = true;
-        lastBeat = uint48(block.timestamp);
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
@@ -93,6 +95,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         bytes memory expected = abi.encode([1, 1, 1]);
         if (MINTR_MAJOR != 1 || PRICE_MAJOR != 1 || ROLES_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
+
+        // Sync beat with distributor if called from kernel
+        if (msg.sender == address(kernel)) {
+            _syncBeatWithDistributor();
+        }
     }
 
     /// @inheritdoc Policy
@@ -126,7 +133,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger price range update and market operations
         operator.operate();
 
-        // Trigger distributor rebase
+        // Trigger protocol loop
+        yieldRepo.endEpoch();
+
+        // Trigger rebase
         distributor.triggerRebase();
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
@@ -149,6 +159,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
+
+    function _syncBeatWithDistributor() internal {
+        (uint256 epochLength, , uint256 epochEnd, ) = distributor.staking().epoch();
+        if (frequency() != epochLength) revert Heart_InvalidFrequency();
+        lastBeat = uint48(epochEnd - epochLength);
+    }
 
     function _resetBeat() internal {
         lastBeat = uint48(block.timestamp) - frequency();
@@ -178,6 +194,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function setDistributor(address distributor_) external onlyRole("heart_admin") {
         distributor = IDistributor(distributor_);
+        _syncBeatWithDistributor();
+    }
+
+    /// @inheritdoc IHeart
+    function setYieldRepo(address yieldRepo_) external onlyRole("heart_admin") {
+        yieldRepo = IYieldRepo(yieldRepo_);
     }
 
     modifier notWhileBeatAvailable() {
