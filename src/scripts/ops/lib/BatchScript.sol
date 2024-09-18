@@ -67,7 +67,7 @@ abstract contract BatchScript is Script {
     bytes32 private constant LEDGER = keccak256("ledger");
 
     // Address to send transaction from
-    address private safe;
+    address internal safe;
 
     enum Operation {
         CALL,
