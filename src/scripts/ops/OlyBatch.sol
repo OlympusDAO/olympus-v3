@@ -9,10 +9,9 @@ abstract contract OlyBatch is BatchScript {
 
     string internal env;
     string internal chain;
-    address daoMS;
-    address policyMS;
-    address emergencyMS;
-    address safe;
+    address internal daoMS;
+    address internal policyMS;
+    address internal emergencyMS;
 
     modifier isDaoBatch(bool send_) {
         // Load environment addresses for chain
@@ -32,7 +31,7 @@ abstract contract OlyBatch is BatchScript {
         _;
 
         // Execute batch
-        executeBatch(daoMS, send_);
+        executeBatch(send_);
     }
 
     modifier isPolicyBatch(bool send_) {
@@ -53,7 +52,7 @@ abstract contract OlyBatch is BatchScript {
         _;
 
         // Execute batch
-        executeBatch(policyMS, send_);
+        executeBatch(send_);
     }
 
     modifier isEmergencyBatch(bool send_) {
@@ -74,24 +73,12 @@ abstract contract OlyBatch is BatchScript {
         _;
 
         // Execute batch
-        executeBatch(emergencyMS, send_);
+        executeBatch(send_);
     }
 
-    function envAddress(string memory version, string memory key) internal returns (address) {
+    function envAddress(string memory version, string memory key) internal view returns (address) {
         return env.readAddress(string.concat(".", version, ".", chain, ".", key));
     }
 
     function loadEnv() internal virtual;
-
-    function addToBatch(address to_, bytes memory data_) internal returns (bytes memory) {
-        return addToBatch(safe, to_, data_);
-    }
-
-    function addToBatch(
-        address to_,
-        uint256 value_,
-        bytes memory data_
-    ) internal returns (bytes memory) {
-        return addToBatch(safe, to_, value_, data_);
-    }
 }
