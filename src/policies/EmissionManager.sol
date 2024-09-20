@@ -39,6 +39,9 @@ contract EmissionManager {
     RANGEv2 public RANGE;
     BACKINGv1 public BACKING;
 
+    // Policies
+    BondCallback public callback;
+
     // Tokens
     ERC20 public immutable ohm;
     ERC20 public immutable dai;
@@ -113,38 +116,31 @@ contract EmissionManager {
     /// @notice create bond protocol market with given budget
     /// @param saleAmount amount of DAI to fund bond market with
     function _createMarket(uint256 saleAmount) internal {
-        // Calculate inverse prices from the oracle feed
-        // The start price is the current market price, which is also the last price since this is called on a heartbeat
-        // The min price is the upper cushion price, since we don't want to buy above this level
-        uint256 minPrice = 10 ** (_oracleDecimals * 2) / RANGE.price(false, false); // lower cushion = (false, false) => high = true, wall = false
-        uint256 initialPrice = 10 ** (_oracleDecimals * 2) / PRICE.getLastPrice();
-
         // Calculate scaleAdjustment for bond market
         // Price decimals are returned from the perspective of the quote token
         // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
         // is the priceDecimal value
-        int8 priceDecimals = _getPriceDecimals(initialPrice);
-        int8 scaleAdjustment = int8(_daiDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
+        int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
+        int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
         uint256 bondScale = 10 **
-            uint8(36 + scaleAdjustment + int8(_ohmDecimals) - int8(_daiDecimals) - priceDecimals);
+            uint8(
+                36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
+            );
 
-        // Approve DAI on the bond teller
-        ohm.safeApprove(address(teller), saleAmount);
-
-        // Create new bond market to buy OHM with the reserve
-        uint256 marketId = auctioneer.createMarket(
+        // Create new bond market to buy the reserve with OHM
+        uint256 market = auctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
                     payoutToken: ohm,
-                    quoteToken: dai,
-                    callbackAddr: address(0),
+                    quoteToken: reserve,
+                    callbackAddr: address(callback),
                     capacityInQuote: false,
                     capacity: saleAmount,
-                    formattedInitialPrice: initialPrice.mulDiv(bondScale, oracleScale),
-                    formattedMinimumPrice: minPrice.mulDiv(bondScale, oracleScale),
+                    formattedInitialPrice: PRICE.getLastPrice().mulDiv(bondScale, oracleScale),
+                    formattedMinimumPrice: range.high.cushion.price.mulDiv(bondScale, oracleScale),
                     debtBuffer: 100_000, // 100%
                     vesting: uint48(0), // Instant swaps
                     conclusion: uint48(block.timestamp + 1 days), // 1 day from now
@@ -153,6 +149,9 @@ contract EmissionManager {
                 })
             )
         );
+
+        // Whitelist the bond market on the callback
+        callback.whitelist(address(auctioneer.getTeller()), market);
 
         emit Sale(marketId, saleAmount);
     }
