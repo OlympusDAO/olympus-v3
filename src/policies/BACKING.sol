@@ -4,8 +4,8 @@ pragma solidity 0.8.15;
 /// @notice The BACKING contract provides the Emission Manager with a passable representation of OHM backing.
 ///         Note that this contract should not be used for other purposes without significant thought. It's
 ///         returned backing value is unlikely to be perfect. However, for the purposes of the emission manager,
-///         which uses backing solely for the purpose of computing premium and daily emissions as a result, this
-///         approach should work fine (the snapshot time for market price in that calculation creates similar noise).
+///         which uses backing solely for the purpose of computing premium ==> daily emissions, this approach
+///         should suffice (the snapshot time for market price in that calculation creates similar noise).
 ///         Backing price should be adjusted by governance should it diverge excessively from reality.
 contract BACKING {
     address public immutable manager;
@@ -27,12 +27,12 @@ contract BACKING {
         uint256 previousSupply = _getSupply() - minted;
 
         uint256 percentIncreaseReserves = (reservesAdded * RESERVE_DECIMALS) / previousReserves;
-        uint256 percentIncreaseSupply = ((minted * SUPPLY_DECIMALS) / previousSupply) * DECIMALS;
+        uint256 percentIncreaseSupply = (minted * SUPPLY_DECIMALS) / previousSupply;
 
         price =
-            (price * percentIncreaseReserves) /
-            percentIncreaseSupply /
-            (RESERVE_DECIMALS - SUPPLY_DECIMALS);
+            (price * percentIncreaseReserves) / // price multiplied by 1e18
+            percentIncreaseSupply / // divided by 1e9
+            (RESERVE_DECIMALS - SUPPLY_DECIMALS); // leaves 1e9 more (1e18 - 1e9) to divide by
     }
 
     /// @notice return reserves, measured as clearinghouse receivables and sdai balances, in DAI denomination
@@ -51,9 +51,10 @@ contract BACKING {
     /// @notice allow governance to adjust backing price if deviated from reality
     /// @dev note if adjustment is more than 33% down, contract should be redeployed
     /// @param newPrice to adjust to
+    /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
     function adjustPrice(uint256 newPrice) external {
         if (msg.sender != governor) revert("Only Governor");
-        if (newPrice < (price * 2) / 3) revert("Change too significant");
+        if (newPrice < (price * 9) / 10) revert("Change too significant");
         price = newPrice;
     }
 }
