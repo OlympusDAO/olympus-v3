@@ -24,10 +24,10 @@ contract BACKING {
         if (msg.sender != manager) revert("Only Manager");
 
         uint256 previousReserves = _getReserves() - reservesAdded;
-        uint256 previousSupply = _getSupply() - minted;
+        uint256 previousSupply = _getSupply() - supplyAdded;
 
         uint256 percentIncreaseReserves = (reservesAdded * RESERVE_DECIMALS) / previousReserves;
-        uint256 percentIncreaseSupply = (minted * SUPPLY_DECIMALS) / previousSupply;
+        uint256 percentIncreaseSupply = (supplyAdded * SUPPLY_DECIMALS) / previousSupply;
 
         price =
             (price * percentIncreaseReserves) / // price multiplied by 1e18

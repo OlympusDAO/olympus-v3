@@ -7,7 +7,6 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -22,8 +21,16 @@ interface BACKINGv1 {
     function price() external view returns (uint256);
 }
 
-contract EmissionManager {
+contract EmissionManager is Policy, RolesConsumer {
+    using FullMath for uint256;
+
+    // ========== ERRORS ========== //
+
+    // ========== EVENTS ========== //
+
     event Sale(uint256 marketID, uint256 saleAmount);
+
+    // ========== DATA STRUCTURES ========== //
 
     struct Sale {
         uint256 premium;
@@ -31,6 +38,8 @@ contract EmissionManager {
         uint256 supplyAdded;
         uint256 reservesAdded;
     }
+
+    // ========== STATE VARIABLES ========== //
     Sale[] public sales;
 
     // Modules
@@ -51,7 +60,33 @@ contract EmissionManager {
     uint256 public baseEmissionRate;
     uint256 public minimumPremium;
 
+    // ========== SETUP ========== //
+
     constructor() {}
+
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("TRSRY");
+        dependencies[1] = toKeycode("PRICE");
+        dependencies[2] = toKeycode("RANGE");
+        dependencies[3] = toKeycode("ROLES");
+
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
+        PRICE = PRICEv1(getModuleAddress(dependencies[1]));
+        RANGE = RANGEv2(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
+
+        _oracleDecimals = PRICE.decimals();
+    }
+
+    function requestPermissions()
+        external
+        view
+        override
+        returns (Permissions[] memory permissions)
+    {}
+
+    // ========== HEARTBEAT ========== //
 
     /// @notice calculate and execute sale, if applicable, once per day
     /// @notice only callable by Olympus Heart
