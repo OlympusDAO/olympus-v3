@@ -78,15 +78,12 @@ contract EmissionManager {
         // It then calculates the amount to sell for the coming day
         uint256 sell = _calculateSale();
 
-        // If that amount is not zero, it mints the tokens needed and creates a market
-        if (sell != 0) {
-            if (sell > currentBalanceOHM) MINTR.mint(address(this), sell - currentBalanceOHM);
-            else if (currentBalanceOHM > sell) ohm.burn(currentBalanceOHM - sell);
+        // It brings its ohm holdings into balance with the amount to sell
+        if (sell > currentBalanceOHM) MINTR.mint(address(this), sell - currentBalanceOHM);
+        else if (currentBalanceOHM > sell) ohm.burn(currentBalanceOHM - sell);
 
-            _createMarket(sell);
-
-            // If there is no sale for the day, it burns any unsold ohm held
-        } else if (currentBalanceOHM != 0) ohm.burn(currentBalanceOHM);
+        // And then opens a market if applicable
+        if (sell != 0) _createMarket(sell);
     }
 
     /// @notice calculate sale amount as a function of premium, minimum premium, and base emission rate
