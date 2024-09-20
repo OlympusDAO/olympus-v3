@@ -91,50 +91,6 @@ abstract contract BatchScript is Script {
 
     bytes[] public encodedTxns;
 
-    // Modifiers
-
-    modifier isBatch(address safe_) {
-        // Set the chain ID
-        Chain memory chain = getChain(vm.envString("CHAIN"));
-        chainId = chain.chainId;
-
-        // Set the Safe API base URL and multisend address based on chain
-        if (chainId == 1) {
-            SAFE_API_BASE_URL = "https://safe-transaction-mainnet.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
-        } else if (chainId == 5) {
-            SAFE_API_BASE_URL = "https://safe-transaction-goerli.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
-        } else if (chainId == 8453) {
-            SAFE_API_BASE_URL = "https://safe-transaction-base.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
-        } else if (chainId == 42161) {
-            SAFE_API_BASE_URL = "https://safe-transaction-arbitrum.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
-        } else if (chainId == 43114) {
-            SAFE_API_BASE_URL = "https://safe-transaction-avalanche.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
-        } else {
-            revert("Unsupported chain");
-        }
-
-        // Store the provided safe address
-        safe = safe_;
-
-        // Load wallet information
-        walletType = keccak256(abi.encodePacked(vm.envString("WALLET_TYPE")));
-        if (walletType == LOCAL) {
-            privateKey = vm.envBytes32("PRIVATE_KEY");
-        } else if (walletType == LEDGER) {
-            mnemonicIndex = vm.envUint("MNEMONIC_INDEX");
-        } else {
-            revert("Unsupported wallet type");
-        }
-
-        // Run batch
-        _;
-    }
-
     // Functions to consume in a script
 
     // Adds an encoded transaction to the batch.
@@ -181,6 +137,7 @@ abstract contract BatchScript is Script {
     // Simulate then send the batch to the Safe API. If `send_` is `false`, the
     // batch will only be simulated.
     function executeBatch(bool send_) internal {
+        _initialize();
         Batch memory batch = _createBatch(safe);
         // _simulateBatch(safe, batch);
         if (send_) {
@@ -190,6 +147,40 @@ abstract contract BatchScript is Script {
     }
 
     // Private functions
+
+    // Internal functions
+    function _initialize() private {
+        // Set the chain ID
+        string memory chainName = vm.envString("CHAIN");
+        if (keccak256(bytes(chainName)) == keccak256(bytes("arbitrum"))) chainName = "arbitrum_one";
+        Chain memory chain = getChain(chainName);
+
+        chainId = chain.chainId;
+
+        // Set the Safe API base URL and multisend address based on chain
+        if (chainId == 1) {
+            SAFE_API_BASE_URL = "https://safe-transaction-mainnet.safe.global/api/v1/safes/";
+            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+        } else if (chainId == 5) {
+            SAFE_API_BASE_URL = "https://safe-transaction-goerli.safe.global/api/v1/safes/";
+            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+        } else if (chainId == 42161) {
+            SAFE_API_BASE_URL = "https://safe-transaction-arbitrum.safe.global/api/v1/safes/";
+            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+        } else {
+            revert("Unsupported chain");
+        }
+
+        // Load wallet information
+        walletType = keccak256(abi.encodePacked(vm.envString("WALLET_TYPE")));
+        if (walletType == LOCAL) {
+            privateKey = vm.envBytes32("PRIVATE_KEY");
+        } else if (walletType == LEDGER) {
+            mnemonicIndex = vm.envUint("MNEMONIC_INDEX");
+        } else {
+            revert("Unsupported wallet type");
+        }
+    }
 
     // Encodes the stored encoded transactions into a single Multisend transaction
     function _createBatch(address safe_) private returns (Batch memory batch) {
@@ -411,15 +402,12 @@ abstract contract BatchScript is Script {
         return string(res);
     }
 
-    function _getNonce(address safe_) private returns (uint256) {
-        string memory endpoint = string.concat(_getSafeAPIEndpoint(safe_), "?limit=1");
+    function _getNonce(address safe_) internal returns (uint256) {
+        string memory endpoint = string.concat(SAFE_API_BASE_URL, vm.toString(safe_), "/");
         (uint256 status, bytes memory data) = endpoint.get();
         if (status == 200) {
-            string memory resp = string(data);
-            string[] memory results;
-            results = resp.readStringArray(".results");
-            if (results.length == 0) return 0;
-            return resp.readUint(".results[0].nonce") + 1;
+            string memory result = string(data);
+            return result.readUint(".nonce");
         } else {
             revert("Get nonce failed!");
         }
