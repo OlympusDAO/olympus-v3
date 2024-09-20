@@ -109,8 +109,8 @@ contract YieldRepurchaseFacilityTest is Test {
                 ERC20(ohm),
                 ERC20(reserve),
                 uint256(100),
-                [uint256(2000), uint256(2500)],
-                [uint256(2000), uint256(2500)]
+                [uint256(1500), uint256(2000)],
+                [uint256(1500), uint256(2000)]
             );
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
@@ -259,7 +259,9 @@ contract YieldRepurchaseFacilityTest is Test {
     //       [X] when epoch == epochLength
     //         [X] The yield earned on the wrapped reserves over the past 21 epochs is withdrawn from the TRSRY (affecting the balanceInDai and bidAmount)
     //         [X] OHM in the contract is burned and reserves are added at the backing rate
-    //         [X] a new bond market is created with correct bid amount
+    //         [X] given current price is less than upper wall
+    //           [ ] a new bond market is created with correct bid amount
+    //         [X] given current price is greater than or equal to upper wall
     //       [X] when epoch != epochLength
     //         [X] OHM in the contract is burned and reserves are added at the backing rate
     //         [X] a new bond market is created with correct bid amount
@@ -291,7 +293,7 @@ contract YieldRepurchaseFacilityTest is Test {
         assertEq(yieldRepo.epoch(), 20);
     }
 
-    function test_endEpoch_firstCall() public {
+    function test_endEpoch_firstCall_currentLessThanWall() public {
         // Mint yield to the wrappedReserve
         _mintYield();
 
@@ -349,7 +351,7 @@ contract YieldRepurchaseFacilityTest is Test {
             assertEq(scale, 10 ** uint8(36 + 18 - 9 + 0));
             assertEq(
                 marketPrice,
-                ((uint256(1e36) / 10e18) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
+                ((uint256(1e36) / ((10e18 * 97) / 100)) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
             );
             assertEq(
                 minPrice,
@@ -360,6 +362,39 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Check that the epoch has been incremented
         assertEq(yieldRepo.epoch(), 0);
+    }
+
+    function test_endEpoch_firstCall_currentGreaterThanWall() public {
+        // Change the current price to be greater than the wall
+        PRICE.setLastPrice(15 * 1e18);
+
+        // Mint yield to the wrappedReserve
+        _mintYield();
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Cache the TRSRY sDAI balance
+        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        vm.prank(heart);
+        yieldRepo.endEpoch();
+
+        // Check that the initial yield was withdrawn from the TRSRY
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            trsryBalance - wrappedReserve.previewWithdraw(initialYield)
+        );
+
+        // Check that the yieldRepo contract has the correct reserve balance
+        assertEq(reserve.balanceOf(address(yieldRepo)), initialYield / 7);
+        assertEq(
+            wrappedReserve.balanceOf(address(yieldRepo)),
+            wrappedReserve.previewDeposit(initialYield - initialYield / 7)
+        );
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
     }
 
     function test_endEpoch_isShutdown() public {
@@ -528,7 +563,7 @@ contract YieldRepurchaseFacilityTest is Test {
             assertEq(scale, 10 ** uint8(36 + 18 - 9 + 0));
             assertEq(
                 marketPrice,
-                ((uint256(1e36) / 10e18) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
+                ((uint256(1e36) / ((10e18 * 97) / 100)) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
             );
             assertEq(
                 minPrice,

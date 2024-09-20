@@ -218,8 +218,11 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         // Calculate inverse prices from the oracle feed
         // The start price is the current market price, which is also the last price since this is called on a heartbeat
         // The min price is the upper cushion price, since we don't want to buy above this level
-        uint256 minPrice = 10 ** (_oracleDecimals * 2) / RANGE.price(true, false); // upper cushion = (true, false) => high = true, wall = false
-        uint256 initialPrice = 10 ** (_oracleDecimals * 2) / PRICE.getLastPrice();
+        uint256 minPrice = 10 ** (_oracleDecimals * 2) / RANGE.price(true, true); // upper wall = (true, true) => high = true, wall = true
+        uint256 initialPrice = 10 ** (_oracleDecimals * 2) / ((PRICE.getLastPrice() * 97) / 100); // 3% below current stated price in case oracle is stale
+
+        // If the min price is greater than or equal to the initial price, we don't want to create a market
+        if (minPrice >= initialPrice) return;
 
         // Calculate scaleAdjustment for bond market
         // Price decimals are returned from the perspective of the quote token
