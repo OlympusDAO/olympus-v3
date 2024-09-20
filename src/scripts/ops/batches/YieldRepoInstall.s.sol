@@ -82,6 +82,16 @@ contract YieldRepoInstall is OlyBatch {
             rolesAdmin,
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("loop_daddy"), daoMS)
         );
+
+        // B.4. Remove "operator_operate" role from the old heart
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.revokeRole.selector,
+                bytes32("operator_operate"),
+                oldHeart
+            )
+        );
     }
 
     // Entry point batch #2
