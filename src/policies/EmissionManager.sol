@@ -54,7 +54,7 @@ contract EmissionManager {
     /// @notice only callable by Olympus Heart
     function execute() external onlyHeart {
         counter++;
-        if (counter != 2) return;
+        if (counter != 3) return;
         counter = 0;
 
         // First see if it needs to do book keeping for previous day
