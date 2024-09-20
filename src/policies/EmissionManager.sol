@@ -17,13 +17,31 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
 
+interface BACKINGv1 {
+    function update(uint256 supplyAdded, uint256 reservesAdded) external;
+    function price() external view returns (uint256);
+}
+
 contract EmissionManager {
     event Sale(uint256 marketID, uint256 saleAmount);
+
+    struct Sale {
+        uint256 premium;
+        uint256 emissionRate;
+        uint256 supplyAdded;
+        uint256 reservesAdded;
+    }
+    Sale[] public sales;
 
     // Modules
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
     RANGEv2 public RANGE;
+    BACKINGv1 public BACKING;
+
+    // Tokens
+    ERC20 public immutable ohm;
+    ERC20 public immutable dai;
 
     uint256 public counter;
 
@@ -39,27 +57,58 @@ contract EmissionManager {
         if (counter != 2) return;
         counter = 0;
 
-        uint256 sale = _calculateSale();
+        // First see if it needs to do book keeping for previous day
+        Sale storage previousSale = sales[sales.length - 1];
+        uint256 currentBalanceDAI = dai.balanceOf(address(this));
+        uint256 currentBalanceOHM = ohm.balanceOf(address(this));
 
-        MINTR.mint(msg.sender, sale);
+        // Book keeping is needed if there are unspent tokens to accounted for
+        if (currentBalanceOHM > 0) previousSale.supplyAdded -= currentBalanceOHM;
 
-        if (sale != 0) _createMarket(sale);
+        // And/or new reserves, for which it:
+        if (currentBalanceDAI > 0) {
+            // Logs the inflow and sweeps them to the treasury as sDAI
+            previousSale.reservesAdded += currentBalanceDAI;
+            sdai.deposit(currentBalanceDAI, address(TRSRY), address(this));
+
+            // And updates backing price in the BACKING module
+            BACKING.update(previousSale.supplyAdded, previousSale.reservesAdded);
+        }
+
+        // It then calculates the amount to sell for the coming day
+        uint256 sell = _calculateSale();
+
+        // If that amount is not zero, it mints the tokens needed and creates a market
+        if (sell != 0) {
+            MINTR.mint(address(this), sell - currentBalanceOHM);
+            _createMarket(sell);
+
+            // If there is no sale for the day, it burns any unsold ohm held
+        } else if (currentBalanceOHM != 0) ohm.burn(currentBalanceOHM);
     }
 
     /// @notice calculate sale amount as a function of premium, minimum premium, and base emission rate
     /// @return emission amount, in OHM
     function _calculateSale() internal view returns (uint256) {
+        // To calculate the sale, it first computes premium (market price / backing price)
         uint256 price = PRICE.getLastPrice();
-        uint256 backingPrice = PRICE.getBackingPrice(); // this is TODO and a placeholder
+        uint256 backingPrice = BACKING.price();
         uint256 premium = (price * DECIMALS) / backingPrice;
 
-        if (premium < minimumPremium) return 0;
+        uint256 emissionRate;
+        uint256 supplyToAdd;
 
-        uint256 multiple = (premium * DECIMALS) / minimumPremium;
-        uint256 emissionRate = (baseEmissionRate * multiple) / DECIMALS;
-        uint256 emission = (ohm.circulatingSupply() * emissionRate) / DECIMALS;
+        // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
+        if (premium >= minimumPremium) {
+            emissionRate = (baseEmissionRate * premium) / minimumPremium;
+            supplyToAdd = (ohm.circulatingSupply() * emissionRate) / DECIMALS;
+        }
 
-        return emission;
+        // It then logs this information for future use
+        sales.push(Sale(premium, emissionRate, supplyToAdd, 0));
+
+        // Before returning the number of tokens to sell
+        return supplyToAdd;
     }
 
     /// @notice create bond protocol market with given budget
