@@ -62,7 +62,7 @@ contract EmissionManager {
         uint256 currentBalanceDAI = dai.balanceOf(address(this));
         uint256 currentBalanceOHM = ohm.balanceOf(address(this));
 
-        // Book keeping is needed if there are unspent tokens to accounted for
+        // Book keeping is needed if there are unspent tokens to account for
         if (currentBalanceOHM > 0) previousSale.supplyAdded -= currentBalanceOHM;
 
         // And/or new reserves, for which it:
