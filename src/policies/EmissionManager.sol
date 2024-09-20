@@ -80,7 +80,9 @@ contract EmissionManager {
 
         // If that amount is not zero, it mints the tokens needed and creates a market
         if (sell != 0) {
-            MINTR.mint(address(this), sell - currentBalanceOHM);
+            if (sell > currentBalanceOHM) MINTR.mint(address(this), sell - currentBalanceOHM);
+            else if (currentBalanceOHM > sell) ohm.burn(currentBalanceOHM - sell);
+
             _createMarket(sell);
 
             // If there is no sale for the day, it burns any unsold ohm held
