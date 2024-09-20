@@ -572,6 +572,15 @@ contract OlympusDeploy is Script {
         // Decode arguments for OlympusHeart policy
         (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
 
+        // Log heart parameters
+        console2.log("OlympusHeart parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   operator", address(operator));
+        console2.log("   zeroDistributor", address(zeroDistributor));
+        console2.log("   yieldRepo", address(yieldRepo));
+        console2.log("   maxReward", maxReward);
+        console2.log("   auctionDuration", auctionDuration);
+
         // Deploy OlympusHeart policy
         vm.broadcast();
         heart = new OlympusHeart(
@@ -1110,10 +1119,20 @@ contract OlympusDeploy is Script {
         return address(governorBravoDelegator);
     }
 
-    // ========== PROTOCOLOOP ========== //
+    // ========== YIELD REPURCHASE FACILITY ========== //
 
     function _deployYieldRepurchaseFacility(bytes calldata args) public returns (address) {
         // No additional arguments for YieldRepurchaseFacility
+
+        // Log dependencies
+        console2.log("YieldRepurchaseFacility parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   ohm", address(ohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   teller", address(bondFixedTermTeller));
+        console2.log("   auctioneer", address(bondAuctioneer));
+        console2.log("   clearinghouse", address(clearinghouse));
 
         // Deploy YieldRepurchaseFacility
         vm.broadcast();
