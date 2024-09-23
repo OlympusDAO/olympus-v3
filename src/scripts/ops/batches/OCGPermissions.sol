@@ -170,7 +170,6 @@ contract OCGPermissions is OlyBatch {
         // "heart_admin",
         // "operator_policy",
         // "loop_daddy"
-        // "distributor_admin" (give to DAO MS too)
         // RolesAdmin - admin
 
         // 1. Grant "operator_admin" to Timelock
@@ -252,29 +251,7 @@ contract OCGPermissions is OlyBatch {
         );
         console2.log("Granted loop_daddy to Timelock");
 
-        // 10. Grant "distributor_admin" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("distributor_admin"),
-                timelock
-            )
-        );
-        console2.log("Granted distributor_admin to Timelock");
-
-        // 11. Grant "distributor_admin" to DAO MS
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("distributor_admin"),
-                daoMS
-            )
-        );
-        console2.log("Granted distributor_admin to DAO MS");
-
-        // 12. Push the admin role on the RolesAdmin contract to the Timelock
+        // 10. Push the admin role on the RolesAdmin contract to the Timelock
         addToBatch(rolesAdmin, abi.encodeWithSelector(RolesAdmin.pushNewAdmin.selector, timelock));
         console2.log("Pushed RolesAdmin admin to Timelock");
     }
