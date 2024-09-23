@@ -10,6 +10,7 @@ import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
+import {IStaking} from "interfaces/IStaking.sol";
 
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
