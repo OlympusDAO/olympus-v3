@@ -60,6 +60,7 @@ import {LegacyBurner} from "policies/LegacyBurner.sol";
 import {pOLY} from "policies/pOLY.sol";
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
+import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -114,6 +115,7 @@ contract OlympusDeploy is Script {
     pOLY public poly;
     Clearinghouse public clearinghouse;
     CoolerUtils public coolerUtils;
+    YieldRepurchaseFacility public yieldRepo;
 
     // Governance
     Timelock public timelock;
@@ -136,6 +138,7 @@ contract OlympusDeploy is Script {
     IBondSDA public bondAuctioneer;
     IBondSDA public bondFixedExpiryAuctioneer;
     IBondTeller public bondFixedExpiryTeller;
+    IBondTeller public bondFixedTermTeller;
     IBondAggregator public bondAggregator;
 
     /// Chainlink price feed addresses
@@ -210,6 +213,7 @@ contract OlympusDeploy is Script {
         selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
         selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
+        selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -235,6 +239,7 @@ contract OlympusDeploy is Script {
         bondFixedExpiryTeller = IBondTeller(
             envAddress("external.bond-protocol.BondFixedExpiryTeller")
         );
+        bondFixedTermTeller = IBondTeller(envAddress("external.bond-protocol.BondFixedTermTeller"));
         bondAggregator = IBondAggregator(envAddress("external.bond-protocol.BondAggregator"));
         ohmEthPriceFeed = AggregatorV2V3Interface(envAddress("external.chainlink.ohmEthPriceFeed"));
         reserveEthPriceFeed = AggregatorV2V3Interface(
@@ -293,6 +298,7 @@ contract OlympusDeploy is Script {
         poly = pOLY(envAddress("olympus.policies.pOLY"));
         claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
+        yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -566,9 +572,25 @@ contract OlympusDeploy is Script {
         // Decode arguments for OlympusHeart policy
         (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
 
+        // Log heart parameters
+        console2.log("OlympusHeart parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   operator", address(operator));
+        console2.log("   zeroDistributor", address(zeroDistributor));
+        console2.log("   yieldRepo", address(yieldRepo));
+        console2.log("   maxReward", maxReward);
+        console2.log("   auctionDuration", auctionDuration);
+
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, zeroDistributor, maxReward, auctionDuration);
+        heart = new OlympusHeart(
+            kernel,
+            operator,
+            zeroDistributor,
+            yieldRepo,
+            maxReward,
+            auctionDuration
+        );
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);
@@ -1095,6 +1117,38 @@ contract OlympusDeploy is Script {
         console2.log("Governor Bravo Delegator deployed at:", address(governorBravoDelegator));
 
         return address(governorBravoDelegator);
+    }
+
+    // ========== YIELD REPURCHASE FACILITY ========== //
+
+    function _deployYieldRepurchaseFacility(bytes calldata args) public returns (address) {
+        // No additional arguments for YieldRepurchaseFacility
+
+        // Log dependencies
+        console2.log("YieldRepurchaseFacility parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   ohm", address(ohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   teller", address(bondFixedTermTeller));
+        console2.log("   auctioneer", address(bondAuctioneer));
+        console2.log("   clearinghouse", address(clearinghouse));
+
+        // Deploy YieldRepurchaseFacility
+        vm.broadcast();
+        yieldRepo = new YieldRepurchaseFacility(
+            kernel,
+            address(ohm),
+            address(reserve),
+            address(wrappedReserve),
+            address(bondFixedTermTeller),
+            address(bondAuctioneer),
+            address(clearinghouse)
+        );
+
+        console2.log("YieldRepurchaseFacility deployed at:", address(yieldRepo));
+
+        return address(yieldRepo);
     }
 
     // ========== VERIFICATION ========== //
