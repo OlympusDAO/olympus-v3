@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
+import {IStaking} from "interfaces/IStaking.sol";
+
 interface IDistributor {
     // =========  ERRORS ========= //
 
@@ -28,4 +30,8 @@ interface IDistributor {
     /// @notice Mints the bounty (if > 0) to the staking contract for distribution.
     /// @return uint256 The amount of OHM minted as a bounty.
     function retrieveBounty() external returns (uint256);
+
+    /// @notice Getter function for the staking contract address.
+    /// @return address The staking contract address.
+    function staking() external view returns (IStaking);
 }

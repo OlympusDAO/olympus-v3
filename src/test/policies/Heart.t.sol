@@ -13,15 +13,17 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
+import {MockYieldRepo} from "test/mocks/MockYieldRepo.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
 
-import {OlympusHeart} from "policies/Heart.sol";
+import {OlympusHeart, IHeart} from "policies/Heart.sol";
 
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
+import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -73,6 +75,8 @@ contract HeartTest is Test {
     MockStakingZD internal staking;
     ZeroDistributor internal distributor;
 
+    MockYieldRepo internal yieldRepo;
+
     uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
 
     // MINTR
@@ -121,11 +125,15 @@ contract HeartTest is Test {
             distributor = new ZeroDistributor(address(staking));
             staking.setDistributor(address(distributor));
 
+            // Deploy mock yieldRepo
+            yieldRepo = new MockYieldRepo();
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
                 IDistributor(address(distributor)),
+                IYieldRepo(address(yieldRepo)),
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -151,6 +159,9 @@ contract HeartTest is Test {
             // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
         }
+
+        // Do initial beat
+        heart.beat();
     }
 
     // ======== SETUP DEPENDENCIES ======= //
@@ -167,6 +178,30 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function testRevert_configureDependencies_invalidFrequency() public {
+        // Deploy mock staking with different frequency
+        staking = new MockStakingZD(7 hours, 0, block.timestamp);
+        distributor = new ZeroDistributor(address(staking));
+        staking.setDistributor(address(distributor));
+
+        // Deploy heart
+        heart = new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IDistributor(address(distributor)),
+            IYieldRepo(address(yieldRepo)),
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+
+        vm.startPrank(address(kernel));
+        // Since the staking frequency is different, the call to configureDependencies reverts
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidFrequency.selector);
+        vm.expectRevert(err);
+        heart.configureDependencies();
+        vm.stopPrank();
     }
 
     function test_requestPermissions() public {
