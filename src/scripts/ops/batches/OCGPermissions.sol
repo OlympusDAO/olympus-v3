@@ -22,8 +22,9 @@ contract OCGPermissions is OlyBatch {
         governor = envAddress("current", "olympus.governance.GovernorBravoDelegator");
     }
 
-    function script1_cleanup(bool send_) external isDaoBatch(send_) {
+    function script(bool send_) external isDaoBatch(send_) {
         // This script cleans up dangling roles from old contracts and addresses not used for managing the system anymore.
+        // At the end, it pushes the RolesAdmin admin role to the Timelock. This must be pulled by the Timelock during the first proposal.
         // 1. Remove the "callback_whitelist" role from an old operator contract
         addToBatch(
             rolesAdmin,
@@ -154,104 +155,8 @@ contract OCGPermissions is OlyBatch {
             )
         );
         console2.log("Revoked liquidityvault_admin from Timelock");
-    }
 
-    function script2_assignPermissions(bool send_) external isDaoBatch(send_) {
-        // Assigns roles to the Timelock based on the initial permissions matrix.
-        // "cooler_overseer", (already has)
-        // "emergency_shutdown", (already has)
-        // "emergency_admin", (already has)
-        // "operator_admin",
-        // "callback_admin",
-        // "price_admin",
-        // "custodian",
-        // "emergency_restart",
-        // "bridge_admin",
-        // "heart_admin",
-        // "operator_policy",
-        // "loop_daddy"
-        // RolesAdmin - admin
-
-        // 1. Grant "operator_admin" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("operator_admin"),
-                timelock
-            )
-        );
-        console2.log("Granted operator_admin to Timelock");
-
-        // 2. Grant "callback_admin" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("callback_admin"),
-                timelock
-            )
-        );
-        console2.log("Granted callback_admin to Timelock");
-
-        // 3. Grant "price_admin" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("price_admin"), timelock)
-        );
-        console2.log("Granted price_admin to Timelock");
-
-        // 4. Grant "custodian" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("custodian"), timelock)
-        );
-        console2.log("Granted custodian to Timelock");
-
-        // 5. Grant "emergency_restart" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("emergency_restart"),
-                timelock
-            )
-        );
-        console2.log("Granted emergency_restart to Timelock");
-
-        // 6. Grant "bridge_admin" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("bridge_admin"), timelock)
-        );
-        console2.log("Granted bridge_admin to Timelock");
-
-        // 7. Grant "heart_admin" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart_admin"), timelock)
-        );
-        console2.log("Granted heart_admin to Timelock");
-
-        // 8. Grant "operator_policy" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("operator_policy"),
-                timelock
-            )
-        );
-        console2.log("Granted operator_policy to Timelock");
-
-        // 9. Grant "loop_daddy" to Timelock
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("loop_daddy"), timelock)
-        );
-        console2.log("Granted loop_daddy to Timelock");
-
-        // 10. Push the admin role on the RolesAdmin contract to the Timelock
+        // 12. Push the admin role on the RolesAdmin contract to the Timelock
         addToBatch(rolesAdmin, abi.encodeWithSelector(RolesAdmin.pushNewAdmin.selector, timelock));
         console2.log("Pushed RolesAdmin admin to Timelock");
     }
