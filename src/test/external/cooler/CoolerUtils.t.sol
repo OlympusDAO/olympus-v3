@@ -1208,6 +1208,8 @@ contract CoolerUtilsTest is Test {
     //  [X] it reverts
     // when the collector address is the zero address
     //  [X] it reverts
+    // when the kernel address is the zero address
+    //  [ ] it reverts
     // when the fee percentage is > 100e2
     //  [X] it reverts
     // [X] it sets the values
@@ -1353,8 +1355,40 @@ contract CoolerUtilsTest is Test {
         assertEq(utils.owner(), owner, "owner");
         assertEq(address(utils.lender()), lender, "lender");
         assertEq(utils.collector(), collector, "collector");
+        assertEq(address(utils.kernel()), kernel, "kernel");
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
     }
+
+    // activate
+    // when the caller is not an admin or owner
+    //  [ ] it reverts
+    // when the caller is the owner
+    //  [ ] it sets the active flag to true
+    // when the caller is an admin
+    //  [ ] it sets the active flag to true
+    // when the contract is already active
+    //  [ ] it does nothing
+
+    // deactivate
+    // when the caller is not an admin or owner
+    //  [ ] it reverts
+    // when the caller is the owner
+    //  [ ] it sets the active flag to false
+    // when the caller is an admin
+    //  [ ] it sets the active flag to false
+    // when the contract is already deactive
+    //  [ ] it does nothing
+
+    // setAdmin
+    // when the caller is not the owner
+    //  [ ] it reverts
+    // when the caller is the admin
+    //  [ ] it reverts
+    // when the new admin is the zero address
+    //  [ ] it reverts
+    // when the new admin is the owner address
+    //  [ ] it sets the admin
+    // [ ] it sets the admin
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
 

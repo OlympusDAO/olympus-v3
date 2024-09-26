@@ -37,6 +37,9 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @notice Thrown when the contract is not active.
     error OnlyActive();
 
+    /// @notice Thrown when the caller is not the admin or owner.
+    error OnlyAdmin();
+
     /// @notice Thrown when the fee percentage is out of range.
     /// @dev    Valid values are 0 <= feePercentage <= 100e2
     error Params_FeePercentageOutOfRange();
@@ -69,6 +72,9 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     /// @notice Emitted when the collector is set
     event CollectorSet(address collector);
+
+    /// @notice Emitted when the admin is set
+    event AdminSet(address admin);
 
     // --- DATA STRUCTURES ---------------------------------------------------------
 
@@ -105,6 +111,9 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     /// @notice Whether the contract is active
     bool public active;
+
+    /// @notice Address permitted to activate and deactivate the contract
+    address public admin;
 
     // --- INITIALIZATION ----------------------------------------------------------
 
@@ -282,6 +291,10 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     // --- ADMIN ---------------------------------------------------
 
+    /// @notice Set the fee percentage
+    /// @dev    This function will revert if:
+    ///         - The fee percentage is above `ONE_HUNDRED_PERCENT`
+    ///         - The caller is not the owner
     function setFeePercentage(uint256 feePercentage_) external onlyOwner {
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
 
@@ -289,6 +302,10 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         emit FeePercentageSet(feePercentage_);
     }
 
+    /// @notice Set the collector address
+    /// @dev    This function will revert if:
+    ///         - The address is the zero address
+    ///         - The caller is not the owner
     function setCollector(address collector_) external onlyOwner {
         if (collector_ == address(0)) revert Params_InvalidAddress();
 
@@ -296,9 +313,12 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         emit CollectorSet(collector_);
     }
 
-    // TODO add admin addresses
-
-    function activate() external onlyOwner {
+    /// @notice Activate the contract
+    /// @dev    This function will revert if:
+    ///         - The caller is not an admin
+    ///
+    ///         If the contract is already active, it will do nothing.
+    function activate() external onlyAdmin {
         // Skip if already activated
         if (active) return;
 
@@ -306,7 +326,12 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         emit Activated();
     }
 
-    function deactivate() external onlyOwner {
+    /// @notice Deactivate the contract
+    /// @dev    This function will revert if:
+    ///         - The caller is not an admin
+    ///
+    ///         If the contract is already deactivated, it will do nothing.
+    function deactivate() external onlyAdmin {
         // Skip if already deactivated
         if (!active) return;
 
@@ -314,8 +339,29 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         emit Deactivated();
     }
 
+    /// @notice Modifier to check that the contract is active
     modifier onlyActive() {
         if (!active) revert OnlyActive();
+        _;
+    }
+
+    /// @notice Set the admin address
+    /// @dev    This function will revert if:
+    ///         - The address is the zero address
+    ///         - The caller is not the owner
+    ///
+    ///         This approach is used (instead of a Bophades role), as the contract is designed to be an independent contract and not a Bophades policy.
+    function setAdmin(address admin_) external onlyOwner {
+        if (admin_ == address(0)) revert Params_InvalidAddress();
+
+        admin = admin_;
+        emit AdminSet(admin_);
+    }
+
+    /// @notice Modifier to check that the caller is the owner or admin
+    modifier onlyAdmin() {
+        // The caller has to be the owner or the emergency admin
+        if (msg.sender != owner && msg.sender != admin) revert OnlyAdmin();
         _;
     }
 
