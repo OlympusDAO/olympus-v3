@@ -1507,7 +1507,7 @@ contract CoolerUtilsTest is Test {
         utils.setAdmin(admin);
     }
 
-    function test_setAdmin_asAdmin_reverts() public {
+    function test_setAdmin_asAdmin_reverts() public givenAdminIsSet {
         // Expect revert
         vm.expectRevert("UNAUTHORIZED");
 
