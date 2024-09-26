@@ -17,6 +17,7 @@ import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
 contract CoolerUtilsTest is Test {
     CoolerUtils public utils;
 
+    ERC20 public ohm;
     ERC20 public gohm;
     ERC20 public dai;
     IERC4626 public sdai;
@@ -24,6 +25,8 @@ contract CoolerUtilsTest is Test {
     CoolerFactory public coolerFactory;
     Clearinghouse public clearinghouse;
 
+    address public staking;
+    address public kernel;
     address public owner;
     address public lender;
     address public collector;
@@ -43,10 +46,14 @@ contract CoolerUtilsTest is Test {
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
         clearinghouse = Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
+
+        ohm = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
         gohm = ERC20(0x0ab87046fBb341D058F17CBC4c1133F25a20a52f);
         dai = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
         sdai = IERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
         lender = 0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA;
+        kernel = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
+        staking = 0xB63cac384247597756545b500253ff8E607a8020;
 
         owner = vm.addr(0x1);
         collector = vm.addr(0xC);
@@ -243,6 +250,12 @@ contract CoolerUtilsTest is Test {
     // ===== TESTS ===== //
 
     // consolidateWithFlashLoan
+    // given the contract has been disabled
+    //  [X] it reverts
+    // when the clearinghouse is not registered with CHREG
+    //  [X] it reverts
+    // when the cooler was not created by a valid CoolerFactory
+    //  [X] it reverts
     // given the caller has no loans
     //  [X] it reverts
     // given the caller has 1 loan
@@ -277,6 +290,57 @@ contract CoolerUtilsTest is Test {
     // [X] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
+
+    function test_consolidate_deactivated_reverts() public {
+        // Deactivate the CoolerUtils contract
+        vm.prank(owner);
+        utils.deactivate();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyActive.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans for coolerA
+        uint256[] memory idsA = _idsA();
+        _consolidate(idsA);
+    }
+
+    function test_consolidate_thirdPartyClearinghouse_reverts() public {
+        // Create a new Clearinghouse
+        // It is not registered with CHREG, so should be rejected
+        Clearinghouse newClearinghouse = new Clearinghouse(
+            address(ohm),
+            address(gohm),
+            staking,
+            address(sdai),
+            address(coolerFactory),
+            kernel
+        );
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidClearinghouse.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        uint256[] memory idsA = _idsA();
+        vm.prank(walletA);
+        utils.consolidateWithFlashLoan(address(newClearinghouse), address(coolerA), idsA, 0, false);
+    }
+
+    function test_consolidate_thirdPartyCooler_reverts() public {
+        // Create a new Cooler
+        // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
+        Cooler newCooler = new Cooler();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidCooler.selector);
+        vm.expectRevert(err);
+
+        // Consolidate loans for coolerA into newCooler
+        uint256[] memory idsA = _idsA();
+        vm.prank(walletA);
+        utils.consolidateWithFlashLoan(address(clearinghouse), address(newCooler), idsA, 0, false);
+    }
 
     function test_consolidate_noLoans_reverts() public {
         // Grant approvals

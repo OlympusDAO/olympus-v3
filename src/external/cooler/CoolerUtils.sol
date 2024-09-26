@@ -31,6 +31,9 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @notice Thrown when the caller is not the Cooler owner.
     error OnlyCoolerOwner();
 
+    /// @notice Thrown when the contract is not active.
+    error OnlyActive();
+
     /// @notice Thrown when the fee percentage is out of range.
     /// @dev    Valid values are 0 <= feePercentage <= 100e2
     error Params_FeePercentageOutOfRange();
@@ -43,6 +46,10 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     /// @notice Thrown when the caller attempts to consolidate too few cooler loans. The minimum is two.
     error InsufficientCoolerCount();
+
+    error Params_InvalidClearinghouse();
+
+    error Params_InvalidCooler();
 
     // --- DATA STRUCTURES ---------------------------------------------------------
 
@@ -69,11 +76,15 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
 
-    // protocol fees
+    /// @notice Percentage of the debt to be paid as a fee
+    /// @dev    In terms of `ONE_HUNDRED_PERCENT`
     uint256 public feePercentage;
 
     /// @notice Address permitted to collect protocol fees
     address public collector;
+
+    /// @notice Whether the contract is active
+    bool public active;
 
     // --- INITIALIZATION ----------------------------------------------------------
 
@@ -393,5 +404,22 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @return Version number
     function VERSION() external pure returns (uint256) {
         return 3;
+    }
+
+    // --- ADMIN ---------------------------------------------------------------
+
+    // TODO add admin addresses
+
+    function activate() external onlyOwner {
+        active = true;
+    }
+
+    function deactivate() external onlyOwner {
+        active = false;
+    }
+
+    modifier onlyActive() {
+        if (!active) revert OnlyActive();
+        _;
     }
 }
