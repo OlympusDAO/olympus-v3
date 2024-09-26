@@ -348,7 +348,7 @@ contract CoolerUtilsTest is Test {
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
         // Expect revert since no loan ids are given
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
         vm.expectRevert(err);
 
         // Consolidate loans, but give no ids
@@ -361,7 +361,7 @@ contract CoolerUtilsTest is Test {
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
         // Expect revert since no loan ids are given
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
         vm.expectRevert(err);
 
         // Consolidate loans, but give one id
@@ -976,7 +976,7 @@ contract CoolerUtilsTest is Test {
         uint256[] memory ids = new uint256[](0);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
         vm.expectRevert(err);
 
         utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
@@ -987,7 +987,7 @@ contract CoolerUtilsTest is Test {
         ids[0] = 0;
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
         vm.expectRevert(err);
 
         utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);

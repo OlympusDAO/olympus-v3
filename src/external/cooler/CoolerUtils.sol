@@ -4,11 +4,14 @@ pragma solidity ^0.8.15;
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 import {Owned} from "solmate/auth/Owned.sol";
+import {Kernel, Module, toKeycode} from "src/Kernel.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
+import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
 //
 //    ██████╗ ██████╗  ██████╗ ██╗     ███████╗██████╗     ██╗   ██╗████████╗██╗██╗     ███████╗
@@ -45,11 +48,27 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     error Params_UseFundsOutOfBounds();
 
     /// @notice Thrown when the caller attempts to consolidate too few cooler loans. The minimum is two.
-    error InsufficientCoolerCount();
+    error Params_InsufficientCoolerCount();
 
+    /// @notice Thrown when the Clearinghouse is not registered with the Bophades kernel
     error Params_InvalidClearinghouse();
 
+    /// @notice Thrown when the Cooler is not created by the CoolerFactory for the specified Clearinghouse
     error Params_InvalidCooler();
+
+    // --- EVENTS ---------------------------------------------------------
+
+    /// @notice Emitted when the contract is activated
+    event Activated();
+
+    /// @notice Emitted when the contract is deactivated
+    event Deactivated();
+
+    /// @notice Emitted when the fee percentage is set
+    event FeePercentageSet(uint256 feePercentage);
+
+    /// @notice Emitted when the collector is set
+    event CollectorSet(address collector);
 
     // --- DATA STRUCTURES ---------------------------------------------------------
 
@@ -73,6 +92,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     IERC20 public immutable gohm;
     IERC4626 public immutable sdai;
     IERC20 public immutable dai;
+    Kernel public immutable kernel;
 
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
 
@@ -95,6 +115,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         address owner_,
         address lender_,
         address collector_,
+        address kernel_,
         uint256 feePercentage_
     ) Owned(owner_) {
         // Validation
@@ -105,6 +126,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         if (gohm_ == address(0)) revert Params_InvalidAddress();
         if (sdai_ == address(0)) revert Params_InvalidAddress();
         if (dai_ == address(0)) revert Params_InvalidAddress();
+        if (kernel_ == address(0)) revert Params_InvalidAddress();
 
         // store contracts
         gohm = IERC20(gohm_);
@@ -117,6 +139,15 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         owner = owner_;
         collector = collector_;
         feePercentage = feePercentage_;
+        kernel = Kernel(kernel_);
+
+        // Activate the contract
+        active = true;
+
+        // Emit events
+        emit FeePercentageSet(feePercentage);
+        emit CollectorSet(collector);
+        emit Activated();
     }
 
     // --- OPERATION ---------------------------------------------------------------
@@ -140,19 +171,24 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         uint256[] calldata ids_,
         uint256 useFunds_,
         bool sdai_
-    ) public {
-        Cooler cooler = Cooler(cooler_);
+    ) public onlyActive {
+        // Validate that the Clearinghouse is registered with the Bophades kernel
+        if (!_isValidClearinghouse(clearinghouse_)) revert Params_InvalidClearinghouse();
+
+        // Validate that the cooler was created by the CoolerFactory for the Clearinghouse
+        if (!_isValidCooler(clearinghouse_, cooler_)) revert Params_InvalidCooler();
 
         // Ensure at least two loans are being consolidated
-        if (ids_.length < 2) revert InsufficientCoolerCount();
+        if (ids_.length < 2) revert Params_InsufficientCoolerCount();
 
         // Cache batch debt and principal
-        (uint256 totalDebt, uint256 totalPrincipal) = _getDebtForLoans(address(cooler), ids_);
+        (uint256 totalDebt, uint256 totalPrincipal) = _getDebtForLoans(cooler_, ids_);
 
         // Grant approval to the Cooler to spend the debt
-        dai.approve(address(cooler), totalDebt);
+        dai.approve(cooler_, totalDebt);
 
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
+        Cooler cooler = Cooler(cooler_);
         if (cooler.owner() != msg.sender) revert OnlyCoolerOwner();
 
         // Transfer in necessary funds to repay the fee
@@ -250,12 +286,37 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
 
         feePercentage = feePercentage_;
+        emit FeePercentageSet(feePercentage_);
     }
 
     function setCollector(address collector_) external onlyOwner {
         if (collector_ == address(0)) revert Params_InvalidAddress();
 
         collector = collector_;
+        emit CollectorSet(collector_);
+    }
+
+    // TODO add admin addresses
+
+    function activate() external onlyOwner {
+        // Skip if already activated
+        if (active) return;
+
+        active = true;
+        emit Activated();
+    }
+
+    function deactivate() external onlyOwner {
+        // Skip if already deactivated
+        if (!active) return;
+
+        active = false;
+        emit Deactivated();
+    }
+
+    modifier onlyActive() {
+        if (!active) revert OnlyActive();
+        _;
     }
 
     // --- INTERNAL FUNCTIONS ------------------------------------------------------
@@ -301,6 +362,39 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         gohm.transferFrom(cooler.owner(), address(this), totalCollateral);
     }
 
+    function _isValidClearinghouse(address clearinghouse_) internal view returns (bool) {
+        // Get the Clearinghouse registry from the kernel
+        Module module = kernel.getModuleForKeycode(toKeycode("CHREG"));
+        if (address(module) == address(0)) revert Params_InvalidClearinghouse();
+
+        CHREGv1 chreg = CHREGv1(address(module));
+
+        // We check against the registry (not just active), as repayments are still allowed when a Clearinghouse is deactivated
+        uint256 registryCount = chreg.registryCount();
+        bool found;
+        for (uint256 i; i < registryCount; i++) {
+            if (chreg.registry(i) == clearinghouse_) {
+                found = true;
+                break;
+            }
+        }
+
+        return found;
+    }
+
+    /// @notice Check if a given cooler was created by the CoolerFactory for a Clearinghouse
+    /// @dev    This function assumes that the authenticity of the Clearinghouse is already verified
+    ///
+    /// @param  clearinghouse_ Clearinghouse contract
+    /// @param  cooler_       Cooler contract
+    /// @return bool          Whether the cooler was created by the CoolerFactory for the Clearinghouse
+    function _isValidCooler(address clearinghouse_, address cooler_) internal view returns (bool) {
+        Clearinghouse clearinghouse = Clearinghouse(clearinghouse_);
+        CoolerFactory coolerFactory = CoolerFactory(clearinghouse.factory());
+
+        return coolerFactory.created(cooler_);
+    }
+
     // --- AUX FUNCTIONS -----------------------------------------------------------
 
     /// @notice View function to compute the protocol fee for a given total debt.
@@ -323,7 +417,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         address cooler_,
         uint256[] calldata ids_
     ) external view returns (address, uint256, uint256, uint256, uint256) {
-        if (ids_.length < 2) revert InsufficientCoolerCount();
+        if (ids_.length < 2) revert Params_InsufficientCoolerCount();
 
         uint256 totalPrincipal;
         uint256 totalDebtWithInterest;
@@ -376,7 +470,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
             uint256 additionalCollateral
         )
     {
-        if (ids_.length == 0) revert InsufficientCoolerCount();
+        if (ids_.length == 0) revert Params_InsufficientCoolerCount();
 
         // Calculate the total principal of the existing loans
         uint256 totalPrincipal;
@@ -403,23 +497,6 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     ///
     /// @return Version number
     function VERSION() external pure returns (uint256) {
-        return 3;
-    }
-
-    // --- ADMIN ---------------------------------------------------------------
-
-    // TODO add admin addresses
-
-    function activate() external onlyOwner {
-        active = true;
-    }
-
-    function deactivate() external onlyOwner {
-        active = false;
-    }
-
-    modifier onlyActive() {
-        if (!active) revert OnlyActive();
-        _;
+        return 4;
     }
 }
