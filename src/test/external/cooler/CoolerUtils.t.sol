@@ -348,7 +348,9 @@ contract CoolerUtilsTest is Test {
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
         // Expect revert since no loan ids are given
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.Params_InsufficientCoolerCount.selector
+        );
         vm.expectRevert(err);
 
         // Consolidate loans, but give no ids
@@ -361,7 +363,9 @@ contract CoolerUtilsTest is Test {
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
         // Expect revert since no loan ids are given
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.Params_InsufficientCoolerCount.selector
+        );
         vm.expectRevert(err);
 
         // Consolidate loans, but give one id
@@ -976,7 +980,9 @@ contract CoolerUtilsTest is Test {
         uint256[] memory ids = new uint256[](0);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.Params_InsufficientCoolerCount.selector
+        );
         vm.expectRevert(err);
 
         utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
@@ -987,7 +993,9 @@ contract CoolerUtilsTest is Test {
         ids[0] = 0;
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InsufficientCoolerCount.selector);
+        bytes memory err = abi.encodeWithSelector(
+            CoolerUtils.Params_InsufficientCoolerCount.selector
+        );
         vm.expectRevert(err);
 
         utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
@@ -1209,7 +1217,16 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(0), address(sdai), address(dai), owner, lender, collector, kernel, 0);
+        new CoolerUtils(
+            address(0),
+            address(sdai),
+            address(dai),
+            owner,
+            lender,
+            collector,
+            kernel,
+            0
+        );
     }
 
     function test_constructor_zeroSDai_reverts() public {
@@ -1217,7 +1234,16 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(gohm), address(0), address(dai), owner, lender, collector, kernel, 0);
+        new CoolerUtils(
+            address(gohm),
+            address(0),
+            address(dai),
+            owner,
+            lender,
+            collector,
+            kernel,
+            0
+        );
     }
 
     function test_constructor_zeroDai_reverts() public {
@@ -1225,7 +1251,16 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(gohm), address(sdai), address(0), owner, lender, collector, kernel, 0);
+        new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(0),
+            owner,
+            lender,
+            collector,
+            kernel,
+            0
+        );
     }
 
     function test_constructor_zeroOwner_reverts() public {
@@ -1267,7 +1302,16 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(gohm), address(sdai), address(dai), owner, lender, address(0), kernel, 0);
+        new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            owner,
+            lender,
+            address(0),
+            kernel,
+            0
+        );
     }
 
     function test_constructor_feePercentageAboveMax_reverts() public {
