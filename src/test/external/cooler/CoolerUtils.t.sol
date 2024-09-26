@@ -66,6 +66,7 @@ contract CoolerUtilsTest is Test {
             owner,
             lender,
             collector,
+            kernel,
             0
         );
 
@@ -1208,7 +1209,7 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(0), address(sdai), address(dai), owner, lender, collector, 0);
+        new CoolerUtils(address(0), address(sdai), address(dai), owner, lender, collector, kernel, 0);
     }
 
     function test_constructor_zeroSDai_reverts() public {
@@ -1216,7 +1217,7 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(gohm), address(0), address(dai), owner, lender, collector, 0);
+        new CoolerUtils(address(gohm), address(0), address(dai), owner, lender, collector, kernel, 0);
     }
 
     function test_constructor_zeroDai_reverts() public {
@@ -1224,7 +1225,7 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(gohm), address(sdai), address(0), owner, lender, collector, 0);
+        new CoolerUtils(address(gohm), address(sdai), address(0), owner, lender, collector, kernel, 0);
     }
 
     function test_constructor_zeroOwner_reverts() public {
@@ -1239,6 +1240,7 @@ contract CoolerUtilsTest is Test {
             address(0),
             lender,
             collector,
+            kernel,
             0
         );
     }
@@ -1255,6 +1257,7 @@ contract CoolerUtilsTest is Test {
             owner,
             address(0),
             collector,
+            kernel,
             0
         );
     }
@@ -1264,7 +1267,7 @@ contract CoolerUtilsTest is Test {
         bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(address(gohm), address(sdai), address(dai), owner, lender, address(0), 0);
+        new CoolerUtils(address(gohm), address(sdai), address(dai), owner, lender, address(0), kernel, 0);
     }
 
     function test_constructor_feePercentageAboveMax_reverts() public {
@@ -1281,6 +1284,7 @@ contract CoolerUtilsTest is Test {
             owner,
             lender,
             collector,
+            kernel,
             _ONE_HUNDRED_PERCENT + 1
         );
     }
@@ -1295,6 +1299,7 @@ contract CoolerUtilsTest is Test {
             owner,
             lender,
             collector,
+            kernel,
             feePercentage
         );
 

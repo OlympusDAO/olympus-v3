@@ -1041,6 +1041,7 @@ contract OlympusDeploy is Script {
         console2.log("  Collector:", collector);
         console2.log("  Fee Percentage:", feePercentage);
         console2.log("  Lender:", lender);
+        console2.log("  Kernel:", address(kernel));
         console2.log("  Owner:", owner);
 
         // Deploy CoolerUtils
@@ -1052,6 +1053,7 @@ contract OlympusDeploy is Script {
             owner,
             lender,
             collector,
+            address(kernel),
             feePercentage
         );
         console2.log("  CoolerUtils deployed at:", address(coolerUtils));
