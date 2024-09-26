@@ -30,6 +30,7 @@ contract CoolerUtilsTest is Test {
     address public owner;
     address public lender;
     address public collector;
+    address public admin;
 
     address public walletA;
     Cooler public coolerA;
@@ -56,6 +57,7 @@ contract CoolerUtilsTest is Test {
         staking = 0xB63cac384247597756545b500253ff8E607a8020;
 
         owner = vm.addr(0x1);
+        admin = vm.addr(0x2);
         collector = vm.addr(0xC);
 
         // Deploy CoolerUtils
@@ -173,6 +175,24 @@ contract CoolerUtilsTest is Test {
 
     function _getInterestDue(uint256[] memory ids_) internal view returns (uint256) {
         return _getInterestDue(address(coolerA), ids_);
+    }
+
+    modifier givenAdminIsSet() {
+        vm.prank(owner);
+        utils.setAdmin(admin);
+        _;
+    }
+
+    modifier givenActivated() {
+        vm.prank(owner);
+        utils.activate();
+        _;
+    }
+
+    modifier givenDeactivated() {
+        vm.prank(owner);
+        utils.deactivate();
+        _;
     }
 
     // ===== ASSERTIONS ===== //
@@ -1209,7 +1229,7 @@ contract CoolerUtilsTest is Test {
     // when the collector address is the zero address
     //  [X] it reverts
     // when the kernel address is the zero address
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the fee percentage is > 100e2
     //  [X] it reverts
     // [X] it sets the values
@@ -1316,6 +1336,23 @@ contract CoolerUtilsTest is Test {
         );
     }
 
+    function test_constructor_zeroKernel_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        new CoolerUtils(
+            address(gohm),
+            address(sdai),
+            address(dai),
+            owner,
+            lender,
+            collector,
+            address(0),
+            0
+        );
+    }
+
     function test_constructor_feePercentageAboveMax_reverts() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -1361,34 +1398,145 @@ contract CoolerUtilsTest is Test {
 
     // activate
     // when the caller is not an admin or owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller is the owner
-    //  [ ] it sets the active flag to true
+    //  [X] it sets the active flag to true
     // when the caller is an admin
-    //  [ ] it sets the active flag to true
+    //  when the admin is not set
+    //   [X] it reverts
+    //  [X] it sets the active flag to true
     // when the contract is already active
-    //  [ ] it does nothing
+    //  [X] it does nothing
+
+    function test_activate_notAdminOrOwner_reverts() public givenAdminIsSet givenDeactivated {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        vm.expectRevert(err);
+
+        utils.activate();
+    }
+
+    function test_activate_asOwner_setsActive() public givenAdminIsSet givenDeactivated {
+        vm.prank(owner);
+        utils.activate();
+
+        assertTrue(utils.active(), "active");
+    }
+
+    function test_activate_asAdmin_setsActive() public givenAdminIsSet givenDeactivated {
+        vm.prank(admin);
+        utils.activate();
+
+        assertTrue(utils.active(), "active");
+    }
+
+    function test_activate_asAdmin_adminNotSet_reverts() public givenDeactivated {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        vm.expectRevert(err);
+
+        vm.prank(admin);
+        utils.activate();
+    }
+
+    function test_activate_asAdmin_alreadyActive() public givenAdminIsSet {
+        vm.prank(owner);
+        utils.activate();
+
+        assertTrue(utils.active(), "active");
+    }
 
     // deactivate
     // when the caller is not an admin or owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller is the owner
-    //  [ ] it sets the active flag to false
+    //  [X] it sets the active flag to false
     // when the caller is an admin
-    //  [ ] it sets the active flag to false
-    // when the contract is already deactive
-    //  [ ] it does nothing
+    //  when the admin is not set
+    //   [X] it reverts
+    //  [X] it sets the active flag to false
+    // when the contract is already deactivated
+    //  [X] it does nothing
+
+    function test_deactivate_notAdminOrOwner_reverts() public givenAdminIsSet givenActivated {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        vm.expectRevert(err);
+
+        utils.deactivate();
+    }
+
+    function test_deactivate_asOwner_setsActive() public givenAdminIsSet {
+        vm.prank(owner);
+        utils.deactivate();
+
+        assertFalse(utils.active(), "active");
+    }
+
+    function test_deactivate_asAdmin_adminNotSet_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        vm.expectRevert(err);
+
+        vm.prank(admin);
+        utils.deactivate();
+    }
+
+    function test_deactivate_asAdmin_alreadyDeactivated() public givenAdminIsSet givenDeactivated {
+        vm.prank(owner);
+        utils.deactivate();
+
+        assertFalse(utils.active(), "active");
+    }
 
     // setAdmin
     // when the caller is not the owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller is the admin
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the new admin is the zero address
-    //  [ ] it reverts
+    //  [X] it sets the admin
     // when the new admin is the owner address
-    //  [ ] it sets the admin
-    // [ ] it sets the admin
+    //  [X] it reverts
+    // [X] it sets the admin
+
+    function test_setAdmin_notOwner_reverts() public {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        utils.setAdmin(admin);
+    }
+
+    function test_setAdmin_asAdmin_reverts() public {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        vm.prank(admin);
+        utils.setAdmin(admin);
+    }
+
+    function test_setAdmin_zeroAddress() public {
+        vm.prank(owner);
+        utils.setAdmin(address(0));
+
+        assertEq(utils.admin(), address(0), "admin");
+    }
+
+    function test_setAdmin_ownerAddress() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        vm.expectRevert(err);
+
+        vm.prank(owner);
+        utils.setAdmin(owner);
+    }
+
+    function test_setAdmin() public {
+        vm.prank(owner);
+        utils.setAdmin(admin);
+
+        assertEq(utils.admin(), admin, "admin");
+    }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
 

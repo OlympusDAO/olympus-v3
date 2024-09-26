@@ -347,12 +347,14 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     /// @notice Set the admin address
     /// @dev    This function will revert if:
-    ///         - The address is the zero address
+    ///         - The address is the owner address (since that would be a duplicate address)
     ///         - The caller is not the owner
     ///
     ///         This approach is used (instead of a Bophades role), as the contract is designed to be an independent contract and not a Bophades policy.
+    ///
+    ///         This function will NOT revert if `admin_` is the zero address, so that the admin can be removed.
     function setAdmin(address admin_) external onlyOwner {
-        if (admin_ == address(0)) revert Params_InvalidAddress();
+        if (admin_ == owner) revert Params_InvalidAddress();
 
         admin = admin_;
         emit AdminSet(admin_);
