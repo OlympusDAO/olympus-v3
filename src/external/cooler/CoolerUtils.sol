@@ -164,9 +164,14 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using
     ///         Maker flashloans.
     ///
-    /// @dev    This function will revert unless the message sender has:
-    ///            - Approved this contract to spend the `useFunds_`.
-    ///            - Approved this contract to spend the gOHM escrowed by the target Cooler.
+    /// @dev    This function will revert if:
+    ///         - The caller has not approved this contract to spend the `useFunds_`.
+    ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
+    ///         - `clearinghouse_` is not registered with the Clearinghouse registry.
+    ///         - `cooler_` is not a valid Cooler for the Clearinghouse.
+    ///         - Less than two loans are being consolidated.
+    ///         - The available funds are less than the required flashloan amount.
+    ///
     ///         For flexibility purposes, the user can either pay with DAI or sDAI.
     ///
     /// @param  clearinghouse_ Olympus Clearinghouse to be used to issue the consolidated loan.
