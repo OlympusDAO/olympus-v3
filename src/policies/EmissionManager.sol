@@ -76,7 +76,7 @@ contract EmissionManager is Policy, RolesConsumer {
     uint8 internal immutable _reserveDecimals;
 
     uint256 public shutdownTimestamp;
-    uint256 public constant RESTART_TIMER = 1 weeks;
+    uint256 public constant restartTimeframe;
 
     // ========== SETUP ========== //
 
@@ -187,7 +187,8 @@ contract EmissionManager is Policy, RolesConsumer {
     function initialize(
         uint256 baseEmissionsRate_,
         uint256 minimumPremium_,
-        uint256 backing_
+        uint256 backing_,
+        uint256 restartTimeframe_
     ) external onlyRole("emissions_admin") {
         if (locallyActive) revert("Already initialized");
 
@@ -195,6 +196,13 @@ contract EmissionManager is Policy, RolesConsumer {
         if (baseEmissionsRate_ == 0) revert("Base emissions rate cannot be 0");
         if (minimumPremium_ == 0) revert("Minimum premium cannot be 0");
         if (backing_ == 0) revert("Backing cannot be 0");
+        if (restartTimeframe_ == 0) revert("Restart timeframe cannot be 0");
+
+        // Assign
+        baseEmissionRate = baseEmissionsRate_;
+        minimumPremium = minimumPremium_;
+        backing = backing_;
+        restartTimeframe = restartTimeframe_;
 
         // Activate
         locallyActive = true;
@@ -341,6 +349,12 @@ contract EmissionManager is Policy, RolesConsumer {
     function adjustBacking(uint256 newBacking) external onlyRole("emissions_admin") {
         if (newBacking < (backing * 9) / 10) revert("Change too significant");
         backing = newBacking;
+    }
+
+    /// @notice allow governance to adjust the timeframe for restart after shutdown
+    /// @param newTimeframe to adjust it to
+    function adjustRestartTimeframe(uint256 newTimeframe) external onlyRole("emissions_admin") {
+        restartTimeframe = newTimeframe;
     }
 
     function updateBondContracts(
