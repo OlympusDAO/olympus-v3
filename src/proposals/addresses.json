@@ -73,5 +73,10 @@
         "addr": "0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c",
         "name": "olympus-policy-clearinghouse",
         "chainId": 1
+    },
+    {
+        "addr": "0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59",
+        "name": "olympus-module-roles",
+        "chainId": 1
     }
 ]

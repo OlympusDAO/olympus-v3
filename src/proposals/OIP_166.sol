@@ -30,7 +30,7 @@ contract OIP_166 is GovernorBravoProposal {
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
-        return "OIP-166: Activate OCG Step 1";
+        return "OIP-166: Transition to OCG, Step 1";
     }
 
     // No deploy actions needed

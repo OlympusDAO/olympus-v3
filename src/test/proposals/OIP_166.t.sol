@@ -47,6 +47,17 @@ contract OIP_166_Test is Test {
             // Set addresses object
             addresses = suite.addresses();
 
+            // NOTE: unique to OIP 166
+            // In prepation for this particular proposal, we need to:
+            // Push the roles admin "admin" permission to the Timelock from the DAO MS (multisig)
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            address timelock = addresses.getAddress("olympus-timelock");
+            RolesAdmin rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));
+
+            vm.prank(daoMS);
+            rolesAdmin.pushNewAdmin(timelock);
+
+            // Set debug mode
             suite.setDebug(true);
             // Execute proposals
             suite.testProposals();
