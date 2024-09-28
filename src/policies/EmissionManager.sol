@@ -75,8 +75,8 @@ contract EmissionManager is Policy, RolesConsumer {
     uint8 internal immutable _ohmDecimals;
     uint8 internal immutable _reserveDecimals;
 
-    uint256 public shutdownTimestamp;
-    uint256 public constant RESTART_TIMER = 1 weeks;
+    uint48 public shutdownTimestamp;
+    uint48 public constant RESTART_TIMER = 1 weeks;
 
     // ========== SETUP ========== //
 
@@ -196,6 +196,11 @@ contract EmissionManager is Policy, RolesConsumer {
         if (minimumPremium_ == 0) revert("Minimum premium cannot be 0");
         if (backing_ == 0) revert("Backing cannot be 0");
 
+        // Initialize variables
+        baseEmissionRate = baseEmissionsRate_;
+        minimumPremium = minimumPremium_;
+        backing = backing_;
+
         // Activate
         locallyActive = true;
     }
@@ -306,20 +311,19 @@ contract EmissionManager is Policy, RolesConsumer {
 
     function shutdown() external onlyRole("emergency_shutdown") {
         locallyActive = false;
+        shutdownTimestamp = uint48(block.timestamp);
 
         uint256 ohmBalance = ohm.balanceOf(address(this));
         if (ohmBalance > 0) BurnableERC20(address(ohm)).burn(ohmBalance);
 
         uint256 daiBalance = dai.balanceOf(address(this));
         if (daiBalance > 0) sdai.deposit(daiBalance, address(TRSRY));
-
-        shutdownTimestamp = block.timestamp;
     }
 
     function restart() external onlyRole("emergency_restart") {
         // Restart can be activated only within the specified timeframe since shutdown
         // Outside of this span of time, emissions_admin must reinitialize
-        if (block.timestamp < shutdownTimestamp + RESTART_TIMER) locallyActive = true;
+        if (uint48(block.timestamp) < shutdownTimestamp + RESTART_TIMER) locallyActive = true;
     }
 
     /// @notice set the base emissions rate
