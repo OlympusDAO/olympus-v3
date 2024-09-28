@@ -69,12 +69,14 @@ contract EmissionManager is Policy, RolesConsumer {
     uint256 public minimumPremium;
     uint256 public backing;
     uint8 public beatCounter;
-    bool public initialized;
     bool public locallyActive;
 
     uint8 internal _oracleDecimals;
     uint8 internal immutable _ohmDecimals;
     uint8 internal immutable _reserveDecimals;
+
+    uint256 public shutdownTimestamp;
+    uint256 public constant RESTART_TIMER = 1 weeks;
 
     // ========== SETUP ========== //
 
@@ -187,7 +189,7 @@ contract EmissionManager is Policy, RolesConsumer {
         uint256 minimumPremium_,
         uint256 backing_
     ) external onlyRole("emissions_admin") {
-        if (initialized) revert("Already initialized");
+        if (locallyActive) revert("Already initialized");
 
         // Validate
         if (baseEmissionsRate_ == 0) revert("Base emissions rate cannot be 0");
@@ -195,7 +197,6 @@ contract EmissionManager is Policy, RolesConsumer {
         if (backing_ == 0) revert("Backing cannot be 0");
 
         // Activate
-        initialized = true;
         locallyActive = true;
     }
 
@@ -304,11 +305,21 @@ contract EmissionManager is Policy, RolesConsumer {
     // ========== ADMIN FUNCTIONS ========== //
 
     function shutdown() external onlyRole("emergency_shutdown") {
-        // TODO
+        locallyActive = false;
+
+        uint256 ohmBalance = ohm.balanceOf(address(this));
+        if (ohmBalance > 0) BurnableERC20(address(ohm)).burn(ohmBalance);
+
+        uint256 daiBalance = dai.balanceOf(address(this));
+        if (daiBalance > 0) sdai.deposit(daiBalance, address(TRSRY));
+
+        shutdownTimestamp = block.timestamp;
     }
 
     function restart() external onlyRole("emergency_restart") {
-        // TODO
+        // Restart can be activated only within the specified timeframe since shutdown
+        // Outside of this span of time, emissions_admin must reinitialize
+        if (block.timestamp < shutdownTimestamp + RESTART_TIMER) locallyActive = true;
     }
 
     /// @notice set the base emissions rate
