@@ -17,7 +17,7 @@ import {OIP_166} from "proposals/OIP_166.sol";
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
 ///         flag to `true` once the proposal has been submitted on-chain.
 /// Note: this will fail if the OCGPermissions script has not been run yet.
-contract OIP_166_Test is Test {
+contract OIP_166_OCGProposalTest is Test {
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
     TestSuite public suite;
     Addresses public addresses;
