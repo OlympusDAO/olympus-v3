@@ -76,7 +76,7 @@ contract EmissionManager is Policy, RolesConsumer {
     uint8 internal immutable _reserveDecimals;
 
     uint48 public shutdownTimestamp;
-    uint48 public constant restartTimeframe;
+    uint48 public restartTimeframe;
 
     // ========== SETUP ========== //
 
