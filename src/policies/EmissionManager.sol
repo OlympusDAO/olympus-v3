@@ -10,15 +10,20 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
+import {IgOHM} from "interfaces/IgOHM.sol";
 
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
-interface BACKINGv1 {
-    function update(uint256 supplyAdded, uint256 reservesAdded) external;
-    function price() external view returns (uint256);
+interface BurnableERC20 {
+    function burn(uint256 amount) external;
+}
+
+interface Clearinghouse {
+    function principalReceivables() external view returns (uint256);
 }
 
 contract EmissionManager is Policy, RolesConsumer {
@@ -28,7 +33,7 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== EVENTS ========== //
 
-    event Sale(uint256 marketID, uint256 saleAmount);
+    event SaleCreated(uint256 marketID, uint256 saleAmount);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -40,41 +45,82 @@ contract EmissionManager is Policy, RolesConsumer {
     }
 
     // ========== STATE VARIABLES ========== //
+    uint256 public saleCounter;
     Sale[] public sales;
 
     // Modules
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
-    RANGEv2 public RANGE;
-    BACKINGv1 public BACKING;
-
-    // Policies
-    BondCallback public callback;
+    MINTRv1 public MINTR;
+    CHREGv1 public CHREG;
 
     // Tokens
     ERC20 public immutable ohm;
+    IgOHM public immutable gohm;
     ERC20 public immutable dai;
+    ERC4626 public immutable sdai;
 
-    uint256 public counter;
+    // External contracts
+    IBondSDA public auctioneer;
+    address public teller;
 
+    // Manager variables
     uint256 public baseEmissionRate;
     uint256 public minimumPremium;
+    uint256 public backing;
+    uint8 public beatCounter;
+    bool public initialized;
+    bool public locallyActive;
+
+    uint8 internal _oracleDecimals;
+    uint8 internal immutable _ohmDecimals;
+    uint8 internal immutable _reserveDecimals;
 
     // ========== SETUP ========== //
 
-    constructor() {}
+    constructor(
+        Kernel kernel_,
+        address ohm_,
+        address gohm_,
+        address dai_,
+        address sdai_,
+        address auctioneer_,
+        address teller_
+    ) Policy(kernel_) {
+        // Set immutable variables
+        if (ohm_ == address(0)) revert("OHM address cannot be 0");
+        if (gohm_ == address(0)) revert("gOHM address cannot be 0");
+        if (dai_ == address(0)) revert("DAI address cannot be 0");
+        if (sdai_ == address(0)) revert("sDAI address cannot be 0");
+        if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
+
+        ohm = ERC20(ohm_);
+        gohm = IgOHM(gohm_);
+        dai = ERC20(dai_);
+        sdai = ERC4626(sdai_);
+        auctioneer = IBondSDA(auctioneer_);
+        teller = teller_;
+
+        _ohmDecimals = ohm.decimals();
+        _reserveDecimals = dai.decimals();
+
+        // Max approve sDAI contract for DAI for deposits
+        dai.approve(address(sdai), type(uint256).max);
+    }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
+        dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
-        dependencies[2] = toKeycode("RANGE");
-        dependencies[3] = toKeycode("ROLES");
+        dependencies[2] = toKeycode("MINTR");
+        dependencies[3] = toKeycode("CHREG");
+        dependencies[4] = toKeycode("ROLES");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
-        RANGE = RANGEv2(getModuleAddress(dependencies[2]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[2]));
+        CHREG = CHREGv1(getModuleAddress(dependencies[3]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
     }
@@ -84,16 +130,22 @@ contract EmissionManager is Policy, RolesConsumer {
         view
         override
         returns (Permissions[] memory permissions)
-    {}
+    {
+        Keycode mintrKeycode = toKeycode("MINTR");
+
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
+        permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+    }
 
     // ========== HEARTBEAT ========== //
 
     /// @notice calculate and execute sale, if applicable, once per day
-    /// @notice only callable by Olympus Heart
-    function execute() external onlyHeart {
-        counter++;
-        if (counter != 3) return;
-        counter = 0;
+    function execute() external onlyRole("heart") {
+        if (!locallyActive) return;
+
+        if (beatCounter != 2) return;
+        beatCounter = ++beatCounter % 3;
 
         // First see if it needs to do book keeping for previous day
         Sale storage previousSale = sales[sales.length - 1];
@@ -107,42 +159,67 @@ contract EmissionManager is Policy, RolesConsumer {
         if (currentBalanceDAI > 0) {
             // Logs the inflow and sweeps them to the treasury as sDAI
             previousSale.reservesAdded += currentBalanceDAI;
-            sdai.deposit(currentBalanceDAI, address(TRSRY), address(this));
+            sdai.deposit(currentBalanceDAI, address(TRSRY));
 
             // And updates backing price in the BACKING module
-            BACKING.update(previousSale.supplyAdded, previousSale.reservesAdded);
+            _updateBacking(previousSale.supplyAdded, previousSale.reservesAdded);
         }
 
         // It then calculates the amount to sell for the coming day
         uint256 sell = _calculateSale();
 
         // It brings its ohm holdings into balance with the amount to sell
-        if (sell > currentBalanceOHM) MINTR.mint(address(this), sell - currentBalanceOHM);
-        else if (currentBalanceOHM > sell) ohm.burn(currentBalanceOHM - sell);
+        if (sell > currentBalanceOHM) {
+            uint256 amountToMint = sell - currentBalanceOHM;
+            MINTR.increaseMintApproval(address(this), amountToMint);
+            MINTR.mintOhm(address(this), amountToMint);
+        } else if (currentBalanceOHM > sell)
+            BurnableERC20(address(ohm)).burn(currentBalanceOHM - sell);
 
         // And then opens a market if applicable
         if (sell != 0) _createMarket(sell);
     }
 
+    // ========== INITIALIZE ========== //
+
+    function initialize(
+        uint256 baseEmissionsRate_,
+        uint256 minimumPremium_,
+        uint256 backing_
+    ) external onlyRole("emissions_admin") {
+        if (initialized) revert("Already initialized");
+
+        // Validate
+        if (baseEmissionsRate_ == 0) revert("Base emissions rate cannot be 0");
+        if (minimumPremium_ == 0) revert("Minimum premium cannot be 0");
+        if (backing_ == 0) revert("Backing cannot be 0");
+
+        // Activate
+        initialized = true;
+        locallyActive = true;
+    }
+
+    // ========== INTERNAL FUNCTIONS ========== //
+
     /// @notice calculate sale amount as a function of premium, minimum premium, and base emission rate
     /// @return emission amount, in OHM
-    function _calculateSale() internal view returns (uint256) {
+    function _calculateSale() internal returns (uint256) {
         // To calculate the sale, it first computes premium (market price / backing price)
         uint256 price = PRICE.getLastPrice();
-        uint256 backingPrice = BACKING.price();
-        uint256 premium = (price * DECIMALS) / backingPrice;
+        uint256 premium = (price * 10 ** _reserveDecimals) / backing;
 
         uint256 emissionRate;
         uint256 supplyToAdd;
 
         // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
         if (premium >= minimumPremium) {
-            emissionRate = (baseEmissionRate * premium) / minimumPremium;
-            supplyToAdd = (ohm.circulatingSupply() * emissionRate) / DECIMALS;
-        }
+            emissionRate = (baseEmissionRate * premium) / minimumPremium; // in OHM scale
+            supplyToAdd = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
 
-        // It then logs this information for future use
-        sales.push(Sale(premium, emissionRate, supplyToAdd, 0));
+            // It then logs this information for future use
+            sales.push(Sale(premium, emissionRate, supplyToAdd, 0));
+            saleCounter++;
+        }
 
         // Before returning the number of tokens to sell
         return supplyToAdd;
@@ -155,7 +232,8 @@ contract EmissionManager is Policy, RolesConsumer {
         // Price decimals are returned from the perspective of the quote token
         // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
         // is the priceDecimal value
-        int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
+        uint256 minPrice = (minimumPremium * backing) / 10 ** _reserveDecimals;
+        int8 priceDecimals = _getPriceDecimals(minPrice);
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
@@ -165,17 +243,21 @@ contract EmissionManager is Policy, RolesConsumer {
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
 
+        // Approve OHM on bond teller
+        uint256 currentApproval = ohm.allowance(address(this), address(teller));
+        ohm.approve(address(teller), currentApproval + saleAmount);
+
         // Create new bond market to buy the reserve with OHM
-        uint256 market = auctioneer.createMarket(
+        uint256 marketId = auctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
                     payoutToken: ohm,
-                    quoteToken: reserve,
-                    callbackAddr: address(callback),
+                    quoteToken: dai,
+                    callbackAddr: address(0),
                     capacityInQuote: false,
                     capacity: saleAmount,
                     formattedInitialPrice: PRICE.getLastPrice().mulDiv(bondScale, oracleScale),
-                    formattedMinimumPrice: range.high.cushion.price.mulDiv(bondScale, oracleScale),
+                    formattedMinimumPrice: minPrice.mulDiv(bondScale, oracleScale),
                     debtBuffer: 100_000, // 100%
                     vesting: uint48(0), // Instant swaps
                     conclusion: uint48(block.timestamp + 1 days), // 1 day from now
@@ -185,21 +267,98 @@ contract EmissionManager is Policy, RolesConsumer {
             )
         );
 
-        // Whitelist the bond market on the callback
-        callback.whitelist(address(auctioneer.getTeller()), market);
+        emit SaleCreated(marketId, saleAmount);
+    }
 
-        emit Sale(marketId, saleAmount);
+    /// @notice allow emission manager to update backing price based on new supply and reserves added
+    /// @param supplyAdded number of new OHM minted
+    /// @param reservesAdded number of new DAI added
+    function _updateBacking(uint256 supplyAdded, uint256 reservesAdded) internal {
+        uint256 previousReserves = getReserves() - reservesAdded;
+        uint256 previousSupply = getSupply() - supplyAdded;
+
+        uint256 percentIncreaseReserves = (reservesAdded * 10 ** _reserveDecimals) /
+            previousReserves;
+        uint256 percentIncreaseSupply = (supplyAdded * 10 ** _reserveDecimals) / previousSupply; // scaled to 1e18 to match
+
+        backing =
+            (backing * percentIncreaseReserves) / // price multiplied by percent increase reserves in reserve scale
+            percentIncreaseSupply; // divided by percent increase supply in reserve scale
+    }
+
+    /// @notice         Helper function to calculate number of price decimals based on the value returned from the price feed.
+    /// @param price_   The price to calculate the number of decimals for
+    /// @return         The number of decimals
+    function _getPriceDecimals(uint256 price_) internal view returns (int8) {
+        int8 decimals;
+        while (price_ >= 10) {
+            price_ = price_ / 10;
+            decimals++;
+        }
+
+        // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
+        // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
+        return decimals - int8(_oracleDecimals);
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    function shutdown() external onlyRole("emergency_shutdown") {
+        // TODO
+    }
+
+    function restart() external onlyRole("emergency_restart") {
+        // TODO
     }
 
     /// @notice set the base emissions rate
     /// @param newBaseRate_ uint256
-    function setBaseRate(uint256 newBaseRate_) external permissioned {
+    function setBaseRate(uint256 newBaseRate_) external onlyRole("emissions_admin") {
         baseEmissionRate = newBaseRate_;
     }
 
     /// @notice set the minimum premium for emissions
     /// @param newMinimumPremium_ uint256
-    function setMinimumPremium(uint256 newMinimumPremium_) external permissioned {
+    function setMinimumPremium(uint256 newMinimumPremium_) external onlyRole("emissions_admin") {
         minimumPremium = newMinimumPremium_;
+    }
+
+    /// @notice allow governance to adjust backing price if deviated from reality
+    /// @dev note if adjustment is more than 33% down, contract should be redeployed
+    /// @param newBacking to adjust to
+    /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
+    function adjustBacking(uint256 newBacking) external onlyRole("emissions_admin") {
+        if (newBacking < (backing * 9) / 10) revert("Change too significant");
+        backing = newBacking;
+    }
+
+    function updateBondContracts(
+        address auctioneer_,
+        address teller_
+    ) external onlyRole("emissions_admin") {
+        if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
+        if (teller_ == address(0)) revert("Teller address cannot be 0");
+
+        auctioneer = IBondSDA(auctioneer_);
+        teller = teller_;
+    }
+
+    // =========- VIEW FUNCTIONS ========== //
+
+    /// @notice return reserves, measured as clearinghouse receivables and sdai balances, in DAI denomination
+    function getReserves() public view returns (uint256 reserves) {
+        uint256 chCount = CHREG.registryCount();
+        for (uint256 i; i < chCount; i++) {
+            reserves += Clearinghouse(CHREG.registry(i)).principalReceivables();
+            uint256 bal = sdai.balanceOf(CHREG.registry(i));
+            if (bal > 0) reserves += sdai.previewRedeem(bal);
+        }
+
+        reserves += sdai.previewRedeem(sdai.balanceOf(address(TRSRY)));
+    }
+
+    /// @notice return supply, measured as supply of gOHM in OHM denomination
+    function getSupply() public view returns (uint256 supply) {
+        return (gohm.totalSupply() * gohm.index()) / 10 ** _ohmDecimals;
     }
 }
