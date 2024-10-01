@@ -20,7 +20,7 @@ contract OIP_166 is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public view override returns (uint256) {
-        return 0; // TODO: ?
+        return 166;
     }
 
     // Returns the name of the proposal.
@@ -30,7 +30,8 @@ contract OIP_166 is GovernorBravoProposal {
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
-        return "OIP-166: Transition to OCG, Step 1";
+        return
+            "Summary: Pull ownership of RolesAdmin and assign roles to Timelock. Proposal: See more here: https://forum.olympusdao.finance/d/4625-oip-166-activate-governor-timelock Roles to Assign: 1) 'cooler_overseer', 2) 'emergency_admin', 3) 'emergency_shutdown', 4) 'operator_admin', 5) 'callback_admin', 6) 'price_admin', 7) 'custodian', 8) 'emergency_restart', 9) 'bridge_admin', 10) 'heart_admin', 11) 'operator_policy', 12) 'loop_daddy'";
     }
 
     // No deploy actions needed
@@ -252,5 +253,31 @@ contract OIP_166 is GovernorBravoProposal {
             roles.hasRole(timelock, bytes32("loop_daddy")),
             "Timelock does not have the loop_daddy role"
         );
+    }
+}
+
+import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
+
+// @notice GovernorBravoScript is a script that runs BRAVO_01 proposal.
+// BRAVO_01 proposal deploys a Vault contract and an ERC20 token contract
+// Then the proposal transfers ownership of both Vault and ERC20 to the timelock address
+// Finally the proposal whitelist the ERC20 token in the Vault contract
+// @dev Use this script to simulates or run a single proposal
+// Use this as a template to create your own script
+// `forge script script/GovernorBravo.s.sol:GovernorBravoScript -vvvv --rpc-url {rpc} --broadcast --verify --etherscan-api-key {key}`
+contract OIP_166_Script is ScriptSuite {
+    string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
+
+    constructor() ScriptSuite(ADDRESSES_PATH, new OIP_166()) {}
+
+    function run() public override {
+        // build the proposal actions
+        proposal.build(addresses);
+
+        // set debug mode to true and run it to build the actions list
+        proposal.setDebug(true);
+
+        // get the calldata for the proposal, doing so in debug mode prints it to the console
+        proposal.getCalldata();
     }
 }
