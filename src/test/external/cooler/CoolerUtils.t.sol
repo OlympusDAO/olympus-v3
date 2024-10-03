@@ -12,6 +12,9 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {Kernel} from "src/Kernel.sol";
+
 import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
 
 contract CoolerUtilsTest is Test {
@@ -25,12 +28,15 @@ contract CoolerUtilsTest is Test {
     CoolerFactory public coolerFactory;
     Clearinghouse public clearinghouse;
 
+    RolesAdmin public rolesAdmin;
+
     address public staking;
     address public kernel;
     address public owner;
     address public lender;
     address public collector;
     address public admin;
+    address public kernelExecutor;
 
     address public walletA;
     Cooler public coolerA;
@@ -55,6 +61,10 @@ contract CoolerUtilsTest is Test {
         lender = 0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA;
         kernel = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
         staking = 0xB63cac384247597756545b500253ff8E607a8020;
+        rolesAdmin = RolesAdmin(0xb216d714d91eeC4F7120a732c11428857C659eC8);
+
+        // Determine the kernel executor
+        kernelExecutor = Kernel(kernel).executor();
 
         owner = vm.addr(0x1);
         admin = vm.addr(0x2);
@@ -177,12 +187,6 @@ contract CoolerUtilsTest is Test {
         return _getInterestDue(address(coolerA), ids_);
     }
 
-    modifier givenAdminIsSet() {
-        vm.prank(owner);
-        utils.setAdmin(admin);
-        _;
-    }
-
     modifier givenActivated() {
         vm.prank(owner);
         utils.activate();
@@ -192,6 +196,12 @@ contract CoolerUtilsTest is Test {
     modifier givenDeactivated() {
         vm.prank(owner);
         utils.deactivate();
+        _;
+    }
+
+    modifier givenAdminHasEmergencyRole() {
+        vm.prank(kernelExecutor);
+        rolesAdmin.grantRole("emergency_shutdown", admin);
         _;
     }
 
@@ -1408,7 +1418,11 @@ contract CoolerUtilsTest is Test {
     // when the contract is already active
     //  [X] it does nothing
 
-    function test_activate_notAdminOrOwner_reverts() public givenAdminIsSet givenDeactivated {
+    function test_activate_notAdminOrOwner_reverts()
+        public
+        givenAdminHasEmergencyRole
+        givenDeactivated
+    {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
         vm.expectRevert(err);
@@ -1416,14 +1430,14 @@ contract CoolerUtilsTest is Test {
         utils.activate();
     }
 
-    function test_activate_asOwner_setsActive() public givenAdminIsSet givenDeactivated {
+    function test_activate_asOwner_setsActive() public givenAdminHasEmergencyRole givenDeactivated {
         vm.prank(owner);
         utils.activate();
 
         assertTrue(utils.active(), "active");
     }
 
-    function test_activate_asAdmin_setsActive() public givenAdminIsSet givenDeactivated {
+    function test_activate_asAdmin_setsActive() public givenAdminHasEmergencyRole givenDeactivated {
         vm.prank(admin);
         utils.activate();
 
@@ -1439,7 +1453,7 @@ contract CoolerUtilsTest is Test {
         utils.activate();
     }
 
-    function test_activate_asAdmin_alreadyActive() public givenAdminIsSet {
+    function test_activate_asAdmin_alreadyActive() public givenAdminHasEmergencyRole {
         vm.prank(owner);
         utils.activate();
 
@@ -1458,7 +1472,11 @@ contract CoolerUtilsTest is Test {
     // when the contract is already deactivated
     //  [X] it does nothing
 
-    function test_deactivate_notAdminOrOwner_reverts() public givenAdminIsSet givenActivated {
+    function test_deactivate_notAdminOrOwner_reverts()
+        public
+        givenAdminHasEmergencyRole
+        givenActivated
+    {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
         vm.expectRevert(err);
@@ -1466,7 +1484,7 @@ contract CoolerUtilsTest is Test {
         utils.deactivate();
     }
 
-    function test_deactivate_asOwner_setsActive() public givenAdminIsSet {
+    function test_deactivate_asOwner_setsActive() public givenAdminHasEmergencyRole {
         vm.prank(owner);
         utils.deactivate();
 
@@ -1482,60 +1500,15 @@ contract CoolerUtilsTest is Test {
         utils.deactivate();
     }
 
-    function test_deactivate_asAdmin_alreadyDeactivated() public givenAdminIsSet givenDeactivated {
+    function test_deactivate_asAdmin_alreadyDeactivated()
+        public
+        givenAdminHasEmergencyRole
+        givenDeactivated
+    {
         vm.prank(owner);
         utils.deactivate();
 
         assertFalse(utils.active(), "active");
-    }
-
-    // setAdmin
-    // when the caller is not the owner
-    //  [X] it reverts
-    // when the caller is the admin
-    //  [X] it reverts
-    // when the new admin is the zero address
-    //  [X] it sets the admin
-    // when the new admin is the owner address
-    //  [X] it reverts
-    // [X] it sets the admin
-
-    function test_setAdmin_notOwner_reverts() public {
-        // Expect revert
-        vm.expectRevert("UNAUTHORIZED");
-
-        utils.setAdmin(admin);
-    }
-
-    function test_setAdmin_asAdmin_reverts() public givenAdminIsSet {
-        // Expect revert
-        vm.expectRevert("UNAUTHORIZED");
-
-        vm.prank(admin);
-        utils.setAdmin(admin);
-    }
-
-    function test_setAdmin_zeroAddress() public {
-        vm.prank(owner);
-        utils.setAdmin(address(0));
-
-        assertEq(utils.admin(), address(0), "admin");
-    }
-
-    function test_setAdmin_ownerAddress() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        vm.prank(owner);
-        utils.setAdmin(owner);
-    }
-
-    function test_setAdmin() public {
-        vm.prank(owner);
-        utils.setAdmin(admin);
-
-        assertEq(utils.admin(), admin, "admin");
     }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------

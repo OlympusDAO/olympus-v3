@@ -6,6 +6,7 @@ import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 import {Kernel, Module, toKeycode} from "src/Kernel.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
@@ -37,7 +38,7 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
     /// @notice Thrown when the contract is not active.
     error OnlyActive();
 
-    /// @notice Thrown when the caller is not the admin or owner.
+    /// @notice Thrown when the caller is not the contract owner or and does not have the "emergency_shutdown" role.
     error OnlyAdmin();
 
     /// @notice Thrown when the fee percentage is out of range.
@@ -72,9 +73,6 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     /// @notice Emitted when the collector is set
     event CollectorSet(address collector);
-
-    /// @notice Emitted when the admin is set
-    event AdminSet(address admin);
 
     // --- DATA STRUCTURES ---------------------------------------------------------
 
@@ -111,9 +109,6 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
 
     /// @notice Whether the contract is active
     bool public active;
-
-    /// @notice Address permitted to activate and deactivate the contract
-    address public admin;
 
     // --- INITIALIZATION ----------------------------------------------------------
 
@@ -350,25 +345,17 @@ contract CoolerUtils is IERC3156FlashBorrower, Owned {
         _;
     }
 
-    /// @notice Set the admin address
-    /// @dev    This function will revert if:
-    ///         - The address is the owner address (since that would be a duplicate address)
-    ///         - The caller is not the owner
-    ///
-    ///         This approach is used (instead of a Bophades role), as the contract is designed to be an independent contract and not a Bophades policy.
-    ///
-    ///         This function will NOT revert if `admin_` is the zero address, so that the admin can be removed.
-    function setAdmin(address admin_) external onlyOwner {
-        if (admin_ == owner) revert Params_InvalidAddress();
-
-        admin = admin_;
-        emit AdminSet(admin_);
-    }
-
-    /// @notice Modifier to check that the caller is the owner or admin
+    /// @notice Modifier to check that the caller is the contract owner or has the "emergency_shutdown" role
     modifier onlyAdmin() {
-        // The caller has to be the owner or the emergency admin
-        if (msg.sender != owner && msg.sender != admin) revert OnlyAdmin();
+        // As this is not a policy, it does not have a `configuredDependencies()` function
+        // that will be called by the kernel whenever modules or policies are upgraded.
+        // Instead, the ROLES module is determined through a kernel lookup.
+        // As the `kernel` state variable is immutable, the risk of this being tampered with is low.
+        ROLESv1 roles = ROLESv1(address(kernel.getModuleForKeycode(toKeycode("ROLES"))));
+
+        // Revert if not owner and does not have the "emergency_shutdown" role
+        if (msg.sender != owner && !roles.hasRole(msg.sender, "emergency_shutdown"))
+            revert OnlyAdmin();
         _;
     }
 
