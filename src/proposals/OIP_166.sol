@@ -271,11 +271,11 @@ contract OIP_166_Script is ScriptSuite {
     constructor() ScriptSuite(ADDRESSES_PATH, new OIP_166()) {}
 
     function run() public override {
-        // build the proposal actions
-        proposal.build(addresses);
-
         // set debug mode to true and run it to build the actions list
         proposal.setDebug(true);
+
+        // run the proposal to build it
+        proposal.run(addresses, address(0));
 
         // get the calldata for the proposal, doing so in debug mode prints it to the console
         proposal.getCalldata();
