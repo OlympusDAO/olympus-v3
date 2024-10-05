@@ -44,9 +44,17 @@ contract EmissionManager is Policy, RolesConsumer {
         uint256 reservesAdded;
     }
 
+    struct BaseRateChange {
+        uint256 changeBy;
+        uint48 beatsLeft;
+        bool addition;
+    }
+
     // ========== STATE VARIABLES ========== //
     uint256 public saleCounter;
     Sale[] public sales;
+
+    BaseRateChange public rateChange;
 
     // Modules
     TRSRYv1 public TRSRY;
@@ -148,6 +156,12 @@ contract EmissionManager is Policy, RolesConsumer {
 
         if (beatCounter != 2) return;
         beatCounter = ++beatCounter % 3;
+
+        if (rateChange.beatsLeft != 0) {
+            --rateChange.beatsLeft;
+            if (rateChange.addition) baseEmissionRate += rateChange.changeBy;
+            else baseEmissionRate -= rateChange.changeBy;
+        }
 
         // First see if it needs to do book keeping for previous day
         Sale storage previousSale = sales[sales.length - 1];
@@ -330,9 +344,16 @@ contract EmissionManager is Policy, RolesConsumer {
     }
 
     /// @notice set the base emissions rate
-    /// @param newBaseRate_ uint256
-    function setBaseRate(uint256 newBaseRate_) external onlyRole("emissions_admin") {
-        baseEmissionRate = newBaseRate_;
+    /// @param changeBy_ uint256 added or subtracted from baseEmissionRate
+    /// @param forNumBeats_ uint256 number of times to change baseEmissionRate by changeBy_
+    /// @param add bool determining addition or subtraction to baseEmissionRate
+    function changeBaseRate(
+        uint256 changeBy_,
+        uint48 forNumBeats_,
+        bool add
+    ) external onlyRole("emissions_admin") {
+        if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate)) revert("Math will underflow");
+        rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
     }
 
     /// @notice set the minimum premium for emissions
