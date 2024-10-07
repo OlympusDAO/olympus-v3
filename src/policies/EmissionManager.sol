@@ -63,6 +63,7 @@ contract EmissionManager is Policy, RolesConsumer {
     CHREGv1 public CHREG;
 
     // Tokens
+    // solhint-disable const-name-snakecase
     ERC20 public immutable ohm;
     IgOHM public immutable gohm;
     ERC20 public immutable dai;
@@ -163,22 +164,27 @@ contract EmissionManager is Policy, RolesConsumer {
             else baseEmissionRate -= rateChange.changeBy;
         }
 
-        // First see if it needs to do book keeping for previous day
-        Sale storage previousSale = sales[sales.length - 1];
+        // Get current balances of the contract
         uint256 currentBalanceDAI = dai.balanceOf(address(this));
         uint256 currentBalanceOHM = ohm.balanceOf(address(this));
 
-        // Book keeping is needed if there are unspent tokens to account for
-        if (currentBalanceOHM > 0) previousSale.supplyAdded -= currentBalanceOHM;
+        // If there are previous sales, we need to do some book keeping
+        uint256 numSales = sales.length;
+        if (numSales > 0) {
+            Sale storage previousSale = sales[numSales - 1];
 
-        // And/or new reserves, for which it:
-        if (currentBalanceDAI > 0) {
-            // Logs the inflow and sweeps them to the treasury as sDAI
-            previousSale.reservesAdded += currentBalanceDAI;
-            sdai.deposit(currentBalanceDAI, address(TRSRY));
+            // Book keeping is needed if there are unspent tokens to account for
+            if (currentBalanceOHM > 0) previousSale.supplyAdded -= currentBalanceOHM;
 
-            // And updates backing price in the BACKING module
-            _updateBacking(previousSale.supplyAdded, previousSale.reservesAdded);
+            // And/or new reserves, for which it:
+            if (currentBalanceDAI > 0) {
+                // Logs the inflow and sweeps them to the treasury as sDAI
+                previousSale.reservesAdded += currentBalanceDAI;
+                sdai.deposit(currentBalanceDAI, address(TRSRY));
+
+                // And updates backing price in the BACKING module
+                _updateBacking(previousSale.supplyAdded, previousSale.reservesAdded);
+            }
         }
 
         // It then calculates the amount to sell for the coming day
