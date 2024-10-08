@@ -4,8 +4,19 @@ pragma solidity 0.8.15;
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {EXREGv1} from "./EXREG.v1.sol";
 
+/// @title  Olympus External Registry
+/// @notice This module is used to track the address of contracts that are external to the Bophades system.
 contract OlympusExternalRegistry is EXREGv1 {
-    constructor(address kernel_) Module(Kernel(kernel_)) {}
+    // =========  CONSTRUCTOR ========= //
+
+    /// @notice Constructor for the Olympus External Registry
+    /// @dev    This function will revert if:
+    ///         - The provided kernel address is zero
+    ///
+    /// @param  kernel_ The address of the kernel
+    constructor(address kernel_) Module(Kernel(kernel_)) {
+        if (kernel_ == address(0)) revert Params_InvalidAddress();
+    }
 
     // =========  MODULE SETUP ========= //
 
@@ -27,11 +38,13 @@ contract OlympusExternalRegistry is EXREGv1 {
     ///
     ///             This function will revert if:
     ///             - The caller is not permissioned
+    ///             - The name is empty
     ///             - The contract address is zero
     function registerContract(
         bytes5 name_,
         address contractAddress_
     ) external override permissioned {
+        if (name_ == bytes5(0)) revert Params_InvalidName();
         if (contractAddress_ == address(0)) revert Params_InvalidAddress();
 
         _contracts[name_] = contractAddress_;
@@ -68,6 +81,7 @@ contract OlympusExternalRegistry is EXREGv1 {
     }
 
     /// @inheritdoc EXREGv1
+    /// @dev        Note that the order of the names in the array is not guaranteed to be consistent.
     function getContractNames() external view override returns (bytes5[] memory) {
         return _contractNames;
     }
