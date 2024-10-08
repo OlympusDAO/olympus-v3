@@ -31,18 +31,22 @@ abstract contract EXREGv1 is Module {
     /// @dev    The address of a registered contract can be retrieved by `getContract()`, and the names of all registered contracts can be retrieved by `getContractNames()`.
     mapping(bytes5 => address) internal _contracts;
 
-    // =========  FUNCTIONS ========= //
+    // =========  REGISTRATION FUNCTIONS ========= //
 
     /// @notice Function to register or update a contract
+    /// @dev    This function should be permissioned to prevent arbitrary contracts from being registered.
     ///
     /// @param  name_               The name of the contract
     /// @param  contractAddress_    The address of the contract
     function registerContract(bytes5 name_, address contractAddress_) external virtual;
 
     /// @notice Function to deregister a contract
+    /// @dev    This function should be permissioned to prevent arbitrary contracts from being deregistered.
     ///
     /// @param  name_   The name of the contract
     function deregisterContract(bytes5 name_) external virtual;
+
+    // =========  VIEW FUNCTIONS ========= //
 
     /// @notice Function to get the address of a contract
     ///
