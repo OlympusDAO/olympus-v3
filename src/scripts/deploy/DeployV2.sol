@@ -1029,33 +1029,15 @@ contract OlympusDeploy is Script {
 
     function _deployLoanConsolidator(bytes calldata args_) public returns (address) {
         // Decode arguments from the sequence file
-        (address collector, uint256 feePercentage, address lender, address owner) = abi.decode(
-            args_,
-            (address, uint256, address, address)
-        );
+        uint256 feePercentage = abi.decode(args_, (uint256));
 
         // Print the arguments
-        console2.log("  gOHM:", address(gohm));
-        console2.log("  SDAI:", address(wrappedReserve));
-        console2.log("  DAI:", address(reserve));
-        console2.log("  Collector:", collector);
         console2.log("  Fee Percentage:", feePercentage);
-        console2.log("  Lender:", lender);
         console2.log("  Kernel:", address(kernel));
-        console2.log("  Owner:", owner);
 
         // Deploy LoanConsolidator
         vm.broadcast();
-        loanConsolidator = new LoanConsolidator(
-            address(gohm),
-            address(wrappedReserve),
-            address(reserve),
-            owner,
-            lender,
-            collector,
-            address(kernel),
-            feePercentage
-        );
+        loanConsolidator = new LoanConsolidator(address(kernel), feePercentage);
         console2.log("  LoanConsolidator deployed at:", address(loanConsolidator));
 
         return address(loanConsolidator);

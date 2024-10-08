@@ -1,0 +1,10 @@
+{
+    "sequence": [
+        {
+            "name": "CoolerUtils",
+            "args": {
+                "feePercentage": 0
+            }
+        }
+    ]
+}

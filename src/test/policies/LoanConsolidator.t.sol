@@ -12,6 +12,7 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {Kernel} from "src/Kernel.sol";
 
@@ -71,16 +72,7 @@ contract LoanConsolidatorTest is Test {
         collector = vm.addr(0xC);
 
         // Deploy LoanConsolidator
-        utils = new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            kernel,
-            0
-        );
+        utils = new LoanConsolidator(kernel, 0);
 
         walletA = vm.addr(0xA);
 
@@ -969,36 +961,6 @@ contract LoanConsolidatorTest is Test {
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
     }
 
-    // setCollector
-    // when the caller is not the owner
-    //  [X] it reverts
-    // when the new collector is the zero address
-    //  [X] it reverts
-    // [X] it sets the collector
-
-    function test_setCollector_notOwner_reverts() public {
-        // Expect revert
-        vm.expectRevert("UNAUTHORIZED");
-
-        utils.setCollector(owner);
-    }
-
-    function test_setCollector_zeroAddress_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        vm.prank(owner);
-        utils.setCollector(address(0));
-    }
-
-    function test_setCollector() public {
-        vm.prank(owner);
-        utils.setCollector(owner);
-
-        assertEq(utils.collector(), owner, "collector");
-    }
-
     // requiredApprovals
     // when the caller has no loans
     //  [X] it reverts
@@ -1230,141 +1192,18 @@ contract LoanConsolidatorTest is Test {
     }
 
     // constructor
-    // when the gOHM address is the zero address
-    //  [X] it reverts
-    // when the sDAI address is the zero address
-    //  [X] it reverts
-    // when the DAI address is the zero address
-    //  [X] it reverts
-    // when the owner address is the zero address
-    //  [X] it reverts
-    // when the lender address is the zero address
-    //  [X] it reverts
-    // when the collector address is the zero address
-    //  [X] it reverts
     // when the kernel address is the zero address
     //  [X] it reverts
     // when the fee percentage is > 100e2
     //  [X] it reverts
     // [X] it sets the values
 
-    function test_constructor_zeroGOhm_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        new LoanConsolidator(
-            address(0),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            kernel,
-            0
-        );
-    }
-
-    function test_constructor_zeroSDai_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        new LoanConsolidator(
-            address(gohm),
-            address(0),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            kernel,
-            0
-        );
-    }
-
-    function test_constructor_zeroDai_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(0),
-            owner,
-            lender,
-            collector,
-            kernel,
-            0
-        );
-    }
-
-    function test_constructor_zeroOwner_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            address(0),
-            lender,
-            collector,
-            kernel,
-            0
-        );
-    }
-
-    function test_constructor_zeroLender_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            address(0),
-            collector,
-            kernel,
-            0
-        );
-    }
-
-    function test_constructor_zeroCollector_reverts() public {
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
-        vm.expectRevert(err);
-
-        new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            address(0),
-            kernel,
-            0
-        );
-    }
-
     function test_constructor_zeroKernel_reverts() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            address(0),
-            0
-        );
+        new LoanConsolidator(address(0), 0);
     }
 
     function test_constructor_feePercentageAboveMax_reverts() public {
@@ -1374,38 +1213,14 @@ contract LoanConsolidatorTest is Test {
         );
         vm.expectRevert(err);
 
-        new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            kernel,
-            _ONE_HUNDRED_PERCENT + 1
-        );
+        new LoanConsolidator(kernel, _ONE_HUNDRED_PERCENT + 1);
     }
 
     function test_constructor(uint256 feePercentage_) public {
         uint256 feePercentage = bound(feePercentage_, 0, _ONE_HUNDRED_PERCENT);
 
-        utils = new LoanConsolidator(
-            address(gohm),
-            address(sdai),
-            address(dai),
-            owner,
-            lender,
-            collector,
-            kernel,
-            feePercentage
-        );
+        utils = new LoanConsolidator(kernel, feePercentage);
 
-        assertEq(address(utils.gohm()), address(gohm), "gOHM");
-        assertEq(address(utils.sdai()), address(sdai), "sDai");
-        assertEq(address(utils.dai()), address(dai), "DAI");
-        assertEq(utils.owner(), owner, "owner");
-        assertEq(address(utils.lender()), lender, "lender");
-        assertEq(utils.collector(), collector, "collector");
         assertEq(address(utils.kernel()), kernel, "kernel");
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
     }
@@ -1428,7 +1243,10 @@ contract LoanConsolidatorTest is Test {
         givenDeactivated
     {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            "emergency_shutdown"
+        );
         vm.expectRevert(err);
 
         utils.activate();
@@ -1450,7 +1268,10 @@ contract LoanConsolidatorTest is Test {
 
     function test_activate_asAdmin_adminNotSet_reverts() public givenDeactivated {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            "emergency_shutdown"
+        );
         vm.expectRevert(err);
 
         vm.prank(admin);
@@ -1482,7 +1303,10 @@ contract LoanConsolidatorTest is Test {
         givenActivated
     {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            "emergency_shutdown"
+        );
         vm.expectRevert(err);
 
         utils.deactivate();
@@ -1497,7 +1321,10 @@ contract LoanConsolidatorTest is Test {
 
     function test_deactivate_asAdmin_adminNotSet_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            "emergency_shutdown"
+        );
         vm.expectRevert(err);
 
         vm.prank(admin);
