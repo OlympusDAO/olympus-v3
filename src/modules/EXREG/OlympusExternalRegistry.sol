@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
+import {Kernel, Module, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {EXREGv1} from "./EXREG.v1.sol";
 
 /// @title  Olympus External Registry
 /// @notice This module is used to track the address of contracts that are external to the Bophades system.
 contract OlympusExternalRegistry is EXREGv1 {
+    // =========  STATE ========= //
+
+    /// @notice The keycode for the Olympus External Registry
+    bytes5 public constant keycode = "EXREG";
+
     // =========  CONSTRUCTOR ========= //
 
     /// @notice Constructor for the Olympus External Registry
@@ -22,7 +27,7 @@ contract OlympusExternalRegistry is EXREGv1 {
 
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
-        return toKeycode("EXREG");
+        return toKeycode(keycode);
     }
 
     /// @inheritdoc Module
@@ -34,7 +39,11 @@ contract OlympusExternalRegistry is EXREGv1 {
     // =========  CONTRACT REGISTRATION ========= //
 
     /// @inheritdoc EXREGv1
-    /// @dev        If the contract is already registered, the address will be updated.
+    /// @dev        This function performs the following steps:
+    ///             - Validates the parameters
+    ///             - Updates the contract address
+    ///             - Updates the contract names (if needed)
+    ///             - Refreshes the dependent policies
     ///
     ///             This function will revert if:
     ///             - The caller is not permissioned
@@ -49,12 +58,19 @@ contract OlympusExternalRegistry is EXREGv1 {
 
         _contracts[name_] = contractAddress_;
         _updateContractNames(name_);
+        _refreshDependents();
 
         emit ContractRegistered(name_, contractAddress_);
     }
 
     /// @inheritdoc EXREGv1
-    /// @dev        This function will revert if:
+    /// @dev        This function performs the following steps:
+    ///             - Validates the parameters
+    ///             - Removes the contract address
+    ///             - Removes the contract name
+    ///             - Refreshes the dependent policies
+    ///
+    ///             This function will revert if:
     ///             - The caller is not permissioned
     ///             - The contract is not registered
     function deregisterContract(bytes5 name_) external override permissioned {
@@ -63,6 +79,7 @@ contract OlympusExternalRegistry is EXREGv1 {
 
         delete _contracts[name_];
         _removeContractName(name_);
+        _refreshDependents();
 
         emit ContractDeregistered(name_);
     }
@@ -117,6 +134,25 @@ contract OlympusExternalRegistry is EXREGv1 {
             }
             unchecked {
                 ++i;
+            }
+        }
+    }
+
+    /// @notice Refreshes the dependents of the module
+    function _refreshDependents() internal {
+        Keycode moduleKeycode = toKeycode(keycode);
+
+        // Iterate over each dependent policy until the end of the array is reached
+        uint256 dependentIndex;
+        while (true) {
+            try kernel.moduleDependents(moduleKeycode, dependentIndex) returns (Policy dependent) {
+                dependent.configureDependencies();
+                unchecked {
+                    ++dependentIndex;
+                }
+            } catch {
+                // If the call to the moduleDependents mapping reverts, then we have reached the end of the array
+                break;
             }
         }
     }
