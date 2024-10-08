@@ -3,10 +3,16 @@ pragma solidity ^0.8.15;
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
-import {Owned} from "solmate/auth/Owned.sol";
-import {Kernel, Module, toKeycode} from "src/Kernel.sol";
+import {Kernel, Keycode, toKeycode, Permissions, Policy} from "src/Kernel.sol";
+
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {EXREGv1} from "src/modules/EXREG/EXREG.v1.sol";
+
+import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
+
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
@@ -14,17 +20,11 @@ import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
-//
-//    ██████╗ ██████╗  ██████╗ ██╗     ███████╗██████╗     ██╗   ██╗████████╗██╗██╗     ███████╗
-//   ██╔════╝██╔═══██╗██╔═══██╗██║     ██╔════╝██╔══██╗    ██║   ██║╚══██╔══╝██║██║     ██╔════╝
-//   ██║     ██║   ██║██║   ██║██║     █████╗  ██████╔╝    ██║   ██║   ██║   ██║██║     ███████╗
-//   ██║     ██║   ██║██║   ██║██║     ██╔══╝  ██╔══██╗    ██║   ██║   ██║   ██║██║     ╚════██║
-//   ╚██████╗╚██████╔╝╚██████╔╝███████╗███████╗██║  ██║    ╚██████╔╝   ██║   ██║███████╗███████║
-//    ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝     ╚═════╝    ╚═╝   ╚═╝╚══════╝╚══════╝
-//
-
-contract LoanConsolidator is IERC3156FlashBorrower, Owned {
-    // --- ERRORS ------------------------------------------------------------------
+/// @title  Loan Consolidator
+/// @notice A policy that consolidates loans taken with a single Cooler contract into a single loan using Maker flashloans.
+/// @dev    This policy uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
+contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, ReentrancyGuard {
+    // ========= ERRORS ========= //
 
     /// @notice Thrown when the caller is not the contract itself.
     error OnlyThis();
@@ -37,9 +37,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
 
     /// @notice Thrown when the contract is not active.
     error OnlyActive();
-
-    /// @notice Thrown when the caller is not the contract owner or and does not have the "emergency_shutdown" role.
-    error OnlyAdmin();
 
     /// @notice Thrown when the fee percentage is out of range.
     /// @dev    Valid values are 0 <= feePercentage <= 100e2
@@ -60,7 +57,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
     /// @notice Thrown when the Cooler is not created by the CoolerFactory for the specified Clearinghouse
     error Params_InvalidCooler();
 
-    // --- EVENTS ---------------------------------------------------------
+    // ========= EVENTS ========= //
 
     /// @notice Emitted when the contract is activated
     event Activated();
@@ -71,16 +68,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
     /// @notice Emitted when the fee percentage is set
     event FeePercentageSet(uint256 feePercentage);
 
-    /// @notice Emitted when the collector is set
-    event CollectorSet(address collector);
+    // ========= DATA STRUCTURES ========= //
 
-    // --- DATA STRUCTURES ---------------------------------------------------------
-
-    struct Batch {
-        address cooler;
-        uint256[] ids;
-    }
-
+    /// @notice Data structure used for flashloan parameters
     struct FlashLoanData {
         address clearinghouse;
         address cooler;
@@ -89,72 +79,110 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         uint256 protocolFee;
     }
 
-    // --- IMMUTABLES AND STATE VARIABLES ------------------------------------------
+    // ========= STATE ========= //
 
-    /// @notice FlashLender contract used to take flashloans
-    IERC3156FlashLender public immutable lender;
-    IERC20 public immutable gohm;
-    IERC4626 public immutable sdai;
-    IERC20 public immutable dai;
-    Kernel public immutable kernel;
+    /// @notice The Clearinghouse registry module
+    CHREGv1 internal CHREG;
 
+    /// @notice The treasury module
+    TRSRYv1 internal TRSRY;
+
+    /// @notice The external contract registry module
+    EXREGv1 internal EXREG;
+
+    /// @notice The DAI token
+    IERC20 internal DAI;
+
+    /// @notice The sDAI token
+    IERC4626 internal SDAI;
+
+    /// @notice The gOHM token
+    IERC20 internal GOHM;
+
+    /// @notice The flash loan provider
+    IERC3156FlashLender internal FLASH;
+
+    /// @notice The denominator for percentage calculations
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     /// @notice Percentage of the debt to be paid as a fee
     /// @dev    In terms of `ONE_HUNDRED_PERCENT`
     uint256 public feePercentage;
 
-    /// @notice Address permitted to collect protocol fees
-    address public collector;
-
     /// @notice Whether the contract is active
     bool public active;
 
-    // --- INITIALIZATION ----------------------------------------------------------
+    /// @notice The role required to call admin functions
+    bytes32 public constant ROLE_ADMIN = "loan_consolidator_admin";
 
-    constructor(
-        address gohm_,
-        address sdai_,
-        address dai_,
-        address owner_,
-        address lender_,
-        address collector_,
-        address kernel_,
-        uint256 feePercentage_
-    ) Owned(owner_) {
+    /// @notice The role required to call emergency shutdown functions
+    bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
+
+    // ========= CONSTRUCTOR ========= //
+
+    /// @notice Constructor for the Loan Consolidator
+    /// @dev    This function will revert if:
+    ///         - The fee percentage is above `ONE_HUNDRED_PERCENT`
+    ///         - The kernel address is zero
+    constructor(address kernel_, uint256 feePercentage_) Policy(Kernel(kernel_)) {
         // Validation
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
-        if (collector_ == address(0)) revert Params_InvalidAddress();
-        if (owner_ == address(0)) revert Params_InvalidAddress();
-        if (lender_ == address(0)) revert Params_InvalidAddress();
-        if (gohm_ == address(0)) revert Params_InvalidAddress();
-        if (sdai_ == address(0)) revert Params_InvalidAddress();
-        if (dai_ == address(0)) revert Params_InvalidAddress();
         if (kernel_ == address(0)) revert Params_InvalidAddress();
 
-        // store contracts
-        gohm = IERC20(gohm_);
-        sdai = IERC4626(sdai_);
-        dai = IERC20(dai_);
-
-        lender = IERC3156FlashLender(lender_);
-
         // store protocol data
-        owner = owner_;
-        collector = collector_;
         feePercentage = feePercentage_;
-        kernel = Kernel(kernel_);
 
         // Activate the contract
         active = true;
 
         // Emit events
         emit FeePercentageSet(feePercentage);
-        emit CollectorSet(collector);
         emit Activated();
     }
 
-    // --- OPERATION ---------------------------------------------------------------
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("CHREG");
+        dependencies[1] = toKeycode("EXREG");
+        dependencies[2] = toKeycode("ROLES");
+        dependencies[3] = toKeycode("TRSRY");
+
+        // Populate module dependencies
+        CHREG = CHREGv1(getModuleAddress(dependencies[0]));
+        EXREG = EXREGv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1, 1]);
+        (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
+        (uint8 EXREG_MAJOR, ) = EXREG.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        if (CHREG_MAJOR != 1 || EXREG_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Populate variables
+        // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
+        DAI = IERC20(EXREG.getContract("dai"));
+        SDAI = IERC4626(EXREG.getContract("sdai"));
+        GOHM = IERC20(EXREG.getContract("gohm"));
+        FLASH = IERC3156FlashLender(EXREG.getContract("flash"));
+
+        return dependencies;
+    }
+
+    /// @inheritdoc Policy
+    /// @dev        This policy does not require any permissions
+    function requestPermissions() external pure override returns (Permissions[] memory requests) {
+        requests = new Permissions[](0);
+
+        return requests;
+    }
+
+    // ========= OPERATION ========= //
 
     /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using
     ///         Maker flashloans.
@@ -166,6 +194,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
     ///         - `cooler_` is not a valid Cooler for the Clearinghouse.
     ///         - Less than two loans are being consolidated.
     ///         - The available funds are less than the required flashloan amount.
+    ///         - The contract is not active.
+    ///         - Re-entrancy is detected.
     ///
     ///         For flexibility purposes, the user can either pay with DAI or sDAI.
     ///
@@ -180,7 +210,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         uint256[] calldata ids_,
         uint256 useFunds_,
         bool sdai_
-    ) public onlyActive {
+    ) public onlyActive nonReentrant {
         // Validate that the Clearinghouse is registered with the Bophades kernel
         if (!_isValidClearinghouse(clearinghouse_)) revert Params_InvalidClearinghouse();
 
@@ -194,7 +224,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         (uint256 totalDebt, uint256 totalPrincipal) = _getDebtForLoans(cooler_, ids_);
 
         // Grant approval to the Cooler to spend the debt
-        dai.approve(cooler_, totalDebt);
+        DAI.approve(cooler_, totalDebt);
 
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
         Cooler cooler = Cooler(cooler_);
@@ -204,14 +234,14 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         // This can also reduce the flashloan fee
         if (useFunds_ != 0) {
             if (sdai_) {
-                sdai.redeem(useFunds_, address(this), msg.sender);
+                SDAI.redeem(useFunds_, address(this), msg.sender);
             } else {
-                dai.transferFrom(msg.sender, address(this), useFunds_);
+                DAI.transferFrom(msg.sender, address(this), useFunds_);
             }
         }
 
         // Calculate the required flashloan amount based on available funds and protocol fee.
-        uint256 daiBalance = dai.balanceOf(address(this));
+        uint256 daiBalance = DAI.balanceOf(address(this));
         // Prevent an underflow
         if (daiBalance > totalDebt) {
             revert Params_UseFundsOutOfBounds();
@@ -232,15 +262,19 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
 
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
-        lender.flashLoan(this, address(dai), flashloan, params);
+        FLASH.flashLoan(this, address(DAI), flashloan, params);
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
-        uint256 daiBalanceAfter = dai.balanceOf(address(this));
+        uint256 daiBalanceAfter = DAI.balanceOf(address(this));
         if (daiBalanceAfter > 0) {
-            dai.transfer(msg.sender, daiBalanceAfter);
+            DAI.transfer(msg.sender, daiBalanceAfter);
         }
     }
 
+    /// @inheritdoc IERC3156FlashBorrower
+    /// @dev        This function reverts if:
+    ///             - The caller is not the flash loan provider
+    ///             - The initiator is not this contract
     function onFlashLoan(
         address initiator_,
         address,
@@ -252,7 +286,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         Cooler cooler = Cooler(flashLoanData.cooler);
 
         // perform sanity checks
-        if (msg.sender != address(lender)) revert OnlyLender();
+        if (msg.sender != address(FLASH)) revert OnlyLender();
         if (initiator_ != address(this)) revert OnlyThis();
 
         // Iterate over all batches, repay the debt and collect the collateral
@@ -264,61 +298,50 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
 
         // If the collateral required is greater than the collateral that was returned, then transfer gOHM from the cooler owner
         // This can happen as the collateral required for the consolidated loan can be greater than the sum of the collateral of the loans being consolidated
-        if (consolidatedLoanCollateral > gohm.balanceOf(address(this))) {
-            gohm.transferFrom(
+        if (consolidatedLoanCollateral > GOHM.balanceOf(address(this))) {
+            GOHM.transferFrom(
                 cooler.owner(),
                 address(this),
-                consolidatedLoanCollateral - gohm.balanceOf(address(this))
+                consolidatedLoanCollateral - GOHM.balanceOf(address(this))
             );
         }
 
         // Take a new Cooler loan for the principal required
-        gohm.approve(flashLoanData.clearinghouse, consolidatedLoanCollateral);
+        GOHM.approve(flashLoanData.clearinghouse, consolidatedLoanCollateral);
         Clearinghouse(flashLoanData.clearinghouse).lendToCooler(cooler, flashLoanData.principal);
 
         // The cooler owner will receive DAI for the consolidated loan
         // Transfer this amount, plus the fee, to this contract
         // Approval must have already been granted by the Cooler owner
-        dai.transferFrom(cooler.owner(), address(this), amount_ + lenderFee_);
+        DAI.transferFrom(cooler.owner(), address(this), amount_ + lenderFee_);
         // Approve the flash loan provider to collect the flashloan amount and fee
-        dai.approve(address(lender), amount_ + lenderFee_);
+        DAI.approve(address(FLASH), amount_ + lenderFee_);
 
         // Pay protocol fee
-        if (flashLoanData.protocolFee != 0) dai.transfer(collector, flashLoanData.protocolFee);
+        if (flashLoanData.protocolFee != 0) DAI.transfer(address(TRSRY), flashLoanData.protocolFee);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
 
-    // --- ADMIN ---------------------------------------------------
+    // ========= ADMIN ========= //
 
     /// @notice Set the fee percentage
     /// @dev    This function will revert if:
     ///         - The fee percentage is above `ONE_HUNDRED_PERCENT`
-    ///         - The caller is not the owner
-    function setFeePercentage(uint256 feePercentage_) external onlyOwner {
+    ///         - The caller does not have the `ROLE_ADMIN` role
+    function setFeePercentage(uint256 feePercentage_) external onlyRole(ROLE_ADMIN) {
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
 
         feePercentage = feePercentage_;
         emit FeePercentageSet(feePercentage_);
     }
 
-    /// @notice Set the collector address
-    /// @dev    This function will revert if:
-    ///         - The address is the zero address
-    ///         - The caller is not the owner
-    function setCollector(address collector_) external onlyOwner {
-        if (collector_ == address(0)) revert Params_InvalidAddress();
-
-        collector = collector_;
-        emit CollectorSet(collector_);
-    }
-
     /// @notice Activate the contract
     /// @dev    This function will revert if:
-    ///         - The caller is not an admin
+    ///         - The caller does not have the `ROLE_EMERGENCY_SHUTDOWN` role
     ///
     ///         If the contract is already active, it will do nothing.
-    function activate() external onlyAdmin {
+    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // Skip if already activated
         if (active) return;
 
@@ -328,10 +351,10 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
 
     /// @notice Deactivate the contract
     /// @dev    This function will revert if:
-    ///         - The caller is not an admin
+    ///         - The caller does not have the `ROLE_EMERGENCY_SHUTDOWN` role
     ///
     ///         If the contract is already deactivated, it will do nothing.
-    function deactivate() external onlyAdmin {
+    function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // Skip if already deactivated
         if (!active) return;
 
@@ -345,21 +368,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         _;
     }
 
-    /// @notice Modifier to check that the caller is the contract owner or has the "emergency_shutdown" role
-    modifier onlyAdmin() {
-        // As this is not a policy, it does not have a `configuredDependencies()` function
-        // that will be called by the kernel whenever modules or policies are upgraded.
-        // Instead, the ROLES module is determined through a kernel lookup.
-        // As the `kernel` state variable is immutable, the risk of this being tampered with is low.
-        ROLESv1 roles = ROLESv1(address(kernel.getModuleForKeycode(toKeycode("ROLES"))));
-
-        // Revert if not owner and does not have the "emergency_shutdown" role
-        if (msg.sender != owner && !roles.hasRole(msg.sender, "emergency_shutdown"))
-            revert OnlyAdmin();
-        _;
-    }
-
-    // --- INTERNAL FUNCTIONS ------------------------------------------------------
+    // =========  FUNCTIONS ========= //
 
     function _getDebtForLoans(
         address cooler_,
@@ -399,21 +408,15 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         }
 
         // Transfers all of the gOHM collateral to this contract
-        gohm.transferFrom(cooler.owner(), address(this), totalCollateral);
+        GOHM.transferFrom(cooler.owner(), address(this), totalCollateral);
     }
 
     function _isValidClearinghouse(address clearinghouse_) internal view returns (bool) {
-        // Get the Clearinghouse registry from the kernel
-        Module module = kernel.getModuleForKeycode(toKeycode("CHREG"));
-        if (address(module) == address(0)) revert Params_InvalidClearinghouse();
-
-        CHREGv1 chreg = CHREGv1(address(module));
-
         // We check against the registry (not just active), as repayments are still allowed when a Clearinghouse is deactivated
-        uint256 registryCount = chreg.registryCount();
+        uint256 registryCount = CHREG.registryCount();
         bool found;
         for (uint256 i; i < registryCount; i++) {
-            if (chreg.registry(i) == clearinghouse_) {
+            if (CHREG.registry(i) == clearinghouse_) {
                 found = true;
                 break;
             }
@@ -435,7 +438,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
         return coolerFactory.created(cooler_);
     }
 
-    // --- AUX FUNCTIONS -----------------------------------------------------------
+    // ========= AUX FUNCTIONS ========= //
 
     /// @notice View function to compute the protocol fee for a given total debt.
     function getProtocolFee(uint256 totalDebt_) public view returns (uint256) {
@@ -482,7 +485,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Owned {
             Cooler(cooler_).owner(),
             consolidatedLoanCollateral,
             totalDebtWithFee,
-            sdai.previewWithdraw(totalDebtWithFee),
+            SDAI.previewWithdraw(totalDebtWithFee),
             protocolFee
         );
     }
