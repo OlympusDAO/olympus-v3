@@ -23,7 +23,7 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 //    ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝     ╚═════╝    ╚═╝   ╚═╝╚══════╝╚══════╝
 //
 
-contract CoolerUtils is IERC3156FlashBorrower, Owned {
+contract LoanConsolidator is IERC3156FlashBorrower, Owned {
     // --- ERRORS ------------------------------------------------------------------
 
     /// @notice Thrown when the caller is not the contract itself.

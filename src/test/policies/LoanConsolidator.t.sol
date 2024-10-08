@@ -15,10 +15,10 @@ import {Cooler} from "src/external/cooler/Cooler.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {Kernel} from "src/Kernel.sol";
 
-import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
+import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
-contract CoolerUtilsTest is Test {
-    CoolerUtils public utils;
+contract LoanConsolidatorTest is Test {
+    LoanConsolidator public utils;
 
     ERC20 public ohm;
     ERC20 public gohm;
@@ -70,8 +70,8 @@ contract CoolerUtilsTest is Test {
         admin = vm.addr(0x2);
         collector = vm.addr(0xC);
 
-        // Deploy CoolerUtils
-        utils = new CoolerUtils(
+        // Deploy LoanConsolidator
+        utils = new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -293,9 +293,9 @@ contract CoolerUtilsTest is Test {
     //  [X] it reverts
     // given the caller is not the cooler owner
     //  [X] it reverts
-    // given DAI spending approval has not been given to CoolerUtils
+    // given DAI spending approval has not been given to LoanConsolidator
     //  [X] it reverts
-    // given gOHM spending approval has not been given to CoolerUtils
+    // given gOHM spending approval has not been given to LoanConsolidator
     //  [X] it reverts
     // given the protocol fee is non-zero
     //  [X] it transfers the protocol fee to the collector
@@ -303,7 +303,7 @@ contract CoolerUtilsTest is Test {
     //  [ ] it transfers the lender fee to the lender
     // when useFunds is non-zero
     //  when sDAI is true
-    //   given sDAI spending approval has not been given to CoolerUtils
+    //   given sDAI spending approval has not been given to LoanConsolidator
     //    [X] it reverts
     //   given the sDAI amount is greater than required for fees
     //    [X] it returns the surplus as DAI to the caller
@@ -318,17 +318,17 @@ contract CoolerUtilsTest is Test {
     //   [X] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
     // when the protocol fee is zero
     //  [X] it succeeds, but does not transfer additional DAI for the fee
-    // [X] it takes a flashloan for the total debt amount + CoolerUtils fee, and consolidates the loans into one
+    // [X] it takes a flashloan for the total debt amount + LoanConsolidator fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
 
     function test_consolidate_deactivated_reverts() public {
-        // Deactivate the CoolerUtils contract
+        // Deactivate the LoanConsolidator contract
         vm.prank(owner);
         utils.deactivate();
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyActive.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyActive.selector);
         vm.expectRevert(err);
 
         // Consolidate loans for coolerA
@@ -349,7 +349,9 @@ contract CoolerUtilsTest is Test {
         );
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidClearinghouse.selector);
+        bytes memory err = abi.encodeWithSelector(
+            LoanConsolidator.Params_InvalidClearinghouse.selector
+        );
         vm.expectRevert(err);
 
         // Consolidate loans for coolers A, B, and C into coolerC
@@ -364,7 +366,7 @@ contract CoolerUtilsTest is Test {
         Cooler newCooler = new Cooler();
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidCooler.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector);
         vm.expectRevert(err);
 
         // Consolidate loans for coolerA into newCooler
@@ -379,7 +381,7 @@ contract CoolerUtilsTest is Test {
 
         // Expect revert since no loan ids are given
         bytes memory err = abi.encodeWithSelector(
-            CoolerUtils.Params_InsufficientCoolerCount.selector
+            LoanConsolidator.Params_InsufficientCoolerCount.selector
         );
         vm.expectRevert(err);
 
@@ -394,7 +396,7 @@ contract CoolerUtilsTest is Test {
 
         // Expect revert since no loan ids are given
         bytes memory err = abi.encodeWithSelector(
-            CoolerUtils.Params_InsufficientCoolerCount.selector
+            LoanConsolidator.Params_InsufficientCoolerCount.selector
         );
         vm.expectRevert(err);
 
@@ -417,7 +419,7 @@ contract CoolerUtilsTest is Test {
         _grantCallerApprovals(gohmApproval, totalDebtWithFee);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyCoolerOwner.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyCoolerOwner.selector);
         vm.expectRevert(err);
 
         // Consolidate loans for coolers A, B, and C into coolerC
@@ -728,7 +730,9 @@ contract CoolerUtilsTest is Test {
         deal(address(dai), walletA, totalDebtWithFee + 1);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_UseFundsOutOfBounds.selector);
+        bytes memory err = abi.encodeWithSelector(
+            LoanConsolidator.Params_UseFundsOutOfBounds.selector
+        );
         vm.expectRevert(err);
 
         // Consolidate loans for coolers A, B, and C into coolerC
@@ -948,7 +952,7 @@ contract CoolerUtilsTest is Test {
     function test_setFeePercentage_aboveMax_reverts() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            CoolerUtils.Params_FeePercentageOutOfRange.selector
+            LoanConsolidator.Params_FeePercentageOutOfRange.selector
         );
         vm.expectRevert(err);
 
@@ -981,7 +985,7 @@ contract CoolerUtilsTest is Test {
 
     function test_setCollector_zeroAddress_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
         vm.prank(owner);
@@ -1011,7 +1015,7 @@ contract CoolerUtilsTest is Test {
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            CoolerUtils.Params_InsufficientCoolerCount.selector
+            LoanConsolidator.Params_InsufficientCoolerCount.selector
         );
         vm.expectRevert(err);
 
@@ -1024,7 +1028,7 @@ contract CoolerUtilsTest is Test {
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            CoolerUtils.Params_InsufficientCoolerCount.selector
+            LoanConsolidator.Params_InsufficientCoolerCount.selector
         );
         vm.expectRevert(err);
 
@@ -1246,10 +1250,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroGOhm_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(0),
             address(sdai),
             address(dai),
@@ -1263,10 +1267,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroSDai_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(0),
             address(dai),
@@ -1280,10 +1284,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroDai_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(0),
@@ -1297,10 +1301,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroOwner_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -1314,10 +1318,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroLender_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -1331,10 +1335,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroCollector_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -1348,10 +1352,10 @@ contract CoolerUtilsTest is Test {
 
     function test_constructor_zeroKernel_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.Params_InvalidAddress.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidAddress.selector);
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -1366,11 +1370,11 @@ contract CoolerUtilsTest is Test {
     function test_constructor_feePercentageAboveMax_reverts() public {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            CoolerUtils.Params_FeePercentageOutOfRange.selector
+            LoanConsolidator.Params_FeePercentageOutOfRange.selector
         );
         vm.expectRevert(err);
 
-        new CoolerUtils(
+        new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -1385,7 +1389,7 @@ contract CoolerUtilsTest is Test {
     function test_constructor(uint256 feePercentage_) public {
         uint256 feePercentage = bound(feePercentage_, 0, _ONE_HUNDRED_PERCENT);
 
-        utils = new CoolerUtils(
+        utils = new LoanConsolidator(
             address(gohm),
             address(sdai),
             address(dai),
@@ -1424,7 +1428,7 @@ contract CoolerUtilsTest is Test {
         givenDeactivated
     {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
         vm.expectRevert(err);
 
         utils.activate();
@@ -1446,7 +1450,7 @@ contract CoolerUtilsTest is Test {
 
     function test_activate_asAdmin_adminNotSet_reverts() public givenDeactivated {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
         vm.expectRevert(err);
 
         vm.prank(admin);
@@ -1478,7 +1482,7 @@ contract CoolerUtilsTest is Test {
         givenActivated
     {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
         vm.expectRevert(err);
 
         utils.deactivate();
@@ -1493,7 +1497,7 @@ contract CoolerUtilsTest is Test {
 
     function test_deactivate_asAdmin_adminNotSet_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(CoolerUtils.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyAdmin.selector);
         vm.expectRevert(err);
 
         vm.prank(admin);

@@ -67,7 +67,7 @@ import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualR
 import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
-import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
+import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -114,7 +114,7 @@ contract OlympusDeploy is Script {
     address public inverseBondDepository;
     pOLY public poly;
     Clearinghouse public clearinghouse;
-    CoolerUtils public coolerUtils;
+    LoanConsolidator public loanConsolidator;
     YieldRepurchaseFacility public yieldRepo;
 
     // Governance
@@ -212,7 +212,7 @@ contract OlympusDeploy is Script {
         selectorMap["pOLY"] = this._deployPoly.selector;
         selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
-        selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
+        selectorMap["LoanConsolidator"] = this._deployLoanConsolidator.selector;
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
 
         // Governance
@@ -1027,7 +1027,7 @@ contract OlympusDeploy is Script {
         return address(CHREG);
     }
 
-    function _deployCoolerUtils(bytes calldata args_) public returns (address) {
+    function _deployLoanConsolidator(bytes calldata args_) public returns (address) {
         // Decode arguments from the sequence file
         (address collector, uint256 feePercentage, address lender, address owner) = abi.decode(
             args_,
@@ -1044,9 +1044,9 @@ contract OlympusDeploy is Script {
         console2.log("  Kernel:", address(kernel));
         console2.log("  Owner:", owner);
 
-        // Deploy CoolerUtils
+        // Deploy LoanConsolidator
         vm.broadcast();
-        coolerUtils = new CoolerUtils(
+        loanConsolidator = new LoanConsolidator(
             address(gohm),
             address(wrappedReserve),
             address(reserve),
@@ -1056,9 +1056,9 @@ contract OlympusDeploy is Script {
             address(kernel),
             feePercentage
         );
-        console2.log("  CoolerUtils deployed at:", address(coolerUtils));
+        console2.log("  LoanConsolidator deployed at:", address(loanConsolidator));
 
-        return address(coolerUtils);
+        return address(loanConsolidator);
     }
 
     // ========== GOVERNANCE ========== //

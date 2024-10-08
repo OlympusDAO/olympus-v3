@@ -6,11 +6,11 @@ import {Script} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {CoolerUtils} from "../../external/cooler/CoolerUtils.sol";
+import {LoanConsolidator} from "../../policies/LoanConsolidator.sol";
 import {Cooler} from "../../external/cooler/Cooler.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-contract CoolerUtilsScript is Test {
+contract LoanConsolidatorScript is Test {
     using stdJson for string;
 
     string internal _env;
@@ -24,7 +24,7 @@ contract CoolerUtilsScript is Test {
     }
 
     /// @dev Call in the form:
-    ///      forge script ./src/scripts/ops/CoolerUtils.s.sol:CoolerUtilsScript --chain mainnet --sig "consolidate(address,address,address,uint256[])()" --rpc-url <YOUR RPC> <owner> <clearinghouse> <cooler> "[<loanIdOne>,<loanIdTwo>,<etc...>]"
+    ///      forge script ./src/scripts/ops/LoanConsolidator.s.sol:LoanConsolidatorScript --chain mainnet --sig "consolidate(address,address,address,uint256[])()" --rpc-url <YOUR RPC> <owner> <clearinghouse> <cooler> "[<loanIdOne>,<loanIdTwo>,<etc...>]"
     function consolidate(
         address owner_,
         address clearinghouse_,
@@ -44,8 +44,8 @@ contract CoolerUtilsScript is Test {
         // loanIds_[2] = 2;
 
         Cooler cooler = Cooler(cooler_);
-        CoolerUtils utils = CoolerUtils(
-            _env.readAddress(".current.mainnet.olympus.policies.CoolerUtils")
+        LoanConsolidator utils = LoanConsolidator(
+            _env.readAddress(".current.mainnet.olympus.policies.LoanConsolidator")
         );
 
         // Determine the approvals required
