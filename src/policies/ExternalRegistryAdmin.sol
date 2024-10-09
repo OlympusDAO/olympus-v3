@@ -8,6 +8,8 @@ import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 
 /// @title  ExternalRegistryAdmin
 /// @notice This policy is used to register and deregister contracts in the EXREG module.
+/// @dev    This contract utilises the following roles:
+///         - `external_registry_admin`: Can register and deregister contracts
 contract ExternalRegistryAdmin is Policy, RolesConsumer {
     // ============ ERRORS ============ //
 
