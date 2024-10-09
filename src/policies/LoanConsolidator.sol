@@ -23,6 +23,10 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 /// @title  Loan Consolidator
 /// @notice A policy that consolidates loans taken with a single Cooler contract into a single loan using Maker flashloans.
 /// @dev    This policy uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
+///
+///         This contract utilises the following roles:
+///         - `loan_consolidator_admin`: Can set the fee percentage
+///         - `emergency_shutdown`: Can activate and deactivate the contract
 contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, ReentrancyGuard {
     // ========= ERRORS ========= //
 
@@ -37,6 +41,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Thrown when the contract is not active.
     error OnlyConsolidatorActive();
+
+    /// @notice Thrown when the contract is not activated as a policy.
+    error OnlyPolicyActive();
 
     /// @notice Thrown when the fee percentage is out of range.
     /// @dev    Valid values are 0 <= feePercentage <= 100e2
@@ -216,7 +223,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256[] calldata ids_,
         uint256 useFunds_,
         bool sdai_
-    ) public onlyConsolidatorActive nonReentrant {
+    ) public onlyPolicyActive onlyConsolidatorActive nonReentrant {
         // Validate that the Clearinghouse is registered with the Bophades kernel
         if (!_isValidClearinghouse(clearinghouse_)) revert Params_InvalidClearinghouse();
 
@@ -336,7 +343,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The contract has not been activated as a policy.
     ///         - The fee percentage is above `ONE_HUNDRED_PERCENT`
     ///         - The caller does not have the `ROLE_ADMIN` role
-    function setFeePercentage(uint256 feePercentage_) external onlyRole(ROLE_ADMIN) {
+    function setFeePercentage(
+        uint256 feePercentage_
+    ) external onlyPolicyActive onlyRole(ROLE_ADMIN) {
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
 
         feePercentage = feePercentage_;
@@ -349,7 +358,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller does not have the `ROLE_EMERGENCY_SHUTDOWN` role
     ///
     ///         If the contract is already active, it will do nothing.
-    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+    function activate() external onlyPolicyActive onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // Skip if already activated
         if (consolidatorActive) return;
 
@@ -363,7 +372,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller does not have the `ROLE_EMERGENCY_SHUTDOWN` role
     ///
     ///         If the contract is already deactivated, it will do nothing.
-    function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+    function deactivate() external onlyPolicyActive onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // Skip if already deactivated
         if (!consolidatorActive) return;
 
@@ -374,6 +383,12 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @notice Modifier to check that the contract is active
     modifier onlyConsolidatorActive() {
         if (!consolidatorActive) revert OnlyConsolidatorActive();
+        _;
+    }
+
+    /// @notice Modifier to check that the contract is activated as a policy
+    modifier onlyPolicyActive() {
+        if (!kernel.isPolicyActive(this)) revert OnlyPolicyActive();
         _;
     }
 
@@ -471,7 +486,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         address clearinghouse_,
         address cooler_,
         uint256[] calldata ids_
-    ) external view returns (address, uint256, uint256, uint256, uint256) {
+    ) external view onlyPolicyActive returns (address, uint256, uint256, uint256, uint256) {
         if (ids_.length < 2) revert Params_InsufficientCoolerCount();
 
         uint256 totalPrincipal;
