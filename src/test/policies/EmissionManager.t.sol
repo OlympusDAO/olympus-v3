@@ -14,6 +14,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
+import {MockGohm} from "test/mocks/MockGohm.sol";
 import {MockClearinghouse} from "test/mocks/MockClearinghouse.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -37,6 +38,7 @@ contract EmissionManagerTest is Test {
     UserFactory public userCreator;
     address internal alice;
     address internal bob;
+    address internal heart;
     address internal guardian;
 
     RolesAuthority internal auth;
@@ -44,6 +46,7 @@ contract EmissionManagerTest is Test {
     BondFixedTermTeller internal teller;
     BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
+    MockGohm internal gohm;
     MockERC20 internal reserve;
     MockERC4626 internal wrappedReserve;
 
@@ -59,16 +62,23 @@ contract EmissionManagerTest is Test {
     RolesAdmin internal rolesAdmin;
     EmissionManager internal emissionManager;
 
+    // Emission manager values
+    uint256 internal baseEmissionsRate = 1e6; // 0.1% at minimum premium
+    uint256 internal minimumPremium = 25e16;
+    uint256 internal backing = 10e18;
+    uint48 internal restartTimeframe = 1 days;
+
     // test cases
     //
     // core functionality
     // [ ] execute
-    //   [ ] when not locally active
-    //     [ ] it reverts
+    //   [X] when not locally active
+    //     [X] it returns without doing anything
     //   [ ] when locally active
-    //     [ ] when beatCounter != 2
-    //        [ ] it returns without doing anything
-    //     [ ] when beatCounter == 2
+    //     [X] it increments the beat counter modulo 3
+    //     [X] when beatCounter is incremented and != 0
+    //        [X] it returns without doing anything
+    //     [ ] when beatCounter is incremented and == 0
     //        [ ] when current OHM balance is not zero
     //           [ ] it reduces supply added from the last sale
     //        [ ] when current DAI balance is not zero
@@ -107,10 +117,11 @@ contract EmissionManagerTest is Test {
         userCreator = new UserFactory();
         {
             /// Deploy bond system to test against
-            address[] memory users = userCreator.create(3);
+            address[] memory users = userCreator.create(4);
             alice = users[0];
             bob = users[1];
             guardian = users[2];
+            heart = users[3];
             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
 
             /// Deploy the bond system
@@ -126,6 +137,7 @@ contract EmissionManagerTest is Test {
         {
             /// Deploy mock tokens
             ohm = new MockOhm("Olympus", "OHM", 9);
+            gohm = new MockGohm("Gohm", "gOHM", 18);
             reserve = new MockERC20("Reserve", "RSV", 18);
             wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
         }
@@ -134,23 +146,25 @@ contract EmissionManagerTest is Test {
             /// Deploy kernel
             kernel = new Kernel(); // this contract will be the executor
 
+            // Deploy mock clearinghouse
+            clearinghouse = new MockClearinghouse(address(reserve), address(wrappedReserve));
+
             /// Deploy modules (some mocks)
             PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            CHREG = new OlympusClearinghouseRegistry(kernel, address(0), new address[](0));
+            CHREG = new OlympusClearinghouseRegistry(
+                kernel,
+                address(clearinghouse),
+                new address[](0)
+            );
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
             ROLES = new OlympusRoles(kernel);
 
             /// Configure mocks
-            PRICE.setMovingAverage(10 * 1e18);
-            PRICE.setLastPrice(10 * 1e18);
+            PRICE.setMovingAverage(13 * 1e18);
+            PRICE.setLastPrice(15 * 1e18); //
             PRICE.setDecimals(18);
             PRICE.setLastTime(uint48(block.timestamp));
-        }
-
-        {
-            // Deploy mock clearinghouse
-            clearinghouse = new MockClearinghouse(address(reserve), address(wrappedReserve));
 
             /// Deploy ROLES administrator
             rolesAdmin = new RolesAdmin(kernel);
@@ -159,9 +173,11 @@ contract EmissionManagerTest is Test {
             emissionManager = new EmissionManager(
                 kernel,
                 address(ohm),
+                address(gohm),
                 address(reserve),
                 address(wrappedReserve),
-                address(clearinghouse)
+                address(auctioneer),
+                address(teller)
             );
         }
 
@@ -170,7 +186,7 @@ contract EmissionManagerTest is Test {
 
             /// Install modules
             kernel.executeAction(Actions.InstallModule, address(PRICE));
-            kernel.executeAction(Actions.InstallModule, address(RANGE));
+            kernel.executeAction(Actions.InstallModule, address(CHREG));
             kernel.executeAction(Actions.InstallModule, address(TRSRY));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
@@ -182,51 +198,140 @@ contract EmissionManagerTest is Test {
         {
             /// Configure access control
 
-            /// YieldRepurchaseFacility ROLES
-            rolesAdmin.grantRole("heart", address(heart));
-            rolesAdmin.grantRole("loop_daddy", guardian);
+            // Emission manager roles
+            rolesAdmin.grantRole("heart", heart);
+            rolesAdmin.grantRole("emissions_admin", guardian);
 
-            /// Operator ROLES
-            rolesAdmin.grantRole("operator_admin", address(guardian));
+            // Emergency roles
+            rolesAdmin.grantRole("emergency_shutdown", guardian);
+            rolesAdmin.grantRole("emergency_restart", guardian);
         }
 
+        // Mint gOHM supply to test against
+        // Index is 10,000, therefore a total supply of 10,000 gOHM = 10,000,000 OHM
+        gohm.mint(address(this), 10_000 * 1e18);
+
         // Mint tokens to users, clearinghouse, and TRSRY for testing
-        uint256 testOhm = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
 
-        ohm.mint(alice, testOhm * 20);
-
-        reserve.mint(address(TRSRY), testReserve * 80);
-        reserve.mint(address(clearinghouse), testReserve * 20);
+        reserve.mint(alice, testReserve);
+        reserve.mint(address(TRSRY), testReserve * 50); // $50M of reserves in TRSRY
 
         // Deposit TRSRY reserves into wrappedReserve
         vm.startPrank(address(TRSRY));
-        reserve.approve(address(wrappedReserve), testReserve * 80);
-        wrappedReserve.deposit(testReserve * 80, address(TRSRY));
+        reserve.approve(address(wrappedReserve), testReserve * 50);
+        wrappedReserve.deposit(testReserve * 50, address(TRSRY));
         vm.stopPrank();
-
-        // Deposit clearinghouse reserves into wrappedReserve
-        vm.startPrank(address(clearinghouse));
-        reserve.approve(address(wrappedReserve), testReserve * 20);
-        wrappedReserve.deposit(testReserve * 20, address(clearinghouse));
-        vm.stopPrank();
-
-        // Mint additional reserve to the wrapped reserve to hit the initial conversion rate
-        reserve.mint(address(wrappedReserve), 5 * testReserve);
 
         // Approve the bond teller for the tokens to swap
         vm.prank(alice);
-        ohm.approve(address(teller), testOhm * 20);
+        reserve.approve(address(teller), testReserve);
 
-        // Initialise the operator so that the range prices are set
+        // Set principal receivables for the clearinghouse to $50M
+        clearinghouse.setPrincipalReceivables(uint256(50 * testReserve));
+
+        // Initialize the emissions manager
         vm.prank(guardian);
-        operator.initialize();
+        emissionManager.initialize(baseEmissionsRate, minimumPremium, backing, restartTimeframe);
 
-        // Set principal receivables for the clearinghouse
-        clearinghouse.setPrincipalReceivables(uint256(100_000_000e18));
+        // Total Reserves = $50M + $50 M = $100M
+        // Total Supply = 10,000,000 OHM
+        // => Backing = $100M / 10,000,000 OHM = $10 / OHM
+        // Price is set at $15 / OHM, so a 50% premium, which is above the 25% minimum premium
 
-        // Initialize the yield repo facility
+        // Emissions Rate is initially set to
+    }
+
+    // execute test cases
+
+    function test_execute_whenNotLocallyActive_NothingHappens() public {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Execute twice to get beat counter to 2
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Check the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
+
+        // Check that the contract is locally active
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+
+        // Deactivate the emission manager
         vm.prank(guardian);
-        yieldRepo.initialize(initialReserves, initialConversionRate, initialYield);
+        emissionManager.shutdown();
+
+        // Check that the contract is not locally active
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Execute the emission manager
+        vm.startPrank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
+
+        // Check that the beat counter did not increment
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+    }
+
+    function test_execute_incrementsBeatCounterModulo3() public {
+        // Beat counter should be 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Execute once to get beat counter to 1
+        vm.startPrank(heart);
+        emissionManager.execute();
+
+        // Check that the beat counter is 1
+        assertEq(emissionManager.beatCounter(), 1, "Beat counter should be 1");
+
+        // Execute again to get beat counter to 2
+        vm.startPrank(heart);
+        emissionManager.execute();
+
+        // Check that the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Execute again to get beat counter to 0 (wraps around)
+        vm.startPrank(heart);
+        emissionManager.execute();
+
+        // Check that the beat counter is 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+    }
+
+    function test_execute_whenBeatCounterNot0_incrementsCounter() public {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Check that the beat counter is initially 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Execute once to get beat counter to 1
+        vm.startPrank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
+
+        // Check the beat counter is 1
+        assertEq(emissionManager.beatCounter(), 1, "Beat counter should be 1");
+
+        // Execute the emission manager
+        vm.startPrank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
+
+        // Check that the beat counter is now 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
     }
 }
