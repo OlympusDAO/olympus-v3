@@ -36,7 +36,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     error OnlyCoolerOwner();
 
     /// @notice Thrown when the contract is not active.
-    error OnlyActive();
+    error OnlyConsolidatorActive();
 
     /// @notice Thrown when the fee percentage is out of range.
     /// @dev    Valid values are 0 <= feePercentage <= 100e2
@@ -60,10 +60,12 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     // ========= EVENTS ========= //
 
     /// @notice Emitted when the contract is activated
-    event Activated();
+    /// @dev    Note that this is different to activation of the contract as a policy
+    event ConsolidatorActivated();
 
     /// @notice Emitted when the contract is deactivated
-    event Deactivated();
+    /// @dev    Note that this is different to deactivation of the contract as a policy
+    event ConsolidatorDeactivated();
 
     /// @notice Emitted when the fee percentage is set
     event FeePercentageSet(uint256 feePercentage);
@@ -110,7 +112,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     uint256 public feePercentage;
 
     /// @notice Whether the contract is active
-    bool public active;
+    /// @dev    Note that this is different to the policy activation status
+    bool public consolidatorActive;
 
     /// @notice The role required to call admin functions
     bytes32 public constant ROLE_ADMIN = "loan_consolidator_admin";
@@ -132,12 +135,14 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // store protocol data
         feePercentage = feePercentage_;
 
-        // Activate the contract
-        active = true;
+        // Set the contract to be active
+        // It is activated here so that it is performed by default
+        // However, the contract will not be useable until it has been installed as a policy
+        consolidatorActive = true;
 
         // Emit events
         emit FeePercentageSet(feePercentage);
-        emit Activated();
+        emit ConsolidatorActivated();
     }
 
     /// @inheritdoc Policy
@@ -195,6 +200,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - Less than two loans are being consolidated.
     ///         - The available funds are less than the required flashloan amount.
     ///         - The contract is not active.
+    ///         - The contract has not been activated as a policy.
     ///         - Re-entrancy is detected.
     ///
     ///         For flexibility purposes, the user can either pay with DAI or sDAI.
@@ -210,7 +216,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256[] calldata ids_,
         uint256 useFunds_,
         bool sdai_
-    ) public onlyActive nonReentrant {
+    ) public onlyConsolidatorActive nonReentrant {
         // Validate that the Clearinghouse is registered with the Bophades kernel
         if (!_isValidClearinghouse(clearinghouse_)) revert Params_InvalidClearinghouse();
 
@@ -327,6 +333,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Set the fee percentage
     /// @dev    This function will revert if:
+    ///         - The contract has not been activated as a policy.
     ///         - The fee percentage is above `ONE_HUNDRED_PERCENT`
     ///         - The caller does not have the `ROLE_ADMIN` role
     function setFeePercentage(uint256 feePercentage_) external onlyRole(ROLE_ADMIN) {
@@ -338,33 +345,35 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Activate the contract
     /// @dev    This function will revert if:
+    ///         - The contract has not been activated as a policy.
     ///         - The caller does not have the `ROLE_EMERGENCY_SHUTDOWN` role
     ///
     ///         If the contract is already active, it will do nothing.
     function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // Skip if already activated
-        if (active) return;
+        if (consolidatorActive) return;
 
-        active = true;
-        emit Activated();
+        consolidatorActive = true;
+        emit ConsolidatorActivated();
     }
 
     /// @notice Deactivate the contract
     /// @dev    This function will revert if:
+    ///         - The contract has not been activated as a policy.
     ///         - The caller does not have the `ROLE_EMERGENCY_SHUTDOWN` role
     ///
     ///         If the contract is already deactivated, it will do nothing.
     function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // Skip if already deactivated
-        if (!active) return;
+        if (!consolidatorActive) return;
 
-        active = false;
-        emit Deactivated();
+        consolidatorActive = false;
+        emit ConsolidatorDeactivated();
     }
 
     /// @notice Modifier to check that the contract is active
-    modifier onlyActive() {
-        if (!active) revert OnlyActive();
+    modifier onlyConsolidatorActive() {
+        if (!consolidatorActive) revert OnlyConsolidatorActive();
         _;
     }
 
@@ -447,6 +456,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice View function to compute the required approval amounts that the owner of a given Cooler
     ///         must give to this contract in order to consolidate the loans.
+    ///
+    /// @dev    This function will revert if:
+    ///         - The contract has not been activated as a policy.
     ///
     /// @param  cooler_         Contract which issued the loans.
     /// @param  ids_            Array of loan ids to be consolidated.

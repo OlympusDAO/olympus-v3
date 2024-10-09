@@ -275,6 +275,8 @@ contract LoanConsolidatorTest is Test {
     // consolidateWithFlashLoan
     // given the contract has been disabled
     //  [X] it reverts
+    // given the contract has not been activated as a policy
+    //  [ ] it reverts
     // when the clearinghouse is not registered with CHREG
     //  [X] it reverts
     // when the cooler was not created by a valid CoolerFactory
@@ -320,7 +322,7 @@ contract LoanConsolidatorTest is Test {
         utils.deactivate();
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyActive.selector);
+        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyConsolidatorActive.selector);
         vm.expectRevert(err);
 
         // Consolidate loans for coolerA
@@ -927,6 +929,8 @@ contract LoanConsolidatorTest is Test {
     }
 
     // setFeePercentage
+    // when the policy is not active
+    //  [ ] it reverts
     // when the caller is not the owner
     //  [X] it reverts
     // when the fee is > 100%
@@ -962,6 +966,8 @@ contract LoanConsolidatorTest is Test {
     }
 
     // requiredApprovals
+    // when the policy is not active
+    //  [ ] it reverts
     // when the caller has no loans
     //  [X] it reverts
     // when the caller has 1 loan
@@ -1223,9 +1229,12 @@ contract LoanConsolidatorTest is Test {
 
         assertEq(address(utils.kernel()), kernel, "kernel");
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
+        assertEq(utils.consolidatorActive(), true, "consolidator active");
     }
 
     // activate
+    // when the policy is not active
+    //  [ ] it reverts
     // when the caller is not an admin or owner
     //  [X] it reverts
     // when the caller is the owner
@@ -1256,14 +1265,14 @@ contract LoanConsolidatorTest is Test {
         vm.prank(owner);
         utils.activate();
 
-        assertTrue(utils.active(), "active");
+        assertTrue(utils.consolidatorActive(), "consolidator active");
     }
 
     function test_activate_asAdmin_setsActive() public givenAdminHasEmergencyRole givenDeactivated {
         vm.prank(admin);
         utils.activate();
 
-        assertTrue(utils.active(), "active");
+        assertTrue(utils.consolidatorActive(), "consolidator active");
     }
 
     function test_activate_asAdmin_adminNotSet_reverts() public givenDeactivated {
@@ -1282,10 +1291,12 @@ contract LoanConsolidatorTest is Test {
         vm.prank(owner);
         utils.activate();
 
-        assertTrue(utils.active(), "active");
+        assertTrue(utils.consolidatorActive(), "consolidator active");
     }
 
     // deactivate
+    // when the policy is not active
+    //  [ ] it reverts
     // when the caller is not an admin or owner
     //  [X] it reverts
     // when the caller is the owner
@@ -1316,7 +1327,7 @@ contract LoanConsolidatorTest is Test {
         vm.prank(owner);
         utils.deactivate();
 
-        assertFalse(utils.active(), "active");
+        assertFalse(utils.consolidatorActive(), "consolidator active");
     }
 
     function test_deactivate_asAdmin_adminNotSet_reverts() public {
@@ -1339,7 +1350,7 @@ contract LoanConsolidatorTest is Test {
         vm.prank(owner);
         utils.deactivate();
 
-        assertFalse(utils.active(), "active");
+        assertFalse(utils.consolidatorActive(), "consolidator active");
     }
 
     // --- AUX FUNCTIONS -----------------------------------------------------------
