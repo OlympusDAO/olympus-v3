@@ -12,9 +12,12 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 
+import {OlympusExternalRegistry} from "src/modules/EXREG/OlympusExternalRegistry.sol";
+import {ExternalRegistryAdmin} from "src/policies/ExternalRegistryAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {Kernel} from "src/Kernel.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
@@ -29,14 +32,16 @@ contract LoanConsolidatorTest is Test {
     CoolerFactory public coolerFactory;
     Clearinghouse public clearinghouse;
 
+    OlympusExternalRegistry public EXREG;
+    ExternalRegistryAdmin public exregAdmin;
     RolesAdmin public rolesAdmin;
+    TRSRYv1 public TRSRY;
+    Kernel public kernel;
 
     address public staking;
-    address public kernel;
-    address public owner;
     address public lender;
-    address public collector;
     address public admin;
+    address public emergency;
     address public kernelExecutor;
 
     address public walletA;
@@ -45,7 +50,15 @@ contract LoanConsolidatorTest is Test {
     uint256 internal constant _GOHM_AMOUNT = 3_333 * 1e18;
     uint256 internal constant _ONE_HUNDRED_PERCENT = 100e2;
 
+    uint256 internal trsryDaiBalance;
+    uint256 internal trsryGOhmBalance;
+    uint256 internal trsrySDaiBalance;
+
     string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
+    // These are replicated here so that if they are updated, the tests will fail
+    bytes32 public constant ROLE_ADMIN = "loan_consolidator_admin";
+    bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
 
     function setUp() public {
         // Mainnet Fork at current block.
@@ -60,19 +73,52 @@ contract LoanConsolidatorTest is Test {
         dai = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
         sdai = IERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
         lender = 0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA;
-        kernel = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
         staking = 0xB63cac384247597756545b500253ff8E607a8020;
+
+        kernel = Kernel(0x2286d7f9639e8158FaD1169e76d1FbC38247f54b);
         rolesAdmin = RolesAdmin(0xb216d714d91eeC4F7120a732c11428857C659eC8);
+        TRSRY = TRSRYv1(address(kernel.getModuleForKeycode(toKeycode("TRSRY"))));
+
+        // Cache the TRSRY balances
+        trsryDaiBalance = dai.balanceOf(address(TRSRY));
+        trsryGOhmBalance = gohm.balanceOf(address(TRSRY));
+        trsrySDaiBalance = sdai.balanceOf(address(TRSRY));
 
         // Determine the kernel executor
         kernelExecutor = Kernel(kernel).executor();
 
-        owner = vm.addr(0x1);
+        // Install EXREG if not already installed
+        address exregAddress = address(kernel.getModuleForKeycode(toKeycode("EXREG")));
+        if (exregAddress == address(0)) {
+            EXREG = new OlympusExternalRegistry(address(kernel));
+            vm.prank(kernelExecutor);
+            kernel.executeAction(Actions.InstallModule, address(EXREG));
+        } else {
+            EXREG = OlympusExternalRegistry(exregAddress);
+        }
+
+        // Set up and install the external registry admin policy
+        exregAdmin = new ExternalRegistryAdmin(address(kernel));
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.ActivatePolicy, address(exregAdmin));
+
+        // Grant the external registry admin role to this contract
+        vm.prank(kernelExecutor);
+        rolesAdmin.grantRole("external_registry_admin", address(this));
+
+        // Register the tokens with EXREG
+        vm.startPrank(address(this));
+        exregAdmin.registerContract("dai", address(dai));
+        exregAdmin.registerContract("sdai", address(sdai));
+        exregAdmin.registerContract("ohm", address(ohm));
+        exregAdmin.registerContract("gohm", address(gohm));
+        exregAdmin.registerContract("flash", address(lender));
+        vm.stopPrank();
+
         admin = vm.addr(0x2);
-        collector = vm.addr(0xC);
 
         // Deploy LoanConsolidator
-        utils = new LoanConsolidator(kernel, 0);
+        utils = new LoanConsolidator(address(kernel), 0);
 
         walletA = vm.addr(0xA);
 
@@ -103,8 +149,20 @@ contract LoanConsolidatorTest is Test {
 
     // ===== MODIFIERS ===== //
 
+    modifier givenAdminHasRole() {
+        vm.prank(kernelExecutor);
+        rolesAdmin.grantRole(ROLE_ADMIN, admin);
+        _;
+    }
+
+    modifier givenEmergencyHasRole() {
+        vm.prank(kernelExecutor);
+        rolesAdmin.grantRole(ROLE_EMERGENCY_SHUTDOWN, emergency);
+        _;
+    }
+
     modifier givenProtocolFee(uint256 feePercent_) {
-        vm.prank(owner);
+        vm.prank(admin);
         utils.setFeePercentage(feePercent_);
         _;
     }
@@ -179,21 +237,21 @@ contract LoanConsolidatorTest is Test {
         return _getInterestDue(address(coolerA), ids_);
     }
 
+    modifier givenPolicyActive() {
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.ActivatePolicy, address(utils));
+        _;
+    }
+
     modifier givenActivated() {
-        vm.prank(owner);
+        vm.prank(emergency);
         utils.activate();
         _;
     }
 
     modifier givenDeactivated() {
-        vm.prank(owner);
+        vm.prank(emergency);
         utils.deactivate();
-        _;
-    }
-
-    modifier givenAdminHasEmergencyRole() {
-        vm.prank(kernelExecutor);
-        rolesAdmin.grantRole("emergency_shutdown", admin);
         _;
     }
 
@@ -223,17 +281,21 @@ contract LoanConsolidatorTest is Test {
         assertEq(dai.balanceOf(walletA), walletABalance, "dai: walletA");
         assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
         assertEq(dai.balanceOf(lender), lenderBalance, "dai: lender");
-        assertEq(dai.balanceOf(collector), collectorBalance, "dai: collector");
+        assertEq(
+            dai.balanceOf(address(TRSRY)),
+            trsryDaiBalance + collectorBalance,
+            "dai: collector"
+        );
         assertEq(sdai.balanceOf(address(utils)), 0, "sdai: utils");
         assertEq(sdai.balanceOf(walletA), 0, "sdai: walletA");
         assertEq(sdai.balanceOf(address(coolerA)), 0, "sdai: coolerA");
         assertEq(sdai.balanceOf(lender), 0, "sdai: lender");
-        assertEq(sdai.balanceOf(collector), 0, "sdai: collector");
+        assertEq(sdai.balanceOf(address(TRSRY)), trsrySDaiBalance, "sdai: collector");
         assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
         assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
         assertEq(gohm.balanceOf(address(coolerA)), collateralBalance, "gohm: coolerA");
         assertEq(gohm.balanceOf(lender), 0, "gohm: lender");
-        assertEq(gohm.balanceOf(collector), 0, "gohm: collector");
+        assertEq(gohm.balanceOf(address(TRSRY)), trsryGOhmBalance, "gohm: collector");
     }
 
     function _assertApprovals() internal {
@@ -273,10 +335,10 @@ contract LoanConsolidatorTest is Test {
     // ===== TESTS ===== //
 
     // consolidateWithFlashLoan
+    // given the contract has not been activated as a policy
+    //  [X] it reverts
     // given the contract has been disabled
     //  [X] it reverts
-    // given the contract has not been activated as a policy
-    //  [ ] it reverts
     // when the clearinghouse is not registered with CHREG
     //  [X] it reverts
     // when the cooler was not created by a valid CoolerFactory
@@ -316,21 +378,31 @@ contract LoanConsolidatorTest is Test {
 
     // --- consolidateWithFlashLoan --------------------------------------------
 
-    function test_consolidate_deactivated_reverts() public {
-        // Deactivate the LoanConsolidator contract
-        vm.prank(owner);
-        utils.deactivate();
-
+    function test_consolidate_policyNotActive_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyConsolidatorActive.selector);
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
 
         // Consolidate loans for coolerA
         uint256[] memory idsA = _idsA();
         _consolidate(idsA);
     }
 
-    function test_consolidate_thirdPartyClearinghouse_reverts() public {
+    function test_consolidate_deactivated_reverts()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+        givenDeactivated
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyConsolidatorActive.selector));
+
+        // Consolidate loans for coolerA
+        uint256[] memory idsA = _idsA();
+        _consolidate(idsA);
+    }
+
+    function test_consolidate_thirdPartyClearinghouse_reverts() public givenPolicyActive {
         // Create a new Clearinghouse
         // It is not registered with CHREG, so should be rejected
         Clearinghouse newClearinghouse = new Clearinghouse(
@@ -339,14 +411,13 @@ contract LoanConsolidatorTest is Test {
             staking,
             address(sdai),
             address(coolerFactory),
-            kernel
+            address(kernel)
         );
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            LoanConsolidator.Params_InvalidClearinghouse.selector
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InvalidClearinghouse.selector)
         );
-        vm.expectRevert(err);
 
         // Consolidate loans for coolers A, B, and C into coolerC
         uint256[] memory idsA = _idsA();
@@ -354,14 +425,13 @@ contract LoanConsolidatorTest is Test {
         utils.consolidateWithFlashLoan(address(newClearinghouse), address(coolerA), idsA, 0, false);
     }
 
-    function test_consolidate_thirdPartyCooler_reverts() public {
+    function test_consolidate_thirdPartyCooler_reverts() public givenPolicyActive {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
         Cooler newCooler = new Cooler();
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector);
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector));
 
         // Consolidate loans for coolerA into newCooler
         uint256[] memory idsA = _idsA();
@@ -369,30 +439,28 @@ contract LoanConsolidatorTest is Test {
         utils.consolidateWithFlashLoan(address(clearinghouse), address(newCooler), idsA, 0, false);
     }
 
-    function test_consolidate_noLoans_reverts() public {
+    function test_consolidate_noLoans_reverts() public givenPolicyActive {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
         // Expect revert since no loan ids are given
-        bytes memory err = abi.encodeWithSelector(
-            LoanConsolidator.Params_InsufficientCoolerCount.selector
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InsufficientCoolerCount.selector)
         );
-        vm.expectRevert(err);
 
         // Consolidate loans, but give no ids
         uint256[] memory ids = new uint256[](0);
         _consolidate(ids);
     }
 
-    function test_consolidate_oneLoan_reverts() public {
+    function test_consolidate_oneLoan_reverts() public givenPolicyActive {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max);
 
         // Expect revert since no loan ids are given
-        bytes memory err = abi.encodeWithSelector(
-            LoanConsolidator.Params_InsufficientCoolerCount.selector
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InsufficientCoolerCount.selector)
         );
-        vm.expectRevert(err);
 
         // Consolidate loans, but give one id
         uint256[] memory ids = new uint256[](1);
@@ -400,7 +468,7 @@ contract LoanConsolidatorTest is Test {
         _consolidate(ids);
     }
 
-    function test_consolidate_callerNotOwner_reverts() public {
+    function test_consolidate_callerNotOwner_reverts() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -413,15 +481,14 @@ contract LoanConsolidatorTest is Test {
         _grantCallerApprovals(gohmApproval, totalDebtWithFee);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(LoanConsolidator.OnlyCoolerOwner.selector);
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyCoolerOwner.selector));
 
         // Consolidate loans for coolers A, B, and C into coolerC
         // Do not perform as the cooler owner
         utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), idsA, 0, false);
     }
 
-    function test_consolidate_insufficientGOhmApproval_reverts() public {
+    function test_consolidate_insufficientGOhmApproval_reverts() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -439,7 +506,7 @@ contract LoanConsolidatorTest is Test {
         _consolidate(idsA);
     }
 
-    function test_consolidate_insufficientDaiApproval_reverts() public {
+    function test_consolidate_insufficientDaiApproval_reverts() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -457,7 +524,7 @@ contract LoanConsolidatorTest is Test {
         _consolidate(idsA, 2, false);
     }
 
-    function test_consolidate_insufficientSdaiApproval_reverts() public {
+    function test_consolidate_insufficientSdaiApproval_reverts() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -477,7 +544,7 @@ contract LoanConsolidatorTest is Test {
         _consolidate(idsA, 2, true);
     }
 
-    function test_consolidate_noProtocolFee() public {
+    function test_consolidate_noProtocolFee() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -504,7 +571,7 @@ contract LoanConsolidatorTest is Test {
     function test_consolidate_noProtocolFee_fuzz(
         uint256 loanOneCollateral_,
         uint256 loanTwoCollateral_
-    ) public {
+    ) public givenPolicyActive {
         // Bound the collateral values
         loanOneCollateral_ = bound(loanOneCollateral_, 1, 1e18);
         loanTwoCollateral_ = bound(loanTwoCollateral_, 1, 1e18);
@@ -597,6 +664,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -624,7 +693,7 @@ contract LoanConsolidatorTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_whenUseFundsLessThanTotalDebt() public {
+    function test_consolidate_whenUseFundsLessThanTotalDebt() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -648,7 +717,7 @@ contract LoanConsolidatorTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_whenUseFundsEqualToTotalDebt() public {
+    function test_consolidate_whenUseFundsEqualToTotalDebt() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -676,6 +745,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee_whenUseFundsGreaterThanProtocolFee()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -708,7 +779,7 @@ contract LoanConsolidatorTest is Test {
         _assertApprovals();
     }
 
-    function test_consolidate_whenUseFundsGreaterThanTotalDebt_reverts() public {
+    function test_consolidate_whenUseFundsGreaterThanTotalDebt_reverts() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -736,6 +807,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee_whenUseFundsLessThanProtocolFee()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -770,6 +843,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee_whenUseFundsEqualToProtocolFee()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -804,6 +879,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee_whenUseFundsEqualToProtocolFee_usingSDai()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -846,6 +923,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee_whenUseFundsGreaterThanProtocolFee_usingSDai()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -888,6 +967,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_consolidate_protocolFee_whenUseFundsLessThanProtocolFee_usingSDai()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -930,36 +1011,45 @@ contract LoanConsolidatorTest is Test {
 
     // setFeePercentage
     // when the policy is not active
-    //  [ ] it reverts
-    // when the caller is not the owner
+    //  [X] it reverts
+    // when the caller is not the admin
     //  [X] it reverts
     // when the fee is > 100%
     //  [X] it reverts
     // [X] it sets the fee percentage
 
-    function test_setFeePercentage_notOwner_reverts() public {
+    function test_setFeePercentage_whenPolicyNotActive_reverts() public givenAdminHasRole {
         // Expect revert
-        vm.expectRevert("UNAUTHORIZED");
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
 
-        // Set the fee percentage as a non-owner
+        vm.prank(admin);
         utils.setFeePercentage(1000);
     }
 
-    function test_setFeePercentage_aboveMax_reverts() public {
+    function test_setFeePercentage_notAdmin_reverts() public givenAdminHasRole givenPolicyActive {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            LoanConsolidator.Params_FeePercentageOutOfRange.selector
-        );
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_ADMIN));
 
-        vm.prank(owner);
+        // Set the fee percentage as a non-admin
+        utils.setFeePercentage(1000);
+    }
+
+    function test_setFeePercentage_aboveMax_reverts() public givenAdminHasRole givenPolicyActive {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_FeePercentageOutOfRange.selector)
+        );
+
+        vm.prank(admin);
         utils.setFeePercentage(_ONE_HUNDRED_PERCENT + 1);
     }
 
-    function test_setFeePercentage(uint256 feePercentage_) public {
+    function test_setFeePercentage(
+        uint256 feePercentage_
+    ) public givenAdminHasRole givenPolicyActive {
         uint256 feePercentage = bound(feePercentage_, 0, _ONE_HUNDRED_PERCENT);
 
-        vm.prank(owner);
+        vm.prank(admin);
         utils.setFeePercentage(feePercentage);
 
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
@@ -967,7 +1057,7 @@ contract LoanConsolidatorTest is Test {
 
     // requiredApprovals
     // when the policy is not active
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller has no loans
     //  [X] it reverts
     // when the caller has 1 loan
@@ -978,32 +1068,39 @@ contract LoanConsolidatorTest is Test {
     //  [X] it returns the correct values
     // [X] it returns the correct values for owner, gOHM amount, total DAI debt and sDAI amount
 
-    function test_requiredApprovals_noLoans() public {
-        uint256[] memory ids = new uint256[](0);
+    function test_requiredApprovals_policyNotActive_reverts() public {
+        uint256[] memory ids = _idsA();
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            LoanConsolidator.Params_InsufficientCoolerCount.selector
-        );
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
 
         utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
     }
 
-    function test_requiredApprovals_oneLoan() public {
+    function test_requiredApprovals_noLoans() public givenPolicyActive {
+        uint256[] memory ids = new uint256[](0);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InsufficientCoolerCount.selector)
+        );
+
+        utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
+    }
+
+    function test_requiredApprovals_oneLoan() public givenPolicyActive {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            LoanConsolidator.Params_InsufficientCoolerCount.selector
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InsufficientCoolerCount.selector)
         );
-        vm.expectRevert(err);
 
         utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
     }
 
-    function test_requiredApprovals_noProtocolFee() public {
+    function test_requiredApprovals_noProtocolFee() public givenPolicyActive {
         uint256[] memory ids = _idsA();
 
         (
@@ -1029,6 +1126,8 @@ contract LoanConsolidatorTest is Test {
 
     function test_requiredApprovals_ProtocolFee()
         public
+        givenAdminHasRole
+        givenPolicyActive
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory ids = _idsA();
@@ -1068,7 +1167,7 @@ contract LoanConsolidatorTest is Test {
     function test_requiredApprovals_fuzz(
         uint256 loanOneCollateral_,
         uint256 loanTwoCollateral_
-    ) public {
+    ) public givenPolicyActive {
         // Bound the collateral values
         loanOneCollateral_ = bound(loanOneCollateral_, 1, 1e18);
         loanTwoCollateral_ = bound(loanTwoCollateral_, 1, 1e18);
@@ -1122,7 +1221,7 @@ contract LoanConsolidatorTest is Test {
     function test_collateralRequired_fuzz(
         uint256 loanOneCollateral_,
         uint256 loanTwoCollateral_
-    ) public {
+    ) public givenPolicyActive {
         // Bound the collateral values
         loanOneCollateral_ = bound(loanOneCollateral_, 1, 1e18);
         loanTwoCollateral_ = bound(loanTwoCollateral_, 1, 1e18);
@@ -1219,67 +1318,71 @@ contract LoanConsolidatorTest is Test {
         );
         vm.expectRevert(err);
 
-        new LoanConsolidator(kernel, _ONE_HUNDRED_PERCENT + 1);
+        new LoanConsolidator(address(kernel), _ONE_HUNDRED_PERCENT + 1);
     }
 
     function test_constructor(uint256 feePercentage_) public {
         uint256 feePercentage = bound(feePercentage_, 0, _ONE_HUNDRED_PERCENT);
 
-        utils = new LoanConsolidator(kernel, feePercentage);
+        utils = new LoanConsolidator(address(kernel), feePercentage);
 
-        assertEq(address(utils.kernel()), kernel, "kernel");
+        assertEq(address(utils.kernel()), address(kernel), "kernel");
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
         assertEq(utils.consolidatorActive(), true, "consolidator active");
     }
 
     // activate
     // when the policy is not active
-    //  [ ] it reverts
-    // when the caller is not an admin or owner
     //  [X] it reverts
-    // when the caller is the owner
+    // when the caller is not an admin or emergency shutdown
+    //  [X] it reverts
+    // when the caller is the admin role
+    //  [X] it reverts
+    // when the caller is the emergency shutdown role
+    //  when the contract is already active
+    //   [X] it does nothing
     //  [X] it sets the active flag to true
-    // when the caller is an admin
-    //  when the admin is not set
-    //   [X] it reverts
-    //  [X] it sets the active flag to true
-    // when the contract is already active
-    //  [X] it does nothing
 
-    function test_activate_notAdminOrOwner_reverts()
+    function test_activate_policyNotActive_reverts()
         public
-        givenAdminHasEmergencyRole
+        givenAdminHasRole
+        givenEmergencyHasRole
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
+
+        vm.prank(emergency);
+        utils.activate();
+    }
+
+    function test_activate_notAdminOrEmergency_reverts()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
         givenDeactivated
     {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            "emergency_shutdown"
+            ROLE_EMERGENCY_SHUTDOWN
         );
         vm.expectRevert(err);
 
         utils.activate();
     }
 
-    function test_activate_asOwner_setsActive() public givenAdminHasEmergencyRole givenDeactivated {
-        vm.prank(owner);
-        utils.activate();
-
-        assertTrue(utils.consolidatorActive(), "consolidator active");
-    }
-
-    function test_activate_asAdmin_setsActive() public givenAdminHasEmergencyRole givenDeactivated {
-        vm.prank(admin);
-        utils.activate();
-
-        assertTrue(utils.consolidatorActive(), "consolidator active");
-    }
-
-    function test_activate_asAdmin_adminNotSet_reverts() public givenDeactivated {
+    function test_activate_asAdmin_reverts()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+        givenDeactivated
+    {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            "emergency_shutdown"
+            ROLE_EMERGENCY_SHUTDOWN
         );
         vm.expectRevert(err);
 
@@ -1287,8 +1390,26 @@ contract LoanConsolidatorTest is Test {
         utils.activate();
     }
 
-    function test_activate_asAdmin_alreadyActive() public givenAdminHasEmergencyRole {
-        vm.prank(owner);
+    function test_activate_asEmergency()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+        givenDeactivated
+    {
+        vm.prank(emergency);
+        utils.activate();
+
+        assertTrue(utils.consolidatorActive(), "consolidator active");
+    }
+
+    function test_activate_asEmergency_alreadyActive()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+    {
+        vm.prank(emergency);
         utils.activate();
 
         assertTrue(utils.consolidatorActive(), "consolidator active");
@@ -1296,58 +1417,77 @@ contract LoanConsolidatorTest is Test {
 
     // deactivate
     // when the policy is not active
-    //  [ ] it reverts
-    // when the caller is not an admin or owner
     //  [X] it reverts
-    // when the caller is the owner
+    // when the caller is not an admin or emergency shutdown
+    //  [X] it reverts
+    // when the caller has the admin role
+    //  [X] it reverts
+    // when the caller has the emergency shutdown role
+    //  when the contract is already deactivated
+    //   [X] it does nothing
     //  [X] it sets the active flag to false
-    // when the caller is an admin
-    //  when the admin is not set
-    //   [X] it reverts
-    //  [X] it sets the active flag to false
-    // when the contract is already deactivated
-    //  [X] it does nothing
 
-    function test_deactivate_notAdminOrOwner_reverts()
+    function test_deactivate_policyNotActive_reverts()
         public
-        givenAdminHasEmergencyRole
-        givenActivated
+        givenAdminHasRole
+        givenEmergencyHasRole
     {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            ROLESv1.ROLES_RequireRole.selector,
-            "emergency_shutdown"
-        );
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
 
+        vm.prank(emergency);
         utils.deactivate();
     }
 
-    function test_deactivate_asOwner_setsActive() public givenAdminHasEmergencyRole {
-        vm.prank(owner);
-        utils.deactivate();
-
-        assertFalse(utils.consolidatorActive(), "consolidator active");
-    }
-
-    function test_deactivate_asAdmin_adminNotSet_reverts() public {
+    function test_deactivate_notAdminOrEmergency_reverts()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+    {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            ROLESv1.ROLES_RequireRole.selector,
-            "emergency_shutdown"
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_EMERGENCY_SHUTDOWN)
         );
-        vm.expectRevert(err);
+
+        utils.deactivate();
+    }
+
+    function test_deactivate_asAdmin_reverts()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_EMERGENCY_SHUTDOWN)
+        );
 
         vm.prank(admin);
         utils.deactivate();
     }
 
-    function test_deactivate_asAdmin_alreadyDeactivated()
+    function test_deactivate_asEmergency()
         public
-        givenAdminHasEmergencyRole
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
+    {
+        vm.prank(emergency);
+        utils.deactivate();
+
+        assertFalse(utils.consolidatorActive(), "consolidator active");
+    }
+
+    function test_deactivate_asEmergency_alreadyDeactivated()
+        public
+        givenAdminHasRole
+        givenEmergencyHasRole
+        givenPolicyActive
         givenDeactivated
     {
-        vm.prank(owner);
+        vm.prank(emergency);
         utils.deactivate();
 
         assertFalse(utils.consolidatorActive(), "consolidator active");
