@@ -64,7 +64,7 @@ contract EmissionManagerTest is Test {
 
     // Emission manager values
     uint256 internal baseEmissionsRate = 1e6; // 0.1% at minimum premium
-    uint256 internal minimumPremium = 25e16;
+    uint256 internal minimumPremium = 125e16; // 125% -> 25% premium
     uint256 internal backing = 10e18;
     uint48 internal restartTimeframe = 1 days;
 
@@ -95,6 +95,13 @@ contract EmissionManagerTest is Test {
     //           [ ] it creates a new bond market with the sell amount
     //        [ ] when sell amount is zero
     //           [ ] it does not create a new bond market
+    //        [ ] when there is a postitive emissions adjustment
+    //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
+    //        [ ] when there is a negative emissions adjustment
+    //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
+    //        [ ] when the num of previous sales is greater than zero
+    //           [ ] it updates the supply added from the last sale based by subtracting any remaining OHM
+    //
     //
     // view functions
     // [ ] getSupply
@@ -333,5 +340,175 @@ contract EmissionManagerTest is Test {
 
         // Check that the beat counter is now 2
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+    }
+
+    function test_execute_whenBeatCounterIs0_whenSellAmountZero_noAdjustment_noBalances_noSales()
+        public
+    {
+        // Call execute twice to get beat counter to 2
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Set the price below the minumum premium
+        PRICE.setLastPrice(12 * 1e18);
+
+        // Confirm that there are no tokens in the contract yet
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+        // Check that the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
+
+        // Confirm that the token balances are still 0
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+    }
+
+    function test_execute_whenBeatCounterIs0_whenSellAmountZero_noAdjustment_ohmBalance_noSales()
+        public
+    {
+        // Call execute twice to get beat counter to 2
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Set the price below the minumum premium
+        PRICE.setLastPrice(12 * 1e18);
+
+        // Mint a small amount of OHM to the emissions manager
+        ohm.mint(address(emissionManager), 100e9);
+        uint256 ohmSupply = ohm.balanceOf(address(emissionManager));
+
+        // Confirm that there are no tokens in the contract yet
+        assertEq(ohm.balanceOf(address(emissionManager)), 100e9, "OHM balance should be 100e9");
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+        // Check that the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was not created
+        assertEq(aggregator.marketCounter(), nextBondMarketId);
+
+        // Confirm that the token balances are now zero.
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+        // Confirm that the ohm was burned
+        assertEq(
+            ohm.totalSupply(),
+            ohmSupply - 100e9,
+            "OHM total supply should be reduced by 100e9"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+    }
+
+    function test_execute_whenBeatCounterIs0_whenSellAmountNotZero_noAdjustment_noBalances()
+        public
+    {
+        // Call execute twice to get beat counter to 2
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Confirm that there are no tokens in the contract yet
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+        // Check that the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was created
+        assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the bond market parameters
+        // Check that the market params are correct
+        {
+            uint256 marketPrice = auctioneer.marketPrice(nextBondMarketId);
+            (
+                address owner,
+                ERC20 payoutToken,
+                ERC20 quoteToken,
+                address callbackAddr,
+                bool isCapacityInQuote,
+                uint256 capacity,
+                ,
+                uint256 minPrice,
+                uint256 maxPayout,
+                ,
+                ,
+                uint256 scale
+            ) = auctioneer.markets(nextBondMarketId);
+
+            assertEq(owner, address(emissionManager), "Owner");
+            assertEq(address(payoutToken), address(ohm), "Payout token");
+            assertEq(address(quoteToken), address(reserve), "Quote token");
+            assertEq(callbackAddr, address(0), "Callback address");
+            assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
+            assertEq(
+                capacity,
+                (((baseEmissionsRate * PRICE.getLastPrice()) /
+                    ((backing * minimumPremium) / 1e18)) *
+                    gohm.totalSupply() *
+                    gohm.index()) / 1e18,
+                "Capacity"
+            );
+            assertEq(maxPayout, capacity / 6, "Max payout");
+
+            assertEq(scale, 10 ** uint8(36 + 9 - 18 + 0), "Scale");
+            assertEq(
+                marketPrice,
+                (PRICE.getLastPrice() * 10 ** uint8(36 - 1)) / 10 ** uint8(18 - 1),
+                "Market price"
+            );
+            assertEq(
+                minPrice,
+                (((backing * minimumPremium) / 1e18) * 10 ** uint8(36 - 1)) / 10 ** uint8(18 - 1),
+                "Min price"
+            );
+
+            // Confirm token balances are updated correctly
+            assertEq(
+                ohm.balanceOf(address(emissionManager)),
+                capacity,
+                "OHM balance should be the capacity"
+            );
+            assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+        }
     }
 }
