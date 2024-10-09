@@ -155,8 +155,8 @@ contract EmissionManager is Policy, RolesConsumer {
     function execute() external onlyRole("heart") {
         if (!locallyActive) return;
 
-        if (beatCounter != 2) return;
         beatCounter = ++beatCounter % 3;
+        if (beatCounter != 0) return;
 
         if (rateChange.beatsLeft != 0) {
             --rateChange.beatsLeft;
