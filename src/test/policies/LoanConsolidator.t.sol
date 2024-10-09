@@ -21,7 +21,7 @@ import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
-contract LoanConsolidatorTest is Test {
+contract LoanConsolidatorForkTest is Test {
     LoanConsolidator public utils;
 
     ERC20 public ohm;
@@ -87,15 +87,10 @@ contract LoanConsolidatorTest is Test {
         // Determine the kernel executor
         kernelExecutor = Kernel(kernel).executor();
 
-        // Install EXREG if not already installed
-        address exregAddress = address(kernel.getModuleForKeycode(toKeycode("EXREG")));
-        if (exregAddress == address(0)) {
-            EXREG = new OlympusExternalRegistry(address(kernel));
-            vm.prank(kernelExecutor);
-            kernel.executeAction(Actions.InstallModule, address(EXREG));
-        } else {
-            EXREG = OlympusExternalRegistry(exregAddress);
-        }
+        // Install EXREG (since block is pinned, it won't be installed)
+        EXREG = new OlympusExternalRegistry(address(kernel));
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.InstallModule, address(EXREG));
 
         // Set up and install the external registry admin policy
         exregAdmin = new ExternalRegistryAdmin(address(kernel));
