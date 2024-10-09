@@ -88,6 +88,12 @@ contract ExternalRegistryTest is Test {
     //  [X] it reverts
     // when the contract address is zero
     //  [X] it reverts
+    // when the name is not lowercase
+    //  [X] it reverts
+    // when the name contains punctuation
+    //  [X] it reverts
+    // when the name contains a numeral
+    //  [X] it succeeds
     // given the name is registered
     //  [X] it updates the contract address and emits an event, but does not update the names array
     // given the name is not registered
@@ -116,6 +122,34 @@ contract ExternalRegistryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
 
         _registerContract(bytes5(0), addressOne);
+    }
+
+    function test_registerContract_whenNameIsNotLowercase_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        _registerContract(bytes5("Ohm"), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        _registerContract(bytes5("oHm"), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        _registerContract(bytes5("ohM"), addressOne);
+    }
+
+    function test_registerContract_whenNameContainsPunctuation_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        _registerContract(bytes5("ohm!"), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        _registerContract(bytes5("ohm "), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        _registerContract(bytes5("ohm-"), addressOne);
+    }
+
+    function test_registerContract_whenNameContainsNumeral() public {
+        _registerContract(bytes5("ohm1"), addressOne);
+
+        assertEq(_exreg.getContract(bytes5("ohm1")), addressOne);
     }
 
     function test_registerContract_whenContractAddressIsZero_reverts() public {

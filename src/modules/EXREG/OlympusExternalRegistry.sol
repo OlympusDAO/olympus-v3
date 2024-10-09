@@ -45,9 +45,14 @@ contract OlympusExternalRegistry is EXREGv1 {
     ///             - Updates the contract names (if needed)
     ///             - Refreshes the dependent policies
     ///
+    ///             The contract name can contain:
+    ///             - Lowercase letters
+    ///             - Numerals
+    ///
     ///             This function will revert if:
     ///             - The caller is not permissioned
     ///             - The name is empty
+    ///             - The name contains punctuation or uppercase letters
     ///             - The contract address is zero
     function registerContract(
         bytes5 name_,
@@ -56,6 +61,24 @@ contract OlympusExternalRegistry is EXREGv1 {
         if (name_ == bytes5(0)) revert Params_InvalidName();
         if (contractAddress_ == address(0)) revert Params_InvalidAddress();
 
+        // Check that the contract name is lowercase letters and numerals only
+        for (uint256 i = 0; i < 5; i++) {
+            bytes1 char = name_[i];
+
+            // 0-9
+            if (char >= 0x30 && char <= 0x39) continue;
+
+            // a-z
+            if (char >= 0x61 && char <= 0x7A) continue;
+
+            // Skip if empty
+            // An empty name has already been checked at the start
+            if (char == 0x00) continue;
+
+            revert Params_InvalidName();
+        }
+
+        // Register the contract
         _contracts[name_] = contractAddress_;
         _updateContractNames(name_);
         _refreshDependents();
