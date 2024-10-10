@@ -22,7 +22,8 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
     // ============ STATE ============ //
 
     /// @notice The EXREG module
-    EXREGv1 internal _EXREG;
+    /// @dev    The value is set when the policy is activated
+    EXREGv1 internal EXREG;
 
     /// @notice The role for the external registry admin
     bytes32 public constant EXTERNAL_REGISTRY_ADMIN_ROLE = "external_registry_admin";
@@ -42,12 +43,12 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
         dependencies[0] = toKeycode("EXREG");
         dependencies[1] = toKeycode("ROLES");
 
-        _EXREG = EXREGv1(getModuleAddress(dependencies[0]));
+        EXREG = EXREGv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
         // Verify the supported version
         bytes memory expected = abi.encode([1, 1]);
-        (uint8 EXREG_MAJOR, ) = _EXREG.VERSION();
+        (uint8 EXREG_MAJOR, ) = EXREG.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         if (EXREG_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
 
@@ -97,7 +98,7 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
         bytes5 name_,
         address contractAddress_
     ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
-        _EXREG.registerContract(name_, contractAddress_);
+        EXREG.registerContract(name_, contractAddress_);
     }
 
     /// @notice Deregister a contract in the external registry
@@ -110,7 +111,7 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
     function deregisterContract(
         bytes5 name_
     ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
-        _EXREG.deregisterContract(name_);
+        EXREG.deregisterContract(name_);
     }
 
     // ============ VIEW FUNCTIONS ============ //
@@ -122,7 +123,7 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
     ///
     /// @return The address of the contract
     function getContract(bytes5 name_) external view onlyPolicyActive returns (address) {
-        return _EXREG.getContract(name_);
+        return EXREG.getContract(name_);
     }
 
     /// @notice Get the names of the contracts
@@ -132,6 +133,6 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
     ///
     /// @return The names of the contracts
     function getContractNames() external view onlyPolicyActive returns (bytes5[] memory) {
-        return _EXREG.getContractNames();
+        return EXREG.getContractNames();
     }
 }
