@@ -11,16 +11,25 @@ abstract contract EXREGv1 is Module {
     /// @notice Emitted when a contract is registered or updated
     event ContractRegistered(bytes5 indexed name, address indexed contractAddress);
 
+    /// @notice Emitted when a contract is updated
+    event ContractUpdated(bytes5 indexed name, address indexed contractAddress);
+
     /// @notice Emitted when a contract is deregistered
     event ContractDeregistered(bytes5 indexed name);
 
     // =========  ERRORS ========= //
 
-    /// @notice Thrown when an invalid name is provided
+    /// @notice The provided name is invalid
     error Params_InvalidName();
 
-    /// @notice Thrown when an invalid address is provided
+    /// @notice The provided address is invalid
     error Params_InvalidAddress();
+
+    /// @notice The provided contract name is already registered
+    error Params_ContractAlreadyRegistered();
+
+    /// @notice The provided contract name is not registered
+    error Params_ContractNotRegistered();
 
     // =========  STATE ========= //
 
@@ -33,14 +42,22 @@ abstract contract EXREGv1 is Module {
 
     // =========  REGISTRATION FUNCTIONS ========= //
 
-    /// @notice Function to register or update a contract
+    /// @notice Register a new contract name and address
     /// @dev    This function should be permissioned to prevent arbitrary contracts from being registered.
+
     ///
     /// @param  name_               The name of the contract
     /// @param  contractAddress_    The address of the contract
     function registerContract(bytes5 name_, address contractAddress_) external virtual;
 
-    /// @notice Function to deregister a contract
+    /// @notice Update the address of an existing contract name
+    /// @dev    This function should be permissioned to prevent arbitrary contracts from being updated.
+    ///
+    /// @param  name_               The name of the contract
+    /// @param  contractAddress_    The address of the contract
+    function updateContract(bytes5 name_, address contractAddress_) external virtual;
+
+    /// @notice Deregister an existing contract name
     /// @dev    This function should be permissioned to prevent arbitrary contracts from being deregistered.
     ///
     /// @param  name_   The name of the contract
@@ -48,13 +65,13 @@ abstract contract EXREGv1 is Module {
 
     // =========  VIEW FUNCTIONS ========= //
 
-    /// @notice Function to get the address of a contract
+    /// @notice Get the address of a registered contract
     ///
     /// @param  name_   The name of the contract
     /// @return The address of the contract
     function getContract(bytes5 name_) external view virtual returns (address);
 
-    /// @notice Function to get the names of all registered contracts
+    /// @notice Get the names of all registered contracts
     ///
     /// @return The names of all registered contracts
     function getContractNames() external view virtual returns (bytes5[] memory);

@@ -66,9 +66,10 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
     {
         Keycode exregKeycode = toKeycode("EXREG");
 
-        permissions = new Permissions[](2);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(exregKeycode, EXREGv1.registerContract.selector);
-        permissions[1] = Permissions(exregKeycode, EXREGv1.deregisterContract.selector);
+        permissions[1] = Permissions(exregKeycode, EXREGv1.updateContract.selector);
+        permissions[2] = Permissions(exregKeycode, EXREGv1.deregisterContract.selector);
 
         return permissions;
     }
@@ -101,6 +102,21 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
         address contractAddress_
     ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
         EXREG.registerContract(name_, contractAddress_);
+    }
+
+    /// @notice Update a contract in the external registry
+    /// @dev    This function will revert if:
+    ///         - This contract is not activated as a policy
+    ///         - The caller does not have the required role
+    ///         - The EXREG module reverts
+    ///
+    /// @param  name_ The name of the contract
+    /// @param  contractAddress_ The address of the contract
+    function updateContract(
+        bytes5 name_,
+        address contractAddress_
+    ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
+        EXREG.updateContract(name_, contractAddress_);
     }
 
     /// @notice Deregister a contract in the external registry

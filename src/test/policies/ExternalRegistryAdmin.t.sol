@@ -94,6 +94,44 @@ contract ExternalRegistryAdminTest is Test {
         assertEq(EXREG.getContract("ohm"), ohm, "contract address");
     }
 
+    // updateContract
+    // when the policy is not active
+    //  [X] it reverts
+    // when the caller does not have the role
+    //  [X] it reverts
+    // [X] it updates the contract
+
+    function test_updateContract_policyNotActive_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(ExternalRegistryAdmin.OnlyPolicyActive.selector));
+
+        exRegAdmin.updateContract("ohm", ohm);
+    }
+
+    function test_updateContract_callerDoesNotHaveRole_reverts()
+        public
+        givenPolicyIsActivated
+        givenAdminHasRole
+    {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EXREG_ROLE));
+
+        vm.prank(notAdmin);
+        exRegAdmin.updateContract("ohm", ohm);
+    }
+
+    function test_updateContract()
+        public
+        givenPolicyIsActivated
+        givenAdminHasRole
+        givenContractIsRegistered
+    {
+        // Update the contract
+        vm.prank(admin);
+        exRegAdmin.updateContract("ohm", address(0x4));
+
+        // Assert values
+        assertEq(EXREG.getContract("ohm"), address(0x4), "contract address");
+    }
+
     // deregisterContract
     // when the policy is not active
     //  [X] it reverts
@@ -130,7 +168,7 @@ contract ExternalRegistryAdminTest is Test {
         exRegAdmin.deregisterContract("ohm");
 
         // Assert values
-        vm.expectRevert(EXREGv1.Params_InvalidName.selector);
+        vm.expectRevert(EXREGv1.Params_ContractNotRegistered.selector);
         EXREG.getContract("ohm");
     }
 }

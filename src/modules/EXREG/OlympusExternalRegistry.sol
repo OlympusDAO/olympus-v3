@@ -54,11 +54,18 @@ contract OlympusExternalRegistry is EXREGv1 {
     ///             - The name is empty
     ///             - The name contains punctuation or uppercase letters
     ///             - The contract address is zero
+    ///             - The contract name is already registered
     function registerContract(
         bytes5 name_,
         address contractAddress_
     ) external override permissioned {
+        // Check that the name is not empty
         if (name_ == bytes5(0)) revert Params_InvalidName();
+
+        // Check that the contract has not already been registered
+        if (_contracts[name_] != address(0)) revert Params_ContractAlreadyRegistered();
+
+        // Check that the contract address is not zero
         if (contractAddress_ == address(0)) revert Params_InvalidAddress();
 
         // Check that the contract name is lowercase letters and numerals only
@@ -89,6 +96,30 @@ contract OlympusExternalRegistry is EXREGv1 {
     /// @inheritdoc EXREGv1
     /// @dev        This function performs the following steps:
     ///             - Validates the parameters
+    ///             - Updates the contract address
+    ///             - Updates the contract names (if needed)
+    ///             - Refreshes the dependent policies
+    ///
+    ///             This function will revert if:
+    ///             - The caller is not permissioned
+    ///             - The name is not registered
+    ///             - The contract address is zero
+    function updateContract(bytes5 name_, address contractAddress_) external override permissioned {
+        // Check that the contract address is not zero
+        if (contractAddress_ == address(0)) revert Params_InvalidAddress();
+
+        // Check that the contract name is registered
+        if (_contracts[name_] == address(0)) revert Params_ContractNotRegistered();
+
+        _contracts[name_] = contractAddress_;
+        _refreshDependents();
+
+        emit ContractUpdated(name_, contractAddress_);
+    }
+
+    /// @inheritdoc EXREGv1
+    /// @dev        This function performs the following steps:
+    ///             - Validates the parameters
     ///             - Removes the contract address
     ///             - Removes the contract name
     ///             - Refreshes the dependent policies
@@ -98,7 +129,7 @@ contract OlympusExternalRegistry is EXREGv1 {
     ///             - The contract is not registered
     function deregisterContract(bytes5 name_) external override permissioned {
         address contractAddress = _contracts[name_];
-        if (contractAddress == address(0)) revert Params_InvalidName();
+        if (contractAddress == address(0)) revert Params_ContractNotRegistered();
 
         delete _contracts[name_];
         _removeContractName(name_);
@@ -115,7 +146,7 @@ contract OlympusExternalRegistry is EXREGv1 {
     function getContract(bytes5 name_) external view override returns (address) {
         address contractAddress = _contracts[name_];
 
-        if (contractAddress == address(0)) revert Params_InvalidName();
+        if (contractAddress == address(0)) revert Params_ContractNotRegistered();
 
         return contractAddress;
     }

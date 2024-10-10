@@ -25,6 +25,7 @@ contract ExternalRegistryTest is Test {
 
     // External Registry Expected events
     event ContractRegistered(bytes5 indexed name, address indexed contractAddress);
+    event ContractUpdated(bytes5 indexed name, address indexed contractAddress);
     event ContractDeregistered(bytes5 indexed name);
 
     function setUp() public {
@@ -53,12 +54,42 @@ contract ExternalRegistryTest is Test {
         _exreg.deregisterContract(name_);
     }
 
+    function _updateContract(bytes5 name_, address contractAddress_) internal {
+        vm.prank(godmode);
+        _exreg.updateContract(name_, contractAddress_);
+    }
+
     function _activatePolicyOne() internal {
         _kernel.executeAction(Actions.ActivatePolicy, address(_policy));
     }
 
     function _activatePolicyTwo() internal {
         _kernel.executeAction(Actions.ActivatePolicy, address(_policy2));
+    }
+
+    modifier givenContractIsRegistered(bytes5 name_, address contractAddress_) {
+        _registerContract(name_, contractAddress_);
+        _;
+    }
+
+    modifier givenContractIsDeregistered(bytes5 name_) {
+        _deregisterContract(name_);
+        _;
+    }
+
+    modifier givenContractIsUpdated(bytes5 name_, address contractAddress_) {
+        _updateContract(name_, contractAddress_);
+        _;
+    }
+
+    modifier givenPolicyOneIsActive() {
+        _activatePolicyOne();
+        _;
+    }
+
+    modifier givenPolicyTwoIsActive() {
+        _activatePolicyTwo();
+        _;
     }
 
     // =========  TESTS ========= //
@@ -95,7 +126,7 @@ contract ExternalRegistryTest is Test {
     // when the name contains a numeral
     //  [X] it succeeds
     // given the name is registered
-    //  [X] it updates the contract address and emits an event, but does not update the names array
+    //  [X] it reverts
     // given the name is not registered
     //  given there are existing registrations
     //   [X] it updates the contract address, emits an event and updates the names array
@@ -103,7 +134,7 @@ contract ExternalRegistryTest is Test {
     // given dependent policies are registered
     //  [X] it refreshes the dependents
 
-    function test_registerContract_whenCallerIsNotPermissioned_reverts() public {
+    function test_registerContract_callerNotPermissioned_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, notOwner)
         );
@@ -158,29 +189,15 @@ contract ExternalRegistryTest is Test {
         _registerContract(bytes5("ohm"), address(0));
     }
 
-    function test_registerContract_whenNameIsRegistered() public {
-        // Register the first time
-        _registerContract(bytes5("ohm"), addressOne);
-
-        // Expect an event to be emitted for updated registration
-        vm.expectEmit();
-        emit ContractRegistered(bytes5("ohm"), addressTwo);
+    function test_registerContract_whenNameIsRegistered_reverts()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractAlreadyRegistered.selector));
 
         // Register the second time
         _registerContract(bytes5("ohm"), addressTwo);
-
-        // Assert values
-        assertEq(
-            _exreg.getContract(bytes5("ohm")),
-            addressTwo,
-            "Contract address is not set correctly"
-        );
-        assertEq(_exreg.getContractNames().length, 1, "Names array is not updated correctly");
-        assertEq(
-            _exreg.getContractNames()[0],
-            bytes5("ohm"),
-            "Names array is not updated correctly"
-        );
     }
 
     function test_registerContract_whenNameIsNotRegistered() public {
@@ -204,16 +221,12 @@ contract ExternalRegistryTest is Test {
         );
     }
 
-    function test_registerContract_whenOtherNamesAreRegistered() public {
-        // Register the first time
-        _registerContract(bytes5("ohm"), addressOne);
-
-        // Register the second time
-        _registerContract(bytes5("ohm2"), addressTwo);
-
-        // Register the third time
-        _registerContract(bytes5("ohm3"), address(0x4));
-
+    function test_registerContract_whenOtherNamesAreRegistered()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+        givenContractIsRegistered(bytes5("ohm2"), addressTwo)
+        givenContractIsRegistered(bytes5("ohm3"), address(0x4))
+    {
         // Assert values
         assertEq(
             _exreg.getContract(bytes5("ohm")),
@@ -264,11 +277,76 @@ contract ExternalRegistryTest is Test {
     }
 
     function test_activatePolicies_whenContractNotRegistered_reverts() public {
-        // Expect it to revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        // Expect the policy to revert
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
 
         // Activate the dependent policies
         _activatePolicyOne();
+    }
+
+    // updateContract
+    // when the caller is not permissioned
+    //  [X] it reverts
+    // when the name is not registered
+    //  [X] it reverts
+    // when the address is zero
+    //  [X] it reverts
+    // given dependent policies are registered
+    //  [X] it refreshes the dependents
+    // [X] it updates the contract address
+
+    function test_updateContract_callerNotPermissioned_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, notOwner)
+        );
+
+        vm.prank(notOwner);
+        _exreg.updateContract(bytes5("ohm"), addressOne);
+    }
+
+    function test_updateContract_whenNameIsNotRegistered_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
+
+        _updateContract(bytes5("ohm"), addressOne);
+    }
+
+    function test_updateContract_whenContractAddressIsZero_reverts()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidAddress.selector));
+
+        _updateContract(bytes5("ohm"), address(0));
+    }
+
+    function test_updateContract() public givenContractIsRegistered(bytes5("ohm"), addressOne) {
+        // Expect an event to be emitted
+        vm.expectEmit();
+        emit ContractUpdated(bytes5("ohm"), addressTwo);
+
+        // Update the contract
+        _updateContract(bytes5("ohm"), addressTwo);
+
+        // Assert values
+        assertEq(
+            _exreg.getContract(bytes5("ohm")),
+            addressTwo,
+            "Contract address is not updated correctly"
+        );
+    }
+
+    function test_updateContract_whenDependentPoliciesAreRegistered()
+        public
+        givenContractIsRegistered(bytes5("dai"), addressOne)
+        givenPolicyOneIsActive
+        givenPolicyTwoIsActive
+    {
+        // Update the contract
+        _updateContract(bytes5("dai"), addressTwo);
+
+        // Assert values in the policies have been updated
+        assertEq(_policy.dai(), addressTwo);
+        assertEq(_policy2.dai(), addressTwo);
     }
 
     // deregisterContract
@@ -298,7 +376,7 @@ contract ExternalRegistryTest is Test {
     }
 
     function test_deregisterContract_whenNameIsNotRegistered_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
 
         _deregisterContract(bytes5(""));
     }
@@ -312,7 +390,7 @@ contract ExternalRegistryTest is Test {
 
         // Assert values
         // Deregistered contract should revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
         _exreg.getContract(bytes5("ohm"));
 
         // Names array should be empty
@@ -341,7 +419,7 @@ contract ExternalRegistryTest is Test {
 
         // Assert values
         // Deregistered contract should revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
         _exreg.getContract(names[randomIndex]);
 
         // Other contracts should still be registered
@@ -394,25 +472,23 @@ contract ExternalRegistryTest is Test {
         }
     }
 
-    function test_deregisterContract_whenDependentPoliciesAreRegistered_reverts() public {
-        // Register the contract
-        _registerContract(bytes5("dai"), addressOne);
-
-        // Activate the dependent policies
-        _activatePolicyOne();
-        _activatePolicyTwo();
-
-        // Expect it to revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+    function test_deregisterContract_whenDependentPoliciesAreRegistered_reverts()
+        public
+        givenContractIsRegistered(bytes5("dai"), addressOne)
+        givenPolicyOneIsActive
+        givenPolicyTwoIsActive
+    {
+        // Expect the policies to revert
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
 
         // Deregister the contract
         _deregisterContract(bytes5("dai"));
     }
 
-    function test_deregisterContract_whenDependentPoliciesAreNotRegistered() public {
-        // Register the contract
-        _registerContract(bytes5("ohm"), addressOne);
-
+    function test_deregisterContract_whenDependentPoliciesAreNotRegistered()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+    {
         // Deregister the contract
         _deregisterContract(bytes5("ohm"));
 
@@ -430,7 +506,7 @@ contract ExternalRegistryTest is Test {
     //  [X] it returns the contract address
 
     function test_getContract_whenNameIsNotRegistered_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
 
         _exreg.getContract(bytes5("ohm"));
     }
@@ -445,10 +521,11 @@ contract ExternalRegistryTest is Test {
         );
     }
 
-    function test_getContract_whenNameIsUpdated() public {
-        _registerContract(bytes5("ohm"), addressOne);
-        _registerContract(bytes5("ohm"), addressTwo);
-
+    function test_getContract_whenNameIsUpdated()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+        givenContractIsUpdated(bytes5("ohm"), addressTwo)
+    {
         assertEq(
             _exreg.getContract(bytes5("ohm")),
             addressTwo,
@@ -466,11 +543,12 @@ contract ExternalRegistryTest is Test {
         assertEq(_exreg.getContractNames().length, 0, "Names array is not empty");
     }
 
-    function test_getContractNames_whenNamesAreRegistered() public {
-        _registerContract(bytes5("ohm"), addressOne);
-        _registerContract(bytes5("ohm2"), addressTwo);
-        _registerContract(bytes5("ohm3"), address(0x4));
-
+    function test_getContractNames_whenNamesAreRegistered()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+        givenContractIsRegistered(bytes5("ohm2"), addressTwo)
+        givenContractIsRegistered(bytes5("ohm3"), address(0x4))
+    {
         assertEq(_exreg.getContractNames().length, 3, "Names array is not updated correctly");
         assertEq(
             _exreg.getContractNames()[0],
