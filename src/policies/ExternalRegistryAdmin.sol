@@ -10,6 +10,8 @@ import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 /// @notice This policy is used to register and deregister contracts in the EXREG module.
 /// @dev    This contract utilises the following roles:
 ///         - `external_registry_admin`: Can register and deregister contracts
+///
+///         This policy provides permissioned access to the state-changing functions on the EXREG module. The view functions can be called directly on the module.
 contract ExternalRegistryAdmin is Policy, RolesConsumer {
     // ============ ERRORS ============ //
 
@@ -112,27 +114,5 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
         bytes5 name_
     ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
         EXREG.deregisterContract(name_);
-    }
-
-    // ============ VIEW FUNCTIONS ============ //
-
-    /// @notice Get the address of the contract
-    /// @dev    This function will revert if:
-    ///         - This contract is not activated as a policy
-    ///         - The EXREG module reverts
-    ///
-    /// @return The address of the contract
-    function getContract(bytes5 name_) external view onlyPolicyActive returns (address) {
-        return EXREG.getContract(name_);
-    }
-
-    /// @notice Get the names of the contracts
-    /// @dev    This function will revert if:
-    ///         - This contract is not activated as a policy
-    ///         - The EXREG module reverts
-    ///
-    /// @return The names of the contracts
-    function getContractNames() external view onlyPolicyActive returns (bytes5[] memory) {
-        return EXREG.getContractNames();
     }
 }
