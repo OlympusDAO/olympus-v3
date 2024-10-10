@@ -40,6 +40,8 @@ BROADCAST_FLAG=""
 if [ "$BROADCAST" = "true" ] || [ "$BROADCAST" = "TRUE" ]; then
   BROADCAST_FLAG="--broadcast"
   echo "Broadcasting is enabled"
+else
+  echo "Broadcasting is disabled"
 fi
 
 # Set VERIFY_FLAG based on VERIFY
@@ -62,6 +64,8 @@ if [ "$VERIFY" = "true" ] || [ "$VERIFY" = "TRUE" ]; then
   fi
 
   echo "Verification is enabled"
+else
+  echo "Verification is disabled"
 fi
 
 # Set RESUME_FLAG based on RESUME
