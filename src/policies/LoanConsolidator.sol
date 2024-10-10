@@ -91,24 +91,31 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     // ========= STATE ========= //
 
     /// @notice The Clearinghouse registry module
+    /// @dev    The value is set when the policy is activated
     CHREGv1 internal CHREG;
 
     /// @notice The treasury module
+    /// @dev    The value is set when the policy is activated
     TRSRYv1 internal TRSRY;
 
     /// @notice The external contract registry module
+    /// @dev    The value is set when the policy is activated
     EXREGv1 internal EXREG;
 
     /// @notice The DAI token
+    /// @dev    The value is set when the policy is activated
     IERC20 internal DAI;
 
     /// @notice The sDAI token
+    /// @dev    The value is set when the policy is activated
     IERC4626 internal SDAI;
 
     /// @notice The gOHM token
+    /// @dev    The value is set when the policy is activated
     IERC20 internal GOHM;
 
-    /// @notice The flash loan provider
+    /// @notice The ERC3156 flash loan provider
+    /// @dev    The value is set when the policy is activated
     IERC3156FlashLender internal FLASH;
 
     /// @notice The denominator for percentage calculations
