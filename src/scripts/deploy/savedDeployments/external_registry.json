@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusExternalRegistry",
+            "args": {}
+        },
+        {
+            "name": "ExternalRegistryAdmin",
+            "args": {}
+        }
+    ]
+}
