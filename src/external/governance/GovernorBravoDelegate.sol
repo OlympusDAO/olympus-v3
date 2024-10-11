@@ -370,10 +370,20 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function execute(uint256 proposalId) external payable {
         Proposal storage proposal = proposals[proposalId];
 
-        if (_isEmergency()) {
-            // In an emergency state, only the veto guardian can queue proposals
+        // Check if this is an emergency proposal
+        // Emergency proposals do not set the startBlock, but they will have a set proposer
+        // This proposer is likely the vetoGuardian, but the vetoGuardian can be changed
+        // Therefore, we just check that the proposer has been set.
+        bool isEmergencyProposal = proposal.startBlock == 0 && proposal.proposer != address(0);
+
+        if (isEmergencyProposal) {
+            // Only the veto guardian can execute emergency proposals
             if (msg.sender != vetoGuardian) revert GovernorBravo_OnlyVetoGuardian();
         } else {
+            // In an emergency state, only the veto guardian can execute proposals
+            if (_isEmergency() && msg.sender != vetoGuardian)
+                revert GovernorBravo_OnlyVetoGuardian();
+
             // Check if proposal is succeeded
             if (state(proposalId) != ProposalState.Queued) revert GovernorBravo_Execute_NotQueued();
             // Check that proposer has not fallen below proposal threshold since proposal creation
