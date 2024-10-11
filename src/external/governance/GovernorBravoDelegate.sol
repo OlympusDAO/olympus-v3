@@ -376,6 +376,8 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
         // Therefore, we just check that the proposer has been set.
         bool isEmergencyProposal = proposal.startBlock == 0 && proposal.proposer != address(0);
 
+        // This check is different from the queue check because the isEmergency() status can change
+        // during the required execution delay.
         if (isEmergencyProposal) {
             // Only the veto guardian can execute emergency proposals
             if (msg.sender != vetoGuardian) revert GovernorBravo_OnlyVetoGuardian();
@@ -929,15 +931,26 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function state(uint256 proposalId) public view returns (ProposalState) {
         if (proposalCount < proposalId) revert GovernorBravo_Proposal_IdInvalid();
         Proposal storage proposal = proposals[proposalId];
+
+        // Check if the proposal is an emergency proposal
+        // Start block is not set for emergency proposals
+        // Veto guardian may have changed so just check if proposer is set
         if (
             proposal.startBlock == 0 &&
-            proposal.proposer == vetoGuardian &&
+            proposal.proposer != address(0) &&
             proposal.targets.length > 0
         ) {
             // We want to short circuit the proposal state if it's an emergency proposal
             // We do not want to leave the proposal in a perpetual pending state (or otherwise)
             // where a user may be able to cancel or reuse it
-            return ProposalState.Emergency;
+            // However, we should check if vetoed or executed and show the final state in those cases
+            if (proposal.vetoed) {
+                return ProposalState.Vetoed;
+            } else if (proposal.executed) {
+                return ProposalState.Executed;
+            } else {
+                return ProposalState.Emergency;
+            }
         } else if (proposal.vetoed) {
             return ProposalState.Vetoed;
         } else if (proposal.canceled) {
