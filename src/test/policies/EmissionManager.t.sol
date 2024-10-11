@@ -79,12 +79,13 @@ contract EmissionManagerTest is Test {
     //     [X] when beatCounter is incremented and != 0
     //        [X] it returns without doing anything
     //     [ ] when beatCounter is incremented and == 0
-    //        [ ] when current OHM balance is not zero
-    //           [ ] it reduces supply added from the last sale
-    //        [ ] when current DAI balance is not zero
-    //           [ ] it increments the reserves added from the last sale
-    //           [ ] it deposits the DAI into sDAI and sends it to the treasury
-    //           [ ] it updates the backing price value based on the reserves added and supply added values from the last sale
+    //        [ ] when the num of previous sales is greater than zero
+    //            [ ] when current OHM balance is not zero
+    //               [ ] it reduces supply added from the last sale
+    //            [ ] when current DAI balance is not zero
+    //               [ ] it increments the reserves added from the last sale
+    //               [ ] it deposits the DAI into sDAI and sends it to the treasury
+    //               [ ] it updates the backing price value based on the reserves added and supply added values from the last sale
     //        [ ] when sell amount is greater than current OHM balance
     //           [ ] it mints the difference between the sell amount and the current OHM balance to the contract
     //        [ ] when sell amount is less than current OHM balance
@@ -99,9 +100,6 @@ contract EmissionManagerTest is Test {
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
     //        [ ] when there is a negative emissions adjustment
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
-    //        [ ] when the num of previous sales is greater than zero
-    //           [ ] it updates the supply added from the last sale based by subtracting any remaining OHM
-    //
     //
     // view functions
     // [ ] getSupply
