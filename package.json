@@ -27,7 +27,8 @@
         "test:proposal": "forge test --match-contract OCGProposal --fork-url $FORK_TEST_RPC_URL -vvv",
         "test:crosschainfork": "forge test --match-contract CrossChainBridgeFork -vvv",
         "test:coverage": "./shell/test_coverage.sh",
-        "size": "forge build --sizes"
+        "size": "forge build --sizes",
+        "metrics": "node shell/metrics.js"
     },
     "devDependencies": {
         "prettier": "^2.5.1",
