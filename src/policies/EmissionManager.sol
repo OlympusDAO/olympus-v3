@@ -76,6 +76,7 @@ contract EmissionManager is Policy, RolesConsumer {
     // Manager variables
     uint256 public baseEmissionRate;
     uint256 public minimumPremium;
+    uint48 public vestingPeriod; // initialized at 0
     uint256 public backing;
     uint8 public beatCounter;
     bool public locallyActive;
@@ -288,7 +289,7 @@ contract EmissionManager is Policy, RolesConsumer {
                     formattedInitialPrice: PRICE.getLastPrice().mulDiv(bondScale, oracleScale),
                     formattedMinimumPrice: minPrice.mulDiv(bondScale, oracleScale),
                     debtBuffer: 100_000, // 100%
-                    vesting: uint48(0), // Instant swaps
+                    vesting: vestingPeriod,
                     conclusion: uint48(block.timestamp + 1 days), // 1 day from now
                     depositInterval: uint32(4 hours), // 4 hours
                     scaleAdjustment: scaleAdjustment
@@ -366,6 +367,12 @@ contract EmissionManager is Policy, RolesConsumer {
     /// @param newMinimumPremium_ uint256
     function setMinimumPremium(uint256 newMinimumPremium_) external onlyRole("emissions_admin") {
         minimumPremium = newMinimumPremium_;
+    }
+
+    /// @notice set the new vesting period in seconds
+    /// @param newVestingPeriod_ uint48
+    function setVestingPeriod(uint48 newVestingPeriod_) external onlyRole("emissions_admin") {
+        vestingPeriod = newVestingPeriod_;
     }
 
     /// @notice allow governance to adjust backing price if deviated from reality
