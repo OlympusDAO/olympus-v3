@@ -11,6 +11,7 @@ import "src/Kernel.sol";
 // Bophades modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "modules/PRICE/OlympusPrice.v2.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 // PRICE submodules
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -48,6 +49,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address price;
     address heart;
     address operator;
+    address roles;
     address rolesAdmin;
     address bondCallback;
     address priceConfigV1;
@@ -106,6 +108,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         price = envAddress("current", "olympus.modules.OlympusPriceV1");
         treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
+        roles = envAddress("current", "olympus.modules.OlympusRoles");
 
         heart = envAddress("current", "olympus.policies.OlympusHeart");
         operator = envAddress("current", "olympus.policies.Operator");
@@ -194,6 +197,17 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 Kernel.executeAction.selector,
                 Actions.DeactivatePolicy,
                 operator
+            )
+        );
+
+        // 2a. Revoke operator_operate from Heart V1
+        console2.log("Revoking operator_operate role from Heart V1");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.revokeRole.selector,
+                bytes32("operator_operate"),
+                heart
             )
         );
 
@@ -751,6 +765,84 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    LBBO Moving Average (18dp)", lbbo);
             console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
         }
+
+        // 10. Validate roles
+        {
+            console2.log("Validating granted roles");
+
+            // Assemble a list of potential role recipients
+            address[] memory allAddresses = new address[](14);
+            allAddresses[0] = daoMS;
+            allAddresses[1] = emergencyMS;
+            allAddresses[2] = price;
+            allAddresses[3] = heart;
+            allAddresses[4] = operator;
+            allAddresses[5] = bondCallback;
+            allAddresses[6] = priceConfigV1;
+            allAddresses[7] = appraiser;
+            allAddresses[8] = priceConfigV2;
+            allAddresses[9] = heartV2;
+            allAddresses[10] = operatorV2;
+            allAddresses[11] = treasuryConfig;
+            allAddresses[12] = supplyConfig;
+            allAddresses[13] = policyMS;
+
+            // 10a. Validate Appraiser roles
+            //   - appraiser_admin: DAO MS
+            {
+                address[] memory permittedAddresses = new address[](1);
+                permittedAddresses[0] = daoMS;
+
+                _validateRoles("appraiser_admin", allAddresses, permittedAddresses);
+            }
+            //   - appraiser_store: Heart V2
+            {
+                address[] memory permittedAddresses = new address[](1);
+                permittedAddresses[0] = heartV2;
+
+                _validateRoles("appraiser_store", allAddresses, permittedAddresses);
+            }
+            // 10b. Validate Heart roles
+            //    - heart_admin: DAO MS, Emergency MS
+            {
+                address[] memory permittedAddresses = new address[](2);
+                permittedAddresses[0] = daoMS;
+                permittedAddresses[1] = emergencyMS;
+
+                _validateRoles("heart_admin", allAddresses, permittedAddresses);
+            }
+            // 10c. Validate Operator roles
+            //    - operator_policy: DAO MS, Emergency MS
+            {
+                address[] memory permittedAddresses = new address[](2);
+                permittedAddresses[0] = daoMS;
+                permittedAddresses[1] = emergencyMS;
+
+                _validateRoles("operator_policy", allAddresses, permittedAddresses);
+            }
+            //    - operator_admin: DAO MS
+            {
+                address[] memory permittedAddresses = new address[](1);
+                permittedAddresses[0] = daoMS;
+
+                _validateRoles("operator_admin", allAddresses, permittedAddresses);
+            }
+            //    - operator_operate: Heart V2, DAO MS
+            {
+                address[] memory permittedAddresses = new address[](2);
+                permittedAddresses[0] = heartV2;
+                permittedAddresses[1] = daoMS;
+
+                _validateRoles("operator_operate", allAddresses, permittedAddresses);
+            }
+            //    - operator_reporter: BondCallback
+            {
+                address[] memory permittedAddresses = new address[](1);
+                permittedAddresses[0] = bondCallback;
+
+                _validateRoles("operator_reporter", allAddresses, permittedAddresses);
+            }
+        }
     }
 
     /// @notice     Activates PRICEv2 module and PriceConfigV2 policy
@@ -764,5 +856,39 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     function RBSv2Install_3_TEST(bool) external {
         initTestBatch();
         install();
+    }
+
+    function _inArray(address[] memory array, address value) internal pure returns (bool) {
+        for (uint256 i = 0; i < array.length; i++) {
+            if (array[i] == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function _validateRoles(
+        string memory role_,
+        address[] memory allAddresses,
+        address[] memory permittedAddresses
+    ) internal view {
+        OlympusRoles ROLES = OlympusRoles(roles);
+
+        console2.log("");
+        console2.log("Role: %s", role_);
+        for (uint256 i = 0; i < allAddresses.length; i++) {
+            bool hasRole = ROLES.hasRole(allAddresses[i], bytes32(bytes(role_)));
+
+            console2.log("    %s: %s", allAddresses[i], hasRole);
+
+            // If the current address has the role, but is not in the permitted list, revert
+            if (hasRole && !_inArray(permittedAddresses, allAddresses[i])) {
+                console2.log(
+                    "    %s has the role, but is not in the permitted list",
+                    allAddresses[i]
+                );
+                revert("Role validation failed");
+            }
+        }
     }
 }
