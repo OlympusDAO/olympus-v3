@@ -928,6 +928,16 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function getVoteOutcome(uint256 proposalId) public view returns (bool) {
         Proposal storage proposal = proposals[proposalId];
 
+        // Check if it's an emergency proposal
+        // If so we need to check if it's vetoed
+        if (
+            proposal.proposer != address(0) &&
+            proposal.startBlock == 0 &&
+            proposal.targets.length > 0
+        ) {
+            return !proposal.vetoed;
+        }
+
         if (proposal.forVotes == 0 && proposal.againstVotes == 0) {
             return false;
         } else if (
