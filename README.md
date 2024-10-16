@@ -26,15 +26,15 @@ Set up a foundry config in foundry.toml.
 
 Up-to-date addresses of all the deployments can be found in:
 
--   the olymsig repos: [mainnet](https://github.com/OlympusDAO/olymsig) and [testnet](https://github.com/OlympusDAO/olymsig-testnet)
--   [the official docs](https://docs.olympusdao.finance/main/technical/addresses)
+- the olymsig repos: [mainnet](https://github.com/OlympusDAO/olymsig) and [testnet](https://github.com/OlympusDAO/olymsig-testnet)
+- [the official docs](https://docs.olympusdao.finance/main/technical/addresses)
 
-#### Privileged Testnet Accounts (Multi-sigs)
+### Privileged Testnet Accounts (Multi-sigs)
 
--   Executor - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
--   Guardian - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
--   Policy - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
--   Emergency - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
+- Executor - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
+- Guardian - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
+- Policy - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
+- Emergency - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
 
 ## Setup
 
@@ -71,13 +71,13 @@ Sometimes the automatic etherscan verification fails when deploying a contract. 
 
 2. This is an example execution of the shell script:
 
-    ```
+    ```shell
     shell/verify_etherscan.sh 0x0AE561226896dA978EaDA0Bec4a7d3CfAE04f506 src/policies/Operator.sol:Operator 0x0000000000000000000000002286d7f9639e8158fad1169e76d1fbc38247f54b000000000000000000000000007f7a1cb838a872515c8ebd16be4b14ef43a22200000000000000000000000073df08ce9dcc8d74d22f23282c4d49f13b4c795e00000000000000000000000064aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d50000000000000000000000006b175474e89094c44da98b954eedeac495271d0f00000000000000000000000083f20f44975d03b1b09e64809b757c47f942beea0000000000000000000000000000000000000000000000000000000000000bb8000000000000000000000000000000000000000000000000000000000003f48000000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000000000000384000000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000007e90000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000015
     ```
 
     Where the `CONSTRUCTOR_ARGS` have been decode in the following way:
 
-    ```
+    ```hex
     constructor(address,address,address,uint256,uint256[2],uint256[2])"
 
     0x
@@ -95,6 +95,6 @@ Sometimes the automatic etherscan verification fails when deploying a contract. 
 
 ## Boosted Liquidity Vault Setup
 
--   Deploy any dependencies (if on testnet)
--   Deploy BLV contracts
--   Activate BLV contracts with the BLV registry (using an olymsig script)
+- Deploy any dependencies (if on testnet)
+- Deploy BLV contracts
+- Activate BLV contracts with the BLV registry (using an olymsig script)
