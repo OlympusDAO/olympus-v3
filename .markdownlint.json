@@ -1,7 +1,7 @@
 {
   "list-marker-space": {
-    "ul_multi": 3,
-    "ul_single": 3
+    "ul_multi": 1,
+    "ul_single": 1
   },
   "ul-indent": {
     "indent": 4
