@@ -19,8 +19,10 @@
         "prettier:check": "prettier --check 'src/**/*.sol' '**/*.html' '**/*.md'",
         "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
         "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
-        "lint": "pnpm run prettier && pnpm run solhint",
-        "lint:check": "pnpm run prettier:check && pnpm run solhint:check",
+        "markdownlint": "markdownlint --fix '**/*.md'",
+        "markdownlint:check": "markdownlint '**/*.md'",
+        "lint": "pnpm run prettier && pnpm run solhint && pnpm run markdownlint",
+        "lint:check": "pnpm run prettier:check && pnpm run solhint:check && pnpm run markdownlint:check",
         "test": "./shell/test_all.sh",
         "test:unit": "forge test --no-match-contract '(Fork|OCGProposal|CoolerUtils)' -vvv",
         "test:fork": "forge test --match-contract '($1.*Fork$|CoolerUtils)' --fork-url $FORK_TEST_RPC_URL -vvv",
@@ -31,6 +33,7 @@
         "metrics": "node shell/metrics.js"
     },
     "devDependencies": {
+        "markdownlint-cli": "^0.42.0",
         "prettier": "^2.5.1",
         "prettier-plugin-solidity": "^1.0.0-beta.19",
         "solhint": "^3.3.7",
