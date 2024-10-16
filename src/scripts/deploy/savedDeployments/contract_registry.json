@@ -1,11 +1,11 @@
 {
     "sequence": [
         {
-            "name": "OlympusExternalRegistry",
+            "name": "OlympusContractRegistry",
             "args": {}
         },
         {
-            "name": "ExternalRegistryAdmin",
+            "name": "ContractRegistryAdmin",
             "args": {}
         }
     ]

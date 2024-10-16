@@ -1,7 +1,7 @@
 {
     "sequence": [
         {
-            "name": "CoolerUtils",
+            "name": "LoanConsolidator",
             "args": {
                 "feePercentage": 0
             }
