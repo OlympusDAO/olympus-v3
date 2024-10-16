@@ -2,19 +2,19 @@
 pragma solidity 0.8.15;
 
 import {Kernel, Module, Policy, Keycode, toKeycode} from "src/Kernel.sol";
-import {EXREGv1} from "./EXREG.v1.sol";
+import {RGSTYv1} from "./RGSTY.v1.sol";
 
-/// @title  Olympus External Registry
-/// @notice This module is used to track the address of contracts that are external to the Bophades system.
-contract OlympusExternalRegistry is EXREGv1 {
+/// @title  Olympus Contract Registry
+/// @notice This module is used to track the addresses of contracts.
+contract OlympusContractRegistry is RGSTYv1 {
     // =========  STATE ========= //
 
-    /// @notice The keycode for the Olympus External Registry
-    bytes5 public constant keycode = "EXREG";
+    /// @notice The keycode for the Olympus Contract Registry
+    bytes5 public constant keycode = "RGSTY";
 
     // =========  CONSTRUCTOR ========= //
 
-    /// @notice Constructor for the Olympus External Registry
+    /// @notice Constructor for the Olympus Contract Registry
     /// @dev    This function will revert if:
     ///         - The provided kernel address is zero
     ///
@@ -38,7 +38,7 @@ contract OlympusExternalRegistry is EXREGv1 {
 
     // =========  CONTRACT REGISTRATION ========= //
 
-    /// @inheritdoc EXREGv1
+    /// @inheritdoc RGSTYv1
     /// @dev        This function performs the following steps:
     ///             - Validates the parameters
     ///             - Updates the contract address
@@ -93,7 +93,7 @@ contract OlympusExternalRegistry is EXREGv1 {
         emit ContractRegistered(name_, contractAddress_);
     }
 
-    /// @inheritdoc EXREGv1
+    /// @inheritdoc RGSTYv1
     /// @dev        This function performs the following steps:
     ///             - Validates the parameters
     ///             - Updates the contract address
@@ -117,7 +117,7 @@ contract OlympusExternalRegistry is EXREGv1 {
         emit ContractUpdated(name_, contractAddress_);
     }
 
-    /// @inheritdoc EXREGv1
+    /// @inheritdoc RGSTYv1
     /// @dev        This function performs the following steps:
     ///             - Validates the parameters
     ///             - Removes the contract address
@@ -140,7 +140,7 @@ contract OlympusExternalRegistry is EXREGv1 {
 
     // =========  VIEW FUNCTIONS ========= //
 
-    /// @inheritdoc EXREGv1
+    /// @inheritdoc RGSTYv1
     /// @dev        This function will revert if:
     ///             - The contract is not registered
     function getContract(bytes5 name_) external view override returns (address) {
@@ -151,7 +151,7 @@ contract OlympusExternalRegistry is EXREGv1 {
         return contractAddress;
     }
 
-    /// @inheritdoc EXREGv1
+    /// @inheritdoc RGSTYv1
     /// @dev        Note that the order of the names in the array is not guaranteed to be consistent.
     function getContractNames() external view override returns (bytes5[] memory) {
         return _contractNames;

@@ -8,7 +8,7 @@ import {Kernel, Keycode, toKeycode, Permissions, Policy} from "src/Kernel.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-import {EXREGv1} from "src/modules/EXREG/EXREG.v1.sol";
+import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
 
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 
@@ -98,9 +98,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @dev    The value is set when the policy is activated
     TRSRYv1 internal TRSRY;
 
-    /// @notice The external contract registry module
+    /// @notice The contract registry module
     /// @dev    The value is set when the policy is activated
-    EXREGv1 internal EXREG;
+    RGSTYv1 internal RGSTY;
 
     /// @notice The DAI token
     /// @dev    The value is set when the policy is activated
@@ -163,13 +163,13 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("CHREG");
-        dependencies[1] = toKeycode("EXREG");
+        dependencies[1] = toKeycode("RGSTY");
         dependencies[2] = toKeycode("ROLES");
         dependencies[3] = toKeycode("TRSRY");
 
         // Populate module dependencies
         CHREG = CHREGv1(getModuleAddress(dependencies[0]));
-        EXREG = EXREGv1(getModuleAddress(dependencies[1]));
+        RGSTY = RGSTYv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
 
@@ -177,18 +177,18 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1, 1, 1]);
         (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
-        (uint8 EXREG_MAJOR, ) = EXREG.VERSION();
+        (uint8 RGSTY_MAJOR, ) = RGSTY.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        if (CHREG_MAJOR != 1 || EXREG_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+        if (CHREG_MAJOR != 1 || RGSTY_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
 
         // Populate variables
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
-        DAI = IERC20(EXREG.getContract("dai"));
-        SDAI = IERC4626(EXREG.getContract("sdai"));
-        GOHM = IERC20(EXREG.getContract("gohm"));
-        FLASH = IERC3156FlashLender(EXREG.getContract("flash"));
+        DAI = IERC20(RGSTY.getContract("dai"));
+        SDAI = IERC4626(RGSTY.getContract("sdai"));
+        GOHM = IERC20(RGSTY.getContract("gohm"));
+        FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
 
         return dependencies;
     }

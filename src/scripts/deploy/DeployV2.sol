@@ -61,8 +61,8 @@ import {pOLY} from "policies/pOLY.sol";
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
-import {OlympusExternalRegistry} from "modules/EXREG/OlympusExternalRegistry.sol";
-import {ExternalRegistryAdmin} from "policies/ExternalRegistryAdmin.sol";
+import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol";
+import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -89,7 +89,7 @@ contract OlympusDeploy is Script {
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
-    OlympusExternalRegistry public EXREG;
+    OlympusContractRegistry public RGSTY;
 
     /// Policies
     Operator public operator;
@@ -109,7 +109,7 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     LegacyBurner public legacyBurner;
-    ExternalRegistryAdmin public externalRegistryAdmin;
+    ContractRegistryAdmin public contractRegistryAdmin;
     LoanConsolidator public loanConsolidator;
 
     /// Other Olympus contracts
@@ -196,7 +196,7 @@ contract OlympusDeploy is Script {
             ._deployBoostedLiquidityRegistry
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
-        selectorMap["OlympusExternalRegistry"] = this._deployExternalRegistry.selector;
+        selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
         // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
@@ -221,7 +221,7 @@ contract OlympusDeploy is Script {
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
         selectorMap["LoanConsolidator"] = this._deployLoanConsolidator.selector;
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
-        selectorMap["ExternalRegistryAdmin"] = this._deployExternalRegistryAdmin.selector;
+        selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -287,7 +287,7 @@ contract OlympusDeploy is Script {
         BLREG = OlympusBoostedLiquidityRegistry(
             envAddress("olympus.modules.OlympusBoostedLiquidityRegistry")
         );
-        EXREG = OlympusExternalRegistry(envAddress("olympus.modules.OlympusExternalRegistry"));
+        RGSTY = OlympusContractRegistry(envAddress("olympus.modules.OlympusContractRegistry"));
         // Policies
         operator = Operator(envAddress("olympus.policies.Operator"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
@@ -310,8 +310,8 @@ contract OlympusDeploy is Script {
         claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
-        externalRegistryAdmin = ExternalRegistryAdmin(
-            envAddress("olympus.policies.ExternalRegistryAdmin")
+        contractRegistryAdmin = ContractRegistryAdmin(
+            envAddress("olympus.policies.ContractRegistryAdmin")
         );
         loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
 
@@ -1042,34 +1042,34 @@ contract OlympusDeploy is Script {
         return address(CHREG);
     }
 
-    function _deployExternalRegistry(bytes calldata) public returns (address) {
+    function _deployContractRegistry(bytes calldata) public returns (address) {
         // Decode arguments from the sequence file
         // None
 
         // Print the arguments
         console2.log("  Kernel:", address(kernel));
 
-        // Deploy OlympusExternalRegistry
+        // Deploy OlympusContractRegistry
         vm.broadcast();
-        EXREG = new OlympusExternalRegistry(address(kernel));
-        console2.log("ExternalRegistry deployed at:", address(EXREG));
+        RGSTY = new OlympusContractRegistry(address(kernel));
+        console2.log("ContractRegistry deployed at:", address(RGSTY));
 
-        return address(EXREG);
+        return address(RGSTY);
     }
 
-    function _deployExternalRegistryAdmin(bytes calldata) public returns (address) {
+    function _deployContractRegistryAdmin(bytes calldata) public returns (address) {
         // Decode arguments from the sequence file
         // None
 
         // Print the arguments
         console2.log("  Kernel:", address(kernel));
 
-        // Deploy ExternalRegistryAdmin
+        // Deploy ContractRegistryAdmin
         vm.broadcast();
-        externalRegistryAdmin = new ExternalRegistryAdmin(address(kernel));
-        console2.log("ExternalRegistryAdmin deployed at:", address(externalRegistryAdmin));
+        contractRegistryAdmin = new ContractRegistryAdmin(address(kernel));
+        console2.log("ContractRegistryAdmin deployed at:", address(contractRegistryAdmin));
 
-        return address(externalRegistryAdmin);
+        return address(contractRegistryAdmin);
     }
 
     function _deployLoanConsolidator(bytes calldata args_) public returns (address) {

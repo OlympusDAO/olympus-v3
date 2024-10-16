@@ -12,8 +12,8 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 
-import {OlympusExternalRegistry} from "src/modules/EXREG/OlympusExternalRegistry.sol";
-import {ExternalRegistryAdmin} from "src/policies/ExternalRegistryAdmin.sol";
+import {OlympusContractRegistry} from "src/modules/RGSTY/OlympusContractRegistry.sol";
+import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -32,8 +32,8 @@ contract LoanConsolidatorForkTest is Test {
     CoolerFactory public coolerFactory;
     Clearinghouse public clearinghouse;
 
-    OlympusExternalRegistry public EXREG;
-    ExternalRegistryAdmin public exregAdmin;
+    OlympusContractRegistry public RGSTY;
+    ContractRegistryAdmin public rgstyAdmin;
     RolesAdmin public rolesAdmin;
     TRSRYv1 public TRSRY;
     Kernel public kernel;
@@ -87,27 +87,27 @@ contract LoanConsolidatorForkTest is Test {
         // Determine the kernel executor
         kernelExecutor = Kernel(kernel).executor();
 
-        // Install EXREG (since block is pinned, it won't be installed)
-        EXREG = new OlympusExternalRegistry(address(kernel));
+        // Install RGSTY (since block is pinned, it won't be installed)
+        RGSTY = new OlympusContractRegistry(address(kernel));
         vm.prank(kernelExecutor);
-        kernel.executeAction(Actions.InstallModule, address(EXREG));
+        kernel.executeAction(Actions.InstallModule, address(RGSTY));
 
-        // Set up and install the external registry admin policy
-        exregAdmin = new ExternalRegistryAdmin(address(kernel));
+        // Set up and install the contract registry admin policy
+        rgstyAdmin = new ContractRegistryAdmin(address(kernel));
         vm.prank(kernelExecutor);
-        kernel.executeAction(Actions.ActivatePolicy, address(exregAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(rgstyAdmin));
 
-        // Grant the external registry admin role to this contract
+        // Grant the contract registry admin role to this contract
         vm.prank(kernelExecutor);
-        rolesAdmin.grantRole("external_registry_admin", address(this));
+        rolesAdmin.grantRole("contract_registry_admin", address(this));
 
-        // Register the tokens with EXREG
+        // Register the tokens with RGSTY
         vm.startPrank(address(this));
-        exregAdmin.registerContract("dai", address(dai));
-        exregAdmin.registerContract("sdai", address(sdai));
-        exregAdmin.registerContract("ohm", address(ohm));
-        exregAdmin.registerContract("gohm", address(gohm));
-        exregAdmin.registerContract("flash", address(lender));
+        rgstyAdmin.registerContract("dai", address(dai));
+        rgstyAdmin.registerContract("sdai", address(sdai));
+        rgstyAdmin.registerContract("ohm", address(ohm));
+        rgstyAdmin.registerContract("gohm", address(gohm));
+        rgstyAdmin.registerContract("flash", address(lender));
         vm.stopPrank();
 
         admin = vm.addr(0x2);

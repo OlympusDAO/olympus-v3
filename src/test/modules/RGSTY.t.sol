@@ -3,14 +3,14 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
-import {MockExternalRegistryPolicy} from "test/mocks/MockExternalRegistryPolicy.sol";
+import {MockContractRegistryPolicy} from "test/mocks/MockContractRegistryPolicy.sol";
 
 import {Kernel, Actions, Module, fromKeycode} from "src/Kernel.sol";
-import {EXREGv1} from "src/modules/EXREG/EXREG.v1.sol";
-import {OlympusExternalRegistry} from "src/modules/EXREG/OlympusExternalRegistry.sol";
+import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
+import {OlympusContractRegistry} from "src/modules/RGSTY/OlympusContractRegistry.sol";
 
-contract ExternalRegistryTest is Test {
-    using ModuleTestFixtureGenerator for OlympusExternalRegistry;
+contract ContractRegistryTest is Test {
+    using ModuleTestFixtureGenerator for OlympusContractRegistry;
 
     address public godmode;
     address public notOwner = address(0x1);
@@ -19,11 +19,11 @@ contract ExternalRegistryTest is Test {
     address public addressTwo = address(0x3);
 
     Kernel internal _kernel;
-    OlympusExternalRegistry internal _exreg;
-    MockExternalRegistryPolicy internal _policy;
-    MockExternalRegistryPolicy internal _policy2;
+    OlympusContractRegistry internal RGSTY;
+    MockContractRegistryPolicy internal _policy;
+    MockContractRegistryPolicy internal _policy2;
 
-    // External Registry Expected events
+    // Contract Registry Expected events
     event ContractRegistered(bytes5 indexed name, address indexed contractAddress);
     event ContractUpdated(bytes5 indexed name, address indexed contractAddress);
     event ContractDeregistered(bytes5 indexed name);
@@ -32,31 +32,31 @@ contract ExternalRegistryTest is Test {
         // Deploy Kernel and modules
         // This contract is the owner
         _kernel = new Kernel();
-        _exreg = new OlympusExternalRegistry(address(_kernel));
-        _policy = new MockExternalRegistryPolicy(_kernel);
-        _policy2 = new MockExternalRegistryPolicy(_kernel);
+        RGSTY = new OlympusContractRegistry(address(_kernel));
+        _policy = new MockContractRegistryPolicy(_kernel);
+        _policy2 = new MockContractRegistryPolicy(_kernel);
 
         // Generate fixtures
-        godmode = _exreg.generateGodmodeFixture(type(OlympusExternalRegistry).name);
+        godmode = RGSTY.generateGodmodeFixture(type(OlympusContractRegistry).name);
 
         // Install modules and policies on Kernel
-        _kernel.executeAction(Actions.InstallModule, address(_exreg));
+        _kernel.executeAction(Actions.InstallModule, address(RGSTY));
         _kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 
     function _registerContract(bytes5 name_, address contractAddress_) internal {
         vm.prank(godmode);
-        _exreg.registerContract(name_, contractAddress_);
+        RGSTY.registerContract(name_, contractAddress_);
     }
 
     function _deregisterContract(bytes5 name_) internal {
         vm.prank(godmode);
-        _exreg.deregisterContract(name_);
+        RGSTY.deregisterContract(name_);
     }
 
     function _updateContract(bytes5 name_, address contractAddress_) internal {
         vm.prank(godmode);
-        _exreg.updateContract(name_, contractAddress_);
+        RGSTY.updateContract(name_, contractAddress_);
     }
 
     function _activatePolicyOne() internal {
@@ -101,15 +101,15 @@ contract ExternalRegistryTest is Test {
     //  [X] it sets the kernel address
 
     function test_constructor_whenKernelAddressIsZero_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidAddress.selector));
 
-        new OlympusExternalRegistry(address(0));
+        new OlympusContractRegistry(address(0));
     }
 
     function test_constructor_whenKernelAddressIsNotZero_reverts() public {
-        OlympusExternalRegistry exreg = new OlympusExternalRegistry(address(1));
+        OlympusContractRegistry rgsty = new OlympusContractRegistry(address(1));
 
-        assertEq(address(exreg.kernel()), address(1), "Kernel address is not set correctly");
+        assertEq(address(rgsty.kernel()), address(1), "Kernel address is not set correctly");
     }
 
     // registerContract
@@ -140,51 +140,51 @@ contract ExternalRegistryTest is Test {
         );
 
         vm.prank(notOwner);
-        _exreg.registerContract(bytes5("ohm"), addressOne);
+        RGSTY.registerContract(bytes5("ohm"), addressOne);
     }
 
     function test_registerContract_whenNameIsEmpty_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
 
         _registerContract(bytes5(""), addressOne);
     }
 
     function test_registerContract_whenNameIsZero_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
 
         _registerContract(bytes5(0), addressOne);
     }
 
     function test_registerContract_whenNameIsNotLowercase_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
         _registerContract(bytes5("Ohm"), addressOne);
 
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
         _registerContract(bytes5("oHm"), addressOne);
 
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
         _registerContract(bytes5("ohM"), addressOne);
     }
 
     function test_registerContract_whenNameContainsPunctuation_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
         _registerContract(bytes5("ohm!"), addressOne);
 
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
         _registerContract(bytes5("ohm "), addressOne);
 
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidName.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
         _registerContract(bytes5("ohm-"), addressOne);
     }
 
     function test_registerContract_whenNameContainsNumeral() public {
         _registerContract(bytes5("ohm1"), addressOne);
 
-        assertEq(_exreg.getContract(bytes5("ohm1")), addressOne);
+        assertEq(RGSTY.getContract(bytes5("ohm1")), addressOne);
     }
 
     function test_registerContract_whenContractAddressIsZero_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidAddress.selector));
 
         _registerContract(bytes5("ohm"), address(0));
     }
@@ -194,7 +194,7 @@ contract ExternalRegistryTest is Test {
         givenContractIsRegistered(bytes5("ohm"), addressOne)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractAlreadyRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractAlreadyRegistered.selector));
 
         // Register the second time
         _registerContract(bytes5("ohm"), addressTwo);
@@ -209,13 +209,13 @@ contract ExternalRegistryTest is Test {
         _registerContract(bytes5("ohm"), addressOne);
 
         assertEq(
-            _exreg.getContract(bytes5("ohm")),
+            RGSTY.getContract(bytes5("ohm")),
             addressOne,
             "Contract address is not set correctly"
         );
-        assertEq(_exreg.getContractNames().length, 1, "Names array is not updated correctly");
+        assertEq(RGSTY.getContractNames().length, 1, "Names array is not updated correctly");
         assertEq(
-            _exreg.getContractNames()[0],
+            RGSTY.getContractNames()[0],
             bytes5("ohm"),
             "Names array is not updated correctly"
         );
@@ -229,33 +229,33 @@ contract ExternalRegistryTest is Test {
     {
         // Assert values
         assertEq(
-            _exreg.getContract(bytes5("ohm")),
+            RGSTY.getContract(bytes5("ohm")),
             addressOne,
             "ohm contract address is not set correctly"
         );
         assertEq(
-            _exreg.getContract(bytes5("ohm2")),
+            RGSTY.getContract(bytes5("ohm2")),
             addressTwo,
             "ohm2 contract address is not set correctly"
         );
         assertEq(
-            _exreg.getContract(bytes5("ohm3")),
+            RGSTY.getContract(bytes5("ohm3")),
             address(0x4),
             "ohm3 contract address is not set correctly"
         );
-        assertEq(_exreg.getContractNames().length, 3, "Names array is not updated correctly");
+        assertEq(RGSTY.getContractNames().length, 3, "Names array is not updated correctly");
         assertEq(
-            _exreg.getContractNames()[0],
+            RGSTY.getContractNames()[0],
             bytes5("ohm"),
             "Names array is not updated correctly"
         );
         assertEq(
-            _exreg.getContractNames()[1],
+            RGSTY.getContractNames()[1],
             bytes5("ohm2"),
             "Names array is not updated correctly"
         );
         assertEq(
-            _exreg.getContractNames()[2],
+            RGSTY.getContractNames()[2],
             bytes5("ohm3"),
             "Names array is not updated correctly"
         );
@@ -278,7 +278,7 @@ contract ExternalRegistryTest is Test {
 
     function test_activatePolicies_whenContractNotRegistered_reverts() public {
         // Expect the policy to revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
         // Activate the dependent policies
         _activatePolicyOne();
@@ -301,11 +301,11 @@ contract ExternalRegistryTest is Test {
         );
 
         vm.prank(notOwner);
-        _exreg.updateContract(bytes5("ohm"), addressOne);
+        RGSTY.updateContract(bytes5("ohm"), addressOne);
     }
 
     function test_updateContract_whenNameIsNotRegistered_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
         _updateContract(bytes5("ohm"), addressOne);
     }
@@ -314,7 +314,7 @@ contract ExternalRegistryTest is Test {
         public
         givenContractIsRegistered(bytes5("ohm"), addressOne)
     {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidAddress.selector));
 
         _updateContract(bytes5("ohm"), address(0));
     }
@@ -329,7 +329,7 @@ contract ExternalRegistryTest is Test {
 
         // Assert values
         assertEq(
-            _exreg.getContract(bytes5("ohm")),
+            RGSTY.getContract(bytes5("ohm")),
             addressTwo,
             "Contract address is not updated correctly"
         );
@@ -372,11 +372,11 @@ contract ExternalRegistryTest is Test {
         );
 
         vm.prank(notOwner);
-        _exreg.deregisterContract(bytes5("ohm"));
+        RGSTY.deregisterContract(bytes5("ohm"));
     }
 
     function test_deregisterContract_whenNameIsNotRegistered_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
         _deregisterContract(bytes5(""));
     }
@@ -390,11 +390,11 @@ contract ExternalRegistryTest is Test {
 
         // Assert values
         // Deregistered contract should revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
-        _exreg.getContract(bytes5("ohm"));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
+        RGSTY.getContract(bytes5("ohm"));
 
         // Names array should be empty
-        assertEq(_exreg.getContractNames().length, 0, "Names array is not updated correctly");
+        assertEq(RGSTY.getContractNames().length, 0, "Names array is not updated correctly");
     }
 
     function test_deregisterContract_whenMultipleNamesAreRegistered(uint256 index_) public {
@@ -419,27 +419,27 @@ contract ExternalRegistryTest is Test {
 
         // Assert values
         // Deregistered contract should revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
-        _exreg.getContract(names[randomIndex]);
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
+        RGSTY.getContract(names[randomIndex]);
 
         // Other contracts should still be registered
         if (randomIndex != 0) {
             assertEq(
-                _exreg.getContract(names[0]),
+                RGSTY.getContract(names[0]),
                 addressOne,
                 "ohm contract address is not set correctly"
             );
         }
         if (randomIndex != 1) {
             assertEq(
-                _exreg.getContract(names[1]),
+                RGSTY.getContract(names[1]),
                 addressTwo,
                 "ohm2 contract address is not set correctly"
             );
         }
         if (randomIndex != 2) {
             assertEq(
-                _exreg.getContract(names[2]),
+                RGSTY.getContract(names[2]),
                 address(0x4),
                 "ohm3 contract address is not set correctly"
             );
@@ -455,8 +455,8 @@ contract ExternalRegistryTest is Test {
             }
         }
 
-        bytes5[] memory contractNames = _exreg.getContractNames();
-        assertEq(_exreg.getContractNames().length, 2, "Names array is not updated correctly");
+        bytes5[] memory contractNames = RGSTY.getContractNames();
+        assertEq(RGSTY.getContractNames().length, 2, "Names array is not updated correctly");
 
         // Check that the expected names are in the array
         // This is done as the order of names in the array is not guaranteed
@@ -479,7 +479,7 @@ contract ExternalRegistryTest is Test {
         givenPolicyTwoIsActive
     {
         // Expect the policies to revert
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
         // Deregister the contract
         _deregisterContract(bytes5("dai"));
@@ -506,16 +506,16 @@ contract ExternalRegistryTest is Test {
     //  [X] it returns the contract address
 
     function test_getContract_whenNameIsNotRegistered_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(EXREGv1.Params_ContractNotRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
-        _exreg.getContract(bytes5("ohm"));
+        RGSTY.getContract(bytes5("ohm"));
     }
 
     function test_getContract_whenNameIsRegistered() public {
         _registerContract(bytes5("ohm"), addressOne);
 
         assertEq(
-            _exreg.getContract(bytes5("ohm")),
+            RGSTY.getContract(bytes5("ohm")),
             addressOne,
             "Contract address is not set correctly"
         );
@@ -527,7 +527,7 @@ contract ExternalRegistryTest is Test {
         givenContractIsUpdated(bytes5("ohm"), addressTwo)
     {
         assertEq(
-            _exreg.getContract(bytes5("ohm")),
+            RGSTY.getContract(bytes5("ohm")),
             addressTwo,
             "Contract address is not updated correctly"
         );
@@ -540,7 +540,7 @@ contract ExternalRegistryTest is Test {
     //  [X] it returns the names array
 
     function test_getContractNames_whenNoNamesAreRegistered() public {
-        assertEq(_exreg.getContractNames().length, 0, "Names array is not empty");
+        assertEq(RGSTY.getContractNames().length, 0, "Names array is not empty");
     }
 
     function test_getContractNames_whenNamesAreRegistered()
@@ -549,19 +549,19 @@ contract ExternalRegistryTest is Test {
         givenContractIsRegistered(bytes5("ohm2"), addressTwo)
         givenContractIsRegistered(bytes5("ohm3"), address(0x4))
     {
-        assertEq(_exreg.getContractNames().length, 3, "Names array is not updated correctly");
+        assertEq(RGSTY.getContractNames().length, 3, "Names array is not updated correctly");
         assertEq(
-            _exreg.getContractNames()[0],
+            RGSTY.getContractNames()[0],
             bytes5("ohm"),
             "Names array at index 0 is not updated correctly"
         );
         assertEq(
-            _exreg.getContractNames()[1],
+            RGSTY.getContractNames()[1],
             bytes5("ohm2"),
             "Names array at index 1 is not updated correctly"
         );
         assertEq(
-            _exreg.getContractNames()[2],
+            RGSTY.getContractNames()[2],
             bytes5("ohm3"),
             "Names array at index 2 is not updated correctly"
         );
@@ -571,14 +571,14 @@ contract ExternalRegistryTest is Test {
     // [X] it returns the correct keycode
 
     function test_KEYCODE() public {
-        assertEq(fromKeycode(_exreg.KEYCODE()), bytes5("EXREG"));
+        assertEq(fromKeycode(RGSTY.KEYCODE()), bytes5("RGSTY"));
     }
 
     // VERSION
     // [X] it returns the correct version
 
     function test_VERSION() public {
-        (uint8 major, uint8 minor) = _exreg.VERSION();
+        (uint8 major, uint8 minor) = RGSTY.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);
     }

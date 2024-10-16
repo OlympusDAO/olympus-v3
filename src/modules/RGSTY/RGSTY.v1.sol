@@ -3,9 +3,9 @@ pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
 
-/// @title  External Registry
-/// @notice Interface for a module that can track the addresses of external contracts
-abstract contract EXREGv1 is Module {
+/// @title  Contract Registry
+/// @notice Interface for a module that can track the addresses of contracts
+abstract contract RGSTYv1 is Module {
     // =========  EVENTS ========= //
 
     /// @notice Emitted when a contract is registered or updated

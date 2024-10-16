@@ -2,25 +2,25 @@
 pragma solidity 0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
-import {EXREGv1} from "src/modules/EXREG/EXREG.v1.sol";
+import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
 
-contract MockExternalRegistryPolicy is Policy {
+contract MockContractRegistryPolicy is Policy {
     address public dai;
 
-    EXREGv1 public exreg;
+    RGSTYv1 public RGSTY;
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
-        dependencies[0] = toKeycode("EXREG");
+        dependencies[0] = toKeycode("RGSTY");
 
         // Populate module dependencies
-        exreg = EXREGv1(getModuleAddress(dependencies[0]));
+        RGSTY = RGSTYv1(getModuleAddress(dependencies[0]));
 
         // Populate variables
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
-        dai = exreg.getContract("dai");
+        dai = RGSTY.getContract("dai");
 
         return dependencies;
     }

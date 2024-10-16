@@ -21,11 +21,11 @@ The contracts in scope for this audit are:
     - [CHREG/](../../src/modules/CHREG)
       - [CHREG.v1.sol](../../src/modules/CHREG/CHREG.v1.sol)
       - [OlympusClearinghouseRegistry.sol](../../src/modules/CHREG/OlympusClearinghouseRegistry.sol)
-    - [EXREG/](../../src/modules/EXREG)
-      - [EXREG.v1.sol](../../src/modules/EXREG/EXREG.v1.sol)
-      - [OlympusExternalRegistry.sol](../../src/modules/EXREG/OlympusExternalRegistry.sol)
+    - [RGSTY/](../../src/modules/RGSTY)
+      - [RGSTY.v1.sol](../../src/modules/RGSTY/RGSTY.v1.sol)
+      - [OlympusContractRegistry.sol](../../src/modules/RGSTY/OlympusContractRegistry.sol)
   - [policies/](../../src/policies)
-    - [ExternalRegistryAdmin.sol](../../src/policies/ExternalRegistryAdmin.sol)
+    - [ContractRegistryAdmin.sol](../../src/policies/ContractRegistryAdmin.sol)
     - [LoanConsolidator.sol](../../src/policies/LoanConsolidator.sol)
 
 The following pull requests can be referred to for the in-scope contracts:
@@ -76,27 +76,27 @@ flowchart TD
   Clearinghouse -- deactivates clearinghouse --> CHREG
 
   subgraph Policies
-    ExternalRegistryAdmin
+    ContractRegistryAdmin
     LoanConsolidator
     Clearinghouse
   end
 
   subgraph Modules
     CHREG
-    EXREG
+    RGSTY
   end
 
-  external_registry_admin((external_registry_admin)) -- registers contract --> ExternalRegistryAdmin
-  ExternalRegistryAdmin -- registers contract --> EXREG
-  external_registry_admin((external_registry_admin)) -- updates contract --> ExternalRegistryAdmin
-  ExternalRegistryAdmin -- updates contract --> EXREG
-  external_registry_admin((external_registry_admin)) -- deregisters contract --> ExternalRegistryAdmin
-  ExternalRegistryAdmin -- deregisters contract --> EXREG
+  contract_registry_admin((contract_registry_admin)) -- registers contract --> ContractRegistryAdmin
+  ContractRegistryAdmin -- registers contract --> RGSTY
+  contract_registry_admin((contract_registry_admin)) -- updates contract --> ContractRegistryAdmin
+  ContractRegistryAdmin -- updates contract --> RGSTY
+  contract_registry_admin((contract_registry_admin)) -- deregisters contract --> ContractRegistryAdmin
+  ContractRegistryAdmin -- deregisters contract --> RGSTY
 
   Caller((Caller)) -- determine required approvals --> LoanConsolidator
   Caller -- consolidate loans --> LoanConsolidator
   LoanConsolidator -- validates Clearinghouse is Olympus-owned --> CHREG
-  LoanConsolidator -- obtains external contract addresses --> EXREG
+  LoanConsolidator -- obtains contract addresses --> RGSTY
   LoanConsolidator -- takes flashloan --> IERC3156FlashLender
   LoanConsolidator -- consolidates loans --> Clearinghouse
 ```
@@ -113,27 +113,27 @@ The Clearinghouse Registry is a module that requires permissioned access in orde
 
 In the current implementation, when a Clearinghouse policy is activated (via `activate()`) by a permissioned user (`cooler_overseer` role), the policy marks the Clearinghouse as active in the Clearinghouse Registry.
 
-### EXREG (Module)
+### RGSTY (Module)
 
 Features:
 
-- Tracks external addresses against an alpha-numeric name
+- Tracks contract addresses against an alpha-numeric name
 - Access a list of registered names
 - Access the current address for a given name
 - Update the address for a given name
 - Deregister a name
 
-The External Registry is a module that requires permissioned access in order to add/update/remove an address for a given name.
+The Contract Registry is a module that requires permissioned access in order to add/update/remove an address for a given name.
 
-### External Registry Admin (Policy)
+### Contract Registry Admin (Policy)
 
 Features:
 
-- Register a name for an external address
+- Register a name for a contract address
 - Update the address for a given name
 - Deregister a name
 
-The External Registry Admin is a policy that enables modification of the EXREG module. It is gated to the `external_registry_admin` role.
+The Contract Registry Admin is a policy that enables modification of the RGSTY module. It is gated to the `contract_registry_admin` role.
 
 ### Loan Consolidator (Policy)
 
@@ -143,5 +143,5 @@ Features:
 - Has a helper function to advise the owner on the approvals of gOHM/DAI/sDAI required in order to complete the consolidation.
 - The policy can optionally take a protocol fee (sent to the TRSRY) that is set to 0 by default.
 - Utilises the CHREG module to obtain the list of Clearinghouse policies.
-- Utilises the EXREG module to obtain the addresses of external contracts.
+- Utilises the RGSTY module to obtain the addresses of contracts.
 - The loan consolidation functionality can be activated/deactivated by the `loan_consolidator_admin` role.

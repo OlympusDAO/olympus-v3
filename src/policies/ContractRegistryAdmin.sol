@@ -3,16 +3,16 @@ pragma solidity 0.8.15;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
-import {EXREGv1} from "src/modules/EXREG/EXREG.v1.sol";
+import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 
-/// @title  ExternalRegistryAdmin
-/// @notice This policy is used to register and deregister contracts in the EXREG module.
+/// @title  ContractRegistryAdmin
+/// @notice This policy is used to register and deregister contracts in the RGSTY module.
 /// @dev    This contract utilises the following roles:
-///         - `external_registry_admin`: Can register and deregister contracts
+///         - `contract_registry_admin`: Can register and deregister contracts
 ///
-///         This policy provides permissioned access to the state-changing functions on the EXREG module. The view functions can be called directly on the module.
-contract ExternalRegistryAdmin is Policy, RolesConsumer {
+///         This policy provides permissioned access to the state-changing functions on the RGSTY module. The view functions can be called directly on the module.
+contract ContractRegistryAdmin is Policy, RolesConsumer {
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the address is invalid
@@ -23,12 +23,12 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
 
     // ============ STATE ============ //
 
-    /// @notice The EXREG module
+    /// @notice The RGSTY module
     /// @dev    The value is set when the policy is activated
-    EXREGv1 internal EXREG;
+    RGSTYv1 internal RGSTY;
 
-    /// @notice The role for the external registry admin
-    bytes32 public constant EXTERNAL_REGISTRY_ADMIN_ROLE = "external_registry_admin";
+    /// @notice The role for the contract registry admin
+    bytes32 public constant CONTRACT_REGISTRY_ADMIN_ROLE = "contract_registry_admin";
 
     // ============ CONSTRUCTOR ============ //
 
@@ -42,17 +42,17 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("EXREG");
+        dependencies[0] = toKeycode("RGSTY");
         dependencies[1] = toKeycode("ROLES");
 
-        EXREG = EXREGv1(getModuleAddress(dependencies[0]));
+        RGSTY = RGSTYv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
         // Verify the supported version
         bytes memory expected = abi.encode([1, 1]);
-        (uint8 EXREG_MAJOR, ) = EXREG.VERSION();
+        (uint8 RGSTY_MAJOR, ) = RGSTY.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        if (EXREG_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
+        if (RGSTY_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
 
         return dependencies;
     }
@@ -64,12 +64,12 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode exregKeycode = toKeycode("EXREG");
+        Keycode rgstyKeycode = toKeycode("RGSTY");
 
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(exregKeycode, EXREGv1.registerContract.selector);
-        permissions[1] = Permissions(exregKeycode, EXREGv1.updateContract.selector);
-        permissions[2] = Permissions(exregKeycode, EXREGv1.deregisterContract.selector);
+        permissions[0] = Permissions(rgstyKeycode, RGSTYv1.registerContract.selector);
+        permissions[1] = Permissions(rgstyKeycode, RGSTYv1.updateContract.selector);
+        permissions[2] = Permissions(rgstyKeycode, RGSTYv1.deregisterContract.selector);
 
         return permissions;
     }
@@ -89,46 +89,46 @@ contract ExternalRegistryAdmin is Policy, RolesConsumer {
 
     // ============ ADMIN FUNCTIONS ============ //
 
-    /// @notice Register a contract in the external registry
+    /// @notice Register a contract in the contract registry
     /// @dev    This function will revert if:
     ///         - This contract is not activated as a policy
     ///         - The caller does not have the required role
-    ///         - The EXREG module reverts
+    ///         - The RGSTY module reverts
     ///
     /// @param  name_ The name of the contract
     /// @param  contractAddress_ The address of the contract
     function registerContract(
         bytes5 name_,
         address contractAddress_
-    ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
-        EXREG.registerContract(name_, contractAddress_);
+    ) external onlyPolicyActive onlyRole(CONTRACT_REGISTRY_ADMIN_ROLE) {
+        RGSTY.registerContract(name_, contractAddress_);
     }
 
-    /// @notice Update a contract in the external registry
+    /// @notice Update a contract in the contract registry
     /// @dev    This function will revert if:
     ///         - This contract is not activated as a policy
     ///         - The caller does not have the required role
-    ///         - The EXREG module reverts
+    ///         - The RGSTY module reverts
     ///
     /// @param  name_ The name of the contract
     /// @param  contractAddress_ The address of the contract
     function updateContract(
         bytes5 name_,
         address contractAddress_
-    ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
-        EXREG.updateContract(name_, contractAddress_);
+    ) external onlyPolicyActive onlyRole(CONTRACT_REGISTRY_ADMIN_ROLE) {
+        RGSTY.updateContract(name_, contractAddress_);
     }
 
-    /// @notice Deregister a contract in the external registry
+    /// @notice Deregister a contract in the contract registry
     /// @dev    This function will revert if:
     ///         - This contract is not activated as a policy
     ///         - The caller does not have the required role
-    ///         - The EXREG module reverts
+    ///         - The RGSTY module reverts
     ///
     /// @param  name_ The name of the contract
     function deregisterContract(
         bytes5 name_
-    ) external onlyPolicyActive onlyRole(EXTERNAL_REGISTRY_ADMIN_ROLE) {
-        EXREG.deregisterContract(name_);
+    ) external onlyPolicyActive onlyRole(CONTRACT_REGISTRY_ADMIN_ROLE) {
+        RGSTY.deregisterContract(name_);
     }
 }

@@ -7,14 +7,14 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {EXREGv1} from "src/modules/EXREG/EXREG.v1.sol";
-import {OlympusExternalRegistry} from "src/modules/EXREG/OlympusExternalRegistry.sol";
-import {ExternalRegistryAdmin} from "src/policies/ExternalRegistryAdmin.sol";
+import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
+import {OlympusContractRegistry} from "src/modules/RGSTY/OlympusContractRegistry.sol";
+import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
 
-contract ExternalRegistryAdminTest is Test {
+contract ContractRegistryAdminTest is Test {
     Kernel public kernel;
-    OlympusExternalRegistry public EXREG;
-    ExternalRegistryAdmin public exRegAdmin;
+    OlympusContractRegistry public RGSTY;
+    ContractRegistryAdmin public rgstyAdmin;
     OlympusRoles public ROLES;
     RolesAdmin public rolesAdmin;
 
@@ -22,7 +22,7 @@ contract ExternalRegistryAdminTest is Test {
     address public notAdmin = address(0x2);
     address public ohm = address(0x3);
 
-    bytes32 public EXREG_ROLE = "external_registry_admin";
+    bytes32 public RGSTY_ROLE = "contract_registry_admin";
 
     function setUp() public {
         kernel = new Kernel();
@@ -35,27 +35,27 @@ contract ExternalRegistryAdminTest is Test {
         rolesAdmin = new RolesAdmin(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
-        // Install the EXREG module
-        EXREG = new OlympusExternalRegistry(address(kernel));
-        kernel.executeAction(Actions.InstallModule, address(EXREG));
+        // Install the RGSTY module
+        RGSTY = new OlympusContractRegistry(address(kernel));
+        kernel.executeAction(Actions.InstallModule, address(RGSTY));
 
-        // Set up the ExternalRegistryAdmin policy
-        exRegAdmin = new ExternalRegistryAdmin(address(kernel));
+        // Set up the ContractRegistryAdmin policy
+        rgstyAdmin = new ContractRegistryAdmin(address(kernel));
     }
 
     modifier givenPolicyIsActivated() {
-        kernel.executeAction(Actions.ActivatePolicy, address(exRegAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(rgstyAdmin));
         _;
     }
 
     modifier givenAdminHasRole() {
-        rolesAdmin.grantRole(EXREG_ROLE, admin);
+        rolesAdmin.grantRole(RGSTY_ROLE, admin);
         _;
     }
 
     modifier givenContractIsRegistered() {
         vm.prank(admin);
-        exRegAdmin.registerContract("ohm", ohm);
+        rgstyAdmin.registerContract("ohm", ohm);
         _;
     }
 
@@ -69,9 +69,9 @@ contract ExternalRegistryAdminTest is Test {
     // [X] it registers the contract
 
     function test_registerContract_policyNotActive_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(ExternalRegistryAdmin.OnlyPolicyActive.selector));
+        vm.expectRevert(abi.encodeWithSelector(ContractRegistryAdmin.OnlyPolicyActive.selector));
 
-        exRegAdmin.registerContract("ohm", ohm);
+        rgstyAdmin.registerContract("ohm", ohm);
     }
 
     function test_registerContract_callerDoesNotHaveRole_reverts()
@@ -79,10 +79,10 @@ contract ExternalRegistryAdminTest is Test {
         givenPolicyIsActivated
         givenAdminHasRole
     {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EXREG_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, RGSTY_ROLE));
 
         vm.prank(notAdmin);
-        exRegAdmin.registerContract("ohm", ohm);
+        rgstyAdmin.registerContract("ohm", ohm);
     }
 
     function test_registerContract()
@@ -91,7 +91,7 @@ contract ExternalRegistryAdminTest is Test {
         givenAdminHasRole
         givenContractIsRegistered
     {
-        assertEq(EXREG.getContract("ohm"), ohm, "contract address");
+        assertEq(RGSTY.getContract("ohm"), ohm, "contract address");
     }
 
     // updateContract
@@ -102,9 +102,9 @@ contract ExternalRegistryAdminTest is Test {
     // [X] it updates the contract
 
     function test_updateContract_policyNotActive_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(ExternalRegistryAdmin.OnlyPolicyActive.selector));
+        vm.expectRevert(abi.encodeWithSelector(ContractRegistryAdmin.OnlyPolicyActive.selector));
 
-        exRegAdmin.updateContract("ohm", ohm);
+        rgstyAdmin.updateContract("ohm", ohm);
     }
 
     function test_updateContract_callerDoesNotHaveRole_reverts()
@@ -112,10 +112,10 @@ contract ExternalRegistryAdminTest is Test {
         givenPolicyIsActivated
         givenAdminHasRole
     {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EXREG_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, RGSTY_ROLE));
 
         vm.prank(notAdmin);
-        exRegAdmin.updateContract("ohm", ohm);
+        rgstyAdmin.updateContract("ohm", ohm);
     }
 
     function test_updateContract()
@@ -126,10 +126,10 @@ contract ExternalRegistryAdminTest is Test {
     {
         // Update the contract
         vm.prank(admin);
-        exRegAdmin.updateContract("ohm", address(0x4));
+        rgstyAdmin.updateContract("ohm", address(0x4));
 
         // Assert values
-        assertEq(EXREG.getContract("ohm"), address(0x4), "contract address");
+        assertEq(RGSTY.getContract("ohm"), address(0x4), "contract address");
     }
 
     // deregisterContract
@@ -140,9 +140,9 @@ contract ExternalRegistryAdminTest is Test {
     // [X] it deregisters the contract
 
     function test_deregisterContract_policyNotActive_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(ExternalRegistryAdmin.OnlyPolicyActive.selector));
+        vm.expectRevert(abi.encodeWithSelector(ContractRegistryAdmin.OnlyPolicyActive.selector));
 
-        exRegAdmin.deregisterContract("ohm");
+        rgstyAdmin.deregisterContract("ohm");
     }
 
     function test_deregisterContract_callerDoesNotHaveRole_reverts()
@@ -151,10 +151,10 @@ contract ExternalRegistryAdminTest is Test {
         givenAdminHasRole
         givenContractIsRegistered
     {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EXREG_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, RGSTY_ROLE));
 
         vm.prank(notAdmin);
-        exRegAdmin.deregisterContract("ohm");
+        rgstyAdmin.deregisterContract("ohm");
     }
 
     function test_deregisterContract()
@@ -165,10 +165,10 @@ contract ExternalRegistryAdminTest is Test {
     {
         // Deregister the contract
         vm.prank(admin);
-        exRegAdmin.deregisterContract("ohm");
+        rgstyAdmin.deregisterContract("ohm");
 
         // Assert values
-        vm.expectRevert(EXREGv1.Params_ContractNotRegistered.selector);
-        EXREG.getContract("ohm");
+        vm.expectRevert(RGSTYv1.Params_ContractNotRegistered.selector);
+        RGSTY.getContract("ohm");
     }
 }
