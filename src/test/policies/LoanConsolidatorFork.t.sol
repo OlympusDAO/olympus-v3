@@ -61,7 +61,8 @@ contract LoanConsolidatorForkTest is Test {
     bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
 
     function setUp() public {
-        // Mainnet Fork at current block.
+        // Mainnet Fork at a fixed block
+        // Prior to actual deployment of LoanConsolidator and RGSTY
         vm.createSelectFork(RPC_URL, 18762666);
 
         // Required Contracts
