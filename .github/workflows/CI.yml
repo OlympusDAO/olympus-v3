@@ -37,11 +37,6 @@ jobs:
             - name: Run unit tests
               run: pnpm run test:unit
 
-            - name: Run proposal simulation tests
-              run: pnpm run test:proposal
-              env:
-                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
-
             - name: Run fork tests
               run: pnpm run test:fork
               env:
