@@ -14,9 +14,9 @@
     },
     "scripts": {
         "build": "chmod +x shell/* && ./shell/full_install.sh",
-        "prettier": "prettier --write 'src/**/*.sol'",
-        "prettier:list": "prettier --list-different 'src/**/*.sol'",
-        "prettier:check": "prettier --check 'src/**/*.sol'",
+        "prettier": "prettier --write 'src/**/*.sol' '**/*.html' '**/*.md'",
+        "prettier:list": "prettier --list-different 'src/**/*.sol' '**/*.html' '**/*.md'",
+        "prettier:check": "prettier --check 'src/**/*.sol' '**/*.html' '**/*.md'",
         "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
         "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
         "lint": "pnpm run prettier && pnpm run solhint",
@@ -27,7 +27,7 @@
         "test:proposal": "forge test --match-contract OCGProposal --fork-url $FORK_TEST_RPC_URL -vvv",
         "test:crosschainfork": "forge test --match-contract CrossChainBridgeFork -vvv",
         "test:coverage": "./shell/test_coverage.sh",
-        "size": "forge build --sizes",
+        "size": "forge clean && forge build --sizes --skip test --skip '*/*Mock*.sol' --skip 'UniswapDeployer.sol'",
         "metrics": "node shell/metrics.js"
     },
     "devDependencies": {
