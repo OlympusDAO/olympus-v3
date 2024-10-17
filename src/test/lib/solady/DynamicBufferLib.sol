@@ -43,11 +43,7 @@ library DynamicBufferLib {
                 // and another extra word as a safety word (giving a total of 0x40 bytes).
                 // Without the safety word, the data at the next free memory word can be overwritten,
                 // because the backwards copying can exceed the buffer space used for storage.
-                for {
-
-                } iszero(lt(newBufferDataLength, capacity)) {
-
-                } {
+                for {} iszero(lt(newBufferDataLength, capacity)) {} {
                     // Approximately double the memory with a heuristic,
                     // ensuring more than enough space for the combined data,
                     // rounding up to the next multiple of 32.
@@ -67,9 +63,7 @@ library DynamicBufferLib {
                         // Copy `bufferData` one word at a time, backwards.
                         for {
                             let o := and(add(bufferDataLength, 32), w)
-                        } 1 {
-
-                        } {
+                        } 1 {} {
                             mstore(add(newBufferData, o), mload(add(bufferData, o)))
                             o := add(o, w) // `sub(o, 0x20)`.
                             if iszero(o) {
@@ -93,9 +87,7 @@ library DynamicBufferLib {
                 // Copy `data` one word at a time, backwards.
                 for {
                     let o := and(add(mload(data), 32), w)
-                } 1 {
-
-                } {
+                } 1 {} {
                     mstore(add(output, o), mload(add(data, o)))
                     o := add(o, w) // `sub(o, 0x20)`.
                     if iszero(o) {

@@ -1066,6 +1066,7 @@ contract GovernorBravoDelegateTest is Test {
     }
 
     // [X]   queue
+    //   [X] when proposal is not emergency
     //      [X] reverts if proposal is canceled
     //      [X] reverts if voting has not finished for proposal (proposal pending or active)
     //      [X] reverts if proposal has been defeated (quorum not met)
@@ -1077,6 +1078,8 @@ contract GovernorBravoDelegateTest is Test {
     //      [X] reverts if an action is already queued on the timelock
     //      [X] queues if an action is not already queued on the timelock
     //      [X] updates proposal object eta (this also updates proposal state to queued)
+    //      [X] when supply drops below emergency threshold
+    //        [X] reverts if sender is not veto guardian
 
     function _createTestProposal(uint256 actions_) internal returns (uint256) {
         // Create action set
@@ -1379,6 +1382,48 @@ contract GovernorBravoDelegateTest is Test {
         );
     }
 
+    function testCorrectness_queue_supplyDrops_onlyVetoGuardian(address rando) public {
+        vm.assume(rando != vetoGuardian);
+
+        uint256 proposalId = _createTestProposal(1);
+
+        // Warp forward so voting period has started
+        vm.roll(block.number + 21601);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("activate(uint256)", proposalId)
+        );
+
+        // Set zero address's voting power
+        gohm.checkpointVotes(address(0));
+
+        // Vote for proposal
+        vm.prank(address(0));
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("castVote(uint256,uint8)", proposalId, 1)
+        );
+
+        // Warp forward so voting period is complete (quorum met and majority) and warp forward so that the timelock grace period has expired
+        vm.roll(block.number + 50401);
+
+        // Burn all gOHM
+        gohm.burn(address(0), gohm.balanceOf(address(0)));
+        gohm.burn(alice, gohm.balanceOf(alice));
+
+        // Try to queue proposal as non vetoGuardian, expect revert
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_OnlyVetoGuardian()");
+        vm.expectRevert(err);
+        vm.prank(rando);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+
+        // Queue the proposal as vetoGuardian
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+    }
+
     function testCorrectness_queue() public {
         uint256 proposalId = _createTestProposal(1);
 
@@ -1461,8 +1506,13 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(eta_, eta);
     }
 
-    // [X]   queue (in emergency state)
-    //      [X] reverts if not called by veto guardian
+    // [X]   queue
+    //   [X] when proposal is emergency
+    //      [X] reverts if sender is not veto guardian
+    //      [X] reverts if proposal is vetoed
+    //      [X] reverts if proposal is already executed
+    //      [X] when supply increases back above threshold
+    //         [X] it's still treated as an emergency proposal
     //      [X] queues transactions
 
     function _createEmergencyProposal(uint256 supply_) internal returns (uint256) {
@@ -1548,7 +1598,84 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(queuedOnTimelock, true);
     }
 
+    function testCorrectness_emergencyQueue_supplyIncreases(
+        uint256 supply_,
+        address rando_
+    ) public {
+        vm.assume(supply_ < 1_000e18);
+        vm.assume(rando_ != vetoGuardian);
+
+        uint256 proposalId = _createEmergencyProposal(supply_);
+
+        // Mint more gOHM to bring supply back above threshold
+        gohm.mint(rando_, 1_000e18);
+
+        // Try to queue proposal as non vetoGuardian, expect revert
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_OnlyVetoGuardian()");
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+
+        // Queue the proposal as vetoGuardian
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+    }
+
+    function testCorrectness_emergencyQueue_revertsIfVetoed(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(supply_);
+
+        // Veto proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("veto(uint256)", proposalId)
+        );
+
+        // Try to queue proposal as vetoGuardian, expect revert
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_NotEmergency()");
+        vm.expectRevert(err);
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+    }
+
+    function testCorrectness_emergencyQueue_revertsIfExecuted(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(supply_);
+
+        // Queue the proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+
+        // Warp forward through timelock delay
+        vm.warp(block.timestamp + 1 days + 1);
+
+        // Execute proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+
+        // Try to queue proposal again, expect revert
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_NotEmergency()");
+        vm.expectRevert(err);
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+    }
+
     // [X]   execute
+    //   [X] when proposal is not emergency
     //      [X] reverts if proposal is not queued
     //      [X] reverts if proposal has been already executed
     //      [X] reverts if proposal has been canceled
@@ -1558,6 +1685,8 @@ contract GovernorBravoDelegateTest is Test {
     //      [X] executes transactions (case 1) (Kernel action)
     //      [X] executes transactions (case 2) (Policy action)
     //      [X] executes transactions (case 3) (Multiple actions)
+    //      [X] when supply drops below emergency threshold
+    //         [X] reverts if sender is not veto guardian
 
     function _queueProposal(uint256 actions_) internal returns (uint256) {
         uint256 proposalId = _createTestProposal(actions_);
@@ -1924,8 +2053,39 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(hasRole, true);
     }
 
-    // [X]    execute (in emergency state)
+    function testCorrectness_execute_supplyDrops_onlyVetoGuardian(address rando_) public {
+        uint256 proposalId = _queueProposal(1);
+
+        // Burn all gOHM
+        gohm.burn(address(0), gohm.balanceOf(address(0)));
+        gohm.burn(alice, gohm.balanceOf(alice));
+
+        // Warp forward past timelock delay
+        vm.warp(block.timestamp + 1 days + 1);
+
+        // mint rando address enough gOHM to propose
+        gohm.mint(rando_, 11e18);
+
+        // Try to execute proposal as non vetoGuardian, expect revert
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_OnlyVetoGuardian()");
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+
+        // Execute the proposal as vetoGuardian
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+    }
+
+    // [X]    execute
+    //   [X] when proposal is emergency
     //      [X] reverts if not called by veto guardian
+    //      [X] reverts if vetoed
+    //      [X] reverts if already executed
     //      [X] executes transactions
 
     function testCorrectness_emergencyExecuteRevertsIfNotCalledByVetoGuardian(
@@ -1943,6 +2103,62 @@ contract GovernorBravoDelegateTest is Test {
         // Try to execute proposal
         bytes memory err = abi.encodeWithSignature("GovernorBravo_OnlyVetoGuardian()");
         vm.expectRevert(err);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+    }
+
+    function testCorrectness_emergencyExecute_revertsIfVetoed(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(supply_);
+
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+
+        // Warp forward through timelock delay
+        vm.warp(block.timestamp + 1 days + 1);
+
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("veto(uint256)", proposalId)
+        );
+
+        // Try to execute proposal
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_NotEmergency()");
+        vm.expectRevert(err);
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+    }
+
+    function testCorrectness_emergencyExecute_revertsIfAlreadyExecuted(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(supply_);
+
+        // Queue the proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+
+        // Warp forward through timelock delay
+        vm.warp(block.timestamp + 1 days + 1);
+
+        // Execute the proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+
+        // Try to execute proposal again, expect revert
+        bytes memory err = abi.encodeWithSignature("GovernorBravo_NotEmergency()");
+        vm.expectRevert(err);
+        vm.prank(vetoGuardian);
         address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("execute(uint256)", proposalId)
         );
@@ -3241,7 +3457,11 @@ contract GovernorBravoDelegateTest is Test {
     //      [X] returns queued if proposal has been queued
     //      [X] returns expired if proposal has expired
     //      [X] returns executed if proposal has been executed
-    //      [] returns vetoed if proposal has been vetoed
+    //      [X] returns vetoed if proposal has been vetoed
+    //      [X] when proposal is emergency proposal
+    //        [X] returns vetoed if the proposal has been vetoed
+    //        [X] returns executed if the proposal has been executed
+    //        [X] returns emergency if the proposal has not been vetoed or executed
 
     function testCorrectness_stateRevertsIfProposalIdInvalid(uint256 proposalId_) public {
         vm.assume(proposalId_ > 0);
@@ -3428,6 +3648,65 @@ contract GovernorBravoDelegateTest is Test {
         );
         uint8 state = abi.decode(data, (uint8));
         assertEq(state, 8);
+    }
+
+    function testCorrectness_state_emergencyVetoed_returnsVetoed(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(1);
+
+        // Veto proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("veto(uint256)", proposalId)
+        );
+
+        bytes memory data = address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("state(uint256)", proposalId)
+        );
+
+        uint8 state = abi.decode(data, (uint8));
+        assertEq(state, 8);
+    }
+
+    function testCorrectness_state_emergencyExecuted_returnsExecuted(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(1);
+
+        // Queue the proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("queue(uint256)", proposalId)
+        );
+
+        // Warp through timelock delay
+        vm.warp(block.timestamp + 1 days + 1);
+
+        // Execute proposal
+        vm.prank(vetoGuardian);
+        address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("execute(uint256)", proposalId)
+        );
+
+        bytes memory data = address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("state(uint256)", proposalId)
+        );
+        uint8 state = abi.decode(data, (uint8));
+        assertEq(state, 7);
+    }
+
+    function testCorrectness_state_emergency_returnsEmergency(uint256 supply_) public {
+        vm.assume(supply_ < 1_000e18);
+
+        uint256 proposalId = _createEmergencyProposal(1);
+
+        // Verify state is emergency
+        bytes memory data = address(governorBravoDelegator).functionCall(
+            abi.encodeWithSignature("state(uint256)", proposalId)
+        );
+        uint8 state = abi.decode(data, (uint8));
+        assertEq(state, 9);
     }
 
     function testCorrectness_implementationUpgrade() public {
