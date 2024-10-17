@@ -35,6 +35,9 @@ jobs:
             - name: Install Foundry dependencies
               run: forge install
 
+            - name: Build
+              run: forge build --ast
+
             - name: Run lint check
               run: pnpm run lint:check
 
