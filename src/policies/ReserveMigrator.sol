@@ -36,6 +36,8 @@ contract ReserveMigrator is Policy, RolesConsumer {
     // Migration contract
     IDaiUsds public migrator;
 
+    bool public locallyActive;
+
     // ========== SETUP ========== //
 
     constructor(
@@ -55,6 +57,8 @@ contract ReserveMigrator is Policy, RolesConsumer {
         to = ERC20(to_);
         sTo = ERC4626(sTo_);
         migrator = IDaiUsds(migrator_);
+
+        locallyActive = true;
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -90,52 +94,77 @@ contract ReserveMigrator is Policy, RolesConsumer {
     // ========== MIGRATE RESERVES ========== //
 
     // TODO determine if we need a threshold value that the reserves must exceed before migrating
-    function migrate() external {
+    /// @notice migrate reserves and wrapped reserves in the treasury to the new reserve token
+    /// @dev this function is restricted to the heart role to avoid complications with opportunistic conversions
+    function migrate() external onlyRole("heart") {
+        // Do nothing if the policy is not active
+        if (!locallyActive) return;
+
         // Get the from and sFrom balances from the TRSRY
         // Note: we want actual token balances, not "reserveBalances" that include debt.
         uint256 fromBalance = from.balanceOf(address(TRSRY));
         uint256 sFromBalance = sFrom.balanceOf(address(TRSRY));
 
         // Withdraw the reserves from the TRSRY
-        uint256 total;
         if (fromBalance > 0) {
             // Increase withdrawal approval and withdraw the reserves from the TRSRY
             TRSRY.increaseWithdrawApproval(address(this), from, fromBalance);
             TRSRY.withdrawReserves(address(this), from, fromBalance);
-            total += fromBalance;
         }
 
         if (sFromBalance > 0) {
             // Increase withdrawal approval and withdraw the wrapped reserves from the TRSRY
             TRSRY.increaseWithdrawApproval(address(this), sFrom, sFromBalance);
             TRSRY.withdrawReserves(address(this), sFrom, sFromBalance);
-
-            // Unwrap the reserves
-            uint256 received = sFrom.redeem(sFromBalance, address(this), address(this));
-            total += received;
         }
 
+        // Update the sFrom balance to include any existing tokens in this contract
+        // as well as the ones withdrawn from the TRSRY
+        sFromBalance = sFrom.balanceOf(address(this));
+        if (sFromBalance > 0) {
+            sFrom.redeem(sFromBalance, address(this), address(this));
+        }
+
+        // Update the from balance based on any existing tokens, withdrawals, or redemptions
+        fromBalance = from.balanceOf(address(this));
+
         // If the total is greater than 0, migrate the reserves
-        if (total > 0) {
+        if (fromBalance > 0) {
             // Approve the migrator for the total amount of from reserves
-            from.approve(address(migrator), total);
+            from.approve(address(migrator), fromBalance);
 
             // Cache the balance of the to token
             uint256 toBalance = to.balanceOf(address(this));
 
             // Migrate the reserves
-            migrator.daiToUsds(address(this), total);
+            migrator.daiToUsds(address(this), fromBalance);
 
             uint256 newToBalance = to.balanceOf(address(this));
 
-            // Confirm that the to balance has increased by at least the total amount
-            if (newToBalance < toBalance + total) revert ReserveMigrator_BadMigration();
+            // Confirm that the to balance has increased by at least the previous from balance
+            if (newToBalance < toBalance + fromBalance) revert ReserveMigrator_BadMigration();
 
             // Wrap the to reserves and deposit them into the TRSRY
+            to.approve(address(sTo), newToBalance);
             sTo.deposit(newToBalance, address(TRSRY));
 
             // Emit event
-            emit MigratedReserves(address(from), address(to), total);
+            emit MigratedReserves(address(from), address(to), fromBalance);
         }
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    function activate() external onlyRole("reserve_migrator_admin") {
+        locallyActive = true;
+    }
+
+    function deactivate() external onlyRole("reserve_migrator_admin") {
+        locallyActive = false;
+    }
+
+    function rescue(address token_) external onlyRole("reserve_migrator_admin") {
+        ERC20 token = ERC20(token_);
+        token.transfer(address(TRSRY), token.balanceOf(address(this)));
     }
 }
