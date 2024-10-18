@@ -14,9 +14,9 @@
     },
     "scripts": {
         "build": "chmod +x shell/* && ./shell/full_install.sh",
-        "prettier": "prettier --write 'src/**/*.sol' '**/*.html'",
-        "prettier:list": "prettier --list-different 'src/**/*.sol' '**/*.html'",
-        "prettier:check": "prettier --check 'src/**/*.sol' '**/*.html'",
+        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html'",
+        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html'",
+        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html'",
         "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
         "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
         "markdownlint": "markdownlint --fix '**/*.md'",
