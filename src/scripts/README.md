@@ -15,10 +15,10 @@
 6. After a successful deployment, update `src/scripts/env.json` with the new contract addresses.
 7. Finally, use [olymsig](https://github.com/OlympusDAO/olymsig) (or [olymsig-testnet](https://github.com/OlympusDAO/olymsig-testnet) if testing the deployment) to plug the newly deployed contracts into `olympus-v3`.
 
-# DeployV2 Instructions for CrossChain
+## DeployV2 Instructions for CrossChain
 
--   Need to deploy OHM token separately.
--   `env.json` is a dependency file.
--   Within `env.json`, make new top-level structure for arbitrum.
--   Change `deploy.json` to list only contracts to deploy.
--   Make a separate `deploy.json` for mainnet for bridge and one with kernel, minter, and bridge for L2s.
+- Need to deploy OHM token separately.
+- `env.json` is a dependency file.
+- Within `env.json`, make new top-level structure for arbitrum.
+- Change `deploy.json` to list only contracts to deploy.
+- Make a separate `deploy.json` for mainnet for bridge and one with kernel, minter, and bridge for L2s.
