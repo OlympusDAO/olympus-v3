@@ -104,10 +104,9 @@ contract LoanConsolidatorForkTest is Test {
 
         // Register the tokens with RGSTY
         vm.startPrank(address(this));
-        rgstyAdmin.registerContract("dai", address(dai));
-        rgstyAdmin.registerContract("sdai", address(sdai));
-        rgstyAdmin.registerContract("ohm", address(ohm));
-        rgstyAdmin.registerContract("gohm", address(gohm));
+        rgstyAdmin.registerImmutableContract("dai", address(dai));
+        rgstyAdmin.registerImmutableContract("sdai", address(sdai));
+        rgstyAdmin.registerImmutableContract("gohm", address(gohm));
         rgstyAdmin.registerContract("flash", address(lender));
         vm.stopPrank();
 
