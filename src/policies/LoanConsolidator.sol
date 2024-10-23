@@ -16,6 +16,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
+import {IDaiUsdsMigrator} from "src/interfaces/maker-dao/IDaiUsdsMigrator.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
@@ -119,10 +120,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @dev    The value is set when the policy is activated
     IERC20 internal GOHM;
 
-    /// TODO interface
     /// @notice The DAI <> USDS Migrator
     /// @dev    The value is set when the policy is activated
-    Migrator public daiMigrator;
+    IDaiUsdsMigrator internal daiMigrator;
 
     /// @notice The ERC3156 flash loan provider
     /// @dev    The value is set when the policy is activated
