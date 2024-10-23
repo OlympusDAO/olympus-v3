@@ -21,17 +21,19 @@ The following establishes a coding standard for the Olympus v3/Bophades repo.
 - NatSpec comments use `///`
     - `/// @notice Natspec comment`
 - Contract and function groups or other major sections in SOURCE files should be denoted with
-```
+    - This is to denote sections when scrolling through large files
+
+```solidity
     //============================================================================================//
     //                                           HEADER                                           //
     //============================================================================================//
 ```
-    - This is to denote sections when scrolling through large files
-- All other sections should be denoted with single line header: 
-```// ========= HEADER ========= // ```
 
+- All other sections should be denoted with single line header:
+    `// ========= HEADER ========= //`
 
 ## Principles (NOT HARD RULES)
+
 - Aim for clear and succinct code
 - Explicit over implicit
 - Write code PRIMARILY for humans, not machines

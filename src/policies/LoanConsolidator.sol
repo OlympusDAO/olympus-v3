@@ -195,9 +195,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
         // Populate variables
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
-        DAI = IERC20(RGSTY.getContract("dai"));
-        SDAI = IERC4626(RGSTY.getContract("sdai"));
-        GOHM = IERC20(RGSTY.getContract("gohm"));
+        DAI = IERC20(RGSTY.getImmutableContract("dai"));
+        SDAI = IERC4626(RGSTY.getImmutableContract("sdai"));
+        GOHM = IERC20(RGSTY.getImmutableContract("gohm"));
         FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
 
         return dependencies;

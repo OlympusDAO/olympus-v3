@@ -104,10 +104,9 @@ contract LoanConsolidatorForkTest is Test {
 
         // Register the tokens with RGSTY
         vm.startPrank(address(this));
-        rgstyAdmin.registerContract("dai", address(dai));
-        rgstyAdmin.registerContract("sdai", address(sdai));
-        rgstyAdmin.registerContract("ohm", address(ohm));
-        rgstyAdmin.registerContract("gohm", address(gohm));
+        rgstyAdmin.registerImmutableContract("dai", address(dai));
+        rgstyAdmin.registerImmutableContract("sdai", address(sdai));
+        rgstyAdmin.registerImmutableContract("gohm", address(gohm));
         rgstyAdmin.registerContract("flash", address(lender));
         vm.stopPrank();
 
@@ -121,26 +120,10 @@ contract LoanConsolidatorForkTest is Test {
         // Fund wallets with gOHM
         deal(address(gohm), walletA, _GOHM_AMOUNT);
 
-        // Ensure Clearinghouse has enough DAI
+        // Ensure the Clearinghouse has enough DAI
         deal(address(dai), address(clearinghouse), 18_000_000 * 1e18);
 
-        vm.startPrank(walletA);
-        // Deploy a cooler for walletA
-        address coolerA_ = coolerFactory.generateCooler(gohm, dai);
-        coolerA = Cooler(coolerA_);
-
-        // Approve clearinghouse to spend gOHM
-        gohm.approve(address(clearinghouse), _GOHM_AMOUNT);
-        // Loan 0 for coolerA (collateral: 2,000 gOHM)
-        (uint256 loan, ) = clearinghouse.getLoanForCollateral(2_000 * 1e18);
-        clearinghouse.lendToCooler(coolerA, loan);
-        // Loan 1 for coolerA (collateral: 1,000 gOHM)
-        (loan, ) = clearinghouse.getLoanForCollateral(1_000 * 1e18);
-        clearinghouse.lendToCooler(coolerA, loan);
-        // Loan 2 for coolerA (collateral: 333 gOHM)
-        (loan, ) = clearinghouse.getLoanForCollateral(333 * 1e18);
-        clearinghouse.lendToCooler(coolerA, loan);
-        vm.stopPrank();
+        _createCoolers(clearinghouse, coolerFactory, walletA);
     }
 
     // ===== MODIFIERS ===== //
@@ -204,15 +187,19 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(ids_, 0, false);
     }
 
-    function _consolidate(uint256[] memory ids_, uint256 useFunds_, bool sDai_) internal {
+    function _consolidate(
+        address clearinghouse_,
+        address cooler_,
+        uint256[] memory ids_,
+        uint256 useFunds_,
+        bool sDai_
+    ) internal {
         vm.prank(walletA);
-        utils.consolidateWithFlashLoan(
-            address(clearinghouse),
-            address(coolerA),
-            ids_,
-            useFunds_,
-            sDai_
-        );
+        utils.consolidateWithFlashLoan(clearinghouse_, cooler_, ids_, useFunds_, sDai_);
+    }
+
+    function _consolidate(uint256[] memory ids_, uint256 useFunds_, bool sDai_) internal {
+        _consolidate(address(clearinghouse), address(coolerA), ids_, useFunds_, sDai_);
     }
 
     function _getInterestDue(
@@ -249,6 +236,31 @@ contract LoanConsolidatorForkTest is Test {
         vm.prank(emergency);
         utils.deactivate();
         _;
+    }
+
+    function _createCoolers(
+        Clearinghouse clearinghouse_,
+        CoolerFactory coolerFactory_,
+        address wallet_
+    ) internal {
+        // Create coolers
+        vm.startPrank(wallet_);
+        // Deploy a cooler for wallet_
+        address coolerA_ = coolerFactory_.generateCooler(gohm, dai);
+        coolerA = Cooler(coolerA_);
+
+        // Approve clearinghouse to spend gOHM
+        gohm.approve(address(clearinghouse_), _GOHM_AMOUNT);
+        // Loan 0 for coolerA (collateral: 2,000 gOHM)
+        (uint256 loan, ) = clearinghouse_.getLoanForCollateral(2_000 * 1e18);
+        clearinghouse_.lendToCooler(coolerA, loan);
+        // Loan 1 for coolerA (collateral: 1,000 gOHM)
+        (loan, ) = clearinghouse_.getLoanForCollateral(1_000 * 1e18);
+        clearinghouse_.lendToCooler(coolerA, loan);
+        // Loan 2 for coolerA (collateral: 333 gOHM)
+        (loan, ) = clearinghouse_.getLoanForCollateral(333 * 1e18);
+        clearinghouse_.lendToCooler(coolerA, loan);
+        vm.stopPrank();
     }
 
     // ===== ASSERTIONS ===== //
@@ -370,6 +382,8 @@ contract LoanConsolidatorForkTest is Test {
     //   [X] it transfers the specified amount of DAI into the contract, and reduces the flashloan amount by the balance
     // when the protocol fee is zero
     //  [X] it succeeds, but does not transfer additional DAI for the fee
+    // when the Clearinghouse is disabled
+    //  [X] it reverts
     // [X] it takes a flashloan for the total debt amount + LoanConsolidator fee, and consolidates the loans into one
 
     // --- consolidateWithFlashLoan --------------------------------------------
@@ -1003,6 +1017,33 @@ contract LoanConsolidatorForkTest is Test {
             _GOHM_AMOUNT
         );
         _assertApprovals();
+    }
+
+    function test_consolidate_noProtocolFee_disabledClearinghouse_reverts()
+        public
+        givenPolicyActive
+        givenEmergencyHasRole
+    {
+        // Disable the Clearinghouse
+        vm.prank(emergency);
+        clearinghouse.emergencyShutdown();
+
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(clearinghouse),
+            address(coolerA),
+            idsA
+        );
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Expect revert
+        vm.expectRevert("SavingsDai/insufficient-balance");
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(address(clearinghouse), address(coolerA), idsA, 0, false);
     }
 
     // setFeePercentage
