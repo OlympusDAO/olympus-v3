@@ -168,7 +168,10 @@ contract EmissionManager is Policy, RolesConsumer {
         (, , uint256 sell) = getNextSale();
 
         // And then opens a market if applicable
-        if (sell != 0) _createMarket(sell);
+        if (sell != 0) {
+            MINTR.increaseMintApproval(address(this), sell);
+            _createMarket(sell);
+        }
     }
 
     // ========== INITIALIZE ========== //
@@ -221,7 +224,6 @@ contract EmissionManager is Policy, RolesConsumer {
         wrappedReserve.deposit(reserveBalance, address(TRSRY));
 
         // Mint the output amount of OHM to the Teller
-        MINTR.increaseMintApproval(address(this), outputAmount_);
         MINTR.mintOhm(teller, outputAmount_);
     }
 
