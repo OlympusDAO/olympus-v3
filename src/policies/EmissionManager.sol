@@ -89,6 +89,8 @@ contract EmissionManager is Policy, RolesConsumer {
     uint48 public shutdownTimestamp;
     uint48 public restartTimeframe;
 
+    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
+
     // ========== SETUP ========== //
 
     constructor(
@@ -240,7 +242,8 @@ contract EmissionManager is Policy, RolesConsumer {
         // Price decimals are returned from the perspective of the quote token
         // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
         // is the priceDecimal value
-        uint256 minPrice = (minimumPremium * backing) / 10 ** _reserveDecimals;
+        uint256 minPrice = ((ONE_HUNDRED_PERCENT + minimumPremium) * backing) /
+            10 ** _reserveDecimals;
         int8 priceDecimals = _getPriceDecimals(minPrice);
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
@@ -287,7 +290,7 @@ contract EmissionManager is Policy, RolesConsumer {
 
         uint256 percentIncreaseReserves = (reservesAdded * 10 ** _reserveDecimals) /
             previousReserves;
-        uint256 percentIncreaseSupply = (supplyAdded * 10 ** _reserveDecimals) / previousSupply; // scaled to 1e18 to match
+        uint256 percentIncreaseSupply = (supplyAdded * 10 ** _reserveDecimals) / previousSupply; // scaled to reserve decimals to match
 
         backing =
             (backing * percentIncreaseReserves) / // price multiplied by percent increase reserves in reserve scale
@@ -400,7 +403,8 @@ contract EmissionManager is Policy, RolesConsumer {
 
     function getPremium() public view returns (uint256) {
         uint256 price = PRICE.getLastPrice();
-        return (price * 10 ** _reserveDecimals) / backing;
+        uint256 pbr = (price * 10 ** _reserveDecimals) / backing;
+        return pbr > ONE_HUNDRED_PERCENT ? pbr - ONE_HUNDRED_PERCENT : 0;
     }
 
     function getNextSale()
@@ -408,13 +412,14 @@ contract EmissionManager is Policy, RolesConsumer {
         view
         returns (uint256 premium, uint256 emissionRate, uint256 emission)
     {
-        // To calculate the sale, it first computes premium (market price / backing price)
-        uint256 price = PRICE.getLastPrice();
-        premium = (price * 10 ** _reserveDecimals) / backing;
+        // To calculate the sale, it first computes premium (market price / backing price) - 100%
+        premium = getPremium();
 
         // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
         if (premium >= minimumPremium) {
-            emissionRate = (baseEmissionRate * premium) / minimumPremium; // in OHM scale
+            emissionRate =
+                (baseEmissionRate * (ONE_HUNDRED_PERCENT + premium)) /
+                (ONE_HUNDRED_PERCENT + minimumPremium); // in OHM scale
             emission = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
         }
     }

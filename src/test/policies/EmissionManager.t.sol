@@ -64,7 +64,7 @@ contract EmissionManagerTest is Test {
 
     // Emission manager values
     uint256 internal baseEmissionsRate = 1e6; // 0.1% at minimum premium
-    uint256 internal minimumPremium = 125e16; // 125% -> 25% premium
+    uint256 internal minimumPremium = 25e16; // 25% premium
     uint256 internal backing = 10e18;
     uint48 internal restartTimeframe = 1 days;
 
@@ -481,7 +481,7 @@ contract EmissionManagerTest is Test {
             assertEq(
                 capacity,
                 (((baseEmissionsRate * PRICE.getLastPrice()) /
-                    ((backing * minimumPremium) / 1e18)) *
+                    ((backing * (1e18 + minimumPremium)) / 1e18)) *
                     gohm.totalSupply() *
                     gohm.index()) / 1e18,
                 "Capacity"
@@ -496,7 +496,8 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
-                (((backing * minimumPremium) / 1e18) * 10 ** uint8(36 - 1)) / 10 ** uint8(18 - 1),
+                (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
+                    10 ** uint8(18 - 1),
                 "Min price"
             );
 
@@ -509,6 +510,7 @@ contract EmissionManagerTest is Test {
             assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
         }
     }
+
     /*
     function test_execute_whenBeatCounterIs0_withPreviousSale_reducesSupplyAdded() public {
         // Get the ID of the next bond market from the aggregator
@@ -572,9 +574,6 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
         emissionManager.execute();
         vm.stopPrank();
-
-        // Set the price above the minumum premium
-        PRICE.setLastPrice(120 * 1e18);
 
         // Get initial treasury sDAI balance
         uint256 initialTreasurySdaiBalance = wrappedReserve.balanceOf(address(TRSRY));
