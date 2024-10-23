@@ -51,8 +51,9 @@ contract EmissionManager is Policy, RolesConsumer {
     }
 
     // ========== STATE VARIABLES ========== //
-    uint256 public saleCounter;
-    Sale[] public sales;
+
+    uint256 public lastSupplyAdded;
+    uint256 public lastReservesAdded;
 
     BaseRateChange public rateChange;
 
@@ -169,29 +170,30 @@ contract EmissionManager is Policy, RolesConsumer {
         uint256 currentBalanceDAI = dai.balanceOf(address(this));
         uint256 currentBalanceOHM = ohm.balanceOf(address(this));
 
-        // If there are previous sales, we need to do some book keeping
-        uint256 numSales = sales.length;
-        if (numSales > 0) {
-            Sale storage previousSale = sales[numSales - 1];
-
+        // If previous day had a sale, do bookkeeping
+        if (lastSupplyAdded != 0) {
             // Book keeping is needed if there are unspent tokens to account for
-            if (currentBalanceOHM > 0) previousSale.supplyAdded -= currentBalanceOHM;
+            if (currentBalanceOHM > 0) lastSupplyAdded -= currentBalanceOHM;
 
             // And/or new reserves, for which it:
             if (currentBalanceDAI > 0) {
                 // Logs the inflow and sweeps them to the treasury as sDAI
-                previousSale.reservesAdded += currentBalanceDAI;
+                lastReservesAdded += currentBalanceDAI;
                 sdai.deposit(currentBalanceDAI, address(TRSRY));
 
-                // And updates backing price in the BACKING module
-                _updateBacking(previousSale.supplyAdded, previousSale.reservesAdded);
+                // And updates backing price
+                _updateBacking(lastSupplyAdded, lastReservesAdded);
             }
         }
 
         // It then calculates the amount to sell for the coming day
-        uint256 sell = _calculateSale();
+        (, , uint256 sell) = getNextSale();
 
-        // It brings its ohm holdings into balance with the amount to sell
+        // Resets bookkeeping variables for new day
+        lastSupplyAdded = sell;
+        lastReservesAdded = 0;
+
+        // Brings its ohm holdings into balance with the amount to sell
         if (sell > currentBalanceOHM) {
             uint256 amountToMint = sell - currentBalanceOHM;
             MINTR.increaseMintApproval(address(this), amountToMint);
@@ -230,30 +232,6 @@ contract EmissionManager is Policy, RolesConsumer {
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
-
-    /// @notice calculate sale amount as a function of premium, minimum premium, and base emission rate
-    /// @return emission amount, in OHM
-    function _calculateSale() internal returns (uint256) {
-        // To calculate the sale, it first computes premium (market price / backing price)
-        uint256 price = PRICE.getLastPrice();
-        uint256 premium = (price * 10 ** _reserveDecimals) / backing;
-
-        uint256 emissionRate;
-        uint256 supplyToAdd;
-
-        // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
-        if (premium >= minimumPremium) {
-            emissionRate = (baseEmissionRate * premium) / minimumPremium; // in OHM scale
-            supplyToAdd = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
-
-            // It then logs this information for future use
-            sales.push(Sale(premium, emissionRate, supplyToAdd, 0));
-            saleCounter++;
-        }
-
-        // Before returning the number of tokens to sell
-        return supplyToAdd;
-    }
 
     /// @notice create bond protocol market with given budget
     /// @param saleAmount amount of DAI to fund bond market with
@@ -425,15 +403,19 @@ contract EmissionManager is Policy, RolesConsumer {
         return (price * 10 ** _reserveDecimals) / backing;
     }
 
-    function nextSale() public view returns (uint256 emissionRate, uint256 supplyToAdd) {
+    function getNextSale()
+        public
+        view
+        returns (uint256 premium, uint256 emissionRate, uint256 emission)
+    {
         // To calculate the sale, it first computes premium (market price / backing price)
         uint256 price = PRICE.getLastPrice();
-        uint256 premium = (price * 10 ** _reserveDecimals) / backing;
+        premium = (price * 10 ** _reserveDecimals) / backing;
 
         // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
         if (premium >= minimumPremium) {
             emissionRate = (baseEmissionRate * premium) / minimumPremium; // in OHM scale
-            supplyToAdd = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
+            emission = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
         }
     }
 }
