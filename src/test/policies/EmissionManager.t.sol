@@ -79,17 +79,31 @@ contract EmissionManagerTest is Test {
     //     [X] when beatCounter is incremented and != 0
     //        [X] it returns without doing anything
     //     [ ] when beatCounter is incremented and == 0
-    //        [ ] when premium is greater than or equal to the minimum premium
-    //           [ ] sell amount is calculated as the base emissions rate * (1 + premium) / (1 + minimum premium)
-    //           [ ] it creates a new bond market with the sell amount
-    //        [ ] when premium is less than the minimum premium
-    //           [ ] it does not create a new bond market
+    //        [X] when premium is greater than or equal to the minimum premium
+    //           [X] sell amount is calculated as the base emissions rate * (1 + premium) / (1 + minimum premium)
+    //           [X] it creates a new bond market with the sell amount
+    //        [X] when premium is less than the minimum premium
+    //           [X] it does not create a new bond market
     //        [ ] when there is a postitive emissions adjustment
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
     //        [ ] when there is a negative emissions adjustment
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
     //
-    // [ ] callback
+    // [X] callback unit tests
+    //    [X] when the sender is not the teller
+    //       [X] it reverts
+    //    [X] when the sender is the teller
+    //       [X] when the id parameter is not equal to the active market id
+    //          [X] it reverts
+    //       [X] when the id parameter is equal to the active market id
+    //          [X] when the reserve balance of the contract is not atleast the input amount
+    //             [X] it reverts
+    //          [X] when the reserve balance of the contract is atleast the input amount
+    //             [X] it updates the backing number, using the input amount as new reserves and the output amount as new supply
+    //             [X] it mints the output amount of OHM to the teller
+    //             [X] it deposits the reserve balance into the wrappedReserve contract with the TRSRY as the recipient
+    //
+    // [ ] bond market purchase tests
     //
     // view functions
     // [ ] getSupply
@@ -592,5 +606,125 @@ contract EmissionManagerTest is Test {
                 "Mint approval should be the capacity"
             );
         }
+    }
+
+    // callback test cases
+
+    function test_callback_whenSenderNotTeller_reverts() public {
+        // Call the callback function with the wrong sender
+        bytes memory err = abi.encodeWithSignature("OnlyTeller()");
+        vm.prank(alice);
+        vm.expectRevert(err);
+        emissionManager.callback(0, 0, 0);
+    }
+
+    function test_callback_whenIdNotActiveMarket_reverts(uint256 id_) public {
+        // Active market ID is originally 0
+        assertEq(emissionManager.activeMarketId(), 0, "Active market ID should be 0");
+
+        vm.assume(id_ != 0);
+
+        // Call the callback function with the wrong ID
+        bytes memory err = abi.encodeWithSignature("InvalidMarket()");
+        vm.expectRevert(err);
+        vm.prank(address(teller));
+        emissionManager.callback(id_, 0, 0);
+    }
+
+    function test_callback_whenActiveMarketIdNotZero_whenIdNotActiveMarket_reverts(
+        uint256 id_
+    ) public {
+        // Trigger two sales so that the active market ID is 1
+        triggerFullCycle();
+        triggerFullCycle();
+
+        // Active market ID is 1
+        assertEq(emissionManager.activeMarketId(), 1, "Active market ID should be 0");
+
+        vm.assume(id_ != 1);
+
+        // Call the callback function with the wrong ID
+        bytes memory err = abi.encodeWithSignature("InvalidMarket()");
+        vm.expectRevert(err);
+        vm.prank(address(teller));
+        emissionManager.callback(id_, 0, 0);
+    }
+
+    function test_callback_whenReserveBalanceLessThanInput_reverts(
+        uint128 balance_,
+        uint128 input_
+    ) public {
+        // Active market ID is originally 0
+        assertEq(emissionManager.activeMarketId(), 0, "Active market ID should be 0");
+
+        // Assume that the balance is less than the input amount
+        // We cap these values to 2^128 - 1 to avoid overflow for practical purposes and to avoid random overflows with minting
+        vm.assume(balance_ < input_);
+        uint256 balance = uint256(balance_);
+        uint256 input = uint256(input_);
+
+        // Mint the balance to the emissions manager
+        reserve.mint(address(emissionManager), balance);
+
+        // Call the callback function with the wrong ID
+        bytes memory err = abi.encodeWithSignature("InvalidCallback()");
+        vm.expectRevert(err);
+        vm.prank(address(teller));
+        emissionManager.callback(0, input, 0);
+    }
+
+    function test_callback_success(uint128 input_, uint128 output_) public {
+        // Active market ID is originally 0
+        assertEq(emissionManager.activeMarketId(), 0, "Active market ID should be 0");
+
+        // We cap these values to 2^128 - 1 to avoid overflow for practical purposes and to avoid random overflows with minting
+        uint256 input = uint256(input_);
+        uint256 output = uint256(output_);
+
+        vm.assume(input != 0 && output != 0);
+
+        // Give the emissions manager mint approval for the output
+        // We will test that it functions within its mint limit granted in `execute` later
+        // This is strictly for the unit testing of the callback function
+        vm.prank(address(emissionManager));
+        MINTR.increaseMintApproval(address(emissionManager), output);
+
+        // Mint the input amount to the emissions manager
+        reserve.mint(address(emissionManager), input);
+
+        // Cache the initial OHM balance of the teller and the wrappedReserve balance of the TRSRY
+        uint256 tellerBalance = ohm.balanceOf(address(teller));
+        uint256 treasuryBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        // Cache the current backing value in the emissions manager
+        uint256 _backing = emissionManager.backing();
+
+        // Cache the reserves and supply values for the backing update calculation
+        uint256 reserves = emissionManager.getReserves();
+        uint256 supply = emissionManager.getSupply();
+
+        uint256 expectedBacking = (_backing * ((input * 1e18) / reserves)) /
+            ((output * 1e18) / supply);
+
+        // Call the callback function
+        vm.prank(address(teller));
+        emissionManager.callback(0, input, output);
+
+        // Check that the backing has been updated
+        assertEq(emissionManager.backing(), expectedBacking, "Backing should be updated");
+
+        // Check that the output amount of OHM has been minted to the teller
+        assertEq(
+            ohm.balanceOf(address(teller)),
+            tellerBalance + output,
+            "Teller OHM balance should be updated"
+        );
+
+        // Check that the input amount of reserves have been wrapped and deposited into the treasury
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            treasuryBalance + input, // can use the reserve amount as the wrappedReserve amount since the conversion rate is 1:1
+            "TRSRY wrapped reserve balance should be updated"
+        );
     }
 }
