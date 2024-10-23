@@ -122,7 +122,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice The DAI <> USDS Migrator
     /// @dev    The value is set when the policy is activated
-    IDaiUsdsMigrator internal daiMigrator;
+    IDaiUsdsMigrator internal MIGRATOR;
 
     /// @notice The ERC3156 flash loan provider
     /// @dev    The value is set when the policy is activated
@@ -195,10 +195,13 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
         // Populate variables
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
+        // Token contract addresses are immutable
         DAI = IERC20(RGSTY.getImmutableContract("dai"));
         SDAI = IERC4626(RGSTY.getImmutableContract("sdai"));
         GOHM = IERC20(RGSTY.getImmutableContract("gohm"));
+        // Utility contract addresses are mutable
         FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
+        MIGRATOR = IDaiUsdsMigrator(RGSTY.getContract("dmgtr"));
 
         return dependencies;
     }
@@ -335,8 +338,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Ensure repayment token is in proper form
         // Migrated loan requires DAI, unmigrated loan requires USDS
         if (!migrating) {
-            DAI.approve(address(daiMigrator), principal);
-            daiMigrator.daiToUsds(principal);
+            DAI.approve(address(MIGRATOR), principal);
+            MIGRATOR.daiToUsds(principal);
         }
 
         // Iterate over all batches, repay the debt and collect the collateral
@@ -365,8 +368,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         USDS.transferFrom(coolerOld.owner(), address(this), amount_ + lenderFee_);
 
         // USDS proceeds must be converted to DAI for flashloan repayment
-        USDS.approve(address(daiMigrator), amount_ + lenderFee_);
-        daiMigrator.usdsToDai(amount_ + lenderFee_);
+        USDS.approve(address(MIGRATOR), amount_ + lenderFee_);
+        MIGRATOR.usdsToDai(amount_ + lenderFee_);
 
         // Approve the flash loan provider to collect the flashloan amount and fee
         DAI.approve(address(FLASH), amount_ + lenderFee_);
