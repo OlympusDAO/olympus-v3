@@ -264,20 +264,28 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
             revert Params_InvalidClearinghouse();
 
         // Validate that the previous cooler was created by the CoolerFactory for the Clearinghouse
-        if (!_isValidCooler(clearinghouseFrom_, coolerFrom_) || !_isValidCooler(clearinghouseTo_, coolerTo_)) revert Params_InvalidCooler();
+        if (
+            !_isValidCooler(clearinghouseFrom_, coolerFrom_) ||
+            !_isValidCooler(clearinghouseTo_, coolerTo_)
+        ) revert Params_InvalidCooler();
 
         // Ensure at least two loans are being consolidated
         if (ids_.length < 2) revert Params_InsufficientCoolerCount();
 
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
-        if (Cooler(coolerFrom_).owner() != msg.sender || Cooler(coolerTo_).owner() != msg.sender) revert OnlyCoolerOwner();
+        if (Cooler(coolerFrom_).owner() != msg.sender || Cooler(coolerTo_).owner() != msg.sender)
+            revert OnlyCoolerOwner();
 
         // Get the migration type and reserve tokens
         MigrationType migrationType;
         IERC20 reserveFrom;
         IERC20 reserveTo;
         {
-            (MigrationType migrationType_, address reserveFrom_, address reserveTo_) = _getMigrationType(clearinghouseFrom_, clearinghouseTo_);
+            (
+                MigrationType migrationType_,
+                address reserveFrom_,
+                address reserveTo_
+            ) = _getMigrationType(clearinghouseFrom_, clearinghouseTo_);
             migrationType = migrationType_;
             reserveFrom = IERC20(reserveFrom_);
             reserveTo = IERC20(reserveTo_);
@@ -551,7 +559,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     function _getClearinghouseReserveToken(address clearinghouse_) internal view returns (address) {
         // Clearinghouse v1, v1.1 has a `dai()` function
         // Perform a low-level call to check if it exists
-        (bool success, bytes memory data) = address(clearinghouse_).staticcall(abi.encodeWithSignature("dai()"));
+        (bool success, bytes memory data) = address(clearinghouse_).staticcall(
+            abi.encodeWithSignature("dai()")
+        );
         if (success) {
             return abi.decode(data, (address));
         }
@@ -574,7 +584,10 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @return migrationType       Migration type
     /// @return reserveFrom         Reserve token for the existing loans
     /// @return reserveTo           Reserve token for the consolidated loan
-    function _getMigrationType(address clearinghouseFrom_, address clearinghouseTo_) internal view returns (MigrationType migrationType, address reserveFrom, address reserveTo) {
+    function _getMigrationType(
+        address clearinghouseFrom_,
+        address clearinghouseTo_
+    ) internal view returns (MigrationType migrationType, address reserveFrom, address reserveTo) {
         // Determine the reserve token for each Clearinghouse
         reserveFrom = _getClearinghouseReserveToken(clearinghouseFrom_);
         reserveTo = _getClearinghouseReserveToken(clearinghouseTo_);
