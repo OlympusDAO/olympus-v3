@@ -76,6 +76,7 @@ contract EmissionManager is Policy, RolesConsumer {
     // Manager variables
     uint256 public baseEmissionRate;
     uint256 public minimumPremium;
+    uint48 public vestingPeriod; // initialized at 0
     uint256 public backing;
     uint8 public beatCounter;
     bool public locallyActive;
@@ -288,7 +289,7 @@ contract EmissionManager is Policy, RolesConsumer {
                     formattedInitialPrice: PRICE.getLastPrice().mulDiv(bondScale, oracleScale),
                     formattedMinimumPrice: minPrice.mulDiv(bondScale, oracleScale),
                     debtBuffer: 100_000, // 100%
-                    vesting: uint48(0), // Instant swaps
+                    vesting: vestingPeriod,
                     conclusion: uint48(block.timestamp + 1 days), // 1 day from now
                     depositInterval: uint32(4 hours), // 4 hours
                     scaleAdjustment: scaleAdjustment
@@ -368,6 +369,12 @@ contract EmissionManager is Policy, RolesConsumer {
         minimumPremium = newMinimumPremium_;
     }
 
+    /// @notice set the new vesting period in seconds
+    /// @param newVestingPeriod_ uint48
+    function setVestingPeriod(uint48 newVestingPeriod_) external onlyRole("emissions_admin") {
+        vestingPeriod = newVestingPeriod_;
+    }
+
     /// @notice allow governance to adjust backing price if deviated from reality
     /// @dev note if adjustment is more than 33% down, contract should be redeployed
     /// @param newBacking to adjust to
@@ -411,5 +418,22 @@ contract EmissionManager is Policy, RolesConsumer {
     /// @notice return supply, measured as supply of gOHM in OHM denomination
     function getSupply() public view returns (uint256 supply) {
         return (gohm.totalSupply() * gohm.index()) / 10 ** _ohmDecimals;
+    }
+
+    function getPremium() public view returns (uint256) {
+        uint256 price = PRICE.getLastPrice();
+        return (price * 10 ** _reserveDecimals) / backing;
+    }
+
+    function nextSale() public view returns (uint256 emissionRate, uint256 supplyToAdd) {
+        // To calculate the sale, it first computes premium (market price / backing price)
+        uint256 price = PRICE.getLastPrice();
+        uint256 premium = (price * 10 ** _reserveDecimals) / backing;
+
+        // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
+        if (premium >= minimumPremium) {
+            emissionRate = (baseEmissionRate * premium) / minimumPremium; // in OHM scale
+            supplyToAdd = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
+        }
     }
 }
