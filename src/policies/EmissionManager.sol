@@ -34,6 +34,7 @@ contract EmissionManager is Policy, RolesConsumer {
     // ========== EVENTS ========== //
 
     event SaleCreated(uint256 marketID, uint256 saleAmount);
+    event BackingUpdated(uint256 newBacking, uint256 supplyAdded, uint256 reservesAdded);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -295,6 +296,9 @@ contract EmissionManager is Policy, RolesConsumer {
         backing =
             (backing * percentIncreaseReserves) / // price multiplied by percent increase reserves in reserve scale
             percentIncreaseSupply; // divided by percent increase supply in reserve scale
+
+        // Emit event to track backing changes and results of sales offchain
+        emit BackingUpdated(backing, supplyAdded, reservesAdded);
     }
 
     /// @notice         Helper function to calculate number of price decimals based on the value returned from the price feed.
