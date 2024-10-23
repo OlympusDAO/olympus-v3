@@ -82,12 +82,23 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Data structure used for flashloan parameters
     struct FlashLoanData {
-        address clearinghouse;
-        address coolerOld;
-        address coolerNew;
+        address clearinghouseFrom;
+        address clearinghouseTo;
+        address coolerFrom;
+        address coolerTo;
         uint256[] ids;
         uint256 principal;
         uint256 protocolFee;
+        MigrationType migrationType;
+        IERC20 reserveFrom;
+        IERC20 reserveTo;
+    }
+
+    enum MigrationType {
+        DAI_DAI,
+        USDS_USDS,
+        DAI_USDS,
+        USDS_DAI
     }
 
     // ========= STATE ========= //
@@ -232,48 +243,57 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///
     ///         For flexibility purposes, the user can either pay with DAI or sDAI.
     ///
-    /// @param  clearinghouse_ Olympus Clearinghouse to be used to issue the consolidated loan.
-    /// @param  coolerOld_     Cooler from which the loans will be consolidated.
-    /// @param  coolerNew_     Cooler to which the loans will be consolidated
+    /// @param  clearinghouseFrom_ Olympus Clearinghouse that issued the existing loans.
+    /// @param  clearinghouseTo_ Olympus Clearinghouse to be used to issue the consolidated loan.
+    /// @param  coolerFrom_     Cooler from which the loans will be consolidated.
+    /// @param  coolerTo_     Cooler to which the loans will be consolidated
     /// @param  ids_           Array containing the ids of the loans to be consolidated.
     /// @param  useFunds_      Amount of DAI/sDAI available to repay the fee.
     /// @param  sdai_          Whether the available funds are in sDAI or DAI.
     function consolidateWithFlashLoan(
-        address clearinghouse_,
-        address coolerOld_,
-        address coolerNew_,
+        address clearinghouseFrom_,
+        address clearinghouseTo_,
+        address coolerFrom_,
+        address coolerTo_,
         uint256[] calldata ids_,
         uint256 useFunds_,
         bool sdai_
     ) public onlyPolicyActive onlyConsolidatorActive nonReentrant {
-        // Check if consolidation is migrating from DAI to USDS clearinghouse
-        bool migrating = (coolerOld_ != coolerNew_);
-        IERC20 repaymentToken = migrating ? DAI : USDS;
+        // Validate that the Clearinghouses are registered with the Bophades kernel
+        if (!_isValidClearinghouse(clearinghouseFrom_) || !_isValidClearinghouse(clearinghouseTo_))
+            revert Params_InvalidClearinghouse();
 
-        // Validate that the Clearinghouse is registered with the Bophades kernel
-        if (!_isValidClearinghouse(clearinghouse_)) revert Params_InvalidClearinghouse();
-
-        // Validate that the old cooler was created by the CoolerFactory for the Clearinghouse
-        if (!_isValidCooler(clearinghouse_, coolerOld_)) revert Params_InvalidCooler();
-
-        // If migrating, validate that the new cooler was created by the CoolerFactory for the Clearinghouse
-        if (migrating) if (!_isValidCooler(clearinghouse_, coolerNew_)) revert Params_InvalidCooler();
+        // Validate that the previous cooler was created by the CoolerFactory for the Clearinghouse
+        if (!_isValidCooler(clearinghouseFrom_, coolerFrom_) || !_isValidCooler(clearinghouseTo_, coolerTo_)) revert Params_InvalidCooler();
 
         // Ensure at least two loans are being consolidated
         if (ids_.length < 2) revert Params_InsufficientCoolerCount();
 
+        // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
+        if (Cooler(coolerFrom_).owner() != msg.sender || Cooler(coolerTo_).owner() != msg.sender) revert OnlyCoolerOwner();
+
+        // Get the migration type and reserve tokens
+        MigrationType migrationType;
+        IERC20 reserveFrom;
+        IERC20 reserveTo;
+        {
+            (MigrationType migrationType_, address reserveFrom_, address reserveTo_) = _getMigrationType(clearinghouseFrom_, clearinghouseTo_);
+            migrationType = migrationType_;
+            reserveFrom = IERC20(reserveFrom_);
+            reserveTo = IERC20(reserveTo_);
+        }
+
         // Cache batch debt and principal
-        (uint256 totalDebt, uint256 totalPrincipal) = _getDebtForLoans(coolerOld_, ids_);
+        (uint256 totalDebt, uint256 totalPrincipal) = _getDebtForLoans(coolerFrom_, ids_);
 
         // Grant approval to the Cooler to spend the debt
-        repaymentToken.approve(coolerOld_, totalDebt);
-
-        // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
-        if (Cooler(coolerOld_).owner() != msg.sender || Cooler(coolerNew_).owner() != msg.sender) revert OnlyCoolerOwner();
+        reserveFrom.approve(coolerFrom_, totalDebt);
 
         // Transfer in necessary funds to repay the fee
         // This can also reduce the flashloan fee
+        // This will be in DAI or sDAI
         if (useFunds_ != 0) {
+            // TODO disable sDAI for payment? Complexity
             if (sdai_) {
                 SDAI.redeem(useFunds_, address(this), msg.sender);
             } else {
@@ -282,23 +302,28 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         }
 
         // Calculate the required flashloan amount based on available funds and protocol fee.
-        uint256 repaymentBalance = repaymentToken.balanceOf(address(this));
+        uint256 repaymentBalance = reserveFrom.balanceOf(address(this));
         // Prevent an underflow
         if (repaymentBalance > totalDebt) {
             revert Params_UseFundsOutOfBounds();
         }
 
         uint256 protocolFee = getProtocolFee(totalDebt - repaymentBalance);
+        // The flashloan amount is in DAI. This assumes a 1:1 exchange rate.
         uint256 flashloan = totalDebt - repaymentBalance + protocolFee;
 
         bytes memory params = abi.encode(
             FlashLoanData({
-                clearinghouse: clearinghouse_,
-                coolerOld: coolerOld_,
-                coolerNew: coolerNew_,
+                clearinghouseFrom: clearinghouseFrom_,
+                clearinghouseTo: clearinghouseTo_,
+                coolerFrom: coolerFrom_,
+                coolerTo: coolerTo_,
                 ids: ids_,
                 principal: totalPrincipal,
-                protocolFee: protocolFee
+                protocolFee: protocolFee,
+                migrationType: migrationType,
+                reserveFrom: reserveFrom,
+                reserveTo: reserveTo
             })
         );
 
@@ -311,6 +336,10 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         if (daiBalanceAfter > 0) {
             DAI.transfer(msg.sender, daiBalanceAfter);
         }
+        uint256 usdsBalanceAfter = USDS.balanceOf(address(this));
+        if (usdsBalanceAfter > 0) {
+            USDS.transfer(msg.sender, usdsBalanceAfter);
+        }
     }
 
     /// @inheritdoc IERC3156FlashBorrower
@@ -319,62 +348,70 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///             - The initiator is not this contract
     function onFlashLoan(
         address initiator_,
-        address,
+        address, // flashloan token is only DAI
         uint256 amount_,
         uint256 lenderFee_,
         bytes calldata params_
     ) external override returns (bytes32) {
         FlashLoanData memory flashLoanData = abi.decode(params_, (FlashLoanData));
-        Clearinghouse clearinghouse = Clearinghouse(flashLoanData.clearinghouse);
-        Cooler coolerOld = Cooler(flashLoanData.coolerOld);
-        Cooler coolerNew = Cooler(flashLoanData.coolerNew);
+        Clearinghouse clearinghouseFrom = Clearinghouse(flashLoanData.clearinghouseFrom);
+        Clearinghouse clearinghouseTo = Clearinghouse(flashLoanData.clearinghouseTo);
+        Cooler coolerFrom = Cooler(flashLoanData.coolerFrom);
+        Cooler coolerTo = Cooler(flashLoanData.coolerTo);
         uint256 principal = flashLoanData.principal;
-        bool migrating = (address(coolerOld) != address(coolerNew));
+        MigrationType migrationType = flashLoanData.migrationType;
+        IERC20 reserveTo = flashLoanData.reserveTo;
 
         // perform sanity checks
         if (msg.sender != address(FLASH)) revert OnlyLender();
         if (initiator_ != address(this)) revert OnlyThis();
 
-        // Ensure repayment token is in proper form
-        // Migrated loan requires DAI, unmigrated loan requires USDS
-        if (!migrating) {
+        // Assumptions:
+        // - The flashloan provider has transferred amount_ in DAI
+        // - If the caller specified `useFunds_`, then that amount of DAI is present in this contract
+
+        // If clearinghouseFrom is in USDS, then we need to convert the DAI to USDS in order to repay the debt
+        if (migrationType == MigrationType.USDS_DAI || migrationType == MigrationType.USDS_USDS) {
             DAI.approve(address(MIGRATOR), principal);
             MIGRATOR.daiToUsds(address(this), principal);
         }
 
         // Iterate over all batches, repay the debt and collect the collateral
-        _repayDebtForLoans(address(coolerOld), flashLoanData.ids);
+        _repayDebtForLoans(address(coolerFrom), flashLoanData.ids);
 
         // Calculate the amount of collateral that will be needed for the consolidated loan
-        uint256 consolidatedLoanCollateral = clearinghouse.getCollateralForLoan(principal);
+        uint256 consolidatedLoanCollateral = clearinghouseFrom.getCollateralForLoan(principal);
 
         // If the collateral required is greater than the collateral that was returned, then transfer gOHM from the cooler owner
         // This can happen as the collateral required for the consolidated loan can be greater than the sum of the collateral of the loans being consolidated
         if (consolidatedLoanCollateral > GOHM.balanceOf(address(this))) {
             GOHM.transferFrom(
-                coolerOld.owner(),
+                coolerFrom.owner(),
                 address(this),
                 consolidatedLoanCollateral - GOHM.balanceOf(address(this))
             );
         }
 
         // Take a new Cooler loan for the principal required
-        GOHM.approve(address(clearinghouse), consolidatedLoanCollateral);
-        clearinghouse.lendToCooler(coolerNew, principal);
+        GOHM.approve(address(clearinghouseTo), consolidatedLoanCollateral);
+        clearinghouseTo.lendToCooler(coolerTo, principal);
 
-        // The cooler owner will receive USDS for the consolidated loan
+        // The cooler owner will receive `reserveTo` for the consolidated loan
         // Transfer this amount, plus the fee, to this contract
         // Approval must have already been granted by the Cooler owner
-        USDS.transferFrom(coolerOld.owner(), address(this), amount_ + lenderFee_);
+        reserveTo.transferFrom(coolerFrom.owner(), address(this), amount_ + lenderFee_);
 
-        // USDS proceeds must be converted to DAI for flashloan repayment
-        USDS.approve(address(MIGRATOR), amount_ + lenderFee_);
-        MIGRATOR.usdsToDai(address(this), amount_ + lenderFee_);
+        // The flashloan needs to be repaid in DAI
+        // Convert the proceeds to DAI if necessary
+        if (migrationType == MigrationType.DAI_USDS || migrationType == MigrationType.USDS_USDS) {
+            USDS.approve(address(MIGRATOR), amount_ + lenderFee_);
+            MIGRATOR.usdsToDai(address(this), amount_ + lenderFee_);
+        }
 
         // Approve the flash loan provider to collect the flashloan amount and fee
         DAI.approve(address(FLASH), amount_ + lenderFee_);
 
-        // Pay protocol fee
+        // Pay protocol fee, which would be left over from the flashloan and in DAI
         if (flashLoanData.protocolFee != 0) DAI.transfer(address(TRSRY), flashLoanData.protocolFee);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
@@ -506,6 +543,66 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         return coolerFactory.created(cooler_);
     }
 
+    /// @notice Get the reserve token for a given Clearinghouse
+    /// @dev    This function will revert if the reserve token cannot be determined
+    ///
+    /// @param  clearinghouse_  Clearinghouse contract
+    /// @return address         Reserve token
+    function _getClearinghouseReserveToken(address clearinghouse_) internal view returns (address) {
+        // Clearinghouse v1, v1.1 has a `dai()` function
+        // Perform a low-level call to check if it exists
+        (bool success, bytes memory data) = address(clearinghouse_).staticcall(abi.encodeWithSignature("dai()"));
+        if (success) {
+            return abi.decode(data, (address));
+        }
+
+        // Clearinghouse v2 has a `reserve()` function
+        // Perform a low-level call to check if it exists
+        (success, data) = address(clearinghouse_).staticcall(abi.encodeWithSignature("reserve()"));
+        if (success) {
+            return abi.decode(data, (address));
+        }
+
+        revert Params_InvalidClearinghouse();
+    }
+
+    /// @notice Get the migration type for a given pair of Clearinghouses
+    /// @dev    This function will revert if the migration type cannot be determined
+    ///
+    /// @param  clearinghouseFrom_  Clearinghouse that issued the existing loans
+    /// @param  clearinghouseTo_    Clearinghouse to be used to issue the consolidated loan
+    /// @return migrationType       Migration type
+    /// @return reserveFrom         Reserve token for the existing loans
+    /// @return reserveTo           Reserve token for the consolidated loan
+    function _getMigrationType(address clearinghouseFrom_, address clearinghouseTo_) internal view returns (MigrationType migrationType, address reserveFrom, address reserveTo) {
+        // Determine the reserve token for each Clearinghouse
+        reserveFrom = _getClearinghouseReserveToken(clearinghouseFrom_);
+        reserveTo = _getClearinghouseReserveToken(clearinghouseTo_);
+
+        // DAI, no migration
+        if (reserveFrom == address(DAI) && reserveFrom == reserveTo) {
+            return (MigrationType.DAI_DAI, reserveFrom, reserveTo);
+        }
+
+        // USDS, no migration
+        if (reserveFrom == address(USDS) && reserveFrom == reserveTo) {
+            return (MigrationType.USDS_USDS, reserveFrom, reserveTo);
+        }
+
+        // DAI -> USDS migration
+        if (reserveFrom == address(DAI) && reserveTo == address(USDS)) {
+            return (MigrationType.DAI_USDS, reserveFrom, reserveTo);
+        }
+
+        // USDS -> DAI migration
+        if (reserveFrom == address(USDS) && reserveTo == address(DAI)) {
+            return (MigrationType.USDS_DAI, reserveFrom, reserveTo);
+        }
+
+        // Otherwise it is unsupported
+        revert Params_InvalidClearinghouse();
+    }
+
     // ========= AUX FUNCTIONS ========= //
 
     /// @notice View function to compute the protocol fee for a given total debt.
@@ -532,6 +629,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256[] calldata ids_
     ) external view onlyPolicyActive returns (address, uint256, uint256, uint256, uint256) {
         if (ids_.length < 2) revert Params_InsufficientCoolerCount();
+
+        // TODO add USDS/DAI logic, support for multiple clearinghouses
 
         uint256 totalPrincipal;
         uint256 totalDebtWithInterest;
