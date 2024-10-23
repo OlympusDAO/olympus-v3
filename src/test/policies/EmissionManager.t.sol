@@ -79,19 +79,6 @@ contract EmissionManagerTest is Test {
     //     [X] when beatCounter is incremented and != 0
     //        [X] it returns without doing anything
     //     [ ] when beatCounter is incremented and == 0
-    //        [ ] when the num of previous sales is greater than zero
-    //            [ ] when current OHM balance is not zero
-    //               [ ] it reduces supply added from the last sale
-    //            [ ] when current DAI balance is not zero
-    //               [ ] it increments the reserves added from the last sale
-    //               [ ] it deposits the DAI into sDAI and sends it to the treasury
-    //               [ ] it updates the backing price value based on the reserves added and supply added values from the last sale
-    //        [ ] when sell amount is greater than current OHM balance
-    //           [ ] it mints the difference between the sell amount and the current OHM balance to the contract
-    //        [ ] when sell amount is less than current OHM balance
-    //           [ ] it burns the difference between the current OHM balance and the sell amount from the contract
-    //        [ ] when the current balance equals the sell amount
-    //           [ ] it does not mint or burn OHM
     //        [ ] when premium is greater than or equal to the minimum premium
     //           [ ] sell amount is calculated as the base emissions rate * (1 + premium) / (1 + minimum premium)
     //           [ ] it creates a new bond market with the sell amount
@@ -101,6 +88,8 @@ contract EmissionManagerTest is Test {
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
     //        [ ] when there is a negative emissions adjustment
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
+    //
+    // [ ] callback
     //
     // view functions
     // [ ] getSupply
@@ -240,12 +229,20 @@ contract EmissionManagerTest is Test {
         vm.prank(guardian);
         emissionManager.initialize(baseEmissionsRate, minimumPremium, backing, restartTimeframe);
 
+        // Approve the emission manager to use a bond callback on the auctioneer
+        vm.prank(guardian);
+        auctioneer.setCallbackAuthStatus(address(emissionManager), true);
+
         // Total Reserves = $50M + $50 M = $100M
         // Total Supply = 10,000,000 OHM
         // => Backing = $100M / 10,000,000 OHM = $10 / OHM
         // Price is set at $15 / OHM, so a 50% premium, which is above the 25% minimum premium
 
-        // Emissions Rate is initially set to
+        // Emissions Rate is initially set to 0.1% of supply per day at the minimum premium
+        // This means the capacity of the initial bond market if premium == minimum premium
+        // is 0.1% * 10,000,000 OHM = 10,000 OHM
+        // For the case where the premium is 50%, then the capacity is:
+        // 10,000 OHM * (1 + 0.5) / (1 + 0.25) = 12,000 OHM
     }
 
     // internal helper functions
@@ -383,7 +380,7 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
     }
 
-    function test_execute_whenNextBeatIsZero_whenPremiumBelowMinimum_noAdjustment_noBalances_noSales()
+    function test_execute_whenNextBeatIsZero_whenPremiumBelowMinimum_whenNoAdjustment()
         public
         givenNextBeatIsZero
         givenPremiumBelowMinimum
@@ -413,48 +410,7 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
     }
 
-    function test_execute_whenNextBeatIsZero_whenPremiumBelowMinimum_noAdjustment_ohmBalance_noSales()
-        public
-        givenNextBeatIsZero
-        givenPremiumBelowMinimum
-    {
-        // Get the ID of the next bond market from the aggregator
-        uint256 nextBondMarketId = aggregator.marketCounter();
-
-        // Mint a small amount of OHM to the emissions manager
-        ohm.mint(address(emissionManager), 100e9);
-        uint256 ohmSupply = ohm.balanceOf(address(emissionManager));
-
-        // Confirm the initial balances
-        assertEq(ohm.balanceOf(address(emissionManager)), 100e9, "OHM balance should be 100e9");
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-
-        // Check that the beat counter is 2
-        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
-
-        // Call execute
-        vm.prank(heart);
-        emissionManager.execute();
-
-        // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
-
-        // Confirm that the token balances are now zero.
-        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-
-        // Confirm that the ohm was burned
-        assertEq(
-            ohm.totalSupply(),
-            ohmSupply - 100e9,
-            "OHM total supply should be reduced by 100e9"
-        );
-
-        // Confirm that the beat counter is now 0
-        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
-    }
-
-    function test_execute_whenNextBeatIsZero_givenPremiumEqualMinimum_noAdjustment_noBalances()
+    function test_execute_whenNextBeatIsZero_whenPremiumEqualMinimum_whenNoAdjustment()
         public
         givenNextBeatIsZero
         givenPremiumEqualToMinimum
@@ -466,6 +422,9 @@ contract EmissionManagerTest is Test {
         assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
         assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
 
+        // Confirm that mint approval is originally zero
+        assertEq(MINTR.mintApproval(address(emissionManager)), 0, "Mint approval should be 0");
+
         // Check that the beat counter is 2
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
 
@@ -501,7 +460,11 @@ contract EmissionManagerTest is Test {
             assertEq(owner, address(emissionManager), "Owner");
             assertEq(address(payoutToken), address(ohm), "Payout token");
             assertEq(address(quoteToken), address(reserve), "Quote token");
-            assertEq(callbackAddr, address(0), "Callback address");
+            assertEq(
+                callbackAddr,
+                address(emissionManager),
+                "Callback address should be the emissions manager"
+            );
             assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
             assertEq(
                 capacity,
@@ -526,17 +489,20 @@ contract EmissionManagerTest is Test {
                 "Min price"
             );
 
-            // Confirm token balances are updated correctly
-            assertEq(
-                ohm.balanceOf(address(emissionManager)),
-                capacity,
-                "OHM balance should be the capacity"
-            );
+            // Confirm token balances are still zero since the callback will minting and receiving tokens
+            assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
             assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+            // Confirm that the emissions manager has mint approval for the capacity
+            assertEq(
+                MINTR.mintApproval(address(emissionManager)),
+                capacity,
+                "Mint approval should be the capacity"
+            );
         }
     }
 
-    function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_noAdjustment_noBalances()
+    function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_whenNoAdjustment()
         public
         givenNextBeatIsZero
         givenPremiumAboveMinimum
@@ -548,6 +514,9 @@ contract EmissionManagerTest is Test {
         assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
         assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
 
+        // Confirm that mint approval is originally zero
+        assertEq(MINTR.mintApproval(address(emissionManager)), 0, "Mint approval should be 0");
+
         // Check that the beat counter is 2
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
 
@@ -583,7 +552,11 @@ contract EmissionManagerTest is Test {
             assertEq(owner, address(emissionManager), "Owner");
             assertEq(address(payoutToken), address(ohm), "Payout token");
             assertEq(address(quoteToken), address(reserve), "Quote token");
-            assertEq(callbackAddr, address(0), "Callback address");
+            assertEq(
+                callbackAddr,
+                address(emissionManager),
+                "Callback address should be the emissions manager"
+            );
             assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
             assertEq(
                 capacity,
@@ -608,110 +581,16 @@ contract EmissionManagerTest is Test {
                 "Min price"
             );
 
-            // Confirm token balances are updated correctly
-            assertEq(
-                ohm.balanceOf(address(emissionManager)),
-                capacity,
-                "OHM balance should be the capacity"
-            );
+            // Confirm token balances are still zero since the callback will minting and receiving tokens
+            assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
             assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+            // Confirm that the emissions manager has mint approval for the capacity
+            assertEq(
+                MINTR.mintApproval(address(emissionManager)),
+                capacity,
+                "Mint approval should be the capacity"
+            );
         }
-    }
-
-    // function test_execute_withPreviousSale_reducesSupplyAdded()
-    //     public
-    //     givenPremiumAboveMinimum
-    //     givenThereIsPreviousSale
-    // {
-    //     // Get the ID of the created bond market from the aggregator (counter - 1)
-    //     uint256 nextBondMarketId = aggregator.marketCounter() - 1;
-
-    //     // Get information about the first sale
-    //     uint256 lastSupplyAdded = emissionManager.lastSupplyAdded();
-    //     // console2.log("lastSupplyAdded after market creation", lastSupplyAdded);
-
-    //     // Confirm that the market capacity is the same as the supply added
-    //     uint256 originalCapacity = auctioneer.currentCapacity(nextBondMarketId);
-
-    //     assertEq(
-    //         originalCapacity,
-    //         lastSupplyAdded,
-    //         "Market capacity should be equal to supply added"
-    //     );
-
-    //     // Get supply at this point
-    //     uint256 originalTotalSupply = emissionManager.getSupply();
-    //     // console2.log("OHM total supply after market creation", originalTotalSupply);
-
-    //     // Buy an amount of token from the bond market
-    //     uint256 bidAmount = 1000e18;
-    //     reserve.mint(alice, bidAmount);
-
-    //     vm.startPrank(alice);
-    //     reserve.approve(address(teller), bidAmount);
-    //     teller.purchase(alice, address(0), nextBondMarketId, bidAmount, 0);
-    //     vm.stopPrank();
-
-    //     // Execute three more times to trigger another cycle
-    //     triggerFullCycle();
-
-    //     // Get the new total supply
-    //     uint256 updatedTotalSupply = emissionManager.getSupply();
-
-    //     // Get the new capacity
-    //     uint256 updatedCapacity = auctioneer.currentCapacity(nextBondMarketId);
-
-    //     // Verify that the supply added was reduced by the leftover amount
-    //     // In other words, only the difference from market 1 to market 2 capacity was minted
-    //     assertEq(
-    //         updatedTotalSupply - originalTotalSupply,
-    //         updatedCapacity - originalCapacity,
-    //         "Supply minted should be difference in capacities"
-    //     );
-    // }
-
-    function test_execute__withPreviousSale_depositsDaiToTreasuryAsSDai()
-        public
-        givenPremiumAboveMinimum
-        givenThereIsPreviousSale
-    {
-        // Get the ID of the next bond market from the aggregator
-        uint256 nextBondMarketId = aggregator.marketCounter() - 1;
-
-        // Buy an amount of token from the bond market
-        uint256 bidAmount = 1000e18;
-        reserve.mint(alice, bidAmount);
-
-        vm.startPrank(alice);
-        reserve.approve(address(teller), bidAmount);
-        teller.purchase(alice, address(0), nextBondMarketId, bidAmount, 0);
-        vm.stopPrank();
-
-        // Confirm balance in emission manager
-        assertEq(
-            reserve.balanceOf(address(emissionManager)),
-            bidAmount,
-            "Initial DAI balance should be correct"
-        );
-
-        uint256 sdaiAmount = wrappedReserve.previewDeposit(bidAmount);
-
-        // Cache TRSRY sDAI balance
-        uint256 initialTreasurySdaiBalance = wrappedReserve.balanceOf(address(TRSRY));
-
-        // Execute three more times to trigger another cycle
-        triggerFullCycle();
-
-        // Verify DAI was converted to sDAI and sent to treasury
-        assertEq(
-            reserve.balanceOf(address(emissionManager)),
-            0,
-            "Emissions manager should have no DAI left"
-        );
-        assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
-            initialTreasurySdaiBalance + sdaiAmount,
-            "Treasury should have received the sDAI"
-        );
     }
 }
