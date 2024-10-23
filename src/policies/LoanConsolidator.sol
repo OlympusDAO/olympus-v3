@@ -269,7 +269,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         repaymentToken.approve(coolerOld_, totalDebt);
 
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
-        if (Cooler(coolerOld_).owner() != msg.sender || Cooler(coolerNew_) != msg.sender) revert OnlyCoolerOwner();
+        if (Cooler(coolerOld_).owner() != msg.sender || Cooler(coolerNew_).owner() != msg.sender) revert OnlyCoolerOwner();
 
         // Transfer in necessary funds to repay the fee
         // This can also reduce the flashloan fee
@@ -329,7 +329,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         Cooler coolerOld = Cooler(flashLoanData.coolerOld);
         Cooler coolerNew = Cooler(flashLoanData.coolerNew);
         uint256 principal = flashLoanData.principal;
-        bool migrating = (coolerOld_ != coolerNew_);
+        bool migrating = (address(coolerOld) != address(coolerNew));
 
         // perform sanity checks
         if (msg.sender != address(FLASH)) revert OnlyLender();
@@ -339,7 +339,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Migrated loan requires DAI, unmigrated loan requires USDS
         if (!migrating) {
             DAI.approve(address(MIGRATOR), principal);
-            MIGRATOR.daiToUsds(principal);
+            MIGRATOR.daiToUsds(address(this), principal);
         }
 
         // Iterate over all batches, repay the debt and collect the collateral
@@ -369,7 +369,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
         // USDS proceeds must be converted to DAI for flashloan repayment
         USDS.approve(address(MIGRATOR), amount_ + lenderFee_);
-        MIGRATOR.usdsToDai(amount_ + lenderFee_);
+        MIGRATOR.usdsToDai(address(this), amount_ + lenderFee_);
 
         // Approve the flash loan provider to collect the flashloan amount and fee
         DAI.approve(address(FLASH), amount_ + lenderFee_);
