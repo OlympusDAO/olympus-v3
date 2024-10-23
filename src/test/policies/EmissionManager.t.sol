@@ -511,4 +511,108 @@ contract EmissionManagerTest is Test {
             assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
         }
     }
+
+    function test_execute_whenBeatCounterIs0_withPreviousSale_reducesSupplyAdded() public {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Set up scenario where we have a previous sale
+        // Execute three times to complete one cycle and create a market
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Check that a bond market was created
+        assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
+
+        // Get information about the first sale
+        (, , uint256 originalCapacity, ) = emissionManager.sales(0);
+        console2.log(originalCapacity);
+
+        // Get supply at this point
+        uint256 originalTotalSupply = ohm.totalSupply();
+        console2.log(originalTotalSupply);
+
+        // Buy an amount of token from the bond market
+        uint256 bidAmount = 1000e18;
+        reserve.mint(alice, bidAmount);
+
+        vm.startPrank(alice);
+        reserve.approve(address(teller), bidAmount);
+        teller.purchase(alice, address(0), nextBondMarketId, bidAmount, 0);
+        vm.stopPrank();
+
+        // Execute three more times to trigger another cycle
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Get the updated sale information
+        (, , uint256 updatedCapacity, ) = emissionManager.sales(1);
+        console2.log(updatedCapacity);
+
+        // Get the new total supply
+        uint256 updatedTotalSupply = ohm.totalSupply();
+        console2.log(updatedTotalSupply);
+
+        // Verify that the supply added was reduced by the leftover amount
+        // In other words, only the difference from market 1 to market 2 capacity was minted
+        assertEq(
+            updatedTotalSupply - originalTotalSupply,
+            updatedCapacity - originalCapacity,
+            "Supply minted should be difference in capacities"
+        );
+    }
+
+    function test_execute_whenBeatCounterIs0_depositsDaiToTreasuryAsSDai() public {
+        // Call execute twice to get beat counter to 2
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+
+        // Set the price above the minumum premium
+        PRICE.setLastPrice(120 * 1e18);
+
+        // Get initial treasury sDAI balance
+        uint256 initialTreasurySdaiBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        // Send some DAI to the emissions manager
+        uint256 daiAmount = 1000e18;
+        reserve.mint(address(emissionManager), daiAmount);
+
+        // Confirm initial balances
+        assertEq(
+            reserve.balanceOf(address(emissionManager)),
+            daiAmount,
+            "Initial DAI balance should be correct"
+        );
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            initialTreasurySdaiBalance,
+            "Initial treasury sDAI balance should be unchanged"
+        );
+
+        uint256 sdaiAmount = wrappedReserve.previewDeposit(daiAmount);
+
+        // Execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Verify DAI was converted to sDAI and sent to treasury
+        assertEq(
+            reserve.balanceOf(address(emissionManager)),
+            0,
+            "Emissions manager should have no DAI left"
+        );
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            initialTreasurySdaiBalance + sdaiAmount,
+            "Treasury should have received the sDAI"
+        );
+    }
 }

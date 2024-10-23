@@ -419,4 +419,21 @@ contract EmissionManager is Policy, RolesConsumer {
     function getSupply() public view returns (uint256 supply) {
         return (gohm.totalSupply() * gohm.index()) / 10 ** _ohmDecimals;
     }
+
+    function getPremium() public view returns (uint256) {
+        uint256 price = PRICE.getLastPrice();
+        return (price * 10 ** _reserveDecimals) / backing;
+    }
+
+    function nextSale() public view returns (uint256 emissionRate, uint256 supplyToAdd) {
+        // To calculate the sale, it first computes premium (market price / backing price)
+        uint256 price = PRICE.getLastPrice();
+        uint256 premium = (price * 10 ** _reserveDecimals) / backing;
+
+        // If the premium is greater than the minimum premium, it computes the emission rate and nominal emissions
+        if (premium >= minimumPremium) {
+            emissionRate = (baseEmissionRate * premium) / minimumPremium; // in OHM scale
+            supplyToAdd = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
+        }
+    }
 }
