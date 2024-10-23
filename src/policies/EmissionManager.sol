@@ -31,19 +31,16 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== ERRORS ========== //
 
+    error OnlyTeller();
+    error InvalidMarket();
+    error InvalidCallback();
+
     // ========== EVENTS ========== //
 
     event SaleCreated(uint256 marketID, uint256 saleAmount);
     event BackingUpdated(uint256 newBacking, uint256 supplyAdded, uint256 reservesAdded);
 
     // ========== DATA STRUCTURES ========== //
-
-    struct Sale {
-        uint256 premium;
-        uint256 emissionRate;
-        uint256 supplyAdded;
-        uint256 reservesAdded;
-    }
 
     struct BaseRateChange {
         uint256 changeBy;
@@ -52,9 +49,6 @@ contract EmissionManager is Policy, RolesConsumer {
     }
 
     // ========== STATE VARIABLES ========== //
-
-    uint256 public lastSupplyAdded;
-    uint256 public lastReservesAdded;
 
     BaseRateChange public rateChange;
 
@@ -68,8 +62,8 @@ contract EmissionManager is Policy, RolesConsumer {
     // solhint-disable const-name-snakecase
     ERC20 public immutable ohm;
     IgOHM public immutable gohm;
-    ERC20 public immutable dai;
-    ERC4626 public immutable sdai;
+    ERC20 public immutable reserve;
+    ERC4626 public immutable wrappedReserve;
 
     // External contracts
     IBondSDA public auctioneer;
@@ -82,6 +76,7 @@ contract EmissionManager is Policy, RolesConsumer {
     uint256 public backing;
     uint8 public beatCounter;
     bool public locallyActive;
+    uint256 public activeMarketId;
 
     uint8 internal _oracleDecimals;
     uint8 internal immutable _ohmDecimals;
@@ -98,30 +93,30 @@ contract EmissionManager is Policy, RolesConsumer {
         Kernel kernel_,
         address ohm_,
         address gohm_,
-        address dai_,
-        address sdai_,
+        address reserve_,
+        address wrappedReserve_,
         address auctioneer_,
         address teller_
     ) Policy(kernel_) {
         // Set immutable variables
         if (ohm_ == address(0)) revert("OHM address cannot be 0");
         if (gohm_ == address(0)) revert("gOHM address cannot be 0");
-        if (dai_ == address(0)) revert("DAI address cannot be 0");
-        if (sdai_ == address(0)) revert("sDAI address cannot be 0");
+        if (reserve_ == address(0)) revert("DAI address cannot be 0");
+        if (wrappedReserve_ == address(0)) revert("sDAI address cannot be 0");
         if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
-        dai = ERC20(dai_);
-        sdai = ERC4626(sdai_);
+        reserve = ERC20(reserve_);
+        wrappedReserve = ERC4626(wrappedReserve_);
         auctioneer = IBondSDA(auctioneer_);
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
-        _reserveDecimals = dai.decimals();
+        _reserveDecimals = reserve.decimals();
 
-        // Max approve sDAI contract for DAI for deposits
-        dai.approve(address(sdai), type(uint256).max);
+        // Max approve wrappedReserve contract for reserve for deposits
+        reserve.approve(address(wrappedReserve), type(uint256).max);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -169,40 +164,8 @@ contract EmissionManager is Policy, RolesConsumer {
             else baseEmissionRate -= rateChange.changeBy;
         }
 
-        // Get current balances of the contract
-        uint256 currentBalanceDAI = dai.balanceOf(address(this));
-        uint256 currentBalanceOHM = ohm.balanceOf(address(this));
-
-        // If previous day had a sale, do bookkeeping
-        if (lastSupplyAdded != 0) {
-            // Book keeping is needed if there are unspent tokens to account for
-            if (currentBalanceOHM > 0) lastSupplyAdded -= currentBalanceOHM;
-
-            // And/or new reserves, for which it:
-            if (currentBalanceDAI > 0) {
-                // Logs the inflow and sweeps them to the treasury as sDAI
-                lastReservesAdded += currentBalanceDAI;
-                sdai.deposit(currentBalanceDAI, address(TRSRY));
-
-                // And updates backing price
-                _updateBacking(lastSupplyAdded, lastReservesAdded);
-            }
-        }
-
         // It then calculates the amount to sell for the coming day
         (, , uint256 sell) = getNextSale();
-
-        // Resets bookkeeping variables for new day
-        lastSupplyAdded = sell;
-        lastReservesAdded = 0;
-
-        // Brings its ohm holdings into balance with the amount to sell
-        if (sell > currentBalanceOHM) {
-            uint256 amountToMint = sell - currentBalanceOHM;
-            MINTR.increaseMintApproval(address(this), amountToMint);
-            MINTR.mintOhm(address(this), amountToMint);
-        } else if (currentBalanceOHM > sell)
-            BurnableERC20(address(ohm)).burn(currentBalanceOHM - sell);
 
         // And then opens a market if applicable
         if (sell != 0) _createMarket(sell);
@@ -234,6 +197,34 @@ contract EmissionManager is Policy, RolesConsumer {
         locallyActive = true;
     }
 
+    // ========== BOND CALLBACK ========== //
+
+    function callback(uint256 id_, uint256 inputAmount_, uint256 outputAmount_) external {
+        // Only callable by the bond teller
+        if (msg.sender != teller) revert OnlyTeller();
+
+        // Market ID must match the active market ID stored locally, otherwise revert
+        if (id_ != activeMarketId) revert InvalidMarket();
+
+        // Reserve balance should have increased by atleast the input amount
+        uint256 reserveBalance = reserve.balanceOf(address(this));
+        if (reserveBalance < inputAmount_) revert InvalidCallback();
+
+        // Update backing value with the new reserves added and supply added
+        // We do this before depositing the received reserves and minting the output amount of OHM
+        // so that the getReserves and getSupply values equal the "previous" values
+        // This also conforms to the CEI pattern
+        _updateBacking(outputAmount_, inputAmount_);
+
+        // Deposit the reserve balance into the wrappedReserve contract with the TRSRY as the recipient
+        // This will sweep any excess reserves into the TRSRY as well
+        wrappedReserve.deposit(reserveBalance, address(TRSRY));
+
+        // Mint the output amount of OHM to the Teller
+        MINTR.increaseMintApproval(address(this), outputAmount_);
+        MINTR.mintOhm(teller, outputAmount_);
+    }
+
     // ========== INTERNAL FUNCTIONS ========== //
 
     /// @notice create bond protocol market with given budget
@@ -255,17 +246,13 @@ contract EmissionManager is Policy, RolesConsumer {
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
 
-        // Approve OHM on bond teller
-        uint256 currentApproval = ohm.allowance(address(this), address(teller));
-        ohm.approve(address(teller), currentApproval + saleAmount);
-
         // Create new bond market to buy the reserve with OHM
-        uint256 marketId = auctioneer.createMarket(
+        activeMarketId = auctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
                     payoutToken: ohm,
-                    quoteToken: dai,
-                    callbackAddr: address(0),
+                    quoteToken: reserve,
+                    callbackAddr: address(this),
                     capacityInQuote: false,
                     capacity: saleAmount,
                     formattedInitialPrice: PRICE.getLastPrice().mulDiv(bondScale, oracleScale),
@@ -279,15 +266,15 @@ contract EmissionManager is Policy, RolesConsumer {
             )
         );
 
-        emit SaleCreated(marketId, saleAmount);
+        emit SaleCreated(activeMarketId, saleAmount);
     }
 
     /// @notice allow emission manager to update backing price based on new supply and reserves added
     /// @param supplyAdded number of new OHM minted
     /// @param reservesAdded number of new DAI added
     function _updateBacking(uint256 supplyAdded, uint256 reservesAdded) internal {
-        uint256 previousReserves = getReserves() - reservesAdded;
-        uint256 previousSupply = getSupply() - supplyAdded;
+        uint256 previousReserves = getReserves();
+        uint256 previousSupply = getSupply();
 
         uint256 percentIncreaseReserves = (reservesAdded * 10 ** _reserveDecimals) /
             previousReserves;
@@ -325,8 +312,8 @@ contract EmissionManager is Policy, RolesConsumer {
         uint256 ohmBalance = ohm.balanceOf(address(this));
         if (ohmBalance > 0) BurnableERC20(address(ohm)).burn(ohmBalance);
 
-        uint256 daiBalance = dai.balanceOf(address(this));
-        if (daiBalance > 0) sdai.deposit(daiBalance, address(TRSRY));
+        uint256 reserveBalance = reserve.balanceOf(address(this));
+        if (reserveBalance > 0) wrappedReserve.deposit(reserveBalance, address(TRSRY));
     }
 
     function restart() external onlyRole("emergency_restart") {
@@ -388,16 +375,16 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // =========- VIEW FUNCTIONS ========== //
 
-    /// @notice return reserves, measured as clearinghouse receivables and sdai balances, in DAI denomination
+    /// @notice return reserves, measured as clearinghouse receivables and wrappedReserve balances, in DAI denomination
     function getReserves() public view returns (uint256 reserves) {
         uint256 chCount = CHREG.registryCount();
         for (uint256 i; i < chCount; i++) {
             reserves += Clearinghouse(CHREG.registry(i)).principalReceivables();
-            uint256 bal = sdai.balanceOf(CHREG.registry(i));
-            if (bal > 0) reserves += sdai.previewRedeem(bal);
+            uint256 bal = wrappedReserve.balanceOf(CHREG.registry(i));
+            if (bal > 0) reserves += wrappedReserve.previewRedeem(bal);
         }
 
-        reserves += sdai.previewRedeem(sdai.balanceOf(address(TRSRY)));
+        reserves += wrappedReserve.previewRedeem(wrappedReserve.balanceOf(address(TRSRY)));
     }
 
     /// @notice return supply, measured as supply of gOHM in OHM denomination
