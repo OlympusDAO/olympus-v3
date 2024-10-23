@@ -188,18 +188,36 @@ contract LoanConsolidatorForkTest is Test {
     }
 
     function _consolidate(
-        address clearinghouse_,
-        address cooler_,
+        address clearinghouseFrom_,
+        address clearinghouseTo_,
+        address coolerFrom_,
+        address coolerTo_,
         uint256[] memory ids_,
         uint256 useFunds_,
         bool sDai_
     ) internal {
         vm.prank(walletA);
-        utils.consolidateWithFlashLoan(clearinghouse_, cooler_, ids_, useFunds_, sDai_);
+        utils.consolidateWithFlashLoan(
+            clearinghouseFrom_,
+            clearinghouseTo_,
+            coolerFrom_,
+            coolerTo_,
+            ids_,
+            useFunds_,
+            sDai_
+        );
     }
 
     function _consolidate(uint256[] memory ids_, uint256 useFunds_, bool sDai_) internal {
-        _consolidate(address(clearinghouse), address(coolerA), ids_, useFunds_, sDai_);
+        _consolidate(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(coolerA),
+            address(coolerA),
+            ids_,
+            useFunds_,
+            sDai_
+        );
     }
 
     function _getInterestDue(
@@ -386,6 +404,8 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it reverts
     // [X] it takes a flashloan for the total debt amount + LoanConsolidator fee, and consolidates the loans into one
 
+    // TODO tests for DAI<->USDS migration
+
     // --- consolidateWithFlashLoan --------------------------------------------
 
     function test_consolidate_policyNotActive_reverts() public {
@@ -432,7 +452,15 @@ contract LoanConsolidatorForkTest is Test {
         // Consolidate loans for coolers A, B, and C into coolerC
         uint256[] memory idsA = _idsA();
         vm.prank(walletA);
-        utils.consolidateWithFlashLoan(address(newClearinghouse), address(coolerA), idsA, 0, false);
+        utils.consolidateWithFlashLoan(
+            address(newClearinghouse),
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
     }
 
     function test_consolidate_thirdPartyCooler_reverts() public givenPolicyActive {
@@ -446,7 +474,15 @@ contract LoanConsolidatorForkTest is Test {
         // Consolidate loans for coolerA into newCooler
         uint256[] memory idsA = _idsA();
         vm.prank(walletA);
-        utils.consolidateWithFlashLoan(address(clearinghouse), address(newCooler), idsA, 0, false);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(newCooler),
+            address(newCooler),
+            idsA,
+            0,
+            false
+        );
     }
 
     function test_consolidate_noLoans_reverts() public givenPolicyActive {
@@ -495,7 +531,15 @@ contract LoanConsolidatorForkTest is Test {
 
         // Consolidate loans for coolers A, B, and C into coolerC
         // Do not perform as the cooler owner
-        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerA), idsA, 0, false);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
     }
 
     function test_consolidate_insufficientGOhmApproval_reverts() public givenPolicyActive {
@@ -635,7 +679,15 @@ contract LoanConsolidatorForkTest is Test {
 
         // Consolidate loans for coolers 0 and 1 into 2
         vm.startPrank(walletB);
-        utils.consolidateWithFlashLoan(address(clearinghouse), address(coolerB), loanIds, 0, false);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(coolerB),
+            address(coolerB),
+            loanIds,
+            0,
+            false
+        );
         vm.stopPrank();
 
         // Assert loan balances
@@ -1043,7 +1095,15 @@ contract LoanConsolidatorForkTest is Test {
         vm.expectRevert("SavingsDai/insufficient-balance");
 
         // Consolidate loans for coolers A, B, and C into coolerC
-        _consolidate(address(clearinghouse), address(coolerA), idsA, 0, false);
+        _consolidate(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
     }
 
     // setFeePercentage
