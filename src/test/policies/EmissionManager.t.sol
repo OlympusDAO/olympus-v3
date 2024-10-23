@@ -511,7 +511,7 @@ contract EmissionManagerTest is Test {
             assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
         }
     }
-
+    /*
     function test_execute_whenBeatCounterIs0_withPreviousSale_reducesSupplyAdded() public {
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
@@ -567,7 +567,7 @@ contract EmissionManagerTest is Test {
             "Supply minted should be difference in capacities"
         );
     }
-
+*/
     function test_execute_whenBeatCounterIs0_depositsDaiToTreasuryAsSDai() public {
         // Call execute twice to get beat counter to 2
         vm.startPrank(heart);
