@@ -6,6 +6,9 @@ import {RGSTYv1} from "./RGSTY.v1.sol";
 
 /// @title  Olympus Contract Registry
 /// @notice This module is used to track the addresses of contracts.
+///         It supports both immutable and mutable addresses.
+///         Immutable addresses can be used to track commonly-used addresses (such as tokens), where the dependent contract needs an assurance that the address is immutable.
+///         Mutable addresses can be used to track contracts that are expected to change over time, such as the latest version of a Policy.
 contract OlympusContractRegistry is RGSTYv1 {
     // =========  STATE ========= //
 
@@ -41,6 +44,51 @@ contract OlympusContractRegistry is RGSTYv1 {
     /// @inheritdoc RGSTYv1
     /// @dev        This function performs the following steps:
     ///             - Validates the parameters
+    ///             - Registers the contract
+    ///             - Updates the contract names
+    ///             - Refreshes the dependent policies
+    ///
+    ///             The contract name can contain:
+    ///             - Lowercase letters
+    ///             - Numerals
+    ///
+    ///             This function will revert if:
+    ///             - The caller is not permissioned
+    ///             - The name is empty
+    ///             - The name contains punctuation or uppercase letters
+    ///             - The contract address is zero
+    ///             - The contract name is already registered as an immutable address
+    ///             - The contract name is already registered as a mutable address
+    function registerImmutableContract(
+        bytes5 name_,
+        address contractAddress_
+    ) external override permissioned {
+        // Check that the name is not empty
+        if (name_ == bytes5(0)) revert Params_InvalidName();
+
+        // Check that the contract has not already been registered
+        if (_contracts[name_] != address(0)) revert Params_ContractAlreadyRegistered();
+
+        // Check that the contract is not registered as an immutable address
+        if (_immutableContracts[name_] != address(0)) revert Params_ContractAlreadyRegistered();
+
+        // Check that the contract address is not zero
+        if (contractAddress_ == address(0)) revert Params_InvalidAddress();
+
+        // Validate the contract name
+        _validateContractName(name_);
+
+        // Register the contract
+        _immutableContracts[name_] = contractAddress_;
+        _updateImmutableContractNames(name_);
+        _refreshDependents();
+
+        emit ContractRegistered(name_, contractAddress_, true);
+    }
+
+    /// @inheritdoc RGSTYv1
+    /// @dev        This function performs the following steps:
+    ///             - Validates the parameters
     ///             - Updates the contract address
     ///             - Updates the contract names (if needed)
     ///             - Refreshes the dependent policies
@@ -54,7 +102,8 @@ contract OlympusContractRegistry is RGSTYv1 {
     ///             - The name is empty
     ///             - The name contains punctuation or uppercase letters
     ///             - The contract address is zero
-    ///             - The contract name is already registered
+    ///             - The contract name is already registered as an immutable address
+    ///             - The contract name is already registered as a mutable address
     function registerContract(
         bytes5 name_,
         address contractAddress_
@@ -65,32 +114,21 @@ contract OlympusContractRegistry is RGSTYv1 {
         // Check that the contract has not already been registered
         if (_contracts[name_] != address(0)) revert Params_ContractAlreadyRegistered();
 
+        // Check that the contract is not registered as an immutable address
+        if (_immutableContracts[name_] != address(0)) revert Params_ContractAlreadyRegistered();
+
         // Check that the contract address is not zero
         if (contractAddress_ == address(0)) revert Params_InvalidAddress();
 
-        // Check that the contract name is lowercase letters and numerals only
-        for (uint256 i = 0; i < 5; i++) {
-            bytes1 char = name_[i];
-
-            // 0-9
-            if (char >= 0x30 && char <= 0x39) continue;
-
-            // a-z
-            if (char >= 0x61 && char <= 0x7A) continue;
-
-            // Skip if empty
-            // An empty name has already been checked at the start
-            if (char == 0x00) continue;
-
-            revert Params_InvalidName();
-        }
+        // Validate the contract name
+        _validateContractName(name_);
 
         // Register the contract
         _contracts[name_] = contractAddress_;
         _updateContractNames(name_);
         _refreshDependents();
 
-        emit ContractRegistered(name_, contractAddress_);
+        emit ContractRegistered(name_, contractAddress_, false);
     }
 
     /// @inheritdoc RGSTYv1
@@ -102,7 +140,7 @@ contract OlympusContractRegistry is RGSTYv1 {
     ///
     ///             This function will revert if:
     ///             - The caller is not permissioned
-    ///             - The name is not registered
+    ///             - The contract is not registered as a mutable address
     ///             - The contract address is zero
     function updateContract(bytes5 name_, address contractAddress_) external override permissioned {
         // Check that the contract address is not zero
@@ -126,7 +164,7 @@ contract OlympusContractRegistry is RGSTYv1 {
     ///
     ///             This function will revert if:
     ///             - The caller is not permissioned
-    ///             - The contract is not registered
+    ///             - The contract is not registered as a mutable address
     function deregisterContract(bytes5 name_) external override permissioned {
         address contractAddress = _contracts[name_];
         if (contractAddress == address(0)) revert Params_ContractNotRegistered();
@@ -139,6 +177,22 @@ contract OlympusContractRegistry is RGSTYv1 {
     }
 
     // =========  VIEW FUNCTIONS ========= //
+
+    /// @inheritdoc RGSTYv1
+    /// @dev        This function will revert if:
+    ///             - The contract is not registered as an immutable address
+    function getImmutableContract(bytes5 name_) external view override returns (address) {
+        address contractAddress = _immutableContracts[name_];
+        if (contractAddress == address(0)) revert Params_ContractNotRegistered();
+
+        return contractAddress;
+    }
+
+    /// @inheritdoc RGSTYv1
+    /// @dev        Note that the order of the names in the array is not guaranteed to be consistent.
+    function getImmutableContractNames() external view override returns (bytes5[] memory) {
+        return _immutableContractNames;
+    }
 
     /// @inheritdoc RGSTYv1
     /// @dev        This function will revert if:
@@ -158,6 +212,42 @@ contract OlympusContractRegistry is RGSTYv1 {
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
+
+    /// @notice Validates the contract name
+    /// @dev    This function will revert if:
+    ///         - The name is empty
+    ///         - The name contains punctuation or uppercase letters
+    function _validateContractName(bytes5 name_) internal pure {
+        // Check that the contract name is lowercase letters and numerals only
+        for (uint256 i = 0; i < 5; i++) {
+            bytes1 char = name_[i];
+
+            // 0-9
+            if (char >= 0x30 && char <= 0x39) continue;
+
+            // a-z
+            if (char >= 0x61 && char <= 0x7A) continue;
+
+            // Skip if empty
+            if (char == 0x00) continue;
+
+            revert Params_InvalidName();
+        }
+    }
+
+    /// @notice Updates the list of immutable contract names if the name is not already present.
+    ///
+    /// @param  name_ The name of the contract
+    function _updateImmutableContractNames(bytes5 name_) internal {
+        bytes5[] memory contractNames = _immutableContractNames;
+        for (uint256 i; i < contractNames.length; ) {
+            if (contractNames[i] == name_) return;
+            unchecked {
+                ++i;
+            }
+        }
+        _immutableContractNames.push(name_);
+    }
 
     /// @notice Updates the list of contract names if the name is not already present.
     ///

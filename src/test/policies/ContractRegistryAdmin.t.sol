@@ -61,6 +61,36 @@ contract ContractRegistryAdminTest is Test {
 
     // ===== TESTS ===== //
 
+    // registerImmutableContract
+    // when the policy is not active
+    //  [X] it reverts
+    // when the caller does not have the role
+    //  [X] it reverts
+    // [X] it registers the contract
+
+    function test_registerImmutableContract_policyNotActive_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(ContractRegistryAdmin.OnlyPolicyActive.selector));
+
+        rgstyAdmin.registerImmutableContract("ohm", ohm);
+    }
+
+    function test_registerImmutableContract_callerDoesNotHaveRole_reverts()
+        public
+        givenPolicyIsActivated
+    {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, RGSTY_ROLE));
+
+        vm.prank(notAdmin);
+        rgstyAdmin.registerImmutableContract("ohm", ohm);
+    }
+
+    function test_registerImmutableContract() public givenPolicyIsActivated givenAdminHasRole {
+        vm.prank(admin);
+        rgstyAdmin.registerImmutableContract("ohm", ohm);
+
+        assertEq(RGSTY.getImmutableContract("ohm"), ohm, "contract address");
+    }
+
     // registerContract
     // when the policy is not active
     //  [X] it reverts

@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
-import {MockContractRegistryPolicy} from "test/mocks/MockContractRegistryPolicy.sol";
+import {MockContractRegistryPolicy, MockImmutableContractRegistryPolicy} from "test/mocks/MockContractRegistryPolicy.sol";
 
 import {Kernel, Actions, Module, fromKeycode} from "src/Kernel.sol";
 import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
@@ -21,10 +21,14 @@ contract ContractRegistryTest is Test {
     Kernel internal _kernel;
     OlympusContractRegistry internal RGSTY;
     MockContractRegistryPolicy internal _policy;
-    MockContractRegistryPolicy internal _policy2;
+    MockImmutableContractRegistryPolicy internal _policyImmutable;
 
     // Contract Registry Expected events
-    event ContractRegistered(bytes5 indexed name, address indexed contractAddress);
+    event ContractRegistered(
+        bytes5 indexed name,
+        address indexed contractAddress,
+        bool isImmutable
+    );
     event ContractUpdated(bytes5 indexed name, address indexed contractAddress);
     event ContractDeregistered(bytes5 indexed name);
 
@@ -34,7 +38,7 @@ contract ContractRegistryTest is Test {
         _kernel = new Kernel();
         RGSTY = new OlympusContractRegistry(address(_kernel));
         _policy = new MockContractRegistryPolicy(_kernel);
-        _policy2 = new MockContractRegistryPolicy(_kernel);
+        _policyImmutable = new MockImmutableContractRegistryPolicy(_kernel);
 
         // Generate fixtures
         godmode = RGSTY.generateGodmodeFixture(type(OlympusContractRegistry).name);
@@ -42,6 +46,11 @@ contract ContractRegistryTest is Test {
         // Install modules and policies on Kernel
         _kernel.executeAction(Actions.InstallModule, address(RGSTY));
         _kernel.executeAction(Actions.ActivatePolicy, godmode);
+    }
+
+    function _registerImmutableContract(bytes5 name_, address contractAddress_) internal {
+        vm.prank(godmode);
+        RGSTY.registerImmutableContract(name_, contractAddress_);
     }
 
     function _registerContract(bytes5 name_, address contractAddress_) internal {
@@ -63,8 +72,13 @@ contract ContractRegistryTest is Test {
         _kernel.executeAction(Actions.ActivatePolicy, address(_policy));
     }
 
-    function _activatePolicyTwo() internal {
-        _kernel.executeAction(Actions.ActivatePolicy, address(_policy2));
+    function _activatePolicyImmutable() internal {
+        _kernel.executeAction(Actions.ActivatePolicy, address(_policyImmutable));
+    }
+
+    modifier givenImmutableContractIsRegistered(bytes5 name_, address contractAddress_) {
+        _registerImmutableContract(name_, contractAddress_);
+        _;
     }
 
     modifier givenContractIsRegistered(bytes5 name_, address contractAddress_) {
@@ -87,8 +101,8 @@ contract ContractRegistryTest is Test {
         _;
     }
 
-    modifier givenPolicyTwoIsActive() {
-        _activatePolicyTwo();
+    modifier givenPolicyImmutableIsActive() {
+        _activatePolicyImmutable();
         _;
     }
 
@@ -112,6 +126,200 @@ contract ContractRegistryTest is Test {
         assertEq(address(rgsty.kernel()), address(1), "Kernel address is not set correctly");
     }
 
+    // registerImmutableContract
+    // when the caller is not permissioned
+    //  [X] it reverts
+    // when the name is empty
+    //  [X] it reverts
+    // when the contract address is zero
+    //  [X] it reverts
+    // when the name is not lowercase
+    //  [X] it reverts
+    // when the name contains punctuation
+    //  [X] it reverts
+    // when the name contains a numeral
+    //  [X] it succeeds
+    // given the name is registered
+    //  [X] it reverts
+    // given the name is registered as mutable address
+    //  [X] it reverts
+    // given the name is not registered
+    //  given there are existing registrations
+    //   [X] it updates the contract address, emits an event and updates the names array
+    //  [X] it registers the contract address, emits an event and updates the names array
+    // given dependent policies are registered
+    //  [X] it refreshes the dependents
+
+    function test_registerImmutableContract_callerNotPermissioned_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, notOwner)
+        );
+
+        vm.prank(notOwner);
+        RGSTY.registerImmutableContract(bytes5("ohm"), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameIsEmpty_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+
+        _registerImmutableContract(bytes5(""), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameIsZero_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+
+        _registerImmutableContract(bytes5(0), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameIsNotLowercase_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+        _registerImmutableContract(bytes5("Ohm"), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+        _registerImmutableContract(bytes5("oHm"), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+        _registerImmutableContract(bytes5("ohM"), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameContainsPunctuation_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+        _registerImmutableContract(bytes5("ohm!"), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+        _registerImmutableContract(bytes5("ohm "), addressOne);
+
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+        _registerImmutableContract(bytes5("ohm-"), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameContainsNumeral() public {
+        _registerImmutableContract(bytes5("ohm1"), addressOne);
+
+        assertEq(RGSTY.getImmutableContract(bytes5("ohm1")), addressOne);
+    }
+
+    function test_registerImmutableContract_whenContractAddressIsZero_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidAddress.selector));
+
+        _registerImmutableContract(bytes5("ohm"), address(0));
+    }
+
+    function test_registerImmutableContract_whenNameIsRegistered_reverts()
+        public
+        givenContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractAlreadyRegistered.selector));
+
+        // Register the second time
+        _registerImmutableContract(bytes5("ohm"), addressTwo);
+    }
+
+    function test_registerImmutableContract_whenImmutableNameIsRegistered_reverts()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractAlreadyRegistered.selector));
+
+        // Register the second time
+        _registerImmutableContract(bytes5("ohm"), addressTwo);
+    }
+
+    function test_registerImmutableContract_whenNameIsNotRegistered() public {
+        // Expect an event to be emitted for updated registration
+        vm.expectEmit();
+        emit ContractRegistered(bytes5("ohm"), addressOne, true);
+
+        // Register the first time
+        _registerImmutableContract(bytes5("ohm"), addressOne);
+
+        assertEq(
+            RGSTY.getImmutableContract(bytes5("ohm")),
+            addressOne,
+            "Contract address is not set correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames().length,
+            1,
+            "Immutable names array is not updated correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames()[0],
+            bytes5("ohm"),
+            "Immutable names array is not updated correctly"
+        );
+        assertEq(RGSTY.getContractNames().length, 0, "Names array is not updated correctly");
+    }
+
+    function test_registerImmutableContract_whenOtherNamesAreRegistered()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+        givenImmutableContractIsRegistered(bytes5("ohm2"), addressTwo)
+        givenImmutableContractIsRegistered(bytes5("ohm3"), address(0x4))
+    {
+        // Assert values
+        assertEq(
+            RGSTY.getImmutableContract(bytes5("ohm")),
+            addressOne,
+            "ohm contract address is not set correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContract(bytes5("ohm2")),
+            addressTwo,
+            "ohm2 contract address is not set correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContract(bytes5("ohm3")),
+            address(0x4),
+            "ohm3 contract address is not set correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames().length,
+            3,
+            "Immutable names array is not updated correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames()[0],
+            bytes5("ohm"),
+            "Immutable names array is not updated correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames()[1],
+            bytes5("ohm2"),
+            "Immutable names array is not updated correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames()[2],
+            bytes5("ohm3"),
+            "Immutable names array is not updated correctly"
+        );
+        assertEq(RGSTY.getContractNames().length, 0, "Names array is not updated correctly");
+    }
+
+    function test_registerImmutableContract_activatePolicy_whenContractIsRegistered() public {
+        // Register the contract
+        _registerImmutableContract(bytes5("dai"), addressOne);
+
+        assertEq(_policyImmutable.dai(), address(0));
+
+        // Activate the dependent policy
+        _activatePolicyImmutable();
+
+        assertEq(_policyImmutable.dai(), addressOne);
+    }
+
+    function test_registerImmutableContract_activatePolicies_whenContractNotRegistered_reverts()
+        public
+    {
+        // Expect the policy to revert
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
+
+        // Activate the dependent policies
+        _activatePolicyImmutable();
+    }
+
     // registerContract
     // when the caller is not permissioned
     //  [X] it reverts
@@ -126,6 +334,8 @@ contract ContractRegistryTest is Test {
     // when the name contains a numeral
     //  [X] it succeeds
     // given the name is registered
+    //  [X] it reverts
+    // given the name is registered as an immutable address
     //  [X] it reverts
     // given the name is not registered
     //  given there are existing registrations
@@ -189,6 +399,17 @@ contract ContractRegistryTest is Test {
         _registerContract(bytes5("ohm"), address(0));
     }
 
+    function test_registerContract_whenImmutableNameIsRegistered_reverts()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractAlreadyRegistered.selector));
+
+        // Register the second time
+        _registerContract(bytes5("ohm"), addressTwo);
+    }
+
     function test_registerContract_whenNameIsRegistered_reverts()
         public
         givenContractIsRegistered(bytes5("ohm"), addressOne)
@@ -203,7 +424,7 @@ contract ContractRegistryTest is Test {
     function test_registerContract_whenNameIsNotRegistered() public {
         // Expect an event to be emitted for updated registration
         vm.expectEmit();
-        emit ContractRegistered(bytes5("ohm"), addressOne);
+        emit ContractRegistered(bytes5("ohm"), addressOne, false);
 
         // Register the first time
         _registerContract(bytes5("ohm"), addressOne);
@@ -218,6 +439,11 @@ contract ContractRegistryTest is Test {
             RGSTY.getContractNames()[0],
             bytes5("ohm"),
             "Names array is not updated correctly"
+        );
+        assertEq(
+            RGSTY.getImmutableContractNames().length,
+            0,
+            "Immutable names array is not updated correctly"
         );
     }
 
@@ -259,24 +485,26 @@ contract ContractRegistryTest is Test {
             bytes5("ohm3"),
             "Names array is not updated correctly"
         );
+        assertEq(
+            RGSTY.getImmutableContractNames().length,
+            0,
+            "Immutable names array is not updated correctly"
+        );
     }
 
-    function test_activatePolicies_whenContractIsRegistered() public {
+    function test_registerContract_activatePolicies_whenContractIsRegistered() public {
         // Register the contract
         _registerContract(bytes5("dai"), addressOne);
 
         assertEq(_policy.dai(), address(0));
-        assertEq(_policy2.dai(), address(0));
 
         // Activate the dependent policies
         _activatePolicyOne();
-        _activatePolicyTwo();
 
         assertEq(_policy.dai(), addressOne);
-        assertEq(_policy2.dai(), addressOne);
     }
 
-    function test_activatePolicies_whenContractNotRegistered_reverts() public {
+    function test_registerContract_activatePolicies_whenContractNotRegistered_reverts() public {
         // Expect the policy to revert
         vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
@@ -290,6 +518,8 @@ contract ContractRegistryTest is Test {
     // when the name is not registered
     //  [X] it reverts
     // when the address is zero
+    //  [X] it reverts
+    // when the name is registered as an immutable address
     //  [X] it reverts
     // given dependent policies are registered
     //  [X] it refreshes the dependents
@@ -319,6 +549,15 @@ contract ContractRegistryTest is Test {
         _updateContract(bytes5("ohm"), address(0));
     }
 
+    function test_updateContract_whenImmutableNameIsRegistered_reverts()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
+
+        _updateContract(bytes5("ohm"), addressOne);
+    }
+
     function test_updateContract() public givenContractIsRegistered(bytes5("ohm"), addressOne) {
         // Expect an event to be emitted
         vm.expectEmit();
@@ -335,24 +574,24 @@ contract ContractRegistryTest is Test {
         );
     }
 
-    function test_updateContract_whenDependentPoliciesAreRegistered()
+    function test_updateContract_whenDependentPolicyIsRegistered()
         public
         givenContractIsRegistered(bytes5("dai"), addressOne)
         givenPolicyOneIsActive
-        givenPolicyTwoIsActive
     {
         // Update the contract
         _updateContract(bytes5("dai"), addressTwo);
 
         // Assert values in the policies have been updated
         assertEq(_policy.dai(), addressTwo);
-        assertEq(_policy2.dai(), addressTwo);
     }
 
     // deregisterContract
     // when the caller is not permissioned
     //  [X] it reverts
     // given the name is not registered
+    //  [X] it reverts
+    // given the name is registered as an immutable address
     //  [X] it reverts
     // given the name is registered
     //  given multiple names are registered
@@ -376,6 +615,15 @@ contract ContractRegistryTest is Test {
     }
 
     function test_deregisterContract_whenNameIsNotRegistered_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
+
+        _deregisterContract(bytes5(""));
+    }
+
+    function test_deregisterContract_whenImmutableNameIsRegistered_reverts()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+    {
         vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
 
         _deregisterContract(bytes5(""));
@@ -472,11 +720,10 @@ contract ContractRegistryTest is Test {
         }
     }
 
-    function test_deregisterContract_whenDependentPoliciesAreRegistered_reverts()
+    function test_deregisterContract_whenDependentPolicyIsRegistered_reverts()
         public
         givenContractIsRegistered(bytes5("dai"), addressOne)
         givenPolicyOneIsActive
-        givenPolicyTwoIsActive
     {
         // Expect the policies to revert
         vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
@@ -485,7 +732,7 @@ contract ContractRegistryTest is Test {
         _deregisterContract(bytes5("dai"));
     }
 
-    function test_deregisterContract_whenDependentPoliciesAreNotRegistered()
+    function test_deregisterContract_whenDependentPolicyIsRegistered()
         public
         givenContractIsRegistered(bytes5("ohm"), addressOne)
     {
@@ -494,7 +741,24 @@ contract ContractRegistryTest is Test {
 
         // Assert values
         assertEq(_policy.dai(), address(0));
-        assertEq(_policy2.dai(), address(0));
+    }
+
+    // getImmutableContract
+    // given the name is not registered
+    //  [X] it reverts
+    // [X] it returns the contract address
+
+    function test_getImmutableContract_whenNameIsNotRegistered_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_ContractNotRegistered.selector));
+
+        RGSTY.getImmutableContract(bytes5("ohm"));
+    }
+
+    function test_getImmutableContract()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        assertEq(RGSTY.getImmutableContract(bytes5("ohm")), addressOne);
     }
 
     // getContract
@@ -511,9 +775,7 @@ contract ContractRegistryTest is Test {
         RGSTY.getContract(bytes5("ohm"));
     }
 
-    function test_getContract_whenNameIsRegistered() public {
-        _registerContract(bytes5("ohm"), addressOne);
-
+    function test_getContract() public givenContractIsRegistered(bytes5("ohm"), addressOne) {
         assertEq(
             RGSTY.getContract(bytes5("ohm")),
             addressOne,
@@ -530,6 +792,27 @@ contract ContractRegistryTest is Test {
             RGSTY.getContract(bytes5("ohm")),
             addressTwo,
             "Contract address is not updated correctly"
+        );
+    }
+
+    // getImmutableContractNames
+    // given no names are registered
+    //  [X] it returns an empty array
+    // given names are registered
+    //  [X] it returns the names array
+
+    function test_getImmutableContractNames_whenNoNamesAreRegistered() public {
+        assertEq(RGSTY.getImmutableContractNames().length, 0, "Immutable names array is not empty");
+    }
+
+    function test_getImmutableContractNames()
+        public
+        givenImmutableContractIsRegistered(bytes5("ohm"), addressOne)
+    {
+        assertEq(
+            RGSTY.getImmutableContractNames().length,
+            1,
+            "Immutable names array is not updated correctly"
         );
     }
 

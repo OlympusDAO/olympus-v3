@@ -66,10 +66,11 @@ contract ContractRegistryAdmin is Policy, RolesConsumer {
     {
         Keycode rgstyKeycode = toKeycode("RGSTY");
 
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](4);
         permissions[0] = Permissions(rgstyKeycode, RGSTYv1.registerContract.selector);
         permissions[1] = Permissions(rgstyKeycode, RGSTYv1.updateContract.selector);
         permissions[2] = Permissions(rgstyKeycode, RGSTYv1.deregisterContract.selector);
+        permissions[3] = Permissions(rgstyKeycode, RGSTYv1.registerImmutableContract.selector);
 
         return permissions;
     }
@@ -88,6 +89,21 @@ contract ContractRegistryAdmin is Policy, RolesConsumer {
     }
 
     // ============ ADMIN FUNCTIONS ============ //
+
+    /// @notice Register an immutable contract in the contract registry
+    /// @dev    This function will revert if:
+    ///         - This contract is not activated as a policy
+    ///         - The caller does not have the required role
+    ///         - The RGSTY module reverts
+    ///
+    /// @param  name_ The name of the contract
+    /// @param  contractAddress_ The address of the contract
+    function registerImmutableContract(
+        bytes5 name_,
+        address contractAddress_
+    ) external onlyPolicyActive onlyRole(CONTRACT_REGISTRY_ADMIN_ROLE) {
+        RGSTY.registerImmutableContract(name_, contractAddress_);
+    }
 
     /// @notice Register a contract in the contract registry
     /// @dev    This function will revert if:
