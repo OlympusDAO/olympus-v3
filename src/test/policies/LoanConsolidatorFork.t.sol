@@ -17,6 +17,7 @@ import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
@@ -27,19 +28,24 @@ contract LoanConsolidatorForkTest is Test {
     ERC20 public ohm;
     ERC20 public gohm;
     ERC20 public dai;
+    ERC20 public usds;
     IERC4626 public sdai;
+    IERC4626 public susds;
 
     CoolerFactory public coolerFactory;
     Clearinghouse public clearinghouse;
+    Clearinghouse public clearinghouseUsds;
 
     OlympusContractRegistry public RGSTY;
     ContractRegistryAdmin public rgstyAdmin;
     RolesAdmin public rolesAdmin;
     TRSRYv1 public TRSRY;
+    CHREGv1 public CHREG;
     Kernel public kernel;
 
     address public staking;
     address public lender;
+    address public daiUsdsMigrator;
     address public admin;
     address public emergency;
     address public kernelExecutor;
@@ -53,7 +59,8 @@ contract LoanConsolidatorForkTest is Test {
     uint256 internal trsryDaiBalance;
     uint256 internal trsryGOhmBalance;
     uint256 internal trsrySDaiBalance;
-
+    uint256 internal trsryUsdsBalance;
+    uint256 internal trsrySusdsBalance;
     string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
 
     // These are replicated here so that if they are updated, the tests will fail
@@ -62,8 +69,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function setUp() public {
         // Mainnet Fork at a fixed block
-        // Prior to actual deployment of LoanConsolidator and RGSTY
-        vm.createSelectFork(RPC_URL, 18762666);
+        // sUSDS deployment
+        vm.createSelectFork(RPC_URL, 20677434);
 
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
@@ -72,18 +79,24 @@ contract LoanConsolidatorForkTest is Test {
         ohm = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
         gohm = ERC20(0x0ab87046fBb341D058F17CBC4c1133F25a20a52f);
         dai = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+        usds = ERC20(0xdC035D45d973E3EC169d2276DDab16f1e407384F);
         sdai = IERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
+        susds = IERC4626(0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD);
         lender = 0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA;
         staking = 0xB63cac384247597756545b500253ff8E607a8020;
+        daiUsdsMigrator = 0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A;
 
         kernel = Kernel(0x2286d7f9639e8158FaD1169e76d1FbC38247f54b);
         rolesAdmin = RolesAdmin(0xb216d714d91eeC4F7120a732c11428857C659eC8);
         TRSRY = TRSRYv1(address(kernel.getModuleForKeycode(toKeycode("TRSRY"))));
+        CHREG = CHREGv1(address(kernel.getModuleForKeycode(toKeycode("CHREG"))));
 
         // Cache the TRSRY balances
         trsryDaiBalance = dai.balanceOf(address(TRSRY));
         trsryGOhmBalance = gohm.balanceOf(address(TRSRY));
         trsrySDaiBalance = sdai.balanceOf(address(TRSRY));
+        trsryUsdsBalance = usds.balanceOf(address(TRSRY));
+        trsrySusdsBalance = susds.balanceOf(address(TRSRY));
 
         // Determine the kernel executor
         kernelExecutor = Kernel(kernel).executor();
@@ -102,13 +115,34 @@ contract LoanConsolidatorForkTest is Test {
         vm.prank(kernelExecutor);
         rolesAdmin.grantRole("contract_registry_admin", address(this));
 
+        // Grant the cooler overseer role to this contract
+        vm.prank(kernelExecutor);
+        rolesAdmin.grantRole("cooler_overseer", address(this));
+
         // Register the tokens with RGSTY
         vm.startPrank(address(this));
         rgstyAdmin.registerImmutableContract("dai", address(dai));
         rgstyAdmin.registerImmutableContract("sdai", address(sdai));
         rgstyAdmin.registerImmutableContract("gohm", address(gohm));
+        rgstyAdmin.registerImmutableContract("usds", address(usds));
         rgstyAdmin.registerContract("flash", address(lender));
+        rgstyAdmin.registerContract("dmgtr", address(coolerFactory));
         vm.stopPrank();
+
+        // Add a new Clearinghouse with USDS
+        clearinghouseUsds = new Clearinghouse(
+            address(ohm),
+            address(gohm),
+            staking,
+            address(susds),
+            address(coolerFactory),
+            address(kernel)
+        );
+        vm.startPrank(kernelExecutor);
+        kernel.executeAction(Actions.ActivatePolicy, address(clearinghouseUsds));
+        vm.stopPrank();
+        // Activate the USDS Clearinghouse
+        clearinghouseUsds.activate();
 
         admin = vm.addr(0x2);
 
@@ -122,8 +156,10 @@ contract LoanConsolidatorForkTest is Test {
 
         // Ensure the Clearinghouse has enough DAI
         deal(address(dai), address(clearinghouse), 18_000_000 * 1e18);
+        // Ensure the Clearinghouse has enough USDS
+        deal(address(usds), address(clearinghouseUsds), 18_000_000 * 1e18);
 
-        _createCoolers(clearinghouse, coolerFactory, walletA);
+        _createCoolers(clearinghouse, coolerFactory, walletA, dai);
     }
 
     // ===== MODIFIERS ===== //
@@ -259,12 +295,13 @@ contract LoanConsolidatorForkTest is Test {
     function _createCoolers(
         Clearinghouse clearinghouse_,
         CoolerFactory coolerFactory_,
-        address wallet_
+        address wallet_,
+        ERC20 token_
     ) internal {
         // Create coolers
         vm.startPrank(wallet_);
         // Deploy a cooler for wallet_
-        address coolerA_ = coolerFactory_.generateCooler(gohm, dai);
+        address coolerA_ = coolerFactory_.generateCooler(gohm, token_);
         coolerA = Cooler(coolerA_);
 
         // Approve clearinghouse to spend gOHM
@@ -312,14 +349,85 @@ contract LoanConsolidatorForkTest is Test {
             trsryDaiBalance + collectorBalance,
             "dai: collector"
         );
+        assertEq(usds.balanceOf(address(utils)), 0, "usds: utils");
+        assertEq(usds.balanceOf(walletA), 0, "usds: walletA");
+        assertEq(usds.balanceOf(address(coolerA)), 0, "usds: coolerA");
+        assertEq(usds.balanceOf(lender), 0, "usds: lender");
+        assertEq(usds.balanceOf(address(TRSRY)), trsryUsdsBalance, "usds: collector");
         assertEq(sdai.balanceOf(address(utils)), 0, "sdai: utils");
         assertEq(sdai.balanceOf(walletA), 0, "sdai: walletA");
         assertEq(sdai.balanceOf(address(coolerA)), 0, "sdai: coolerA");
         assertEq(sdai.balanceOf(lender), 0, "sdai: lender");
         assertEq(sdai.balanceOf(address(TRSRY)), trsrySDaiBalance, "sdai: collector");
+        assertEq(susds.balanceOf(address(utils)), 0, "susds: utils");
+        assertEq(susds.balanceOf(walletA), 0, "susds: walletA");
+        assertEq(susds.balanceOf(address(coolerA)), 0, "susds: coolerA");
+        assertEq(susds.balanceOf(lender), 0, "susds: lender");
+        assertEq(susds.balanceOf(address(TRSRY)), trsrySusdsBalance, "susds: collector");
         assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
         assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
         assertEq(gohm.balanceOf(address(coolerA)), collateralBalance, "gohm: coolerA");
+        assertEq(gohm.balanceOf(lender), 0, "gohm: lender");
+        assertEq(gohm.balanceOf(address(TRSRY)), trsryGOhmBalance, "gohm: collector");
+    }
+
+    function _assertTokenBalances(
+        address reserveTo_,
+        address coolerFrom_,
+        address coolerTo_,
+        uint256 walletABalance,
+        uint256 lenderBalance,
+        uint256 collectorBalance,
+        uint256 collateralBalance
+    ) internal {
+        assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
+        assertEq(
+            dai.balanceOf(walletA),
+            reserveTo_ == address(dai) ? walletABalance : 0,
+            "dai: walletA"
+        );
+        assertEq(dai.balanceOf(address(coolerFrom_)), 0, "dai: coolerFrom_");
+        assertEq(dai.balanceOf(address(coolerTo_)), 0, "dai: coolerTo_");
+        assertEq(dai.balanceOf(lender), lenderBalance, "dai: lender");
+        assertEq(
+            dai.balanceOf(address(TRSRY)),
+            trsryDaiBalance + collectorBalance,
+            "dai: collector"
+        );
+
+        assertEq(usds.balanceOf(address(utils)), 0, "usds: utils");
+        assertEq(
+            usds.balanceOf(walletA),
+            reserveTo_ == address(usds) ? walletABalance : 0,
+            "usds: walletA"
+        );
+        assertEq(usds.balanceOf(address(coolerFrom_)), 0, "usds: coolerFrom_");
+        assertEq(usds.balanceOf(address(coolerTo_)), 0, "usds: coolerTo_");
+        assertEq(usds.balanceOf(lender), 0, "usds: lender");
+        assertEq(usds.balanceOf(address(TRSRY)), trsryUsdsBalance, "usds: collector");
+
+        assertEq(sdai.balanceOf(address(utils)), 0, "sdai: utils");
+        assertEq(sdai.balanceOf(walletA), 0, "sdai: walletA");
+        assertEq(sdai.balanceOf(address(coolerFrom_)), 0, "sdai: coolerFrom_");
+        assertEq(sdai.balanceOf(address(coolerTo_)), 0, "sdai: coolerTo_");
+        assertEq(sdai.balanceOf(lender), 0, "sdai: lender");
+        assertEq(sdai.balanceOf(address(TRSRY)), trsrySDaiBalance, "sdai: collector");
+
+        assertEq(susds.balanceOf(address(utils)), 0, "susds: utils");
+        assertEq(susds.balanceOf(walletA), 0, "susds: walletA");
+        assertEq(susds.balanceOf(address(coolerFrom_)), 0, "susds: coolerFrom_");
+        assertEq(susds.balanceOf(address(coolerTo_)), 0, "susds: coolerTo_");
+        assertEq(susds.balanceOf(lender), 0, "susds: lender");
+        assertEq(susds.balanceOf(address(TRSRY)), trsrySusdsBalance, "susds: collector");
+
+        assertEq(gohm.balanceOf(address(utils)), 0, "gohm: utils");
+        assertEq(gohm.balanceOf(walletA), 0, "gohm: walletA");
+        assertEq(
+            gohm.balanceOf(address(coolerFrom_)),
+            address(coolerFrom_) == address(coolerTo_) ? collateralBalance : 0,
+            "gohm: coolerFrom_"
+        );
+        assertEq(gohm.balanceOf(address(coolerTo_)), collateralBalance, "gohm: coolerTo_");
         assertEq(gohm.balanceOf(lender), 0, "gohm: lender");
         assertEq(gohm.balanceOf(address(TRSRY)), trsryGOhmBalance, "gohm: collector");
     }
@@ -365,15 +473,21 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it reverts
     // given the contract has been disabled
     //  [X] it reverts
-    // when the clearinghouse is not registered with CHREG
+    // given clearinghouseFrom is not registered with CHREG
     //  [X] it reverts
-    // when the cooler was not created by a valid CoolerFactory
+    // given clearinghouseTo is not registered with CHREG
+    //  [X] it reverts
+    // given coolerFrom was not created by a valid CoolerFactory
+    //  [X] it reverts
+    // given coolerTo was not created by a valid CoolerFactory
     //  [X] it reverts
     // given the caller has no loans
     //  [X] it reverts
     // given the caller has 1 loan
     //  [X] it reverts
-    // given the caller is not the cooler owner
+    // given the caller is not the owner of coolerFrom
+    //  [X] it reverts
+    // given the caller is not the owner of coolerTo
     //  [X] it reverts
     // given DAI spending approval has not been given to LoanConsolidator
     //  [X] it reverts
@@ -402,9 +516,23 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it succeeds, but does not transfer additional DAI for the fee
     // when the Clearinghouse is disabled
     //  [X] it reverts
+    // when clearinghouseFrom is DAI and clearinghouseTo is USDS
+    //  given the Cooler owner has not approved sufficient spending of USDS proceeds
+    //   [ ] it reverts
+    //  [X] the Cooler owner receives USDS
+    // when clearinghouseFrom is USDS and clearinghouseTo is DAI
+    //  given the Cooler owner has not approved sufficient spending of DAI proceeds
+    //   [ ] it reverts
+    //  [X] the Cooler owner receives DAI
+    // when clearinghouseFrom is USDS and clearinghouseTo is USDS
+    //  given the Cooler owner has not approved sufficient spending of USDS proceeds
+    //   [ ] it reverts
+    //  [ ] the Cooler owner receives USDS
+    // when clearinghouseFrom is DAI and clearinghouseTo is DAI
+    //  given the Cooler owner has not approved sufficient spending of DAI proceeds
+    //   [ ] it reverts
+    //  [X] the Cooler owner receives DAI
     // [X] it takes a flashloan for the total debt amount + LoanConsolidator fee, and consolidates the loans into one
-
-    // TODO tests for DAI<->USDS migration
 
     // --- consolidateWithFlashLoan --------------------------------------------
 
@@ -432,7 +560,7 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(idsA);
     }
 
-    function test_consolidate_thirdPartyClearinghouse_reverts() public givenPolicyActive {
+    function test_consolidate_thirdPartyClearinghouseFrom_reverts() public givenPolicyActive {
         // Create a new Clearinghouse
         // It is not registered with CHREG, so should be rejected
         Clearinghouse newClearinghouse = new Clearinghouse(
@@ -454,6 +582,37 @@ contract LoanConsolidatorForkTest is Test {
         vm.prank(walletA);
         utils.consolidateWithFlashLoan(
             address(newClearinghouse),
+            address(clearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
+    }
+
+    function test_consolidate_thirdPartyClearinghouseTo_reverts() public givenPolicyActive {
+        // Create a new Clearinghouse
+        // It is not registered with CHREG, so should be rejected
+        Clearinghouse newClearinghouse = new Clearinghouse(
+            address(ohm),
+            address(gohm),
+            staking,
+            address(sdai),
+            address(coolerFactory),
+            address(kernel)
+        );
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InvalidClearinghouse.selector)
+        );
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        uint256[] memory idsA = _idsA();
+        vm.prank(walletA);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
             address(newClearinghouse),
             address(coolerA),
             address(coolerA),
@@ -463,7 +622,7 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_thirdPartyCooler_reverts() public givenPolicyActive {
+    function test_consolidate_thirdPartyCoolerFrom_reverts() public givenPolicyActive {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
         Cooler newCooler = new Cooler();
@@ -478,6 +637,28 @@ contract LoanConsolidatorForkTest is Test {
             address(clearinghouse),
             address(clearinghouse),
             address(newCooler),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
+    }
+
+    function test_consolidate_thirdPartyCoolerTo_reverts() public givenPolicyActive {
+        // Create a new Cooler
+        // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
+        Cooler newCooler = new Cooler();
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector));
+
+        // Consolidate loans for coolerA into newCooler
+        uint256[] memory idsA = _idsA();
+        vm.prank(walletA);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(coolerA),
             address(newCooler),
             idsA,
             0,
@@ -514,8 +695,15 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(ids);
     }
 
-    function test_consolidate_callerNotOwner_reverts() public givenPolicyActive {
+    function test_consolidate_callerNotOwner_coolerFrom_reverts() public givenPolicyActive {
         uint256[] memory idsA = _idsA();
+
+        // Deploy a cooler for walletB
+        address walletB = vm.addr(0xB);
+        vm.startPrank(walletB);
+        address coolerB_ = coolerFactory.generateCooler(gohm, dai);
+        Cooler coolerB = Cooler(coolerB_);
+        vm.stopPrank();
 
         // Grant approvals
         (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
@@ -531,11 +719,48 @@ contract LoanConsolidatorForkTest is Test {
 
         // Consolidate loans for coolers A, B, and C into coolerC
         // Do not perform as the cooler owner
+        vm.prank(walletA);
+        utils.consolidateWithFlashLoan(
+            address(clearinghouse),
+            address(clearinghouse),
+            address(coolerB),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
+    }
+
+    function test_consolidate_callerNotOwner_coolerTo_reverts() public givenPolicyActive {
+        uint256[] memory idsA = _idsA();
+
+        // Deploy a cooler for walletB
+        address walletB = vm.addr(0xB);
+        vm.startPrank(walletB);
+        address coolerB_ = coolerFactory.generateCooler(gohm, dai);
+        Cooler coolerB = Cooler(coolerB_);
+        vm.stopPrank();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
+            address(clearinghouse),
+            address(coolerA),
+            idsA
+        );
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyCoolerOwner.selector));
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        // Do not perform as the cooler owner
+        vm.prank(walletA);
         utils.consolidateWithFlashLoan(
             address(clearinghouse),
             address(clearinghouse),
             address(coolerA),
-            address(coolerA),
+            address(coolerB),
             idsA,
             0,
             false
@@ -961,6 +1186,8 @@ contract LoanConsolidatorForkTest is Test {
         uint256 useFunds = protocolFee;
         uint256 useFundsSDai = sdai.previewWithdraw(useFunds);
         deal(address(sdai), walletA, useFundsSDai);
+        // Convert sDAI amount back to DAI, in case of rounding
+        useFunds = sdai.previewRedeem(useFundsSDai);
 
         // Approve SDai spending
         vm.prank(walletA);
@@ -1106,6 +1333,103 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
+    function test_consolidate_protocolFee_daiToUsds()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Create a Cooler on the USDS Clearinghouse
+        vm.startPrank(walletA);
+        address coolerUsds_ = coolerFactory.generateCooler(usds, dai);
+        Cooler coolerUsds = Cooler(coolerUsds_);
+        vm.stopPrank();
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(clearinghouse), address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(
+            address(clearinghouse),
+            address(clearinghouseUsds),
+            address(coolerA),
+            address(coolerUsds),
+            idsA,
+            0,
+            false
+        );
+
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            address(usds),
+            address(coolerA),
+            address(coolerUsds),
+            initPrincipal - interestDue - protocolFee,
+            0,
+            protocolFee,
+            _GOHM_AMOUNT
+        );
+        _assertApprovals();
+    }
+
+    function test_consolidate_protocolFee_usdsToDai()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Cache before it gets overwritten
+        address coolerDai = address(coolerA);
+
+        // Create coolers
+        deal(address(gohm), walletA, _GOHM_AMOUNT);
+        _createCoolers(clearinghouseUsds, coolerFactory, walletA, usds);
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(clearinghouseUsds), address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(
+            address(clearinghouseUsds),
+            address(clearinghouse),
+            address(coolerA),
+            address(coolerDai),
+            idsA,
+            0,
+            false
+        );
+
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            address(dai),
+            address(coolerA),
+            address(coolerDai),
+            initPrincipal - interestDue - protocolFee,
+            0,
+            protocolFee,
+            _GOHM_AMOUNT
+        );
+        _assertApprovals();
+    }
+
     // setFeePercentage
     // when the policy is not active
     //  [X] it reverts
@@ -1163,7 +1487,14 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it returns the correct values
     // when the protocol fee is non-zero
     //  [X] it returns the correct values
-    // [X] it returns the correct values for owner, gOHM amount, total DAI debt and sDAI amount
+    // when clearinghouseFrom is DAI and clearinghouseTo is USDS
+    //  [ ] it provides the correct values
+    // when clearinghouseFrom is USDS and clearinghouseTo is DAI
+    //  [ ] it provides the correct values
+    // when clearinghouseFrom is USDS and clearinghouseTo is USDS
+    //  [ ] it provides the correct values
+    // when clearinghouseFrom is DAI and clearinghouseTo is DAI
+    //  [ ] it provides the correct values
 
     function test_requiredApprovals_policyNotActive_reverts() public {
         uint256[] memory ids = _idsA();
