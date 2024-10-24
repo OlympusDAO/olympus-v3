@@ -60,26 +60,28 @@ contract LoanConsolidatorScript is Test {
         );
 
         // Determine the interest payable
-        uint256 interestPayable;
-        uint256 collateral;
-        for (uint256 i = 0; i < loanIds_.length; i++) {
-            Cooler.Loan memory loan = coolerFrom.getLoan(loanIds_[i]);
-            interestPayable += loan.interestDue;
-            collateral += loan.collateral;
-        }
-        console2.log("Interest payable:", interestPayable);
-        console2.log("Collateral:", collateral);
+        {
+            uint256 interestPayable;
+            uint256 collateral;
+            for (uint256 i = 0; i < loanIds_.length; i++) {
+                Cooler.Loan memory loan = coolerFrom.getLoan(loanIds_[i]);
+                interestPayable += loan.interestDue;
+                collateral += loan.collateral;
+            }
+            console2.log("Interest payable:", interestPayable);
+            console2.log("Collateral:", collateral);
 
-        // Determine if there is an additional amount of collateral to be paid
-        uint256 additionalCollateral;
-        if (gohmApproval > collateral) {
-            additionalCollateral = gohmApproval - collateral;
-        }
+            // Determine if there is an additional amount of collateral to be paid
+            uint256 additionalCollateral;
+            if (gohmApproval > collateral) {
+                additionalCollateral = gohmApproval - collateral;
+            }
 
-        // Provide the additional collateral
-        if (additionalCollateral > 0) {
-            console2.log("Providing additional collateral:", additionalCollateral);
-            deal(address(_gohm), owner_, additionalCollateral);
+            // Provide the additional collateral
+            if (additionalCollateral > 0) {
+                console2.log("Providing additional collateral:", additionalCollateral);
+                deal(address(_gohm), owner_, additionalCollateral);
+            }
         }
 
         // Grant approvals
@@ -88,11 +90,14 @@ contract LoanConsolidatorScript is Test {
         _dai.approve(address(utils), totalDebtWithFee);
         vm.stopPrank();
 
-        console2.log("---");
-        console2.log("gOHM balance before:", _gohm.balanceOf(owner_));
-        console2.log("DAI balance before:", _dai.balanceOf(owner_));
+        {
+            console2.log("---");
+            console2.log("gOHM balance before:", _gohm.balanceOf(owner_));
+            console2.log("DAI balance before:", _dai.balanceOf(owner_));
 
-        console2.log("Consolidating loans...");
+            console2.log("Consolidating loans...");
+        }
+
         // Consolidate the loans
         vm.startPrank(owner_);
         utils.consolidateWithFlashLoan(
