@@ -369,7 +369,7 @@ contract EmissionManager is Policy, RolesConsumer {
     function setVestingPeriod(uint48 newVestingPeriod_) external onlyRole("emissions_admin") {
         // Verify that the vesting period isn't more than a year
         // This check helps ensure a timestamp isn't input instead of a duration
-        if (newVestingPeriod_ > uint48(1 years)) revert InvalidParam("newVestingPeriod");
+        if (newVestingPeriod_ > uint48(31536000)) revert InvalidParam("newVestingPeriod");
         vestingPeriod = newVestingPeriod_;
     }
 
