@@ -209,6 +209,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Token contract addresses are immutable
         DAI = IERC20(RGSTY.getImmutableContract("dai"));
         SDAI = IERC4626(RGSTY.getImmutableContract("sdai"));
+        USDS = IERC20(RGSTY.getImmutableContract("usds"));
         GOHM = IERC20(RGSTY.getImmutableContract("gohm"));
         // Utility contract addresses are mutable
         FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
@@ -233,8 +234,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @dev    This function will revert if:
     ///         - The caller has not approved this contract to spend the `useFunds_`.
     ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
-    ///         - `clearinghouse_` is not registered with the Clearinghouse registry.
-    ///         - `cooler_` is not a valid Cooler for the Clearinghouse.
+    ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
+    ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
     ///         - Less than two loans are being consolidated.
     ///         - The available funds are less than the required flashloan amount.
     ///         - The contract is not active.
