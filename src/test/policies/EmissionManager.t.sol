@@ -703,8 +703,8 @@ contract EmissionManagerTest is Test {
         uint256 reserves = emissionManager.getReserves();
         uint256 supply = emissionManager.getSupply();
 
-        uint256 expectedBacking = (_backing * ((input * 1e18) / reserves)) /
-            ((output * 1e18) / supply);
+        uint256 expectedBacking = (_backing * (((input + reserves) * 1e18) / reserves)) /
+            (((output + supply) * 1e18) / supply);
 
         // Call the callback function
         vm.prank(address(teller));
@@ -726,5 +726,63 @@ contract EmissionManagerTest is Test {
             treasuryBalance + input, // can use the reserve amount as the wrappedReserve amount since the conversion rate is 1:1
             "TRSRY wrapped reserve balance should be updated"
         );
+    }
+
+    // execute -> callback (full cycle bond purchase) tests
+
+    function test_executeCallback_success() public givenNextBeatIsZero {
+        // Change the price to 20 reserve per OHM for easier math
+        PRICE.setLastPrice(20 * 1e18);
+
+        // Cache the next bond market id
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute to create the bond market
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Store initial balances
+        uint256 aliceOhmBalance = ohm.balanceOf(alice);
+        uint256 aliceReserveBalance = reserve.balanceOf(alice);
+        uint256 treasuryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 ohmSupply = ohm.totalSupply();
+
+        // Store initial backing value
+        uint256 bidAmount = 1000e18;
+        uint256 expectedPayout = auctioneer.payoutFor(bidAmount, nextBondMarketId, address(0));
+        uint256 backing = emissionManager.backing();
+        uint256 expectedBacking;
+        {
+            uint256 reserves = emissionManager.getReserves();
+            uint256 supply = emissionManager.getSupply();
+            expectedBacking =
+                (backing * (((reserves + bidAmount) * 1e18) / reserves)) /
+                (((supply + expectedPayout) * 1e18) / supply);
+        }
+
+        // Purchase a bond from the market
+
+        vm.prank(alice);
+        teller.purchase(alice, address(0), nextBondMarketId, bidAmount, expectedPayout);
+
+        // Confirm the balance changes
+        assertEq(
+            ohm.balanceOf(alice),
+            aliceOhmBalance + expectedPayout,
+            "OHM balance should be updated"
+        );
+        assertEq(
+            reserve.balanceOf(alice),
+            aliceReserveBalance - bidAmount,
+            "Reserve balance should be updated"
+        );
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            treasuryWrappedReserveBalance + bidAmount,
+            "TRSRY wrapped reserve balance should be updated"
+        );
+
+        // Confirm the backing has been updated
+        assertEq(emissionManager.backing(), expectedBacking, "Backing should be updated");
     }
 }
