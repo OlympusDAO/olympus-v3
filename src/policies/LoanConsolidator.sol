@@ -713,6 +713,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
         uint256 lenderFee = FLASH.flashFee(address(DAI), totalDebtWithFee);
 
+        // TODO indicate how much will be paid from the flashloan (max) and how much the owner needs to provide
+
         return (
             Cooler(coolerFrom_).owner(),
             consolidatedLoanCollateral,
