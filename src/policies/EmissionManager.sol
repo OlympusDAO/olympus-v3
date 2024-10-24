@@ -199,7 +199,7 @@ contract EmissionManager is Policy, RolesConsumer {
         if (baseEmissionsRate_ == 0) revert InvalidParam("baseEmissionRate");
         if (minimumPremium_ == 0) revert InvalidParam("minimumPremium");
         if (backing_ == 0) revert InvalidParam("backing");
-        if (restartTimeframe_ == 0) InvalidParam("restartTimeframe");
+        if (restartTimeframe_ == 0) revert InvalidParam("restartTimeframe");
 
         // Assign
         baseEmissionRate = baseEmissionsRate_;
