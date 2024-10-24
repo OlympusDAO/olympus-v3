@@ -34,6 +34,10 @@ contract EmissionManager is Policy, RolesConsumer {
     error OnlyTeller();
     error InvalidMarket();
     error InvalidCallback();
+    error InvalidParam(string parameter);
+    error CannotRestartYet(uint48 availableAt);
+    error NotActive();
+    error AlreadyActive();
 
     // ========== EVENTS ========== //
 
@@ -182,13 +186,20 @@ contract EmissionManager is Policy, RolesConsumer {
         uint256 backing_,
         uint48 restartTimeframe_
     ) external onlyRole("emissions_admin") {
-        if (locallyActive) revert("Already initialized");
+        // Cannot initialize if currently active
+        if (locallyActive) revert AlreadyActive();
 
-        // Validate
-        if (baseEmissionsRate_ == 0) revert("Base emissions rate cannot be 0");
-        if (minimumPremium_ == 0) revert("Minimum premium cannot be 0");
-        if (backing_ == 0) revert("Backing cannot be 0");
-        if (restartTimeframe_ == 0) revert("Restart timeframe cannot be 0");
+        // Cannot initialize if the restart timeframe hasn't passed since the shutdown timestamp
+        // This is specific to re-initializing after a shutdown
+        // It will not revert on the first initialization since both values will be zero
+        if (shutdownTimestamp + restartTimeframe > uint48(block.timestamp))
+            revert CannotRestartYet(shutdownTimestamp + restartTimeframe);
+
+        // Validate inputs
+        if (baseEmissionsRate_ == 0) revert InvalidParam("baseEmissionRate");
+        if (minimumPremium_ == 0) revert InvalidParam("minimumPremium");
+        if (backing_ == 0) revert InvalidParam("backing");
+        if (restartTimeframe_ == 0) InvalidParam("restartTimeframe");
 
         // Assign
         baseEmissionRate = baseEmissionsRate_;
@@ -334,19 +345,25 @@ contract EmissionManager is Policy, RolesConsumer {
         uint48 forNumBeats_,
         bool add
     ) external onlyRole("emissions_admin") {
-        if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate)) revert("Math will underflow");
+        if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate))
+            revert InvalidParam("changeBy * forNumBeats");
         rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
     }
 
     /// @notice set the minimum premium for emissions
     /// @param newMinimumPremium_ uint256
     function setMinimumPremium(uint256 newMinimumPremium_) external onlyRole("emissions_admin") {
+        if (newMinimumPremium_ == 0) revert InvalidParam("newMinimumPremium");
+
         minimumPremium = newMinimumPremium_;
     }
 
     /// @notice set the new vesting period in seconds
     /// @param newVestingPeriod_ uint48
     function setVestingPeriod(uint48 newVestingPeriod_) external onlyRole("emissions_admin") {
+        // Verify that the vesting period isn't more than a year
+        // This check helps ensure a timestamp isn't input instead of a duration
+        if (newVestingPeriod_ > uint48(1 years)) revert InvalidParam("newVestingPeriod");
         vestingPeriod = newVestingPeriod_;
     }
 
@@ -355,13 +372,17 @@ contract EmissionManager is Policy, RolesConsumer {
     /// @param newBacking to adjust to
     /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
     function adjustBacking(uint256 newBacking) external onlyRole("emissions_admin") {
-        if (newBacking < (backing * 9) / 10) revert("Change too significant");
+        // Backing cannot be reduced by more than 10% at a time
+        if (newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
         backing = newBacking;
     }
 
     /// @notice allow governance to adjust the timeframe for restart after shutdown
     /// @param newTimeframe to adjust it to
     function adjustRestartTimeframe(uint48 newTimeframe) external onlyRole("emissions_admin") {
+        // Restart timeframe must be greater than 0
+        if (newTimeframe == 0) revert InvalidParam("newTimeframe");
+
         restartTimeframe = newTimeframe;
     }
 
@@ -369,8 +390,9 @@ contract EmissionManager is Policy, RolesConsumer {
         address auctioneer_,
         address teller_
     ) external onlyRole("emissions_admin") {
-        if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
-        if (teller_ == address(0)) revert("Teller address cannot be 0");
+        // Bond contracts cannot be set to the zero address
+        if (auctioneer_ == address(0)) revert InvalidParam("auctioneer");
+        if (teller_ == address(0)) revert InvalidParam("teller");
 
         auctioneer = IBondSDA(auctioneer_);
         teller = teller_;
