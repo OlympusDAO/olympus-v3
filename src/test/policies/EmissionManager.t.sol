@@ -67,6 +67,8 @@ contract EmissionManagerTest is Test {
     uint256 internal minimumPremium = 25e16; // 25% premium
     uint256 internal backing = 10e18;
     uint48 internal restartTimeframe = 1 days;
+    uint256 internal changeBy = 1e5; // 0.01% change per execution
+    uint48 internal changeDuration = 2; // 2 executions
 
     // test cases
     //
@@ -84,7 +86,7 @@ contract EmissionManagerTest is Test {
     //           [X] it creates a new bond market with the sell amount
     //        [X] when premium is less than the minimum premium
     //           [X] it does not create a new bond market
-    //        [ ] when there is a postitive emissions adjustment
+    //        [ ] when there is a positive emissions adjustment
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
     //        [ ] when there is a negative emissions adjustment
     //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
@@ -103,7 +105,7 @@ contract EmissionManagerTest is Test {
     //             [X] it mints the output amount of OHM to the teller
     //             [X] it deposits the reserve balance into the wrappedReserve contract with the TRSRY as the recipient
     //
-    // [ ] bond market purchase tests
+    // [x] execute -> callback (bond market purchase test)
     //
     // view functions
     // [ ] getSupply
@@ -299,6 +301,18 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
         emissionManager.execute();
         vm.stopPrank();
+    }
+
+    modifier givenPositiveRateAdjustment() {
+        vm.prank(guardian);
+        emissionManager.changeBaseRate(changeBy, changeDuration, true);
+        _;
+    }
+
+    modifier givenNegativeRateAdjustment() {
+        vm.prank(guardian);
+        emissionManager.changeBaseRate(changeBy, changeDuration, false);
+        _;
     }
 
     // execute test cases
@@ -608,6 +622,130 @@ contract EmissionManagerTest is Test {
         }
     }
 
+    function test_execute_whenNextBeatIsZero_whenPositiveRateAdjustment()
+        public
+        givenNextBeatIsZero
+        givenPositiveRateAdjustment
+    {
+        // Cache the current base rate
+        uint256 baseRate = emissionManager.baseEmissionRate();
+
+        // Calculate the expected base rate after the adjustment
+        uint256 expectedBaseRate = baseRate + changeBy;
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Calculate the expected capacity of the bond market
+        uint256 expectedCapacity = (((expectedBaseRate * PRICE.getLastPrice()) /
+            ((backing * (1e18 + minimumPremium)) / 1e18)) *
+            gohm.totalSupply() *
+            gohm.index()) / 1e18;
+
+        // Execute to trigger the rate adjustment
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Confirm the base rate has been updated
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            expectedBaseRate,
+            "Base rate should be updated"
+        );
+
+        // Confirm that the capacity of the bond market uses the new base rate
+        assertEq(
+            auctioneer.currentCapacity(nextBondMarketId),
+            expectedCapacity,
+            "Capacity should be updated"
+        );
+
+        // Calculate the expected base rate after the next adjustment
+        expectedBaseRate += changeBy;
+
+        // Trigger a full cycle to make the next adjustment
+        triggerFullCycle();
+
+        // Confirm that the base rate has been updated
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            expectedBaseRate,
+            "Base rate should be updated"
+        );
+
+        // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
+        triggerFullCycle();
+
+        // Confirm that the base rate has not been updated
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            expectedBaseRate,
+            "Base rate should not be updated"
+        );
+    }
+
+    function test_execute_whenNextBeatIsZero_whenNegativeRateAdjustment()
+        public
+        givenNextBeatIsZero
+        givenNegativeRateAdjustment
+    {
+        // Cache the current base rate
+        uint256 baseRate = emissionManager.baseEmissionRate();
+
+        // Calculate the expected base rate after the adjustment
+        uint256 expectedBaseRate = baseRate - changeBy;
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Calculate the expected capacity of the bond market
+        uint256 expectedCapacity = (((expectedBaseRate * PRICE.getLastPrice()) /
+            ((backing * (1e18 + minimumPremium)) / 1e18)) *
+            gohm.totalSupply() *
+            gohm.index()) / 1e18;
+
+        // Execute to trigger the rate adjustment
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Confirm the base rate has been updated
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            expectedBaseRate,
+            "Base rate should be updated"
+        );
+
+        // Confirm that the capacity of the bond market uses the new base rate
+        assertEq(
+            auctioneer.currentCapacity(nextBondMarketId),
+            expectedCapacity,
+            "Capacity should be updated"
+        );
+
+        // Calculate the expected base rate after the next adjustment
+        expectedBaseRate -= changeBy;
+
+        // Trigger a full cycle to make the next adjustment
+        triggerFullCycle();
+
+        // Confirm that the base rate has been updated
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            expectedBaseRate,
+            "Base rate should be updated"
+        );
+
+        // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
+        triggerFullCycle();
+
+        // Confirm that the base rate has not been updated
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            expectedBaseRate,
+            "Base rate should not be updated"
+        );
+    }
+
     // callback test cases
 
     function test_callback_whenSenderNotTeller_reverts() public {
@@ -750,13 +888,12 @@ contract EmissionManagerTest is Test {
         // Store initial backing value
         uint256 bidAmount = 1000e18;
         uint256 expectedPayout = auctioneer.payoutFor(bidAmount, nextBondMarketId, address(0));
-        uint256 backing = emissionManager.backing();
         uint256 expectedBacking;
         {
             uint256 reserves = emissionManager.getReserves();
             uint256 supply = emissionManager.getSupply();
             expectedBacking =
-                (backing * (((reserves + bidAmount) * 1e18) / reserves)) /
+                (emissionManager.backing() * (((reserves + bidAmount) * 1e18) / reserves)) /
                 (((supply + expectedPayout) * 1e18) / supply);
         }
 
@@ -780,6 +917,11 @@ contract EmissionManagerTest is Test {
             wrappedReserve.balanceOf(address(TRSRY)),
             treasuryWrappedReserveBalance + bidAmount,
             "TRSRY wrapped reserve balance should be updated"
+        );
+        assertEq(
+            ohm.totalSupply(),
+            ohmSupply + expectedPayout,
+            "OHM total supply should be updated"
         );
 
         // Confirm the backing has been updated
