@@ -278,9 +278,10 @@ contract EmissionManager is Policy, RolesConsumer {
         uint256 previousReserves = getReserves();
         uint256 previousSupply = getSupply();
 
-        uint256 percentIncreaseReserves = (reservesAdded * 10 ** _reserveDecimals) /
-            previousReserves;
-        uint256 percentIncreaseSupply = (supplyAdded * 10 ** _reserveDecimals) / previousSupply; // scaled to reserve decimals to match
+        uint256 percentIncreaseReserves = ((previousReserves + reservesAdded) *
+            10 ** _reserveDecimals) / previousReserves;
+        uint256 percentIncreaseSupply = ((previousSupply + supplyAdded) * 10 ** _reserveDecimals) /
+            previousSupply; // scaled to reserve decimals to match
 
         backing =
             (backing * percentIncreaseReserves) / // price multiplied by percent increase reserves in reserve scale
