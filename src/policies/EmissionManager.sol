@@ -345,8 +345,14 @@ contract EmissionManager is Policy, RolesConsumer {
         uint48 forNumBeats_,
         bool add
     ) external onlyRole("emissions_admin") {
+        // Prevent underflow on negative adjustments
         if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
+
+        // Prevent overflow on positive adjustments
+        if (add && (type(uint256).max - changeBy_ * forNumBeats_ < baseEmissionRate))
+            revert InvalidParam("changeBy * forNumBeats");
+
         rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
     }
 
@@ -371,7 +377,7 @@ contract EmissionManager is Policy, RolesConsumer {
     /// @dev note if adjustment is more than 33% down, contract should be redeployed
     /// @param newBacking to adjust to
     /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
-    function adjustBacking(uint256 newBacking) external onlyRole("emissions_admin") {
+    function setBacking(uint256 newBacking) external onlyRole("emissions_admin") {
         // Backing cannot be reduced by more than 10% at a time
         if (newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
         backing = newBacking;
@@ -379,14 +385,14 @@ contract EmissionManager is Policy, RolesConsumer {
 
     /// @notice allow governance to adjust the timeframe for restart after shutdown
     /// @param newTimeframe to adjust it to
-    function adjustRestartTimeframe(uint48 newTimeframe) external onlyRole("emissions_admin") {
+    function setRestartTimeframe(uint48 newTimeframe) external onlyRole("emissions_admin") {
         // Restart timeframe must be greater than 0
         if (newTimeframe == 0) revert InvalidParam("newTimeframe");
 
         restartTimeframe = newTimeframe;
     }
 
-    function updateBondContracts(
+    function setBondContracts(
         address auctioneer_,
         address teller_
     ) external onlyRole("emissions_admin") {
