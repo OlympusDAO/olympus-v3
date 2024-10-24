@@ -73,23 +73,23 @@ contract EmissionManagerTest is Test {
     // test cases
     //
     // core functionality
-    // [ ] execute
+    // [X] execute
     //   [X] when not locally active
     //     [X] it returns without doing anything
-    //   [ ] when locally active
+    //   [X] when locally active
     //     [X] it increments the beat counter modulo 3
     //     [X] when beatCounter is incremented and != 0
     //        [X] it returns without doing anything
-    //     [ ] when beatCounter is incremented and == 0
+    //     [X] when beatCounter is incremented and == 0
     //        [X] when premium is greater than or equal to the minimum premium
     //           [X] sell amount is calculated as the base emissions rate * (1 + premium) / (1 + minimum premium)
     //           [X] it creates a new bond market with the sell amount
     //        [X] when premium is less than the minimum premium
     //           [X] it does not create a new bond market
-    //        [ ] when there is a positive emissions adjustment
-    //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
-    //        [ ] when there is a negative emissions adjustment
-    //           [ ] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
+    //        [X] when there is a positive emissions adjustment
+    //           [X] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
+    //        [X] when there is a negative emissions adjustment
+    //           [X] it adjusts the emissions rate by the adjustment amount before calculating the sell amount
     //
     // [X] callback unit tests
     //    [X] when the sender is not the teller
@@ -109,19 +109,103 @@ contract EmissionManagerTest is Test {
     //
     // view functions
     // [ ] getSupply
-    // [ ] getReseves
+    //    [ ] returns the supply of OHM in gOHM
+    // [ ] getReserves
+    //    [ ] TODO handle different balance and number of CHs
+    // [ ] getNextSale
+    //    [ ] when the premium is less than the minimum premium
+    //       [ ] it returns the premium, 0, and 0
+    //    [ ] when the premium is greater than or equal to the minimum premium
+    //       [ ] it returns the premium, scaled emissions rate, and the emission amount for the sale
     //
     // emergency functions
     // [ ] shutdown
+    //    [ ] when the caller doesn't have emergency_shutdown role
+    //       [ ] it reverts
+    //    [ ] when the caller has emergency_shutdown role
+    //       [ ] it sets locallyActive to false
+    //       [ ] it sets the shutdown timestamp to the current block time
+    //       [ ] when the ohm balance of the contract is not zero
+    //          [ ] it burns the OHM balance of the contract
+    //       [ ] when the reserve balance of the contract is not zero
+    //          [ ] it deposits the reserves into the wrappedReserve contract with the TRSRY as the recipient
+    //
     // [ ] restart
+    //    [ ] when the caller doesn't have emergency_restart role
+    //       [ ] it reverts
+    //    [ ] when the caller has emergency_restart role
+    //       [ ] when the restart timeframe has not elapsed since shutdown
+    //          [ ] it reverts
+    //       [ ] when the restart timeframe has elapsed since shutdown
+    //          [ ] it sets locallyActive to true
     //
     // admin functions
     // [ ] initialize
-    // [ ] setBaseRate
+    //    [ ] when the caller doesn't have emissions_admin role
+    //       [ ] it reverts
+    //    [ ] when the caller has emissions_admin role
+    //       [ ] when the contract is locally active
+    //          [ ] it reverts
+    //       [ ] when the restart timeframe has not passed since the last shutdown
+    //          [ ] it reverts
+    //       [ ] when the baseEmissionsRate is zero
+    //          [ ] it reverts
+    //       [ ] when the minimumPremium is zero
+    //          [ ] it reverts
+    //       [ ] when the backing is zero
+    //          [ ] it reverts
+    //       [ ] when the restartTimeframe is zero
+    //          [ ] it reverts
+    //       [ ] it sets the baseEmissionsRate
+    //       [ ] it sets the minimumPremium
+    //       [ ] it sets the backing
+    //       [ ] it sets the restartTimeframe
+    //       [ ] it sets locallyActive to true
+    //
+    // [ ] changeBaseRate
+    //    [ ] when the caller doesn't have the emissions_admin role
+    //       [ ] it reverts
+    //    [ ] when the caller has the emissions_admin role
+    //       [ ] when a negative rate adjustment would result in an underflow
+    //          [ ] it reverts
+    //       [ ] when a positive rate adjustment would result in an overflow
+    //          [ ] it reverts
+    //       [ ] it sets the rateChange to changeBy, forNumBeats, and add parameters
+    //
     // [ ] setMinimumPremium
-    // [ ] adjustBacking
-    // [ ] adjustRestartTimeframe
-    // [ ] updateBondContracts
+    //     [ ] when the caller doesn't have the emissions_admin role
+    //        [ ] it reverts
+    //     [ ] when the caller has the emissions_admin role
+    //        [ ] when the new minimum premium is zero
+    //           [ ] it reverts
+    //        [ ] it sets the minimum premium
+    //
+    // [ ] setBacking
+    //    [ ] when the caller doesn't have the emissions_admin role
+    //       [ ] it reverts
+    //    [ ] when the caller has the emissions_admin role
+    //       [ ] when the new backing is more than 10% lower than the current backing
+    //          [ ] it reverts
+    //       [ ] it sets the backing
+    //
+    // [ ] setRestartTimeframe
+    //    [ ] when the caller doesn't have the emissions_admin role
+    //       [ ] it reverts
+    //    [ ] when the caller has the emissions_admin role
+    //       [ ] when the new restart timeframe is zero
+    //          [ ] it reverts
+    //       [ ] it sets the restart timeframe
+    //
+    // [ ] setBondContracts
+    //    [ ] when the caller doesn't have the emissions_admin role
+    //       [ ] it reverts
+    //    [ ] when the caller has the emissions_admin role
+    //       [ ] when the new auctioneer address is the zero address
+    //          [ ] it reverts
+    //       [ ] when the new teller address is the zero address
+    //          [ ] it reverts
+    //       [ ] it sets the auctioneer address
+    //       [ ] it sets the teller address
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
