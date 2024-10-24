@@ -287,12 +287,15 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // This can also reduce the flashloan fee
         // This will be in DAI or sDAI
         if (useFunds_ != 0) {
+            // TODO remove this or shift to reserveTo
             if (sdai_) {
                 SDAI.redeem(useFunds_, address(this), msg.sender);
             } else {
                 DAI.transferFrom(msg.sender, address(this), useFunds_);
             }
         }
+
+        // TODO clarify where fees are paid from
 
         uint256 flashloanAmount;
         bytes memory flashloanParams;
@@ -381,12 +384,12 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         flashLoanData.clearinghouseTo.lendToCooler(flashLoanData.coolerTo, flashLoanData.principal);
 
         // The cooler owner will receive `reserveTo` for the consolidated loan
-        // Transfer this amount, plus the fee, to this contract
+        // Transfer this amount, the protocol fee and the lender fee, to this contract
         // Approval must have already been granted by the Cooler owner
         flashLoanData.reserveTo.transferFrom(
             flashLoanData.coolerFrom.owner(),
             address(this),
-            amount_ + lenderFee_
+            amount_ + lenderFee_ + flashLoanData.protocolFee
         );
 
         // The flashloan needs to be repaid in DAI
@@ -403,7 +406,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         DAI.approve(address(FLASH), amount_ + lenderFee_);
 
         // Pay protocol fee, which would be left over from the flashloan and in DAI
-        if (flashLoanData.protocolFee != 0) DAI.transfer(address(TRSRY), flashLoanData.protocolFee);
+        if (flashLoanData.protocolFee != 0)
+            flashLoanData.reserveTo.transfer(address(TRSRY), flashLoanData.protocolFee);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
@@ -664,21 +668,27 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @dev    This function will revert if:
     ///         - The contract has not been activated as a policy.
     ///
-    /// @param  cooler_         Contract which issued the loans.
-    /// @param  ids_            Array of loan ids to be consolidated.
-    /// @return owner           Owner of the Cooler (address that should grant the approval).
-    /// @return collateral      gOHM amount to be approved.
-    /// @return debtWithFee     Total debt to be approved in DAI, including the protocol fee (if sDAI option will be set to false).
-    /// @return sDaiDebtWithFee Total debt to be approved in sDAI, including the protocol fee (is sDAI option will be set to true).
-    /// @return protocolFee     Fee to be paid to the protocol.
+    /// @param  clearinghouseTo_    Clearinghouse contract used to issue the consolidated loan.
+    /// @param  coolerFrom_         Cooler contract that issued the loans.
+    /// @param  ids_                Array of loan ids to be consolidated.
+    /// @return owner               Owner of the Cooler (address that should grant the approval).
+    /// @return gOhmCollateral      Amount of gOHM to be approved
+    /// @return token               Token that the approval is in terms of
+    /// @return total               Total approval amount
+    /// @return debt                Amount of debt
+    /// @return lenderFee           Fee to be paid to the lender
+    /// @return protocolFee         Fee to be paid to the protocol, in terms of DAI
     function requiredApprovals(
-        address clearinghouse_,
-        address cooler_,
+        address clearinghouseTo_,
+        address coolerFrom_,
         uint256[] calldata ids_
-    ) external view onlyPolicyActive returns (address, uint256, uint256, uint256, uint256) {
+    )
+        external
+        view
+        onlyPolicyActive
+        returns (address, uint256, address, uint256, uint256, uint256, uint256)
+    {
         if (ids_.length < 2) revert Params_InsufficientCoolerCount();
-
-        // TODO add USDS/DAI logic, support for multiple clearinghouses
 
         uint256 totalPrincipal;
         uint256 totalDebtWithInterest;
@@ -686,7 +696,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
         // Calculate the total debt and collateral for the loans
         for (uint256 i; i < numLoans; i++) {
-            (, uint256 principal, uint256 interestDue, , , , , ) = Cooler(cooler_).loans(ids_[i]);
+            (, uint256 principal, uint256 interestDue, , , , , ) = Cooler(coolerFrom_).loans(
+                ids_[i]
+            );
             totalPrincipal += principal;
             totalDebtWithInterest += principal + interestDue;
         }
@@ -695,15 +707,19 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256 totalDebtWithFee = totalDebtWithInterest + protocolFee;
 
         // Calculate the collateral required for the consolidated loan principal
-        uint256 consolidatedLoanCollateral = Clearinghouse(clearinghouse_).getCollateralForLoan(
+        uint256 consolidatedLoanCollateral = Clearinghouse(clearinghouseTo_).getCollateralForLoan(
             totalPrincipal
         );
 
+        uint256 lenderFee = FLASH.flashFee(address(DAI), totalDebtWithFee);
+
         return (
-            Cooler(cooler_).owner(),
+            Cooler(coolerFrom_).owner(),
             consolidatedLoanCollateral,
-            totalDebtWithFee,
-            SDAI.previewWithdraw(totalDebtWithFee),
+            _getClearinghouseReserveToken(clearinghouseTo_),
+            totalDebtWithInterest + lenderFee + protocolFee,
+            totalDebtWithInterest,
+            lenderFee,
             protocolFee
         );
     }

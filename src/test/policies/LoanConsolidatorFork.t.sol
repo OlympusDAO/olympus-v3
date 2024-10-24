@@ -433,10 +433,19 @@ contract LoanConsolidatorForkTest is Test {
     }
 
     function _assertApprovals() internal {
+        _assertApprovals(address(coolerA), address(coolerA));
+    }
+
+    function _assertApprovals(address coolerFrom_, address coolerTo_) internal {
         assertEq(
-            dai.allowance(address(utils), address(coolerA)),
+            dai.allowance(address(utils), address(coolerFrom_)),
             0,
-            "dai allowance: utils -> coolerA"
+            "dai allowance: utils -> coolerFrom_"
+        );
+        assertEq(
+            dai.allowance(address(utils), address(coolerTo_)),
+            0,
+            "dai allowance: utils -> coolerTo_"
         );
         assertEq(
             dai.allowance(address(utils), address(clearinghouse)),
@@ -444,20 +453,62 @@ contract LoanConsolidatorForkTest is Test {
             "dai allowance: utils -> clearinghouse"
         );
         assertEq(
+            dai.allowance(address(utils), address(clearinghouseUsds)),
+            0,
+            "dai allowance: utils -> clearinghouseUsds"
+        );
+        assertEq(
             dai.allowance(address(utils), address(lender)),
             0,
             "dai allowance: utils -> lender"
         );
+
+        assertEq(
+            usds.allowance(address(utils), address(coolerFrom_)),
+            0,
+            "usds allowance: utils -> coolerFrom_"
+        );
+        assertEq(
+            usds.allowance(address(utils), address(coolerTo_)),
+            0,
+            "usds allowance: utils -> coolerTo_"
+        );
+        assertEq(
+            usds.allowance(address(utils), address(clearinghouse)),
+            0,
+            "usds allowance: utils -> clearinghouse"
+        );
+        assertEq(
+            usds.allowance(address(utils), address(clearinghouseUsds)),
+            0,
+            "usds allowance: utils -> clearinghouseUsds"
+        );
+        assertEq(
+            usds.allowance(address(utils), address(lender)),
+            0,
+            "usds allowance: utils -> lender"
+        );
+
         assertEq(gohm.allowance(walletA, address(utils)), 0, "gohm allowance: walletA -> utils");
         assertEq(
-            gohm.allowance(address(utils), address(coolerA)),
+            gohm.allowance(address(utils), address(coolerFrom_)),
             0,
-            "gohm allowance: utils -> coolerA"
+            "gohm allowance: utils -> coolerFrom_"
+        );
+        assertEq(
+            gohm.allowance(address(utils), address(coolerTo_)),
+            0,
+            "gohm allowance: utils -> coolerTo_"
         );
         assertEq(
             gohm.allowance(address(utils), address(clearinghouse)),
             0,
             "gohm allowance: utils -> clearinghouse"
+        );
+        assertEq(
+            gohm.allowance(address(utils), address(clearinghouseUsds)),
+            0,
+            "gohm allowance: utils -> clearinghouseUsds"
         );
         assertEq(
             gohm.allowance(address(utils), address(lender)),
@@ -1378,7 +1429,7 @@ contract LoanConsolidatorForkTest is Test {
             protocolFee,
             _GOHM_AMOUNT
         );
-        _assertApprovals();
+        _assertApprovals(address(coolerA), address(coolerUsds));
     }
 
     function test_consolidate_protocolFee_usdsToDai()
@@ -1427,7 +1478,53 @@ contract LoanConsolidatorForkTest is Test {
             protocolFee,
             _GOHM_AMOUNT
         );
-        _assertApprovals();
+        _assertApprovals(address(coolerA), address(coolerDai));
+    }
+
+    function test_consolidate_protocolFee_usdsToUsds()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Create coolers
+        deal(address(gohm), walletA, _GOHM_AMOUNT);
+        _createCoolers(clearinghouseUsds, coolerFactory, walletA, usds);
+
+        // Grant approvals
+        (, uint256 gohmApproval, uint256 totalDebtWithFee, , uint256 protocolFee) = utils
+            .requiredApprovals(address(clearinghouseUsds), address(coolerA), idsA);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        _grantCallerApprovals(gohmApproval, totalDebtWithFee);
+
+        // Consolidate loans for coolers A, B, and C into coolerC
+        _consolidate(
+            address(clearinghouseUsds),
+            address(clearinghouseUsds),
+            address(coolerA),
+            address(coolerA),
+            idsA,
+            0,
+            false
+        );
+
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            address(usds),
+            address(coolerA),
+            address(coolerA),
+            initPrincipal - interestDue - protocolFee,
+            0,
+            protocolFee,
+            _GOHM_AMOUNT
+        );
+        _assertApprovals(address(coolerA), address(coolerA));
     }
 
     // setFeePercentage
@@ -1534,25 +1631,29 @@ contract LoanConsolidatorForkTest is Test {
         (
             address owner_,
             uint256 gohmApproval,
-            uint256 totalDebtWithFee,
-            uint256 sDaiApproval,
+            address reserveTo,
+            uint256 totalApproval,
+            uint256 debt,
+            uint256 lenderFee,
             uint256 protocolFee
         ) = utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
 
-        uint256 expectedTotalDebtWithFee;
+        uint256 expectedTotalDebt;
         for (uint256 i = 0; i < ids.length; i++) {
             Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
-            expectedTotalDebtWithFee += loan.principal + loan.interestDue;
+            expectedTotalDebt += loan.principal + loan.interestDue;
         }
 
         assertEq(owner_, walletA, "owner");
         assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
-        assertEq(totalDebtWithFee, expectedTotalDebtWithFee, "total debt with fee");
-        assertEq(sDaiApproval, sdai.previewWithdraw(expectedTotalDebtWithFee), "sDai approval");
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(totalApproval, expectedTotalDebt, "total approval");
+        assertEq(debt, expectedTotalDebt, "debt");
+        assertEq(lenderFee, 0, "lender fee");
         assertEq(protocolFee, 0, "protocol fee");
     }
 
-    function test_requiredApprovals_ProtocolFee()
+    function test_requiredApprovals_protocolFee()
         public
         givenAdminHasRole
         givenPolicyActive
@@ -1563,32 +1664,143 @@ contract LoanConsolidatorForkTest is Test {
         (
             address owner_,
             uint256 gohmApproval,
-            uint256 totalDebtWithFee,
-            uint256 sDaiApproval,
+            address reserveTo,
+            uint256 totalApproval,
+            uint256 debt,
+            uint256 lenderFee,
             uint256 protocolFee
         ) = utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
 
-        uint256 expectedTotalDebtWithFee;
+        uint256 expectedTotalDebt;
         for (uint256 i = 0; i < ids.length; i++) {
             Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
-            expectedTotalDebtWithFee += loan.principal + loan.interestDue;
+            expectedTotalDebt += loan.principal + loan.interestDue;
         }
 
         // Calculate protocol fee
-        uint256 protocolFeeActual = (expectedTotalDebtWithFee * 1000) / _ONE_HUNDRED_PERCENT;
+        uint256 protocolFeeActual = (expectedTotalDebt * 1000) / _ONE_HUNDRED_PERCENT;
 
         assertEq(owner_, walletA, "owner");
         assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
-        assertEq(
-            totalDebtWithFee,
-            expectedTotalDebtWithFee + protocolFeeActual,
-            "total debt with fee"
-        );
-        assertEq(
-            sDaiApproval,
-            sdai.previewWithdraw(expectedTotalDebtWithFee + protocolFeeActual),
-            "sDai approval"
-        );
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(totalApproval, expectedTotalDebt + protocolFeeActual, "total approval");
+        assertEq(debt, expectedTotalDebt, "debt");
+        assertEq(lenderFee, 0, "lender fee");
+        assertEq(protocolFee, protocolFeeActual, "protocol fee");
+    }
+
+    function test_requiredApprovals_protocolFee_daiToUsds()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory ids = _idsA();
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            address reserveTo,
+            uint256 totalApproval,
+            uint256 debt,
+            uint256 lenderFee,
+            uint256 protocolFee
+        ) = utils.requiredApprovals(address(clearinghouseUsds), address(coolerA), ids);
+
+        uint256 expectedTotalDebt;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+            expectedTotalDebt += loan.principal + loan.interestDue;
+        }
+
+        // Calculate protocol fee
+        uint256 protocolFeeActual = (expectedTotalDebt * 1000) / _ONE_HUNDRED_PERCENT;
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(reserveTo, address(usds), "reserveTo");
+        assertEq(totalApproval, expectedTotalDebt + protocolFeeActual, "total approval");
+        assertEq(debt, expectedTotalDebt, "debt");
+        assertEq(lenderFee, 0, "lender fee");
+        assertEq(protocolFee, protocolFeeActual, "protocol fee");
+    }
+
+    function test_requiredApprovals_protocolFee_usdsToDai()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory ids = _idsA();
+
+        // Create Cooler loans on the USDS Clearinghouse
+        deal(address(gohm), walletA, _GOHM_AMOUNT);
+        _createCoolers(clearinghouseUsds, coolerFactory, walletA, usds);
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            address reserveTo,
+            uint256 totalApproval,
+            uint256 debt,
+            uint256 lenderFee,
+            uint256 protocolFee
+        ) = utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
+
+        uint256 expectedTotalDebt;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+            expectedTotalDebt += loan.principal + loan.interestDue;
+        }
+
+        // Calculate protocol fee
+        uint256 protocolFeeActual = (expectedTotalDebt * 1000) / _ONE_HUNDRED_PERCENT;
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(debt, expectedTotalDebt, "debt");
+        assertEq(lenderFee, 0, "lender fee");
+        assertEq(protocolFee, protocolFeeActual, "protocol fee");
+    }
+
+    function test_requiredApprovals_protocolFee_usdsToUsds()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenProtocolFee(1000) // 1%
+    {
+        uint256[] memory ids = _idsA();
+
+        // Create Cooler loans on the USDS Clearinghouse
+        deal(address(gohm), walletA, _GOHM_AMOUNT);
+        _createCoolers(clearinghouseUsds, coolerFactory, walletA, usds);
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            address reserveTo,
+            uint256 totalApproval,
+            uint256 debt,
+            uint256 lenderFee,
+            uint256 protocolFee
+        ) = utils.requiredApprovals(address(clearinghouseUsds), address(coolerA), ids);
+
+        uint256 expectedTotalDebt;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+            expectedTotalDebt += loan.principal + loan.interestDue;
+        }
+
+        // Calculate protocol fee
+        uint256 protocolFeeActual = (expectedTotalDebt * 1000) / _ONE_HUNDRED_PERCENT;
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(reserveTo, address(usds), "reserveTo");
+        assertEq(totalApproval, expectedTotalDebt + protocolFeeActual, "total approval");
+        assertEq(debt, expectedTotalDebt, "debt");
+        assertEq(lenderFee, 0, "lender fee");
         assertEq(protocolFee, protocolFeeActual, "protocol fee");
     }
 
@@ -1634,7 +1846,7 @@ contract LoanConsolidatorForkTest is Test {
         loanIds[1] = 1;
 
         // Grant approvals
-        (, uint256 gohmApproval, , , ) = utils.requiredApprovals(
+        (, uint256 gohmApproval, , , , , ) = utils.requiredApprovals(
             address(clearinghouse),
             address(coolerB),
             loanIds
@@ -1645,6 +1857,8 @@ contract LoanConsolidatorForkTest is Test {
         // At small values, this may be slightly different due to rounding
         assertEq(gohmApproval, clearinghouse.getCollateralForLoan(totalPrincipal), "gOHM approval");
     }
+
+    // collateralRequired
 
     function test_collateralRequired_fuzz(
         uint256 loanOneCollateral_,
