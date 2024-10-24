@@ -117,6 +117,9 @@ contract EmissionManager is Policy, RolesConsumer {
 
         // Max approve wrappedReserve contract for reserve for deposits
         reserve.approve(address(wrappedReserve), type(uint256).max);
+
+        // Max approve teller for ohm for markets
+        ohm.approve(address(teller), type(uint256).max);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
