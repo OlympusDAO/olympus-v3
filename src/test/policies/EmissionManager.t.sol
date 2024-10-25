@@ -109,7 +109,7 @@ contract EmissionManagerTest is Test {
     //
     // view functions
     // [ ] getSupply
-    //    [ ] returns the supply of OHM in gOHM
+    //    [ ] returns the supply of gOHM in OHM
     // [ ] getReserves
     //    [ ] TODO handle different balance and number of CHs
     // [ ] getNextSale
@@ -119,16 +119,16 @@ contract EmissionManagerTest is Test {
     //       [ ] it returns the premium, scaled emissions rate, and the emission amount for the sale
     //
     // emergency functions
-    // [ ] shutdown
-    //    [ ] when the caller doesn't have emergency_shutdown role
-    //       [ ] it reverts
-    //    [ ] when the caller has emergency_shutdown role
-    //       [ ] it sets locallyActive to false
-    //       [ ] it sets the shutdown timestamp to the current block time
-    //       [ ] when the ohm balance of the contract is not zero
-    //          [ ] it burns the OHM balance of the contract
-    //       [ ] when the reserve balance of the contract is not zero
-    //          [ ] it deposits the reserves into the wrappedReserve contract with the TRSRY as the recipient
+    // [X] shutdown
+    //    [X] when the caller doesn't have emergency_shutdown role
+    //       [X] it reverts
+    //    [X] when the caller has emergency_shutdown role
+    //       [X] it sets locallyActive to false
+    //       [X] it sets the shutdown timestamp to the current block time
+    //       [X] when the ohm balance of the contract is not zero
+    //          [X] it burns the OHM balance of the contract
+    //       [X] when the reserve balance of the contract is not zero
+    //          [X] it deposits the reserves into the wrappedReserve contract with the TRSRY as the recipient
     //
     // [ ] restart
     //    [ ] when the caller doesn't have emergency_restart role
@@ -1010,5 +1010,150 @@ contract EmissionManagerTest is Test {
 
         // Confirm the backing has been updated
         assertEq(emissionManager.backing(), expectedBacking, "Backing should be updated");
+    }
+
+    // shutdown tests
+
+    function test_shutdown_whenCallerNotEmergencyShutdownRole_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the shutdown function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emergency_shutdown")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.shutdown();
+    }
+
+    function test_shutdown_noBalances() public {
+        // Check that the contract is locally active
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+
+        // Check that the shutdown timestamp is 0
+        assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
+
+        // Confirm that the block timestamp is not 0
+        assertGt(block.timestamp, 0, "Block timestamp should not be 0");
+
+        // Confirm that the reserve and OHM balances are 0
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+
+        // Call the shutdown function as guardian (which has the emergency_shutdown role)
+        vm.prank(guardian);
+        emissionManager.shutdown();
+
+        // Check that the contract is not locally active
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Check that the shutdown timestamp is set to the current block timestamp
+        assertEq(
+            emissionManager.shutdownTimestamp(),
+            block.timestamp,
+            "Shutdown timestamp should be set"
+        );
+
+        // Confirm that the reserve and OHM balances are still 0
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+    }
+
+    function test_shutdown_ohmBalance() public {
+        // Check that the contract is locally active
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+
+        // Check that the shutdown timestamp is 0
+        assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
+
+        // Confirm that the block timestamp is not 0
+        assertGt(block.timestamp, 0, "Block timestamp should not be 0");
+
+        // Confirm that the reserve balance is 0
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+
+        // Mint OHM to the contract (this shouldn't happen in practice)
+        uint256 ohmAmount = 1000e9;
+        ohm.mint(address(emissionManager), ohmAmount);
+        assertEq(
+            ohm.balanceOf(address(emissionManager)),
+            ohmAmount,
+            "OHM balance should be nonzero"
+        );
+
+        // Cache total supply of OHM
+        uint256 totalSupply = ohm.totalSupply();
+
+        // Call the shutdown function as guardian (which has the emergency_shutdown role)
+        vm.prank(guardian);
+        emissionManager.shutdown();
+
+        // Check that the contract is not locally active
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Check that the shutdown timestamp is set to the current block timestamp
+        assertEq(
+            emissionManager.shutdownTimestamp(),
+            block.timestamp,
+            "Shutdown timestamp should be set"
+        );
+
+        // Confirm that the reserve and OHM balances are 0
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+
+        // Confirm that the OHM was burned
+        assertEq(ohm.totalSupply(), totalSupply - ohmAmount, "OHM total supply should be updated");
+    }
+
+    function test_shutdown_reserveBalance() public {
+        // Check that the contract is locally active
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+
+        // Check that the shutdown timestamp is 0
+        assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
+
+        // Confirm that the block timestamp is not 0
+        assertGt(block.timestamp, 0, "Block timestamp should not be 0");
+
+        // Confirm that the OHM balance is 0
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+
+        // Mint reserve contract (this shouldn't happen in practice)
+        uint256 reserveAmount = 1000e18;
+        reserve.mint(address(emissionManager), reserveAmount);
+        assertEq(
+            reserve.balanceOf(address(emissionManager)),
+            reserveAmount,
+            "Reserve balance should be nonzero"
+        );
+
+        // Cache the wrapped reserves in the treasury
+        uint256 treasuryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+
+        // Call the shutdown function as guardian (which has the emergency_shutdown role)
+        vm.prank(guardian);
+        emissionManager.shutdown();
+
+        // Check that the contract is not locally active
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Check that the shutdown timestamp is set to the current block timestamp
+        assertEq(
+            emissionManager.shutdownTimestamp(),
+            block.timestamp,
+            "Shutdown timestamp should be set"
+        );
+
+        // Confirm that the reserve and OHM balances are 0
+        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
+        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
+
+        // Confirm that the reserve was wrapped and deposited into the treasury
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            treasuryWrappedReserveBalance + reserveAmount
+        );
     }
 }
