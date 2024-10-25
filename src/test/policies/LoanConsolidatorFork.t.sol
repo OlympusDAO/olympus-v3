@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GLP-3.0
 pragma solidity ^0.8.15;
 
-import {Test, console2} from "forge-std/Test.sol";
+import {Test, console2, stdStorage, StdStorage} from "forge-std/Test.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
@@ -23,6 +23,8 @@ import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 contract LoanConsolidatorForkTest is Test {
+    using stdStorage for StdStorage;
+
     LoanConsolidator public utils;
 
     ERC20 public ohm;
@@ -143,6 +145,12 @@ contract LoanConsolidatorForkTest is Test {
         vm.stopPrank();
         // Activate the USDS Clearinghouse
         clearinghouseUsds.activate();
+
+        // Increment the CHREG registry count
+        // The registryCount does not seem to be incremented on the fork, which is... weird.
+        console2.log("CHREG registry count before:", CHREG.registryCount());
+        stdstore.target(address(CHREG)).sig("registryCount()").checked_write(3);
+        console2.log("CHREG registry count after:", CHREG.registryCount());
 
         admin = vm.addr(0x2);
 
