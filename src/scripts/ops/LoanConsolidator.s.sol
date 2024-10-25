@@ -16,15 +16,17 @@ contract LoanConsolidatorScript is Test {
     string internal _env;
     ERC20 internal _gohm;
     ERC20 internal _dai;
+    ERC20 internal _usds;
 
     function _loadEnv() internal {
         _env = vm.readFile("./src/scripts/env.json");
         _gohm = ERC20(_env.readAddress(".current.mainnet.olympus.legacy.gOHM"));
         _dai = ERC20(_env.readAddress(".current.mainnet.external.tokens.DAI"));
+        _usds = ERC20(_env.readAddress(".current.mainnet.external.tokens.USDS"));
     }
 
     /// @dev Call in the form:
-    ///      forge script ./src/scripts/ops/LoanConsolidator.s.sol:LoanConsolidatorScript --chain mainnet --sig "consolidate(address,address,address,uint256[])()" --rpc-url <YOUR RPC> <owner> <clearinghouse> <cooler> "[<loanIdOne>,<loanIdTwo>,<etc...>]"
+    ///      forge script ./src/scripts/ops/LoanConsolidator.s.sol:LoanConsolidatorScript --chain mainnet --sig "consolidate(address,address,address,address,address,uint256[])()" --rpc-url <YOUR RPC> <owner> <clearinghouseFrom> <clearinghouseTo> <coolerFrom> <coolerTo> "[<loanIdOne>,<loanIdTwo>,<etc...>]"
     function consolidate(
         address owner_,
         address clearinghouseFrom_,
@@ -41,30 +43,25 @@ contract LoanConsolidatorScript is Test {
         console2.log("Cooler From:", coolerFrom_);
         console2.log("Cooler To:", coolerTo_);
 
-        // // NOTE: Couldn't figure out how to pass an array to the function using forge script. Hard-coding.
-        // uint256[] memory loanIds_ = new uint256[](3);
-        // loanIds_[0] = 0;
-        // loanIds_[1] = 1;
-        // loanIds_[2] = 2;
-
-        Cooler coolerFrom = Cooler(coolerFrom_);
         LoanConsolidator utils = LoanConsolidator(
             _env.readAddress(".current.mainnet.olympus.policies.LoanConsolidator")
         );
 
         // Determine the approvals required
-        (, uint256 gohmApproval, uint256 totalDebtWithFee, , ) = utils.requiredApprovals(
-            clearinghouseFrom_,
-            coolerFrom_,
-            loanIds_
-        );
+        (
+            ,
+            uint256 gohmApproval,
+            address reserveTo,
+            uint256 ownerReserveTo,
+            uint256 callerReserveTo
+        ) = utils.requiredApprovals(clearinghouseFrom_, coolerFrom_, loanIds_);
 
         // Determine the interest payable
         {
             uint256 interestPayable;
             uint256 collateral;
             for (uint256 i = 0; i < loanIds_.length; i++) {
-                Cooler.Loan memory loan = coolerFrom.getLoan(loanIds_[i]);
+                Cooler.Loan memory loan = Cooler(coolerFrom_).getLoan(loanIds_[i]);
                 interestPayable += loan.interestDue;
                 collateral += loan.collateral;
             }
@@ -87,13 +84,14 @@ contract LoanConsolidatorScript is Test {
         // Grant approvals
         vm.startPrank(owner_);
         _gohm.approve(address(utils), gohmApproval);
-        _dai.approve(address(utils), totalDebtWithFee);
+        ERC20(reserveTo).approve(address(utils), ownerReserveTo + callerReserveTo);
         vm.stopPrank();
 
         {
             console2.log("---");
             console2.log("gOHM balance before:", _gohm.balanceOf(owner_));
             console2.log("DAI balance before:", _dai.balanceOf(owner_));
+            console2.log("USDS balance before:", _usds.balanceOf(owner_));
 
             console2.log("Consolidating loans...");
         }
@@ -105,20 +103,18 @@ contract LoanConsolidatorScript is Test {
             clearinghouseTo_,
             coolerFrom_,
             coolerTo_,
-            loanIds_,
-            0,
-            false
+            loanIds_
         );
         vm.stopPrank();
 
         console2.log("gOHM balance after:", _gohm.balanceOf(owner_));
         console2.log("DAI balance after:", _dai.balanceOf(owner_));
-
+        console2.log("USDS balance after:", _usds.balanceOf(owner_));
         uint256 lastLoanId;
 
         // Check the previous loans
         for (uint256 i = 0; i < loanIds_.length; i++) {
-            Cooler.Loan memory loan = coolerFrom.getLoan(loanIds_[i]);
+            Cooler.Loan memory loan = Cooler(coolerFrom_).getLoan(loanIds_[i]);
 
             console2.log("---");
             console2.log("Loan ID:", loanIds_[i]);

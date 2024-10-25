@@ -88,6 +88,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         Cooler coolerTo;
         uint256[] ids;
         uint256 principal;
+        uint256 interest;
         uint256 protocolFee;
         MigrationType migrationType;
         IERC20 reserveFrom;
@@ -228,11 +229,15 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     // ========= OPERATION ========= //
 
-    /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using
-    ///         Maker flashloans.
+    /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using flashloans.
+    ///
+    ///         The caller will be required to provide additional funds to cover accrued interest on the Cooler loans and the lender and protocol fees (if applicable). Use the `requiredApprovals()` function to determine the amount of funds and approvals required.
+    ///
+    ///         It is expected that the caller will have already provided approval for this contract to spend the required tokens. See `requiredApprovals()` for more details.
     ///
     /// @dev    This function will revert if:
-    ///         - The caller has not approved this contract to spend the `useFunds_`.
+    ///         - The caller has not approved this contract to spend the fees in DAI.
+    ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to repay the flashloan.
     ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
@@ -249,16 +254,12 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @param  coolerFrom_     Cooler from which the loans will be consolidated.
     /// @param  coolerTo_     Cooler to which the loans will be consolidated
     /// @param  ids_           Array containing the ids of the loans to be consolidated.
-    /// @param  useFunds_      Amount of DAI/sDAI available to repay the fee.
-    /// @param  sdai_          Whether the available funds are in sDAI or DAI.
     function consolidateWithFlashLoan(
         address clearinghouseFrom_,
         address clearinghouseTo_,
         address coolerFrom_,
         address coolerTo_,
-        uint256[] calldata ids_,
-        uint256 useFunds_,
-        bool sdai_
+        uint256[] calldata ids_
     ) public onlyPolicyActive onlyConsolidatorActive nonReentrant {
         // Validate that the Clearinghouses are registered with the Bophades kernel
         if (!_isValidClearinghouse(clearinghouseFrom_) || !_isValidClearinghouse(clearinghouseTo_))
@@ -283,42 +284,35 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
             clearinghouseTo_
         );
 
-        // Transfer in necessary funds to repay the fee
-        // This can also reduce the flashloan fee
-        // This will be in DAI or sDAI
-        if (useFunds_ != 0) {
-            // TODO remove this or shift to reserveTo
-            if (sdai_) {
-                SDAI.redeem(useFunds_, address(this), msg.sender);
-            } else {
-                DAI.transferFrom(msg.sender, address(this), useFunds_);
-            }
-        }
+        (uint256 flashloanAmount, FlashLoanData memory flashloanParams) = _getFlashloanParameters(
+            Clearinghouse(clearinghouseFrom_),
+            Clearinghouse(clearinghouseTo_),
+            Cooler(coolerFrom_),
+            Cooler(coolerTo_),
+            ids_,
+            migrationType,
+            reserveFrom,
+            reserveTo
+        );
 
-        // TODO clarify where fees are paid from
-
-        uint256 flashloanAmount;
-        bytes memory flashloanParams;
+        // Transfer in the interest and fees from the caller, in terms of the reserveTo token
+        // The Cooler owner will supply the principal, so the balance needs to be provided by the caller
         {
-            uint256 totalDebt;
-            (flashloanAmount, flashloanParams, totalDebt) = _getFlashloanParameters(
-                Clearinghouse(clearinghouseFrom_),
-                Clearinghouse(clearinghouseTo_),
-                Cooler(coolerFrom_),
-                Cooler(coolerTo_),
-                ids_,
-                migrationType,
-                reserveFrom,
-                reserveTo
+            uint256 lenderFee = FLASH.flashFee(address(DAI), flashloanAmount);
+            reserveTo.transferFrom(
+                msg.sender,
+                address(this),
+                flashloanParams.interest + flashloanParams.protocolFee + lenderFee
             );
-
-            // Grant approval to the Cooler to spend the debt
-            reserveFrom.approve(coolerFrom_, totalDebt);
         }
 
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
-        FLASH.flashLoan(this, address(DAI), flashloanAmount, flashloanParams);
+        FLASH.flashLoan(this, address(DAI), flashloanAmount, abi.encode(flashloanParams));
+        // State:
+        // - reserveFrom: 0
+        // - reserveTo: 0
+        // - gOHM: 0
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
         uint256 daiBalanceAfter = DAI.balanceOf(address(this));
@@ -349,20 +343,28 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         if (initiator_ != address(this)) revert OnlyThis();
 
         // Assumptions:
-        // - The flashloan provider has transferred amount_ in DAI
-        // - If the caller specified `useFunds_`, then that amount of DAI is present in this contract
+        // - The flashloan provider has transferred amount_ in DAI, which includes the principal and interest
 
-        // If clearinghouseFrom is in USDS, then we need to convert the DAI to USDS in order to repay the debt
+        // If clearinghouseFrom is in USDS, then we need to convert the DAI to USDS in order to repay the principal and interest
         if (
             flashLoanData.migrationType == MigrationType.USDS_DAI ||
             flashLoanData.migrationType == MigrationType.USDS_USDS
         ) {
-            DAI.approve(address(MIGRATOR), flashLoanData.principal);
-            MIGRATOR.daiToUsds(address(this), flashLoanData.principal);
+            DAI.approve(address(MIGRATOR), flashLoanData.principal + flashLoanData.interest);
+            MIGRATOR.daiToUsds(address(this), flashLoanData.principal + flashLoanData.interest);
         }
 
+        // Grant approval to the Cooler to spend the debt
+        flashLoanData.reserveFrom.approve(
+            address(flashLoanData.coolerFrom),
+            flashLoanData.principal + flashLoanData.interest
+        );
         // Iterate over all batches, repay the debt and collect the collateral
         _repayDebtForLoans(address(flashLoanData.coolerFrom), flashLoanData.ids);
+        // State:
+        // - reserveFrom: reduced by principal and interest, should be 0
+        // - reserveTo: no change, should be 0
+        // - gOHM: increased by the collateral returned
 
         // Calculate the amount of collateral that will be needed for the consolidated loan
         uint256 consolidatedLoanCollateral = flashLoanData.clearinghouseFrom.getCollateralForLoan(
@@ -382,15 +384,23 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Take a new Cooler loan for the principal required
         GOHM.approve(address(flashLoanData.clearinghouseTo), consolidatedLoanCollateral);
         flashLoanData.clearinghouseTo.lendToCooler(flashLoanData.coolerTo, flashLoanData.principal);
+        // State:
+        // - reserveFrom: no change
+        // - reserveTo: no change, as the cooler owner received it
+        // - gOHM: reduced by the collateral used for the consolidated loan. gOHM balance in this contract is now 0.
 
-        // The cooler owner will receive `reserveTo` for the consolidated loan
-        // Transfer this amount, the protocol fee and the lender fee, to this contract
+        // The cooler owner will receive `principal` quantity of `reserveTo` tokens for the consolidated loan
+        // Transfer the amount of `reserveTo` required to repay the flash loan (debt + interest), lender fee and protocol fee
         // Approval must have already been granted by the Cooler owner
         flashLoanData.reserveTo.transferFrom(
             flashLoanData.coolerFrom.owner(),
             address(this),
-            amount_ + lenderFee_ + flashLoanData.protocolFee
+            flashLoanData.principal
         );
+        // State:
+        // - reserveFrom: no change
+        // - reserveTo: increased by the flashloan amount, lender fee and protocol fee
+        // - gOHM: no change, 0
 
         // The flashloan needs to be repaid in DAI
         // Convert the proceeds to DAI if necessary
@@ -405,9 +415,13 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Approve the flash loan provider to collect the flashloan amount and fee
         DAI.approve(address(FLASH), amount_ + lenderFee_);
 
-        // Pay protocol fee, which would be left over from the flashloan and in DAI
+        // Pay protocol fee, which would be left over
         if (flashLoanData.protocolFee != 0)
             flashLoanData.reserveTo.transfer(address(TRSRY), flashLoanData.protocolFee);
+        // State:
+        // - reserveFrom: no change
+        // - reserveTo: reduced by the protocol fee, balance should be 0
+        // - gOHM: no change, balance should be 0
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
@@ -470,21 +484,27 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     // =========  FUNCTIONS ========= //
 
+    /// @notice Get the total principal and interest for a given set of loans
+    ///
+    /// @param  cooler_         Cooler contract that issued the loans
+    /// @param  ids_            Array of loan ids to be consolidated
+    /// @return totalPrincipal_ Total principal
+    /// @return totalInterest_  Total interest
     function _getDebtForLoans(
         address cooler_,
         uint256[] calldata ids_
     ) internal view returns (uint256, uint256) {
-        uint256 totalDebt;
+        uint256 totalInterest;
         uint256 totalPrincipal;
 
         uint256 numLoans = ids_.length;
         for (uint256 i; i < numLoans; i++) {
             (, uint256 principal, uint256 interestDue, , , , , ) = Cooler(cooler_).loans(ids_[i]);
-            totalDebt += principal + interestDue;
+            totalInterest += interestDue;
             totalPrincipal += principal;
         }
 
-        return (totalDebt, totalPrincipal);
+        return (totalPrincipal, totalInterest);
     }
 
     /// @notice Repay the debt for a given set of loans and collect the collateral.
@@ -614,45 +634,33 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         MigrationType migrationType_,
         IERC20 reserveFrom_,
         IERC20 reserveTo_
-    )
-        internal
-        view
-        returns (uint256 flashloanAmount, bytes memory flashloanParams, uint256 totalDebt)
-    {
-        uint256 protocolFee;
-        uint256 totalPrincipal;
-        {
-            // Cache batch debt and principal
-            (totalDebt, totalPrincipal) = _getDebtForLoans(address(coolerFrom_), ids_);
-
-            // Calculate the required flashloan amount based on available funds and protocol fee.
-            uint256 repaymentBalance = reserveFrom_.balanceOf(address(this));
-            // Prevent an underflow
-            if (repaymentBalance > totalDebt) {
-                revert Params_UseFundsOutOfBounds();
-            }
-
-            protocolFee = getProtocolFee(totalDebt - repaymentBalance);
-            // The flashloan amount is in DAI. This assumes a 1:1 exchange rate.
-            flashloanAmount = totalDebt - repaymentBalance + protocolFee;
-        }
-
-        flashloanParams = abi.encode(
-            FlashLoanData({
-                clearinghouseFrom: clearinghouseFrom_,
-                clearinghouseTo: clearinghouseTo_,
-                coolerFrom: coolerFrom_,
-                coolerTo: coolerTo_,
-                ids: ids_,
-                principal: totalPrincipal,
-                protocolFee: protocolFee,
-                migrationType: migrationType_,
-                reserveFrom: reserveFrom_,
-                reserveTo: reserveTo_
-            })
+    ) internal view returns (uint256 flashloanAmount, FlashLoanData memory flashloanParams) {
+        // Cache principal and interest
+        (uint256 totalPrincipal, uint256 totalInterest) = _getDebtForLoans(
+            address(coolerFrom_),
+            ids_
         );
 
-        return (flashloanAmount, flashloanParams, totalDebt);
+        uint256 protocolFee = getProtocolFee(totalPrincipal + totalInterest);
+
+        // The flashloan amount is in DAI. This assumes a 1:1 exchange rate.
+        flashloanAmount = totalPrincipal + totalInterest;
+
+        flashloanParams = FlashLoanData({
+            clearinghouseFrom: clearinghouseFrom_,
+            clearinghouseTo: clearinghouseTo_,
+            coolerFrom: coolerFrom_,
+            coolerTo: coolerTo_,
+            ids: ids_,
+            principal: totalPrincipal,
+            interest: totalInterest,
+            protocolFee: protocolFee,
+            migrationType: migrationType_,
+            reserveFrom: reserveFrom_,
+            reserveTo: reserveTo_
+        });
+
+        return (flashloanAmount, flashloanParams);
     }
 
     // ========= AUX FUNCTIONS ========= //
@@ -672,57 +680,42 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @param  coolerFrom_         Cooler contract that issued the loans.
     /// @param  ids_                Array of loan ids to be consolidated.
     /// @return owner               Owner of the Cooler (address that should grant the approval).
-    /// @return gOhmCollateral      Amount of gOHM to be approved
-    /// @return token               Token that the approval is in terms of
-    /// @return total               Total approval amount
-    /// @return debt                Amount of debt
-    /// @return lenderFee           Fee to be paid to the lender
-    /// @return protocolFee         Fee to be paid to the protocol, in terms of DAI
+    /// @return ownerGOhm           Amount of gOHM to be approved by the Cooler owner.
+    /// @return reserveTo           Token that the approval is in terms of
+    /// @return ownerReserveTo      Amount of `reserveTo` to be approved by the Cooler owner. This will be the principal of the consolidated loan.
+    /// @return callerReserveTo     Amount of `reserveTo` that the caller will need to provide.
     function requiredApprovals(
         address clearinghouseTo_,
         address coolerFrom_,
         uint256[] calldata ids_
-    )
-        external
-        view
-        onlyPolicyActive
-        returns (address, uint256, address, uint256, uint256, uint256, uint256)
-    {
+    ) external view onlyPolicyActive returns (address, uint256, address, uint256, uint256) {
         if (ids_.length < 2) revert Params_InsufficientCoolerCount();
 
-        uint256 totalPrincipal;
-        uint256 totalDebtWithInterest;
-        uint256 numLoans = ids_.length;
+        // Cache the total principal and interest
+        (uint256 totalPrincipal, uint256 totalInterest) = _getDebtForLoans(
+            address(coolerFrom_),
+            ids_
+        );
 
-        // Calculate the total debt and collateral for the loans
-        for (uint256 i; i < numLoans; i++) {
-            (, uint256 principal, uint256 interestDue, , , , , ) = Cooler(coolerFrom_).loans(
-                ids_[i]
-            );
-            totalPrincipal += principal;
-            totalDebtWithInterest += principal + interestDue;
+        uint256 totalFees;
+        {
+            uint256 protocolFee = getProtocolFee(totalPrincipal + totalInterest);
+            uint256 lenderFee = FLASH.flashFee(address(DAI), totalPrincipal + totalInterest);
+
+            totalFees = totalInterest + lenderFee + protocolFee;
         }
-
-        uint256 protocolFee = getProtocolFee(totalDebtWithInterest);
-        uint256 totalDebtWithFee = totalDebtWithInterest + protocolFee;
 
         // Calculate the collateral required for the consolidated loan principal
         uint256 consolidatedLoanCollateral = Clearinghouse(clearinghouseTo_).getCollateralForLoan(
             totalPrincipal
         );
 
-        uint256 lenderFee = FLASH.flashFee(address(DAI), totalDebtWithFee);
-
-        // TODO indicate how much will be paid from the flashloan (max) and how much the owner needs to provide
-
         return (
             Cooler(coolerFrom_).owner(),
             consolidatedLoanCollateral,
             _getClearinghouseReserveToken(clearinghouseTo_),
-            totalDebtWithInterest + lenderFee + protocolFee,
-            totalDebtWithInterest,
-            lenderFee,
-            protocolFee
+            totalPrincipal,
+            totalFees
         );
     }
 
@@ -770,6 +763,38 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         }
 
         return (consolidatedLoanCollateral, existingLoanCollateral, additionalCollateral);
+    }
+
+    /// @notice View function to compute the funds required to consolidate a set of loans.
+    ///         The sum of the values must be held in the caller's wallet, in terms of the reserve token.
+    ///
+    /// @param  clearinghouseTo_    Clearinghouse contract to be used to issue the consolidated loan.
+    /// @param  coolerFrom_         Cooler contract that issued the loans.
+    /// @param  ids_                Array of loan ids to be consolidated.
+    /// @return reserveTo           Token the fund amounts are in terms of
+    /// @return interest            Total interest
+    /// @return lenderFee           Lender fee
+    /// @return protocolFee         Protocol fee
+    function fundsRequired(
+        address clearinghouseTo_,
+        address coolerFrom_,
+        uint256[] calldata ids_
+    )
+        public
+        view
+        onlyPolicyActive
+        returns (address reserveTo, uint256 interest, uint256 lenderFee, uint256 protocolFee)
+    {
+        (uint256 totalPrincipal, uint256 totalInterest) = _getDebtForLoans(
+            address(coolerFrom_),
+            ids_
+        );
+        reserveTo = _getClearinghouseReserveToken(clearinghouseTo_);
+        protocolFee = getProtocolFee(totalPrincipal + totalInterest);
+        interest = totalInterest;
+        lenderFee = FLASH.flashFee(address(DAI), totalPrincipal + totalInterest);
+
+        return (reserveTo, interest, lenderFee, protocolFee);
     }
 
     /// @notice Version of the contract
