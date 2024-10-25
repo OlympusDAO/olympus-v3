@@ -169,7 +169,7 @@ contract CHREGTest is Test {
         chreg.activateClearinghouse(address(3));
         vm.stopPrank();
 
-        // Verify clearinghouse was activateed
+        // Verify clearinghouse was activated
         assertEq(chreg.registryCount(), 3);
         assertEq(chreg.registry(0), address(1));
         assertEq(chreg.registry(1), address(2));
@@ -191,7 +191,7 @@ contract CHREGTest is Test {
         chreg.activateClearinghouse(address(3));
         vm.stopPrank();
 
-        // Verify clearinghouse was activateed
+        // Verify clearinghouse was activated
         assertEq(chreg.registryCount(), 3);
         assertEq(chreg.registry(0), address(1));
         assertEq(chreg.registry(1), address(2));
@@ -199,6 +199,28 @@ contract CHREGTest is Test {
         assertEq(chreg.activeCount(), 2);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.active(1), address(3));
+    }
+
+    function test_activateMultiple_givenThirdDeactivated() public {
+        // Verify initial state
+        assertEq(chreg.registryCount(), 0);
+        assertEq(chreg.activeCount(), 0);
+
+        vm.startPrank(godmode);
+        chreg.activateClearinghouse(address(1));
+        chreg.activateClearinghouse(address(2));
+        chreg.activateClearinghouse(address(3));
+        chreg.deactivateClearinghouse(address(3));
+        vm.stopPrank();
+
+        // Verify clearinghouse was activated
+        assertEq(chreg.registryCount(), 3);
+        assertEq(chreg.registry(0), address(1));
+        assertEq(chreg.registry(1), address(2));
+        assertEq(chreg.registry(2), address(3));
+        assertEq(chreg.activeCount(), 2);
+        assertEq(chreg.active(0), address(1));
+        assertEq(chreg.active(1), address(2));
     }
 
     function test_addressIsNotRegisteredTwice() public {
