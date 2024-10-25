@@ -71,8 +71,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function setUp() public {
         // Mainnet Fork at a fixed block
-        // sUSDS deployment
-        vm.createSelectFork(RPC_URL, 20677434);
+        // After sUSDS deployment
+        vm.createSelectFork(RPC_URL, 20900000);
 
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);
