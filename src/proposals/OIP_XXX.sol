@@ -54,7 +54,7 @@ contract OIP_XXX is GovernorBravoProposal {
             ohm_: addresses.getAddress("olympus-legacy-ohm"),
             gohm_: addresses.getAddress("olympus-legacy-gohm"),
             staking_: addresses.getAddress("olympus-legacy-staking"),
-            sdai_: addresses.getAddress("external-tokens-sdai"),
+            wrappedReserve_: addresses.getAddress("external-tokens-sdai"),
             coolerFactory_: addresses.getAddress("external-coolers-factory"),
             kernel_: address(_kernel)
         });
