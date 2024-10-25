@@ -128,7 +128,7 @@ contract LoanConsolidatorForkTest is Test {
         rgstyAdmin.registerImmutableContract("gohm", address(gohm));
         rgstyAdmin.registerImmutableContract("usds", address(usds));
         rgstyAdmin.registerContract("flash", address(lender));
-        rgstyAdmin.registerContract("dmgtr", address(coolerFactory));
+        rgstyAdmin.registerContract("dmgtr", address(daiUsdsMigrator));
         vm.stopPrank();
 
         // Add a new Clearinghouse with USDS
@@ -1027,7 +1027,7 @@ contract LoanConsolidatorForkTest is Test {
 
         // Create a Cooler on the USDS Clearinghouse
         vm.startPrank(walletA);
-        address coolerUsds_ = coolerFactory.generateCooler(usds, dai);
+        address coolerUsds_ = coolerFactory.generateCooler(gohm, usds);
         Cooler coolerUsds = Cooler(coolerUsds_);
         vm.stopPrank();
 
@@ -1041,6 +1041,9 @@ contract LoanConsolidatorForkTest is Test {
 
         // Grant approvals
         _grantCallerApprovals(walletA, address(clearinghouseUsds), idsA);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
 
         // Consolidate loans
         _consolidate(
@@ -1091,6 +1094,8 @@ contract LoanConsolidatorForkTest is Test {
         // Grant approvals
         _grantCallerApprovals(idsA);
 
+        // TODO deal fees in DAI?
+
         // Consolidate loans
         _consolidate(
             walletA,
@@ -1136,6 +1141,9 @@ contract LoanConsolidatorForkTest is Test {
 
         // Grant approvals
         _grantCallerApprovals(walletA, address(clearinghouseUsds), idsA);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
 
         // Consolidate loans
         _consolidate(
