@@ -93,12 +93,8 @@ contract LoanConsolidatorForkTest is Test {
         TRSRY = TRSRYv1(address(kernel.getModuleForKeycode(toKeycode("TRSRY"))));
         CHREG = CHREGv1(address(kernel.getModuleForKeycode(toKeycode("CHREG"))));
 
-        // Cache the TRSRY balances
-        trsryDaiBalance = dai.balanceOf(address(TRSRY));
-        trsryGOhmBalance = gohm.balanceOf(address(TRSRY));
-        trsrySDaiBalance = sdai.balanceOf(address(TRSRY));
-        trsryUsdsBalance = usds.balanceOf(address(TRSRY));
-        trsrySusdsBalance = susds.balanceOf(address(TRSRY));
+        // Deposit sUSDS in TRSRY
+        deal(address(susds), address(TRSRY), 18_000_000 * 1e18);
 
         // Determine the kernel executor
         kernelExecutor = Kernel(kernel).executor();
@@ -145,6 +141,16 @@ contract LoanConsolidatorForkTest is Test {
         vm.stopPrank();
         // Activate the USDS Clearinghouse
         clearinghouseUsds.activate();
+        // Rebalance the USDS Clearinghouse
+        clearinghouseUsds.rebalance();
+
+        // Cache the TRSRY balances
+        // This is after the Clearinghouse, since activation may result in funds movement
+        trsryDaiBalance = dai.balanceOf(address(TRSRY));
+        trsryGOhmBalance = gohm.balanceOf(address(TRSRY));
+        trsrySDaiBalance = sdai.balanceOf(address(TRSRY));
+        trsryUsdsBalance = usds.balanceOf(address(TRSRY));
+        trsrySusdsBalance = susds.balanceOf(address(TRSRY));
 
         // Increment the CHREG registry count
         // The registryCount does not seem to be incremented on the fork, which is... weird.
@@ -162,10 +168,12 @@ contract LoanConsolidatorForkTest is Test {
         // Fund wallets with gOHM
         deal(address(gohm), walletA, _GOHM_AMOUNT);
 
-        // Ensure the Clearinghouse has enough DAI
+        // Ensure the Clearinghouse has enough DAI and sDAI
         deal(address(dai), address(clearinghouse), 18_000_000 * 1e18);
-        // Ensure the Clearinghouse has enough USDS
+        deal(address(sdai), address(clearinghouse), 18_000_000 * 1e18);
+        // Ensure the Clearinghouse has enough USDS and sUSDS
         deal(address(usds), address(clearinghouseUsds), 18_000_000 * 1e18);
+        deal(address(susds), address(clearinghouseUsds), 18_000_000 * 1e18);
 
         _createCoolers(clearinghouse, coolerFactory, walletA, dai);
     }
@@ -307,18 +315,32 @@ contract LoanConsolidatorForkTest is Test {
         _;
     }
 
+    function _createCooler(
+        CoolerFactory coolerFactory_,
+        address wallet_,
+        ERC20 token_
+    ) internal returns (address) {
+        console2.log("Creating cooler...");
+        console2.log("token:", address(token_));
+        console2.log("wallet:", wallet_);
+
+        vm.startPrank(wallet_);
+        address cooler_ = coolerFactory_.generateCooler(gohm, token_);
+        vm.stopPrank();
+
+        return cooler_;
+    }
+
     function _createCoolers(
         Clearinghouse clearinghouse_,
         CoolerFactory coolerFactory_,
         address wallet_,
         ERC20 token_
     ) internal {
-        // Create coolers
-        vm.startPrank(wallet_);
-        // Deploy a cooler for wallet_
-        address coolerA_ = coolerFactory_.generateCooler(gohm, token_);
-        coolerA = Cooler(coolerA_);
+        address cooler_ = _createCooler(coolerFactory_, wallet_, token_);
+        coolerA = Cooler(cooler_);
 
+        vm.startPrank(wallet_);
         // Approve clearinghouse to spend gOHM
         gohm.approve(address(clearinghouse_), _GOHM_AMOUNT);
         // Loan 0 for coolerA (collateral: 2,000 gOHM)
@@ -331,6 +353,7 @@ contract LoanConsolidatorForkTest is Test {
         (loan, ) = clearinghouse_.getLoanForCollateral(333 * 1e18);
         clearinghouse_.lendToCooler(coolerA, loan);
         vm.stopPrank();
+        console2.log("Loans 0, 1, 2 created for cooler:", address(cooler_));
     }
 
     // ===== ASSERTIONS ===== //
@@ -347,6 +370,28 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(loan.collateral, collateral_, "loan 3: collateral");
         vm.expectRevert();
         loan = coolerA.getLoan(4);
+    }
+
+    function _assertCoolerLoansCrossClearinghouse(
+        address coolerFrom_,
+        address coolerTo_,
+        uint256 collateral_
+    ) internal {
+        // Check that coolerFrom has no open loans
+        Cooler.Loan memory loan = Cooler(coolerFrom_).getLoan(0);
+        assertEq(loan.collateral, 0, "coolerFrom, loan 0: collateral");
+        loan = Cooler(coolerFrom_).getLoan(1);
+        assertEq(loan.collateral, 0, "coolerFrom, loan 1: collateral");
+        loan = Cooler(coolerFrom_).getLoan(2);
+        assertEq(loan.collateral, 0, "coolerFrom, loan 2: collateral");
+        vm.expectRevert();
+        loan = Cooler(coolerFrom_).getLoan(3);
+
+        // Check that coolerTo has a single open loan
+        loan = Cooler(coolerTo_).getLoan(0);
+        assertEq(loan.collateral, collateral_, "coolerTo, loan 0: collateral");
+        vm.expectRevert();
+        loan = Cooler(coolerTo_).getLoan(1);
     }
 
     function _assertTokenBalances(
@@ -406,7 +451,7 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(dai.balanceOf(lender), lenderBalance, "dai: lender");
         assertEq(
             dai.balanceOf(address(TRSRY)),
-            trsryDaiBalance + collectorBalance,
+            trsryDaiBalance + (reserveTo_ == address(dai) ? collectorBalance : 0),
             "dai: collector"
         );
 
@@ -419,7 +464,11 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(usds.balanceOf(address(coolerFrom_)), 0, "usds: coolerFrom_");
         assertEq(usds.balanceOf(address(coolerTo_)), 0, "usds: coolerTo_");
         assertEq(usds.balanceOf(lender), 0, "usds: lender");
-        assertEq(usds.balanceOf(address(TRSRY)), trsryUsdsBalance, "usds: collector");
+        assertEq(
+            usds.balanceOf(address(TRSRY)),
+            trsryUsdsBalance + (reserveTo_ == address(usds) ? collectorBalance : 0),
+            "usds: collector"
+        );
 
         assertEq(sdai.balanceOf(address(utils)), 0, "sdai: utils");
         assertEq(sdai.balanceOf(walletA), 0, "sdai: walletA");
@@ -1026,16 +1075,12 @@ contract LoanConsolidatorForkTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Create a Cooler on the USDS Clearinghouse
-        vm.startPrank(walletA);
-        address coolerUsds_ = coolerFactory.generateCooler(gohm, usds);
-        Cooler coolerUsds = Cooler(coolerUsds_);
-        vm.stopPrank();
+        address coolerUsds = _createCooler(coolerFactory, walletA, usds);
+        address coolerDai = address(coolerA);
 
-        // Record the amount of USDS in the wallet
-        uint256 initPrincipal = usds.balanceOf(walletA);
         (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
             address(clearinghouseUsds),
-            address(coolerA),
+            coolerDai,
             idsA
         );
 
@@ -1044,28 +1089,33 @@ contract LoanConsolidatorForkTest is Test {
 
         // Deal fees in USDS to the wallet
         deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Record the amount of USDS in the wallet
+        uint256 initPrincipal = usds.balanceOf(walletA);
 
         // Consolidate loans
         _consolidate(
             walletA,
             address(clearinghouse),
             address(clearinghouseUsds),
-            address(coolerA),
-            address(coolerUsds),
+            coolerDai,
+            coolerUsds,
             idsA
         );
 
-        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertCoolerLoansCrossClearinghouse(coolerDai, coolerUsds, _GOHM_AMOUNT);
         _assertTokenBalances(
             address(usds),
-            address(coolerA),
-            address(coolerUsds),
+            coolerDai,
+            coolerUsds,
             initPrincipal - interest - protocolFee,
             0,
             protocolFee,
             _GOHM_AMOUNT
         );
-        _assertApprovals(address(coolerA), address(coolerUsds));
+        _assertApprovals(coolerDai, coolerUsds);
     }
 
     function test_consolidate_protocolFee_usdsToDai()
@@ -1079,44 +1129,80 @@ contract LoanConsolidatorForkTest is Test {
         // Cache before it gets overwritten
         address coolerDai = address(coolerA);
 
-        // Create coolers
+        // Create cooler loans on the USDS Clearinghouse
         deal(address(gohm), walletA, _GOHM_AMOUNT);
         _createCoolers(clearinghouseUsds, coolerFactory, walletA, usds);
-
-        // Record the amount of DAI in the wallet
-        uint256 initPrincipal = dai.balanceOf(walletA);
+        address coolerUsds = address(coolerA);
         (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
-            address(clearinghouseUsds),
-            address(coolerA),
+            address(clearinghouse),
+            coolerUsds,
             idsA
         );
 
         // Grant approvals
-        _grantCallerApprovals(idsA);
+        _grantCallerApprovals(walletA, address(clearinghouse), idsA);
 
-        // TODO deal fees in DAI?
+        // Deal fees in DAI to the wallet
+        deal(address(dai), walletA, interest + protocolFee);
+        // Make sure the wallet has no USDS
+        deal(address(usds), walletA, 0);
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
 
         // Consolidate loans
         _consolidate(
             walletA,
             address(clearinghouseUsds),
             address(clearinghouse),
-            address(coolerA),
-            address(coolerDai),
+            coolerUsds,
+            coolerDai,
             idsA
         );
 
-        _assertCoolerLoans(_GOHM_AMOUNT);
+        // Check that coolerUsds has no loans
+        assertEq(Cooler(coolerUsds).getLoan(0).collateral, 0, "coolerUsds: loan 0: collateral");
+        assertEq(Cooler(coolerUsds).getLoan(1).collateral, 0, "coolerUsds: loan 1: collateral");
+        assertEq(Cooler(coolerUsds).getLoan(2).collateral, 0, "coolerUsds: loan 2: collateral");
+        vm.expectRevert();
+        Cooler(coolerUsds).getLoan(3);
+
+        // Check that coolerDai has the previous 3 loans
+        assertEq(
+            Cooler(coolerDai).getLoan(0).collateral,
+            2_000 * 1e18,
+            "coolerDai: loan 0: collateral"
+        );
+        assertEq(
+            Cooler(coolerDai).getLoan(1).collateral,
+            1_000 * 1e18,
+            "coolerDai: loan 1: collateral"
+        );
+        assertEq(
+            Cooler(coolerDai).getLoan(2).collateral,
+            333 * 1e18,
+            "coolerDai: loan 2: collateral"
+        );
+        // Check that it has the consolidated loan
+        assertEq(
+            Cooler(coolerDai).getLoan(3).collateral,
+            _GOHM_AMOUNT,
+            "coolerDai: loan 3: collateral"
+        );
+        // No more loans
+        vm.expectRevert();
+        Cooler(coolerDai).getLoan(4);
+
         _assertTokenBalances(
             address(dai),
-            address(coolerA),
-            address(coolerDai),
+            coolerUsds,
+            coolerDai,
             initPrincipal - interest - protocolFee,
             0,
             protocolFee,
-            _GOHM_AMOUNT
+            _GOHM_AMOUNT + _GOHM_AMOUNT // 2x loans
         );
-        _assertApprovals(address(coolerA), address(coolerDai));
+        _assertApprovals(coolerUsds, coolerDai);
     }
 
     function test_consolidate_protocolFee_usdsToUsds()
@@ -1130,12 +1216,11 @@ contract LoanConsolidatorForkTest is Test {
         // Create coolers
         deal(address(gohm), walletA, _GOHM_AMOUNT);
         _createCoolers(clearinghouseUsds, coolerFactory, walletA, usds);
+        address coolerUsds = address(coolerA);
 
-        // Record the amount of USDS in the wallet
-        uint256 initPrincipal = usds.balanceOf(walletA);
         (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
             address(clearinghouseUsds),
-            address(coolerA),
+            coolerUsds,
             idsA
         );
 
@@ -1144,28 +1229,33 @@ contract LoanConsolidatorForkTest is Test {
 
         // Deal fees in USDS to the wallet
         deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Record the amount of USDS in the wallet
+        uint256 initPrincipal = usds.balanceOf(walletA);
 
         // Consolidate loans
         _consolidate(
             walletA,
             address(clearinghouseUsds),
             address(clearinghouseUsds),
-            address(coolerA),
-            address(coolerA),
+            coolerUsds,
+            coolerUsds,
             idsA
         );
 
         _assertCoolerLoans(_GOHM_AMOUNT);
         _assertTokenBalances(
             address(usds),
-            address(coolerA),
-            address(coolerA),
+            coolerUsds,
+            coolerUsds,
             initPrincipal - interest - protocolFee,
             0,
             protocolFee,
             _GOHM_AMOUNT
         );
-        _assertApprovals(address(coolerA), address(coolerA));
+        _assertApprovals(coolerUsds, coolerUsds);
     }
 
     // setFeePercentage
