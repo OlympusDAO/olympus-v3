@@ -1043,9 +1043,7 @@ contract LoanConsolidatorForkTest is Test {
         uint256[] memory idsA = _idsA();
 
         // Record the initial debt balance
-        (uint256 totalPrincipal, ) = clearinghouse.getLoanForCollateral(
-            _GOHM_AMOUNT
-        );
+        (uint256 totalPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
 
         // Record the amount of DAI in the wallet
         uint256 initPrincipal = dai.balanceOf(walletA);
