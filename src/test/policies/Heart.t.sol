@@ -14,6 +14,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
 import {MockYieldRepo} from "test/mocks/MockYieldRepo.sol";
+import {MockReserveMigrator} from "test/mocks/MockReserveMigrator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -24,6 +25,7 @@ import {OlympusHeart, IHeart} from "policies/Heart.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
+import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -76,6 +78,7 @@ contract HeartTest is Test {
     ZeroDistributor internal distributor;
 
     MockYieldRepo internal yieldRepo;
+    MockReserveMigrator internal reserveMigrator;
 
     uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
 
@@ -128,12 +131,16 @@ contract HeartTest is Test {
             // Deploy mock yieldRepo
             yieldRepo = new MockYieldRepo();
 
+            // Deploy mock reserve migrator
+            reserveMigrator = new MockReserveMigrator();
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
                 IDistributor(address(distributor)),
                 IYieldRepo(address(yieldRepo)),
+                IReserveMigrator(address(reserveMigrator)),
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -192,6 +199,7 @@ contract HeartTest is Test {
             IOperator(address(operator)),
             IDistributor(address(distributor)),
             IYieldRepo(address(yieldRepo)),
+            IReserveMigrator(address(reserveMigrator)),
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );

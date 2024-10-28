@@ -11,6 +11,7 @@ import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 import {IStaking} from "interfaces/IStaking.sol";
+import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
 
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
@@ -50,6 +51,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     IOperator public operator;
     IDistributor public distributor;
     IYieldRepo public yieldRepo;
+    IReserveMigrator public reserveMigrator;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -62,12 +64,14 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IOperator operator_,
         IDistributor distributor_,
         IYieldRepo yieldRepo_,
+        IReserveMigrator reserveMigrator_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         distributor = distributor_;
         yieldRepo = yieldRepo_;
+        reserveMigrator = reserveMigrator_;
 
         active = true;
         auctionDuration = auctionDuration_;
@@ -130,6 +134,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
         // Update the moving average on the Price module
         PRICE.updateMovingAverage();
+
+        // Migrate reserves, if necessary
+        reserveMigrator.migrate();
 
         // Trigger price range update and market operations
         operator.operate();

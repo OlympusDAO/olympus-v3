@@ -41,6 +41,7 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
+import {MockReserveMigrator} from "test/mocks/MockReserveMigrator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -199,6 +200,7 @@ abstract contract RangeSim is Test {
     RolesAdmin public rolesAdmin;
     ZeroDistributor public distributor;
     YieldRepurchaseFacility public yieldRepo;
+    MockReserveMigrator public reserveMigrator;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
@@ -409,6 +411,7 @@ abstract contract RangeSim is Test {
                 address(auctioneer),
                 address(0) // no clearinghouse
             );
+            reserveMigrator = new MockReserveMigrator();
 
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);
@@ -419,6 +422,7 @@ abstract contract RangeSim is Test {
                 operator,
                 distributor,
                 yieldRepo,
+                reserveMigrator,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );

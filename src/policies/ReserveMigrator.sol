@@ -7,21 +7,13 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import "src/Kernel.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
 
 interface IDaiUsds {
     function daiToUsds(address usr, uint256 wad) external;
 }
 
-contract ReserveMigrator is Policy, RolesConsumer {
-    // ========== ERRORS ========== //
-
-    error ReserveMigrator_InvalidParams();
-    error ReserveMigrator_BadMigration();
-
-    // ========== EVENTS ========== //
-
-    event MigratedReserves(address indexed from, address indexed to, uint256 amount);
-
+contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
     // ========== STATE VARIABLES ========== //
 
     // Modules
@@ -86,9 +78,8 @@ contract ReserveMigrator is Policy, RolesConsumer {
 
     // ========== MIGRATE RESERVES ========== //
 
-    /// @notice migrate reserves and wrapped reserves in the treasury to the new reserve token
-    /// @dev this function is restricted to the heart role to avoid complications with opportunistic conversions
-    function migrate() external onlyRole("heart") {
+    /// @inheritdoc IReserveMigrator
+    function migrate() external override onlyRole("heart") {
         // Do nothing if the policy is not active
         if (!locallyActive) return;
 
@@ -147,14 +138,21 @@ contract ReserveMigrator is Policy, RolesConsumer {
 
     // ========== ADMIN FUNCTIONS ========== //
 
+    /// @notice Activate the policy locally, if it has been deactivated
+    /// @dev This function is restricted to the reserve_migrator admin role
     function activate() external onlyRole("reserve_migrator_admin") {
         locallyActive = true;
     }
 
+    /// @notice Deactivate the policy locally, preventing it from migrating reserves
+    /// @dev This function is restricted to the reserve_migrator admin role
     function deactivate() external onlyRole("reserve_migrator_admin") {
         locallyActive = false;
     }
 
+    /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
+    /// @dev This function is restricted to the reserve_migrator admin role
+    /// @param token_ The address of the ERC20 token to rescue
     function rescue(address token_) external onlyRole("reserve_migrator_admin") {
         ERC20 token = ERC20(token_);
         token.transfer(address(TRSRY), token.balanceOf(address(this)));
