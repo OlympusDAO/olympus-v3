@@ -48,6 +48,7 @@ contract OperatorTest is Test {
     MockOhm internal ohm;
     MockERC20 internal reserve;
     MockERC4626 internal wrappedReserve;
+    MockERC20 internal oldReserve;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
@@ -95,6 +96,7 @@ contract OperatorTest is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
             wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
+            oldReserve = new MockERC20("Old Reserve", "oRSV", 18);
         }
 
         {
@@ -131,7 +133,7 @@ contract OperatorTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve), address(wrappedReserve)],
+                [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration

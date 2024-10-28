@@ -543,6 +543,7 @@ contract OlympusDeploy is Script {
         console2.log("   ohm", address(ohm));
         console2.log("   reserve", address(reserve));
         console2.log("   sReserve", address(sReserve));
+        console2.log("   oldReserve", address(oldReserve));
         console2.log("   cushionDebtBuffer", cushionDebtBuffer);
         console2.log("   cushionDepositInterval", cushionDepositInterval);
         console2.log("   cushionDuration", cushionDuration);
@@ -558,7 +559,7 @@ contract OlympusDeploy is Script {
             kernel,
             bondAuctioneer,
             callback,
-            [address(ohm), address(reserve), address(sReserve)],
+            [address(ohm), address(reserve), address(sReserve), address(oldReserve)],
             configParams
         );
         console2.log("Operator deployed at:", address(operator));

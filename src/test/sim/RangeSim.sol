@@ -219,6 +219,7 @@ abstract contract RangeSim is Test {
     MockOhm internal ohm;
     MockERC20 internal reserve;
     MockERC4626 internal wrappedReserve;
+    MockERC20 internal oldReserve;
     ZuniswapV2Factory internal lpFactory;
     ZuniswapV2Pair internal pool;
     ZuniswapV2Router internal router;
@@ -292,6 +293,7 @@ abstract contract RangeSim is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             require(address(reserve) < address(ohm)); // ensure reserve is token0 in the LP pool
             wrappedReserve = new MockERC4626(reserve, "Wrapped Reserve", "WRSV");
+            oldReserve = new MockERC20("Old Reserve", "ORSV", 18);
 
             ohmEthPriceFeed = new MockPriceFeed();
             ohmEthPriceFeed.setDecimals(18);
@@ -387,7 +389,7 @@ abstract contract RangeSim is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve), address(wrappedReserve)],
+                [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
                 [
                     _params.cushionFactor, // cushionFactor
                     uint32(vm.envUint("CUSHION_DURATION")), // duration

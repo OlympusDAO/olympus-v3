@@ -69,6 +69,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev _wrappedReserveDecimals == _reserveDecimals
     ERC4626 public immutable wrappedReserve;
 
+    // During the reserve migration period, we need to track the reserve balance of the old reserve token
+    // This is because there are debts issued in the old reserve which count towards the capacity of the Operator
+    ERC20 public immutable oldReserve;
+
     // Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 internal constant ONE_PERCENT = 1e2;
@@ -81,7 +85,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
-        address[3] memory tokens_, // [ohm, reserve, wrappedReserve]
+        address[4] memory tokens_, // [ohm, reserve, wrappedReserve, oldReserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
@@ -110,6 +114,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         reserve = ERC20(tokens_[1]);
         _reserveDecimals = reserve.decimals();
         wrappedReserve = ERC4626(tokens_[2]);
+        oldReserve = ERC20(tokens_[3]);
 
         // Ensure wrappedReserve decimals match reserve decimals
         if (wrappedReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
@@ -886,7 +891,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     function fullCapacity(bool high_) public view override returns (uint256) {
         uint256 reservesInTreasury = wrappedReserve.previewRedeem(
             TRSRY.getReserveBalance(wrappedReserve)
-        ) + TRSRY.getReserveBalance(reserve);
+        ) +
+            TRSRY.getReserveBalance(reserve) +
+            TRSRY.getReserveBalance(oldReserve);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
