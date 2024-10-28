@@ -356,9 +356,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
         // Ensure that the interest transferred from the caller is in terms of the reserveFrom token
         // Fees are in terms of the reserveTo token
-        if (
-            flashLoanData.migrationType == MigrationType.USDS_DAI
-        ) {
+        if (flashLoanData.migrationType == MigrationType.USDS_DAI) {
             DAI.approve(address(MIGRATOR), flashLoanData.interest);
             MIGRATOR.daiToUsds(address(this), flashLoanData.interest);
         }
