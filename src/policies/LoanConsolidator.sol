@@ -342,15 +342,29 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         if (initiator_ != address(this)) revert OnlyThis();
 
         // Assumptions:
-        // - The flashloan provider has transferred amount_ in DAI, which includes the principal and interest
+        // - The flashloan provider has transferred amount_ in DAI, which includes the principal
+        // - This contract has transferred from the caller the interest, lender fee and protocol fee to this contract
 
-        // If clearinghouseFrom is in USDS, then we need to convert the DAI to USDS in order to repay the principal and interest
+        // If clearinghouseFrom is in USDS, then we need to convert the flashloan DAI to USDS in order to repay the principal
         if (
             flashLoanData.migrationType == MigrationType.USDS_DAI ||
             flashLoanData.migrationType == MigrationType.USDS_USDS
         ) {
-            DAI.approve(address(MIGRATOR), flashLoanData.principal + flashLoanData.interest);
-            MIGRATOR.daiToUsds(address(this), flashLoanData.principal + flashLoanData.interest);
+            DAI.approve(address(MIGRATOR), flashLoanData.principal);
+            MIGRATOR.daiToUsds(address(this), flashLoanData.principal);
+        }
+
+        // Ensure that the interest transferred from the caller is in terms of the reserveFrom token
+        // Fees are in terms of the reserveTo token
+        if (
+            flashLoanData.migrationType == MigrationType.USDS_DAI
+        ) {
+            DAI.approve(address(MIGRATOR), flashLoanData.interest);
+            MIGRATOR.daiToUsds(address(this), flashLoanData.interest);
+        }
+        if (flashLoanData.migrationType == MigrationType.DAI_USDS) {
+            USDS.approve(address(MIGRATOR), flashLoanData.interest);
+            MIGRATOR.usdsToDai(address(this), flashLoanData.interest);
         }
 
         // Grant approval to the Cooler to spend the debt
