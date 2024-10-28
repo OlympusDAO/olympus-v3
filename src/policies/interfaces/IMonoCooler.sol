@@ -107,6 +107,15 @@ interface IMonoCooler {
 
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
+
+        /// @notice The total collateral delegated for this user across all delegates
+        uint256 totalDelegated;
+
+        /// @notice The current number of addresses this account has delegated to
+        uint256 numDelegateAddresses;
+
+        /// @notice The max number of delegates this account is allowed to delegate to
+        uint256 maxDelegateAddresses;
     }
 
     /// @notice The collateral token supplied by users/accounts, eg gOHM
@@ -285,7 +294,7 @@ interface IMonoCooler {
     /**
      * @notice Update the interest rate, specified in basis points.
      */
-    function setInterestRate(uint16 newInterestRateBps) external;
+    function setInterestRateBps(uint16 newInterestRateBps) external;
 
     /**
      * @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES 

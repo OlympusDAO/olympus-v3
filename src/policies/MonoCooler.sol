@@ -30,7 +30,8 @@ import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
 - Did a little gas golfing to pack storage variables - slight tradeoff for readability (eg safely encode uint256 => uint128). But worth it imo.
 - Funding of DAI/USDS debt is done 'just in time'. Will need an opinion on whether this is OK or if too gassy and we need to have a debt buffer or use 
   the same Clearinghouse max weekly funding model.
-  
+
+- Discussed adding a circuit breaker (like Temple's TLC) - sounds like we should?
  */
 
 contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
@@ -123,9 +124,11 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         /// @dev A regular account is allowed to delegate up to 10 different addresses.
         /// The account may be whitelisted to delegate more than that.
         EnumerableSet.AddressSet delegateAddresses;
+
+        /// @dev The total collateral delegated for this user across all delegates
         uint128 totalDelegated;
 
-        /// @notice By default an account can only delegate to 10 addresses.
+        /// @dev By default an account can only delegate to 10 addresses.
         /// This may be increased on a per account basis by governance.
         uint128 maxDelegateAddresses;
     }
@@ -144,6 +147,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     /// @notice Extra precision scalar
     uint256 private constant RAY = 1e27;
+
+    uint96 private constant ONE_YEAR = 365 days;
 
     // --- INITIALIZATION -------------------------------------------
 
@@ -166,8 +171,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         minDebtRequired = minDebtRequired_;
 
         // This contract only handles 18dp
-        if (collateralToken.decimals() != FixedPointMathLib.WAD) revert InvalidParam();
-        if (debtToken.decimals() != FixedPointMathLib.WAD) revert InvalidParam();
+        if (collateralToken.decimals() != 18) revert InvalidParam();
+        if (debtToken.decimals() != 18) revert InvalidParam();
 
         liquidationLtv = liquidationLtv_;
         maxOriginationLtv = maxOriginationLtv_;
@@ -519,8 +524,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         uint256 currentMaxOriginationLtv = maxOriginationLtv;
         if (newMaxOriginationLtv != currentMaxOriginationLtv) {
-            // Must be greater than the liquidationLtv
-            if (newMaxOriginationLtv <= newLiquidationLtv) revert InvalidParam();
+            // Must be less than the liquidationLtv
+            if (newMaxOriginationLtv >= newLiquidationLtv) revert InvalidParam();
             emit MaxOriginationLtvSet(newMaxOriginationLtv);
             maxOriginationLtv = newMaxOriginationLtv;
         }
@@ -546,7 +551,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /**
      * @notice Update the interest rate, specified in basis points.
      */
-    function setInterestRate(uint16 newInterestRateBps) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setInterestRateBps(uint16 newInterestRateBps) external override onlyRole(COOLER_OVERSEER_ROLE) {
         // Force an update of state on the old rate first.
         _globalStateRW();
 
@@ -599,6 +604,11 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
                 position.collateral,
                 position.currentDebt
             );
+        
+        AccountDelegations storage delegations = _accountDelegations[account];
+        position.totalDelegated = delegations.totalDelegated;
+        position.numDelegateAddresses = delegations.delegateAddresses.length();
+        position.maxDelegateAddresses = delegations.maxDelegateAddresses;
     }
 
     /**
@@ -648,10 +658,10 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint256 maxPossibleEndIndex = length - startIndex - 1;
         if (maxPossibleEndIndex < requestedEndIndex) requestedEndIndex = maxPossibleEndIndex;
 
-        delegations = new AccountDelegation[](requestedEndIndex-startIndex);
+        delegations = new AccountDelegation[](requestedEndIndex-startIndex+1);
         DelegateEscrow escrow;
         AccountDelegation memory delegateInfo;
-        for (uint256 i = startIndex; i < requestedEndIndex; ++i) {
+        for (uint256 i = startIndex; i <= requestedEndIndex; ++i) {
             delegateInfo = delegations[i];
             delegateInfo.delegate = acctDelegateAddresses.at(i);
             escrow = delegateEscrows[delegateInfo.delegate];
@@ -670,8 +680,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /**
      * @notice A view of the derived/internal cache data.
      */
-    function globalState() external view returns (GlobalStateCache memory) {
-        return _globalStateRO();
+    function globalState() external view returns (uint128 /*totalDebt*/, uint256 /*interestAccumulatorRay*/) {
+        GlobalStateCache memory gState = _globalStateRO();
+        return (gState.totalDebt, gState.interestAccumulatorRay);
     }
 
     // --- INTERNAL STATE CACHE -------------------------------------
@@ -683,13 +694,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
          * Decreases on repays or liquidations.
          */
         uint128 totalDebt;
-
-        /**
-         * @notice The interest rate as of the last borrow/repay/liquidation.
-         * This last rate is used to accrue interest from that last action time
-         * until the current block.
-         */
-        uint96 interestRateWad;
 
         /**
          * @notice Internal tracking of the accumulated interest as an index starting from 1.0e27
@@ -730,7 +734,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         // Copies from storage (once)
         gState.interestAccumulatorRay = interestAccumulatorRay;
         gState.totalDebt = totalDebt;
-        gState.interestRateWad = interestRateBps * uint96(FixedPointMathLib.WAD) / 1e4; // Convert basis points into WAD
+
+        // Convert annual IR [basis points] into WAD per second, assuming 365 days in a year
+        uint96 interestRatePerSec = uint96(interestRateBps) * 1e14 / ONE_YEAR;
 
         // Only compound if we're on a new block
         uint32 timeElapsed;
@@ -744,7 +750,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             // Compound the accumulator
             uint256 newInterestAccumulatorRay = gState.interestAccumulatorRay.continuouslyCompounded(
                 timeElapsed,
-                gState.interestRateWad
+                interestRatePerSec
             );
 
             // Calculate the latest totalDebt from this
@@ -854,11 +860,12 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         EnumerableSet.AddressSet storage acctDelegateAddresses,
         uint128 maxDelegateAddresses
     ) private returns (DelegateEscrow delegateEscrow) {
-        // Ensure it's added to this user's set of delegate addresses
-        acctDelegateAddresses.add(delegate);
         delegateEscrow = delegateEscrows[delegate];
         
         if (address(delegateEscrow) == address(0)) {
+            // Ensure it's added to this user's set of delegate addresses
+            acctDelegateAddresses.add(delegate);
+
             // create new escrow if the user has under the 10 cap
             if (acctDelegateAddresses.length() > maxDelegateAddresses) revert TooManyDelegates();
 
@@ -885,7 +892,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         // If this is the first delegation, set to the default.
         // NB: This means the lowest number of delegate addresses an account can have after
         // whitelisting is 1 (since if it's set to zero, it will reset to the default)
-        if (maxDelegateAddresses == 0) acctDelegations.maxDelegateAddresses = DEFAULT_MAX_DELEGATE_ADDRESSES;
+        if (maxDelegateAddresses == 0) {
+            acctDelegations.maxDelegateAddresses = maxDelegateAddresses = DEFAULT_MAX_DELEGATE_ADDRESSES;
+        }
 
         uint256 length = delegationRequests.length;
         for (uint256 i; i < length; ++i) {
@@ -918,6 +927,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         bool rescindOnly
     ) private returns (uint128 newTotalDelegated) {
         if (delegationRequest.fromDelegate == address(0) && delegationRequest.toDelegate == address(0)) revert InvalidParam();
+        if (delegationRequest.fromDelegate == delegationRequest.toDelegate) revert InvalidParam();
 
         // Special case to delegate all remaining (undelegated) collateral.
         uint128 collateralAmount = delegationRequest.collateralAmount == type(uint128).max
@@ -934,7 +944,11 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             if (address(delegateEscrow) == address(0)) revert InvalidDelegateEscrow();
 
             // Pull collateral from the old escrow
-            delegateEscrow.rescindDelegation(onBehalfOf, collateralAmount);
+            // And remove from acctDelegateAddresses if it's now empty
+            uint256 delegatedBalance = delegateEscrow.rescindDelegation(onBehalfOf, collateralAmount);
+            if (delegatedBalance == 0) {
+                acctDelegateAddresses.remove(delegationRequest.fromDelegate);
+            }
         }
         
         if (delegationRequest.toDelegate == address(0)) {
@@ -949,6 +963,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             );
 
             // Push collateral to the new escrow
+            collateralToken.safeApprove(address(delegateEscrow), collateralAmount);
             delegateEscrow.delegate(onBehalfOf, collateralAmount);
         }
 

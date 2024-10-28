@@ -55,22 +55,22 @@ contract DelegateEscrow {
     /// @notice Delegate an amount of gOHM to the predefined `delegateAccount`
     /// @dev gOHM is pulled from the caller (which must provide allowance), and only that 
     /// same caller may rescind the delegation to recall the gOHM at a future date.
-    function delegate(address onBehalfOf, uint256 gohmAmount) external {
+    function delegate(address onBehalfOf, uint256 gohmAmount) external returns (uint256 delegatedAmount) {
         gohm.safeTransferFrom(msg.sender, address(this), gohmAmount);
 
         mapping(address => uint256) storage delegatorAmounts = delegations[msg.sender];
-        delegatorAmounts[onBehalfOf] += gohmAmount;
+        delegatorAmounts[onBehalfOf] = delegatedAmount = delegatorAmounts[onBehalfOf] + gohmAmount;
 
         emit Delegate(msg.sender, onBehalfOf, int256(gohmAmount));
     }
 
     /// @notice Rescind a delegation of gOHM and send back to the caller.
-    function rescindDelegation(address onBehalfOf, uint256 gohmAmount) external {
+    function rescindDelegation(address onBehalfOf, uint256 gohmAmount) external returns (uint256 delegatedAmount) {
         mapping(address => uint256) storage delegatorAmounts = delegations[msg.sender];
         uint256 existingDelegatedAmount = delegatorAmounts[onBehalfOf];
         if (gohmAmount > existingDelegatedAmount) revert ExceededDelegationBalance();
 
-        delegatorAmounts[onBehalfOf] = existingDelegatedAmount - gohmAmount;
+        delegatorAmounts[onBehalfOf] = delegatedAmount = existingDelegatedAmount - gohmAmount;
         gohm.safeTransfer(msg.sender, gohmAmount);
 
         emit Delegate(msg.sender, onBehalfOf, -int256(gohmAmount));
