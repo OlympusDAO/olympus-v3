@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -269,8 +268,8 @@ contract ReserveMigratorTest is Test {
     //          [X] it redeems the combined sFrom balance of the TRSRY and the reserve migrator
     //          [X] it migrates the combined from balance of the TRSRY and the reserve migrator to the to reserve
     //          [X] it deposits the to reserves into sTo and sends to the TRSRY
-    // [ ] when called by an address with the "heart" role and when the contract is not locally active
-    //    [ ] it does nothing (in all the cases listed above)
+    // [X] when called by an address with the "heart" role and when the contract is not locally active
+    //    [X] it does nothing (in all the cases listed above)
 
     // migrate
     // when called by an address without the "heart" role

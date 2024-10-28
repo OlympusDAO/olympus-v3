@@ -93,7 +93,6 @@ contract ReserveMigrator is Policy, RolesConsumer {
 
     // ========== MIGRATE RESERVES ========== //
 
-    // TODO determine if we need a threshold value that the reserves must exceed before migrating
     /// @notice migrate reserves and wrapped reserves in the treasury to the new reserve token
     /// @dev this function is restricted to the heart role to avoid complications with opportunistic conversions
     function migrate() external onlyRole("heart") {
