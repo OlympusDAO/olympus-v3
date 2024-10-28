@@ -2,6 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {Test, console2, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
@@ -315,6 +316,26 @@ contract LoanConsolidatorForkTest is Test {
         _;
     }
 
+    modifier givenMockFlashloanLender() {
+        lender = address(new MockFlashloanLender(0, address(dai)));
+
+        // Swap the maker flashloan lender for our mock
+        vm.startPrank(address(this));
+        rgstyAdmin.updateContract("flash", lender);
+        vm.stopPrank();
+        _;
+    }
+
+    modifier givenMockFlashloanLenderFee(uint16 feePercent_) {
+        MockFlashloanLender(lender).setFeePercent(feePercent_);
+        _;
+    }
+
+    modifier givenMockFlashloanLenderHasBalance(uint256 balance_) {
+        deal(address(dai), lender, balance_);
+        _;
+    }
+
     function _createCooler(
         CoolerFactory coolerFactory_,
         address wallet_,
@@ -615,7 +636,7 @@ contract LoanConsolidatorForkTest is Test {
     // given the protocol fee is non-zero
     //  [X] it transfers the protocol fee to the collector
     // given the lender fee is non-zero
-    //  [ ] it transfers the lender fee to the lender
+    //  [X] it transfers the lender fee to the lender
     // when the protocol fee is zero
     //  [X] it succeeds, but does not transfer additional DAI for the fee
     // when the Clearinghouse is disabled
@@ -1009,6 +1030,49 @@ contract LoanConsolidatorForkTest is Test {
             0,
             "gOHM allowance: utils -> coolerB"
         );
+    }
+
+    function test_consolidate_lenderFee()
+        public
+        givenAdminHasRole
+        givenPolicyActive
+        givenMockFlashloanLender
+        givenMockFlashloanLenderFee(100) // 1%
+        givenMockFlashloanLenderHasBalance(20_000_000e18)
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Record the initial debt balance
+        (uint256 totalPrincipal, uint256 totalInterest) = clearinghouse.getLoanForCollateral(
+            _GOHM_AMOUNT
+        );
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
+            address(clearinghouse),
+            address(coolerA),
+            idsA
+        );
+
+        // Grant approvals
+        _grantCallerApprovals(walletA, address(clearinghouse), idsA);
+
+        // Calculate the expected lender fee
+        uint256 lenderFee = MockFlashloanLender(lender).flashFee(address(dai), totalPrincipal);
+        uint256 expectedLenderBalance = 20_000_000e18 + lenderFee;
+
+        // Consolidate loans
+        _consolidate(idsA);
+
+        _assertCoolerLoans(_GOHM_AMOUNT);
+        _assertTokenBalances(
+            initPrincipal - interest - protocolFee - lenderFee,
+            expectedLenderBalance,
+            protocolFee,
+            _GOHM_AMOUNT
+        );
+        _assertApprovals();
     }
 
     function test_consolidate_protocolFee()

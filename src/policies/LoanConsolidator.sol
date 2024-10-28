@@ -624,6 +624,18 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         revert Params_InvalidClearinghouse();
     }
 
+    /// @notice Assembles the parameters for a flashloan
+    ///
+    /// @param  clearinghouseFrom_  Clearinghouse that issued the existing loans
+    /// @param  clearinghouseTo_    Clearinghouse to be used to issue the consolidated loan
+    /// @param  coolerFrom_         Cooler contract that issued the existing loans
+    /// @param  coolerTo_           Cooler contract to be used to issue the consolidated loan
+    /// @param  ids_                Array of loan ids to be consolidated
+    /// @param  migrationType_      Migration type
+    /// @param  reserveFrom_        Reserve token for the existing loans
+    /// @param  reserveTo_          Reserve token for the consolidated loan
+    /// @return flashloanAmount     Amount of the flashloan
+    /// @return flashloanParams     Flashloan parameters
     function _getFlashloanParameters(
         Clearinghouse clearinghouseFrom_,
         Clearinghouse clearinghouseTo_,
@@ -643,7 +655,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256 protocolFee = getProtocolFee(totalPrincipal + totalInterest);
 
         // The flashloan amount is in DAI. This assumes a 1:1 exchange rate.
-        flashloanAmount = totalPrincipal + totalInterest;
+        // The flashloan amount is the total principal, without any interest
+        // This is because the interest is paid by the caller, not the flashloan provider
+        flashloanAmount = totalPrincipal;
 
         flashloanParams = FlashLoanData({
             clearinghouseFrom: clearinghouseFrom_,
