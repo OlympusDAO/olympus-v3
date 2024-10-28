@@ -196,7 +196,7 @@ contract BondCallbackTest is Test {
             /// Configure access control
 
             /// Operator ROLES
-            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("heart", guardian);
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);

@@ -449,8 +449,8 @@ abstract contract RangeSim is Test {
             // Configure access control
 
             // Operator roles
-            rolesAdmin.grantRole("operator_operate", address(heart));
-            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("heart", address(heart));
+            rolesAdmin.grantRole("heart", guardian);
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);

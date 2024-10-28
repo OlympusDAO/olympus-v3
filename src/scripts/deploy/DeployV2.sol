@@ -1224,8 +1224,8 @@ contract OlympusDeploy is Script {
         kernel = Kernel(vm.envAddress("KERNEL"));
 
         /// Operator Roles
-        require(ROLES.hasRole(address(heart), "operator_operate"));
-        require(ROLES.hasRole(guardian_, "operator_operate"));
+        require(ROLES.hasRole(address(heart), "heart"));
+        require(ROLES.hasRole(guardian_, "heart"));
         require(ROLES.hasRole(address(callback), "operator_reporter"));
         require(ROLES.hasRole(policy_, "operator_policy"));
         require(ROLES.hasRole(guardian_, "operator_admin"));
@@ -1271,8 +1271,8 @@ contract OlympusDeploy is Script {
         burner = Burner(vm.envAddress("BURNER"));
 
         /// Operator Roles
-        require(ROLES.hasRole(address(heart), "operator_operate"));
-        require(ROLES.hasRole(guardian_, "operator_operate"));
+        require(ROLES.hasRole(address(heart), "heart"));
+        require(ROLES.hasRole(guardian_, "heart"));
         require(ROLES.hasRole(address(callback), "operator_reporter"));
         require(ROLES.hasRole(policy_, "operator_policy"));
         require(ROLES.hasRole(guardian_, "operator_admin"));

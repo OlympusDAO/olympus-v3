@@ -171,7 +171,7 @@ contract OperatorTest is Test {
             /// Configure access control
 
             /// Operator ROLES
-            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("heart", address(heart));
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);
@@ -1614,7 +1614,7 @@ contract OperatorTest is Test {
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            bytes32("operator_operate")
+            bytes32("heart")
         );
         vm.expectRevert(err);
         vm.prank(alice);
