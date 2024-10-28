@@ -1884,7 +1884,7 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setCushionFactor(uint32(99));
+        operator.setCushionFactor(uint32(0));
 
         /// Set cushion factor with invalid params as admin (too high)
         vm.expectRevert(err);
@@ -1972,7 +1972,7 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setReserveFactor(uint32(99));
+        operator.setReserveFactor(uint32(0));
 
         /// Set reserve factor with invalid params as admin (too high)
         vm.expectRevert(err);

@@ -846,7 +846,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     function _checkFactor(uint32 factor_) internal pure {
-        if (factor_ > ONE_HUNDRED_PERCENT || factor_ < ONE_PERCENT) revert Operator_InvalidParams();
+        if (factor_ > ONE_HUNDRED_PERCENT || factor_ == 0) revert Operator_InvalidParams();
     }
 
     //============================================================================================//
