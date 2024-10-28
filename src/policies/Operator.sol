@@ -220,7 +220,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _;
     }
 
-    function _onlyWhileActive() internal {
+    function _onlyWhileActive() internal view {
         if (
             !active ||
             uint48(block.timestamp) > PRICE.lastObservationTime() + 3 * PRICE.observationFrequency()
