@@ -26,8 +26,14 @@ contract OIP_166_OCGProposalTest is Test {
     // If true, the framework will check that calldatas match.
     bool public hasBeenSubmitted;
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
+        // Mainnet Fork at a fixed block
+        // Prior to actual deployment of the proposal (otherwise it will fail) - 20872023
+        vm.createSelectFork(RPC_URL, 20872022);
+
         /// @dev Deploy your proposal
         OIP_166 proposal = new OIP_166();
 

@@ -11,3 +11,4 @@ src/test/sim/sims/*.t.sol
 .env_deploy*
 docs/
 coverage/
+/solidity-metrics.html
