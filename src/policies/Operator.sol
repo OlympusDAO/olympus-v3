@@ -230,7 +230,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     // =========  HEART FUNCTIONS ========= //
 
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive onlyRole("operator_operate") {
+    function operate() external override onlyWhileActive onlyRole("heart") {
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
