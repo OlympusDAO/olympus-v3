@@ -122,6 +122,7 @@ Features:
 - Access the current address for a given name
 - Update the address for a given name
 - Deregister a name
+- Contract addresses can be registered as mutable or immutable
 
 The Contract Registry is a module that requires permissioned access in order to add/update/remove an address for a given name.
 
@@ -140,6 +141,7 @@ The Contract Registry Admin is a policy that enables modification of the RGSTY m
 Features:
 
 - Enables the owner of Cooler Loans to consolidate multiple loans (within the same Cooler) into a single loan, using an ERC3156 flash loan provider.
+- Enables the owner of Cooler Loans to migrate loans between Clearinghouses and debt tokens (DAI and USDS).
 - Has a helper function to advise the owner on the approvals of gOHM/DAI/sDAI required in order to complete the consolidation.
 - The policy can optionally take a protocol fee (sent to the TRSRY) that is set to 0 by default.
 - Utilises the CHREG module to obtain the list of Clearinghouse policies.
