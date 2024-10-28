@@ -23,6 +23,8 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
 /// @title  Loan Consolidator
 /// @notice A policy that consolidates loans taken with a single Cooler contract into a single loan using Maker flashloans.
+///         This policy can be used to consolidate loans within the same Clearinghouse, or from one Clearinghouse to another.
+///         This also enables migration between debt denominated in different assets (such as DAI and USDS).
 /// @dev    This policy uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
 ///
 ///         This contract utilises the following roles:
