@@ -53,9 +53,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @notice Thrown when the address is invalid.
     error Params_InvalidAddress();
 
-    /// @notice Thrown when the caller attempts to provide more funds than are required.
-    error Params_UseFundsOutOfBounds();
-
     /// @notice Thrown when the caller attempts to consolidate too few cooler loans. The minimum is two.
     error Params_InsufficientCoolerCount();
 
