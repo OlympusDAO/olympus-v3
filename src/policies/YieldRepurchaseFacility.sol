@@ -80,7 +80,6 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     constructor(
         Kernel kernel_,
         address ohm_,
-        address reserve_,
         address sReserve_,
         address teller_,
         address auctioneer_,
@@ -88,8 +87,8 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     ) Policy(kernel_) {
         // Set immutable variables
         ohm = ERC20(ohm_);
-        reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
+        reserve = ERC20(sReserve.asset());
         teller = teller_;
         auctioneer = IBondSDA(auctioneer_);
         clearinghouse = Clearinghouse(clearinghouse_);

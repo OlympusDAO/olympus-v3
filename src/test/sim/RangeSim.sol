@@ -404,7 +404,6 @@ abstract contract RangeSim is Test {
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
-                address(reserve),
                 address(wrappedReserve),
                 address(teller),
                 address(auctioneer),

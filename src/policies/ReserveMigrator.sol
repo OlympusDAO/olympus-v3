@@ -40,22 +40,15 @@ contract ReserveMigrator is Policy, RolesConsumer {
 
     // ========== SETUP ========== //
 
-    constructor(
-        Kernel kernel_,
-        address from_,
-        address sFrom_,
-        address to_,
-        address sTo_,
-        address migrator_
-    ) Policy(kernel_) {
-        // Confirm the ERC20 tokens are not null
-        if (from_ == address(0) || to_ == address(0) || migrator_ == address(0))
+    constructor(Kernel kernel_, address sFrom_, address sTo_, address migrator_) Policy(kernel_) {
+        // Confirm the addresses are not null
+        if (sFrom_ == address(0) || sTo_ == address(0) || migrator_ == address(0))
             revert ReserveMigrator_InvalidParams();
 
-        from = ERC20(from_);
         sFrom = ERC4626(sFrom_);
-        to = ERC20(to_);
+        from = ERC20(sFrom.asset());
         sTo = ERC4626(sTo_);
+        to = ERC20(sTo.asset());
         migrator = IDaiUsds(migrator_);
 
         locallyActive = true;

@@ -128,7 +128,7 @@ contract OlympusDeploy is Script {
     ERC20 public ohm;
     ERC20 public gohm;
     ERC20 public reserve;
-    ERC4626 public wrappedReserve;
+    ERC4626 public sReserve;
     ERC20 public wsteth;
     ERC20 public lusd;
     ERC20 public aura;
@@ -227,11 +227,10 @@ contract OlympusDeploy is Script {
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
         gohm = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
-        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
+        sReserve = ERC4626(envAddress("external.tokens.sDAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
-        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -533,7 +532,7 @@ contract OlympusDeploy is Script {
         console2.log("   callback", address(callback));
         console2.log("   ohm", address(ohm));
         console2.log("   reserve", address(reserve));
-        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   sReserve", address(sReserve));
         console2.log("   cushionDebtBuffer", cushionDebtBuffer);
         console2.log("   cushionDepositInterval", cushionDepositInterval);
         console2.log("   cushionDuration", cushionDuration);
@@ -549,7 +548,7 @@ contract OlympusDeploy is Script {
             kernel,
             bondAuctioneer,
             callback,
-            [address(ohm), address(reserve), address(wrappedReserve)],
+            [address(ohm), address(reserve), address(sReserve)],
             configParams
         );
         console2.log("Operator deployed at:", address(operator));
@@ -1006,7 +1005,7 @@ contract OlympusDeploy is Script {
             ohm_: address(ohm),
             gohm_: address(gohm),
             staking_: address(staking),
-            sdai_: address(wrappedReserve),
+            sReserve_: address(sReserve),
             coolerFactory_: address(coolerFactory),
             kernel_: address(kernel)
         });
@@ -1036,7 +1035,7 @@ contract OlympusDeploy is Script {
 
         // Print the arguments
         console2.log("  gOHM:", address(gohm));
-        console2.log("  SDAI:", address(wrappedReserve));
+        console2.log("  SDAI:", address(sReserve));
         console2.log("  DAI:", address(reserve));
         console2.log("  Collector:", collector);
         console2.log("  Fee Percentage:", feePercentage);
@@ -1047,7 +1046,7 @@ contract OlympusDeploy is Script {
         vm.broadcast();
         coolerUtils = new CoolerUtils(
             address(gohm),
-            address(wrappedReserve),
+            address(sReserve),
             address(reserve),
             owner,
             lender,
@@ -1128,8 +1127,7 @@ contract OlympusDeploy is Script {
         console2.log("YieldRepurchaseFacility parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   ohm", address(ohm));
-        console2.log("   reserve", address(reserve));
-        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   sReserve", address(sReserve));
         console2.log("   teller", address(bondFixedTermTeller));
         console2.log("   auctioneer", address(bondAuctioneer));
         console2.log("   clearinghouse", address(clearinghouse));
@@ -1139,8 +1137,7 @@ contract OlympusDeploy is Script {
         yieldRepo = new YieldRepurchaseFacility(
             kernel,
             address(ohm),
-            address(reserve),
-            address(wrappedReserve),
+            address(sReserve),
             address(bondFixedTermTeller),
             address(bondAuctioneer),
             address(clearinghouse)

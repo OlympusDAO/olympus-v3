@@ -153,7 +153,6 @@ contract YieldRepurchaseFacilityTest is Test {
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
-                address(reserve),
                 address(sReserve),
                 address(teller),
                 address(auctioneer),

@@ -169,7 +169,6 @@ contract OlympusDeploy is Script {
         yieldRepo = new YieldRepurchaseFacility(
             kernel,
             address(ohm),
-            address(reserve),
             address(wrappedReserve),
             address(bondTeller),
             address(bondAuctioneer),

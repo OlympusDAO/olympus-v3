@@ -75,9 +75,7 @@ contract ReserveMigratorTest is Test {
         rolesAdmin = new RolesAdmin(kernel);
         reserveMigrator = new ReserveMigrator(
             kernel,
-            address(from),
             address(sFrom),
-            address(to),
             address(sTo),
             address(daiUsds)
         );
