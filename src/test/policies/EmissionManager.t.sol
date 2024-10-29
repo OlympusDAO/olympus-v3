@@ -108,15 +108,20 @@ contract EmissionManagerTest is Test {
     // [x] execute -> callback (bond market purchase test)
     //
     // view functions
-    // [ ] getSupply
-    //    [ ] returns the supply of gOHM in OHM
-    // [ ] getReserves
-    //    [ ] TODO handle different balance and number of CHs
-    // [ ] getNextSale
-    //    [ ] when the premium is less than the minimum premium
-    //       [ ] it returns the premium, 0, and 0
-    //    [ ] when the premium is greater than or equal to the minimum premium
-    //       [ ] it returns the premium, scaled emissions rate, and the emission amount for the sale
+    // [X] getSupply
+    //    [X] returns the supply of gOHM in OHM
+    // [X] getReserves
+    //    [X] returns the combined balance of the TSRSY and clearinghouses
+    // [ ] getPremium
+    //    [ ] when price less than or equal to backing
+    //      [ ] it returns 0
+    //    [ ] when price is greater than backing
+    //      [ ] it returns the (price - backing) / backing
+    // [X] getNextSale
+    //    [X] when the premium is less than the minimum premium
+    //       [X] it returns the premium, 0, and 0
+    //    [X] when the premium is greater than or equal to the minimum premium
+    //       [X] it returns the premium, scaled emissions rate, and the emission amount for the sale
     //
     // emergency functions
     // [X] shutdown
@@ -303,8 +308,8 @@ contract EmissionManagerTest is Test {
         }
 
         // Mint gOHM supply to test against
-        // Index is 10,000, therefore a total supply of 10,000 gOHM = 10,000,000 OHM
-        gohm.mint(address(this), 10_000 * 1e18);
+        // Index is 10,000, therefore a total supply of 1,000 gOHM = 10,000,000 OHM
+        gohm.mint(address(this), 1_000 * 1e18);
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
         uint256 testReserve = 1_000_000 * 1e18;
@@ -1618,5 +1623,175 @@ contract EmissionManagerTest is Test {
             "Bond auctioneer should be updated"
         );
         assertEq(emissionManager.teller(), address(1), "Bond teller should be updated");
+    }
+
+    // getSupply tests
+
+    function test_getSupply_success() public {
+        // Confirm the supply is the total supply of OHM
+        assertEq(
+            emissionManager.getSupply(),
+            (gohm.totalSupply() * gohm.index()) / 1e9,
+            "Supply should be gOHM supply times index"
+        );
+
+        // Mint some more gOHM
+        uint256 mintAmount = 1000e18;
+        gohm.mint(address(1), mintAmount);
+
+        // Confirm the supply is the total supply of OHM
+        assertEq(
+            emissionManager.getSupply(),
+            (gohm.totalSupply() * gohm.index()) / 1e9,
+            "Supply should be gOHM supply times index"
+        );
+    }
+
+    // getReserves test
+
+    function test_getReserves_success() public {
+        uint256 expectedBalance = wrappedReserve.balanceOf(address(TRSRY));
+        expectedBalance += wrappedReserve.balanceOf(address(clearinghouse));
+        expectedBalance += clearinghouse.principalReceivables();
+
+        // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse
+        assertEq(
+            emissionManager.getReserves(),
+            expectedBalance,
+            "Reserves should be wrapped reserve balance of treasury and clearinghouse"
+        );
+
+        // Mint some more wrapped reserve to the treasury
+        uint256 mintAmount = 1000e18;
+        reserve.mint(address(this), 2 * mintAmount);
+        reserve.approve(address(wrappedReserve), 2 * mintAmount);
+        wrappedReserve.mint(mintAmount, address(TRSRY));
+        expectedBalance += mintAmount;
+
+        // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse
+        assertEq(
+            emissionManager.getReserves(),
+            expectedBalance,
+            "Reserves should be wrapped reserve balance of treasury and clearinghouse"
+        );
+
+        // Mint some wrapped reserves to the clearinghouse
+        wrappedReserve.mint(mintAmount, address(clearinghouse));
+        expectedBalance += mintAmount;
+
+        // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse
+        assertEq(
+            emissionManager.getReserves(),
+            expectedBalance,
+            "Reserves should be wrapped reserve balance of treasury and clearinghouse"
+        );
+
+        // Increase the principal receivables of the clearinghouse
+        uint256 principalReceivables = clearinghouse.principalReceivables();
+        clearinghouse.setPrincipalReceivables(principalReceivables + mintAmount);
+        expectedBalance += mintAmount;
+
+        // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse
+        assertEq(
+            emissionManager.getReserves(),
+            expectedBalance,
+            "Reserves should be wrapped reserve balance of treasury and clearinghouse"
+        );
+    }
+
+    // getNextSale tests
+
+    function test_getNextSale_whenPremiumBelowMinimum() public givenPremiumBelowMinimum {
+        // Get the next sale data
+        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager.getNextSale();
+
+        // Expect that the premium is as set in the setup
+        // and the other two values are zero
+        assertEq(premium, 20e16, "Premium should be 20%");
+        assertEq(emissionRate, 0, "Emission rate should be 0");
+        assertEq(emission, 0, "Emission should be 0");
+    }
+
+    function test_getNextSale_whenPremiumEqualToMinimum() public givenPremiumEqualToMinimum {
+        // Get the next sale data
+        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager.getNextSale();
+
+        uint256 expectedEmission = 10_000e9; // 10,000 OHM (as described in setup)
+
+        // Expect that the premium is as set in the setup
+        // and the other two values are zero
+        assertEq(premium, 25e16, "Premium should be 20%");
+        assertEq(emissionRate, baseEmissionRate, "Emission rate should be the baseEmissionRate");
+        assertEq(emission, expectedEmission, "Emission should be 10,000 OHM");
+    }
+
+    function test_getNextSale_whenPremiumAboveMinimum() public givenPremiumAboveMinimum {
+        // Get the next sale data
+        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager.getNextSale();
+
+        uint256 expectedEmission = 12_000e9; // 12,000 OHM (as described in setup)
+
+        // Expect that the premium is as set in the setup
+        // and the other two values are zero
+        assertEq(premium, 50e16, "Premium should be 50%");
+        assertEq(
+            emissionRate,
+            (baseEmissionRate * 150e16) / 125e16,
+            "Emission rate should be the baseEmissionRate"
+        );
+        assertEq(emission, expectedEmission, "Emission should be 10,000 OHM");
+    }
+
+    // getPremium tests
+
+    function test_getPremium_whenPriceBelowBacking() public {
+        // Set the price to be below the backing ($10/OHM)
+        PRICE.setLastPrice(9e18);
+
+        // Get the premium
+        uint256 premium = emissionManager.getPremium();
+
+        // Expect the premium to be 0
+        assertEq(premium, 0, "Premium should be 0");
+    }
+
+    function test_getPremium_whenPriceEqualsBacking() public {
+        // Set the price to be equal to the backing ($10/OHM)
+        PRICE.setLastPrice(10e18);
+
+        // Get the premium
+        uint256 premium = emissionManager.getPremium();
+
+        // Expect the premium to be 0
+        assertEq(premium, 0, "Premium should be 0");
+    }
+
+    function test_getPremium_whenPriceAboveBacking() public {
+        // Set the price to be above the backing ($10/OHM)
+        PRICE.setLastPrice(11e18);
+
+        // Get the premium
+        uint256 premium = emissionManager.getPremium();
+
+        // Expect the premium to be 10%
+        assertEq(premium, 10e16, "Premium should be 10%");
+
+        // Set price again
+        PRICE.setLastPrice(15e18);
+
+        // Get the premium
+        premium = emissionManager.getPremium();
+
+        // Expect the premium to be 50%
+        assertEq(premium, 50e16, "Premium should be 50%");
+
+        // Set price again
+        PRICE.setLastPrice(30e18);
+
+        // Get the premium
+        premium = emissionManager.getPremium();
+
+        // Expect the premium to be 200%
+        assertEq(premium, 200e16, "Premium should be 200%");
     }
 }
