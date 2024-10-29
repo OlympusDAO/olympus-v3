@@ -63,7 +63,7 @@ contract EmissionManagerTest is Test {
     EmissionManager internal emissionManager;
 
     // Emission manager values
-    uint256 internal baseEmissionsRate = 1e6; // 0.1% at minimum premium
+    uint256 internal baseEmissionRate = 1e6; // 0.1% at minimum premium
     uint256 internal minimumPremium = 25e16; // 25% premium
     uint256 internal backing = 10e18;
     uint48 internal restartTimeframe = 1 days;
@@ -140,27 +140,27 @@ contract EmissionManagerTest is Test {
     //          [X] it sets locallyActive to true
     //
     // admin functions
-    // [ ] initialize
-    //    [ ] when the caller doesn't have emissions_admin role
-    //       [ ] it reverts
-    //    [ ] when the caller has emissions_admin role
-    //       [ ] when the contract is locally active
-    //          [ ] it reverts
-    //       [ ] when the restart timeframe has not passed since the last shutdown
-    //          [ ] it reverts
-    //       [ ] when the baseEmissionsRate is zero
-    //          [ ] it reverts
-    //       [ ] when the minimumPremium is zero
-    //          [ ] it reverts
-    //       [ ] when the backing is zero
-    //          [ ] it reverts
-    //       [ ] when the restartTimeframe is zero
-    //          [ ] it reverts
-    //       [ ] it sets the baseEmissionsRate
-    //       [ ] it sets the minimumPremium
-    //       [ ] it sets the backing
-    //       [ ] it sets the restartTimeframe
-    //       [ ] it sets locallyActive to true
+    // [X] initialize
+    //    [X] when the caller doesn't have emissions_admin role
+    //       [X] it reverts
+    //    [X] when the caller has emissions_admin role
+    //       [X] when the contract is locally active
+    //          [X] it reverts
+    //       [X] when the restart timeframe has not passed since the last shutdown
+    //          [X] it reverts
+    //       [X] when the baseEmissionRate is zero
+    //          [X] it reverts
+    //       [X] when the minimumPremium is zero
+    //          [X] it reverts
+    //       [X] when the backing is zero
+    //          [X] it reverts
+    //       [X] when the restartTimeframe is zero
+    //          [X] it reverts
+    //       [X] it sets the baseEmissionRate
+    //       [X] it sets the minimumPremium
+    //       [X] it sets the backing
+    //       [X] it sets the restartTimeframe
+    //       [X] it sets locallyActive to true
     //
     // [ ] changeBaseRate
     //    [ ] when the caller doesn't have the emissions_admin role
@@ -327,7 +327,7 @@ contract EmissionManagerTest is Test {
 
         // Initialize the emissions manager
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionsRate, minimumPremium, backing, restartTimeframe);
+        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
 
         // Approve the emission manager to use a bond callback on the auctioneer
         vm.prank(guardian);
@@ -402,6 +402,11 @@ contract EmissionManagerTest is Test {
     modifier givenShutdown() {
         vm.prank(guardian);
         emissionManager.shutdown();
+        _;
+    }
+
+    modifier givenRestartTimeframeElapsed() {
+        vm.warp(block.timestamp + restartTimeframe);
         _;
     }
 
@@ -586,7 +591,7 @@ contract EmissionManagerTest is Test {
             assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
             assertEq(
                 capacity,
-                (((baseEmissionsRate * PRICE.getLastPrice()) /
+                (((baseEmissionRate * PRICE.getLastPrice()) /
                     ((backing * (1e18 + minimumPremium)) / 1e18)) *
                     gohm.totalSupply() *
                     gohm.index()) / 1e18,
@@ -678,7 +683,7 @@ contract EmissionManagerTest is Test {
             assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
             assertEq(
                 capacity,
-                (((baseEmissionsRate * PRICE.getLastPrice()) /
+                (((baseEmissionRate * PRICE.getLastPrice()) /
                     ((backing * (1e18 + minimumPremium)) / 1e18)) *
                     gohm.totalSupply() *
                     gohm.index()) / 1e18,
@@ -1228,5 +1233,143 @@ contract EmissionManagerTest is Test {
         emissionManager.restart();
 
         assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+    }
+
+    // initialize tests
+
+    function test_initialize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the initialize function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emissions_admin")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+    }
+
+    function test_initialize_whenAlreadyActive_reverts() public {
+        // Call the initialize function with the wrong caller
+        bytes memory err = abi.encodeWithSignature("AlreadyActive()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+    }
+
+    function test_initialize_whenRestartTimeframeNotElapsed_reverts(
+        uint48 elapsed_
+    ) public givenShutdown {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Get the restart timeframe and the last shutdown timestamp
+        uint48 shutdownTimestamp = emissionManager.shutdownTimestamp();
+        uint48 restartTimeframe_ = emissionManager.restartTimeframe();
+
+        // Set the elapsed time to be less than the restart timeframe
+        uint48 elapsed = elapsed_ % restartTimeframe_;
+
+        // Warp forward the elapsed time
+        vm.warp(shutdownTimestamp + elapsed);
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "CannotRestartYet(uint48)",
+            shutdownTimestamp + restartTimeframe_
+        );
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+    }
+
+    function test_initialize_whenBaseEmissionRateZero_reverts()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "baseEmissionRate");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.initialize(0, minimumPremium, backing, restartTimeframe);
+    }
+
+    function test_initialize_whenMinimumPremiumZero_reverts()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "minimumPremium");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.initialize(baseEmissionRate, 0, backing, restartTimeframe);
+    }
+
+    function test_initialize_whenBackingZero_reverts()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "backing");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.initialize(baseEmissionRate, minimumPremium, 0, restartTimeframe);
+    }
+
+    function test_initialize_whenRestartTimeframeZero_reverts()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "restartTimeframe");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, 0);
+    }
+
+    function test_initialize_success() public givenShutdown givenRestartTimeframeElapsed {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Values are currently as setup
+
+        // Initialize the emissions manager with guardian using new values
+        vm.prank(guardian);
+        emissionManager.initialize(
+            baseEmissionRate + 1,
+            minimumPremium + 1,
+            backing + 1,
+            restartTimeframe + 1
+        );
+
+        // Check that the contract is locally active
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+        assertEq(
+            emissionManager.baseEmissionRate(),
+            baseEmissionRate + 1,
+            "Base emission rate should be updated"
+        );
+        assertEq(
+            emissionManager.minimumPremium(),
+            minimumPremium + 1,
+            "Minimum premium should be updated"
+        );
+        assertEq(emissionManager.backing(), backing + 1, "Backing should be updated");
+        assertEq(
+            emissionManager.restartTimeframe(),
+            restartTimeframe + 1,
+            "Restart timeframe should be updated"
+        );
     }
 }
