@@ -147,6 +147,14 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
     }
 
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 2);
+    }
+
     // --- OPERATION -------------------------------------------------
 
     /// @notice Lend to a cooler.

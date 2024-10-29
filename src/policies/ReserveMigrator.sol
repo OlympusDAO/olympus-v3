@@ -136,6 +136,14 @@ contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
         }
     }
 
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 0);
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice Activate the policy locally, if it has been deactivated

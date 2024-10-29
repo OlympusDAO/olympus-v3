@@ -212,6 +212,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 5);
+    }
+
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//

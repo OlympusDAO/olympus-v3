@@ -145,6 +145,14 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         permissions[1] = Permissions(TRSRY_KEYCODE, TRSRYv1.increaseWithdrawApproval.selector);
     }
 
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 1);
+    }
+
     ///////////////////////// EXTERNAL /////////////////////////
 
     /// @notice create a new bond market at the end of the day with some portion of remaining funds
