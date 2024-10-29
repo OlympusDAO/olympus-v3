@@ -391,7 +391,7 @@ contract EmissionManager is Policy, RolesConsumer {
     /// @param newTimeframe to adjust it to
     function setRestartTimeframe(uint48 newTimeframe) external onlyRole("emissions_admin") {
         // Restart timeframe must be greater than 0
-        if (newTimeframe == 0) revert InvalidParam("newTimeframe");
+        if (newTimeframe == 0) revert InvalidParam("newRestartTimeframe");
 
         restartTimeframe = newTimeframe;
     }

@@ -162,50 +162,50 @@ contract EmissionManagerTest is Test {
     //       [X] it sets the restartTimeframe
     //       [X] it sets locallyActive to true
     //
-    // [ ] changeBaseRate
-    //    [ ] when the caller doesn't have the emissions_admin role
-    //       [ ] it reverts
-    //    [ ] when the caller has the emissions_admin role
-    //       [ ] when a negative rate adjustment would result in an underflow
-    //          [ ] it reverts
-    //       [ ] when a positive rate adjustment would result in an overflow
-    //          [ ] it reverts
-    //       [ ] it sets the rateChange to changeBy, forNumBeats, and add parameters
+    // [X] changeBaseRate
+    //    [X] when the caller doesn't have the emissions_admin role
+    //       [X] it reverts
+    //    [X] when the caller has the emissions_admin role
+    //       [X] when a negative rate adjustment would result in an underflow
+    //          [X] it reverts
+    //       [X] when a positive rate adjustment would result in an overflow
+    //          [X] it reverts
+    //       [X] it sets the rateChange to changeBy, forNumBeats, and add parameters
     //
-    // [ ] setMinimumPremium
-    //     [ ] when the caller doesn't have the emissions_admin role
-    //        [ ] it reverts
-    //     [ ] when the caller has the emissions_admin role
-    //        [ ] when the new minimum premium is zero
-    //           [ ] it reverts
-    //        [ ] it sets the minimum premium
+    // [X] setMinimumPremium
+    //     [X] when the caller doesn't have the emissions_admin role
+    //        [X] it reverts
+    //     [X] when the caller has the emissions_admin role
+    //        [X] when the new minimum premium is zero
+    //           [X] it reverts
+    //        [X] it sets the minimum premium
     //
-    // [ ] setBacking
-    //    [ ] when the caller doesn't have the emissions_admin role
-    //       [ ] it reverts
-    //    [ ] when the caller has the emissions_admin role
-    //       [ ] when the new backing is more than 10% lower than the current backing
-    //          [ ] it reverts
-    //       [ ] it sets the backing
+    // [X] setBacking
+    //    [X] when the caller doesn't have the emissions_admin role
+    //       [X] it reverts
+    //    [X] when the caller has the emissions_admin role
+    //       [X] when the new backing is more than 10% lower than the current backing
+    //          [X] it reverts
+    //       [X] it sets the backing
     //
-    // [ ] setRestartTimeframe
-    //    [ ] when the caller doesn't have the emissions_admin role
-    //       [ ] it reverts
-    //    [ ] when the caller has the emissions_admin role
-    //       [ ] when the new restart timeframe is zero
-    //          [ ] it reverts
-    //       [ ] it sets the restart timeframe
+    // [X] setRestartTimeframe
+    //    [X] when the caller doesn't have the emissions_admin role
+    //       [X] it reverts
+    //    [X] when the caller has the emissions_admin role
+    //       [X] when the new restart timeframe is zero
+    //          [X] it reverts
+    //       [X] it sets the restart timeframe
     //
-    // [ ] setBondContracts
-    //    [ ] when the caller doesn't have the emissions_admin role
-    //       [ ] it reverts
-    //    [ ] when the caller has the emissions_admin role
-    //       [ ] when the new auctioneer address is the zero address
-    //          [ ] it reverts
-    //       [ ] when the new teller address is the zero address
-    //          [ ] it reverts
-    //       [ ] it sets the auctioneer address
-    //       [ ] it sets the teller address
+    // [X] setBondContracts
+    //    [X] when the caller doesn't have the emissions_admin role
+    //       [X] it reverts
+    //    [X] when the caller has the emissions_admin role
+    //       [X] when the new auctioneer address is the zero address
+    //          [X] it reverts
+    //       [X] when the new teller address is the zero address
+    //          [X] it reverts
+    //       [X] it sets the auctioneer address
+    //       [X] it sets the teller address
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -1371,5 +1371,252 @@ contract EmissionManagerTest is Test {
             restartTimeframe + 1,
             "Restart timeframe should be updated"
         );
+    }
+
+    // changeBaseRate tests
+
+    function test_changeBaseRate_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the changeBaseRate function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emissions_admin")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.changeBaseRate(1e18, 1, true);
+    }
+
+    function test_changeBaseRate_whenNegativeAdjustmentUnderflows_reverts() public {
+        uint256 changeBy_ = baseEmissionRate + 1;
+        uint48 forNumBeats = 1;
+
+        // Try to change base rate, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "InvalidParam(string)",
+            "changeBy * forNumBeats"
+        );
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.changeBaseRate(changeBy_, forNumBeats, false);
+    }
+
+    function test_changeBaseRate_whenPositiveAdjustmentOverflows_reverts() public {
+        uint256 changeBy_ = type(uint256).max - baseEmissionRate + 1;
+        uint48 forNumBeats = 1;
+
+        // Try to change base rate, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "InvalidParam(string)",
+            "changeBy * forNumBeats"
+        );
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
+    }
+
+    function test_changeBaseRate_positive_success() public {
+        // Confirm there is no current rate change
+        (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
+            .rateChange();
+        assertEq(currentChangeBy, 0, "Change by should be 0");
+        assertEq(currentBeatsLeft, 0, "Beats left should be 0");
+        assertEq(addition, false, "Addition should be false");
+
+        uint256 changeBy_ = 1e3;
+        uint48 forNumBeats = 5;
+
+        vm.prank(guardian);
+        emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
+
+        // Confirm the rate change has been set
+        (currentChangeBy, currentBeatsLeft, addition) = emissionManager.rateChange();
+        assertEq(currentChangeBy, changeBy_, "Change by should be updated");
+        assertEq(currentBeatsLeft, forNumBeats, "Beats left should be updated");
+        assertEq(addition, true, "Addition should be true");
+    }
+
+    function test_changeBaseRate_negative_success() public {
+        // Confirm there is no current rate change
+        (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
+            .rateChange();
+        assertEq(currentChangeBy, 0, "Change by should be 0");
+        assertEq(currentBeatsLeft, 0, "Beats left should be 0");
+        assertEq(addition, false, "Addition should be false");
+
+        uint256 changeBy_ = 1e3;
+        uint48 forNumBeats = 5;
+
+        vm.prank(guardian);
+        emissionManager.changeBaseRate(changeBy_, forNumBeats, false);
+
+        // Confirm the rate change has been set
+        (currentChangeBy, currentBeatsLeft, addition) = emissionManager.rateChange();
+        assertEq(currentChangeBy, changeBy_, "Change by should be updated");
+        assertEq(currentBeatsLeft, forNumBeats, "Beats left should be updated");
+        assertEq(addition, false, "Addition should be false");
+    }
+
+    // setMinimumPremium tests
+
+    function test_setMinimumPremium_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setMinimumPremium function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emissions_admin")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.setMinimumPremium(1e18);
+    }
+
+    function test_setMinimumPremium_whenMinimumPremiumZero_reverts() public {
+        // Try to set minimum premium to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "newMinimumPremium");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setMinimumPremium(0);
+    }
+
+    function test_setMinimumPremium_success() public {
+        uint256 newMinimumPremium = 1e18;
+
+        // Confirm the current minimum premium
+        assertEq(emissionManager.minimumPremium(), minimumPremium, "Minimum premium should be 0");
+
+        // Set the new minimum premium
+        vm.prank(guardian);
+        emissionManager.setMinimumPremium(newMinimumPremium);
+
+        // Confirm the new minimum premium
+        assertEq(
+            emissionManager.minimumPremium(),
+            newMinimumPremium,
+            "Minimum premium should be updated"
+        );
+    }
+
+    // setBacking tests
+
+    function test_setBacking_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setBacking function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emissions_admin")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.setBacking(11e18);
+    }
+
+    function test_setBacking_whenNewBackingTenPercentLessThanCurrent_reverts(
+        uint256 newBacking_
+    ) public {
+        uint256 newBacking = newBacking_ % ((backing * 9) / 10);
+
+        // Try to set backing to more than 10% less than current, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "newBacking");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setBacking(newBacking);
+    }
+
+    function test_setBacking_success(uint256 newBacking_) public {
+        vm.assume(newBacking_ >= ((backing * 9) / 10));
+
+        // Set new backing
+        vm.prank(guardian);
+        emissionManager.setBacking(newBacking_);
+
+        // Confirm new backing
+        assertEq(emissionManager.backing(), newBacking_, "Backing should be updated");
+    }
+
+    // setRestartTimeframe tests
+
+    function test_setRestartTimeframe_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setRestartTimeframe function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emissions_admin")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.setRestartTimeframe(1);
+    }
+
+    function test_setRestartTimeframe_whenRestartTimeframeIsZero_reverts() public {
+        // Try to set restart timeframe to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "newRestartTimeframe");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setRestartTimeframe(0);
+    }
+
+    function test_setRestartTimeframe_success(uint48 restartTimeframe_) public {
+        vm.assume(restartTimeframe_ != 0);
+
+        // Set new restart timeframe
+        vm.prank(guardian);
+        emissionManager.setRestartTimeframe(restartTimeframe_);
+
+        // Confirm new restart timeframe
+        assertEq(
+            emissionManager.restartTimeframe(),
+            restartTimeframe_,
+            "Restart timeframe should be updated"
+        );
+    }
+
+    // setBondContracts tests
+
+    function test_setBondContracts_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setBondContracts function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emissions_admin")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.setBondContracts(address(1), address(1));
+    }
+
+    function test_setBondContracts_whenBondAuctioneerZero_reverts() public {
+        // Try to set bond auctioneer to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "auctioneer");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setBondContracts(address(0), address(1));
+    }
+
+    function test_setBondContracts_whenBondTellerZero_reverts() public {
+        // Try to set bond teller to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "teller");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setBondContracts(address(1), address(0));
+    }
+
+    function test_setBondContracts_success() public {
+        // Set new bond contracts
+        vm.prank(guardian);
+        emissionManager.setBondContracts(address(1), address(1));
+
+        // Confirm new bond contracts
+        assertEq(
+            address(emissionManager.auctioneer()),
+            address(1),
+            "Bond auctioneer should be updated"
+        );
+        assertEq(emissionManager.teller(), address(1), "Bond teller should be updated");
     }
 }
