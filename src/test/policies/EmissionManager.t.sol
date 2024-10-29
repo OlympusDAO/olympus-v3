@@ -112,11 +112,11 @@ contract EmissionManagerTest is Test {
     //    [X] returns the supply of gOHM in OHM
     // [X] getReserves
     //    [X] returns the combined balance of the TSRSY and clearinghouses
-    // [ ] getPremium
-    //    [ ] when price less than or equal to backing
-    //      [ ] it returns 0
-    //    [ ] when price is greater than backing
-    //      [ ] it returns the (price - backing) / backing
+    // [X] getPremium
+    //    [X] when price less than or equal to backing
+    //      [X] it returns 0
+    //    [X] when price is greater than backing
+    //      [X] it returns the (price - backing) / backing
     // [X] getNextSale
     //    [X] when the premium is less than the minimum premium
     //       [X] it returns the premium, 0, and 0
