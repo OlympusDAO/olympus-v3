@@ -98,9 +98,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             configParams[3] < uint32(1 hours) ||
             configParams[3] > configParams[1] ||
             configParams[0] > ONE_HUNDRED_PERCENT ||
-            configParams[0] < ONE_PERCENT ||
+            configParams[0] == 0 ||
             configParams[4] > ONE_HUNDRED_PERCENT ||
-            configParams[4] < ONE_PERCENT ||
+            configParams[4] == 0 ||
             configParams[5] < 1 hours ||
             configParams[6] > configParams[7] ||
             configParams[7] == uint32(0) ||
