@@ -36,6 +36,7 @@ contract EmissionManager is Policy, RolesConsumer {
     error InvalidCallback();
     error InvalidParam(string parameter);
     error CannotRestartYet(uint48 availableAt);
+    error RestartTimeframePassed();
     error NotActive();
     error AlreadyActive();
 
@@ -333,7 +334,10 @@ contract EmissionManager is Policy, RolesConsumer {
     function restart() external onlyRole("emergency_restart") {
         // Restart can be activated only within the specified timeframe since shutdown
         // Outside of this span of time, emissions_admin must reinitialize
-        if (uint48(block.timestamp) < shutdownTimestamp + restartTimeframe) locallyActive = true;
+        if (uint48(block.timestamp) >= shutdownTimestamp + restartTimeframe)
+            revert RestartTimeframePassed();
+
+        locallyActive = true;
     }
 
     /// @notice set the base emissions rate

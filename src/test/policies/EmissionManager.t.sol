@@ -130,14 +130,14 @@ contract EmissionManagerTest is Test {
     //       [X] when the reserve balance of the contract is not zero
     //          [X] it deposits the reserves into the wrappedReserve contract with the TRSRY as the recipient
     //
-    // [ ] restart
-    //    [ ] when the caller doesn't have emergency_restart role
-    //       [ ] it reverts
-    //    [ ] when the caller has emergency_restart role
-    //       [ ] when the restart timeframe has not elapsed since shutdown
-    //          [ ] it reverts
-    //       [ ] when the restart timeframe has elapsed since shutdown
-    //          [ ] it sets locallyActive to true
+    // [X] restart
+    //    [X] when the caller doesn't have emergency_restart role
+    //       [X] it reverts
+    //    [X] when the caller has emergency_restart role
+    //       [X] when the restart timeframe has elapsed since shutdown
+    //          [X] it reverts
+    //       [X] when the restart timeframe has not elapsed since shutdown
+    //          [X] it sets locallyActive to true
     //
     // admin functions
     // [ ] initialize
@@ -396,6 +396,12 @@ contract EmissionManagerTest is Test {
     modifier givenNegativeRateAdjustment() {
         vm.prank(guardian);
         emissionManager.changeBaseRate(changeBy, changeDuration, false);
+        _;
+    }
+
+    modifier givenShutdown() {
+        vm.prank(guardian);
+        emissionManager.shutdown();
         _;
     }
 
@@ -1155,5 +1161,72 @@ contract EmissionManagerTest is Test {
             wrappedReserve.balanceOf(address(TRSRY)),
             treasuryWrappedReserveBalance + reserveAmount
         );
+    }
+
+    // restart tests
+
+    function test_restart_whenCallerNotEmergencyRestartRole_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Emissions Manager is currently locally active
+        // Call the restart function with the wrong caller
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("emergency_restart")
+        );
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.restart();
+
+        // Shutdown the emissions manager with the guardian
+        vm.prank(guardian);
+        emissionManager.shutdown();
+
+        // Emissions Manager is currently locally inactive
+        // Try to call restart again with the wrong caller
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.restart();
+    }
+
+    function test_restart_whenRestartTimeElapsed_reverts(uint48 elapsed_) public givenShutdown {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Get the restart timeframe and the last shutdown timestamp
+        uint48 shutdownTimestamp = emissionManager.shutdownTimestamp();
+        uint48 restartTimeframe_ = emissionManager.restartTimeframe();
+
+        vm.assume(elapsed_ <= type(uint48).max - shutdownTimestamp - restartTimeframe_);
+
+        // Warp time to the restart timeframe plus some elapsed time (potentially 0)
+        vm.warp(shutdownTimestamp + restartTimeframe_ + elapsed_);
+
+        // Try to restart the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("RestartTimeframePassed()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.restart();
+    }
+
+    function test_restart_whenRestartTimeFrameNotElapsed_success(
+        uint48 elapsed_
+    ) public givenShutdown {
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Get the restart timeframe and the last shutdown timestamp
+        uint48 shutdownTimestamp = emissionManager.shutdownTimestamp();
+        uint48 restartTimeframe_ = emissionManager.restartTimeframe();
+
+        // Set the elapsed time to be less than the restart timeframe
+        uint48 elapsed = elapsed_ % restartTimeframe_;
+
+        // Warp forward the elapsed time
+        vm.warp(shutdownTimestamp + elapsed);
+
+        // Restart the emissions manager with guardian
+        vm.prank(guardian);
+        emissionManager.restart();
+
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
     }
 }
