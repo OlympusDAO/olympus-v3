@@ -75,6 +75,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     // Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
+    bytes32 internal constant OPERATOR_POLICY_ROLE = "operator_policy";
+    bytes32 internal constant OPERATOR_ADMIN_ROLE = "operator_admin";
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -227,11 +229,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     ///      This check is different from the price feed staleness checks in the PRICE module.
     ///      The PRICE module checks new price feed data for staleness when storing a new observations,
     ///      whereas this check ensures that the range data is using a recent observation.
-    modifier onlyWhileActive() {
-        _onlyWhileActive();
-        _;
-    }
-
     function _onlyWhileActive() internal view {
         if (
             !active ||
@@ -242,7 +239,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     // =========  HEART FUNCTIONS ========= //
 
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive onlyRole("heart") {
+    function operate() external override onlyRole("heart") {
+        // Check that the policy is active
+        _onlyWhileActive();
+
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -322,7 +322,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 tokenIn_,
         uint256 amountIn_,
         uint256 minAmountOut_
-    ) external override nonReentrant onlyWhileActive returns (uint256 amountOut) {
+    ) external override nonReentrant returns (uint256 amountOut) {
+        // Check that the policy is active
+        _onlyWhileActive();
+
         if (tokenIn_ == ohm) {
             // Revert if lower wall is inactive
             if (!RANGE.active(false)) revert Operator_WallDown();
@@ -401,10 +404,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(
-        uint256 id_,
-        uint256 amountOut_
-    ) external onlyWhileActive onlyRole("operator_reporter") {
+    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyRole("operator_reporter") {
+        // Check that the policy is active
+        _onlyWhileActive();
+
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -708,7 +711,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         bool high_,
         uint256 cushionSpread_,
         uint256 wallSpread_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Set spreads on the range module
         RANGE.setSpreads(high_, cushionSpread_, wallSpread_);
 
@@ -717,13 +720,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole("operator_policy") {
+    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Set threshold factor on the range module
         RANGE.setThresholdFactor(thresholdFactor_);
     }
 
     /// @inheritdoc IOperator
-    function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
+    function setCushionFactor(uint32 cushionFactor_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm factor is within allowed values
         _checkFactor(cushionFactor_);
 
@@ -738,7 +741,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 duration_,
         uint32 debtBuffer_,
         uint32 depositInterval_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm values are valid
         if (
             duration_ > uint256(7 days) ||
@@ -757,7 +760,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
+    function setReserveFactor(uint32 reserveFactor_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm factor is within allowed values
         _checkFactor(reserveFactor_);
 
@@ -772,7 +775,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 wait_,
         uint32 threshold_,
         uint32 observe_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm regen parameters are within allowed values
         if (
             wait_ < 1 hours ||
@@ -803,7 +806,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     function setBondContracts(
         IBondSDA auctioneer_,
         IBondCallback callback_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
             revert Operator_InvalidParams();
         // Set contracts
@@ -812,7 +815,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function initialize() external onlyRole("operator_admin") {
+    function initialize() external onlyRole(OPERATOR_ADMIN_ROLE) {
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
@@ -829,18 +832,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external onlyRole("operator_policy") {
+    function regenerate(bool high_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Regenerate side
         _regenerate(high_);
     }
 
     /// @inheritdoc IOperator
-    function activate() external onlyRole("operator_policy") {
+    function activate() external onlyRole(OPERATOR_POLICY_ROLE) {
         active = true;
     }
 
     /// @inheritdoc IOperator
-    function deactivate() external onlyRole("operator_policy") {
+    function deactivate() external onlyRole(OPERATOR_POLICY_ROLE) {
         active = false;
         // Deactivate cushions
         _deactivate(true);
@@ -848,7 +851,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function deactivateCushion(bool high_) external onlyRole("operator_policy") {
+    function deactivateCushion(bool high_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Manually deactivate a cushion
         _deactivate(high_);
     }
@@ -892,10 +895,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
-        uint256 reservesInTreasury = sReserve.previewRedeem(TRSRY.getReserveBalance(sReserve)) +
+        // Reserves in treasury * reserve factor
+        uint256 capacity = ((sReserve.previewRedeem(TRSRY.getReserveBalance(sReserve)) +
             TRSRY.getReserveBalance(reserve) +
-            TRSRY.getReserveBalance(oldReserve);
-        uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
+            TRSRY.getReserveBalance(oldReserve)) * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
                 (capacity.mulDiv(
