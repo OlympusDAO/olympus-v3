@@ -41,17 +41,18 @@ contract OIP_168 is GovernorBravoProposal {
             "[Proposal](https://forum.olympusdao.finance/d/4633-oip-168-olympus-treasury-migration-from-daisdai-to-usdssusds)\n\n"
             "## Roles to Assign\n\n"
             "1. `heart` to the new Heart policy (renamed from `operator_operate`)\n"
-            "1. `callback_whitelist` to the new Operator policy\n\n"
+            "2. `reserve_migrator_admin` to the Timelock and DAO MS\n"
+            "3. `callback_whitelist` to the new Operator policy\n\n"
             "## Roles to Revoke\n\n"
             "1. `heart` from the old Heart policy\n"
-            "1. `operator_operate` from the old Heart policy\n"
-            "1. `callback_whitelist` from the old Operator policy\n\n"
+            "2. `operator_operate` from the old Heart policy\n"
+            "3. `callback_whitelist` from the old Operator policy\n\n"
             "## Policy Initialization Steps\n\n"
             "1. Set `BondCallback.operator()` to the new Operator policy\n"
-            "1. Set sUSDS as the wrapped token for USDS on BondCallback\n"
-            "1. Initialize the new YieldRepurchaseFacility policy\n"
-            "1. Initialize the new Operator policy\n"
-            "1. Activate the new Clearinghouse policy";
+            "2. Set sUSDS as the wrapped token for USDS on BondCallback\n"
+            "3. Initialize the new YieldRepurchaseFacility policy\n"
+            "4. Initialize the new Operator policy\n"
+            "5. Activate the new Clearinghouse policy";
     }
 
     // No deploy actions needed
@@ -80,6 +81,8 @@ contract OIP_168 is GovernorBravoProposal {
         address clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
         address usds = addresses.getAddress("external-tokens-usds");
         address susds = addresses.getAddress("external-tokens-susds");
+        address timelock = addresses.getAddress("olympus-timelock");
+        address daoMS = addresses.getAddress("olympus-multisig-dao");
 
         // STEP 1: Assign roles
         // 1a. Grant "heart" to the new Heart policy
@@ -89,7 +92,27 @@ contract OIP_168 is GovernorBravoProposal {
             "Grant heart to new Heart policy"
         );
 
-        // 1b. Grant "callback_whitelist" to the new Operator policy
+        // 1b. Grant "reserve_migrator_admin" to the Timelock and DAO MS
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("reserve_migrator_admin"),
+                timelock
+            ),
+            "Grant reserve_migrator_admin to Timelock"
+        );
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("reserve_migrator_admin"),
+                daoMS
+            ),
+            "Grant reserve_migrator_admin to DAO MS"
+        );
+
+        // 1c. Grant "callback_whitelist" to the new Operator policy
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
