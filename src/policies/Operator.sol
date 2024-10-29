@@ -66,8 +66,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     ERC20 public immutable reserve;
     uint8 internal immutable _reserveDecimals;
     uint8 internal _oracleDecimals;
-    /// @dev _wrappedReserveDecimals == _reserveDecimals
-    ERC4626 public immutable wrappedReserve;
+    /// @dev _sReserveDecimals == _reserveDecimals
+    ERC4626 public immutable sReserve;
 
     // During the reserve migration period, we need to track the reserve balance of the old reserve token
     // This is because there are debts issued in the old reserve which count towards the capacity of the Operator
@@ -84,7 +84,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
-        address[4] memory tokens_, // [ohm, reserve, wrappedReserve, oldReserve]
+        address[4] memory tokens_, // [ohm, reserve, sReserve, oldReserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
@@ -112,11 +112,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _ohmDecimals = ohm.decimals();
         reserve = ERC20(tokens_[1]);
         _reserveDecimals = reserve.decimals();
-        wrappedReserve = ERC4626(tokens_[2]);
+        sReserve = ERC4626(tokens_[2]);
         oldReserve = ERC20(tokens_[3]);
 
-        // Ensure wrappedReserve decimals match reserve decimals
-        if (wrappedReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
+        // Ensure sReserve decimals match reserve decimals
+        if (sReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
 
         _config = Config({
             cushionFactor: configParams[0],
@@ -350,16 +350,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Burn OHM
             MINTR.burnOhm(address(this), amountIn_);
 
-            // Calculate amount of wrappedReserve equivalent to amountOut
-            // and withdraw wrapped reserves from TRSRY
-            TRSRY.withdrawReserves(
-                address(this),
-                wrappedReserve,
-                wrappedReserve.previewWithdraw(amountOut)
-            );
+            // Calculate amount of sReserve equivalent to amountOut
+            // and withdraw from TRSRY
+            TRSRY.withdrawReserves(address(this), sReserve, sReserve.previewWithdraw(amountOut));
 
             // Unwrap reserves and transfer to sender
-            wrappedReserve.withdraw(amountOut, msg.sender, address(this));
+            sReserve.withdraw(amountOut, msg.sender, address(this));
 
             emit Swap(ohm, reserve, amountIn_, amountOut);
         } else if (tokenIn_ == reserve) {
@@ -387,8 +383,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
 
             // Wrap reserves and transfer to TRSRY
-            reserve.approve(address(wrappedReserve), amountIn_);
-            wrappedReserve.deposit(amountIn_, address(TRSRY));
+            reserve.approve(address(sReserve), amountIn_);
+            sReserve.deposit(amountIn_, address(TRSRY));
 
             // Mint OHM to sender
             MINTR.mintOhm(msg.sender, amountOut);
@@ -662,21 +658,21 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Get approval from the TRSRY to withdraw up to the capacity in reserves
             // If current approval is higher than the capacity, reduce it
-            uint256 currentApproval = wrappedReserve.previewRedeem(
-                TRSRY.withdrawApproval(address(this), wrappedReserve)
+            uint256 currentApproval = sReserve.previewRedeem(
+                TRSRY.withdrawApproval(address(this), sReserve)
             );
             unchecked {
                 if (currentApproval < capacity) {
                     TRSRY.increaseWithdrawApproval(
                         address(this),
-                        wrappedReserve,
-                        wrappedReserve.previewWithdraw(capacity - currentApproval)
+                        sReserve,
+                        sReserve.previewWithdraw(capacity - currentApproval)
                     );
                 } else if (currentApproval > capacity) {
                     TRSRY.decreaseWithdrawApproval(
                         address(this),
-                        wrappedReserve,
-                        wrappedReserve.previewWithdraw(currentApproval - capacity)
+                        sReserve,
+                        sReserve.previewWithdraw(currentApproval - capacity)
                     );
                 }
             }
@@ -896,9 +892,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
-        uint256 reservesInTreasury = wrappedReserve.previewRedeem(
-            TRSRY.getReserveBalance(wrappedReserve)
-        ) +
+        uint256 reservesInTreasury = sReserve.previewRedeem(TRSRY.getReserveBalance(sReserve)) +
             TRSRY.getReserveBalance(reserve) +
             TRSRY.getReserveBalance(oldReserve);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
