@@ -78,5 +78,45 @@
         "addr": "0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59",
         "name": "olympus-module-roles",
         "chainId": 1
+    },
+    {
+        "addr": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+        "name": "external-tokens-usds",
+        "chainId": 1
+    },
+    {
+        "addr": "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
+        "name": "external-tokens-susds",
+        "chainId": 1
+    },
+    {
+        "addr": "0x73df08CE9dcC8d74d22F23282c4d49F13b4c795E",
+        "name": "olympus-policy-bondcallback",
+        "chainId": 1
+    },
+    {
+        "addr": "0x39F6AA3d445e6Dd8eC232c6Bd589889A88E3034d",
+        "name": "olympus-policy-heart-1_5",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0AE561226896dA978EaDA0Bec4a7d3CfAE04f506",
+        "name": "olympus-policy-operator-1_4",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "name": "olympus-policy-heart-1_6",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "name": "olympus-policy-operator-1_5",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "name": "olympus-policy-clearinghouse-1_2",
+        "chainId": 1
     }
 ]
