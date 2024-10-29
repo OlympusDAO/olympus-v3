@@ -75,7 +75,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     // Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
-    uint32 internal constant ONE_PERCENT = 1e2;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
