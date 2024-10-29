@@ -216,7 +216,7 @@ contract ReserveMigratorTest is Test {
     //       [X] when the reserve migrator has a non-zero balance of from and sFrom reserves
     //          [X] it redeems the sFrom balance of the reserve migrator
     //          [X] it migrates the combined from balance of the reserve migrator to the to reserve
-    //          [ ] it deposits the to reserves into sTo and sends to the TRSRY
+    //          [X] it deposits the to reserves into sTo and sends to the TRSRY
     //    [X] when the TRSRY contract has a non-zero balance of from reserves
     //       [X] when the reserve migrator has a zero balance of from and sFrom reserves
     //          [X] it migrates the from balance of the TRSRY to the to reserve
@@ -268,10 +268,6 @@ contract ReserveMigratorTest is Test {
     //          [X] it deposits the to reserves into sTo and sends to the TRSRY
     // [X] when called by an address with the "heart" role and when the contract is not locally active
     //    [X] it does nothing (in all the cases listed above)
-
-    // migrate
-    // when called by an address without the "heart" role
-    // it reverts
 
     function test_migrate_whenCalledByNonHeartRole_itReverts(address caller_) public {
         vm.assume(caller_ != heart);
