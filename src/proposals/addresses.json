@@ -78,5 +78,10 @@
         "addr": "0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59",
         "name": "olympus-module-roles",
         "chainId": 1
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "name": "olympus-policy-loan-consolidator",
+        "chainId": 1
     }
 ]
