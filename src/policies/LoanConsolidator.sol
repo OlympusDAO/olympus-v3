@@ -240,7 +240,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller is not the 'coolerFrom' and 'coolerTo' owner.
     ///         - The caller has not approved this contract to spend the fees in DAI.
     ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to repay the flashloan.
-    ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
+    ///         - The caller has not approved this contract to spend the gOHM escrowed by `coolerFrom_`.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
     ///         - Less than two loans are being consolidated.
@@ -248,8 +248,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The contract is not active.
     ///         - The contract has not been activated as a policy.
     ///         - Re-entrancy is detected.
-    ///
-    ///         For flexibility purposes, the user can either pay with DAI or sDAI. @dev still true?
     ///
     /// @param  clearinghouseFrom_ Olympus Clearinghouse that issued the existing loans.
     /// @param  clearinghouseTo_ Olympus Clearinghouse to be used to issue the consolidated loan.
@@ -266,8 +264,17 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
         if (Cooler(coolerFrom_).owner() != msg.sender || Cooler(coolerTo_).owner() != msg.sender)
             revert OnlyCoolerOwner();
-        _consolidateWithFlashLoan(clearinghouseFrom_, clearinghouseTo_, coolerFrom_, coolerTo_, ids_);
+
+        _consolidateWithFlashLoan(
+            clearinghouseFrom_,
+            clearinghouseTo_,
+            coolerFrom_,
+            coolerTo_,
+            ids_
+        );
     }
+
+    // TODO remove restriction on less than 2 loans
 
     /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using flashloans.
     ///
@@ -284,13 +291,11 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
-    ///         - Less than two loans are being consolidated. @dev is this possible to do without? so it funcs as transfer?
+    ///         - Less than two loans are being consolidated.
     ///         - The available funds are less than the required flashloan amount.
     ///         - The contract is not active.
     ///         - The contract has not been activated as a policy.
     ///         - Re-entrancy is detected.
-    ///
-    ///         For flexibility purposes, the user can either pay with DAI or sDAI. @dev still true?
     ///
     /// @param  clearinghouseFrom_ Olympus Clearinghouse that issued the existing loans.
     /// @param  clearinghouseTo_ Olympus Clearinghouse to be used to issue the consolidated loan.
@@ -305,9 +310,15 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256[] calldata ids_
     ) public onlyPolicyActive onlyConsolidatorActive nonReentrant {
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
-        if (Cooler(coolerFrom_).owner() != msg.sender)
-            revert OnlyCoolerOwner();
-        _consolidateWithFlashLoan(clearinghouseFrom_, clearinghouseTo_, coolerFrom_, coolerTo_, ids_);
+        if (Cooler(coolerFrom_).owner() != msg.sender) revert OnlyCoolerOwner();
+
+        _consolidateWithFlashLoan(
+            clearinghouseFrom_,
+            clearinghouseTo_,
+            coolerFrom_,
+            coolerTo_,
+            ids_
+        );
     }
 
     /// @notice Internal logic for loan consolidation
@@ -317,7 +328,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @param  coolerFrom_     Cooler from which the loans will be consolidated.
     /// @param  coolerTo_     Cooler to which the loans will be consolidated
     /// @param  ids_           Array containing the ids of the loans to be consolidated.
-    function _consolidateWithFlashLoan(address clearinghouseFrom_,
+    function _consolidateWithFlashLoan(
+        address clearinghouseFrom_,
         address clearinghouseTo_,
         address coolerFrom_,
         address coolerTo_,
