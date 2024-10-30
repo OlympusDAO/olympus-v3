@@ -612,7 +612,7 @@ contract LoanConsolidatorForkTest is Test {
 
     // ===== TESTS ===== //
 
-    // consolidateWithFlashLoan
+    // consolidate
     // given the contract has not been activated as a policy
     //  [X] it reverts
     // given the contract has been disabled
@@ -628,6 +628,8 @@ contract LoanConsolidatorForkTest is Test {
     // given the caller is not the owner of coolerFrom
     //  [X] it reverts
     // given the caller is not the owner of coolerTo
+    //  [X] it reverts
+    // given clearinghouseTo is disabled
     //  [X] it reverts
     // given coolerFrom is equal to coolerTo
     //  given the cooler has no loans
@@ -651,19 +653,22 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it transfers the protocol fee to the collector
     // given the lender fee is non-zero
     //  [X] it transfers the lender fee to the lender
-    // when the protocol fee is zero
-    //  [X] it succeeds, but does not transfer additional DAI for the fee
-    // when the Clearinghouse is disabled
-    //  [X] it reverts
+    // given the protocol fee is zero
+    //  [X] it succeeds, but does not transfer additional reserveTo for the protocol fee
+    // given the lender fee is zero
+    //  [X] it succeeds, but does not transfer additional reserveTo for the lender fee
     // when clearinghouseFrom is DAI and clearinghouseTo is USDS
-    //  [X] the Cooler owner receives USDS
+    //  [X] the loans on coolerFrom are migrated to coolerTo
+    //  [X] the Cooler owner receives USDS from the new loan
     // when clearinghouseFrom is USDS and clearinghouseTo is DAI
-    //  [X] the Cooler owner receives DAI
+    //  [X] the loans on coolerFrom are migrated to coolerTo
+    //  [X] the Cooler owner receives DAI from the new loan
     // when clearinghouseFrom is USDS and clearinghouseTo is USDS
-    //  [X] the Cooler owner receives USDS
+    //  [X] the loans on coolerFrom are migrated to coolerTo
+    //  [X] the Cooler owner receives USDS from the new loan
     // when clearinghouseFrom is DAI and clearinghouseTo is DAI
-    //  [X] the Cooler owner receives DAI
-    // [X] it takes a flashloan for the total debt amount + LoanConsolidator fee, and consolidates the loans into one
+    //  [X] the loans on coolerFrom are migrated to coolerTo
+    //  [X] the Cooler owner receives DAI from the new loan
 
     // --- consolidateWithFlashLoan --------------------------------------------
 
