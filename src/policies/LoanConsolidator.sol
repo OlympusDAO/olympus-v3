@@ -230,7 +230,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using flashloans.
     ///
-    ///         Unlike consolidateWithNewOwner, the owner of the new cooler must be the same as the cooler being repaid.
+    ///         Unlike `consolidateWithNewOwner()`, the owner of the new Cooler must be the same as the Cooler being repaid.
     ///
     ///         The caller will be required to provide additional funds to cover accrued interest on the Cooler loans and the lender and protocol fees (if applicable). Use the `requiredApprovals()` function to determine the amount of funds and approvals required.
     ///
@@ -254,7 +254,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @param  coolerFrom_     Cooler from which the loans will be consolidated.
     /// @param  coolerTo_     Cooler to which the loans will be consolidated
     /// @param  ids_           Array containing the ids of the loans to be consolidated.
-    function consolidateWithFlashLoan(
+    function consolidate(
         address clearinghouseFrom_,
         address clearinghouseTo_,
         address coolerFrom_,
@@ -276,7 +276,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using flashloans.
     ///
-    ///         Unlike consolidateWithFlashLoan, the owner of the new cooler can be different from the cooler being repaid.
+    ///         Unlike `consolidate()`, the owner of the new Cooler can be different from the Cooler being repaid.
     ///
     ///         The caller will be required to provide additional funds to cover accrued interest on the Cooler loans and the lender and protocol fees (if applicable). Use the `requiredApprovals()` function to determine the amount of funds and approvals required.
     ///
@@ -320,7 +320,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     }
 
     /// @notice Internal logic for loan consolidation
-    /// @dev    Utilized by consolidateWithFlashLoan and consolidateWithNewOwner
+    /// @dev    Utilized by `consolidate()` and `consolidateWithNewOwner()`
     ///
     /// @param  clearinghouseFrom_ Olympus Clearinghouse that issued the existing loans.
     /// @param  clearinghouseTo_ Olympus Clearinghouse to be used to issue the consolidated loan.

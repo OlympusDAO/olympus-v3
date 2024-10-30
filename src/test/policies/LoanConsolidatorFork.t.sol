@@ -262,13 +262,7 @@ contract LoanConsolidatorForkTest is Test {
         uint256[] memory ids_
     ) internal {
         vm.prank(caller_);
-        utils.consolidateWithFlashLoan(
-            clearinghouseFrom_,
-            clearinghouseTo_,
-            coolerFrom_,
-            coolerTo_,
-            ids_
-        );
+        utils.consolidate(clearinghouseFrom_, clearinghouseTo_, coolerFrom_, coolerTo_, ids_);
     }
 
     function _consolidate(uint256[] memory ids_) internal {
