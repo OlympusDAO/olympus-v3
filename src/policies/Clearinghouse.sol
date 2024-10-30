@@ -48,7 +48,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     // --- RELEVANT CONTRACTS ----------------------------------------
 
     ERC20 public immutable reserve; // Debt token
-    ERC4626 public immutable wrappedReserve; // Idle reserve will be wrapped into wrappedReserve
+    ERC4626 public immutable sReserve; // Idle reserve will be wrapped into sReserve
     ERC20 public immutable gohm; // Collateral token
     ERC20 public immutable ohm; // Unwrapped gOHM
     IStaking public immutable staking; // Necessary to unstake (and burn) OHM from defaults
@@ -88,7 +88,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         address ohm_,
         address gohm_,
         address staking_,
-        address wrappedReserve_,
+        address sReserve_,
         address coolerFactory_,
         address kernel_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
@@ -96,8 +96,8 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         ohm = ERC20(ohm_);
         gohm = ERC20(gohm_);
         staking = IStaking(staking_);
-        wrappedReserve = ERC4626(wrappedReserve_);
-        reserve = ERC20(wrappedReserve.asset());
+        sReserve = ERC4626(sReserve_);
+        reserve = ERC20(sReserve.asset());
     }
 
     /// @notice Default framework setup. Configure dependencies for olympus-v3 modules.
@@ -147,11 +147,12 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
     }
 
-    /// @notice     Returns the current version of the policy
-    /// @dev        This is useful for distinguishing between different versions of the policy
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
     function VERSION() external pure returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 2;
+        return (1, 2);
     }
 
     // --- OPERATION -------------------------------------------------
@@ -186,7 +187,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, LOAN_TO_COLLATERAL, DURATION);
 
         // Clear the created loan request by providing enough reserve.
-        wrappedReserve.withdraw(amount_, address(this), address(this));
+        sReserve.withdraw(amount_, address(this), address(this));
         reserve.approve(address(cooler_), amount_);
         uint256 loanID = cooler_.clearRequest(reqID, address(this), true);
 
@@ -211,7 +212,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         // Transfer in extension interest from the caller.
         reserve.transferFrom(msg.sender, address(this), interestBase * times_);
         if (active) {
-            _sweepIntoDSR(interestBase * times_);
+            _sweepIntoSavingsVault(interestBase * times_);
         } else {
             _defund(reserve, interestBase * times_);
         }
@@ -291,11 +292,12 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     // --- CALLBACKS -----------------------------------------------------
 
     /// @notice Overridden callback to decrement loan receivables.
+    /// @param *unused loadID_ of the load.
     /// @param  principalPaid_ in reserve.
     /// @param  interestPaid_ in reserve.
     function _onRepay(uint256, uint256 principalPaid_, uint256 interestPaid_) internal override {
         if (active) {
-            _sweepIntoDSR(principalPaid_ + interestPaid_);
+            _sweepIntoSavingsVault(principalPaid_ + interestPaid_);
         } else {
             _defund(reserve, principalPaid_ + interestPaid_);
         }
@@ -331,9 +333,9 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
 
         // Sweep reserve into DSR if necessary.
         uint256 idle = reserve.balanceOf(address(this));
-        if (idle != 0) _sweepIntoDSR(idle);
+        if (idle != 0) _sweepIntoSavingsVault(idle);
 
-        uint256 reserveBalance = wrappedReserve.maxWithdraw(address(this));
+        uint256 reserveBalance = sReserve.maxWithdraw(address(this));
         uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
         // Rebalance funds on hand with treasury's reserves.
         if (reserveBalance < maxFundAmount) {
@@ -346,11 +348,11 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
                 amount_: outstandingDebt + fundAmount
             });
 
-            // Since TRSRY holds wrappedReserve, a conversion must be done before
+            // Since TRSRY holds sReserve, a conversion must be done before
             // funding the clearinghouse.
-            uint256 wrappedReserveAmount = wrappedReserve.previewWithdraw(fundAmount);
-            TRSRY.increaseWithdrawApproval(address(this), wrappedReserve, wrappedReserveAmount);
-            TRSRY.withdrawReserves(address(this), wrappedReserve, wrappedReserveAmount);
+            uint256 sReserveAmount = sReserve.previewWithdraw(fundAmount);
+            TRSRY.increaseWithdrawApproval(address(this), sReserve, sReserveAmount);
+            TRSRY.withdrawReserves(address(this), sReserve, sReserveAmount);
 
             // Log the event.
             emit Rebalance(false, fundAmount);
@@ -364,10 +366,10 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
                 amount_: (outstandingDebt > defundAmount) ? outstandingDebt - defundAmount : 0
             });
 
-            // Since TRSRY holds wrappedReserve, a conversion must be done before
-            // sending wrappedReserve back.
-            uint256 wrappedReserveAmount = wrappedReserve.previewWithdraw(defundAmount);
-            wrappedReserve.transfer(address(TRSRY), wrappedReserveAmount);
+            // Since TRSRY holds sReserve, a conversion must be done before
+            // sending sReserve back.
+            uint256 sReserveAmount = sReserve.previewWithdraw(defundAmount);
+            sReserve.transfer(address(TRSRY), sReserveAmount);
 
             // Log the event.
             emit Rebalance(true, defundAmount);
@@ -376,16 +378,16 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         return true;
     }
 
-    /// @notice Sweep excess reserve into vault.
-    function sweepIntoDSR() public {
+    /// @notice Sweep excess reserve into savings vault.
+    function sweepIntoSavingsVault() public {
         uint256 reserveBalance = reserve.balanceOf(address(this));
-        _sweepIntoDSR(reserveBalance);
+        _sweepIntoSavingsVault(reserveBalance);
     }
 
     /// @notice Sweep excess reserve into vault.
-    function _sweepIntoDSR(uint256 amount_) internal {
-        reserve.approve(address(wrappedReserve), amount_);
-        wrappedReserve.deposit(amount_, address(this));
+    function _sweepIntoSavingsVault(uint256 amount_) internal {
+        reserve.approve(address(sReserve), amount_);
+        sReserve.deposit(amount_, address(this));
     }
 
     /// @notice Public function to burn gOHM.
@@ -414,9 +416,9 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     function emergencyShutdown() external onlyRole("emergency_shutdown") {
         active = false;
 
-        // If necessary, defund wrappedReserve.
-        uint256 wrappedReserveBalance = wrappedReserve.balanceOf(address(this));
-        if (wrappedReserveBalance != 0) _defund(wrappedReserve, wrappedReserveBalance);
+        // If necessary, defund sReserve.
+        uint256 sReserveBalance = sReserve.balanceOf(address(this));
+        if (sReserveBalance != 0) _defund(sReserve, sReserveBalance);
 
         // If necessary, defund reserve.
         uint256 reserveBalance = reserve.balanceOf(address(this));
@@ -440,12 +442,12 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     /// @param  token_ to transfer.
     /// @param  amount_ to transfer.
     function _defund(ERC20 token_, uint256 amount_) internal {
-        if (token_ == wrappedReserve || token_ == reserve) {
+        if (token_ == sReserve || token_ == reserve) {
             // Since users loans are denominated in reserve, the clearinghouse
             // debt is set in reserve terms. It must be adjusted when defunding.
             uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
-            uint256 reserveAmount = (token_ == wrappedReserve)
-                ? wrappedReserve.previewRedeem(amount_)
+            uint256 reserveAmount = (token_ == sReserve)
+                ? sReserve.previewRedeem(amount_)
                 : amount_;
 
             TRSRY.setDebt({
