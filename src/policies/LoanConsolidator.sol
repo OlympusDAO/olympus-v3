@@ -283,7 +283,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         It is expected that the caller will have already provided approval for this contract to spend the required tokens. See `requiredApprovals()` for more details.
     ///
     /// @dev    This function will revert if:
-    ///         - The caller is not the coolerFrom owner.
+    ///         - The caller is not the `coolerFrom_` owner.
+    ///         - `coolerFrom_` is the same as `coolerTo_` (in which case `consolidate()` should be used).
+    ///         - The owner of `coolerFrom_` is the same as `coolerTo_` (in which case `consolidate()` should be used).
     ///         - The caller has not approved this contract to spend the fees in DAI.
     ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to repay the flashloan.
     ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
@@ -310,6 +312,12 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
         if (Cooler(coolerFrom_).owner() != msg.sender) revert OnlyCoolerOwner();
 
+        // Ensure that the caller is not trying to operate on the same Cooler
+        if (coolerFrom_ == coolerTo_) revert Params_InvalidCooler();
+
+        // Ensure that the owner of the coolerFrom_ is not the same as coolerTo_
+        if (Cooler(coolerFrom_).owner() == Cooler(coolerTo_).owner()) revert Params_InvalidCooler();
+
         _consolidateWithFlashLoan(
             clearinghouseFrom_,
             clearinghouseTo_,
@@ -321,6 +329,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Internal logic for loan consolidation
     /// @dev    Utilized by `consolidate()` and `consolidateWithNewOwner()`
+    ///
+    ///         This function assumes:
+    ///         - The calling external-facing function has checked that the caller is permitted to operate on `coolerFrom_`.
     ///
     /// @param  clearinghouseFrom_ Olympus Clearinghouse that issued the existing loans.
     /// @param  clearinghouseTo_ Olympus Clearinghouse to be used to issue the consolidated loan.
@@ -787,8 +798,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         address coolerFrom_,
         uint256[] calldata ids_
     ) external view onlyPolicyActive returns (address, uint256, address, uint256, uint256) {
-        if (ids_.length < 2) revert Params_InsufficientCoolerCount();
-
         // Cache the total principal and interest
         (uint256 totalPrincipal, uint256 totalInterest) = _getDebtForLoans(
             address(coolerFrom_),
