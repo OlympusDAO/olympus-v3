@@ -182,6 +182,10 @@ contract LoanConsolidatorForkTest is Test {
         deal(address(susds), address(clearinghouseUsds), 18_000_000 * 1e18);
 
         _createCoolerAndLoans(clearinghouse, coolerFactory, walletA, dai);
+
+        // LoanConsolidator is deactivated by default
+        // Assign the emergency role so that the contract can be activated
+        _assignEmergencyRole();
     }
 
     // ===== MODIFIERS ===== //
@@ -192,10 +196,9 @@ contract LoanConsolidatorForkTest is Test {
         _;
     }
 
-    modifier givenEmergencyHasRole() {
+    function _assignEmergencyRole() internal {
         vm.prank(kernelExecutor);
         rolesAdmin.grantRole(ROLE_EMERGENCY_SHUTDOWN, emergency);
-        _;
     }
 
     modifier givenProtocolFee(uint256 feePercent_) {
@@ -748,11 +751,19 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(idsA);
     }
 
+    function test_consolidate_defaultDeactivated_reverts() public givenPolicyActive {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyConsolidatorActive.selector));
+
+        // Consolidate loans for coolerA
+        uint256[] memory idsA = _idsA();
+        _consolidate(idsA);
+    }
+
     function test_consolidate_deactivated_reverts()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
+        givenActivated
         givenDeactivated
     {
         // Expect revert
@@ -763,7 +774,11 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(idsA);
     }
 
-    function test_consolidate_thirdPartyClearinghouseFrom_reverts() public givenPolicyActive {
+    function test_consolidate_thirdPartyClearinghouseFrom_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         // Create a new Clearinghouse
         // It is not registered with CHREG, so should be rejected
         Clearinghouse newClearinghouse = new Clearinghouse(
@@ -792,7 +807,11 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_thirdPartyClearinghouseTo_reverts() public givenPolicyActive {
+    function test_consolidate_thirdPartyClearinghouseTo_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         // Create a new Clearinghouse
         // It is not registered with CHREG, so should be rejected
         Clearinghouse newClearinghouse = new Clearinghouse(
@@ -821,7 +840,11 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_thirdPartyCoolerFrom_reverts() public givenPolicyActive {
+    function test_consolidate_thirdPartyCoolerFrom_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
         Cooler newCooler = _cloneCooler(
@@ -846,7 +869,7 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_thirdPartyCoolerTo_reverts() public givenPolicyActive {
+    function test_consolidate_thirdPartyCoolerTo_reverts() public givenPolicyActive givenActivated {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
         Cooler newCooler = _cloneCooler(
@@ -871,7 +894,7 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_sameCooler_noLoans_reverts() public givenPolicyActive {
+    function test_consolidate_sameCooler_noLoans_reverts() public givenPolicyActive givenActivated {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max, type(uint256).max);
 
@@ -885,7 +908,7 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(ids);
     }
 
-    function test_consolidate_sameCooler_oneLoan_reverts() public givenPolicyActive {
+    function test_consolidate_sameCooler_oneLoan_reverts() public givenPolicyActive givenActivated {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max, type(uint256).max);
 
@@ -900,7 +923,11 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(ids);
     }
 
-    function test_consolidate_differentCooler_noLoans_reverts() public givenPolicyActive {
+    function test_consolidate_differentCooler_noLoans_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         uint256[] memory idsA = _idsA();
 
         // Deploy a Cooler on the USDS Clearinghouse
@@ -940,7 +967,7 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_differentCooler_oneLoan() public givenPolicyActive {
+    function test_consolidate_differentCooler_oneLoan() public givenPolicyActive givenActivated {
         uint256[] memory idsA = _idsA();
 
         // Deploy a Cooler on the USDS Clearinghouse
@@ -998,6 +1025,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_callerNotOwner_coolerFrom_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = _idsA();
@@ -1023,6 +1051,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_callerNotOwner_coolerTo_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = _idsA();
@@ -1045,7 +1074,11 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_insufficientGOhmApproval_reverts() public givenPolicyActive {
+    function test_consolidate_insufficientGOhmApproval_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -1060,7 +1093,11 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(idsA);
     }
 
-    function test_consolidate_insufficientDaiApproval_reverts() public givenPolicyActive {
+    function test_consolidate_insufficientDaiApproval_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -1078,7 +1115,11 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(idsA);
     }
 
-    function test_consolidate_insufficientUsdsApproval_reverts() public givenPolicyActive {
+    function test_consolidate_insufficientUsdsApproval_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         uint256[] memory idsA = _idsA();
 
         // Create a Cooler on the USDS Clearinghouse
@@ -1106,7 +1147,7 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_noProtocolFee() public givenPolicyActive {
+    function test_consolidate_noProtocolFee() public givenPolicyActive givenActivated {
         uint256[] memory idsA = _idsA();
 
         // Record the amount of DAI in the wallet
@@ -1127,7 +1168,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_noProtocolFee_fuzz(
         uint256 loanOneCollateral_,
         uint256 loanTwoCollateral_
-    ) public givenPolicyActive givenCoolerB(dai) {
+    ) public givenPolicyActive givenActivated givenCoolerB(dai) {
         // Bound the collateral values
         loanOneCollateral_ = bound(loanOneCollateral_, 1, 1e18);
         loanTwoCollateral_ = bound(loanTwoCollateral_, 1, 1e18);
@@ -1215,8 +1256,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidate_lenderFee()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
+        givenAdminHasRole
         givenMockFlashloanLender
         givenMockFlashloanLenderFee(100) // 1%
         givenMockFlashloanLenderHasBalance(20_000_000e18)
@@ -1262,8 +1304,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidate_protocolFee()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -1296,7 +1339,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_noProtocolFee_disabledClearinghouse_reverts()
         public
         givenPolicyActive
-        givenEmergencyHasRole
+        givenActivated
     {
         // Disable the Clearinghouse
         vm.prank(emergency);
@@ -1323,8 +1366,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidate_protocolFee_daiToUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -1375,8 +1419,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidate_protocolFee_usdsToDai()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -1462,8 +1507,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidate_protocolFee_usdsToUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -1588,10 +1634,10 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidateWithNewOwner_deactivated_reverts()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
+        givenActivated
         givenDeactivated
+        givenAdminHasRole
         givenCoolerB(dai)
     {
         // Expect revert
@@ -1612,6 +1658,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_thirdPartyClearinghouseFrom_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         // Create a new Clearinghouse
@@ -1645,6 +1692,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_thirdPartyClearinghouseTo_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         // Create a new Clearinghouse
@@ -1678,6 +1726,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_thirdPartyCoolerFrom_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         // Create a new Cooler
@@ -1704,7 +1753,11 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidateWithNewOwner_thirdPartyCoolerTo_reverts() public givenPolicyActive {
+    function test_consolidateWithNewOwner_thirdPartyCoolerTo_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
         Cooler newCooler = _cloneCooler(
@@ -1729,7 +1782,11 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidateWithNewOwner_sameCooler_reverts() public givenPolicyActive {
+    function test_consolidateWithNewOwner_sameCooler_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         uint256[] memory idsA = _idsA();
 
         // Grant approvals
@@ -1755,7 +1812,11 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidateWithNewOwner_sameOwner_reverts() public givenPolicyActive {
+    function test_consolidateWithNewOwner_sameOwner_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
         uint256[] memory idsA = _idsA();
 
         // Create a new Cooler on the USDS Clearinghouse
@@ -1790,6 +1851,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_noLoans_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = new uint256[](0);
@@ -1828,7 +1890,12 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidateWithNewOwner_oneLoan() public givenPolicyActive givenCoolerB(dai) {
+    function test_consolidateWithNewOwner_oneLoan()
+        public
+        givenPolicyActive
+        givenActivated
+        givenCoolerB(dai)
+    {
         uint256[] memory idsA = new uint256[](1);
         idsA[0] = 0;
 
@@ -1879,6 +1946,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_callerNotOwner_coolerFrom_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = _idsA();
@@ -1910,6 +1978,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_insufficientGOhmApproval_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = _idsA();
@@ -1937,6 +2006,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_insufficientDaiApproval_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = _idsA();
@@ -1967,6 +2037,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_insufficientUsdsApproval_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(usds)
     {
         uint256[] memory idsA = _idsA();
@@ -1997,6 +2068,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_noProtocolFee()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
     {
         uint256[] memory idsA = _idsA();
@@ -2039,9 +2111,10 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidateWithNewOwner_lenderFee()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
+        givenAdminHasRole
         givenMockFlashloanLender
         givenMockFlashloanLenderFee(100) // 1%
         givenMockFlashloanLenderHasBalance(20_000_000e18)
@@ -2097,9 +2170,10 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidateWithNewOwner_protocolFee()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -2147,8 +2221,8 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidateWithNewOwner_disabledClearinghouse_reverts()
         public
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
-        givenEmergencyHasRole
     {
         // Disable the Clearinghouse
         vm.prank(emergency);
@@ -2181,9 +2255,10 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidateWithNewOwner_protocolFee_daiToUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
         givenCoolerB(usds)
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -2236,9 +2311,10 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidateWithNewOwner_protocolFee_usdsToDai()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
         givenCoolerB(dai)
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -2296,9 +2372,10 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_consolidateWithNewOwner_protocolFee_usdsToUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenActivated
         givenCoolerB(usds)
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory idsA = _idsA();
@@ -2519,8 +2596,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_requiredApprovals_protocolFee()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory ids = _idsA();
@@ -2559,8 +2636,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_requiredApprovals_protocolFee_daiToUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory ids = _idsA();
@@ -2599,8 +2676,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_requiredApprovals_protocolFee_usdsToDai()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory ids = _idsA();
@@ -2643,8 +2720,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_requiredApprovals_protocolFee_usdsToUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenAdminHasRole
         givenProtocolFee(1000) // 1%
     {
         uint256[] memory ids = _idsA();
@@ -2845,8 +2922,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_fundsRequired_interestDue()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenAdminHasRole
         givenProtocolFee(1000)
     {
         // Warp to the future, so that there is interest due
@@ -2879,8 +2956,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_fundsRequired_toUsds()
         public
-        givenAdminHasRole
         givenPolicyActive
+        givenAdminHasRole
         givenProtocolFee(1000)
     {
         uint256[] memory ids = _idsA();
@@ -2908,7 +2985,7 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(protocolFee, expectedProtocolFee, "protocolFee");
     }
 
-    function test_fundsRequired_toDai() public givenAdminHasRole givenPolicyActive {
+    function test_fundsRequired_toDai() public givenPolicyActive givenAdminHasRole {
         uint256[] memory ids = _idsA();
 
         // Calculate the interest due
@@ -2965,7 +3042,7 @@ contract LoanConsolidatorForkTest is Test {
 
         assertEq(address(utils.kernel()), address(kernel), "kernel");
         assertEq(utils.feePercentage(), feePercentage, "fee percentage");
-        assertEq(utils.consolidatorActive(), true, "consolidator active");
+        assertEq(utils.consolidatorActive(), false, "consolidator should be inactive");
     }
 
     // activate
@@ -2980,11 +3057,7 @@ contract LoanConsolidatorForkTest is Test {
     //   [X] it does nothing
     //  [X] it sets the active flag to true
 
-    function test_activate_policyNotActive_reverts()
-        public
-        givenAdminHasRole
-        givenEmergencyHasRole
-    {
+    function test_activate_policyNotActive_reverts() public givenAdminHasRole {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
 
@@ -2994,10 +3067,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_activate_notAdminOrEmergency_reverts()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
         givenDeactivated
+        givenAdminHasRole
     {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -3011,10 +3083,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_activate_asAdmin_reverts()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
         givenDeactivated
+        givenAdminHasRole
     {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -3029,10 +3100,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_activate_asEmergency()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
         givenDeactivated
+        givenAdminHasRole
     {
         vm.prank(emergency);
         utils.activate();
@@ -3040,12 +3110,7 @@ contract LoanConsolidatorForkTest is Test {
         assertTrue(utils.consolidatorActive(), "consolidator active");
     }
 
-    function test_activate_asEmergency_alreadyActive()
-        public
-        givenAdminHasRole
-        givenEmergencyHasRole
-        givenPolicyActive
-    {
+    function test_activate_asEmergency_alreadyActive() public givenPolicyActive givenAdminHasRole {
         vm.prank(emergency);
         utils.activate();
 
@@ -3064,11 +3129,7 @@ contract LoanConsolidatorForkTest is Test {
     //   [X] it does nothing
     //  [X] it sets the active flag to false
 
-    function test_deactivate_policyNotActive_reverts()
-        public
-        givenAdminHasRole
-        givenEmergencyHasRole
-    {
+    function test_deactivate_policyNotActive_reverts() public givenAdminHasRole {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.OnlyPolicyActive.selector));
 
@@ -3078,9 +3139,8 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_deactivate_notAdminOrEmergency_reverts()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
+        givenAdminHasRole
     {
         // Expect revert
         vm.expectRevert(
@@ -3090,12 +3150,7 @@ contract LoanConsolidatorForkTest is Test {
         utils.deactivate();
     }
 
-    function test_deactivate_asAdmin_reverts()
-        public
-        givenAdminHasRole
-        givenEmergencyHasRole
-        givenPolicyActive
-    {
+    function test_deactivate_asAdmin_reverts() public givenPolicyActive givenAdminHasRole {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_EMERGENCY_SHUTDOWN)
@@ -3105,12 +3160,7 @@ contract LoanConsolidatorForkTest is Test {
         utils.deactivate();
     }
 
-    function test_deactivate_asEmergency()
-        public
-        givenAdminHasRole
-        givenEmergencyHasRole
-        givenPolicyActive
-    {
+    function test_deactivate_asEmergency() public givenPolicyActive givenAdminHasRole {
         vm.prank(emergency);
         utils.deactivate();
 
@@ -3119,10 +3169,9 @@ contract LoanConsolidatorForkTest is Test {
 
     function test_deactivate_asEmergency_alreadyDeactivated()
         public
-        givenAdminHasRole
-        givenEmergencyHasRole
         givenPolicyActive
         givenDeactivated
+        givenAdminHasRole
     {
         vm.prank(emergency);
         utils.deactivate();

@@ -167,13 +167,12 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         if (feePercentage_ > ONE_HUNDRED_PERCENT) revert Params_FeePercentageOutOfRange();
         if (kernel_ == address(0)) revert Params_InvalidAddress();
 
-        // store protocol data
+        // Store protocol data
         feePercentage = feePercentage_;
 
-        // Set the contract to be active
-        // It is activated here so that it is performed by default
-        // However, the contract will not be useable until it has been installed as a policy
-        consolidatorActive = true;
+        // Set the contract to be disabled by default
+        // It must be activated as a policy and activated before being used
+        consolidatorActive = false;
 
         // Emit events
         emit FeePercentageSet(feePercentage);
