@@ -243,7 +243,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller has not approved this contract to spend the gOHM escrowed by `coolerFrom_`.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
-    ///         - Less than two loans are being consolidated.
+    ///         - Consolidation is taking place within the same Cooler, and less than two loans are being consolidated.
     ///         - The available funds are less than the required flashloan amount.
     ///         - The contract is not active.
     ///         - The contract has not been activated as a policy.
@@ -274,8 +274,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         );
     }
 
-    // TODO remove restriction on less than 2 loans
-
     /// @notice Consolidate loans (taken with a single Cooler contract) into a single loan by using flashloans.
     ///
     ///         Unlike consolidateWithFlashLoan, the owner of the new cooler can be different from the cooler being repaid.
@@ -291,7 +289,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
-    ///         - Less than two loans are being consolidated.
+    ///         - Consolidation is taking place within the same Cooler, and less than two loans are being consolidated.
     ///         - The available funds are less than the required flashloan amount.
     ///         - The contract is not active.
     ///         - The contract has not been activated as a policy.
@@ -323,6 +321,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
 
     /// @notice Internal logic for loan consolidation
     /// @dev    Utilized by consolidateWithFlashLoan and consolidateWithNewOwner
+    ///
     /// @param  clearinghouseFrom_ Olympus Clearinghouse that issued the existing loans.
     /// @param  clearinghouseTo_ Olympus Clearinghouse to be used to issue the consolidated loan.
     /// @param  coolerFrom_     Cooler from which the loans will be consolidated.
@@ -345,8 +344,11 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
             !_isValidCooler(clearinghouseTo_, coolerTo_)
         ) revert Params_InvalidCooler();
 
-        // Ensure at least two loans are being consolidated
-        if (ids_.length < 2) revert Params_InsufficientCoolerCount();
+        // If consolidating within the same Cooler, ensure that at least two loans are being consolidated
+        if (coolerFrom_ == coolerTo_ && ids_.length < 2) revert Params_InsufficientCoolerCount();
+
+        // If consolidating across different Coolers, ensure that at least one loan is being consolidated
+        if (coolerFrom_ != coolerTo_ && ids_.length == 0) revert Params_InsufficientCoolerCount();
 
         // Get the migration type and reserve tokens
         (MigrationType migrationType, IERC20 reserveFrom, IERC20 reserveTo) = _getMigrationType(

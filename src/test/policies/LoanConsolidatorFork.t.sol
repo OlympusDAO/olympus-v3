@@ -627,18 +627,24 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it reverts
     // given clearinghouseTo is not registered with CHREG
     //  [X] it reverts
-    // given coolerFrom was not created by a valid CoolerFactory
+    // given coolerFrom was not created by clearinghouseFrom's CoolerFactory
     //  [X] it reverts
-    // given coolerTo was not created by a valid CoolerFactory
-    //  [X] it reverts
-    // given the caller has no loans
-    //  [X] it reverts
-    // given the caller has 1 loan
+    // given coolerTo was not created by clearinghouseTo's CoolerFactory
     //  [X] it reverts
     // given the caller is not the owner of coolerFrom
     //  [X] it reverts
     // given the caller is not the owner of coolerTo
     //  [X] it reverts
+    // given coolerFrom is equal to coolerTo
+    //  given the cooler has no loans
+    //   [X] it reverts
+    //  given the cooler has 1 loan
+    //   [X] it reverts
+    // given coolerFrom is not equal to coolerTo
+    //  given the cooler has no loans
+    //   [X] it reverts
+    //  given the cooler has 1 loan
+    //   [X] it migrates the loan to coolerTo
     // given reserveTo is DAI
     //  given DAI spending approval has not been given to LoanConsolidator
     //   [X] it reverts
@@ -752,7 +758,12 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_thirdPartyCoolerFrom_reverts() public givenPolicyActive {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
-        Cooler newCooler = _cloneCooler(walletA, address(gohm), address(dai), address(coolerFactory));
+        Cooler newCooler = _cloneCooler(
+            walletA,
+            address(gohm),
+            address(dai),
+            address(coolerFactory)
+        );
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector));
@@ -772,7 +783,12 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_thirdPartyCoolerTo_reverts() public givenPolicyActive {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
-        Cooler newCooler = _cloneCooler(walletA, address(gohm), address(dai), address(coolerFactory));
+        Cooler newCooler = _cloneCooler(
+            walletA,
+            address(gohm),
+            address(dai),
+            address(coolerFactory)
+        );
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector));
@@ -789,7 +805,7 @@ contract LoanConsolidatorForkTest is Test {
         );
     }
 
-    function test_consolidate_noLoans_reverts() public givenPolicyActive {
+    function test_consolidate_sameCooler_noLoans_reverts() public givenPolicyActive {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max, type(uint256).max);
 
@@ -803,7 +819,7 @@ contract LoanConsolidatorForkTest is Test {
         _consolidate(ids);
     }
 
-    function test_consolidate_oneLoan_reverts() public givenPolicyActive {
+    function test_consolidate_sameCooler_oneLoan_reverts() public givenPolicyActive {
         // Grant approvals
         _grantCallerApprovals(type(uint256).max, type(uint256).max, type(uint256).max);
 
@@ -816,6 +832,101 @@ contract LoanConsolidatorForkTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
         _consolidate(ids);
+    }
+
+    function test_consolidate_differentCooler_noLoans_reverts() public givenPolicyActive {
+        uint256[] memory idsA = _idsA();
+
+        // Deploy a Cooler on the USDS Clearinghouse
+        vm.startPrank(walletA);
+        address coolerUsds_ = coolerFactory.generateCooler(gohm, usds);
+        Cooler coolerUsds = Cooler(coolerUsds_);
+        vm.stopPrank();
+
+        (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
+            address(clearinghouse),
+            address(coolerA),
+            idsA
+        );
+
+        // Grant approvals
+        _grantCallerApprovals(type(uint256).max, type(uint256).max, type(uint256).max);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Expect revert since no loan ids are given
+        vm.expectRevert(
+            abi.encodeWithSelector(LoanConsolidator.Params_InsufficientCoolerCount.selector)
+        );
+
+        // Consolidate loans, but give no ids
+        idsA = new uint256[](0);
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(clearinghouseUsds),
+            address(coolerA),
+            address(coolerUsds),
+            idsA
+        );
+    }
+
+    function test_consolidate_differentCooler_oneLoan() public givenPolicyActive {
+        uint256[] memory idsA = _idsA();
+
+        // Deploy a Cooler on the USDS Clearinghouse
+        vm.startPrank(walletA);
+        address coolerUsds_ = coolerFactory.generateCooler(gohm, usds);
+        Cooler coolerUsds = Cooler(coolerUsds_);
+        vm.stopPrank();
+
+        (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
+            address(clearinghouse),
+            address(coolerA),
+            idsA
+        );
+
+        // Grant approvals
+        _grantCallerApprovals(type(uint256).max, type(uint256).max, type(uint256).max);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Get the loan principal before consolidation
+        Cooler.Loan memory loanZero = coolerA.getLoan(0);
+        Cooler.Loan memory loanOne = coolerA.getLoan(1);
+        Cooler.Loan memory loanTwo = coolerA.getLoan(2);
+
+        // Consolidate loans, but give only one id
+        idsA = new uint256[](1);
+        idsA[0] = 0;
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(clearinghouseUsds),
+            address(coolerA),
+            address(coolerUsds),
+            idsA
+        );
+
+        // Assert that only loan 0 has been repaid
+        assertEq(coolerA.getLoan(0).principal, 0, "cooler DAI, loan 0: principal");
+        assertEq(coolerA.getLoan(1).principal, loanOne.principal, "cooler DAI, loan 1: principal");
+        assertEq(coolerA.getLoan(2).principal, loanTwo.principal, "cooler DAI, loan 2: principal");
+        // Assert that loan 0 has been migrated to coolerUsds
+        assertEq(
+            coolerUsds.getLoan(0).principal,
+            loanZero.principal,
+            "cooler USDS, loan 0: principal"
+        );
+        // Assert that coolerUsds has no other loans
+        vm.expectRevert();
+        coolerUsds.getLoan(1);
     }
 
     function test_consolidate_callerNotOwner_coolerFrom_reverts() public givenPolicyActive {
