@@ -20,11 +20,13 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 contract LoanConsolidatorForkTest is Test {
     using stdStorage for StdStorage;
+    using ClonesWithImmutableArgs for address;
 
     LoanConsolidator public utils;
 
@@ -375,6 +377,18 @@ contract LoanConsolidatorForkTest is Test {
         clearinghouse_.lendToCooler(coolerA, loan);
         vm.stopPrank();
         console2.log("Loans 0, 1, 2 created for cooler:", address(cooler_));
+    }
+
+    /// @notice Creates a new Cooler clone
+    /// @dev    Not that this will be regarded as a third-party Cooler, and rejected by LoanConsolidator, as CoolerFactory has no record of it.
+    function _cloneCooler(
+        address owner_,
+        address collateral_,
+        address debt_,
+        address factory_
+    ) internal returns (Cooler) {
+        bytes memory coolerData = abi.encodePacked(owner_, collateral_, debt_, factory_);
+        return Cooler(address(coolerFactory.coolerImplementation()).clone(coolerData));
     }
 
     // ===== ASSERTIONS ===== //
@@ -738,7 +752,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_thirdPartyCoolerFrom_reverts() public givenPolicyActive {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
-        Cooler newCooler = new Cooler();
+        Cooler newCooler = _cloneCooler(walletA, address(gohm), address(dai), address(coolerFactory));
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector));
@@ -758,7 +772,7 @@ contract LoanConsolidatorForkTest is Test {
     function test_consolidate_thirdPartyCoolerTo_reverts() public givenPolicyActive {
         // Create a new Cooler
         // It was not created by the Clearinghouse's CoolerFactory, so should be rejected
-        Cooler newCooler = new Cooler();
+        Cooler newCooler = _cloneCooler(walletA, address(gohm), address(dai), address(coolerFactory));
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(LoanConsolidator.Params_InvalidCooler.selector));
