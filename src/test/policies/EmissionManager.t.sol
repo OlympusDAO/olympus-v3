@@ -48,7 +48,7 @@ contract EmissionManagerTest is Test {
     MockOhm internal ohm;
     MockGohm internal gohm;
     MockERC20 internal reserve;
-    MockERC4626 internal wrappedReserve;
+    MockERC4626 internal sReserve;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
@@ -103,7 +103,7 @@ contract EmissionManagerTest is Test {
     //          [X] when the reserve balance of the contract is atleast the input amount
     //             [X] it updates the backing number, using the input amount as new reserves and the output amount as new supply
     //             [X] it mints the output amount of OHM to the teller
-    //             [X] it deposits the reserve balance into the wrappedReserve contract with the TRSRY as the recipient
+    //             [X] it deposits the reserve balance into the sReserve contract with the TRSRY as the recipient
     //
     // [x] execute -> callback (bond market purchase test)
     //
@@ -133,7 +133,7 @@ contract EmissionManagerTest is Test {
     //       [X] when the ohm balance of the contract is not zero
     //          [X] it burns the OHM balance of the contract
     //       [X] when the reserve balance of the contract is not zero
-    //          [X] it deposits the reserves into the wrappedReserve contract with the TRSRY as the recipient
+    //          [X] it deposits the reserves into the sReserve contract with the TRSRY as the recipient
     //
     // [X] restart
     //    [X] when the caller doesn't have emergency_restart role
@@ -239,7 +239,7 @@ contract EmissionManagerTest is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             gohm = new MockGohm("Gohm", "gOHM", 18);
             reserve = new MockERC20("Reserve", "RSV", 18);
-            wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
+            sReserve = new MockERC4626(reserve, "sReserve", "sRSV");
         }
 
         {
@@ -247,7 +247,7 @@ contract EmissionManagerTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy mock clearinghouse
-            clearinghouse = new MockClearinghouse(address(reserve), address(wrappedReserve));
+            clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
 
             /// Deploy modules (some mocks)
             PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
@@ -275,7 +275,7 @@ contract EmissionManagerTest is Test {
                 address(ohm),
                 address(gohm),
                 address(reserve),
-                address(wrappedReserve),
+                address(sReserve),
                 address(auctioneer),
                 address(teller)
             );
@@ -317,10 +317,10 @@ contract EmissionManagerTest is Test {
         reserve.mint(alice, testReserve);
         reserve.mint(address(TRSRY), testReserve * 50); // $50M of reserves in TRSRY
 
-        // Deposit TRSRY reserves into wrappedReserve
+        // Deposit TRSRY reserves into sReserve
         vm.startPrank(address(TRSRY));
-        reserve.approve(address(wrappedReserve), testReserve * 50);
-        wrappedReserve.deposit(testReserve * 50, address(TRSRY));
+        reserve.approve(address(sReserve), testReserve * 50);
+        sReserve.deposit(testReserve * 50, address(TRSRY));
         vm.stopPrank();
 
         // Approve the bond teller for the tokens to swap
@@ -930,9 +930,9 @@ contract EmissionManagerTest is Test {
         // Mint the input amount to the emissions manager
         reserve.mint(address(emissionManager), input);
 
-        // Cache the initial OHM balance of the teller and the wrappedReserve balance of the TRSRY
+        // Cache the initial OHM balance of the teller and the sReserve balance of the TRSRY
         uint256 tellerBalance = ohm.balanceOf(address(teller));
-        uint256 treasuryBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 treasuryBalance = sReserve.balanceOf(address(TRSRY));
 
         // Cache the current backing value in the emissions manager
         uint256 _backing = emissionManager.backing();
@@ -960,8 +960,8 @@ contract EmissionManagerTest is Test {
 
         // Check that the input amount of reserves have been wrapped and deposited into the treasury
         assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
-            treasuryBalance + input, // can use the reserve amount as the wrappedReserve amount since the conversion rate is 1:1
+            sReserve.balanceOf(address(TRSRY)),
+            treasuryBalance + input, // can use the reserve amount as the sReserve amount since the conversion rate is 1:1
             "TRSRY wrapped reserve balance should be updated"
         );
     }
@@ -982,7 +982,7 @@ contract EmissionManagerTest is Test {
         // Store initial balances
         uint256 aliceOhmBalance = ohm.balanceOf(alice);
         uint256 aliceReserveBalance = reserve.balanceOf(alice);
-        uint256 treasuryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 treasuryWrappedReserveBalance = sReserve.balanceOf(address(TRSRY));
         uint256 ohmSupply = ohm.totalSupply();
 
         // Store initial backing value
@@ -1014,7 +1014,7 @@ contract EmissionManagerTest is Test {
             "Reserve balance should be updated"
         );
         assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
+            sReserve.balanceOf(address(TRSRY)),
             treasuryWrappedReserveBalance + bidAmount,
             "TRSRY wrapped reserve balance should be updated"
         );
@@ -1146,7 +1146,7 @@ contract EmissionManagerTest is Test {
         );
 
         // Cache the wrapped reserves in the treasury
-        uint256 treasuryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 treasuryWrappedReserveBalance = sReserve.balanceOf(address(TRSRY));
 
         // Call the shutdown function as guardian (which has the emergency_shutdown role)
         vm.prank(guardian);
@@ -1167,10 +1167,7 @@ contract EmissionManagerTest is Test {
         assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
 
         // Confirm that the reserve was wrapped and deposited into the treasury
-        assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
-            treasuryWrappedReserveBalance + reserveAmount
-        );
+        assertEq(sReserve.balanceOf(address(TRSRY)), treasuryWrappedReserveBalance + reserveAmount);
     }
 
     // restart tests
@@ -1650,8 +1647,8 @@ contract EmissionManagerTest is Test {
     // getReserves test
 
     function test_getReserves_success() public {
-        uint256 expectedBalance = wrappedReserve.balanceOf(address(TRSRY));
-        expectedBalance += wrappedReserve.balanceOf(address(clearinghouse));
+        uint256 expectedBalance = sReserve.balanceOf(address(TRSRY));
+        expectedBalance += sReserve.balanceOf(address(clearinghouse));
         expectedBalance += clearinghouse.principalReceivables();
 
         // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse
@@ -1664,8 +1661,8 @@ contract EmissionManagerTest is Test {
         // Mint some more wrapped reserve to the treasury
         uint256 mintAmount = 1000e18;
         reserve.mint(address(this), 2 * mintAmount);
-        reserve.approve(address(wrappedReserve), 2 * mintAmount);
-        wrappedReserve.mint(mintAmount, address(TRSRY));
+        reserve.approve(address(sReserve), 2 * mintAmount);
+        sReserve.mint(mintAmount, address(TRSRY));
         expectedBalance += mintAmount;
 
         // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse
@@ -1676,7 +1673,7 @@ contract EmissionManagerTest is Test {
         );
 
         // Mint some wrapped reserves to the clearinghouse
-        wrappedReserve.mint(mintAmount, address(clearinghouse));
+        sReserve.mint(mintAmount, address(clearinghouse));
         expectedBalance += mintAmount;
 
         // Confirm the reserves are the wrapped reserve balance of the treasury and clearinghouse

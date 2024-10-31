@@ -68,7 +68,7 @@ contract EmissionManager is Policy, RolesConsumer {
     ERC20 public immutable ohm;
     IgOHM public immutable gohm;
     ERC20 public immutable reserve;
-    ERC4626 public immutable wrappedReserve;
+    ERC4626 public immutable sReserve;
 
     // External contracts
     IBondSDA public auctioneer;
@@ -99,7 +99,7 @@ contract EmissionManager is Policy, RolesConsumer {
         address ohm_,
         address gohm_,
         address reserve_,
-        address wrappedReserve_,
+        address sReserve_,
         address auctioneer_,
         address teller_
     ) Policy(kernel_) {
@@ -107,21 +107,21 @@ contract EmissionManager is Policy, RolesConsumer {
         if (ohm_ == address(0)) revert("OHM address cannot be 0");
         if (gohm_ == address(0)) revert("gOHM address cannot be 0");
         if (reserve_ == address(0)) revert("DAI address cannot be 0");
-        if (wrappedReserve_ == address(0)) revert("sDAI address cannot be 0");
+        if (sReserve_ == address(0)) revert("sDAI address cannot be 0");
         if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
         reserve = ERC20(reserve_);
-        wrappedReserve = ERC4626(wrappedReserve_);
+        sReserve = ERC4626(sReserve_);
         auctioneer = IBondSDA(auctioneer_);
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
         _reserveDecimals = reserve.decimals();
 
-        // Max approve wrappedReserve contract for reserve for deposits
-        reserve.approve(address(wrappedReserve), type(uint256).max);
+        // Max approve sReserve contract for reserve for deposits
+        reserve.approve(address(sReserve), type(uint256).max);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -231,9 +231,9 @@ contract EmissionManager is Policy, RolesConsumer {
         // This also conforms to the CEI pattern
         _updateBacking(outputAmount_, inputAmount_);
 
-        // Deposit the reserve balance into the wrappedReserve contract with the TRSRY as the recipient
+        // Deposit the reserve balance into the sReserve contract with the TRSRY as the recipient
         // This will sweep any excess reserves into the TRSRY as well
-        wrappedReserve.deposit(reserveBalance, address(TRSRY));
+        sReserve.deposit(reserveBalance, address(TRSRY));
 
         // Mint the output amount of OHM to the Teller
         MINTR.mintOhm(teller, outputAmount_);
@@ -328,7 +328,7 @@ contract EmissionManager is Policy, RolesConsumer {
         if (ohmBalance > 0) BurnableERC20(address(ohm)).burn(ohmBalance);
 
         uint256 reserveBalance = reserve.balanceOf(address(this));
-        if (reserveBalance > 0) wrappedReserve.deposit(reserveBalance, address(TRSRY));
+        if (reserveBalance > 0) sReserve.deposit(reserveBalance, address(TRSRY));
     }
 
     function restart() external onlyRole("emergency_restart") {
@@ -410,16 +410,16 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // =========- VIEW FUNCTIONS ========== //
 
-    /// @notice return reserves, measured as clearinghouse receivables and wrappedReserve balances, in DAI denomination
+    /// @notice return reserves, measured as clearinghouse receivables and sReserve balances, in reserve denomination
     function getReserves() public view returns (uint256 reserves) {
         uint256 chCount = CHREG.registryCount();
         for (uint256 i; i < chCount; i++) {
             reserves += Clearinghouse(CHREG.registry(i)).principalReceivables();
-            uint256 bal = wrappedReserve.balanceOf(CHREG.registry(i));
-            if (bal > 0) reserves += wrappedReserve.previewRedeem(bal);
+            uint256 bal = sReserve.balanceOf(CHREG.registry(i));
+            if (bal > 0) reserves += sReserve.previewRedeem(bal);
         }
 
-        reserves += wrappedReserve.previewRedeem(wrappedReserve.balanceOf(address(TRSRY)));
+        reserves += sReserve.previewRedeem(sReserve.balanceOf(address(TRSRY)));
     }
 
     /// @notice return supply, measured as supply of gOHM in OHM denomination
