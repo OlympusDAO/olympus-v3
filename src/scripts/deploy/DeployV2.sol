@@ -1021,7 +1021,7 @@ contract OlympusDeploy is Script {
             ohm_: address(ohm),
             gohm_: address(gohm),
             staking_: address(staking),
-            wrappedReserve_: address(wrappedReserve),
+            sReserve_: address(wrappedReserve),
             coolerFactory_: address(coolerFactory),
             kernel_: address(kernel)
         });

@@ -98,13 +98,7 @@ contract LoanConsolidatorScript is Test {
 
         // Consolidate the loans
         vm.startPrank(owner_);
-        utils.consolidateWithFlashLoan(
-            clearinghouseFrom_,
-            clearinghouseTo_,
-            coolerFrom_,
-            coolerTo_,
-            loanIds_
-        );
+        utils.consolidate(clearinghouseFrom_, clearinghouseTo_, coolerFrom_, coolerTo_, loanIds_);
         vm.stopPrank();
 
         console2.log("gOHM balance after:", _gohm.balanceOf(owner_));
