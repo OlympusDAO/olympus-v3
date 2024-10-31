@@ -453,20 +453,23 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
             address(flashLoanData.coolerFrom),
             flashLoanData.principal + flashLoanData.interest
         );
-        // Iterate over all batches, repay the debt and collect the collateral
+        // Iterate over all batches, repay the debt
         _repayDebtForLoans(address(flashLoanData.coolerFrom), flashLoanData.ids);
         // State:
         // - reserveFrom: reduced by principal and interest, should be 0
         // - reserveTo: no change, should be 0
-        // - gOHM: increased by the collateral returned
+        // - gOHM: no change, should be 0
 
         // Calculate the amount of collateral that will be needed for the consolidated loan
-        uint256 consolidatedLoanCollateral = flashLoanData.clearinghouseFrom.getCollateralForLoan(
+        // This is performed on the destination Clearinghouse, since it will be the one issuing the consolidated loan
+        uint256 consolidatedLoanCollateral = flashLoanData.clearinghouseTo.getCollateralForLoan(
             flashLoanData.principal
         );
 
-        // If the collateral required is greater than the collateral that was returned, then transfer gOHM from the cooler owner
-        // This can happen as the collateral required for the consolidated loan can be greater than the sum of the collateral of the loans being consolidated
+        // Transfer the collateral from the cooler owner to this contract
+        // consolidatedLoanCollateral > returned collateral if clearinghouseFrom has a higher LTC than clearinghouseTo
+        // consolidatedLoanCollateral > returned collateral due to rounding
+        // consolidatedLoanCollateral < returned collateral if clearinghouseFrom has a lower LTC than clearinghouseTo
         if (consolidatedLoanCollateral > GOHM.balanceOf(address(this))) {
             GOHM.transferFrom(
                 flashLoanData.coolerFrom.owner(),
@@ -474,6 +477,10 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
                 consolidatedLoanCollateral - GOHM.balanceOf(address(this))
             );
         }
+        // State:
+        // - reserveFrom: no change
+        // - reserveTo: no change
+        // - gOHM: increased by consolidatedLoanCollateral
 
         // Take a new Cooler loan for the principal required
         GOHM.approve(address(flashLoanData.clearinghouseTo), consolidatedLoanCollateral);
@@ -621,8 +628,8 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
             totalCollateral += collateralReturned;
         }
 
-        // Transfers all of the gOHM collateral to this contract
-        GOHM.transferFrom(cooler.owner(), address(this), totalCollateral);
+        // Upon repayment, the collateral is released to the owner
+        // After this function concludes, the contract needs to transfer the collateral to itself
     }
 
     function _isValidClearinghouse(address clearinghouse_) internal view returns (bool) {
