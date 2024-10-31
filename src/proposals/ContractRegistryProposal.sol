@@ -45,7 +45,6 @@ contract ContractRegistryProposal is GovernorBravoProposal {
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
-        // TODO add link to audit report
         return
             string.concat(
                 "# Contract Registry Activation\n\n",
@@ -53,7 +52,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
                 "The RGSTY module is used to register commonly-used addresses that can be referenced by other contracts. These addresses are marked as either mutable or immutable.\n\n",
                 "The ContractRegistryAdmin policy is used to manage the addresses registered in the RGSTY module.\n\n",
                 "The RGSTY module will be used by the LoanConsolidator policy to lookup contract addresses. In order to roll-out the improved LoanConsolidator, this proposal must be executed first.\n\n",
-                "The audit report can be found at:\n\n",
+                "[View the audit report here](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)\n\n",
                 "## Assumptions\n\n",
                 "- The RGSTY module has been deployed and activated as a module by the DAO MS.\n",
                 "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n\n",

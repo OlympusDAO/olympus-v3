@@ -32,7 +32,6 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
-        // TODO add link to audit report
         return
             string.concat(
                 "# LoanConsolidator and Contract Registry Activation\n\n",
@@ -43,7 +42,7 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
                 "- Strict checks on callers, ownership and Clearinghouse validity\n",
                 "- Allows for migration of loans from one Clearinghouse to another (in preparation for a USDS Clearinghouse)\n",
                 "- Allows for migration of loans from one owner to another\n\n",
-                "The audit report can be found at:\n\n",
+                "[View the audit report here](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)\n\n",
                 "## Assumptions\n\n",
                 "- The Contract Registry module has been deployed and activated as a module by the DAO MS.\n",
                 "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n",
