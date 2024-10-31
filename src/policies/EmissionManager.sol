@@ -55,6 +55,8 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice active base emissions rate change information
+    /// @dev active until beatsLeft is 0
     BaseRateChange public rateChange;
 
     // Modules
@@ -87,7 +89,9 @@ contract EmissionManager is Policy, RolesConsumer {
     uint8 internal immutable _ohmDecimals;
     uint8 internal immutable _reserveDecimals;
 
+    /// @notice timestamp of last shutdown
     uint48 public shutdownTimestamp;
+    /// @notice time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     uint48 public restartTimeframe;
 
     uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
@@ -156,7 +160,7 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== HEARTBEAT ========== //
 
-    /// @notice calculate and execute sale, if applicable, once per day
+    /// @notice calculate and execute sale, if applicable, once per day (every 3 beats)
     function execute() external onlyRole("heart") {
         if (!locallyActive) return;
 
@@ -181,6 +185,11 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== INITIALIZE ========== //
 
+    /// @notice allow governance to initialize the emission manager
+    /// @param baseEmissionsRate_ percent of OHM supply to issue per day at the minimum premium, in OHM scale, i.e. 1e9 = 100%
+    /// @param minimumPremium_ minimum premium at which to issue OHM, a percentage where 1e18 is 100%
+    /// @param backing_ backing price of OHM in reserve token, in reserve scale
+    /// @param restartTimeframe_ time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     function initialize(
         uint256 baseEmissionsRate_,
         uint256 minimumPremium_,
@@ -214,6 +223,7 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== BOND CALLBACK ========== //
 
+    /// @notice callback function for bond market, only callable by the teller
     function callback(uint256 id_, uint256 inputAmount_, uint256 outputAmount_) external {
         // Only callable by the bond teller
         if (msg.sender != teller) revert OnlyTeller();
@@ -320,6 +330,7 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== ADMIN FUNCTIONS ========== //
 
+    /// @notice shutdown the emission manager locally, burn OHM, and return any reserves to TRSRY
     function shutdown() external onlyRole("emergency_shutdown") {
         locallyActive = false;
         shutdownTimestamp = uint48(block.timestamp);
@@ -331,6 +342,7 @@ contract EmissionManager is Policy, RolesConsumer {
         if (reserveBalance > 0) sReserve.deposit(reserveBalance, address(TRSRY));
     }
 
+    /// @notice restart the emission manager locally
     function restart() external onlyRole("emergency_restart") {
         // Restart can be activated only within the specified timeframe since shutdown
         // Outside of this span of time, emissions_admin must reinitialize
@@ -396,6 +408,9 @@ contract EmissionManager is Policy, RolesConsumer {
         restartTimeframe = newTimeframe;
     }
 
+    /// @notice allow governance to set the bond contracts used by the emission manager
+    /// @param auctioneer_ address of the bond auctioneer contract
+    /// @param teller_ address of the bond teller contract
     function setBondContracts(
         address auctioneer_,
         address teller_
@@ -427,12 +442,14 @@ contract EmissionManager is Policy, RolesConsumer {
         return (gohm.totalSupply() * gohm.index()) / 10 ** _ohmDecimals;
     }
 
+    /// @notice return the current premium as a percentage where 1e18 is 100%
     function getPremium() public view returns (uint256) {
         uint256 price = PRICE.getLastPrice();
         uint256 pbr = (price * 10 ** _reserveDecimals) / backing;
         return pbr > ONE_HUNDRED_PERCENT ? pbr - ONE_HUNDRED_PERCENT : 0;
     }
 
+    /// @notice return the next sale amount, premium, emission rate, and emissions based on the current premium
     function getNextSale()
         public
         view
