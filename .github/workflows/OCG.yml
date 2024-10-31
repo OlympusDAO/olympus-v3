@@ -1,0 +1,39 @@
+name: OCG Proposals
+on:
+    push:
+        branches:
+            - master
+    pull_request:
+
+jobs:
+    run-ci:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - uses: pnpm/action-setup@v2
+              with:
+                  version: 9
+
+            - name: Install Node dependencies
+              run: pnpm install
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+              with:
+                  version: nightly-ca67d15f4abd46394b324c50e21e66f306a1162d
+
+            - name: Install Foundry dependencies
+              run: forge install
+
+            - name: Run proposal simulation tests
+              run: pnpm run test:proposal
+              env:
+                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
