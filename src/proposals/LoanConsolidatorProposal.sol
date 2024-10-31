@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 import {console2} from "forge-std/console2.sol";
+import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -21,7 +22,7 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 3;
+        return 4;
     }
 
     // Returns the name of the proposal.
@@ -32,26 +33,26 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         // TODO add link to audit report
-        return string.concat(
-            "# LoanConsolidator and Contract Registry Activation\n\n",
-            "This proposal activates the LoanConsolidator policy and installs the Contract Registry module (and associated ContractRegistryAdmin configuration policy).\n\n",
-            "The Contract Registry module is used to register commonly-used addresses that can be referenced by other contracts. These addresses are marked as either mutable or immutable.\n\n",
-            "The previous version of LoanConsolidator contained logic that, combined with infinite approvals, enabled an attacker to steal funds from users of the CoolerUtils contract (as it was known at the time).\n\n",
-            "This version introduces the following:\n\n",
-            "- Strict checks on callers, ownership and Clearinghouse validity\n",
-            "- Allows for migration of loans from one Clearinghouse to another (in preparation for a USDS Clearinghouse)\n",
-            "- Allows for migration of loans from one owner to another\n\n",
-            "The audit report can be found at:\n\n",
-            "## Assumptions\n\n",
-            "- The Contract Registry module has been deployed and activated as a module by the DAO MS.\n",
-            "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n",
-            "- The LoanConsolidator contract has been deployed and activated as a policy by the DAO MS.\n",
-            "- However, the consolidator is disabled by default.\n\n",
-            "## Proposal Steps\n\n",
-            "1. Grant the `loan_consolidator_admin` role to the OCG Timelock.\n",
-            "2. Grant the `contract_registry_admin` role to the OCG Timelock.\n",
-            "3. Activate the LoanConsolidator."
-        );
+        return
+            string.concat(
+                "# LoanConsolidator and Contract Registry Activation\n\n",
+                "This proposal activates the LoanConsolidator policy and installs the Contract Registry module (and associated ContractRegistryAdmin configuration policy).\n\n",
+                "The Contract Registry module is used to register commonly-used addresses that can be referenced by other contracts. These addresses are marked as either mutable or immutable.\n\n",
+                "The previous version of LoanConsolidator contained logic that, combined with infinite approvals, enabled an attacker to steal funds from users of the CoolerUtils contract (as it was known at the time).\n\n",
+                "This version introduces the following:\n\n",
+                "- Strict checks on callers, ownership and Clearinghouse validity\n",
+                "- Allows for migration of loans from one Clearinghouse to another (in preparation for a USDS Clearinghouse)\n",
+                "- Allows for migration of loans from one owner to another\n\n",
+                "The audit report can be found at:\n\n",
+                "## Assumptions\n\n",
+                "- The Contract Registry module has been deployed and activated as a module by the DAO MS.\n",
+                "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n",
+                "- The mutable and immutable contract addresses required by LoanConsolidator have been registered in the Contract Registry.\n",
+                "- The LoanConsolidator contract has been deployed and activated as a policy by the DAO MS.\n\n",
+                "## Proposal Steps\n\n",
+                "1. Grant the `loan_consolidator_admin` role to the OCG Timelock.\n",
+                "2. Activate the LoanConsolidator."
+            );
     }
 
     // No deploy actions needed
@@ -79,14 +80,7 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
             "Grant loan_consolidator_admin to Timelock"
         );
 
-        // STEP 2: Grant the `contract_registry_admin` role to the OCG Timelock
-        _pushAction(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("contract_registry_admin"), timelock),
-            "Grant contract_registry_admin to Timelock"
-        );
-
-        // STEP 3: Activate the LoanConsolidator
+        // STEP 2: Activate the LoanConsolidator
         _pushAction(
             loanConsolidator,
             abi.encodeWithSelector(LoanConsolidator.activate.selector),
@@ -143,8 +137,6 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
         require(loanConsolidator.consolidatorActive(), "LoanConsolidator is not active");
     }
 }
-
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
 
 // @notice GovernorBravoScript is a script that runs BRAVO_01 proposal.
 // BRAVO_01 proposal deploys a Vault contract and an ERC20 token contract

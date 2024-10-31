@@ -83,5 +83,10 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "name": "olympus-policy-loan-consolidator",
         "chainId": 1
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "name": "olympus-policy-contract-registry-admin",
+        "chainId": 1
     }
 ]

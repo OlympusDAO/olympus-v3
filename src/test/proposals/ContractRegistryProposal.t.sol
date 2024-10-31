@@ -11,14 +11,17 @@ import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDeleg
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";
 
-// Proposal imports
-import {LoanConsolidatorProposal} from "src/proposals/LoanConsolidatorProposal.sol";
+// ContractRegistry
+import {OlympusContractRegistry} from "src/modules/RGSTY/OlympusContractRegistry.sol";
+import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
+
+import {ContractRegistryProposal} from "src/proposals/ContractRegistryProposal.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
 ///         flag to `true` once the proposal has been submitted on-chain.
 /// Note: this will fail if the OCGPermissions script has not been run yet.
-contract LoanConsolidatorProposalTest is Test {
+contract ContractRegistryProposalTest is Test {
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
     TestSuite public suite;
     Addresses public addresses;
@@ -35,10 +38,10 @@ contract LoanConsolidatorProposalTest is Test {
         // Prior to the proposal deployment (otherwise it will fail)
         vm.createSelectFork(RPC_URL, 21070000);
 
-        // TODO update addresses when LoanConsolidator is deployed
+        // TODO update addresses when RGSTY and ContractRegistryAdmin are deployed
 
         /// @dev Deploy your proposal
-        LoanConsolidatorProposal proposal = new LoanConsolidatorProposal();
+        ContractRegistryProposal proposal = new ContractRegistryProposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
         hasBeenSubmitted = false;
