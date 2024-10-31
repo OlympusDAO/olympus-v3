@@ -12,6 +12,7 @@ import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
+import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
@@ -52,6 +53,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     IDistributor public distributor;
     IYieldRepo public yieldRepo;
     IReserveMigrator public reserveMigrator;
+    IEmissionManager public emissionManager;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -65,6 +67,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IDistributor distributor_,
         IYieldRepo yieldRepo_,
         IReserveMigrator reserveMigrator_,
+        IEmissionManager emissionManager_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
@@ -72,6 +75,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         distributor = distributor_;
         yieldRepo = yieldRepo_;
         reserveMigrator = reserveMigrator_;
+        emissionManager = emissionManager_;
 
         active = true;
         auctionDuration = auctionDuration_;
@@ -155,6 +159,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger rebase
         distributor.triggerRebase();
 
+        // Trigger emission manager
+        emissionManager.execute();
+
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
 
@@ -216,6 +223,16 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function setYieldRepo(address yieldRepo_) external onlyRole("heart_admin") {
         yieldRepo = IYieldRepo(yieldRepo_);
+    }
+
+    /// @inheritdoc IHeart
+    function setReserveMigrator(address reserveMigrator_) external onlyRole("heart_admin") {
+        reserveMigrator = IReserveMigrator(reserveMigrator_);
+    }
+
+    /// @inheritdoc IHeart
+    function setEmissionManager(address emissionManager_) external onlyRole("heart_admin") {
+        emissionManager = IEmissionManager(emissionManager_);
     }
 
     modifier notWhileBeatAvailable() {

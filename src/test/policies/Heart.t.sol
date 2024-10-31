@@ -15,6 +15,7 @@ import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
 import {MockYieldRepo} from "test/mocks/MockYieldRepo.sol";
 import {MockReserveMigrator} from "test/mocks/MockReserveMigrator.sol";
+import {MockEmissionManager} from "test/mocks/MockEmissionManager.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -26,6 +27,7 @@ import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
+import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -79,6 +81,7 @@ contract HeartTest is Test {
 
     MockYieldRepo internal yieldRepo;
     MockReserveMigrator internal reserveMigrator;
+    MockEmissionManager internal emissionManager;
 
     uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
 
@@ -134,6 +137,9 @@ contract HeartTest is Test {
             // Deploy mock reserve migrator
             reserveMigrator = new MockReserveMigrator();
 
+            // Deploy mock emission manager
+            emissionManager = new MockEmissionManager();
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
@@ -141,6 +147,7 @@ contract HeartTest is Test {
                 IDistributor(address(distributor)),
                 IYieldRepo(address(yieldRepo)),
                 IReserveMigrator(address(reserveMigrator)),
+                IEmissionManager(address(emissionManager)),
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -200,6 +207,7 @@ contract HeartTest is Test {
             IDistributor(address(distributor)),
             IYieldRepo(address(yieldRepo)),
             IReserveMigrator(address(reserveMigrator)),
+            IEmissionManager(address(emissionManager)),
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );

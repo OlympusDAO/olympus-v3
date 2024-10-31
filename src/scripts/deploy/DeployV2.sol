@@ -62,6 +62,7 @@ import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
+import {EmissionManager} from "policies/EmissionManager.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -109,6 +110,7 @@ contract OlympusDeploy is Script {
     LegacyBurner public legacyBurner;
     YieldRepurchaseFacility public yieldRepo;
     ReserveMigrator public reserveMigrator;
+    EmissionManager public emissionManager;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -220,6 +222,7 @@ contract OlympusDeploy is Script {
         selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
+        selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -308,6 +311,7 @@ contract OlympusDeploy is Script {
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
+        emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -600,6 +604,7 @@ contract OlympusDeploy is Script {
             zeroDistributor,
             yieldRepo,
             reserveMigrator,
+            emissionManager,
             maxReward,
             auctionDuration
         );
@@ -1185,6 +1190,38 @@ contract OlympusDeploy is Script {
         console2.log("ReserveMigrator deployed at:", address(reserveMigrator));
 
         return address(reserveMigrator);
+    }
+
+    // ========== EMISSION MANAGER ========== //
+
+    function _deployEmissionManager(bytes calldata) public returns (address) {
+        // No additional arguments for EmissionManager
+
+        // Log dependencies
+        console2.log("EmissionManager parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   ohm", address(ohm));
+        console2.log("   gohm", address(gohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   sReserve", address(sReserve));
+        console2.log("   auctioneer", address(bondAuctioneer));
+        console2.log("   teller", address(bondFixedTermTeller));
+
+        // Deploy EmissionManager
+        vm.broadcast();
+        emissionManager = new EmissionManager(
+            kernel,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            address(sReserve),
+            address(bondAuctioneer),
+            address(bondFixedTermTeller)
+        );
+
+        console2.log("EmissionManager deployed at:", address(emissionManager));
+
+        return address(emissionManager);
     }
 
     // ========== VERIFICATION ========== //
