@@ -13,7 +13,7 @@ import {Timelock} from "src/external/governance/Timelock.sol";
 
 // LoanConsolidator imports
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
-import {LoanConsolidator} from "proposals/LoanConsolidator.sol";
+import {LoanConsolidatorProposal} from "proposals/LoanConsolidator.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
