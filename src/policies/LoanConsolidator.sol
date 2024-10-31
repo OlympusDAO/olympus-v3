@@ -813,7 +813,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         uint256 totalFees;
         {
             uint256 protocolFee = getProtocolFee(totalPrincipal + totalInterest);
-            uint256 lenderFee = FLASH.flashFee(address(DAI), totalPrincipal + totalInterest);
+            uint256 lenderFee = FLASH.flashFee(address(DAI), totalPrincipal);
 
             totalFees = totalInterest + lenderFee + protocolFee;
         }
@@ -905,7 +905,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         reserveTo = _getClearinghouseReserveToken(clearinghouseTo_);
         protocolFee = getProtocolFee(totalPrincipal + totalInterest);
         interest = totalInterest;
-        lenderFee = FLASH.flashFee(address(DAI), totalPrincipal + totalInterest);
+        lenderFee = FLASH.flashFee(address(DAI), totalPrincipal);
 
         return (reserveTo, interest, lenderFee, protocolFee);
     }

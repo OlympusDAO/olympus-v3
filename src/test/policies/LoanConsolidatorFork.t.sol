@@ -1329,7 +1329,7 @@ contract LoanConsolidatorForkTest is Test {
         givenActivated
         givenAdminHasRole
         givenMockFlashloanLender
-        givenMockFlashloanLenderFee(100) // 1%
+        givenMockFlashloanLenderFee(1000) // 10%
         givenMockFlashloanLenderHasBalance(20_000_000e18)
     {
         uint256[] memory idsA = _idsA();
@@ -2690,6 +2690,8 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it returns the correct values
     // when the protocol fee is non-zero
     //  [X] it returns the correct values
+    // when the lender fee is non-zero
+    //  [X] it returns the correct values
     // when clearinghouseFrom is DAI and clearinghouseTo is USDS
     //  [X] it provides the correct values
     // when clearinghouseFrom is USDS and clearinghouseTo is DAI
@@ -2829,6 +2831,47 @@ contract LoanConsolidatorForkTest is Test {
         uint256 expectedProtocolFee = ((expectedPrincipal + expectedInterest) * 1000) /
             _ONE_HUNDRED_PERCENT;
         uint256 expectedLenderFee = 0;
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(ownerReserveTo, expectedPrincipal, "ownerReserveTo");
+        assertEq(
+            callerReserveTo,
+            expectedInterest + expectedProtocolFee + expectedLenderFee,
+            "callerReserveTo"
+        );
+    }
+
+    function test_requiredApprovals_lenderFee()
+        public
+        givenPolicyActive
+        givenAdminHasRole
+        givenMockFlashloanLender
+        givenMockFlashloanLenderFee(1000) // 10%
+        givenMockFlashloanLenderHasBalance(20_000_000e18)
+    {
+        uint256[] memory ids = _idsA();
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            address reserveTo,
+            uint256 ownerReserveTo,
+            uint256 callerReserveTo
+        ) = utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
+
+        uint256 expectedPrincipal;
+        uint256 expectedInterest;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+
+            expectedPrincipal += loan.principal;
+            expectedInterest += loan.interestDue;
+        }
+
+        uint256 expectedProtocolFee = 0;
+        uint256 expectedLenderFee = (expectedPrincipal * 1000) / _ONE_HUNDRED_PERCENT;
 
         assertEq(owner_, walletA, "owner");
         assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
@@ -3194,6 +3237,8 @@ contract LoanConsolidatorForkTest is Test {
     // fundsRequired
     // given there is no protocol fee
     //  [X] it returns the correct values
+    // given there is a lender fee
+    //  [X] it returns the correct values
     // given the loan has interest due
     //  [X] it returns the correct values
     // given clearinghouseTo is DAI
@@ -3216,6 +3261,38 @@ contract LoanConsolidatorForkTest is Test {
 
         uint256 expectedProtocolFee = 0;
         uint256 expectedLenderFee = 0;
+
+        (address reserveTo, uint256 interest, uint256 lenderFee, uint256 protocolFee) = utils
+            .fundsRequired(address(clearinghouse), address(coolerA), ids);
+
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(interest, expectedInterest, "interest");
+        assertEq(lenderFee, expectedLenderFee, "lenderFee");
+        assertEq(protocolFee, expectedProtocolFee, "protocolFee");
+    }
+
+    function test_fundsRequired_lenderFee()
+        public
+        givenPolicyActive
+        givenAdminHasRole
+        givenMockFlashloanLender
+        givenMockFlashloanLenderFee(10000) // 10%
+        givenMockFlashloanLenderHasBalance(20_000_000e18)
+    {
+        uint256[] memory ids = _idsA();
+
+        // Calculate the interest due
+        uint256 expectedPrincipal;
+        uint256 expectedInterest;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+
+            expectedPrincipal += loan.principal;
+            expectedInterest += loan.interestDue;
+        }
+
+        uint256 expectedProtocolFee = 0;
+        uint256 expectedLenderFee = (expectedPrincipal * 10000) / _ONE_HUNDRED_PERCENT;
 
         (address reserveTo, uint256 interest, uint256 lenderFee, uint256 protocolFee) = utils
             .fundsRequired(address(clearinghouse), address(coolerA), ids);
