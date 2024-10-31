@@ -20,7 +20,7 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
+    function id() public pure override returns (uint256) {
         return 3;
     }
 
@@ -106,10 +106,9 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        RolesAdmin rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));
         address timelock = addresses.getAddress("olympus-timelock");
         LoanConsolidator loanConsolidator = LoanConsolidator(
             addresses.getAddress("olympus-policy-loan-consolidator")
