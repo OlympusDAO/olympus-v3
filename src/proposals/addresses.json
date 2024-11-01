@@ -123,5 +123,10 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "name": "olympus-policy-yieldrepurchasefacility",
         "chainId": 1
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "name": "olympus-policy-emissionmanager",
+        "chainId": 1
     }
 ]
