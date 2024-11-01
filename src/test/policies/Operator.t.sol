@@ -1909,7 +1909,7 @@ contract OperatorTest is Test {
         vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
 
         // Deploy a new Operator
-        Operator newOperator = new Operator(
+        new Operator(
             kernel,
             IBondSDA(address(auctioneer)),
             callback,
@@ -1933,7 +1933,7 @@ contract OperatorTest is Test {
         vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
 
         // Deploy a new Operator
-        Operator newOperator = new Operator(
+        new Operator(
             kernel,
             IBondSDA(address(auctioneer)),
             callback,
@@ -2072,7 +2072,7 @@ contract OperatorTest is Test {
         vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
 
         // Deploy a new Operator
-        Operator newOperator = new Operator(
+        new Operator(
             kernel,
             IBondSDA(address(auctioneer)),
             callback,
@@ -2096,7 +2096,7 @@ contract OperatorTest is Test {
         vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
 
         // Deploy a new Operator
-        Operator newOperator = new Operator(
+        new Operator(
             kernel,
             IBondSDA(address(auctioneer)),
             callback,

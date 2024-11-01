@@ -716,7 +716,6 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Get the "last values" from the yieldRepo contract
         uint256 lastReserveBalance = yieldRepo.lastReserveBalance();
-        uint256 lastConversionRate = yieldRepo.lastConversionRate();
 
         // Get the principal receivables from the clearinghouse
         uint256 principalReceivables = clearinghouse.principalReceivables();
