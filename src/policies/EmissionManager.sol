@@ -199,6 +199,9 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         locallyActive = true;
 
         emit Activated();
+        emit MinimumPremiumChanged(minimumPremium_);
+        emit BackingChanged(backing_);
+        emit RestartTimeframeChanged(restartTimeframe_);
     }
 
     // ========== BOND CALLBACK ========== //

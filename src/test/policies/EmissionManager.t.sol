@@ -77,6 +77,8 @@ contract EmissionManagerTest is Test {
     //   [X] when not locally active
     //     [X] it returns without doing anything
     //   [X] when locally active
+    //     [X] given the caller does not have the "heart" role
+    //       [X] it reverts
     //     [X] it increments the beat counter modulo 3
     //     [X] when beatCounter is incremented and != 0
     //        [X] it returns without doing anything
@@ -105,7 +107,7 @@ contract EmissionManagerTest is Test {
     //             [X] it mints the output amount of OHM to the teller
     //             [X] it deposits the reserve balance into the sReserve contract with the TRSRY as the recipient
     //
-    // [x] execute -> callback (bond market purchase test)
+    // [X] execute -> callback (bond market purchase test)
     //
     // view functions
     // [X] getSupply
@@ -452,6 +454,16 @@ contract EmissionManagerTest is Test {
 
         // Check that the beat counter did not increment
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+    }
+
+    function test_execute_withoutHeartRole_reverts() public {
+        // Call the function with the wrong caller
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("heart"));
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.startPrank(guardian);
+        emissionManager.execute();
     }
 
     function test_execute_incrementsBeatCounterModulo3() public {
