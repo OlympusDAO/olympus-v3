@@ -237,8 +237,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///
     /// @dev    This function will revert if:
     ///         - The caller is not the 'coolerFrom' and 'coolerTo' owner.
-    ///         - The caller has not approved this contract to spend the fees in DAI.
-    ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to repay the flashloan.
+    ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to pay the interest, lender and protocol fees.
     ///         - The caller has not approved this contract to spend the gOHM escrowed by `coolerFrom_`.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
@@ -285,8 +284,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     ///         - The caller is not the `coolerFrom_` owner.
     ///         - `coolerFrom_` is the same as `coolerTo_` (in which case `consolidate()` should be used).
     ///         - The owner of `coolerFrom_` is the same as `coolerTo_` (in which case `consolidate()` should be used).
-    ///         - The caller has not approved this contract to spend the fees in DAI.
-    ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to repay the flashloan.
+    ///         - The caller has not approved this contract to spend the reserve token of `clearinghouseTo_` in order to pay the interest, lender and protocol fees.
     ///         - The caller has not approved this contract to spend the gOHM escrowed by the target Cooler.
     ///         - `clearinghouseFrom_` or `clearinghouseTo_` is not registered with the Clearinghouse registry.
     ///         - `coolerFrom_` or `coolerTo_` is not a valid Cooler for the respective Clearinghouse.
@@ -425,7 +423,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         if (initiator_ != address(this)) revert OnlyThis();
 
         // Assumptions:
-        // - The flashloan provider has transferred amount_ in DAI, which includes the principal
+        // - The flashloan provider has transferred amount_ in DAI, which is equal to the principal
         // - This contract has transferred from the caller the interest, lender fee and protocol fee to this contract
 
         // If clearinghouseFrom is in USDS, then we need to convert the flashloan DAI to USDS in order to repay the principal
@@ -438,7 +436,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         }
 
         // Ensure that the interest transferred from the caller is in terms of the reserveFrom token
-        // Fees are in terms of the reserveTo token
+        // Interest was collected in terms of the reserveTo token
         if (flashLoanData.migrationType == MigrationType.USDS_DAI) {
             DAI.approve(address(MIGRATOR), flashLoanData.interest);
             MIGRATOR.daiToUsds(address(this), flashLoanData.interest);
@@ -457,7 +455,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         _repayDebtForLoans(address(flashLoanData.coolerFrom), flashLoanData.ids);
         // State:
         // - reserveFrom: reduced by principal and interest, should be 0
-        // - reserveTo: no change, should be 0
+        // - reserveTo: no change, balance is lender fee + protocol fee
         // - gOHM: no change, should be 0
 
         // Calculate the amount of collateral that will be needed for the consolidated loan
@@ -491,7 +489,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // - gOHM: reduced by the collateral used for the consolidated loan. gOHM balance in this contract is now 0.
 
         // The coolerTo owner will receive `principal` quantity of `reserveTo` tokens for the consolidated loan
-        // Transfer the amount of `reserveTo` required to repay the flash loan (debt + interest), lender fee and protocol fee
+        // Transfer the principal amount in terms of `reserveTo`. The lender fee and protocol fee have already been transferred to this contract.
         // Approval must have already been granted by the Cooler owner
         flashLoanData.reserveTo.transferFrom(
             flashLoanData.coolerTo.owner(),
@@ -500,7 +498,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         );
         // State:
         // - reserveFrom: no change
-        // - reserveTo: increased by the flashloan amount, lender fee and protocol fee
+        // - reserveTo: increased by the loan principal, balance is principal + lender fee + protocol fee
         // - gOHM: no change, 0
 
         // The flashloan needs to be repaid in DAI
@@ -795,7 +793,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @param  coolerFrom_         Cooler contract that issued the loans.
     /// @param  ids_                Array of loan ids to be consolidated.
     /// @return owner               Owner of the Cooler (address that should grant the approval).
-    /// @return ownerGOhm           Amount of gOHM to be approved by the Cooler owner.
+    /// @return gOhmAmount          Amount of gOHM to be approved by the Cooler owner.
     /// @return reserveTo           Token that the approval is in terms of
     /// @return ownerReserveTo      Amount of `reserveTo` to be approved by the Cooler owner. This will be the principal of the consolidated loan.
     /// @return callerReserveTo     Amount of `reserveTo` that the caller will need to provide.
