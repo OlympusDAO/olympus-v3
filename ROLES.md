@@ -14,8 +14,12 @@ This document describes the roles that are used in the Olympus protocol.
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
+| emergency_restart | EmissionManager | Reactivates the EmissionManager |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
+| emergency_shutdown | EmissionManager | Deactivates the EmissionManager |
+| emissions_admin | EmissionManager | Set configuration parameters |
+| heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
