@@ -4,6 +4,8 @@ pragma solidity 0.8.15;
 import {Kernel, Module, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {RGSTYv1} from "./RGSTY.v1.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 /// @title  Olympus Contract Registry
 /// @notice This module is used to track the addresses of contracts.
 ///         It supports both immutable and mutable addresses.
@@ -216,23 +218,46 @@ contract OlympusContractRegistry is RGSTYv1 {
     /// @notice Validates the contract name
     /// @dev    This function will revert if:
     ///         - The name is empty
+    ///         - Null characters are found in the start or middle of the name
     ///         - The name contains punctuation or uppercase letters
     function _validateContractName(bytes5 name_) internal pure {
+        bool validCharacterFound = false;
+
         // Check that the contract name is lowercase letters and numerals only
         for (uint256 i = 0; i < 5; i++) {
             bytes1 char = name_[i];
 
+            // When a null character is found, it should only be followed by null characters
+            if (char == 0x00) {
+                for (uint256 j = i + 1; j < 5; j++) {
+                    if (name_[j] != 0x00) revert Params_InvalidName();
+                }
+
+                // If reaching this far, then all of the subsequent characters are null characters
+                return;
+            }
+
+            // Before finding valid characters, we should not find a null character
+            // This prevents names like "\x00\x00ohm" from being registered, which could be visually indistinguishable from "ohm"
+            if (char == 0x00 && validCharacterFound == false) revert Params_InvalidName();
+
             // 0-9
-            if (char >= 0x30 && char <= 0x39) continue;
+            if (char >= 0x30 && char <= 0x39) {
+                validCharacterFound = true;
+                continue;
+            }
 
             // a-z
-            if (char >= 0x61 && char <= 0x7A) continue;
-
-            // Skip if empty
-            if (char == 0x00) continue;
+            if (char >= 0x61 && char <= 0x7A) {
+                validCharacterFound = true;
+                continue;
+            }
 
             revert Params_InvalidName();
         }
+
+        // Catch-all
+        if (validCharacterFound == false) revert Params_InvalidName();
     }
 
     /// @notice Updates the list of immutable contract names if the name is not already present.
