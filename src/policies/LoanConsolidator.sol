@@ -304,11 +304,9 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // Ensure `msg.sender` is allowed to spend cooler funds on behalf of this contract
         if (Cooler(coolerFrom_).owner() != msg.sender) revert OnlyCoolerOwner();
 
-        // Ensure that the caller is not trying to operate on the same Cooler
-        if (coolerFrom_ == coolerTo_) revert Params_InvalidCooler();
-
         // Ensure that the owner of the coolerFrom_ is not the same as coolerTo_
-        if (Cooler(coolerFrom_).owner() == Cooler(coolerTo_).owner()) revert Params_InvalidCooler();
+        // This also implicitly checks that the coolers must be different, ie. can't operate on the same Cooler
+        if (Cooler(coolerTo_).owner() == msg.sender) revert Params_InvalidCooler();
 
         _consolidateWithFlashLoan(
             clearinghouseFrom_,
