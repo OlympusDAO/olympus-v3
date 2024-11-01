@@ -150,12 +150,16 @@ contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
     /// @dev This function is restricted to the reserve_migrator admin role
     function activate() external onlyRole("reserve_migrator_admin") {
         locallyActive = true;
+
+        emit Activated();
     }
 
     /// @notice Deactivate the policy locally, preventing it from migrating reserves
     /// @dev This function is restricted to the reserve_migrator admin role
     function deactivate() external onlyRole("reserve_migrator_admin") {
         locallyActive = false;
+
+        emit Deactivated();
     }
 
     /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY

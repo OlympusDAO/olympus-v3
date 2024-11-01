@@ -10,6 +10,8 @@ interface IReserveMigrator {
     // ========== EVENTS ========== //
 
     event MigratedReserves(address indexed from, address indexed to, uint256 amount);
+    event Activated();
+    event Deactivated();
 
     // ========== MIGRATE ========== //
 

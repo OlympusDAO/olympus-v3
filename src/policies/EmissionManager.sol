@@ -197,6 +197,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
         // Activate
         locallyActive = true;
+
+        emit Activated();
     }
 
     // ========== BOND CALLBACK ========== //
@@ -318,6 +320,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
         uint256 reserveBalance = reserve.balanceOf(address(this));
         if (reserveBalance > 0) sReserve.deposit(reserveBalance, address(TRSRY));
+
+        emit Deactivated();
     }
 
     /// @notice restart the emission manager locally
@@ -328,6 +332,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             revert RestartTimeframePassed();
 
         locallyActive = true;
+
+        emit Activated();
     }
 
     /// @notice set the base emissions rate
@@ -348,6 +354,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             revert InvalidParam("changeBy * forNumBeats");
 
         rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
+
+        emit BaseRateChanged(changeBy_, forNumBeats_, add);
     }
 
     /// @notice set the minimum premium for emissions
@@ -356,6 +364,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (newMinimumPremium_ == 0) revert InvalidParam("newMinimumPremium");
 
         minimumPremium = newMinimumPremium_;
+
+        emit MinimumPremiumChanged(newMinimumPremium_);
     }
 
     /// @notice set the new vesting period in seconds
@@ -365,6 +375,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         // This check helps ensure a timestamp isn't input instead of a duration
         if (newVestingPeriod_ > uint48(31536000)) revert InvalidParam("newVestingPeriod");
         vestingPeriod = newVestingPeriod_;
+
+        emit VestingPeriodChanged(newVestingPeriod_);
     }
 
     /// @notice allow governance to adjust backing price if deviated from reality
@@ -375,6 +387,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         // Backing cannot be reduced by more than 10% at a time
         if (newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
         backing = newBacking;
+
+        emit BackingChanged(newBacking);
     }
 
     /// @notice allow governance to adjust the timeframe for restart after shutdown
@@ -384,6 +398,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (newTimeframe == 0) revert InvalidParam("newRestartTimeframe");
 
         restartTimeframe = newTimeframe;
+
+        emit RestartTimeframeChanged(newTimeframe);
     }
 
     /// @notice allow governance to set the bond contracts used by the emission manager
@@ -399,6 +415,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
         auctioneer = IBondSDA(auctioneer_);
         teller = teller_;
+
+        emit BondContractsSet(auctioneer_, teller_);
     }
 
     // =========- VIEW FUNCTIONS ========== //
