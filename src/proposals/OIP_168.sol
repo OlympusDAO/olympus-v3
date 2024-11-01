@@ -24,6 +24,9 @@ import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol"
 contract OIP_168 is GovernorBravoProposal {
     Kernel internal _kernel;
 
+    // TODO set initial yield value
+    uint256 public constant INITIAL_YIELD = 0;
+
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
         return 168;
@@ -169,13 +172,21 @@ contract OIP_168 is GovernorBravoProposal {
         );
 
         // 3c. Initialize the new YieldRepurchaseFacility policy
-        // TODO requires inputs - shift to step 4 of MS script?
-        // _pushAction(yieldRepurchaseFacility, abi.encodeWithSelector(YieldRepurchaseFacility.initialize.selector, addresses), "Initialize the new YieldRepurchaseFacility policy");
+        _pushAction(
+            yieldRepurchaseFacility,
+            abi.encodeWithSelector(
+                YieldRepurchaseFacility.initialize.selector,
+                0, // initialReserveBalance: will be set in the next epoch
+                0, // initialConversionRate: will be set in the next epoch
+                INITIAL_YIELD // initialYield
+            ),
+            "Initialize the new YieldRepurchaseFacility policy"
+        );
 
         // 3d. Initialize the new Operator policy
         _pushAction(
             operator_1_5,
-            abi.encodeWithSelector(Operator.initialize.selector, addresses),
+            abi.encodeWithSelector(Operator.initialize.selector),
             "Initialize the new Operator policy"
         );
 
@@ -257,9 +268,10 @@ contract OIP_168 is GovernorBravoProposal {
         require(Operator(operator_1_5).initialized(), "New Operator policy is not initialized");
 
         // Validate the new YieldRepurchaseFacility policy is initialized
-        // TODO requires inputs - shift to step 4 of MS script?
-        // require(YieldRepurchaseFacility(yieldRepurchaseFacility).initialized(),
-        // "New YieldRepurchaseFacility policy is not initialized");
+        require(
+            YieldRepurchaseFacility(yieldRepurchaseFacility).initialized(),
+            "New YieldRepurchaseFacility policy is not initialized"
+        );
 
         // Validate the new Clearinghouse policy is activated
         require(Clearinghouse(clearinghouse).active(), "New Clearinghouse policy is not activated");
