@@ -40,22 +40,24 @@ contract OIP_168 is GovernorBravoProposal {
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
-            "# Migrate the reserve token from DAI to USDS\n\n"
-            "[Proposal](https://forum.olympusdao.finance/d/4633-oip-168-olympus-treasury-migration-from-daisdai-to-usdssusds)\n\n"
-            "## Roles to Assign\n\n"
-            "1. `heart` to the new Heart policy (renamed from `operator_operate`)\n"
-            "2. `reserve_migrator_admin` to the Timelock and DAO MS\n"
-            "3. `callback_whitelist` to the new Operator policy\n\n"
-            "## Roles to Revoke\n\n"
-            "1. `heart` from the old Heart policy\n"
-            "2. `operator_operate` from the old Heart policy\n"
-            "3. `callback_whitelist` from the old Operator policy\n\n"
-            "## Policy Initialization Steps\n\n"
-            "1. Set `BondCallback.operator()` to the new Operator policy\n"
-            "2. Set sUSDS as the wrapped token for USDS on BondCallback\n"
-            "3. Initialize the new YieldRepurchaseFacility policy\n"
-            "4. Initialize the new Operator policy\n"
-            "5. Activate the new Clearinghouse policy";
+            string.concat(
+                "# Migrate the reserve token from DAI to USDS\n\n",
+                "[Proposal](https://forum.olympusdao.finance/d/4633-oip-168-olympus-treasury-migration-from-daisdai-to-usdssusds)\n\n",
+                "## Roles to Assign\n\n",
+                "1. `heart` to the new Heart policy (renamed from `operator_operate`)\n",
+                "2. `reserve_migrator_admin` to the Timelock and DAO MS\n",
+                "3. `callback_whitelist` to the new Operator policy\n\n",
+                "## Roles to Revoke\n\n",
+                "1. `heart` from the old Heart policy\n",
+                "2. `operator_operate` from the old Heart policy\n",
+                "3. `callback_whitelist` from the old Operator policy\n\n",
+                "## Policy Initialization Steps\n\n",
+                "1. Set `BondCallback.operator()` to the new Operator policy\n",
+                "2. Set sUSDS as the wrapped token for USDS on BondCallback\n",
+                "3. Initialize the new YieldRepurchaseFacility policy\n",
+                "4. Initialize the new Operator policy\n",
+                "5. Activate the new Clearinghouse policy"
+            );
     }
 
     // No deploy actions needed
