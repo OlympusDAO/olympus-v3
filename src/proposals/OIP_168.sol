@@ -86,6 +86,9 @@ contract OIP_168 is GovernorBravoProposal {
         address susds = addresses.getAddress("external-tokens-susds");
         address timelock = addresses.getAddress("olympus-timelock");
         address daoMS = addresses.getAddress("olympus-multisig-dao");
+        address yieldRepurchaseFacility = addresses.getAddress(
+            "olympus-policy-yieldrepurchasefacility"
+        );
 
         // STEP 1: Assign roles
         // 1a. Grant "heart" to the new Heart policy
@@ -221,6 +224,9 @@ contract OIP_168 is GovernorBravoProposal {
         address clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
         address usds = addresses.getAddress("external-tokens-usds");
         address susds = addresses.getAddress("external-tokens-susds");
+        address yieldRepurchaseFacility = addresses.getAddress(
+            "olympus-policy-yieldrepurchasefacility"
+        );
 
         // Validate the new Heart policy has the "heart" role
         require(
@@ -267,10 +273,13 @@ contract OIP_168 is GovernorBravoProposal {
         // Validate the new Operator policy is initialized
         require(Operator(operator_1_5).initialized(), "New Operator policy is not initialized");
 
-        // Validate the new YieldRepurchaseFacility policy is initialized
+        // Validate the new Operator policy is active
+        require(Operator(operator_1_5).active(), "New Operator policy is not active");
+
+        // Validate the new YieldRepurchaseFacility policy is active
         require(
-            YieldRepurchaseFacility(yieldRepurchaseFacility).initialized(),
-            "New YieldRepurchaseFacility policy is not initialized"
+            YieldRepurchaseFacility(yieldRepurchaseFacility).isShutdown() == false,
+            "New YieldRepurchaseFacility policy is not active"
         );
 
         // Validate the new Clearinghouse policy is activated
