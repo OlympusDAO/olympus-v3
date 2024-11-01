@@ -28,6 +28,7 @@ interface Clearinghouse {
     function principalReceivables() external view returns (uint256);
 }
 
+// solhint-disable max-states-count
 contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     using FullMath for uint256;
 
