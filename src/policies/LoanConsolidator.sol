@@ -119,10 +119,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
     /// @dev    The value is set when the policy is activated
     IERC20 internal DAI;
 
-    /// @notice The sDAI token
-    /// @dev    The value is set when the policy is activated
-    IERC4626 internal SDAI;
-
     /// @notice The USDS token
     /// @dev    The value is set when the policy is activated
     IERC20 internal USDS;
@@ -207,7 +203,6 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
         // Token contract addresses are immutable
         DAI = IERC20(RGSTY.getImmutableContract("dai"));
-        SDAI = IERC4626(RGSTY.getImmutableContract("sdai"));
         USDS = IERC20(RGSTY.getImmutableContract("usds"));
         GOHM = IERC20(RGSTY.getImmutableContract("gohm"));
         // Utility contract addresses are mutable
