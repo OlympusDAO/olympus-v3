@@ -593,6 +593,7 @@ contract OlympusDeploy is Script {
         console2.log("   zeroDistributor", address(zeroDistributor));
         console2.log("   yieldRepo", address(yieldRepo));
         console2.log("   reserveMigrator", address(reserveMigrator));
+        console2.log("   emissionManager", address(emissionManager));
         console2.log("   maxReward", maxReward);
         console2.log("   auctionDuration", auctionDuration);
 

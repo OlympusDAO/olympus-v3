@@ -9,6 +9,10 @@
             "args": {}
         },
         {
+            "name": "EmissionManager",
+            "args": {}
+        },
+        {
             "name": "Operator",
             "args": {
                 "cushionDebtBuffer": 100000,
