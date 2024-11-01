@@ -82,7 +82,9 @@ contract OlympusContractRegistry is RGSTYv1 {
 
         // Register the contract
         _immutableContracts[name_] = contractAddress_;
-        _updateImmutableContractNames(name_);
+        // Update the list of immutable contract names
+        // By this stage, it has been validated that an entry for the name does not already exist
+        _immutableContractNames.push(name_);
         _refreshDependents();
 
         emit ContractRegistered(name_, contractAddress_, true);
@@ -127,7 +129,9 @@ contract OlympusContractRegistry is RGSTYv1 {
 
         // Register the contract
         _contracts[name_] = contractAddress_;
-        _updateContractNames(name_);
+        // Update the list of contract names
+        // By this stage, it has been validated that an entry for the name does not already exist
+        _contractNames.push(name_);
         _refreshDependents();
 
         emit ContractRegistered(name_, contractAddress_, false);
@@ -258,34 +262,6 @@ contract OlympusContractRegistry is RGSTYv1 {
 
         // Catch-all
         if (validCharacterFound == false) revert Params_InvalidName();
-    }
-
-    /// @notice Updates the list of immutable contract names if the name is not already present.
-    ///
-    /// @param  name_ The name of the contract
-    function _updateImmutableContractNames(bytes5 name_) internal {
-        bytes5[] memory contractNames = _immutableContractNames;
-        for (uint256 i; i < contractNames.length; ) {
-            if (contractNames[i] == name_) return;
-            unchecked {
-                ++i;
-            }
-        }
-        _immutableContractNames.push(name_);
-    }
-
-    /// @notice Updates the list of contract names if the name is not already present.
-    ///
-    /// @param  name_ The name of the contract
-    function _updateContractNames(bytes5 name_) internal {
-        bytes5[] memory contractNames = _contractNames;
-        for (uint256 i; i < contractNames.length; ) {
-            if (contractNames[i] == name_) return;
-            unchecked {
-                ++i;
-            }
-        }
-        _contractNames.push(name_);
     }
 
     /// @notice Removes the name of a contract from the list of contract names.
