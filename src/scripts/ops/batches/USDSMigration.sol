@@ -42,6 +42,7 @@ contract USDSMigration is OlyBatch {
     //    + Operator vX+1
     //    + YieldRepurchaseFacility v1.1
     //    + ReserveMigrator v1
+    //    + EmissionManager v1
     //    + Heart vX+1
 
     address kernel;
@@ -54,6 +55,7 @@ contract USDSMigration is OlyBatch {
     address newYieldRepo;
     address newClearinghouse;
     address reserveMigrator;
+    address emissionManager;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
@@ -67,6 +69,7 @@ contract USDSMigration is OlyBatch {
         newYieldRepo = envAddress("current", "olympus.policies.YieldRepurchaseFacility");
         newClearinghouse = envAddress("current", "olympus.policies.Clearinghouse");
         reserveMigrator = envAddress("current", "olympus.policies.ReserveMigrator");
+        emissionManager = envAddress("current", "olympus.policies.EmissionManager");
     }
 
     // Entry point for the script
@@ -142,6 +145,14 @@ contract USDSMigration is OlyBatch {
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
                 reserveMigrator
+            )
+        );
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                emissionManager
             )
         );
         addToBatch(
