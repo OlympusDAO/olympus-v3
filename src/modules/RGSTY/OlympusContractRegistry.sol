@@ -223,8 +223,6 @@ contract OlympusContractRegistry is RGSTYv1 {
     ///         - Null characters are found in the start or middle of the name
     ///         - The name contains punctuation or uppercase letters
     function _validateContractName(bytes5 name_) internal pure {
-        bool validCharacterFound = false;
-
         // Check that the contract name is lowercase letters and numerals only
         for (uint256 i = 0; i < 5; i++) {
             bytes1 char = name_[i];
@@ -239,27 +237,18 @@ contract OlympusContractRegistry is RGSTYv1 {
                 return;
             }
 
-            // Before finding valid characters, we should not find a null character
-            // This prevents names like "\x00\x00ohm" from being registered, which could be visually indistinguishable from "ohm"
-            if (char == 0x00 && validCharacterFound == false) revert Params_InvalidName();
-
             // 0-9
             if (char >= 0x30 && char <= 0x39) {
-                validCharacterFound = true;
                 continue;
             }
 
             // a-z
             if (char >= 0x61 && char <= 0x7A) {
-                validCharacterFound = true;
                 continue;
             }
 
             revert Params_InvalidName();
         }
-
-        // Catch-all
-        if (validCharacterFound == false) revert Params_InvalidName();
     }
 
     /// @notice Removes the name of a contract from the list of contract names.
