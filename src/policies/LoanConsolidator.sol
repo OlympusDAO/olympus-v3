@@ -458,16 +458,11 @@ contract LoanConsolidator is IERC3156FlashBorrower, Policy, RolesConsumer, Reent
         );
 
         // Transfer the collateral from the cooler owner to this contract
-        // consolidatedLoanCollateral > returned collateral if clearinghouseFrom has a higher LTC than clearinghouseTo
-        // consolidatedLoanCollateral > returned collateral due to rounding
-        // consolidatedLoanCollateral < returned collateral if clearinghouseFrom has a lower LTC than clearinghouseTo
-        if (consolidatedLoanCollateral > GOHM.balanceOf(address(this))) {
-            GOHM.transferFrom(
-                flashLoanData.coolerFrom.owner(),
-                address(this),
-                consolidatedLoanCollateral - GOHM.balanceOf(address(this))
-            );
-        }
+        GOHM.transferFrom(
+            flashLoanData.coolerFrom.owner(),
+            address(this),
+            consolidatedLoanCollateral
+        );
         // State:
         // - reserveFrom: no change
         // - reserveTo: no change
