@@ -4,8 +4,6 @@ pragma solidity 0.8.15;
 import {Kernel, Module, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {RGSTYv1} from "./RGSTY.v1.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 /// @title  Olympus Contract Registry
 /// @notice This module is used to track the addresses of contracts.
 ///         It supports both immutable and mutable addresses.
