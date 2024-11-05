@@ -131,6 +131,10 @@ contract ContractRegistryTest is Test {
     //  [X] it reverts
     // when the name is empty
     //  [X] it reverts
+    // when the start of the name contains null characters
+    //  [X] it reverts
+    // when the end of the name contains null characters
+    //  [X] it succeeds
     // when the contract address is zero
     //  [X] it reverts
     // when the name is not lowercase
@@ -163,6 +167,24 @@ contract ContractRegistryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
 
         _registerImmutableContract(bytes5(""), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameStartsWithNullCharacters_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+
+        _registerImmutableContract(bytes5("\x00\x00ohm"), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameContainsNullCharacters_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+
+        _registerImmutableContract(bytes5("o\x00\x00hm"), addressOne);
+    }
+
+    function test_registerImmutableContract_whenNameEndsWithNullCharacters_succeeds() public {
+        _registerImmutableContract(bytes5("ohm\x00"), addressOne);
+
+        assertEq(RGSTY.getImmutableContract(bytes5("ohm")), addressOne);
     }
 
     function test_registerImmutableContract_whenNameIsZero_reverts() public {
@@ -325,6 +347,10 @@ contract ContractRegistryTest is Test {
     //  [X] it reverts
     // when the name is empty
     //  [X] it reverts
+    // when the start of the name contains null characters
+    //  [X] it reverts
+    // when the end of the name contains null characters
+    //  [X] it succeeds
     // when the contract address is zero
     //  [X] it reverts
     // when the name is not lowercase
@@ -357,6 +383,24 @@ contract ContractRegistryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
 
         _registerContract(bytes5(""), addressOne);
+    }
+
+    function test_registerContract_whenNameStartsWithNullCharacters_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+
+        _registerContract(bytes5("\x00\x00ohm"), addressOne);
+    }
+
+    function test_registerContract_whenNameContainsNullCharacters_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(RGSTYv1.Params_InvalidName.selector));
+
+        _registerContract(bytes5("o\x00\x00hm"), addressOne);
+    }
+
+    function test_registerContract_whenNameEndsWithNullCharacters_succeeds() public {
+        _registerContract(bytes5("ohm\x00"), addressOne);
+
+        assertEq(RGSTY.getContract(bytes5("ohm")), addressOne);
     }
 
     function test_registerContract_whenNameIsZero_reverts() public {

@@ -24,6 +24,9 @@ import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
+import {ClearinghouseLowerLTC} from "src/test/lib/ClearinghouseLowerLTC.sol";
+import {ClearinghouseHigherLTC} from "src/test/lib/ClearinghouseHigherLTC.sol";
+
 contract LoanConsolidatorForkTest is Test {
     using stdStorage for StdStorage;
     using ClonesWithImmutableArgs for address;
@@ -125,7 +128,6 @@ contract LoanConsolidatorForkTest is Test {
         // Register the tokens with RGSTY
         vm.startPrank(address(this));
         rgstyAdmin.registerImmutableContract("dai", address(dai));
-        rgstyAdmin.registerImmutableContract("sdai", address(sdai));
         rgstyAdmin.registerImmutableContract("gohm", address(gohm));
         rgstyAdmin.registerImmutableContract("usds", address(usds));
         rgstyAdmin.registerContract("flash", address(lender));
@@ -455,6 +457,66 @@ contract LoanConsolidatorForkTest is Test {
         _;
     }
 
+    function _createClearinghouseWithLowerLTC() internal returns (Clearinghouse) {
+        uint256 registryCountBefore = CHREG.registryCount();
+
+        ClearinghouseLowerLTC newClearinghouse = new ClearinghouseLowerLTC(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(sdai),
+            address(coolerFactory),
+            address(kernel)
+        );
+
+        // Activate as a policy
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.ActivatePolicy, address(newClearinghouse));
+
+        // Activate the new clearinghouse
+        newClearinghouse.activate();
+        // Rebalance the new clearinghouse
+        newClearinghouse.rebalance();
+
+        // Increment the CHREG registry count
+        // The registryCount does not seem to be incremented on the fork, which is... weird.
+        stdstore.target(address(CHREG)).sig("registryCount()").checked_write(
+            registryCountBefore + 1
+        );
+
+        return Clearinghouse(address(newClearinghouse));
+    }
+
+    function _createClearinghouseWithHigherLTC() internal returns (Clearinghouse) {
+        uint256 registryCountBefore = CHREG.registryCount();
+
+        ClearinghouseHigherLTC newClearinghouse = new ClearinghouseHigherLTC(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(sdai),
+            address(coolerFactory),
+            address(kernel)
+        );
+
+        // Activate as a policy
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.ActivatePolicy, address(newClearinghouse));
+
+        // Activate the new clearinghouse
+        newClearinghouse.activate();
+        // Rebalance the new clearinghouse
+        newClearinghouse.rebalance();
+
+        // Increment the CHREG registry count
+        // The registryCount does not seem to be incremented on the fork, which is... weird.
+        stdstore.target(address(CHREG)).sig("registryCount()").checked_write(
+            registryCountBefore + 1
+        );
+
+        return Clearinghouse(address(newClearinghouse));
+    }
+
     // ===== ASSERTIONS ===== //
 
     function _assertCoolerLoans(uint256 collateral_) internal {
@@ -739,6 +801,12 @@ contract LoanConsolidatorForkTest is Test {
     // when clearinghouseFrom is DAI and clearinghouseTo is DAI
     //  [X] the loans on coolerFrom are migrated to coolerTo
     //  [X] the Cooler owner receives DAI from the new loan
+    // given clearinghouseFrom has a lower LTC than clearinghouseTo
+    //  [X] the cooler owner receives a new loan for the old principal amount based on a higher LTC/higher collateral amount
+    // given clearinghouseFrom has a higher LTC than clearinghouseTo
+    //  given the cooler owner does not have enough collateral for the new loan
+    //   [X] it reverts
+    //  [X] the Cooler owner receives a new loan for the old principal amount based on a lower LTC/lower collateral amount
 
     // --- consolidate --------------------------------------------
 
@@ -1260,7 +1328,7 @@ contract LoanConsolidatorForkTest is Test {
         givenActivated
         givenAdminHasRole
         givenMockFlashloanLender
-        givenMockFlashloanLenderFee(100) // 1%
+        givenMockFlashloanLenderFee(1000) // 10%
         givenMockFlashloanLenderHasBalance(20_000_000e18)
     {
         uint256[] memory idsA = _idsA();
@@ -1557,6 +1625,140 @@ contract LoanConsolidatorForkTest is Test {
             _GOHM_AMOUNT
         );
         _assertApprovals(coolerUsds, coolerUsds);
+    }
+
+    function test_consolidate_clearinghouseFromLowerLTC() public givenPolicyActive givenActivated {
+        // Create a new Clearinghouse with a higher LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithHigherLTC();
+
+        // Calculate the collateral required for the existing loans
+        (uint256 existingPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
+        uint256 newCollateralRequired = newClearinghouse.getCollateralForLoan(existingPrincipal);
+
+        uint256[] memory idsA = _idsA();
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        // Grant approvals
+        _grantCallerApprovals(
+            walletA,
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA
+        );
+
+        // Consolidate loans
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA
+        );
+
+        _assertCoolerLoans(newCollateralRequired);
+        _assertApprovals();
+
+        // WalletA should have received the principal amount
+        assertEq(dai.balanceOf(walletA), initPrincipal - interestDue, "walletA: dai balance");
+        // Balance of gOHM should be the old collateral amount - new collateral required
+        assertEq(
+            gohm.balanceOf(walletA),
+            _GOHM_AMOUNT - newCollateralRequired,
+            "walletA: gOHM balance"
+        );
+        // Balance of gOHM in the cooler should be the new collateral required
+        assertEq(gohm.balanceOf(address(coolerA)), newCollateralRequired, "coolerA: gOHM balance");
+        // Balance of gOHM on the LoanConsolidator should be 0
+        assertEq(gohm.balanceOf(address(utils)), 0, "policy: gOHM balance");
+    }
+
+    function test_consolidate_clearinghouseFromHigherLTC_insufficientCollateral_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
+        // Create a new Clearinghouse with a lower LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithLowerLTC();
+
+        // Do NOT deal more collateral to the wallet
+
+        uint256[] memory idsA = _idsA();
+
+        // Grant approvals
+        _grantCallerApprovals(
+            walletA,
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA
+        );
+
+        // Expect revert
+        vm.expectRevert("ERC20: transfer amount exceeds balance");
+
+        // Consolidate loans
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA
+        );
+    }
+
+    function test_consolidate_clearinghouseFromHigherLTC() public givenPolicyActive givenActivated {
+        // Create a new Clearinghouse with a lower LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithLowerLTC();
+
+        // Calculate the collateral required for the existing loans
+        (uint256 existingPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
+        uint256 newCollateralRequired = newClearinghouse.getCollateralForLoan(existingPrincipal);
+
+        // Deal the difference in collateral to the wallet
+        deal(address(gohm), walletA, newCollateralRequired - _GOHM_AMOUNT);
+
+        uint256[] memory idsA = _idsA();
+
+        // Record the amount of DAI in the wallet
+        uint256 initPrincipal = dai.balanceOf(walletA);
+        uint256 interestDue = _getInterestDue(idsA);
+
+        // Grant approvals
+        _grantCallerApprovals(
+            walletA,
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA
+        );
+
+        // Consolidate loans
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(newClearinghouse),
+            address(coolerA),
+            address(coolerA),
+            idsA
+        );
+
+        _assertCoolerLoans(newCollateralRequired);
+        _assertApprovals();
+
+        // WalletA should have received the principal amount
+        assertEq(dai.balanceOf(walletA), initPrincipal - interestDue, "walletA: dai balance");
+        // Balance of gOHM should be 0, as the new collateral amount was used
+        assertEq(gohm.balanceOf(walletA), 0, "walletA: gOHM balance");
+        // Balance of gOHM in the cooler should be the new collateral required
+        assertEq(gohm.balanceOf(address(coolerA)), newCollateralRequired, "coolerA: gOHM balance");
+        // Balance of gOHM on the LoanConsolidator should be 0
+        assertEq(gohm.balanceOf(address(utils)), 0, "policy: gOHM balance");
     }
 
     // consolidateWithNewOwner
@@ -2487,6 +2689,8 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it returns the correct values
     // when the protocol fee is non-zero
     //  [X] it returns the correct values
+    // when the lender fee is non-zero
+    //  [X] it returns the correct values
     // when clearinghouseFrom is DAI and clearinghouseTo is USDS
     //  [X] it provides the correct values
     // when clearinghouseFrom is USDS and clearinghouseTo is DAI
@@ -2495,6 +2699,10 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it provides the correct values
     // when clearinghouseFrom is DAI and clearinghouseTo is DAI
     //  [X] it provides the correct values
+    // given clearinghouseFrom has a lower LTC than clearinghouseTo
+    //  [X] gOHM approval is higher than the collateral amount for the existing loans
+    // given clearinghouseFrom has a higher LTC than clearinghouseTo
+    //  [X] gOHM approval is lower than the collateral amount for the existing loans
 
     function test_requiredApprovals_policyNotActive_reverts() public {
         uint256[] memory ids = _idsA();
@@ -2622,6 +2830,47 @@ contract LoanConsolidatorForkTest is Test {
         uint256 expectedProtocolFee = ((expectedPrincipal + expectedInterest) * 1000) /
             _ONE_HUNDRED_PERCENT;
         uint256 expectedLenderFee = 0;
+
+        assertEq(owner_, walletA, "owner");
+        assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(ownerReserveTo, expectedPrincipal, "ownerReserveTo");
+        assertEq(
+            callerReserveTo,
+            expectedInterest + expectedProtocolFee + expectedLenderFee,
+            "callerReserveTo"
+        );
+    }
+
+    function test_requiredApprovals_lenderFee()
+        public
+        givenPolicyActive
+        givenAdminHasRole
+        givenMockFlashloanLender
+        givenMockFlashloanLenderFee(1000) // 10%
+        givenMockFlashloanLenderHasBalance(20_000_000e18)
+    {
+        uint256[] memory ids = _idsA();
+
+        (
+            address owner_,
+            uint256 gohmApproval,
+            address reserveTo,
+            uint256 ownerReserveTo,
+            uint256 callerReserveTo
+        ) = utils.requiredApprovals(address(clearinghouse), address(coolerA), ids);
+
+        uint256 expectedPrincipal;
+        uint256 expectedInterest;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+
+            expectedPrincipal += loan.principal;
+            expectedInterest += loan.interestDue;
+        }
+
+        uint256 expectedProtocolFee = 0;
+        uint256 expectedLenderFee = (expectedPrincipal * 1000) / _ONE_HUNDRED_PERCENT;
 
         assertEq(owner_, walletA, "owner");
         assertEq(gohmApproval, _GOHM_AMOUNT, "gOHM approval");
@@ -2810,8 +3059,49 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(gohmApproval, clearinghouse.getCollateralForLoan(totalPrincipal), "gOHM approval");
     }
 
+    function test_requiredApprovals_clearinghouseFromLowerLTC() public givenPolicyActive {
+        // Create a new Clearinghouse with a higher LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithHigherLTC();
+
+        // Calculate the collateral required for the existing loans
+        (uint256 existingPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
+        uint256 newCollateralRequired = newClearinghouse.getCollateralForLoan(existingPrincipal);
+
+        uint256[] memory loanIds = _idsA();
+        (, uint256 gohmApproval, , , ) = utils.requiredApprovals(
+            address(newClearinghouse),
+            address(coolerA),
+            loanIds
+        );
+
+        assertEq(gohmApproval, newCollateralRequired, "gOHM approval");
+    }
+
+    function test_requiredApprovals_clearinghouseFromHigherLTC() public givenPolicyActive {
+        // Create a new Clearinghouse with a lower LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithLowerLTC();
+
+        // Calculate the collateral required for the existing loans
+        (uint256 existingPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
+        uint256 newCollateralRequired = newClearinghouse.getCollateralForLoan(existingPrincipal);
+
+        uint256[] memory loanIds = _idsA();
+        (, uint256 gohmApproval, , , ) = utils.requiredApprovals(
+            address(newClearinghouse),
+            address(coolerA),
+            loanIds
+        );
+
+        assertEq(gohmApproval, newCollateralRequired, "gOHM approval");
+    }
+
     // collateralRequired
-    // [X] it returns the correct values
+    // given clearinghouseFrom has the same LTC as clearinghouseTo
+    //  [X] it returns the correct values
+    // given clearinghouseFrom has a lower LTC than clearinghouseTo
+    //  [X] additional collateral is 0
+    // given clearinghouseFrom has a higher LTC than clearinghouseTo
+    //  [X] additional collateral is required
 
     function test_collateralRequired_fuzz(
         uint256 loanOneCollateral_,
@@ -2885,8 +3175,68 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(additionalCollateral, additionalCollateralExpected, "additional collateral");
     }
 
+    function test_collateralRequired_clearinghouseFromLowerLTC() public givenPolicyActive {
+        // Create a new Clearinghouse with a higher LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithHigherLTC();
+
+        // Calculate the collateral required for the existing loans
+        (uint256 existingPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
+        uint256 newCollateralRequired = newClearinghouse.getCollateralForLoan(existingPrincipal);
+
+        uint256[] memory loanIds = _idsA();
+
+        (
+            uint256 consolidatedLoanCollateral,
+            uint256 existingLoanCollateral,
+            uint256 additionalCollateral
+        ) = utils.collateralRequired(address(newClearinghouse), address(coolerA), loanIds);
+
+        // Assert values
+        // Consolidated loan collateral is the same as what the new Clearinghouse requires
+        assertEq(consolidatedLoanCollateral, newCollateralRequired, "consolidated loan collateral");
+
+        // Existing loan collateral is the same as what has been deposited already
+        assertEq(existingLoanCollateral, _GOHM_AMOUNT, "existing loan collateral");
+
+        // Additional collateral is 0, as less collateral is required
+        assertEq(additionalCollateral, 0, "additional collateral");
+    }
+
+    function test_collateralRequired_clearinghouseFromHigherLTC() public givenPolicyActive {
+        // Create a new Clearinghouse with a lower LTC
+        Clearinghouse newClearinghouse = _createClearinghouseWithLowerLTC();
+
+        // Calculate the collateral required for the existing loans
+        (uint256 existingPrincipal, ) = clearinghouse.getLoanForCollateral(_GOHM_AMOUNT);
+        uint256 newCollateralRequired = newClearinghouse.getCollateralForLoan(existingPrincipal);
+
+        uint256[] memory loanIds = _idsA();
+
+        (
+            uint256 consolidatedLoanCollateral,
+            uint256 existingLoanCollateral,
+            uint256 additionalCollateral
+        ) = utils.collateralRequired(address(newClearinghouse), address(coolerA), loanIds);
+
+        // Assert values
+        // Consolidated loan collateral is the same as what the new Clearinghouse requires
+        assertEq(consolidatedLoanCollateral, newCollateralRequired, "consolidated loan collateral");
+
+        // Existing loan collateral is the same as what has been deposited already
+        assertEq(existingLoanCollateral, _GOHM_AMOUNT, "existing loan collateral");
+
+        // Additional collateral is the difference between the existing loan collateral and what the new Clearinghouse requires
+        assertEq(
+            additionalCollateral,
+            newCollateralRequired - _GOHM_AMOUNT,
+            "additional collateral"
+        );
+    }
+
     // fundsRequired
     // given there is no protocol fee
+    //  [X] it returns the correct values
+    // given there is a lender fee
     //  [X] it returns the correct values
     // given the loan has interest due
     //  [X] it returns the correct values
@@ -2910,6 +3260,38 @@ contract LoanConsolidatorForkTest is Test {
 
         uint256 expectedProtocolFee = 0;
         uint256 expectedLenderFee = 0;
+
+        (address reserveTo, uint256 interest, uint256 lenderFee, uint256 protocolFee) = utils
+            .fundsRequired(address(clearinghouse), address(coolerA), ids);
+
+        assertEq(reserveTo, address(dai), "reserveTo");
+        assertEq(interest, expectedInterest, "interest");
+        assertEq(lenderFee, expectedLenderFee, "lenderFee");
+        assertEq(protocolFee, expectedProtocolFee, "protocolFee");
+    }
+
+    function test_fundsRequired_lenderFee()
+        public
+        givenPolicyActive
+        givenAdminHasRole
+        givenMockFlashloanLender
+        givenMockFlashloanLenderFee(10000) // 10%
+        givenMockFlashloanLenderHasBalance(20_000_000e18)
+    {
+        uint256[] memory ids = _idsA();
+
+        // Calculate the interest due
+        uint256 expectedPrincipal;
+        uint256 expectedInterest;
+        for (uint256 i = 0; i < ids.length; i++) {
+            Cooler.Loan memory loan = coolerA.getLoan(ids[i]);
+
+            expectedPrincipal += loan.principal;
+            expectedInterest += loan.interestDue;
+        }
+
+        uint256 expectedProtocolFee = 0;
+        uint256 expectedLenderFee = (expectedPrincipal * 10000) / _ONE_HUNDRED_PERCENT;
 
         (address reserveTo, uint256 interest, uint256 lenderFee, uint256 protocolFee) = utils
             .fundsRequired(address(clearinghouse), address(coolerA), ids);

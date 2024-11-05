@@ -13,7 +13,7 @@
         "yarn": "use-pnpm"
     },
     "scripts": {
-        "build": "chmod +x shell/* && ./shell/full_install.sh",
+        "build": "chmod +x shell/*.sh && ./shell/full_install.sh",
         "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html'",
         "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html'",
         "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html'",

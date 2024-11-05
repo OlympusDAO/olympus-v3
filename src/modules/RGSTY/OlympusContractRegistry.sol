@@ -80,7 +80,9 @@ contract OlympusContractRegistry is RGSTYv1 {
 
         // Register the contract
         _immutableContracts[name_] = contractAddress_;
-        _updateImmutableContractNames(name_);
+        // Update the list of immutable contract names
+        // By this stage, it has been validated that an entry for the name does not already exist
+        _immutableContractNames.push(name_);
         _refreshDependents();
 
         emit ContractRegistered(name_, contractAddress_, true);
@@ -125,7 +127,9 @@ contract OlympusContractRegistry is RGSTYv1 {
 
         // Register the contract
         _contracts[name_] = contractAddress_;
-        _updateContractNames(name_);
+        // Update the list of contract names
+        // By this stage, it has been validated that an entry for the name does not already exist
+        _contractNames.push(name_);
         _refreshDependents();
 
         emit ContractRegistered(name_, contractAddress_, false);
@@ -216,51 +220,35 @@ contract OlympusContractRegistry is RGSTYv1 {
     /// @notice Validates the contract name
     /// @dev    This function will revert if:
     ///         - The name is empty
+    ///         - Null characters are found in the start or middle of the name
     ///         - The name contains punctuation or uppercase letters
     function _validateContractName(bytes5 name_) internal pure {
         // Check that the contract name is lowercase letters and numerals only
         for (uint256 i = 0; i < 5; i++) {
             bytes1 char = name_[i];
 
+            // When a null character is found, it should only be followed by null characters
+            if (char == 0x00) {
+                for (uint256 j = i + 1; j < 5; j++) {
+                    if (name_[j] != 0x00) revert Params_InvalidName();
+                }
+
+                // If reaching this far, then all of the subsequent characters are null characters
+                return;
+            }
+
             // 0-9
-            if (char >= 0x30 && char <= 0x39) continue;
+            if (char >= 0x30 && char <= 0x39) {
+                continue;
+            }
 
             // a-z
-            if (char >= 0x61 && char <= 0x7A) continue;
-
-            // Skip if empty
-            if (char == 0x00) continue;
+            if (char >= 0x61 && char <= 0x7A) {
+                continue;
+            }
 
             revert Params_InvalidName();
         }
-    }
-
-    /// @notice Updates the list of immutable contract names if the name is not already present.
-    ///
-    /// @param  name_ The name of the contract
-    function _updateImmutableContractNames(bytes5 name_) internal {
-        bytes5[] memory contractNames = _immutableContractNames;
-        for (uint256 i; i < contractNames.length; ) {
-            if (contractNames[i] == name_) return;
-            unchecked {
-                ++i;
-            }
-        }
-        _immutableContractNames.push(name_);
-    }
-
-    /// @notice Updates the list of contract names if the name is not already present.
-    ///
-    /// @param  name_ The name of the contract
-    function _updateContractNames(bytes5 name_) internal {
-        bytes5[] memory contractNames = _contractNames;
-        for (uint256 i; i < contractNames.length; ) {
-            if (contractNames[i] == name_) return;
-            unchecked {
-                ++i;
-            }
-        }
-        _contractNames.push(name_);
     }
 
     /// @notice Removes the name of a contract from the list of contract names.
