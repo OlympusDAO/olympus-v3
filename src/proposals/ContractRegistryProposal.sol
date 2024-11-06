@@ -2,6 +2,7 @@
 pragma solidity ^0.8.15;
 import {console2} from "forge-std/console2.sol";
 import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
+import {Address} from "proposal-sim/utils/Address.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -217,6 +218,8 @@ contract ContractRegistryProposal is GovernorBravoProposal {
 // Use this as a template to create your own script
 // `forge script script/GovernorBravo.s.sol:GovernorBravoScript -vvvv --rpc-url {rpc} --broadcast --verify --etherscan-api-key {key}`
 contract ContractRegistryProposalScript is ScriptSuite {
+    using Address for address;
+
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
 
     constructor() ScriptSuite(ADDRESSES_PATH, new ContractRegistryProposal()) {}
@@ -229,6 +232,18 @@ contract ContractRegistryProposalScript is ScriptSuite {
         proposal.run(addresses, address(0));
 
         // get the calldata for the proposal, doing so in debug mode prints it to the console
-        proposal.getCalldata();
+        bytes memory proposalCalldata = proposal.getCalldata();
+
+        address governor = addresses.getAddress("olympus-governor");
+
+        // Register the proposal
+        console2.log("\n\n");
+        console2.log("Submitting proposal...");
+        vm.startBroadcast();
+        console2.log("Proposer: ", msg.sender);
+        bytes memory proposalReturnData = address(payable(governor)).functionCall(proposalCalldata);
+        vm.stopBroadcast();
+        uint256 proposalId = abi.decode(proposalReturnData, (uint256));
+        console2.log("Proposal ID:", proposalId);
     }
 }
