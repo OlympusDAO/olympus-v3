@@ -19,7 +19,7 @@ contract ContractRegistryInstall is OlyBatch {
         // Load contract addresses from the environment file
         kernel = envAddress("current", "olympus.Kernel");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
-        rgsty = envAddress("current", "olympus.modules.RGSTY");
+        rgsty = envAddress("current", "olympus.modules.OlympusContractRegistry");
         contractRegistryAdmin = envAddress("current", "olympus.policies.ContractRegistryAdmin");
     }
 

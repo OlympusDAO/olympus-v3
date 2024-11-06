@@ -95,7 +95,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerImmutableContract.selector,
-                "dai",
+                bytes5("dai"),
                 DAI
             ),
             "Register immutable DAI address"
@@ -104,7 +104,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerImmutableContract.selector,
-                "sdai",
+                bytes5("sdai"),
                 SDAI
             ),
             "Register immutable SDAI address"
@@ -113,7 +113,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerImmutableContract.selector,
-                "usds",
+                bytes5("usds"),
                 USDS
             ),
             "Register immutable USDS address"
@@ -122,7 +122,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerImmutableContract.selector,
-                "susds",
+                bytes5("susds"),
                 SUSDS
             ),
             "Register immutable SUSDS address"
@@ -131,7 +131,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerImmutableContract.selector,
-                "gohm",
+                bytes5("gohm"),
                 GOHM
             ),
             "Register immutable GOHM address"
@@ -140,7 +140,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerImmutableContract.selector,
-                "ohm",
+                bytes5("ohm"),
                 OHM
             ),
             "Register immutable OHM address"
@@ -151,7 +151,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerContract.selector,
-                "flash",
+                bytes5("flash"),
                 FLASH_LENDER
             ),
             "Register mutable Flash Lender address"
@@ -160,7 +160,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
             contractRegistryAdmin,
             abi.encodeWithSelector(
                 ContractRegistryAdmin.registerContract.selector,
-                "dmgtr",
+                bytes5("dmgtr"),
                 DAI_USDS_MIGRATOR
             ),
             "Register mutable DAI-USDS Migrator address"
