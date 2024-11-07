@@ -246,4 +246,89 @@ contract ContractRegistryProposalScript is ScriptSuite {
         uint256 proposalId = abi.decode(proposalReturnData, (uint256));
         console2.log("Proposal ID:", proposalId);
     }
+
+    function executeOnTestnet() public {
+        console2.log("Building proposal...");
+        // set debug mode to true and run it to build the actions list
+        proposal.setDebug(true);
+
+        // run the proposal to build it
+        proposal.run(addresses, address(0));
+
+        console2.log("Preparing transactions");
+        // Get the timelock address
+        address timelock = addresses.getAddress("olympus-timelock");
+
+        // Get the testnet RPC URL and access key
+        string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
+        string memory TENDERLY_PROJECT_SLUG = vm.envString("TENDERLY_PROJECT_SLUG");
+        string memory TENDERLY_VNET_ID = vm.envString("TENDERLY_VNET_ID");
+        string memory TENDERLY_ACCESS_KEY = vm.envString("TENDERLY_ACCESS_KEY");
+
+        // Iterate over the proposal actions and execute them
+        (address[] memory targets, , bytes[] memory arguments) = proposal.getProposalActions();
+        for (uint256 i; i < targets.length; i++) {
+            console2.log("Preparing proposal action ", i + 1);
+
+            // Construct the API call
+            string[] memory inputs = new string[](14);
+            inputs[0] = "curl";
+            inputs[1] = "--request";
+            inputs[2] = "POST";
+            inputs[3] = "--url";
+            inputs[4] = string.concat(
+                "https://api.tenderly.co/api/v1/account/",
+                TENDERLY_ACCOUNT_SLUG,
+                "/project/",
+                TENDERLY_PROJECT_SLUG,
+                "/vnets/",
+                TENDERLY_VNET_ID,
+                "/transactions"
+            );
+            inputs[5] = "--header";
+            inputs[6] = "'Accept: application/json'";
+            inputs[7] = "--header";
+            inputs[8] = "'Content-Type: application/json'";
+            inputs[9] = "--header";
+            inputs[10] = string.concat("'X-Access-Key: ", TENDERLY_ACCESS_KEY, "'");
+            inputs[11] = "--data";
+            inputs[12] = string.concat(
+                "'{",
+                '"callArgs": {',
+                '"from": "',
+                vm.toString(timelock),
+                '", "to": "',
+                vm.toString(targets[i]),
+                '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',
+                '"data": "',
+                vm.toString(arguments[i]),
+                '"',
+                "}}'"
+            );
+            inputs[13] = "--silent";
+
+            console2.log(inputs[3]);
+            console2.log(inputs[4]);
+            console2.log(inputs[9]);
+            console2.log(inputs[10]);
+
+            // Print the command
+            string memory command = "";
+            for (uint256 j; j < inputs.length; j++) {
+                command = string.concat(command, inputs[j], " ");
+            }
+            console2.log("Command: ", command);
+
+            // Execute the API call
+            console2.log("Executing proposal action ", i + 1);
+            bytes memory response = vm.ffi(inputs);
+            string memory responseString = string(response);
+            console2.log("Response: ", responseString);
+
+            // If the response contains "error", exit
+            if (vm.keyExists(responseString, ".error")) {
+                revert("Error executing proposal action");
+            }
+        }
+    }
 }
