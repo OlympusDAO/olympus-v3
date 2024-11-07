@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
-import {console2} from "forge-std/console2.sol";
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
-import {Address} from "proposal-sim/utils/Address.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -18,7 +15,8 @@ import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelega
 import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
 import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
 
-import {Surl} from "surl-1.0.0/Surl.sol";
+// Script
+import {ProposalScript} from "./ProposalScript.sol";
 
 /// @notice Activates the contract registry module and associated configuration policy.
 contract ContractRegistryProposal is GovernorBravoProposal {
@@ -212,106 +210,6 @@ contract ContractRegistryProposal is GovernorBravoProposal {
     }
 }
 
-// @notice GovernorBravoScript is a script that runs BRAVO_01 proposal.
-// BRAVO_01 proposal deploys a Vault contract and an ERC20 token contract
-// Then the proposal transfers ownership of both Vault and ERC20 to the timelock address
-// Finally the proposal whitelist the ERC20 token in the Vault contract
-// @dev Use this script to simulates or run a single proposal
-// Use this as a template to create your own script
-// `forge script script/GovernorBravo.s.sol:GovernorBravoScript -vvvv --rpc-url {rpc} --broadcast --verify --etherscan-api-key {key}`
-contract ContractRegistryProposalScript is ScriptSuite {
-    using Address for address;
-    using Surl for *;
-
-    string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
-
-    constructor() ScriptSuite(ADDRESSES_PATH, new ContractRegistryProposal()) {}
-
-    function run() public override {
-        // set debug mode to true and run it to build the actions list
-        proposal.setDebug(true);
-
-        // run the proposal to build it
-        proposal.run(addresses, address(0));
-
-        // get the calldata for the proposal, doing so in debug mode prints it to the console
-        bytes memory proposalCalldata = proposal.getCalldata();
-
-        address governor = addresses.getAddress("olympus-governor");
-
-        // Register the proposal
-        console2.log("\n\n");
-        console2.log("Submitting proposal...");
-        vm.startBroadcast();
-        console2.log("Proposer: ", msg.sender);
-        bytes memory proposalReturnData = address(payable(governor)).functionCall(proposalCalldata);
-        vm.stopBroadcast();
-        uint256 proposalId = abi.decode(proposalReturnData, (uint256));
-        console2.log("Proposal ID:", proposalId);
-    }
-
-    function executeOnTestnet() public {
-        console2.log("Building proposal...");
-        // set debug mode to true and run it to build the actions list
-        proposal.setDebug(true);
-
-        // run the proposal to build it
-        proposal.run(addresses, address(0));
-
-        console2.log("Preparing transactions");
-        // Get the timelock address
-        address timelock = addresses.getAddress("olympus-timelock");
-
-        // Get the testnet RPC URL and access key
-        string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
-        string memory TENDERLY_PROJECT_SLUG = vm.envString("TENDERLY_PROJECT_SLUG");
-        string memory TENDERLY_VNET_ID = vm.envString("TENDERLY_VNET_ID");
-        string memory TENDERLY_ACCESS_KEY = vm.envString("TENDERLY_ACCESS_KEY");
-
-        // Iterate over the proposal actions and execute them
-        (address[] memory targets, , bytes[] memory arguments) = proposal.getProposalActions();
-        for (uint256 i; i < targets.length; i++) {
-            console2.log("Preparing proposal action ", i + 1);
-
-            // Construct the API call
-            string[] memory headers = new string[](3);
-            headers[0] = "Accept: application/json";
-            headers[1] = "Content-Type: application/json";
-            headers[2] = string.concat("X-Access-Key: ", TENDERLY_ACCESS_KEY);
-
-            string memory url = string.concat(
-                "https://api.tenderly.co/api/v1/account/",
-                TENDERLY_ACCOUNT_SLUG,
-                "/project/",
-                TENDERLY_PROJECT_SLUG,
-                "/vnets/",
-                TENDERLY_VNET_ID,
-                "/transactions"
-            );
-
-            // Execute the API call
-            console2.log("Executing proposal action ", i + 1);
-            (uint256 status, bytes memory response) = url.post(headers, string.concat(
-                "{",
-                '"callArgs": {',
-                '"from": "',
-                vm.toString(timelock),
-                '", "to": "',
-                vm.toString(targets[i]),
-                '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',
-                '"data": "',
-                vm.toString(arguments[i]),
-                '"',
-                "}}"
-            ));
-
-            string memory responseString = string(response);
-            console2.log("Response: ", responseString);
-
-            // If the response contains "error", exit
-            if (status >= 300 || vm.keyExists(responseString, ".error")) {
-                revert("Error executing proposal action");
-            }
-        }
-    }
+contract ContractRegistryProposalScript is ProposalScript {
+    constructor() ProposalScript(new ContractRegistryProposal()) {}
 }
