@@ -90,7 +90,7 @@
         "chainId": 1
     },
     {
-        "addr": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
+        "addr": "0x0000000000000000000000000000000000000000",
         "name": "olympus-policy-contract-registry-admin",
         "chainId": 1
     }
