@@ -35,7 +35,7 @@ set -a  # Automatically export all variables
 source $ENV_FILE
 set +a  # Disable automatic export
 
-# Get command-line arguments
+# Set sane defaults
 BROADCAST=${broadcast:-false}
 VERIFY=${verify:-false}
 RESUME=${resume:-false}
