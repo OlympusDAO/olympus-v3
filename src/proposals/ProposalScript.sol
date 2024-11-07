@@ -106,7 +106,7 @@ abstract contract ProposalScript is ScriptSuite {
             console2.log("Response: ", responseString);
 
             // If the response contains "error", exit
-            if (status >= 300 || vm.keyExists(responseString, ".error")) {
+            if (status >= 400 || vm.keyExists(responseString, ".error")) {
                 revert("Error executing proposal action");
             }
         }
