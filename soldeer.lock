@@ -1,0 +1,5 @@
+[[dependencies]]
+name = "surl"
+version = "1.0.0"
+git = "git@github.com:memester-xyz/surl.git"
+rev = "034c912ae9b5e707a5afd21f145b452ad8e800df"

@@ -13,3 +13,4 @@ proposal-sim=lib/forge-proposal-simulator/
 proposal-sim/proposals/=lib/forge-proposal-simulator/proposals/
 proposals/=src/proposals/
 openzeppelin/=lib/openzeppelin-contracts/contracts
+surl-1.0.0/=dependencies/surl-1.0.0/src

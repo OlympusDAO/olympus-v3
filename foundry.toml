@@ -26,6 +26,10 @@ solc_version = "0.8.15"
 optimizer = true
 optimizer_runs = 10
 chain_id = 1
+libs = ["lib", "dependencies"]
 
 [fuzz]
 runs = 256
+
+[dependencies]
+surl = { version = "1.0.0", git = "git@github.com:memester-xyz/surl.git", rev = "034c912ae9b5e707a5afd21f145b452ad8e800df" }
