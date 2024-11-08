@@ -106,7 +106,7 @@ abstract contract OlyBatch is BatchScript {
 
         // Iterate over the proposal actions and execute them
         for (uint256 i; i < actionsTo.length; i++) {
-            console2.log("Preparing proposal action ", i + 1);
+            console2.log("Preparing batch action ", i + 1);
 
             // Construct the API call
             string[] memory headers = new string[](3);
@@ -126,7 +126,7 @@ abstract contract OlyBatch is BatchScript {
 
             // Execute the API call
             // solhint-disable quotes
-            console2.log("Executing proposal action ", i + 1);
+            console2.log("Executing batch action ", i + 1);
             (uint256 status, bytes memory response) = url.post(
                 headers,
                 string.concat(
@@ -150,7 +150,7 @@ abstract contract OlyBatch is BatchScript {
 
             // If the response contains "error", exit
             if (status >= 400 || vm.keyExists(responseString, ".error")) {
-                revert("Error executing proposal action");
+                revert("Error executing batch action");
             }
         }
     }
