@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
-import {console2} from "forge-std/console2.sol";
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -15,6 +13,9 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
+
+// Script
+import {ProposalScript} from "./ProposalScript.sol";
 
 /// @notice Activates an updated LoanConsolidator policy.
 contract LoanConsolidatorProposal is GovernorBravoProposal {
@@ -137,26 +138,6 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
     }
 }
 
-// @notice GovernorBravoScript is a script that runs BRAVO_01 proposal.
-// BRAVO_01 proposal deploys a Vault contract and an ERC20 token contract
-// Then the proposal transfers ownership of both Vault and ERC20 to the timelock address
-// Finally the proposal whitelist the ERC20 token in the Vault contract
-// @dev Use this script to simulates or run a single proposal
-// Use this as a template to create your own script
-// `forge script script/GovernorBravo.s.sol:GovernorBravoScript -vvvv --rpc-url {rpc} --broadcast --verify --etherscan-api-key {key}`
-contract LoanConsolidatorProposalScript is ScriptSuite {
-    string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
-
-    constructor() ScriptSuite(ADDRESSES_PATH, new LoanConsolidatorProposal()) {}
-
-    function run() public override {
-        // set debug mode to true and run it to build the actions list
-        proposal.setDebug(true);
-
-        // run the proposal to build it
-        proposal.run(addresses, address(0));
-
-        // get the calldata for the proposal, doing so in debug mode prints it to the console
-        proposal.getCalldata();
-    }
+contract LoanConsolidatorProposalScript is ProposalScript {
+    constructor() ProposalScript(new LoanConsolidatorProposal()) {}
 }
