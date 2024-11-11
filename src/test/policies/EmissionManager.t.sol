@@ -1055,7 +1055,7 @@ contract EmissionManagerTest is Test {
         emissionManager.shutdown();
     }
 
-    function test_shutdown_noBalances() public {
+    function test_shutdown_success() public {
         // Check that the contract is locally active
         assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
 
@@ -1064,10 +1064,6 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the block timestamp is not 0
         assertGt(block.timestamp, 0, "Block timestamp should not be 0");
-
-        // Confirm that the reserve and OHM balances are 0
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
 
         // Call the shutdown function as guardian (which has the emergency_shutdown role)
         vm.prank(guardian);
@@ -1082,104 +1078,6 @@ contract EmissionManagerTest is Test {
             block.timestamp,
             "Shutdown timestamp should be set"
         );
-
-        // Confirm that the reserve and OHM balances are still 0
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
-    }
-
-    function test_shutdown_ohmBalance() public {
-        // Check that the contract is locally active
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
-
-        // Check that the shutdown timestamp is 0
-        assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
-
-        // Confirm that the block timestamp is not 0
-        assertGt(block.timestamp, 0, "Block timestamp should not be 0");
-
-        // Confirm that the reserve balance is 0
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-
-        // Mint OHM to the contract (this shouldn't happen in practice)
-        uint256 ohmAmount = 1000e9;
-        ohm.mint(address(emissionManager), ohmAmount);
-        assertEq(
-            ohm.balanceOf(address(emissionManager)),
-            ohmAmount,
-            "OHM balance should be nonzero"
-        );
-
-        // Cache total supply of OHM
-        uint256 totalSupply = ohm.totalSupply();
-
-        // Call the shutdown function as guardian (which has the emergency_shutdown role)
-        vm.prank(guardian);
-        emissionManager.shutdown();
-
-        // Check that the contract is not locally active
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
-
-        // Check that the shutdown timestamp is set to the current block timestamp
-        assertEq(
-            emissionManager.shutdownTimestamp(),
-            block.timestamp,
-            "Shutdown timestamp should be set"
-        );
-
-        // Confirm that the reserve and OHM balances are 0
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
-
-        // Confirm that the OHM was burned
-        assertEq(ohm.totalSupply(), totalSupply - ohmAmount, "OHM total supply should be updated");
-    }
-
-    function test_shutdown_reserveBalance() public {
-        // Check that the contract is locally active
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
-
-        // Check that the shutdown timestamp is 0
-        assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
-
-        // Confirm that the block timestamp is not 0
-        assertGt(block.timestamp, 0, "Block timestamp should not be 0");
-
-        // Confirm that the OHM balance is 0
-        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
-
-        // Mint reserve contract (this shouldn't happen in practice)
-        uint256 reserveAmount = 1000e18;
-        reserve.mint(address(emissionManager), reserveAmount);
-        assertEq(
-            reserve.balanceOf(address(emissionManager)),
-            reserveAmount,
-            "Reserve balance should be nonzero"
-        );
-
-        // Cache the wrapped reserves in the treasury
-        uint256 treasuryWrappedReserveBalance = sReserve.balanceOf(address(TRSRY));
-
-        // Call the shutdown function as guardian (which has the emergency_shutdown role)
-        vm.prank(guardian);
-        emissionManager.shutdown();
-
-        // Check that the contract is not locally active
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
-
-        // Check that the shutdown timestamp is set to the current block timestamp
-        assertEq(
-            emissionManager.shutdownTimestamp(),
-            block.timestamp,
-            "Shutdown timestamp should be set"
-        );
-
-        // Confirm that the reserve and OHM balances are 0
-        assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
-        assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
-
-        // Confirm that the reserve was wrapped and deposited into the treasury
-        assertEq(sReserve.balanceOf(address(TRSRY)), treasuryWrappedReserveBalance + reserveAmount);
     }
 
     // restart tests

@@ -5,6 +5,7 @@ import "src/Kernel.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -30,6 +31,7 @@ interface Clearinghouse {
 // solhint-disable max-states-count
 contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     using FullMath for uint256;
+    using TransferHelper for ERC20;
 
     // ========== STATE VARIABLES ========== //
 
@@ -320,12 +322,6 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         locallyActive = false;
         shutdownTimestamp = uint48(block.timestamp);
 
-        uint256 ohmBalance = ohm.balanceOf(address(this));
-        if (ohmBalance > 0) BurnableERC20(address(ohm)).burn(ohmBalance);
-
-        uint256 reserveBalance = reserve.balanceOf(address(this));
-        if (reserveBalance > 0) sReserve.deposit(reserveBalance, address(TRSRY));
-
         emit Deactivated();
     }
 
@@ -339,6 +335,14 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         locallyActive = true;
 
         emit Activated();
+    }
+
+    /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
+    /// @dev This function is restricted to the reserve_migrator admin role
+    /// @param token_ The address of the ERC20 token to rescue
+    function rescue(address token_) external onlyRole("emissions_admin") {
+        ERC20 token = ERC20(token_);
+        token.safeTransfer(address(TRSRY), token.balanceOf(address(this)));
     }
 
     /// @notice set the base emissions rate
