@@ -131,11 +131,9 @@ contract EmissionManagerTest is Test {
     //       [X] it reverts
     //    [X] when the caller has emergency_shutdown role
     //       [X] it sets locallyActive to false
-    //       [X] it sets the shutdown timestamp to the current block time
-    //       [X] when the ohm balance of the contract is not zero
-    //          [X] it burns the OHM balance of the contract
-    //       [X] when the reserve balance of the contract is not zero
-    //          [X] it deposits the reserves into the sReserve contract with the TRSRY as the recipient
+    //       [X] it sets the shutdown timestamp to the current block timestamp
+    //       [ ] when the active market id is live
+    //           [ ] it closes the market
     //
     // [X] restart
     //    [X] when the caller doesn't have emergency_restart role
@@ -1078,6 +1076,42 @@ contract EmissionManagerTest is Test {
             block.timestamp,
             "Shutdown timestamp should be set"
         );
+    }
+
+    function test_shutdown_whenMarketIsActive_closesMarket()
+        public
+        givenPremiumEqualToMinimum
+        givenThereIsPreviousSale
+    {
+        // We created a market, confirm it is active
+        uint256 id = emissionManager.activeMarketId();
+        assertTrue(auctioneer.isLive(id));
+
+        // Check that the contract is locally active
+        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+
+        // Check that the shutdown timestamp is 0
+        assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
+
+        // Confirm that the block timestamp is not 0
+        assertGt(block.timestamp, 0, "Block timestamp should not be 0");
+
+        // Call the shutdown function as guardian (which has the emergency_shutdown role)
+        vm.prank(guardian);
+        emissionManager.shutdown();
+
+        // Check that the contract is not locally active
+        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+
+        // Check that the shutdown timestamp is set to the current block timestamp
+        assertEq(
+            emissionManager.shutdownTimestamp(),
+            block.timestamp,
+            "Shutdown timestamp should be set"
+        );
+
+        // Check that the market is no longer active
+        assertFalse(auctioneer.isLive(id));
     }
 
     // restart tests

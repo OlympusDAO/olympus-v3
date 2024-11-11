@@ -317,10 +317,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice shutdown the emission manager locally, burn OHM, and return any reserves to TRSRY
+    /// @notice shutdown the emission manager locally and close the active bond market
     function shutdown() external onlyRole("emergency_shutdown") {
         locallyActive = false;
         shutdownTimestamp = uint48(block.timestamp);
+
+        // Shutdown the bond market, if it is active
+        if (auctioneer.isLive(activeMarketId)) {
+            auctioneer.closeMarket(activeMarketId);
+        }
 
         emit Deactivated();
     }
@@ -338,7 +343,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     }
 
     /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
-    /// @dev This function is restricted to the reserve_migrator admin role
+    /// @dev This function is restricted to the emissions_admin role
     /// @param token_ The address of the ERC20 token to rescue
     function rescue(address token_) external onlyRole("emissions_admin") {
         ERC20 token = ERC20(token_);
