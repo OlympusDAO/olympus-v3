@@ -66,6 +66,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     uint8 internal _oracleDecimals;
     uint8 internal immutable _ohmDecimals;
+    uint8 internal immutable _gohmDecimals;
     uint8 internal immutable _reserveDecimals;
 
     /// @notice timestamp of last shutdown
@@ -101,6 +102,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
+        _gohmDecimals = ERC20(gohm_).decimals();
         _reserveDecimals = reserve.decimals();
 
         // Max approve sReserve contract for reserve for deposits
@@ -439,7 +441,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice return supply, measured as supply of gOHM in OHM denomination
     function getSupply() public view returns (uint256 supply) {
-        return (gohm.totalSupply() * gohm.index()) / 10 ** _ohmDecimals;
+        return (gohm.totalSupply() * gohm.index()) / 10 ** _gohmDecimals;
     }
 
     /// @notice return the current premium as a percentage where 1e18 is 100%

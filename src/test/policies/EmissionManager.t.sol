@@ -611,7 +611,7 @@ contract EmissionManagerTest is Test {
                 (((baseEmissionRate * PRICE.getLastPrice()) /
                     ((backing * (1e18 + minimumPremium)) / 1e18)) *
                     gohm.totalSupply() *
-                    gohm.index()) / 1e18,
+                    gohm.index()) / 1e27,
                 "Capacity"
             );
             assertEq(maxPayout, capacity / 6, "Max payout");
@@ -703,7 +703,7 @@ contract EmissionManagerTest is Test {
                 (((baseEmissionRate * PRICE.getLastPrice()) /
                     ((backing * (1e18 + minimumPremium)) / 1e18)) *
                     gohm.totalSupply() *
-                    gohm.index()) / 1e18,
+                    gohm.index()) / 1e27,
                 "Capacity"
             );
             assertEq(maxPayout, capacity / 6, "Max payout");
@@ -752,7 +752,7 @@ contract EmissionManagerTest is Test {
         uint256 expectedCapacity = (((expectedBaseRate * PRICE.getLastPrice()) /
             ((backing * (1e18 + minimumPremium)) / 1e18)) *
             gohm.totalSupply() *
-            gohm.index()) / 1e18;
+            gohm.index()) / 1e27;
 
         // Execute to trigger the rate adjustment
         vm.prank(heart);
@@ -814,7 +814,7 @@ contract EmissionManagerTest is Test {
         uint256 expectedCapacity = (((expectedBaseRate * PRICE.getLastPrice()) /
             ((backing * (1e18 + minimumPremium)) / 1e18)) *
             gohm.totalSupply() *
-            gohm.index()) / 1e18;
+            gohm.index()) / 1e27;
 
         // Execute to trigger the rate adjustment
         vm.prank(heart);
@@ -1640,7 +1640,7 @@ contract EmissionManagerTest is Test {
         // Confirm the supply is the total supply of OHM
         assertEq(
             emissionManager.getSupply(),
-            (gohm.totalSupply() * gohm.index()) / 1e9,
+            (gohm.totalSupply() * gohm.index()) / 1e18,
             "Supply should be gOHM supply times index"
         );
 
@@ -1651,7 +1651,7 @@ contract EmissionManagerTest is Test {
         // Confirm the supply is the total supply of OHM
         assertEq(
             emissionManager.getSupply(),
-            (gohm.totalSupply() * gohm.index()) / 1e9,
+            (gohm.totalSupply() * gohm.index()) / 10 ** gohm.decimals(),
             "Supply should be gOHM supply times index"
         );
     }
