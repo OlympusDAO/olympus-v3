@@ -47,7 +47,7 @@ interface IEmissionManager {
 
     struct BaseRateChange {
         uint256 changeBy;
-        uint48 beatsLeft;
+        uint48 daysLeft;
         bool addition;
     }
 

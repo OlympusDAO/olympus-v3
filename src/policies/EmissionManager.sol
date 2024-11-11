@@ -34,7 +34,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     // ========== STATE VARIABLES ========== //
 
     /// @notice active base emissions rate change information
-    /// @dev active until beatsLeft is 0
+    /// @dev active until daysLeft is 0
     BaseRateChange public rateChange;
 
     // Modules
@@ -147,8 +147,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         beatCounter = ++beatCounter % 3;
         if (beatCounter != 0) return;
 
-        if (rateChange.beatsLeft != 0) {
-            --rateChange.beatsLeft;
+        if (rateChange.daysLeft != 0) {
+            --rateChange.daysLeft;
             if (rateChange.addition) baseEmissionRate += rateChange.changeBy;
             else baseEmissionRate -= rateChange.changeBy;
         }
