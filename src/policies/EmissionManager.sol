@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
