@@ -390,7 +390,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
     function setBacking(uint256 newBacking) external onlyRole("emissions_admin") {
         // Backing cannot be reduced by more than 10% at a time
-        if (newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
+        if (newBacking == 0 || newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
         backing = newBacking;
 
         emit BackingChanged(newBacking);
