@@ -2359,16 +2359,22 @@ contract OperatorTest is Test {
         vm.prank(guardian);
         operator.initialize();
 
+        /// Set the price to trigger a low cushion
+        PRICE.setLastPrice(89 * 1e18);
+
         /// Toggle the operator to inactive
         vm.prank(policy);
         operator.deactivate();
 
-        /// Try to call operator, swap, and bondPurchase, expect reverts
-        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
-        vm.expectRevert(err);
+        // Calling operate will not fail, but it will do nothing
         vm.prank(heart);
         operator.operate();
 
+        // Check that the market is not live
+        assertFalse(auctioneer.isLive(RANGE.market(false)));
+
+        /// Try to call operator, swap, and bondPurchase, expect reverts
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
         vm.prank(alice);
         operator.swap(ohm, 1e9, 1);
