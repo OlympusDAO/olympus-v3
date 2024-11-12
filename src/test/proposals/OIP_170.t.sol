@@ -9,13 +9,13 @@ import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDeleg
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";
 
-import {OIP_169} from "proposals/OIP_169.sol";
+import {OIP_170} from "proposals/OIP_170.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
 ///         flag to `true` once the proposal has been submitted on-chain.
 /// Note: this will fail if the OCGPermissions script has not been run yet.
-contract OIP_169_OCGProposalTest is Test {
+contract OIP_170_OCGProposalTest is Test {
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
     TestSuite public suite;
     Addresses public addresses;
@@ -27,7 +27,7 @@ contract OIP_169_OCGProposalTest is Test {
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
         /// @dev Deploy your proposal
-        OIP_169 proposal = new OIP_169();
+        OIP_170 proposal = new OIP_170();
 
         console2.log(proposal.description());
 
