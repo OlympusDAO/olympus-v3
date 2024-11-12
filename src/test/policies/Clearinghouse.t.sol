@@ -3,10 +3,10 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {console2 as console} from "forge-std/console2.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockOhm} from "test/mocks/MockOhm.sol";
-import {MockStaking} from "test/mocks/MockStaking.sol";
+import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockStaking} from "src/test/mocks/MockStaking.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 

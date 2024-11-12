@@ -6,12 +6,12 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
 
-import "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 contract VOTESTest is Test {
     using ModuleTestFixtureGenerator for OlympusVotes;

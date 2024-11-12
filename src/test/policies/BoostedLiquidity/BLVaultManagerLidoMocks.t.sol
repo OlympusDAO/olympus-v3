@@ -2,16 +2,16 @@
 pragma solidity 0.8.15;
 
 import {Test, stdError} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test/lib/larping.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
+import {larping} from "src/test/lib/larping.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
+import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
+import {MockVault, MockBalancerPool} from "src/test/mocks/BalancerMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "src/test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";

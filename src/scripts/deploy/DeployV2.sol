@@ -64,11 +64,11 @@ import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol";
 import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
+import {MockBalancerPool, MockVault} from "src/test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Faucet} from "test/mocks/Faucet.sol";
+import {Faucet} from "src/test/mocks/Faucet.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";

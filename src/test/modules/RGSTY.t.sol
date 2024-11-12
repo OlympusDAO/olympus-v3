@@ -2,8 +2,8 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
-import {MockContractRegistryPolicy, MockImmutableContractRegistryPolicy} from "test/mocks/MockContractRegistryPolicy.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {MockContractRegistryPolicy, MockImmutableContractRegistryPolicy} from "src/test/mocks/MockContractRegistryPolicy.sol";
 
 import {Kernel, Actions, Module, fromKeycode} from "src/Kernel.sol";
 import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
