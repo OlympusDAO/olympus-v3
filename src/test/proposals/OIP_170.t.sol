@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
 // Proposal test-suite imports
@@ -9,7 +10,7 @@ import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDeleg
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";
 
-import {OIP_170} from "proposals/OIP_170.sol";
+import {OIP_170} from "src/proposals/OIP_170.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
