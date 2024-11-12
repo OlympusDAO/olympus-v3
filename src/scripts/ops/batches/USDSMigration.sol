@@ -15,6 +15,8 @@ import {Operator} from "policies/Operator.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
 /// @notice
 /// @dev Deactivates old heart, operator, yield repo, and clearinghouse contracts.
 ///      Installs new versions that references USDS instead of DAI. Also, adds the ReserveMigrator contract.
@@ -75,10 +77,28 @@ contract USDSMigration is OlyBatch {
     // Entry point for the script
     function run(bool send_) external isDaoBatch(send_) {
         // 1. Deactivate existing contracts that are being replaced locally
+        // 1a. Deactivate OlympusHeart
         addToBatch(oldHeart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
+        // 1b. Deactivate Operator
         addToBatch(oldOperator, abi.encodeWithSelector(Operator.deactivate.selector));
-        addToBatch(oldYieldRepo, abi.encodeWithSelector(YieldRepurchaseFacility.shutdown.selector));
-        addToBatch(oldClearinghouse, abi.encodeWithSelector(Clearinghouse.defund.selector));
+        // 1c. Shutdown YieldRepurchaseFacility
+        ERC20[] memory tokensToTransfer = new ERC20[](2);
+        tokensToTransfer[0] = ERC20(envAddress("current", "external.tokens.DAI"));
+        tokensToTransfer[1] = ERC20(envAddress("current", "external.tokens.sDAI"));
+        addToBatch(
+            oldYieldRepo,
+            abi.encodeWithSelector(YieldRepurchaseFacility.shutdown.selector, tokensToTransfer)
+        );
+        // 1d. Defund the Clearinghouse
+        ERC20 clearinghouseToken = ERC20(envAddress("current", "external.tokens.sDAI"));
+        addToBatch(
+            oldClearinghouse,
+            abi.encodeWithSelector(
+                Clearinghouse.defund.selector,
+                clearinghouseToken,
+                clearinghouseToken.balanceOf(address(oldClearinghouse))
+            )
+        );
 
         // 2. Deactivate policies that are being replaced on the Kernel
         addToBatch(
