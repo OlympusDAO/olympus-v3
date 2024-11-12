@@ -71,7 +71,12 @@ contract BLVaultLusdTestFork is Test {
 
     uint256[] internal minAmountsOut = [0, 0];
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     function setUp() public {
+        // Mainnet Fork at a fixed block that is known to work
+        vm.createSelectFork(RPC_URL, 18762666);
+
         {
             // Set up users
             alice = payable(address(uint160(uint256(keccak256(abi.encodePacked("alice"))))));
