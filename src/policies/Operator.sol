@@ -213,13 +213,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
-    /// @notice Returns the version of the policy.
-    ///
-    /// @return major The major version of the policy.
-    /// @return minor The minor version of the policy.
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
-        return (1, 5);
-    }
+    // /// @notice Returns the version of the policy.
+    // ///
+    // /// @return major The major version of the policy.
+    // /// @return minor The minor version of the policy.
+    // function VERSION() external pure returns (uint8 major, uint8 minor) {
+    //     return (1, 5);
+    // }
 
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
@@ -240,7 +240,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function operate() external override onlyRole("heart") {
-        // Check that the policy is active
+        // Fail silently if not active locally so Operator can be disabled
+        if (!active) return;
+
+        // Check that the policy is active and price is not stale
+        // There is a redundant check on the active flag here
+        // but we leave it in because it requires fewer changes
         _onlyWhileActive();
 
         // Revert if not initialized
