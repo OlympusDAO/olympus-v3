@@ -2,11 +2,11 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {MockGohm} from "test/mocks/OlympusMocks.sol";
+import {MockGohm} from "src/test/mocks/OlympusMocks.sol";
 
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";

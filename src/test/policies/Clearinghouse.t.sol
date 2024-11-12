@@ -3,10 +3,10 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {console2 as console} from "forge-std/console2.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockOhm} from "test/mocks/MockOhm.sol";
-import {MockStaking} from "test/mocks/MockStaking.sol";
+import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockStaking} from "src/test/mocks/MockStaking.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
@@ -33,7 +33,7 @@ import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Cle
 //     [X] Treasury approvals for the clearing house are correct.
 //     [X] if necessary, sends excess DSR funds back to the Treasury.
 //     [X] if a rebalances are missed, can execute several rebalances if FUND_CADENCE allows it.
-// [X] sweepIntoDSR
+// [X] sweepIntoSavingsVault
 //     [X] excess DAI is deposited into DSR.
 // [X] defund
 //     [X] only "cooler_overseer" can call.
@@ -48,8 +48,8 @@ import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Cle
 // [X] lendToCooler
 //     [X] only lend to coolers issued by coolerFactory.
 //     [X] only collateral = gOHM + only debt = DAI.
-//     [x] user and cooler new gOHM balances are correct.
-//     [x] user and cooler new DAI balances are correct.
+//     [X] user and cooler new gOHM balances are correct.
+//     [X] user and cooler new DAI balances are correct.
 // [X] extendLoan
 //     [X] only roll coolers issued by coolerFactory.
 //     [X] roll by adding more collateral.
@@ -524,7 +524,7 @@ contract ClearinghouseTest is Test {
 
         // Mint 1 million to clearinghouse and sweep to simulate assets being repaid
         dai.mint(address(clearinghouse), oneMillion);
-        clearinghouse.sweepIntoDSR();
+        clearinghouse.sweepIntoSavingsVault();
 
         assertEq(
             sdai.maxWithdraw(address(clearinghouse)),
@@ -604,12 +604,12 @@ contract ClearinghouseTest is Test {
 
     // --- SWEEP INTO DSR ------------------------------------------------
 
-    function test_sweepIntoDSR() public {
+    function test_sweepIntoSavingsVault() public {
         uint256 sdaiBal = sdai.balanceOf(address(clearinghouse));
 
         // Mint 1 million to clearinghouse and sweep to simulate assets being repaid
         dai.mint(address(clearinghouse), 1e24);
-        clearinghouse.sweepIntoDSR();
+        clearinghouse.sweepIntoSavingsVault();
 
         assertEq(sdai.balanceOf(address(clearinghouse)), sdaiBal + 1e24);
     }

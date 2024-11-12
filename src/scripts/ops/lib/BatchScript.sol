@@ -69,6 +69,9 @@ abstract contract BatchScript is Script {
     // Address to send transaction from
     address internal safe;
 
+    address[] internal actionsTo;
+    bytes[] internal actionsData;
+
     enum Operation {
         CALL,
         DELEGATECALL
@@ -128,6 +131,9 @@ abstract contract BatchScript is Script {
         vm.prank(safe);
         (bool success, bytes memory data) = to_.call(data_);
         if (success) {
+            actionsTo.push(to_);
+            actionsData.push(data_);
+
             return data;
         } else {
             revert(string(data));
@@ -136,7 +142,7 @@ abstract contract BatchScript is Script {
 
     // Simulate then send the batch to the Safe API. If `send_` is `false`, the
     // batch will only be simulated.
-    function executeBatch(bool send_) internal {
+    function executeBatch(bool send_) internal virtual {
         _initialize();
         Batch memory batch = _createBatch(safe);
         // _simulateBatch(safe, batch);

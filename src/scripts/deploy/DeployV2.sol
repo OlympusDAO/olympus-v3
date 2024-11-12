@@ -61,13 +61,15 @@ import {pOLY} from "policies/pOLY.sol";
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
+import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol";
+import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
+import {MockBalancerPool, MockVault} from "src/test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Faucet} from "test/mocks/Faucet.sol";
-import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
+import {Faucet} from "src/test/mocks/Faucet.sol";
+import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -87,6 +89,7 @@ contract OlympusDeploy is Script {
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
+    OlympusContractRegistry public RGSTY;
 
     /// Policies
     Operator public operator;
@@ -106,6 +109,8 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     LegacyBurner public legacyBurner;
+    ContractRegistryAdmin public contractRegistryAdmin;
+    LoanConsolidator public loanConsolidator;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -114,7 +119,6 @@ contract OlympusDeploy is Script {
     address public inverseBondDepository;
     pOLY public poly;
     Clearinghouse public clearinghouse;
-    CoolerUtils public coolerUtils;
     YieldRepurchaseFacility public yieldRepo;
 
     // Governance
@@ -182,6 +186,7 @@ contract OlympusDeploy is Script {
         chain = chain_;
 
         // Setup contract -> selector mappings
+        // Modules
         selectorMap["OlympusPrice"] = this._deployPrice.selector;
         selectorMap["OlympusRange"] = this._deployRange.selector;
         selectorMap["OlympusTreasury"] = this._deployTreasury.selector;
@@ -191,6 +196,8 @@ contract OlympusDeploy is Script {
             ._deployBoostedLiquidityRegistry
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
+        selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
+        // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
@@ -212,8 +219,9 @@ contract OlympusDeploy is Script {
         selectorMap["pOLY"] = this._deployPoly.selector;
         selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
-        selectorMap["CoolerUtils"] = this._deployCoolerUtils.selector;
+        selectorMap["LoanConsolidator"] = this._deployLoanConsolidator.selector;
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
+        selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -269,6 +277,7 @@ contract OlympusDeploy is Script {
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
+        // Modules
         PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV2"));
         RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
         TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
@@ -278,6 +287,8 @@ contract OlympusDeploy is Script {
         BLREG = OlympusBoostedLiquidityRegistry(
             envAddress("olympus.modules.OlympusBoostedLiquidityRegistry")
         );
+        RGSTY = OlympusContractRegistry(envAddress("olympus.modules.OlympusContractRegistry"));
+        // Policies
         operator = Operator(envAddress("olympus.policies.Operator"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
         callback = BondCallback(envAddress("olympus.policies.BondCallback"));
@@ -299,6 +310,10 @@ contract OlympusDeploy is Script {
         claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
+        contractRegistryAdmin = ContractRegistryAdmin(
+            envAddress("olympus.policies.ContractRegistryAdmin")
+        );
+        loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1006,7 +1021,7 @@ contract OlympusDeploy is Script {
             ohm_: address(ohm),
             gohm_: address(gohm),
             staking_: address(staking),
-            sdai_: address(wrappedReserve),
+            sReserve_: address(wrappedReserve),
             coolerFactory_: address(coolerFactory),
             kernel_: address(kernel)
         });
@@ -1027,36 +1042,50 @@ contract OlympusDeploy is Script {
         return address(CHREG);
     }
 
-    function _deployCoolerUtils(bytes calldata args_) public returns (address) {
+    function _deployContractRegistry(bytes calldata) public returns (address) {
         // Decode arguments from the sequence file
-        (address collector, uint256 feePercentage, address lender, address owner) = abi.decode(
-            args_,
-            (address, uint256, address, address)
-        );
+        // None
 
         // Print the arguments
-        console2.log("  gOHM:", address(gohm));
-        console2.log("  SDAI:", address(wrappedReserve));
-        console2.log("  DAI:", address(reserve));
-        console2.log("  Collector:", collector);
-        console2.log("  Fee Percentage:", feePercentage);
-        console2.log("  Lender:", lender);
-        console2.log("  Owner:", owner);
+        console2.log("  Kernel:", address(kernel));
 
-        // Deploy CoolerUtils
+        // Deploy OlympusContractRegistry
         vm.broadcast();
-        coolerUtils = new CoolerUtils(
-            address(gohm),
-            address(wrappedReserve),
-            address(reserve),
-            owner,
-            lender,
-            collector,
-            feePercentage
-        );
-        console2.log("  CoolerUtils deployed at:", address(coolerUtils));
+        RGSTY = new OlympusContractRegistry(address(kernel));
+        console2.log("ContractRegistry deployed at:", address(RGSTY));
 
-        return address(coolerUtils);
+        return address(RGSTY);
+    }
+
+    function _deployContractRegistryAdmin(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        // None
+
+        // Print the arguments
+        console2.log("  Kernel:", address(kernel));
+
+        // Deploy ContractRegistryAdmin
+        vm.broadcast();
+        contractRegistryAdmin = new ContractRegistryAdmin(address(kernel));
+        console2.log("ContractRegistryAdmin deployed at:", address(contractRegistryAdmin));
+
+        return address(contractRegistryAdmin);
+    }
+
+    function _deployLoanConsolidator(bytes calldata args_) public returns (address) {
+        // Decode arguments from the sequence file
+        uint256 feePercentage = abi.decode(args_, (uint256));
+
+        // Print the arguments
+        console2.log("  Fee Percentage:", feePercentage);
+        console2.log("  Kernel:", address(kernel));
+
+        // Deploy LoanConsolidator
+        vm.broadcast();
+        loanConsolidator = new LoanConsolidator(address(kernel), feePercentage);
+        console2.log("  LoanConsolidator deployed at:", address(loanConsolidator));
+
+        return address(loanConsolidator);
     }
 
     // ========== GOVERNANCE ========== //

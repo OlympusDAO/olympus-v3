@@ -20,29 +20,22 @@ jobs:
 
             - uses: pnpm/action-setup@v2
               with:
-                  version: 8
+                  version: 9
 
             - name: Install Node dependencies
               run: pnpm install
 
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
-              with:
-                  version: nightly-ca67d15f4abd46394b324c50e21e66f306a1162d
 
             - name: Install Foundry dependencies
-              run: forge install
+              run: pnpm run build
 
             - name: Run lint check
               run: pnpm run lint:check
 
             - name: Run unit tests
               run: pnpm run test:unit
-
-            - name: Run proposal simulation tests
-              run: pnpm run test:proposal
-              env:
-                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run fork tests
               run: pnpm run test:fork
