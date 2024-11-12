@@ -11,7 +11,7 @@ import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelega
 import {Timelock} from "src/external/governance/Timelock.sol";
 
 // OIP_XXX imports
-import {OIP_XXX, Clearinghouse, CHREGv1, IERC20, IERC4626} from "proposals/OIP_XXX.sol";
+import {OIP_XXX, Clearinghouse, CHREGv1, IERC20, IERC4626} from "src/proposals/OIP_XXX.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
