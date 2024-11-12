@@ -1,0 +1,37 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusRange",
+            "args": {
+                "highCushionSpread": 1000,
+                "highWallSpread": 2000,
+                "lowCushionSpread": 750,
+                "lowWallSpread": 1500,
+                "thresholdFactor": 100
+            }
+        },
+        {
+            "name": "BondCallback"
+        },
+        {
+            "name": "Operator",
+            "args": {
+                "cushionDebtBuffer": 100000,
+                "cushionDepositInterval": 14400,
+                "cushionDuration": 259200,
+                "cushionFactor": 3000,
+                "regenObserve": 21,
+                "regenThreshold": 18,
+                "regenWait": 518400,
+                "reserveFactor": 1000
+            }
+        },
+        {
+            "name": "OlympusHeart",
+            "args": {
+                "auctionDuration": 1200,
+                "maxReward": 40000000000
+            }
+        }
+    ]
+}

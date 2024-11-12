@@ -6,7 +6,7 @@ Before creating a new proposal, it's essential to understand Olympus' On-Chain G
 
 The lifecycle of a proposal begins with a crucial step: the **Review Phase**. This is where the Olympus community plays a pivotal role in assessing and verifying the proposed on-chain actions. The community ensures that these actions align with the protocol's goals, the proposal intent, and the discussions held in the forums.
 
-### Key Objectives During the Review Phase:
+### Key Objectives During the Review Phase
 
 1. **Security Assurance:** This phase is critical for safeguarding the protocol against malicious proposals.
 2. **Community Engagement:** Active community participation is vital in evaluating the proposal's feasibility and impact.
@@ -19,8 +19,8 @@ OCG's trustless nature is one of its greatest strengths, but it also presents a 
 
 To address this challenge, the DAO has decided to adopt [forge-proposal-simulator](https://solidity-labs.gitbook.io/forge-proposal-simulator/), an open-source framework designed to:
 
--   Simplify the verifiability process of a proposal.
--   Effectively structure proposals.
+- Simplify the verifiability process of a proposal.
+- Effectively structure proposals.
 
 This framework allows anyone to execute proposals in a forked environment and develop integration tests to examine the new system's behavior in a controlled sandbox.
 
@@ -28,7 +28,7 @@ This framework allows anyone to execute proposals in a forked environment and de
 
 Due to the importance of this framework in ensuring transparency and security, **the DAO will "socially veto" any proposals not adopting it**. This stance is based on the belief that **omitting the framework could indicate an attempt to pass a harmful proposal** by obfuscating its verification process.
 
-# Creating a New Proposal
+## Creating a New Proposal
 
 To create a new simulatable proposal, follow these steps:
 
@@ -47,11 +47,14 @@ To create a new simulatable proposal, follow these steps:
         - 2.5. Include the address/contract name.
         - 2.6. Exceptions: `"proposer"`, `"olympus-governor"`, `"olympus-kernel"`.
         - 2.7. Examples:
+
             - **Olympus modules**: Use the following pattern instead of importing module addresses:
+
                 ```solidity
                 Kernel kernel = Kernel(addresses.getAddress("olympus-kernel"));
                 address TRSRY = address(kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
                 ```
+
             - **Olympus policies**: `"olympus-policy-xxx"`
             - **Olympus legacy contracts (OHM, gOHM, staking)**: `"olympus-legacy-xxx"`
             - **Olympus multisigs**: `olympus-multisig-dao` or `olympus-multisig-emergency`
