@@ -2,13 +2,13 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";

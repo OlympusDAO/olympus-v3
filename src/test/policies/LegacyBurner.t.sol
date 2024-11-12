@@ -2,13 +2,13 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-import {MockLegacyAuthorityV2} from "test/mocks/MockLegacyAuthority.sol";
+import {MockLegacyAuthorityV2} from "src/test/mocks/MockLegacyAuthority.sol";
 
 import "src/Kernel.sol";
 
@@ -20,7 +20,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BondManager} from "policies/BondManager.sol";
 import {LegacyBurner} from "policies/LegacyBurner.sol";
 
-import {MockLegacyInverseBondDepo} from "test/mocks/MockLegacyInverseBondDepo.sol";
+import {MockLegacyInverseBondDepo} from "src/test/mocks/MockLegacyInverseBondDepo.sol";
 
 // solhint-disable-next-line max-states-count
 contract LegacyBurnerTest is Test {
