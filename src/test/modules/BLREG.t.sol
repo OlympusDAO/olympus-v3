@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import "src/Kernel.sol";

@@ -2,8 +2,8 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test/lib/larping.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
+import {larping} from "src/test/lib/larping.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
@@ -23,10 +23,10 @@ import {BondManager} from "policies/BondManager.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
-import {MockAggregator} from "test/mocks/MockAggregator.sol";
-import {MockFixedExpirySDA} from "test/mocks/MockFixedExpirySDA.sol";
-import {MockFixedExpiryTeller} from "test/mocks/MockFixedExpiryTeller.sol";
-import {MockEasyAuction} from "test/mocks/MockEasyAuction.sol";
+import {MockAggregator} from "src/test/mocks/MockAggregator.sol";
+import {MockFixedExpirySDA} from "src/test/mocks/MockFixedExpirySDA.sol";
+import {MockFixedExpiryTeller} from "src/test/mocks/MockFixedExpiryTeller.sol";
+import {MockEasyAuction} from "src/test/mocks/MockEasyAuction.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
