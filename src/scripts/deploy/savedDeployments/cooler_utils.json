@@ -1,0 +1,13 @@
+{
+    "sequence": [
+        {
+            "name": "CoolerUtils",
+            "args": {
+                "collector": "0x31F8Cc382c9898b273eff4e0b7626a6987C846E8",
+                "feePercentage": 0,
+                "lender": "0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA",
+                "owner": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B"
+            }
+        }
+    ]
+}

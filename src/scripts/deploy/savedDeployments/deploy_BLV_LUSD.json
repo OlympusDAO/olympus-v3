@@ -1,0 +1,17 @@
+{
+    "sequence": [
+        {
+            "name": "BLVaultLusd",
+            "args": {}
+        },
+        {
+            "name": "BLVaultManagerLusd",
+            "args": {
+                "auraPid": 127,
+                "ethUsdFeedUpdateThreshold": 3600,
+                "lusdUsdFeedUpdateThreshold": 3600,
+                "ohmEthFeedUpdateThreshold": 86400
+            }
+        }
+    ]
+}

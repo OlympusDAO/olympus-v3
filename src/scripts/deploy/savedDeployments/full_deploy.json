@@ -1,0 +1,84 @@
+{
+    "sequence": [
+        {
+            "name": "Kernel"
+        },
+        {
+            "name": "OlympusTreasury",
+            "args": {}
+        },
+        {
+            "name": "OlympusMinter",
+            "args": {}
+        },
+        {
+            "name": "OlympusPrice",
+            "args": {
+                "ohmEthUpdateThreshold": 86400,
+                "reserveEthUpdateThreshold": 86400,
+                "observationFrequency": 28800,
+                "movingAverageDuration": 2592000,
+                "minimumTargetPrice": 10000000000000000000
+            }
+        },
+        {
+            "name": "OlympusRange",
+            "args": {
+                "thresholdFactor": 100,
+                "cushionSpread": 1500,
+                "wallSpread": 2800
+            }
+        },
+        {
+            "name": "OlympusRoles",
+            "args": {}
+        },
+        {
+            "name": "BondCallback",
+            "args": {}
+        },
+        {
+            "name": "Operator",
+            "args": {
+                "configParams": [
+                    3000,
+                    259200,
+                    100000,
+                    14400,
+                    1000,
+                    518400,
+                    18,
+                    21
+                ]
+            }
+        },
+        {
+            "name": "OlympusHeart",
+            "args": {
+                "reward": 5000000000
+            }
+        },
+        {
+            "name": "OlympusPriceConfig",
+            "args": {}
+        },
+        {   
+            "name": "TreasuryCustodian",
+            "args": {}
+        },
+        {
+            "name": "RolesAdmin",
+            "args": {}
+        },
+        {
+            "name": "Distributor",
+            "args": {
+                "initialRate": 64770
+            }
+        },
+        {
+            "name": "Emergency",
+            "args": {}
+        }
+    ]
+}
