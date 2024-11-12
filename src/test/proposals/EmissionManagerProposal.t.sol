@@ -11,35 +11,33 @@ import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDeleg
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";
 
-// OIP_XXX imports
-import {OIP_XXX, Clearinghouse, CHREGv1, IERC20, IERC4626} from "proposals/OIP_XXX.sol";
+// EmissionManagerProposal imports
+import {EmissionManagerProposal} from "proposals/EmissionManagerProposal.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
 ///         flag to `true` once the proposal has been submitted on-chain.
-contract OCGProposalTest is Test {
+/// Note: this will fail if the OCGPermissions script has not been run yet.
+contract EmissionManagerProposalTest is Test {
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
     TestSuite public suite;
     Addresses public addresses;
-
-    // Data struct to cache initial balances.
-    struct Cache {
-        uint256 daiBalance;
-        uint256 sdaiBalance;
-    }
 
     // Wether the proposal has been submitted or not.
     // If true, the framework will check that calldatas match.
     bool public hasBeenSubmitted;
 
-    // Clearinghouse Expected events
-    event Defund(address token, uint256 amount);
-    event Deactivate();
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
 
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
+        // Mainnet Fork at a fixed block
+        // Prior to actual deployment of the proposal (otherwise it will fail) - 21071000
+        // TODO: Update the block number once the proposal has been submitted on-chain.
+        vm.createSelectFork(RPC_URL, 21071000);
+
         /// @dev Deploy your proposal
-        OIP_XXX proposal = new OIP_XXX();
+        EmissionManagerProposal proposal = new EmissionManagerProposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
         hasBeenSubmitted = false;
@@ -57,6 +55,7 @@ contract OCGProposalTest is Test {
             // Set addresses object
             addresses = suite.addresses();
 
+            // Set debug mode
             suite.setDebug(true);
             // Execute proposals
             suite.testProposals();
@@ -81,53 +80,5 @@ contract OCGProposalTest is Test {
     // [DO NOT DELETE] Dummy test to ensure `setUp` is executed and the proposal simulated.
     function testProposal_simulate() public {
         assertTrue(true);
-    }
-
-    /// -- OPTIONAL INTEGRATION TESTS ----------------------------------------------------
-    /// @dev Section for anyone to fork the repo and add integration tests.
-    ///      This feature allows anyone to expand the test suite of the proposal in a sandboxed environment.
-
-    function testProposal_emergencyShutdown() public {
-        // Get relevant olympus contracts
-        Kernel kernel = Kernel(addresses.getAddress("olympus-kernel"));
-        address emergencyMS = addresses.getAddress("olympus-multisig-emergency");
-        address TRSRY = address(kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
-        address CHREG = address(kernel.getModuleForKeycode(toKeycode(bytes5("CHREG"))));
-        Clearinghouse clearinghouseV1 = Clearinghouse(
-            addresses.getAddress("olympus-policy-clearinghouse-v1.1")
-        );
-        // Get relevant tokens
-        IERC20 dai = IERC20(addresses.getAddress("external-tokens-dai"));
-        IERC20 sdai = IERC20(addresses.getAddress("external-tokens-sdai"));
-
-        // Cache initial balances
-        Cache memory cacheCH = Cache({
-            daiBalance: dai.balanceOf(address(clearinghouseV1)),
-            sdaiBalance: sdai.balanceOf(address(clearinghouseV1))
-        });
-        Cache memory cacheTRSRY = Cache({
-            daiBalance: dai.balanceOf(TRSRY),
-            sdaiBalance: sdai.balanceOf(TRSRY)
-        });
-
-        // Random actors cannot shut down the system
-        vm.expectRevert();
-        clearinghouseV1.emergencyShutdown();
-
-        // Only the emergency MS can shutdown the system
-        vm.prank(emergencyMS);
-        // Ensure that the event is emitted
-        vm.expectEmit(address(clearinghouseV1));
-        emit Deactivate();
-        clearinghouseV1.emergencyShutdown();
-
-        // Check that the system is shutdown and logged in the CHREG
-        assertFalse(clearinghouseV1.active());
-        // assertEq(CHREGv1(CHREG).activeCount(), 0);
-        // Check the token balances
-        assertEq(dai.balanceOf(address(clearinghouseV1)), 0);
-        assertEq(sdai.balanceOf(address(clearinghouseV1)), 0);
-        assertEq(dai.balanceOf(TRSRY), cacheCH.daiBalance + cacheTRSRY.daiBalance);
-        assertEq(sdai.balanceOf(TRSRY), cacheCH.sdaiBalance + cacheTRSRY.sdaiBalance);
     }
 }

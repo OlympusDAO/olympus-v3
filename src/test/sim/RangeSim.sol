@@ -41,6 +41,8 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
+import {MockReserveMigrator} from "test/mocks/MockReserveMigrator.sol";
+import {MockEmissionManager} from "test/mocks/MockEmissionManager.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -199,6 +201,8 @@ abstract contract RangeSim is Test {
     RolesAdmin public rolesAdmin;
     ZeroDistributor public distributor;
     YieldRepurchaseFacility public yieldRepo;
+    MockReserveMigrator public reserveMigrator;
+    MockEmissionManager public emissionManager;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
@@ -217,6 +221,7 @@ abstract contract RangeSim is Test {
     MockOhm internal ohm;
     MockERC20 internal reserve;
     MockERC4626 internal wrappedReserve;
+    MockERC20 internal oldReserve;
     ZuniswapV2Factory internal lpFactory;
     ZuniswapV2Pair internal pool;
     ZuniswapV2Router internal router;
@@ -290,6 +295,7 @@ abstract contract RangeSim is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             require(address(reserve) < address(ohm)); // ensure reserve is token0 in the LP pool
             wrappedReserve = new MockERC4626(reserve, "Wrapped Reserve", "WRSV");
+            oldReserve = new MockERC20("Old Reserve", "ORSV", 18);
 
             ohmEthPriceFeed = new MockPriceFeed();
             ohmEthPriceFeed.setDecimals(18);
@@ -385,7 +391,7 @@ abstract contract RangeSim is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve), address(wrappedReserve)],
+                [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
                 [
                     _params.cushionFactor, // cushionFactor
                     uint32(vm.envUint("CUSHION_DURATION")), // duration
@@ -404,12 +410,13 @@ abstract contract RangeSim is Test {
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
-                address(reserve),
                 address(wrappedReserve),
                 address(teller),
                 address(auctioneer),
                 address(0) // no clearinghouse
             );
+            reserveMigrator = new MockReserveMigrator();
+            emissionManager = new MockEmissionManager();
 
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);
@@ -420,6 +427,8 @@ abstract contract RangeSim is Test {
                 operator,
                 distributor,
                 yieldRepo,
+                reserveMigrator,
+                emissionManager,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
@@ -450,8 +459,8 @@ abstract contract RangeSim is Test {
             // Configure access control
 
             // Operator roles
-            rolesAdmin.grantRole("operator_operate", address(heart));
-            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("heart", address(heart));
+            rolesAdmin.grantRole("heart", guardian);
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);

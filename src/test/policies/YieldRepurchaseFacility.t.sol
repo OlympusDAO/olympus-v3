@@ -48,7 +48,8 @@ contract YieldRepurchaseFacilityTest is Test {
     BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
-    MockERC4626 internal wrappedReserve;
+    MockERC4626 internal sReserve;
+    MockERC20 internal oldReserve;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
@@ -95,7 +96,8 @@ contract YieldRepurchaseFacilityTest is Test {
             /// Deploy mock tokens
             ohm = new MockOhm("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
-            wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
+            oldReserve = new MockERC20("Old Reserve", "oRSV", 18);
+            sReserve = new MockERC4626(reserve, "sReserve", "sRSV");
         }
 
         {
@@ -125,7 +127,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         {
             // Deploy mock clearinghouse
-            clearinghouse = new MockClearinghouse(address(reserve), address(wrappedReserve));
+            clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
 
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
@@ -135,7 +137,7 @@ contract YieldRepurchaseFacilityTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve), address(wrappedReserve)],
+                [address(ohm), address(reserve), address(sReserve), address(oldReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -153,8 +155,7 @@ contract YieldRepurchaseFacilityTest is Test {
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
-                address(reserve),
-                address(wrappedReserve),
+                address(sReserve),
                 address(teller),
                 address(auctioneer),
                 address(clearinghouse)
@@ -200,20 +201,20 @@ contract YieldRepurchaseFacilityTest is Test {
         reserve.mint(address(TRSRY), testReserve * 80);
         reserve.mint(address(clearinghouse), testReserve * 20);
 
-        // Deposit TRSRY reserves into wrappedReserve
+        // Deposit TRSRY reserves into sReserve
         vm.startPrank(address(TRSRY));
-        reserve.approve(address(wrappedReserve), testReserve * 80);
-        wrappedReserve.deposit(testReserve * 80, address(TRSRY));
+        reserve.approve(address(sReserve), testReserve * 80);
+        sReserve.deposit(testReserve * 80, address(TRSRY));
         vm.stopPrank();
 
-        // Deposit clearinghouse reserves into wrappedReserve
+        // Deposit clearinghouse reserves into sReserve
         vm.startPrank(address(clearinghouse));
-        reserve.approve(address(wrappedReserve), testReserve * 20);
-        wrappedReserve.deposit(testReserve * 20, address(clearinghouse));
+        reserve.approve(address(sReserve), testReserve * 20);
+        sReserve.deposit(testReserve * 20, address(clearinghouse));
         vm.stopPrank();
 
         // Mint additional reserve to the wrapped reserve to hit the initial conversion rate
-        reserve.mint(address(wrappedReserve), 5 * testReserve);
+        reserve.mint(address(sReserve), 5 * testReserve);
 
         // Approve the bond teller for the tokens to swap
         vm.prank(alice);
@@ -232,14 +233,14 @@ contract YieldRepurchaseFacilityTest is Test {
     }
 
     function _mintYield() internal {
-        // Get the balance of reserves in the wrappedReserve contract
-        uint256 wrappedReserveBalance = wrappedReserve.totalAssets();
+        // Get the balance of reserves in the sReserve contract
+        uint256 sReserveBalance = sReserve.totalAssets();
 
         // Calculate the yield to mint (0.01%)
-        uint256 yield = wrappedReserveBalance / 10000;
+        uint256 yield = sReserveBalance / 10000;
 
         // Mint the yield
-        reserve.mint(address(wrappedReserve), yield);
+        reserve.mint(address(sReserve), yield);
     }
 
     // test cases
@@ -273,8 +274,8 @@ contract YieldRepurchaseFacilityTest is Test {
     function test_setup() public {
         // addresses are set correctly
         assertEq(address(yieldRepo.ohm()), address(ohm));
-        assertEq(address(yieldRepo.dai()), address(reserve));
-        assertEq(address(yieldRepo.sdai()), address(wrappedReserve));
+        assertEq(address(yieldRepo.reserve()), address(reserve));
+        assertEq(address(yieldRepo.sReserve()), address(sReserve));
         assertEq(address(yieldRepo.teller()), address(teller));
         assertEq(address(yieldRepo.auctioneer()), address(auctioneer));
 
@@ -284,7 +285,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // initial conversion rate is set correctly
         assertEq(yieldRepo.lastConversionRate(), initialConversionRate);
-        assertEq((wrappedReserve.totalAssets() * 1e18) / wrappedReserve.totalSupply(), 1_05e16);
+        assertEq((sReserve.totalAssets() * 1e18) / sReserve.totalSupply(), 1_05e16);
 
         // initial yield is set correctly
         assertEq(yieldRepo.nextYield(), initialYield);
@@ -294,29 +295,29 @@ contract YieldRepurchaseFacilityTest is Test {
     }
 
     function test_endEpoch_firstCall_currentLessThanWall() public {
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
         // Cache the TRSRY sDAI balance
-        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
 
         vm.prank(heart);
         yieldRepo.endEpoch();
 
         // Check that the initial yield was withdrawn from the TRSRY
         assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
-            trsryBalance - wrappedReserve.previewWithdraw(initialYield)
+            sReserve.balanceOf(address(TRSRY)),
+            trsryBalance - sReserve.previewWithdraw(initialYield)
         );
 
         // Check that the yieldRepo contract has the correct reserve balance
         assertEq(reserve.balanceOf(address(yieldRepo)), initialYield / 7);
         assertEq(
-            wrappedReserve.balanceOf(address(yieldRepo)),
-            wrappedReserve.previewDeposit(initialYield - initialYield / 7)
+            sReserve.balanceOf(address(yieldRepo)),
+            sReserve.previewDeposit(initialYield - initialYield / 7)
         );
 
         // Check that the bond market was created
@@ -368,29 +369,29 @@ contract YieldRepurchaseFacilityTest is Test {
         // Change the current price to be greater than the wall
         PRICE.setLastPrice(15 * 1e18);
 
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
         // Cache the TRSRY sDAI balance
-        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
 
         vm.prank(heart);
         yieldRepo.endEpoch();
 
         // Check that the initial yield was withdrawn from the TRSRY
         assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
-            trsryBalance - wrappedReserve.previewWithdraw(initialYield)
+            sReserve.balanceOf(address(TRSRY)),
+            trsryBalance - sReserve.previewWithdraw(initialYield)
         );
 
         // Check that the yieldRepo contract has the correct reserve balance
         assertEq(reserve.balanceOf(address(yieldRepo)), initialYield / 7);
         assertEq(
-            wrappedReserve.balanceOf(address(yieldRepo)),
-            wrappedReserve.previewDeposit(initialYield - initialYield / 7)
+            sReserve.balanceOf(address(yieldRepo)),
+            sReserve.previewDeposit(initialYield - initialYield / 7)
         );
 
         // Check that a bond market was not created
@@ -402,49 +403,49 @@ contract YieldRepurchaseFacilityTest is Test {
         vm.prank(guardian);
         yieldRepo.shutdown(new ERC20[](0));
 
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
         // Cache the TRSRY sDAI balance
-        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
 
         vm.prank(heart);
         yieldRepo.endEpoch();
 
         // Check that the initial yield was not withdrawn from the treasury
-        assertEq(wrappedReserve.balanceOf(address(TRSRY)), trsryBalance);
+        assertEq(sReserve.balanceOf(address(TRSRY)), trsryBalance);
 
         // Check that the yieldRepo contract has not received any funds
         assertEq(reserve.balanceOf(address(yieldRepo)), 0);
-        assertEq(wrappedReserve.balanceOf(address(yieldRepo)), 0);
+        assertEq(sReserve.balanceOf(address(yieldRepo)), 0);
 
         // Check that the bond market was not created
         assertEq(aggregator.marketCounter(), nextBondMarketId);
     }
 
     function test_endEpoch_notDivisBy3() public {
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Make the initial call to get the epoch counter to reset
         vm.prank(heart);
         yieldRepo.endEpoch();
 
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
         // Cache the TRSRY sDAI balance
-        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
 
         // Cache the yieldRepo contract reserve balance
         uint256 yieldRepoReserveBalance = reserve.balanceOf(address(yieldRepo));
-        uint256 yieldRepoWrappedReserveBalance = wrappedReserve.balanceOf(address(yieldRepo));
+        uint256 yieldRepoWrappedReserveBalance = sReserve.balanceOf(address(yieldRepo));
 
         // Call end epoch again
         vm.prank(heart);
@@ -454,18 +455,18 @@ contract YieldRepurchaseFacilityTest is Test {
         assertEq(aggregator.marketCounter(), nextBondMarketId);
 
         // Check that the treasury balance has not changed
-        assertEq(wrappedReserve.balanceOf(address(TRSRY)), trsryBalance);
+        assertEq(sReserve.balanceOf(address(TRSRY)), trsryBalance);
 
         // Check that the yieldRepo contract reserve balance has not changed
         assertEq(reserve.balanceOf(address(yieldRepo)), yieldRepoReserveBalance);
-        assertEq(wrappedReserve.balanceOf(address(yieldRepo)), yieldRepoWrappedReserveBalance);
+        assertEq(sReserve.balanceOf(address(yieldRepo)), yieldRepoWrappedReserveBalance);
 
         // Check that the epoch has been incremented
         assertEq(yieldRepo.epoch(), 1);
     }
 
     function test_endEpoch_divisBy3_notEpochLength() public {
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Make the initial call to get the epoch counter to reset
@@ -483,7 +484,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Cache the yieldRepo contract reserve balance before any bonds are issued
         uint256 yieldRepoReserveBalance = reserve.balanceOf(address(yieldRepo));
-        uint256 yieldRepoWrappedReserveBalance = wrappedReserve.balanceOf(address(yieldRepo));
+        uint256 yieldRepoWrappedReserveBalance = sReserve.balanceOf(address(yieldRepo));
 
         // Purchase a bond from the existing bond market
         // So that there is some OHM in the contract to burn
@@ -497,14 +498,14 @@ contract YieldRepurchaseFacilityTest is Test {
         // Warp forward a day so that the initial bond market ends
         vm.warp(block.timestamp + 1 days);
 
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
         // Cache the TRSRY sDAI balance
-        uint256 trsryBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
 
         // Cache the OHM balance in the yieldRepo contract
         uint256 yieldRepoOhmBalance = ohm.balanceOf(address(yieldRepo));
@@ -521,22 +522,22 @@ contract YieldRepurchaseFacilityTest is Test {
         assertEq(ohm.balanceOf(address(yieldRepo)), 0);
 
         // Check that the treasury balance has changed by the amount of backing withdrawn for the burnt OHM
-        uint256 daiFromBurnedOhm = 100e9 * yieldRepo.backingPerToken();
+        uint256 reserveFromBurnedOhm = 100e9 * yieldRepo.backingPerToken();
         assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
-            trsryBalance - wrappedReserve.previewWithdraw(daiFromBurnedOhm)
+            sReserve.balanceOf(address(TRSRY)),
+            trsryBalance - sReserve.previewWithdraw(reserveFromBurnedOhm)
         );
 
         // Check that the balance of the yieldRepo contract has changed correctly
         uint256 expectedBidAmount = (yieldRepoReserveBalance +
-            wrappedReserve.previewRedeem(yieldRepoWrappedReserveBalance) +
-            daiFromBurnedOhm) / 6;
+            sReserve.previewRedeem(yieldRepoWrappedReserveBalance) +
+            reserveFromBurnedOhm) / 6;
 
         // Check that the yieldRepo contract reserve balances have changed correctly
         assertEq(reserve.balanceOf(address(yieldRepo)), expectedBidAmount);
         assertGe(
-            wrappedReserve.balanceOf(address(yieldRepo)),
-            yieldRepoWrappedReserveBalance - wrappedReserve.previewWithdraw(expectedBidAmount)
+            sReserve.balanceOf(address(yieldRepo)),
+            yieldRepoWrappedReserveBalance - sReserve.previewWithdraw(expectedBidAmount)
         );
 
         // Confirm that the bond market has the correct configuration
@@ -576,7 +577,7 @@ contract YieldRepurchaseFacilityTest is Test {
     // error ROLES_RequireRole(bytes32 role_);
 
     function test_adjustNextYield() public {
-        // Mint yield to the wrappedReserve
+        // Mint yield to the sReserve
         _mintYield();
 
         // Call endEpoch to set the next yield
@@ -647,16 +648,16 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Cache the yieldRepo contract reserve balances
         uint256 yieldRepoReserveBalance = reserve.balanceOf(address(yieldRepo));
-        uint256 yieldRepoWrappedReserveBalance = wrappedReserve.balanceOf(address(yieldRepo));
+        uint256 yieldRepoWrappedReserveBalance = sReserve.balanceOf(address(yieldRepo));
 
         // Cache the treasury balances of the reserve tokens
         uint256 trsryReserveBalance = reserve.balanceOf(address(TRSRY));
-        uint256 trsryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 trsryWrappedReserveBalance = sReserve.balanceOf(address(TRSRY));
 
         // Setup array of tokens to extract
         ERC20[] memory tokens = new ERC20[](2);
         tokens[0] = reserve;
-        tokens[1] = wrappedReserve;
+        tokens[1] = sReserve;
 
         // Call shutdown with an invalid caller
         // Expect it to fail
@@ -676,10 +677,10 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Check that the yieldRepo contract reserve balances have been transferred to the TRSRY
         assertEq(reserve.balanceOf(address(yieldRepo)), 0);
-        assertEq(wrappedReserve.balanceOf(address(yieldRepo)), 0);
+        assertEq(sReserve.balanceOf(address(yieldRepo)), 0);
         assertEq(reserve.balanceOf(address(TRSRY)), trsryReserveBalance + yieldRepoReserveBalance);
         assertEq(
-            wrappedReserve.balanceOf(address(TRSRY)),
+            sReserve.balanceOf(address(TRSRY)),
             trsryWrappedReserveBalance + yieldRepoWrappedReserveBalance
         );
     }
@@ -693,13 +694,11 @@ contract YieldRepurchaseFacilityTest is Test {
         yieldRepo.endEpoch();
 
         // Cache yield earning balances in the clearinghouse and treasury
-        uint256 clearinghouseWrappedReserveBalance = wrappedReserve.balanceOf(
-            address(clearinghouse)
-        );
-        uint256 trsryWrappedReserveBalance = wrappedReserve.balanceOf(address(TRSRY));
+        uint256 clearinghouseWrappedReserveBalance = sReserve.balanceOf(address(clearinghouse));
+        uint256 trsryWrappedReserveBalance = sReserve.balanceOf(address(TRSRY));
 
         // Calculate the expected yield earning reserve balance, in reserves
-        uint256 expectedYieldEarningReserveBalance = wrappedReserve.previewRedeem(
+        uint256 expectedYieldEarningReserveBalance = sReserve.previewRedeem(
             clearinghouseWrappedReserveBalance + trsryWrappedReserveBalance
         );
 
@@ -717,12 +716,11 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Get the "last values" from the yieldRepo contract
         uint256 lastReserveBalance = yieldRepo.lastReserveBalance();
-        uint256 lastConversionRate = yieldRepo.lastConversionRate();
 
         // Get the principal receivables from the clearinghouse
         uint256 principalReceivables = clearinghouse.principalReceivables();
 
-        // Mint additional yield to the wrappedReserve
+        // Mint additional yield to the sReserve
         _mintYield();
 
         // Calculate the expected next yield
