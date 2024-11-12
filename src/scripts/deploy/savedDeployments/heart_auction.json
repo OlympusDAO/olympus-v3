@@ -1,0 +1,11 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusHeart",
+            "args": {
+                "auctionDuration": 1200,
+                "maxReward": 40000000000
+            }
+        }
+    ]
+}
