@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import "src/Kernel.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
@@ -14,6 +15,8 @@ interface IDaiUsds {
 }
 
 contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
+    using TransferHelper for ERC20;
+
     // ========== STATE VARIABLES ========== //
 
     // Modules
@@ -114,7 +117,7 @@ contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
         // If the total is greater than 0, migrate the reserves
         if (fromBalance > 0) {
             // Approve the migrator for the total amount of from reserves
-            from.approve(address(migrator), fromBalance);
+            from.safeApprove(address(migrator), fromBalance);
 
             // Cache the balance of the to token
             uint256 toBalance = to.balanceOf(address(this));
@@ -128,7 +131,7 @@ contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
             if (newToBalance < toBalance + fromBalance) revert ReserveMigrator_BadMigration();
 
             // Wrap the to reserves and deposit them into the TRSRY
-            to.approve(address(sTo), newToBalance);
+            to.safeApprove(address(sTo), newToBalance);
             sTo.deposit(newToBalance, address(TRSRY));
 
             // Emit event
@@ -167,6 +170,6 @@ contract ReserveMigrator is IReserveMigrator, Policy, RolesConsumer {
     /// @param token_ The address of the ERC20 token to rescue
     function rescue(address token_) external onlyRole("reserve_migrator_admin") {
         ERC20 token = ERC20(token_);
-        token.transfer(address(TRSRY), token.balanceOf(address(this)));
+        token.safeTransfer(address(TRSRY), token.balanceOf(address(this)));
     }
 }

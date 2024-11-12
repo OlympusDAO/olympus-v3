@@ -3,9 +3,9 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -31,11 +31,12 @@ interface Clearinghouse {
 // solhint-disable max-states-count
 contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     using FullMath for uint256;
+    using TransferHelper for ERC20;
 
     // ========== STATE VARIABLES ========== //
 
     /// @notice active base emissions rate change information
-    /// @dev active until beatsLeft is 0
+    /// @dev active until daysLeft is 0
     BaseRateChange public rateChange;
 
     // Modules
@@ -66,6 +67,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     uint8 internal _oracleDecimals;
     uint8 internal immutable _ohmDecimals;
+    uint8 internal immutable _gohmDecimals;
     uint8 internal immutable _reserveDecimals;
 
     /// @notice timestamp of last shutdown
@@ -101,6 +103,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
+        _gohmDecimals = ERC20(gohm_).decimals();
         _reserveDecimals = reserve.decimals();
 
         // Max approve sReserve contract for reserve for deposits
@@ -146,8 +149,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         beatCounter = ++beatCounter % 3;
         if (beatCounter != 0) return;
 
-        if (rateChange.beatsLeft != 0) {
-            --rateChange.beatsLeft;
+        if (rateChange.daysLeft != 0) {
+            --rateChange.daysLeft;
             if (rateChange.addition) baseEmissionRate += rateChange.changeBy;
             else baseEmissionRate -= rateChange.changeBy;
         }
@@ -314,16 +317,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice shutdown the emission manager locally, burn OHM, and return any reserves to TRSRY
+    /// @notice shutdown the emission manager locally and close the active bond market
     function shutdown() external onlyRole("emergency_shutdown") {
         locallyActive = false;
         shutdownTimestamp = uint48(block.timestamp);
 
-        uint256 ohmBalance = ohm.balanceOf(address(this));
-        if (ohmBalance > 0) BurnableERC20(address(ohm)).burn(ohmBalance);
-
-        uint256 reserveBalance = reserve.balanceOf(address(this));
-        if (reserveBalance > 0) sReserve.deposit(reserveBalance, address(TRSRY));
+        // Shutdown the bond market, if it is active
+        if (auctioneer.isLive(activeMarketId)) {
+            auctioneer.closeMarket(activeMarketId);
+        }
 
         emit Deactivated();
     }
@@ -338,6 +340,14 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         locallyActive = true;
 
         emit Activated();
+    }
+
+    /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
+    /// @dev This function is restricted to the emissions_admin role
+    /// @param token_ The address of the ERC20 token to rescue
+    function rescue(address token_) external onlyRole("emissions_admin") {
+        ERC20 token = ERC20(token_);
+        token.safeTransfer(address(TRSRY), token.balanceOf(address(this)));
     }
 
     /// @notice set the base emissions rate
@@ -389,7 +399,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
     function setBacking(uint256 newBacking) external onlyRole("emissions_admin") {
         // Backing cannot be reduced by more than 10% at a time
-        if (newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
+        if (newBacking == 0 || newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
         backing = newBacking;
 
         emit BackingChanged(newBacking);
@@ -439,7 +449,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice return supply, measured as supply of gOHM in OHM denomination
     function getSupply() public view returns (uint256 supply) {
-        return (gohm.totalSupply() * gohm.index()) / 10 ** _ohmDecimals;
+        return (gohm.totalSupply() * gohm.index()) / 10 ** _gohmDecimals;
     }
 
     /// @notice return the current premium as a percentage where 1e18 is 100%
