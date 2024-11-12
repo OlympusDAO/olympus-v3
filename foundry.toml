@@ -13,8 +13,8 @@ remappings = [
     'layer-zero/=lib/solidity-examples/contracts/',
     '@openzeppelin/=lib/openzeppelin-contracts/',
     'bonds/=lib/bonds/src/',
-    'test/=src/test/',
     'clones/=lib/clones-with-immutable-args/src/',
+    'proposal-sim/=lib/forge-proposal-simulator/',
 ]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
@@ -29,3 +29,9 @@ chain_id = 1
 
 [fuzz]
 runs = 256
+
+[soldeer]
+remappings_generate = false
+
+[dependencies]
+surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", rev = "034c912ae9b5e707a5afd21f145b452ad8e800df" }

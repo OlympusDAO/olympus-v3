@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
-import {console2} from "forge-std/console2.sol";
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
-import {Address} from "proposal-sim/utils/Address.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -17,6 +14,9 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
 import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
+
+// Script
+import {ProposalScript} from "./ProposalScript.sol";
 
 /// @notice Activates the contract registry module and associated configuration policy.
 contract ContractRegistryProposal is GovernorBravoProposal {
@@ -210,40 +210,6 @@ contract ContractRegistryProposal is GovernorBravoProposal {
     }
 }
 
-// @notice GovernorBravoScript is a script that runs BRAVO_01 proposal.
-// BRAVO_01 proposal deploys a Vault contract and an ERC20 token contract
-// Then the proposal transfers ownership of both Vault and ERC20 to the timelock address
-// Finally the proposal whitelist the ERC20 token in the Vault contract
-// @dev Use this script to simulates or run a single proposal
-// Use this as a template to create your own script
-// `forge script script/GovernorBravo.s.sol:GovernorBravoScript -vvvv --rpc-url {rpc} --broadcast --verify --etherscan-api-key {key}`
-contract ContractRegistryProposalScript is ScriptSuite {
-    using Address for address;
-
-    string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
-
-    constructor() ScriptSuite(ADDRESSES_PATH, new ContractRegistryProposal()) {}
-
-    function run() public override {
-        // set debug mode to true and run it to build the actions list
-        proposal.setDebug(true);
-
-        // run the proposal to build it
-        proposal.run(addresses, address(0));
-
-        // get the calldata for the proposal, doing so in debug mode prints it to the console
-        bytes memory proposalCalldata = proposal.getCalldata();
-
-        address governor = addresses.getAddress("olympus-governor");
-
-        // Register the proposal
-        console2.log("\n\n");
-        console2.log("Submitting proposal...");
-        vm.startBroadcast();
-        console2.log("Proposer: ", msg.sender);
-        bytes memory proposalReturnData = address(payable(governor)).functionCall(proposalCalldata);
-        vm.stopBroadcast();
-        uint256 proposalId = abi.decode(proposalReturnData, (uint256));
-        console2.log("Proposal ID:", proposalId);
-    }
+contract ContractRegistryProposalScript is ProposalScript {
+    constructor() ProposalScript(new ContractRegistryProposal()) {}
 }
