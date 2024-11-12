@@ -1,0 +1,16 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusMinter",
+            "args": {
+                "ohm": ""
+            }
+        },
+        {
+            "name": "CrossChainBridge",
+            "args": {
+                "endpoint": "0xbfD2135BFfbb0B5378b56643c2Df8a87552Bfa23"
+            }
+        }
+    ]
+}

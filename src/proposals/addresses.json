@@ -1,12 +1,17 @@
 [
     {
-        "addr": "0x0000000000000000000000000000000000000001",
+        "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
         "name": "proposer",
         "chainId": 1
     },
     {
         "addr": "0x0941233c964e7d7Efeb05D253176E5E634cEFfcD",
         "name": "olympus-governor",
+        "chainId": 1
+    },
+    {
+        "addr": "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39",
+        "name": "olympus-timelock",
         "chainId": 1
     },
     {
@@ -67,6 +72,11 @@
     {
         "addr": "0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c",
         "name": "olympus-policy-clearinghouse",
+        "chainId": 1
+    },
+    {
+        "addr": "0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59",
+        "name": "olympus-module-roles",
         "chainId": 1
     }
 ]
