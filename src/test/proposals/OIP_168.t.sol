@@ -12,7 +12,7 @@ import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelega
 import {Timelock} from "src/external/governance/Timelock.sol";
 
 // OIP_168 imports
-import {OIP_168} from "proposals/OIP_168.sol";
+import {OIP_168} from "src/proposals/OIP_168.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission

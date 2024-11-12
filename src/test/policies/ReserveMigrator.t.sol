@@ -2,12 +2,12 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-import {MockDaiUsds} from "test/mocks/MockDaiUsds.sol";
+import {MockDaiUsds} from "src/test/mocks/MockDaiUsds.sol";
 
 import "src/Kernel.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";

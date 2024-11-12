@@ -12,7 +12,7 @@ import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelega
 import {Timelock} from "src/external/governance/Timelock.sol";
 
 // EmissionManagerProposal imports
-import {EmissionManagerProposal} from "proposals/EmissionManagerProposal.sol";
+import {EmissionManagerProposal} from "src/proposals/EmissionManagerProposal.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
