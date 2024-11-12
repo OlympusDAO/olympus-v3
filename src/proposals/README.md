@@ -54,6 +54,7 @@ To create a new simulatable proposal, follow these steps:
                 Kernel kernel = Kernel(addresses.getAddress("olympus-kernel"));
                 address TRSRY = address(kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
                 ```
+
             - **Olympus policies**: `"olympus-policy-xxx"`
             - **Olympus legacy contracts (OHM, gOHM, staking)**: `"olympus-legacy-xxx"`
             - **Olympus multisigs**: `olympus-multisig-dao` or `olympus-multisig-emergency`
