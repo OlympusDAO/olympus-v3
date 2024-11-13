@@ -24,9 +24,11 @@ import {EmissionManager} from "src/policies/EmissionManager.sol";
 contract EmissionManagerProposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
+    /// @notice The base emission rate, in OHM scale. Set to 0.02%.
+    uint256 public constant BASE_EMISSIONS_RATE = 2e5;
+    /// @notice The minimum premium, where 100% = 1e18. Set to 100%.
+    uint256 public constant MINIMUM_PREMIUM = 1e18;
     // TODO fill in values
-    uint256 public constant BASE_EMISSIONS_RATE = 0;
-    uint256 public constant MINIMUM_PREMIUM = 0;
     uint256 public constant BACKING = 0;
     uint48 public constant RESTART_TIMEFRAME = 0;
 
