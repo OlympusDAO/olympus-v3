@@ -3,12 +3,12 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 
-import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test/lib/larping.sol";
-import {Quabi} from "test/lib/quabi/Quabi.sol";
-import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
+import {larping} from "src/test/lib/larping.sol";
+import {Quabi} from "src/test/lib/quabi/Quabi.sol";
+import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import "modules/MINTR/OlympusMinter.sol";

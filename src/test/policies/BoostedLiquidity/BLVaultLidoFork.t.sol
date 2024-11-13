@@ -2,12 +2,12 @@
 pragma solidity 0.8.15;
 
 import {Test, stdError} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test/lib/larping.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
+import {larping} from "src/test/lib/larping.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
+import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 import {ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
@@ -37,7 +37,6 @@ interface IWsteth {
 
 // solhint-disable-next-line max-states-count
 contract BLVaultLidoTestFork is Test {
-    /*
     using FullMath for uint256;
 
     address internal alice;
@@ -80,7 +79,12 @@ contract BLVaultLidoTestFork is Test {
 
     uint256[] internal minAmountsOut = [0, 0];
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     function setUp() public {
+        // Mainnet Fork at a fixed block that is known to work
+        vm.createSelectFork(RPC_URL, 18762666);
+
         {
             // Set up users
             alice = payable(address(uint160(uint256(keccak256(abi.encodePacked("alice"))))));
@@ -534,5 +538,4 @@ contract BLVaultLidoTestFork is Test {
         // Check state after
         assertTrue(aliceVault.getUserPairShare() > 0);
     }
-*/
 }

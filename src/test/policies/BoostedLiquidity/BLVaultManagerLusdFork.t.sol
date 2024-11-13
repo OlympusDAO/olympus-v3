@@ -2,12 +2,12 @@
 pragma solidity 0.8.15;
 
 import {Test, stdError} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test/lib/larping.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
+import {larping} from "src/test/lib/larping.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
+import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 import {ERC20, MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
@@ -30,7 +30,6 @@ import {console2} from "forge-std/console2.sol";
 
 // solhint-disable-next-line max-states-count
 contract BLVaultManagerLusdTestFork is Test {
-    /*
     using FullMath for uint256;
 
     address internal alice;
@@ -69,7 +68,12 @@ contract BLVaultManagerLusdTestFork is Test {
 
     uint256 internal constant OHM_LIMIT = 233_645e9; // $2.5m = 233,645 OHM
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     function setUp() public {
+        // Mainnet Fork at a fixed block that is known to work
+        vm.createSelectFork(RPC_URL, 18762666);
+
         {
             // Set up users
             alice = payable(address(uint160(uint256(keccak256(abi.encodePacked("alice"))))));
@@ -912,5 +916,4 @@ contract BLVaultManagerLusdTestFork is Test {
         // Check state after
         assertEq(vaultManager.isLusdBLVaultActive(), false);
     }
-    */
 }
