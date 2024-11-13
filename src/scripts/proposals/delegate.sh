@@ -13,12 +13,12 @@ set -e
 # Iterate through named arguments
 # Source: https://unix.stackexchange.com/a/388038
 while [ $# -gt 0 ]; do
-  if [[ $1 == *"--"* ]]; then
-    v="${1/--/}"
-    declare $v="$2"
-  fi
+    if [[ $1 == *"--"* ]]; then
+        v="${1/--/}"
+        declare $v="$2"
+    fi
 
-  shift
+    shift
 done
 
 # Get the name of the .env file or use the default
@@ -26,26 +26,26 @@ ENV_FILE=${env:-".env"}
 echo "Sourcing environment variables from $ENV_FILE"
 
 # Load environment file
-set -a  # Automatically export all variables
+set -a # Automatically export all variables
 source $ENV_FILE
-set +a  # Disable automatic export
+set +a # Disable automatic export
 
 # Check if the RPC_URL was specified
 if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL was not specified"
-  exit 1
+    echo "Error: RPC_URL was not specified"
+    exit 1
 fi
 
 # Check if the forge account was specified
 if [ -z "$account" ]; then
-  echo "Error: Forge account was not specified. Set up using 'cast wallet'."
-  exit 1
+    echo "Error: Forge account was not specified. Set up using 'cast wallet'."
+    exit 1
 fi
 
 # Check if the delegate was specified
 if [ -z "$delegate" ]; then
-  echo "Error: Delegate was not specified"
-  exit 1
+    echo "Error: Delegate was not specified"
+    exit 1
 fi
 
 echo "Using RPC at URL: $RPC_URL"

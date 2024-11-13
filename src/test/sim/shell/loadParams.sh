@@ -17,7 +17,7 @@ for row in $params; do
     wallSpread=$(echo "$(echo $row | jq -r '.wallSpread')/1" | bc)
     cushionSpread=$(echo "$(echo $row | jq -r '.cushionSpread')/1" | bc)
     dynamicRR=$(echo $row | jq -r '.dynamicRR')
-    
+
     result=($key $maxLiqRatio $reserveFactor $cushionFactor $wallSpread $cushionSpread $dynamicRR)
 
     # Concatenate array elements into a single string with parentheses for encoding as tuple (struct)
