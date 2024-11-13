@@ -34,29 +34,46 @@ contract OIP_168 is GovernorBravoProposal {
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "OIP-168";
+        return "OIP-168: Migration of Reserves from DAI to USDS";
     }
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Migrate the reserve token from DAI to USDS\n\n",
-                "[Proposal](https://forum.olympusdao.finance/d/4633-oip-168-olympus-treasury-migration-from-daisdai-to-usdssusds)\n\n",
-                "## Roles to Assign\n\n",
+                "# OIP-168: Migrate the reserve token from DAI to USDS\n",
+                "\n",
+                "## Summary\n",
+                "\n",
+                "As Maker continues to reduce the DSR in favor of USDS, there is a tactical need to migrate a majority of Treasury Reserves from sDAI to sUSDS. Doing so will immediately create an additional 1% APY (sUSDS is currently 6.5% to sDAI's 5.5%) and failing to do so creates substantial missed opportunity cost.\n",
+                "\n",
+                "This OCG proposal will result in the following:\n",
+                "- Activation of a new ReserveMigrator policy that will periodically migrate any DAI/sDAI in the Treasury to USDS/sUSDS\n",
+                "- Activation of updated Clearinghouse, Heart, Operator and YieldRepurchaseFacility policies to support the new reserve token\n",
+                "\n",
+                "Read the [forum proposal](https://forum.olympusdao.finance/d/4633-oip-168-olympus-treasury-migration-from-daisdai-to-usdssusds) for more context.\n",
+                "\n",
+                "The new ReserveMigrator policy has also been audited. [Read the audit report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_11_EmissionManager_ReserveMigrator.pdf)\n",
+                "\n",
+                "## Roles to Assign\n",
+                "\n",
                 "1. `heart` to the new Heart policy (renamed from `operator_operate`)\n",
                 "2. `reserve_migrator_admin` to the Timelock and DAO MS\n",
-                "3. `callback_whitelist` to the new Operator policy\n\n",
-                "## Roles to Revoke\n\n",
+                "3. `callback_whitelist` to the new Operator policy\n",
+                "\n",
+                "## Roles to Revoke\n",
+                "\n",
                 "1. `heart` from the old Heart policy\n",
                 "2. `operator_operate` from the old Heart policy\n",
-                "3. `callback_whitelist` from the old Operator policy\n\n",
-                "## Policy Initialization Steps\n\n",
+                "3. `callback_whitelist` from the old Operator policy\n",
+                "\n",
+                "## Policy Initialization Steps\n",
+                "\n",
                 "1. Set `BondCallback.operator()` to the new Operator policy\n",
                 "2. Set sUSDS as the wrapped token for USDS on BondCallback\n",
                 "3. Initialize the new YieldRepurchaseFacility policy\n",
                 "4. Initialize the new Operator policy\n",
-                "5. Activate the new Clearinghouse policy"
+                "5. Activate the new Clearinghouse policy\n"
             );
     }
 
