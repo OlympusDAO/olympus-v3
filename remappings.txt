@@ -27,4 +27,4 @@ openzeppelin-contracts/=lib/openzeppelin-contracts/
 openzeppelin/=lib/forge-proposal-simulator/lib/openzeppelin-contracts/contracts/
 solidity-code-metrics/=node_modules/solidity-code-metrics/
 solidity-examples/=lib/solidity-examples/contracts/
-surl-1.0.0/=dependencies/surl-1.0.0/src
+surl-1.0.0/=dependencies/surl-1.0.0/src/

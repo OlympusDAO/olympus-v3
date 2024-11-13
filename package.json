@@ -14,9 +14,9 @@
     },
     "scripts": {
         "build": "chmod +x shell/*.sh && ./shell/full_install.sh",
-        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html'",
-        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html'",
-        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html'",
+        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '**/*.sh'",
+        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html' '**/*.sh'",
+        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' '**/*.sh'",
         "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
         "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
         "markdownlint": "markdownlint --fix '**/*.md'",
@@ -34,7 +34,8 @@
     },
     "devDependencies": {
         "markdownlint-cli": "^0.42.0",
-        "prettier": "^2.5.1",
+        "prettier": "^3.0.3",
+        "prettier-plugin-sh": "^0.14.0",
         "prettier-plugin-solidity": "^1.0.0-beta.19",
         "solhint": "^3.3.7",
         "solidity-code-metrics": "^0.0.25"
@@ -45,7 +46,8 @@
         "bracketSpacing": false,
         "printWidth": 100,
         "plugins": [
-            "prettier-plugin-solidity"
+            "prettier-plugin-solidity",
+            "prettier-plugin-sh"
         ]
     }
 }
