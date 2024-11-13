@@ -29,7 +29,7 @@ contract OIP_168 is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 168;
+        return 3;
     }
 
     // Returns the name of the proposal.
