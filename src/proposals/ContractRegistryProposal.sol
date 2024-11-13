@@ -36,7 +36,7 @@ contract ContractRegistryProposal is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 3;
+        return 5;
     }
 
     // Returns the name of the proposal.
@@ -48,20 +48,31 @@ contract ContractRegistryProposal is GovernorBravoProposal {
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Contract Registry Activation\n\n",
-                "This proposal activates the RGSTY module (and associated ContractRegistryAdmin configuration policy).\n\n",
-                "The RGSTY module is used to register commonly-used addresses that can be referenced by other contracts. These addresses are marked as either mutable or immutable.\n\n",
-                "The ContractRegistryAdmin policy is used to manage the addresses registered in the RGSTY module.\n\n",
-                "The RGSTY module will be used by the LoanConsolidator policy to lookup contract addresses. In order to roll-out the improved LoanConsolidator, this proposal must be executed first.\n\n",
-                "[View the audit report here](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)\n\n",
-                "[View the pull request here](https://github.com/OlympusDAO/olympus-v3/pull/19)\n\n",
-                "## Assumptions\n\n",
+                "# Contract Registry Activation\n",
+                "\n",
+                "This proposal activates the RGSTY module (and associated ContractRegistryAdmin configuration policy).\n",
+                "\n",
+                "The RGSTY module is used to register commonly-used addresses that can be referenced by other contracts. These addresses are marked as either mutable or immutable.\n",
+                "\n",
+                "The ContractRegistryAdmin policy is used to manage the addresses registered in the RGSTY module.\n",
+                "\n",
+                "The RGSTY module will be used by the LoanConsolidator policy to lookup contract addresses. In order to roll-out the improved LoanConsolidator, this proposal must be executed first.\n",
+                "\n",
+                "## Resources\n",
+                "\n",
+                "- [View the audit report here](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)\n",
+                "- [View the pull request here](https://github.com/OlympusDAO/olympus-v3/pull/19)\n",
+                "\n",
+                "## Assumptions\n",
+                "\n",
                 "- The RGSTY module has been deployed and activated as a module by the DAO MS.\n",
-                "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n\n",
-                "## Proposal Steps\n\n",
+                "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n",
+                "\n",
+                "## Proposal Steps\n",
+                "\n",
                 "1. Grant the `contract_registry_admin` role to the OCG Timelock.\n",
                 "2. Register immutable addresses for DAI, SDAI, USDS, SUSDS, GOHM and OHM.\n",
-                "3. Register mutable addresses for the Flash Lender and DAI-USDS Migrator contracts."
+                "3. Register mutable addresses for the Flash Lender and DAI-USDS Migrator contracts.\n"
             );
     }
 

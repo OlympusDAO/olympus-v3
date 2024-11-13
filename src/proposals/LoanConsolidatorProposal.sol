@@ -23,36 +23,47 @@ contract LoanConsolidatorProposal is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 4;
+        return 6;
     }
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "LoanConsolidator and Contract Registry Activation";
+        return "LoanConsolidator Activation";
     }
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# LoanConsolidator and Contract Registry Activation\n\n",
-                "This proposal activates the LoanConsolidator policy and installs the Contract Registry module (and associated ContractRegistryAdmin configuration policy).\n\n",
-                "The Contract Registry module is used to register commonly-used addresses that can be referenced by other contracts. These addresses are marked as either mutable or immutable.\n\n",
-                "The previous version of LoanConsolidator contained logic that, combined with infinite approvals, enabled an attacker to steal funds from users of the CoolerUtils contract (as it was known at the time).\n\n",
-                "This version introduces the following:\n\n",
+                "# LoanConsolidator Activation\n",
+                "\n",
+                "This proposal activates the LoanConsolidator policy.\n",
+                "\n",
+                "The previous version of LoanConsolidator contained logic that, combined with infinite approvals, enabled an attacker to steal funds from users of the CoolerUtils contract (as it was known at the time).\n",
+                "\n",
+                "This version introduces the following:\n",
+                "\n",
                 "- Strict checks on callers, ownership and Clearinghouse validity\n",
                 "- Allows for migration of loans from one Clearinghouse to another (in preparation for a USDS Clearinghouse)\n",
-                "- Allows for migration of loans from one owner to another\n\n",
-                "[View the audit report here](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)\n\n",
-                "[View the pull request here](https://github.com/OlympusDAO/olympus-v3/pull/19)\n\n",
-                "## Assumptions\n\n",
+                "- Allows for migration of loans from one owner to another\n",
+                "\n",
+                "## Resources\n",
+                "\n",
+                "- [View the audit report here](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)\n",
+                "\n",
+                "- [View the pull request here](https://github.com/OlympusDAO/olympus-v3/pull/19)\n",
+                "\n",
+                "## Assumptions\n",
+                "\n",
                 "- The Contract Registry module has been deployed and activated as a module by the DAO MS.\n",
                 "- The ContractRegistryAdmin policy has been deployed and activated as a policy by the DAO MS.\n",
                 "- The mutable and immutable contract addresses required by LoanConsolidator have been registered in the Contract Registry.\n",
-                "- The LoanConsolidator contract has been deployed and activated as a policy by the DAO MS.\n\n",
-                "## Proposal Steps\n\n",
+                "- The LoanConsolidator contract has been deployed and activated as a policy by the DAO MS.\n",
+                "\n",
+                "## Proposal Steps\n",
+                "\n",
                 "1. Grant the `loan_consolidator_admin` role to the OCG Timelock.\n",
-                "2. Activate the LoanConsolidator."
+                "2. Activate the LoanConsolidator.\n"
             );
     }
 
