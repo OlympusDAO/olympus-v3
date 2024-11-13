@@ -32,26 +32,42 @@ contract EmissionManagerProposal is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        // 3: ContractRegistry
-        // 4: LoanConsolidator
-        // 5: ReserveMigrator/OIP-168
-        return 6;
+        // 3: ReserveMigrator/OIP-168
+        return 4;
     }
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "Initialize EmissionManager";
+        return "Initialize Emissions Manager";
     }
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Initialize EmissionManager Policy\n\n",
-                "<insert justification here>\n\n", // TODO fill in justification
-                "## Roles to Assign\n\n",
+                "# Initialize Emissions Manager Policy\n",
+                "\n",
+                "## Summary\n",
+                "Install the Emissions Manager into the protocol, providing it with minter privileges to allow it to emit new supply.\n",
+                "\n",
+                "## Justification\n",
+                "The Emissions Manager allows the protocol to grow treasury, backing, and supply upon an increase in demand for OHM sufficient to push higher premiums.\n",
+                "\n",
+                "## Description\n",
+                "\n",
+                "This proposal will result in the following:\n",
+                "- Activation of the new EmissionManager policy\n",
+                "\n",
+                "[Read the forum proposal](https://forum.olympusdao.finance/d/4656-install-emissions-manager) for more context.\n",
+                "\n",
+                "The EmissionManager policy has been audited. [Read the audit report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_11_EmissionManager_ReserveMigrator.pdf)\n",
+                "\n",
+                "## Roles to Assign\n",
+                "\n",
                 "1. `emissions_admin` to the Timelock\n",
-                "## Policy Initialization Steps\n\n",
+                "\n",
+                "## Policy Initialization Steps\n",
+                "\n",
                 "1. Initialize the new EmissionManager policy"
             );
     }
