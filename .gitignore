@@ -2,6 +2,7 @@
 cache/
 node_modules/
 .env
+.env.*
 remappings.txt
 broadcast/
 src/test/sim/in/*.json
@@ -12,3 +13,4 @@ src/test/sim/sims/*.t.sol
 docs/
 coverage/
 /solidity-metrics.html
+dependencies/
