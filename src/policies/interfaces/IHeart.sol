@@ -16,6 +16,7 @@ interface IHeart {
     error Heart_BeatStopped();
     error Heart_InvalidParams();
     error Heart_BeatAvailable();
+    error Heart_InvalidFrequency();
 
     // =========  CORE FUNCTIONS ========= //
 
@@ -50,6 +51,11 @@ interface IHeart {
     /// @notice Access restricted
     /// @param  distributor_ The address of the new Distributor contract
     function setDistributor(address distributor_) external;
+
+    /// @notice Updates the YieldRepo contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  yieldRepo_ The address of the new YieldRepo contract
+    function setYieldRepo(address yieldRepo_) external;
 
     /// @notice Sets the max reward amount, and auction duration for the beat function
     /// @notice Access restricted

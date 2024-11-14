@@ -2,9 +2,9 @@
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockERC20} from "test/mocks/OlympusMocks.sol";
+import {MockERC20} from "src/test/mocks/OlympusMocks.sol";
 
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
