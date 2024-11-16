@@ -61,5 +61,6 @@ interface IEmissionManager {
     // ========== VIEW ========== //
 
     function getPremium() external view returns (uint256);
+
     function minimumPremium() external view returns (uint256);
 }

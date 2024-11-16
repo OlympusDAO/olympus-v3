@@ -168,14 +168,14 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         if (epoch == epochLength) {
             // reset at end of week
             epoch = 0;
-            
+
             // Get funds for the week, if needed
-            uint256 currentBalance =reserve.balanceOf(address(this)) +
+            uint256 currentBalance = reserve.balanceOf(address(this)) +
                 sReserve.previewRedeem(sReserve.balanceOf(address(this)));
             if (nextYield > currentBalance) {
                 _withdraw(nextYield - currentBalance);
             }
-            
+
             nextYield = getNextYield();
             emit NextYieldSet(nextYield);
             lastConversionRate = sReserve.previewRedeem(1e18);
@@ -185,7 +185,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         _getBackingForPurchased(); // convert yesterdays ohm purchases into sReserve
 
         // Return if the contract should not be buying right now
-        // We do this after the yield and balance changes are handled to avoid 
+        // We do this after the yield and balance changes are handled to avoid
         // issues with gaps in evaluating it
         if (shouldNotBuy()) return;
 

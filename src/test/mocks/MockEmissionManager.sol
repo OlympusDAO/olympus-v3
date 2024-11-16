@@ -16,6 +16,7 @@ contract MockEmissionManager is IEmissionManager {
     function getPremium() external view returns (uint256) {
         return _premium;
     }
+
     function minimumPremium() external view returns (uint256) {
         return _minimumPremium;
     }
