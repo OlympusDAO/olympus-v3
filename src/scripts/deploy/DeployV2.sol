@@ -1159,7 +1159,8 @@ contract OlympusDeploy is Script {
             address(sReserve),
             address(bondFixedTermTeller),
             address(bondAuctioneer),
-            address(clearinghouse)
+            address(clearinghouse),
+            address(emissionManager)
         );
 
         console2.log("YieldRepurchaseFacility deployed at:", address(yieldRepo));
@@ -1195,8 +1196,9 @@ contract OlympusDeploy is Script {
 
     // ========== EMISSION MANAGER ========== //
 
-    function _deployEmissionManager(bytes calldata) public returns (address) {
-        // No additional arguments for EmissionManager
+    function _deployEmissionManager(bytes calldata args) public returns (address) {
+        // Minimum premium is set on deploy
+        uint256 minimumPremium = abi.decode(args, (uint256));
 
         // Log dependencies
         console2.log("EmissionManager parameters:");
@@ -1217,7 +1219,8 @@ contract OlympusDeploy is Script {
             address(reserve),
             address(sReserve),
             address(bondAuctioneer),
-            address(bondFixedTermTeller)
+            address(bondFixedTermTeller),
+            minimumPremium
         );
 
         console2.log("EmissionManager deployed at:", address(emissionManager));

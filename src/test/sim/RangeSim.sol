@@ -407,16 +407,17 @@ abstract contract RangeSim is Test {
 
             staking = new MockStakingZD(8 hours, 0, block.timestamp);
             distributor = new ZeroDistributor(address(staking));
+            emissionManager = new MockEmissionManager();
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
                 address(ohm),
                 address(wrappedReserve),
                 address(teller),
                 address(auctioneer),
-                address(0) // no clearinghouse
+                address(0), // no clearinghouse
+                address(emissionManager)
             );
             reserveMigrator = new MockReserveMigrator();
-            emissionManager = new MockEmissionManager();
 
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);

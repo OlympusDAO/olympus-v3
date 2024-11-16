@@ -13,6 +13,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
+import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
@@ -55,7 +56,8 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     RANGEv2 public RANGE;
 
     // Policies
-    Clearinghouse public immutable clearinghouse; // = Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
+    Clearinghouse public clearinghouse;
+    IEmissionManager public emissionManager;
 
     // External contracts
     address public immutable teller; // = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
@@ -83,7 +85,8 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         address sReserve_,
         address teller_,
         address auctioneer_,
-        address clearinghouse_
+        address clearinghouse_,
+        address emissionManager_
     ) Policy(kernel_) {
         // Set immutable variables
         ohm = ERC20(ohm_);
@@ -92,6 +95,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         teller = teller_;
         auctioneer = IBondSDA(auctioneer_);
         clearinghouse = Clearinghouse(clearinghouse_);
+        emissionManager = IEmissionManager(emissionManager_);
 
         // Cache token decimals
         _reserveDecimals = reserve.decimals();
@@ -164,8 +168,14 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         if (epoch == epochLength) {
             // reset at end of week
             epoch = 0;
-            _withdraw(nextYield);
-
+            
+            // Get funds for the week, if needed
+            uint256 currentBalance =reserve.balanceOf(address(this)) +
+                sReserve.previewRedeem(sReserve.balanceOf(address(this)));
+            if (nextYield > currentBalance) {
+                _withdraw(nextYield - currentBalance);
+            }
+            
             nextYield = getNextYield();
             emit NextYieldSet(nextYield);
             lastConversionRate = sReserve.previewRedeem(1e18);
@@ -173,6 +183,11 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         }
 
         _getBackingForPurchased(); // convert yesterdays ohm purchases into sReserve
+
+        // Return if the contract should not be buying right now
+        // We do this after the yield and balance changes are handled to avoid 
+        // issues with gaps in evaluating it
+        if (shouldNotBuy()) return;
 
         uint256 reserveBalance = reserve.balanceOf(address(this));
         uint256 totalBalanceInReserve = reserveBalance +
@@ -288,9 +303,9 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         _withdraw(backing);
     }
 
-    /// @notice internal function to withdraw sReserve from treasury
+    /// @notice internal function to withdraw sReserve from the treasury
     /// @dev note amount given is in reserve, not sReserve
-    /// @param amount an amount to withdraw, in reserve
+    /// @param amount an amount that the contract should withdraw, in reserve
     function _withdraw(uint256 amount) internal {
         // Get the amount of sReserve to withdraw
         uint256 amountInSReserve = sReserve.previewWithdraw(amount);
@@ -345,5 +360,15 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         // balance and backingPerToken are 9 decimals, reserve amount is 18 decimals
         balance = ohm.balanceOf(address(this));
         backing = balance * backingPerToken;
+    }
+
+    function shouldNotBuy() public view returns (bool) {
+        // Get the current premium and minimumPremium from the BRR
+        uint256 premium = emissionManager.getPremium();
+        uint256 minimumPremium = emissionManager.minimumPremium();
+
+        // If the premium is greater than or equal to the minimum premium, it shouldn't buy
+        // Otherwise, it should
+        return premium >= minimumPremium;
     }
 }

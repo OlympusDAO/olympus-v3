@@ -57,4 +57,9 @@ interface IEmissionManager {
     /// @dev this function is restricted to the heart role and is called on each heart beat
     /// @dev if the contract is not active, the function does nothing
     function execute() external;
+
+    // ========== VIEW ========== //
+
+    function getPremium() external view returns (uint256);
+    function minimumPremium() external view returns (uint256);
 }

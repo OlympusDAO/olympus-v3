@@ -86,7 +86,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         address reserve_,
         address sReserve_,
         address auctioneer_,
-        address teller_
+        address teller_,
+        uint256 minimumPremium_
     ) Policy(kernel_) {
         // Set immutable variables
         if (ohm_ == address(0)) revert("OHM address cannot be 0");
@@ -105,6 +106,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         _ohmDecimals = ohm.decimals();
         _gohmDecimals = ERC20(gohm_).decimals();
         _reserveDecimals = reserve.decimals();
+
+        minimumPremium = minimumPremium_;
 
         // Max approve sReserve contract for reserve for deposits
         reserve.approve(address(sReserve), type(uint256).max);
@@ -453,7 +456,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     }
 
     /// @notice return the current premium as a percentage where 1e18 is 100%
-    function getPremium() public view returns (uint256) {
+    function getPremium() public view override returns (uint256) {
         uint256 price = PRICE.getLastPrice();
         uint256 pbr = (price * 10 ** _reserveDecimals) / backing;
         return pbr > ONE_HUNDRED_PERCENT ? pbr - ONE_HUNDRED_PERCENT : 0;

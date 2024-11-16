@@ -15,6 +15,7 @@ import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
+import {MockEmissionManager} from "src/test/mocks/MockEmissionManager.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -59,6 +60,7 @@ contract YieldRepurchaseFacilityTest is Test {
     OlympusRoles internal ROLES;
 
     MockClearinghouse internal clearinghouse;
+    MockEmissionManager internal emissionManager;
     YieldRepurchaseFacility internal yieldRepo;
     RolesAdmin internal rolesAdmin;
     BondCallback internal callback; // only used by operator, not by yieldRepo
@@ -151,6 +153,12 @@ contract YieldRepurchaseFacilityTest is Test {
                 ]
             );
 
+            // Deploy mock emission manager
+            emissionManager = new MockEmissionManager();
+
+            // Set minimum premium to 100%
+            emissionManager.setMinimumPremium(1e18);
+
             /// Deploy protocol loop
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
@@ -158,7 +166,8 @@ contract YieldRepurchaseFacilityTest is Test {
                 address(sReserve),
                 address(teller),
                 address(auctioneer),
-                address(clearinghouse)
+                address(clearinghouse),
+                address(emissionManager)
             );
 
             /// Deploy ROLES administrator

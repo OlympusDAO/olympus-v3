@@ -277,7 +277,8 @@ contract EmissionManagerTest is Test {
                 address(reserve),
                 address(sReserve),
                 address(auctioneer),
-                address(teller)
+                address(teller),
+                minimumPremium
             );
         }
 
