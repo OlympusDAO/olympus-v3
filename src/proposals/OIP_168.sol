@@ -72,9 +72,8 @@ contract OIP_168 is GovernorBravoProposal {
                 "\n",
                 "1. Set `BondCallback.operator()` to the new Operator policy\n",
                 "2. Set sUSDS as the wrapped token for USDS on BondCallback\n",
-                "3. Initialize the new YieldRepurchaseFacility policy\n",
-                "4. Initialize the new Operator policy\n",
-                "5. Activate the new Clearinghouse policy\n"
+                "3. Initialize the new Operator policy\n",
+                "4. Activate the new Clearinghouse policy\n"
             );
     }
 
@@ -106,9 +105,6 @@ contract OIP_168 is GovernorBravoProposal {
         address susds = addresses.getAddress("external-tokens-susds");
         address timelock = addresses.getAddress("olympus-timelock");
         address daoMS = addresses.getAddress("olympus-multisig-dao");
-        address yieldRepurchaseFacility = addresses.getAddress(
-            "olympus-policy-yieldrepurchasefacility"
-        );
 
         // STEP 1: Assign roles
         // 1a. Grant "heart" to the new Heart policy
@@ -194,26 +190,14 @@ contract OIP_168 is GovernorBravoProposal {
             "Set sUSDS as the wrapped token for USDS on BondCallback"
         );
 
-        // 3c. Initialize the new YieldRepurchaseFacility policy
-        _pushAction(
-            yieldRepurchaseFacility,
-            abi.encodeWithSelector(
-                YieldRepurchaseFacility.initialize.selector,
-                0, // initialReserveBalance: will be set in the next epoch
-                0, // initialConversionRate: will be set in the next epoch
-                INITIAL_YIELD // initialYield
-            ),
-            "Initialize the new YieldRepurchaseFacility policy"
-        );
-
-        // 3d. Initialize the new Operator policy
+        // 3c. Initialize the new Operator policy
         _pushAction(
             operator_1_5,
             abi.encodeWithSelector(Operator.initialize.selector),
             "Initialize the new Operator policy"
         );
 
-        // 3e. Activate the new Clearinghouse policy
+        // 3d. Activate the new Clearinghouse policy
         _pushAction(
             clearinghouse,
             abi.encodeWithSelector(Clearinghouse.activate.selector),
