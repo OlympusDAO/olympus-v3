@@ -23,13 +23,13 @@ import {EmissionManager} from "src/policies/EmissionManager.sol";
 contract EmissionManagerProposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
-    /// @notice The base emission rate, in OHM scale. Set to 0.02%.
-    uint256 public constant BASE_EMISSIONS_RATE = 2e5;
-    /// @notice The minimum premium, where 100% = 1e18. Set to 100%.
-    uint256 public constant MINIMUM_PREMIUM = 1e18;
-    // TODO fill in values
-    uint256 public constant BACKING = 0;
-    uint48 public constant RESTART_TIMEFRAME = 0;
+    // /// @notice The base emission rate, in OHM scale. Set to 0.02%.
+    // uint256 public constant BASE_EMISSIONS_RATE = 2e5;
+    // /// @notice The minimum premium, where 100% = 1e18. Set to 100%.
+    // uint256 public constant MINIMUM_PREMIUM = 1e18;
+    // // TODO fill in values
+    // uint256 public constant BACKING = 0;
+    // uint48 public constant RESTART_TIMEFRAME = 0;
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
@@ -71,7 +71,7 @@ contract EmissionManagerProposal is GovernorBravoProposal {
                 "1. `emissions_admin` to the Timelock\n",
                 "2. `emissions_admin` to the DAO MS\n",
                 "\n",
-                "## Policy Initialization\n",
+                "## Follow-on MS Actions (due to time-sensitive valeus)\n",
                 "\n",
                 "1. Initialize the new EmissionManager policy"
             );
@@ -121,19 +121,19 @@ contract EmissionManagerProposal is GovernorBravoProposal {
             "Grant emissions_admin to DAO MS"
         );
 
-        // STEP 2: Policy initialization steps
-        // 2a. Initialize the new EmissionManager policy
-        _pushAction(
-            emissionManager,
-            abi.encodeWithSelector(
-                EmissionManager.initialize.selector,
-                BASE_EMISSIONS_RATE,
-                MINIMUM_PREMIUM,
-                BACKING,
-                RESTART_TIMEFRAME
-            ),
-            "Initialize the new EmissionManager policy"
-        );
+        // // STEP 2: Policy initialization steps
+        // // 2a. Initialize the new EmissionManager policy
+        // _pushAction(
+        //     emissionManager,
+        //     abi.encodeWithSelector(
+        //         EmissionManager.initialize.selector,
+        //         BASE_EMISSIONS_RATE,
+        //         MINIMUM_PREMIUM,
+        //         BACKING,
+        //         RESTART_TIMEFRAME
+        //     ),
+        //     "Initialize the new EmissionManager policy"
+        // );
     }
 
     // Executes the proposal actions.
@@ -165,30 +165,6 @@ contract EmissionManagerProposal is GovernorBravoProposal {
         require(
             roles.hasRole(daoMS, bytes32("emissions_admin")),
             "DAO MS does not have the emissions_admin role"
-        );
-
-        // Validate the new EmissionManager policy is initialized
-        require(
-            EmissionManager(emissionManager).locallyActive(),
-            "New EmissionManager policy is not initialized"
-        );
-
-        // Validate the new EmissionManager policy has the correct parameters
-        require(
-            EmissionManager(emissionManager).baseEmissionRate() == BASE_EMISSIONS_RATE,
-            "New EmissionManager policy has incorrect baseEmissionRate"
-        );
-        require(
-            EmissionManager(emissionManager).minimumPremium() == MINIMUM_PREMIUM,
-            "New EmissionManager policy has incorrect minimumPremium"
-        );
-        require(
-            EmissionManager(emissionManager).backing() == BACKING,
-            "New EmissionManager policy has incorrect backing"
-        );
-        require(
-            EmissionManager(emissionManager).restartTimeframe() == RESTART_TIMEFRAME,
-            "New EmissionManager policy has incorrect restartTimeframe"
         );
     }
 }
