@@ -69,8 +69,9 @@ contract EmissionManagerProposal is GovernorBravoProposal {
                 "## Roles to Assign\n",
                 "\n",
                 "1. `emissions_admin` to the Timelock\n",
+                "2. `emissions_admin` to the DAO MS\n",
                 "\n",
-                "## Policy Initialization Steps\n",
+                "## Policy Initialization\n",
                 "\n",
                 "1. Initialize the new EmissionManager policy"
             );
@@ -95,6 +96,7 @@ contract EmissionManagerProposal is GovernorBravoProposal {
 
         // Load variables
         address timelock = addresses.getAddress("olympus-timelock");
+        address daoMS = addresses.getAddress("olympus-dao-ms");
         address emissionManager = addresses.getAddress("olympus-policy-emissionmanager");
 
         // STEP 1: Assign roles
@@ -107,6 +109,16 @@ contract EmissionManagerProposal is GovernorBravoProposal {
                 timelock
             ),
             "Grant emissions_admin to Timelock"
+        );
+        // 1b. Grant "emissions_admin" to the DAO MS
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("emissions_admin"),
+                daoMS
+            ),
+            "Grant emissions_admin to DAO MS"
         );
 
         // STEP 2: Policy initialization steps
@@ -139,19 +151,20 @@ contract EmissionManagerProposal is GovernorBravoProposal {
     function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        address heart_1_6 = addresses.getAddress("olympus-policy-heart-1_6");
         address emissionManager = addresses.getAddress("olympus-policy-emissionmanager");
-
-        // Validate the new Heart policy has the "heart" role
-        require(
-            roles.hasRole(heart_1_6, bytes32("heart")),
-            "New Heart policy does not have the heart role"
-        );
+        address timelock = addresses.getAddress("olympus-timelock");
+        address daoMS = addresses.getAddress("olympus-dao-ms");
 
         // Validate the Timelock has the "emissions_admin" role
         require(
-            roles.hasRole(emissionManager, bytes32("emissions_admin")),
+            roles.hasRole(timelock, bytes32("emissions_admin")),
             "Timelock does not have the emissions_admin role"
+        );
+
+        // Validate the DAO MS has the "emissions_admin" role
+        require(
+            roles.hasRole(daoMS, bytes32("emissions_admin")),
+            "DAO MS does not have the emissions_admin role"
         );
 
         // Validate the new EmissionManager policy is initialized
