@@ -73,6 +73,8 @@ contract USDSMigration is OlyBatch {
     address reserveMigrator;
     address emissionManager;
     address bondCallback;
+    address usds;
+    address susds;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
@@ -88,6 +90,8 @@ contract USDSMigration is OlyBatch {
         reserveMigrator = envAddress("current", "olympus.policies.ReserveMigrator");
         emissionManager = envAddress("current", "olympus.policies.EmissionManager");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
+        usds = envAddress("current", "external.tokens.USDS");
+        susds = envAddress("current", "external.tokens.sUSDS");
     }
 
     // Entry point for the script
@@ -197,7 +201,7 @@ contract USDSMigration is OlyBatch {
         // 4a. Set `BondCallback.operator()` to the new Operator policy
         addToBatch(
             bondCallback,
-            abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator),
+            abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator)
         );
 
         // 4b. Set sUSDS as the wrapped token for USDS on BondCallback
@@ -207,14 +211,14 @@ contract USDSMigration is OlyBatch {
         );
 
         // 4c. Initialize the new Operator policy
-        addBatch(
-            Operator,
+        addToBatch(
+            newOperator,
             abi.encodeWithSelector(Operator.initialize.selector)
         );
 
         // 4d. Activate the new Clearinghouse policy
         addToBatch(
-            clearinghouse,
+            newClearinghouse,
             abi.encodeWithSelector(Clearinghouse.activate.selector)
         );
 

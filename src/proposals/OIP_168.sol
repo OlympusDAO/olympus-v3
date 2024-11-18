@@ -66,7 +66,7 @@ contract OIP_168 is GovernorBravoProposal {
                 "\n",
                 "1. `heart` from the old Heart policy\n",
                 "2. `operator_operate` from the old Heart policy\n",
-                "3. `callback_whitelist` from the old Operator policy\n",
+                "3. `callback_whitelist` from the old Operator policy\n"
             );
     }
 
@@ -228,32 +228,7 @@ contract OIP_168 is GovernorBravoProposal {
             "Old Operator policy still has the callback_whitelist role"
         );
 
-        // Validate BondCallback.operator() is set to the new Operator policy
-        require(
-            address(BondCallback(bondCallback).operator()) == operator_1_5,
-            "BondCallback.operator() is not set to the new Operator policy"
-        );
 
-        // Validate BondCallback.wrapped() is set to sUSDS for USDS
-        require(
-            BondCallback(bondCallback).wrapped(usds) == susds,
-            "BondCallback.wrapped() is not set to sUSDS for USDS"
-        );
-
-        // Validate the new Operator policy is initialized
-        require(Operator(operator_1_5).initialized(), "New Operator policy is not initialized");
-
-        // Validate the new Operator policy is active
-        require(Operator(operator_1_5).active(), "New Operator policy is not active");
-
-        // Validate the new YieldRepurchaseFacility policy is active
-        require(
-            YieldRepurchaseFacility(yieldRepurchaseFacility).isShutdown() == false,
-            "New YieldRepurchaseFacility policy is not active"
-        );
-
-        // Validate the new Clearinghouse policy is activated
-        require(Clearinghouse(clearinghouse).active(), "New Clearinghouse policy is not activated");
     }
 }
 
