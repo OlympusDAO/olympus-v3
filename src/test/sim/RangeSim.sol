@@ -412,8 +412,7 @@ abstract contract RangeSim is Test {
                 address(ohm),
                 address(wrappedReserve),
                 address(teller),
-                address(auctioneer),
-                address(0) // no clearinghouse
+                address(auctioneer)
             );
             reserveMigrator = new MockReserveMigrator();
             emissionManager = new MockEmissionManager();

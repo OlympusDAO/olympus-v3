@@ -1149,7 +1149,6 @@ contract OlympusDeploy is Script {
         console2.log("   sReserve", address(sReserve));
         console2.log("   teller", address(bondFixedTermTeller));
         console2.log("   auctioneer", address(bondAuctioneer));
-        console2.log("   clearinghouse", address(clearinghouse));
 
         // Deploy YieldRepurchaseFacility
         vm.broadcast();
@@ -1158,8 +1157,7 @@ contract OlympusDeploy is Script {
             address(ohm),
             address(sReserve),
             address(bondFixedTermTeller),
-            address(bondAuctioneer),
-            address(clearinghouse)
+            address(bondAuctioneer)
         );
 
         console2.log("YieldRepurchaseFacility deployed at:", address(yieldRepo));

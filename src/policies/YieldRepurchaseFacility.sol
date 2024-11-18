@@ -17,6 +17,7 @@ import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
+import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 interface BurnableERC20 {
     function burn(uint256 amount) external;
@@ -53,9 +54,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
     RANGEv2 public RANGE;
-
-    // Policies
-    Clearinghouse public immutable clearinghouse; // = Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
+    CHREGv1 public CHREG;
 
     // External contracts
     address public immutable teller; // = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
@@ -82,8 +81,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         address ohm_,
         address sReserve_,
         address teller_,
-        address auctioneer_,
-        address clearinghouse_
+        address auctioneer_
     ) Policy(kernel_) {
         // Set immutable variables
         ohm = ERC20(ohm_);
@@ -91,7 +89,6 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         reserve = ERC20(sReserve.asset());
         teller = teller_;
         auctioneer = IBondSDA(auctioneer_);
-        clearinghouse = Clearinghouse(clearinghouse_);
 
         // Cache token decimals
         _reserveDecimals = reserve.decimals();
@@ -118,16 +115,18 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
+        dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
         dependencies[2] = toKeycode("RANGE");
-        dependencies[3] = toKeycode("ROLES");
+        dependencies[3] = toKeycode("CHREG");
+        dependencies[4] = toKeycode("ROLES");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
         RANGE = RANGEv2(getModuleAddress(dependencies[2]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
+        CHREG = CHREGv1(getModuleAddress(dependencies[3]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
     }
@@ -317,10 +316,13 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
     ///////////////////////// VIEW /////////////////////////
 
-    /// @notice fetch combined sReserve balance of clearinghouse and treasury, in reserve
+    /// @notice fetch combined sReserve balance of active clearinghouses and treasury, in reserve
     function getReserveBalance() public view override returns (uint256 balance) {
-        uint256 sBalance = sReserve.balanceOf(address(clearinghouse));
-        sBalance += sReserve.balanceOf(address(TRSRY));
+        uint256 sBalance = sReserve.balanceOf(address(TRSRY));
+        uint256 len = CHREG.activeCount();
+        for (uint256 i; i < len; i++) {
+            sBalance += sReserve.balanceOf(CHREG.active(i));
+        }
 
         balance = sReserve.previewRedeem(sBalance);
     }
@@ -332,7 +334,14 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
             ((lastReserveBalance * sReserve.previewRedeem(1e18)) / lastConversionRate) -
             lastReserveBalance;
         // add clearinghouse interest accrued for week (0.5% divided by 52 weeks)
-        yield += (clearinghouse.principalReceivables() * 5) / 1000 / 52;
+        // iterate through clearinghouses in the CHREG and get the outstanding principal receivables
+        uint256 receivables;
+        uint256 len = CHREG.registryCount();
+        for (uint256 i; i < len; i++) {
+            receivables += Clearinghouse(CHREG.registry(i)).principalReceivables();
+        }
+
+        yield += (receivables * 5) / 1000 / 52;
     }
 
     /// @notice compute backing for ohm balance

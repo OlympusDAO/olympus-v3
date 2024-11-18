@@ -15,6 +15,7 @@ import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -26,6 +27,7 @@ import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {Operator} from "policies/Operator.sol";
@@ -33,6 +35,8 @@ import {BondCallback} from "policies/BondCallback.sol";
 
 // solhint-disable-next-line max-states-count
 contract YieldRepurchaseFacilityTest is Test {
+    using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
+
     using FullMath for uint256;
 
     UserFactory public userCreator;
@@ -57,6 +61,8 @@ contract YieldRepurchaseFacilityTest is Test {
     OlympusTreasury internal TRSRY;
     OlympusMinter internal MINTR;
     OlympusRoles internal ROLES;
+    OlympusClearinghouseRegistry internal CHREG;
+    address internal godmode;
 
     MockClearinghouse internal clearinghouse;
     YieldRepurchaseFacility internal yieldRepo;
@@ -118,6 +124,14 @@ contract YieldRepurchaseFacilityTest is Test {
             MINTR = new OlympusMinter(kernel, address(ohm));
             ROLES = new OlympusRoles(kernel);
 
+            // Deploy mock clearinghouse and registry
+            clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
+            CHREG = new OlympusClearinghouseRegistry(
+                kernel,
+                address(clearinghouse),
+                new address[](0)
+            );
+
             /// Configure mocks
             PRICE.setMovingAverage(10 * 1e18);
             PRICE.setLastPrice(10 * 1e18);
@@ -126,9 +140,6 @@ contract YieldRepurchaseFacilityTest is Test {
         }
 
         {
-            // Deploy mock clearinghouse
-            clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
-
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
@@ -157,8 +168,7 @@ contract YieldRepurchaseFacilityTest is Test {
                 address(ohm),
                 address(sReserve),
                 address(teller),
-                address(auctioneer),
-                address(clearinghouse)
+                address(auctioneer)
             );
 
             /// Deploy ROLES administrator
@@ -174,6 +184,7 @@ contract YieldRepurchaseFacilityTest is Test {
             kernel.executeAction(Actions.InstallModule, address(TRSRY));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
+            kernel.executeAction(Actions.InstallModule, address(CHREG));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
@@ -704,6 +715,34 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Confirm the view function matches
         assertEq(yieldRepo.getReserveBalance(), expectedYieldEarningReserveBalance);
+
+        // Add new active clearinghouse and mint it some reserves
+        MockClearinghouse newClearinghouse = new MockClearinghouse(
+            address(reserve),
+            address(sReserve)
+        );
+        reserve.mint(address(newClearinghouse), 1_000_000e18);
+        vm.startPrank(address(newClearinghouse));
+        reserve.approve(address(sReserve), 1_000_000e18);
+        sReserve.deposit(1_000_000e18, address(newClearinghouse));
+        vm.stopPrank();
+
+        // Register the new clearinghouse
+        godmode = CHREG.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
+        vm.prank(godmode);
+        CHREG.activateClearinghouse(address(newClearinghouse));
+
+        // Get the total yield earning balance with the new clearinghouse included
+        uint256 totalWrappedReserveBalance = clearinghouseWrappedReserveBalance +
+            trsryWrappedReserveBalance +
+            sReserve.balanceOf(address(newClearinghouse));
+
+        // Calculate the expected yield earning reserve balance, in reserves
+        expectedYieldEarningReserveBalance = sReserve.previewRedeem(totalWrappedReserveBalance);
+
+        // Confirm the view function matches
+        assertEq(yieldRepo.getReserveBalance(), expectedYieldEarningReserveBalance);
     }
 
     function test_getNextYield() public {
@@ -729,6 +768,37 @@ contract YieldRepurchaseFacilityTest is Test {
             (principalReceivables * 5) /
             1000 /
             52;
+
+        // Confirm the view function matches
+        assertEq(yieldRepo.getNextYield(), expectedNextYield);
+
+        // Add new active clearinghouse and mint it some reserves
+        MockClearinghouse newClearinghouse = new MockClearinghouse(
+            address(reserve),
+            address(sReserve)
+        );
+        newClearinghouse.setPrincipalReceivables(1_000_000e18);
+
+        // Register the new clearinghouse
+        godmode = CHREG.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
+        vm.prank(godmode);
+        CHREG.activateClearinghouse(address(newClearinghouse));
+
+        // Recalculate the expected next yield
+        expectedNextYield =
+            lastReserveBalance /
+            10000 +
+            ((clearinghouse.principalReceivables() + newClearinghouse.principalReceivables()) * 5) /
+            1000 /
+            52;
+
+        // Confirm the view function matches
+        assertEq(yieldRepo.getNextYield(), expectedNextYield);
+
+        // Deactivate the old clearinghouse, ensure its receivables are still included
+        vm.prank(godmode);
+        CHREG.deactivateClearinghouse(address(clearinghouse));
 
         // Confirm the view function matches
         assertEq(yieldRepo.getNextYield(), expectedNextYield);
