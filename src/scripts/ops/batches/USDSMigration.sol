@@ -112,9 +112,7 @@ contract USDSMigration is OlyBatch {
         // 1d. Shutdown the old Clearinghouse
         addToBatch(
             oldClearinghouse,
-            abi.encodeWithSelector(
-                Clearinghouse.emergencyShutdown.selector
-            )
+            abi.encodeWithSelector(Clearinghouse.emergencyShutdown.selector)
         );
 
         // 2. Deactivate policies that are being replaced on the Kernel
@@ -211,16 +209,10 @@ contract USDSMigration is OlyBatch {
         );
 
         // 4c. Initialize the new Operator policy
-        addToBatch(
-            newOperator,
-            abi.encodeWithSelector(Operator.initialize.selector)
-        );
+        addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
 
         // 4d. Activate the new Clearinghouse policy
-        addToBatch(
-            newClearinghouse,
-            abi.encodeWithSelector(Clearinghouse.activate.selector)
-        );
+        addToBatch(newClearinghouse, abi.encodeWithSelector(Clearinghouse.activate.selector));
 
         // 4e. Initialize the new YRF
         addToBatch(

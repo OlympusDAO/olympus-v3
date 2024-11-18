@@ -167,8 +167,6 @@ contract OIP_168 is GovernorBravoProposal {
             ),
             "Revoke callback_whitelist from old Operator policy"
         );
-
-        
     }
 
     // Executes the proposal actions.
@@ -227,8 +225,6 @@ contract OIP_168 is GovernorBravoProposal {
             !roles.hasRole(operator_1_4, bytes32("callback_whitelist")),
             "Old Operator policy still has the callback_whitelist role"
         );
-
-
     }
 }
 
