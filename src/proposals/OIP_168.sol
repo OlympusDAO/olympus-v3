@@ -67,13 +67,6 @@ contract OIP_168 is GovernorBravoProposal {
                 "1. `heart` from the old Heart policy\n",
                 "2. `operator_operate` from the old Heart policy\n",
                 "3. `callback_whitelist` from the old Operator policy\n",
-                "\n",
-                "## Policy Initialization Steps\n",
-                "\n",
-                "1. Set `BondCallback.operator()` to the new Operator policy\n",
-                "2. Set sUSDS as the wrapped token for USDS on BondCallback\n",
-                "3. Initialize the new Operator policy\n",
-                "4. Activate the new Clearinghouse policy\n"
             );
     }
 
@@ -175,34 +168,7 @@ contract OIP_168 is GovernorBravoProposal {
             "Revoke callback_whitelist from old Operator policy"
         );
 
-        // STEP 3: Policy initialization steps
-        // 3a. Set `BondCallback.operator()` to the new Operator policy
-        _pushAction(
-            bondCallback,
-            abi.encodeWithSelector(BondCallback.setOperator.selector, operator_1_5),
-            "Set BondCallback.operator() to new Operator policy"
-        );
-
-        // 3b. Set sUSDS as the wrapped token for USDS on BondCallback
-        _pushAction(
-            bondCallback,
-            abi.encodeWithSelector(BondCallback.useWrappedVersion.selector, usds, susds),
-            "Set sUSDS as the wrapped token for USDS on BondCallback"
-        );
-
-        // 3c. Initialize the new Operator policy
-        _pushAction(
-            operator_1_5,
-            abi.encodeWithSelector(Operator.initialize.selector),
-            "Initialize the new Operator policy"
-        );
-
-        // 3d. Activate the new Clearinghouse policy
-        _pushAction(
-            clearinghouse,
-            abi.encodeWithSelector(Clearinghouse.activate.selector),
-            "Activate the new Clearinghouse policy"
-        );
+        
     }
 
     // Executes the proposal actions.

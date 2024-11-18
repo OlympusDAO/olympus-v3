@@ -14,6 +14,7 @@ import {OlympusHeart} from "policies/Heart.sol";
 import {Operator} from "policies/Operator.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
+import {BondCallback} from "policies/BondCallback.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -28,24 +29,37 @@ contract USDSMigration is OlyBatch {
     //    + YieldRepurchaseFacility v1
     //      - shutdown to send any reserves back to TRSRY
     //      - make sure that bond market is ended
-    //    + Operator vX
+    //    + Operator v1.4
     //      - Deactivate to prevent swaps and bond markets
-    //    + Heart vX
+    //    + Heart v1.5
     //      - Deactivate so it will not beat
 
     // 2. Deactivate policies that are being replaced on the Kernel - DAO MS
     //    + Clearinghouse v2
     //    + YieldRepurchaseFacility v1
-    //    + Operator vX
-    //    + Heart vX
+    //    + Operator v1.4
+    //    + Heart v1.5
 
     // 3. Activate new policies on the Kernel - DAO MS
     //    + Clearinghouse v2.1
-    //    + Operator vX+1
+    //    + Operator v1.5
     //    + YieldRepurchaseFacility v1.1
     //    + ReserveMigrator v1
     //    + EmissionManager v1
-    //    + Heart vX+1
+    //    + Heart v1.6
+
+    // 4. Initialize new policies and update certain configs - DAO MS
+    //    + Set Operator on BondCallback to Operator v1.5
+    //    + Set sUSDS as the wrapped token for USDS on BondCallback
+    //    + Initialize Operator v1.5
+    //    + Activate Clearinghouse v2.1
+    //    + Initialize YieldRepurchaseFacility v1.1
+    // TODO set these
+    uint256 initialReserveBalance = 0;
+    uint256 initialConversionRate = 0;
+    uint256 initialYield = 0;
+
+    // 5. Beat the new Heart
 
     address kernel;
     address oldHeart;
@@ -58,6 +72,7 @@ contract USDSMigration is OlyBatch {
     address newClearinghouse;
     address reserveMigrator;
     address emissionManager;
+    address bondCallback;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
@@ -72,6 +87,7 @@ contract USDSMigration is OlyBatch {
         newClearinghouse = envAddress("current", "olympus.policies.Clearinghouse");
         reserveMigrator = envAddress("current", "olympus.policies.ReserveMigrator");
         emissionManager = envAddress("current", "olympus.policies.EmissionManager");
+        bondCallback = envAddress("current", "olympus.policies.BondCallback");
     }
 
     // Entry point for the script
@@ -89,14 +105,11 @@ contract USDSMigration is OlyBatch {
             oldYieldRepo,
             abi.encodeWithSelector(YieldRepurchaseFacility.shutdown.selector, tokensToTransfer)
         );
-        // 1d. Defund the Clearinghouse
-        ERC20 clearinghouseToken = ERC20(envAddress("current", "external.tokens.sDAI"));
+        // 1d. Shutdown the old Clearinghouse
         addToBatch(
             oldClearinghouse,
             abi.encodeWithSelector(
-                Clearinghouse.defund.selector,
-                clearinghouseToken,
-                clearinghouseToken.balanceOf(address(oldClearinghouse))
+                Clearinghouse.emergencyShutdown.selector
             )
         );
 
@@ -179,5 +192,44 @@ contract USDSMigration is OlyBatch {
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newHeart)
         );
+
+        // STEP 4: Policy initialization steps
+        // 4a. Set `BondCallback.operator()` to the new Operator policy
+        addToBatch(
+            bondCallback,
+            abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator),
+        );
+
+        // 4b. Set sUSDS as the wrapped token for USDS on BondCallback
+        addToBatch(
+            bondCallback,
+            abi.encodeWithSelector(BondCallback.useWrappedVersion.selector, usds, susds)
+        );
+
+        // 4c. Initialize the new Operator policy
+        addBatch(
+            Operator,
+            abi.encodeWithSelector(Operator.initialize.selector)
+        );
+
+        // 4d. Activate the new Clearinghouse policy
+        addToBatch(
+            clearinghouse,
+            abi.encodeWithSelector(Clearinghouse.activate.selector)
+        );
+
+        // 4e. Initialize the new YRF
+        addToBatch(
+            newYieldRepo,
+            abi.encodeWithSelector(
+                YieldRepurchaseFacility.initialize.selector,
+                initialReserveBalance,
+                initialConversionRate,
+                initialYield
+            )
+        );
+
+        // 5. Beat the new Heart to trigger the migration, among other things
+        addToBatch(newHeart, abi.encodeWithSelector(OlympusHeart.beat.selector));
     }
 }
