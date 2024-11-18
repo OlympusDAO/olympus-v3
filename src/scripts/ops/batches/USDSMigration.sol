@@ -59,8 +59,6 @@ contract USDSMigration is OlyBatch {
     uint256 initialConversionRate = 0;
     uint256 initialYield = 0;
 
-    // 5. Beat the new Heart
-
     address kernel;
     address oldHeart;
     address oldOperator;
@@ -112,9 +110,7 @@ contract USDSMigration is OlyBatch {
         // 1d. Shutdown the old Clearinghouse
         addToBatch(
             oldClearinghouse,
-            abi.encodeWithSelector(
-                Clearinghouse.emergencyShutdown.selector
-            )
+            abi.encodeWithSelector(Clearinghouse.emergencyShutdown.selector)
         );
 
         // 2. Deactivate policies that are being replaced on the Kernel
@@ -211,16 +207,10 @@ contract USDSMigration is OlyBatch {
         );
 
         // 4c. Initialize the new Operator policy
-        addToBatch(
-            newOperator,
-            abi.encodeWithSelector(Operator.initialize.selector)
-        );
+        addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
 
         // 4d. Activate the new Clearinghouse policy
-        addToBatch(
-            newClearinghouse,
-            abi.encodeWithSelector(Clearinghouse.activate.selector)
-        );
+        addToBatch(newClearinghouse, abi.encodeWithSelector(Clearinghouse.activate.selector));
 
         // 4e. Initialize the new YRF
         addToBatch(
@@ -232,8 +222,5 @@ contract USDSMigration is OlyBatch {
                 initialYield
             )
         );
-
-        // 5. Beat the new Heart to trigger the migration, among other things
-        addToBatch(newHeart, abi.encodeWithSelector(OlympusHeart.beat.selector));
     }
 }

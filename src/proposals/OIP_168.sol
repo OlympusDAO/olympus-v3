@@ -61,6 +61,7 @@ contract OIP_168 is GovernorBravoProposal {
                 "1. `heart` to the new Heart policy (renamed from `operator_operate`)\n",
                 "2. `reserve_migrator_admin` to the Timelock and DAO MS\n",
                 "3. `callback_whitelist` to the new Operator policy\n",
+                "4. `emergency_shutdown` to the DAO MS\n",
                 "\n",
                 "## Roles to Revoke\n",
                 "\n",
@@ -138,6 +139,18 @@ contract OIP_168 is GovernorBravoProposal {
             "Grant callback_whitelist to new Operator policy"
         );
 
+        // 1d. Grant "emergency_shutdown" to the DAO MS
+        // Missing from its permissions and needed to sunset existing Clearinghouse
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("emergency_shutdown"),
+                daoMS
+            ),
+            "Grant emergency_shutdown to DAO MS"
+        );
+
         // STEP 2: Revoke roles
         // 2a. Revoke "heart" from the old Heart policy
         _pushAction(
@@ -167,8 +180,6 @@ contract OIP_168 is GovernorBravoProposal {
             ),
             "Revoke callback_whitelist from old Operator policy"
         );
-
-        
     }
 
     // Executes the proposal actions.
@@ -227,8 +238,6 @@ contract OIP_168 is GovernorBravoProposal {
             !roles.hasRole(operator_1_4, bytes32("callback_whitelist")),
             "Old Operator policy still has the callback_whitelist role"
         );
-
-
     }
 }
 
