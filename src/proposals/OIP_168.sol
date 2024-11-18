@@ -23,9 +23,6 @@ import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol"
 contract OIP_168 is GovernorBravoProposal {
     Kernel internal _kernel;
 
-    // TODO set initial yield value
-    uint256 public constant INITIAL_YIELD = 0;
-
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
         return 3;
@@ -67,7 +64,15 @@ contract OIP_168 is GovernorBravoProposal {
                 "\n",
                 "1. `heart` from the old Heart policy\n",
                 "2. `operator_operate` from the old Heart policy\n",
-                "3. `callback_whitelist` from the old Operator policy\n"
+                "3. `callback_whitelist` from the old Operator policy\n",
+                "\n",
+                "## Follow-on Actions by DAO MS\n",
+                "\n",
+                "1. Deactivate old Operator, Clearinghouse, YRF, and Heart locally (i.e. on the contracts themselves)\n",
+                "2. Deactivate old Operator, Clearinghouse, YRF, and Heart on the Kernel\n",
+                "3. Activate new Operator, Clearinghouse, YRF, and Heart on the Kernel\n",
+                "4. Configure BondCallback with new Operator and USDS/sUSDS\n",
+                "5. Initialize new Operator, Clearinghouse, and YRF"
             );
     }
 
@@ -89,14 +94,10 @@ contract OIP_168 is GovernorBravoProposal {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
 
         // Load variables
-        address bondCallback = addresses.getAddress("olympus-policy-bondcallback");
         address operator_1_4 = addresses.getAddress("olympus-policy-operator-1_4");
         address operator_1_5 = addresses.getAddress("olympus-policy-operator-1_5");
         address heart_1_5 = addresses.getAddress("olympus-policy-heart-1_5");
         address heart_1_6 = addresses.getAddress("olympus-policy-heart-1_6");
-        address clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
-        address usds = addresses.getAddress("external-tokens-usds");
-        address susds = addresses.getAddress("external-tokens-susds");
         address timelock = addresses.getAddress("olympus-timelock");
         address daoMS = addresses.getAddress("olympus-multisig-dao");
 
@@ -197,17 +198,11 @@ contract OIP_168 is GovernorBravoProposal {
     function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        address bondCallback = addresses.getAddress("olympus-policy-bondcallback");
         address operator_1_4 = addresses.getAddress("olympus-policy-operator-1_4");
         address operator_1_5 = addresses.getAddress("olympus-policy-operator-1_5");
         address heart_1_5 = addresses.getAddress("olympus-policy-heart-1_5");
         address heart_1_6 = addresses.getAddress("olympus-policy-heart-1_6");
         address clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
-        address usds = addresses.getAddress("external-tokens-usds");
-        address susds = addresses.getAddress("external-tokens-susds");
-        address yieldRepurchaseFacility = addresses.getAddress(
-            "olympus-policy-yieldrepurchasefacility"
-        );
 
         // Validate the new Heart policy has the "heart" role
         require(

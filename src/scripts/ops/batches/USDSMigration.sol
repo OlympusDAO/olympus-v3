@@ -45,7 +45,6 @@ contract USDSMigration is OlyBatch {
     //    + Operator v1.5
     //    + YieldRepurchaseFacility v1.1
     //    + ReserveMigrator v1
-    //    + EmissionManager v1
     //    + Heart v1.6
 
     // 4. Initialize new policies and update certain configs - DAO MS
@@ -178,14 +177,6 @@ contract USDSMigration is OlyBatch {
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
                 reserveMigrator
-            )
-        );
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                emissionManager
             )
         );
         addToBatch(
