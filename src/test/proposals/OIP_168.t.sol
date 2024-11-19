@@ -39,7 +39,7 @@ contract OIP_168_OCGProposalTest is Test {
         OIP_168 proposal = new OIP_168();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         /// [DO NOT DELETE]
         /// @notice This section is used to simulate the proposal on the mainnet fork.
