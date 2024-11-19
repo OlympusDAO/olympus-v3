@@ -46,11 +46,8 @@ contract EmissionManagerProposal is GovernorBravoProposal {
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Initialize Emissions Manager Policy\n",
-                "\n",
-                "## Summary\n",
-                "Install the Emissions Manager into the protocol, providing it with minter privileges to allow it to emit new supply.\n",
-                "\n",
+                "# OIP-171 - Activation of Emissions Manager Policy\n\n",
+                "## Summary\n\nThe primary supply emission structure of Olympus has the protocol offer new tokens when the market for OHM is at a premium. This vote will grant permission to activate and properly role the new emissions contract - 0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2\n\n",
                 "## Justification\n",
                 "The Emissions Manager allows the protocol to grow treasury, backing, and supply upon an increase in demand for OHM sufficient to push higher premiums.\n",
                 "\n",
@@ -63,8 +60,7 @@ contract EmissionManagerProposal is GovernorBravoProposal {
                 "\n",
                 "- [Read the forum proposal](https://forum.olympusdao.finance/d/4656-install-emissions-manager) for more context.\n",
                 "- The EmissionManager policy has been audited. [Read the audit report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_11_EmissionManager_ReserveMigrator.pdf)\n",
-                "- The code changes can be found in pull request [#18](https://github.com/OlympusDAO/olympus-v3/pull/18)\n",
-                "- The proposal can be found in pull request [#21](https://github.com/OlympusDAO/olympus-v3/pull/21)\n",
+                "- The code changes and proposal can be found in pull request [#18](https://github.com/OlympusDAO/olympus-v3/pull/18)\n",
                 "\n",
                 "## Roles to Assign\n",
                 "\n",
@@ -96,8 +92,8 @@ contract EmissionManagerProposal is GovernorBravoProposal {
 
         // Load variables
         address timelock = addresses.getAddress("olympus-timelock");
-        address daoMS = addresses.getAddress("olympus-dao-ms");
-        address emissionManager = addresses.getAddress("olympus-policy-emissionmanager");
+        address daoMS = addresses.getAddress("olympus-multisig-dao");
+        // address emissionManager = addresses.getAddress("olympus-policy-emissionmanager");
 
         // STEP 1: Assign roles
         // 1a. Grant "emissions_admin" to the Timelock
@@ -151,9 +147,8 @@ contract EmissionManagerProposal is GovernorBravoProposal {
     function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        address emissionManager = addresses.getAddress("olympus-policy-emissionmanager");
         address timelock = addresses.getAddress("olympus-timelock");
-        address daoMS = addresses.getAddress("olympus-dao-ms");
+        address daoMS = addresses.getAddress("olympus-multisig-dao");
 
         // Validate the Timelock has the "emissions_admin" role
         require(

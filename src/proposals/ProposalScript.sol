@@ -42,6 +42,67 @@ abstract contract ProposalScript is ScriptSuite {
         console2.log("Proposal ID:", proposalId);
     }
 
+    function printProposalInputs() public {
+        // set debug mode to true and run it to build the actions list
+        proposal.setDebug(true);
+
+        // run the proposal to build it
+        proposal.run(addresses, address(0));
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = proposal.getProposalActions();
+        uint256 len = targets.length;
+        // print the targets
+        console2.log("Targets:");
+        string memory t_str = "[";
+        for (uint256 i = 0; i < len; i++) {
+            if (i == len - 1) {
+                t_str = string.concat(t_str, vm.toString(targets[i]), "]");
+            } else {
+                t_str = string.concat(t_str, vm.toString(targets[i]), ", ");
+            }
+        }
+        console2.log(t_str);
+
+        // print the values
+        console2.log("Values:");
+        string memory v_str = "[";
+        for (uint256 i = 0; i < len; i++) {
+            if (i == len - 1) {
+                v_str = string.concat(v_str, vm.toString(values[i]), "]");
+            } else {
+                v_str = string.concat(v_str, vm.toString(values[i]), ", ");
+            }
+        }
+        console2.log(v_str);
+
+        // print the calldatas
+        console2.log("Calldatas:");
+        string memory c_str = "[";
+        for (uint256 i = 0; i < len; i++) {
+            if (i == len - 1) {
+                c_str = string.concat(c_str, vm.toString(calldatas[i]), "]");
+            } else {
+                c_str = string.concat(c_str, vm.toString(calldatas[i]), ", ");
+            }
+        }
+        console2.log(c_str);
+
+        // print the signatures list of empty strings
+        console2.log("Signatures:");
+        string memory s_str = "[";
+        for (uint256 i = 0; i < len; i++) {
+            if (i == len - 1) {
+                s_str = string.concat(s_str, '""', "]");
+            } else {
+                s_str = string.concat(s_str, '""', ", ");
+            }
+        }
+
+        // print the description
+        console2.log("Description:");
+        console2.log(proposal.description());
+    }
+
     function executeOnTestnet() public {
         console2.log("Building proposal...");
         // set debug mode to true and run it to build the actions list
