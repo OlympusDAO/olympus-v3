@@ -61,12 +61,21 @@ contract OIP_168 is GovernorBravoProposal {
                 "1. `heart` to the new Heart policy (renamed from `operator_operate`)\n",
                 "2. `reserve_migrator_admin` to the Timelock and DAO MS\n",
                 "3. `callback_whitelist` to the new Operator policy\n",
+                "4. `emergency_shutdown` to the DAO MS\n",
                 "\n",
                 "## Roles to Revoke\n",
                 "\n",
                 "1. `heart` from the old Heart policy\n",
                 "2. `operator_operate` from the old Heart policy\n",
-                "3. `callback_whitelist` from the old Operator policy\n"
+                "3. `callback_whitelist` from the old Operator policy\n",
+                "\n",
+                "## Follow-on Actions by DAO MS\n",
+                "\n",
+                "1. Deactivate old Operator, Clearinghouse, YRF, and Heart locally (i.e. on the contracts themselves)\n",
+                "2. Deactivate old Operator, Clearinghouse, YRF, and Heart on the Kernel\n",
+                "3. Activate new Operator, Clearinghouse, YRF, and Heart on the Kernel\n",
+                "4. Configure BondCallback with new Operator and USDS/sUSDS\n",
+                "5. Initialize new Operator, Clearinghouse, and YRF\n"
             );
     }
 
