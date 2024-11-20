@@ -4,6 +4,7 @@ pragma solidity ^0.8.15;
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 import {Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
+import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     event LiquidationLtvSet(uint256 ltv);
@@ -11,7 +12,12 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     event LiquidationsPausedSet(bool isPaused);
     event BorrowPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
-    event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
+
+    event MaxDelegateAddressesSet(
+        address indexed policy, 
+        address indexed account, 
+        uint256 maxDelegateAddresses
+    );
 
     function test_construction() public {
         assertEq(address(cooler.collateralToken()), address(gohm));
@@ -33,41 +39,44 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.maxOriginationLtv(), DEFAULT_OLTV);
         assertEq(cooler.interestAccumulatorUpdatedAt(), uint32(block.timestamp));
         assertEq(cooler.interestAccumulatorRay(), 1e27);
-        assertEq(cooler.DEFAULT_MAX_DELEGATE_ADDRESSES(), 10);
 
         (uint128 totalDebt, uint256 interestAccumulatorRay) = cooler.globalState();
         assertEq(totalDebt, 0);
         assertEq(interestAccumulatorRay, 1e27);
 
-        IMonoCooler.AccountState memory aState = cooler.accountState(ALICE);
-        assertEq(aState.collateral, 0);
-        assertEq(aState.debtCheckpoint, 0);
-        assertEq(aState.interestAccumulatorRay, 0);
+        checkAccountState(ALICE, IMonoCooler.AccountState({
+            collateral: 0,
+            debtCheckpoint: 0,
+            interestAccumulatorRay: 0
+        }));
 
-        address[] memory accounts = new address[](1);
-        accounts[0] = ALICE;
-        IMonoCooler.LiquidationStatus[] memory status = cooler.computeLiquidity(accounts);
-        assertEq(status.length, 1);
-        assertEq(status[0].collateral, 0);
-        assertEq(status[0].currentDebt, 0);
-        assertEq(status[0].currentLtv, 0);
-        assertEq(status[0].exceededLiquidationLtv, false);
-        assertEq(status[0].exceededMaxOriginationLtv, false);
-       
-        IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
-        assertEq(position.collateral, 0);
-        assertEq(position.currentDebt, 0);
-        assertEq(position.maxDebt, 0);
-        assertEq(position.healthFactor, type(uint256).max);
-        assertEq(position.currentLtv, 0);
+        checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
+            collateral: 0,
+            currentDebt: 0,
+            maxDebt: 0,
+            healthFactor: type(uint256).max,
+            currentLtv: 0,
+            totalDelegated: 0,
+            numDelegateAddresses: 0,
+            maxDelegateAddresses: 10
+        }));
+
+        checkLiquidityStatus(ALICE, IMonoCooler.LiquidationStatus({
+            collateral: 0,
+            currentDebt: 0,
+            currentLtv: 0,
+            exceededLiquidationLtv: false,
+            exceededMaxOriginationLtv: false
+        }));
     }
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](4);
+        Keycode[] memory expectedDeps = new Keycode[](5);
         expectedDeps[0] = toKeycode("CHREG");
         expectedDeps[1] = toKeycode("MINTR");
         expectedDeps[2] = toKeycode("ROLES");
         expectedDeps[3] = toKeycode("TRSRY");
+        expectedDeps[4] = toKeycode("DLGTE");
 
         Keycode[] memory deps = cooler.configureDependencies();
         // Check: configured dependencies storage
@@ -76,19 +85,23 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
         assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
+        assertEq(fromKeycode(deps[4]), fromKeycode(expectedDeps[4]));
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](6);
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
         expectedPerms[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
         expectedPerms[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
         expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
         expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPerms[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        expectedPerms[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
 
         Permissions[] memory perms = cooler.requestPermissions();
         // Check: permission storage
@@ -209,53 +222,43 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         
         // Add collateral with a delegation (50% of collateral)
         {
-            IMonoCooler.DelegationRequest[] memory delegationRequests = new IMonoCooler.DelegationRequest[](1);
-            delegationRequests[0] = IMonoCooler.DelegationRequest({
+            DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](1);
+            delegationRequests[0] = DLGTEv1.DelegationRequest({
                 fromDelegate: address(0),
                 toDelegate: BOB,
-                collateralAmount: collateralAmount/2
+                amount: collateralAmount/2
             });
             addCollateral(ALICE, collateralAmount, delegationRequests);
         }
 
-        // Check delegations
-        {
-            IMonoCooler.AccountDelegation[] memory delegations = cooler.accountDelegations(ALICE, 0, 100);
-            assertEq(delegations.length, 1);
-            assertEq(delegations[0].delegate, BOB);
-            assertEq(delegations[0].delegationAmount, collateralAmount/2);
-            assertEq(gohm.balanceOf(delegations[0].delegateEscrow), collateralAmount/2);
-        }
+        expectOneDelegation(ALICE, BOB, collateralAmount/2);
         
-        // Check account position
-        {
-            IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
-            assertEq(position.collateral, collateralAmount);
-            assertEq(position.currentDebt, 0);
-            assertEq(position.maxDebt, 9.3e18);
-            assertEq(position.healthFactor, type(uint256).max);
-            assertEq(position.currentLtv, 0);
-            assertEq(position.totalDelegated, collateralAmount/2);
-            assertEq(position.numDelegateAddresses, 1);
-            assertEq(position.maxDelegateAddresses, 10);
-        }
+        checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
+            collateral: collateralAmount,
+            currentDebt: 0,
+            maxDebt: 9.3e18,
+            healthFactor: type(uint256).max,
+            currentLtv: 0,
+            totalDelegated: collateralAmount/2,
+            numDelegateAddresses: 1,
+            maxDelegateAddresses: 10
+        }));
 
         vm.startPrank(OVERSEER);
-        vm.expectEmit(address(cooler));
-        emit MaxDelegateAddressesSet(ALICE, 50);
+        vm.expectEmit(address(DLGTE));
+        emit MaxDelegateAddressesSet(address(cooler), ALICE, 50);
         cooler.setMaxDelegateAddresses(ALICE, 50);
 
         // The maxDelegateAddresses has increased
-        {
-            IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
-            assertEq(position.collateral, collateralAmount);
-            assertEq(position.currentDebt, 0);
-            assertEq(position.maxDebt, 9.3e18);
-            assertEq(position.healthFactor, type(uint256).max);
-            assertEq(position.currentLtv, 0);
-            assertEq(position.totalDelegated, collateralAmount/2);
-            assertEq(position.numDelegateAddresses, 1);
-            assertEq(position.maxDelegateAddresses, 50);
-        }
+        checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
+            collateral: collateralAmount,
+            currentDebt: 0,
+            maxDebt: 9.3e18,
+            healthFactor: type(uint256).max,
+            currentLtv: 0,
+            totalDelegated: collateralAmount/2,
+            numDelegateAddresses: 1,
+            maxDelegateAddresses: 50
+        }));
     }
 }

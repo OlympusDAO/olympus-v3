@@ -2,19 +2,15 @@
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 interface IMonoCooler {
     error ExceededMaxOriginationLtv(uint256 collateral, uint256 currentDebt);
-    error ExceededCollateralBalance(uint256 balance, uint256 requested);
-    error ExceededUndelegatedCollateralBalance(uint256 balance, uint256 requested);
     error MinDebtNotMet(uint256 minRequired, uint256 current);
     error InvalidParam();
     error ExpectedNonZero();
-    error TooManyDelegates();
-    error InvalidDelegateEscrow();
     error Paused();
     error CannotLiquidate();
-    error CanOnlyRescindDelegation();
 
     event LiquidationLtvSet(uint256 ltv);
     event MaxOriginationLtvSet(uint256 ltv);
@@ -24,32 +20,10 @@ interface IMonoCooler {
     event InterestRateSet(uint16 interestRateBps);
 
     event CollateralAdded(address indexed fundedBy, address indexed onBehalfOf, uint128 collateralAmount);
-    event CollateralRemoved(address indexed account, address indexed recipient, uint128 collateralAmount);
+    event CollateralWithdrawn(address indexed account, address indexed recipient, uint128 collateralAmount);
     event Borrow(address indexed account, address indexed recipient, uint128 amount);
     event Repay(address indexed fundedBy, address indexed onBehalfOf, uint128 repayAmount);
     event Liquidated(address indexed account, uint128 collateralSeized, uint128 debtWiped);
-
-    event DelegateEscrowCreated(address indexed delegate, address indexed escrow);
-    event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
-
-    event DelegationApplied(
-        address indexed account, 
-        address indexed fromDelegate, 
-        address indexed toDelegate, 
-        uint256 collateralAmount
-    );
-
-    struct DelegationRequest {
-        address fromDelegate;
-        address toDelegate;
-        uint128 collateralAmount;
-    }
-
-    struct AccountDelegation {
-        address delegate;
-        address delegateEscrow;
-        uint256 delegationAmount;
-    }
 
     /// @notice The record of an individual account's collateral and debt data
     struct AccountState {
@@ -163,9 +137,6 @@ interface IMonoCooler {
     /// @dev To RAY (1e27) precision
     function interestAccumulatorRay() external view returns (uint256);
     
-    /// @notice The default maximum number of addresses an account can delegate to
-    function DEFAULT_MAX_DELEGATE_ADDRESSES() external view returns (uint128);
-
     /**
      * @notice Deposit gOHM as collateral
      * @param collateralAmount The amount to deposit
@@ -182,7 +153,7 @@ interface IMonoCooler {
     function addCollateral(
         uint128 collateralAmount,
         address onBehalfOf,
-        DelegationRequest[] calldata delegationRequests
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external;
 
     /**
@@ -203,7 +174,7 @@ interface IMonoCooler {
     function withdrawCollateral(
         uint128 collateralAmount,
         address recipient,
-        DelegationRequest[] calldata delegationRequests
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external;
 
     /**
@@ -232,7 +203,7 @@ interface IMonoCooler {
     function repay(uint128 repayAmount, address onBehalfOf) external;
 
     function applyDelegations(
-        DelegationRequest[] calldata delegationRequests
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (
         uint256 totalDelegated
     );
@@ -258,7 +229,7 @@ interface IMonoCooler {
      */
     function applyUnhealthyDelegations(
         address account,
-        DelegationRequest[] calldata delegationRequests
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (
         uint256 totalDelegated
     );
@@ -302,7 +273,7 @@ interface IMonoCooler {
      */
     function setMaxDelegateAddresses(
         address account, 
-        uint128 maxDelegateAddresses
+        uint32 maxDelegateAddresses
     ) external;
 
     // --- AUX FUNCTIONS --------------------------------------------
@@ -331,12 +302,12 @@ interface IMonoCooler {
      * @dev Can call sequentially increasing the `startIndex` each time by the number of items returned in the previous call,
      * until number of items returned is less than `maxItems`
      */
-    function accountDelegations(
+    function accountDelegationsList(
         address account, 
         uint256 startIndex, 
         uint256 maxItems
     ) external view returns (
-        AccountDelegation[] memory delegations
+        DLGTEv1.AccountDelegation[] memory delegations
     );
 
     /**

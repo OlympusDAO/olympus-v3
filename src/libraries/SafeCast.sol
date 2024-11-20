@@ -10,4 +10,11 @@ library SafeCast {
         }
         return uint128(amount);
     }
+
+    function encodeUInt112(uint256 amount) internal pure returns (uint112) {
+        if (amount > type(uint112).max) {
+            revert Overflow(amount);
+        }
+        return uint112(amount);
+    }
 }
