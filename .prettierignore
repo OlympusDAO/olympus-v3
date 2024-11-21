@@ -8,3 +8,6 @@ docs/
 lib/
 node_modules/
 out/
+
+# Skip deployment sequences, as order is important
+src/scripts/deploy/savedDeployments/
