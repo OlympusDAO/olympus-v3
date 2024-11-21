@@ -7,13 +7,17 @@ import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     event CollateralAdded(address indexed fundedBy, address indexed onBehalfOf, uint128 collateralAmount);
-    event DelegateEscrowCreated(address indexed delegate, address indexed escrow);
+
+    event DelegateEscrowCreated(
+        address indexed caller, 
+        address indexed delegate, 
+        address indexed escrow
+    );
+
     event DelegationApplied(
-        address indexed policy,
-        address indexed account, 
-        address indexed fromDelegate, 
-        address toDelegate, 
-        uint256 gOhmAmount
+        address indexed account,
+        address indexed delegate,
+        int256 amount
     );
 
     function test_addCollateral_failZeroAmount() public {
@@ -127,15 +131,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
 
-        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](1);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({
-            fromDelegate: address(0),
-            toDelegate: BOB,
-            amount: collateralAmount + 1
-        });
-
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededGOhmBalance.selector, collateralAmount, collateralAmount + 1));
-        cooler.addCollateral(collateralAmount, ALICE, delegationRequests);
+        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, collateralAmount, collateralAmount + 1));
+        cooler.addCollateral(collateralAmount, ALICE, delegationRequest(BOB, collateralAmount + 1));
     }
 
     function test_addCollateral_withDelegations() public {
@@ -144,21 +141,14 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
 
-        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](1);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({
-            fromDelegate: address(0),
-            toDelegate: BOB,
-            amount: collateralAmount/2
-        });
-
-        address bobEscrow = 0xe8a41C57AB0019c403D35e8D54f2921BaE21Ed66;
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
+        vm.expectEmit(address(escrowFactory));
+        emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
-        emit DelegateEscrowCreated(BOB, bobEscrow);
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(address(cooler), ALICE, address(0), BOB, collateralAmount/2);
+        emit DelegationApplied(ALICE, BOB, int256(uint256(collateralAmount/2)));
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, ALICE, collateralAmount);
-        cooler.addCollateral(collateralAmount, ALICE, delegationRequests);
+        cooler.addCollateral(collateralAmount, ALICE, delegationRequest(BOB, collateralAmount/2));
         
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -205,45 +195,49 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         // undelegated -> OTHERS: 30
         // OTHERS -> BOB: 15
         // OTHERS -> undelegated: 5
-        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](4);
+        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](5);
         delegationRequests[0] = DLGTEv1.DelegationRequest({
-            fromDelegate: address(0),
-            toDelegate: BOB,
+            delegate: BOB,
             amount: 10e18
         });
         delegationRequests[1] = DLGTEv1.DelegationRequest({
-            fromDelegate: address(0),
-            toDelegate: OTHERS,
+            delegate: OTHERS,
             amount: 30e18
         });
         delegationRequests[2] = DLGTEv1.DelegationRequest({
-            fromDelegate: OTHERS,
-            toDelegate: BOB,
-            amount: 15e18
+            delegate: OTHERS,
+            amount: -15e18
         });
         delegationRequests[3] = DLGTEv1.DelegationRequest({
-            fromDelegate: OTHERS,
-            toDelegate: address(0),
-            amount: 5e18
+            delegate: BOB,
+            amount: 15e18
+        });
+        delegationRequests[4] = DLGTEv1.DelegationRequest({
+            delegate: OTHERS,
+            amount: -5e18
         });
 
-        address bobEscrow = 0xe8a41C57AB0019c403D35e8D54f2921BaE21Ed66;
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
+        vm.expectEmit(address(escrowFactory));
+        emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
-        emit DelegateEscrowCreated(BOB, bobEscrow);
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(address(cooler), ALICE, address(0), BOB, 10e18);
+        emit DelegationApplied(ALICE, BOB, 10e18);
 
-        address othersEscrow = 0xD6C5fA22BBE89db86245e111044a880213b35705;
-        vm.expectEmit(address(DLGTE));
-        emit DelegateEscrowCreated(OTHERS, othersEscrow);
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(address(cooler), ALICE, address(0), OTHERS, 30e18);
+        address othersEscrow = 0x6F67DD53F065131901fC8B45f183aD4977F75161;
+        vm.expectEmit(address(escrowFactory));
+        emit DelegateEscrowCreated(address(DLGTE), OTHERS, othersEscrow);
 
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(address(cooler), ALICE, OTHERS, BOB, 15e18);
+        emit DelegationApplied(ALICE, OTHERS, 30e18);
 
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(address(cooler), ALICE, OTHERS, address(0), 5e18);
+        emit DelegationApplied(ALICE, OTHERS, -15e18);
+
+        vm.expectEmit(address(DLGTE));
+        emit DelegationApplied(ALICE, BOB, 15e18);
+
+        vm.expectEmit(address(DLGTE));
+        emit DelegationApplied(ALICE, OTHERS, -5e18);
 
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, ALICE, collateralAmount);
@@ -301,20 +295,20 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_failNoCollateral_noGohm() public {
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededGOhmBalance.selector, 0, 100));
+        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 0, 100));
         cooler.withdrawCollateral(100, ALICE, new DLGTEv1.DelegationRequest[](0));      
     }
 
     function test_withdrawCollateral_failNoCollateral_withGohm() public {
         deal(address(gohm), address(DLGTE), 1e18);
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededGOhmBalance.selector, 0, 100));
+        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 0, 100));
         cooler.withdrawCollateral(100, ALICE, new DLGTEv1.DelegationRequest[](0));      
     }
 
     function test_withdrawCollateral_failNotEnoughCollateral() public {
         addCollateral(ALICE, 100e18);
         vm.startPrank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededGOhmBalance.selector, 100e18, 100e18 + 1));
+        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 100e18, 100e18 + 1));
         cooler.withdrawCollateral(100e18 + 1, ALICE, new DLGTEv1.DelegationRequest[](0));      
     }
 

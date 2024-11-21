@@ -16,6 +16,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {OlympusGovDelegation, DLGTEv1} from "modules/DLGTE/OlympusGovDelegation.sol";
+import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
 
 abstract contract MonoCoolerBaseTest is Test {
     MockOhm internal ohm;
@@ -33,6 +34,7 @@ abstract contract MonoCoolerBaseTest is Test {
     RolesAdmin internal rolesAdmin;
 
     MonoCooler public cooler;
+    DelegateEscrowFactory escrowFactory;
 
     address internal immutable OVERSEER = makeAddr("overseer");
     address internal immutable ALICE = makeAddr("alice");
@@ -55,12 +57,13 @@ abstract contract MonoCoolerBaseTest is Test {
         sdai = new MockERC4626(dai, "sDai", "sDAI");
 
         kernel = new Kernel(); // this contract will be the executor
+        escrowFactory = new DelegateEscrowFactory(address(gohm));
 
         TRSRY = new OlympusTreasury(kernel);
         MINTR = new OlympusMinter(kernel, address(ohm));
         ROLES = new OlympusRoles(kernel);
         CHREG = new OlympusClearinghouseRegistry(kernel, address(0), new address[](0));
-        DLGTE = new OlympusGovDelegation(kernel, address(gohm));
+        DLGTE = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
 
         cooler = new MonoCooler(
             address(ohm),
@@ -206,4 +209,49 @@ abstract contract MonoCoolerBaseTest is Test {
         assertEq(status[0].exceededLiquidationLtv, expectedLiquidationStatus.exceededLiquidationLtv, "LiquidationStatus::exceededLiquidationLtv");
         assertEq(status[0].exceededMaxOriginationLtv, expectedLiquidationStatus.exceededMaxOriginationLtv, "LiquidationStatus::exceededMaxOriginationLtv");
     }
+
+    function delegationRequest(
+        address to,
+        uint256 amount
+    ) internal pure returns (
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) {
+        delegationRequests = new DLGTEv1.DelegationRequest[](1);
+        delegationRequests[0] = DLGTEv1.DelegationRequest({
+            delegate: to,
+            amount: int256(amount)
+        });
+    }
+
+    function unDelegationRequest(
+        address from,
+        uint256 amount
+    ) internal pure returns (
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) {
+        delegationRequests = new DLGTEv1.DelegationRequest[](1);
+        delegationRequests[0] = DLGTEv1.DelegationRequest({
+            delegate: from,
+            amount: int256(amount) * -1
+        });
+    }
+
+    function transferDelegationRequest(
+        address from,
+        address to,
+        uint256 amount
+    ) internal pure returns (
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) {
+        delegationRequests = new DLGTEv1.DelegationRequest[](2);
+        delegationRequests[0] = DLGTEv1.DelegationRequest({
+            delegate: from,
+            amount: int256(amount) * -1
+        });
+        delegationRequests[0] = DLGTEv1.DelegationRequest({
+            delegate: to,
+            amount: int256(amount)
+        });
+    }
+
 }

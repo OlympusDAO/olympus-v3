@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 import {Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
-import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     event LiquidationLtvSet(uint256 ltv);
@@ -14,7 +13,6 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     event InterestRateSet(uint16 interestRateBps);
 
     event MaxDelegateAddressesSet(
-        address indexed policy, 
         address indexed account, 
         uint256 maxDelegateAddresses
     );
@@ -89,7 +87,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](8);
+        Permissions[] memory expectedPerms = new Permissions[](10);
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
@@ -100,8 +98,10 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
         expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPerms[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
-        expectedPerms[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        expectedPerms[6] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
+        expectedPerms[7] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
+        expectedPerms[8] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        expectedPerms[9] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
 
         Permissions[] memory perms = cooler.requestPermissions();
         // Check: permission storage
@@ -221,15 +221,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         uint128 collateralAmount = 10e18;
         
         // Add collateral with a delegation (50% of collateral)
-        {
-            DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](1);
-            delegationRequests[0] = DLGTEv1.DelegationRequest({
-                fromDelegate: address(0),
-                toDelegate: BOB,
-                amount: collateralAmount/2
-            });
-            addCollateral(ALICE, collateralAmount, delegationRequests);
-        }
+        addCollateral(ALICE, collateralAmount, delegationRequest(BOB, collateralAmount/2));
 
         expectOneDelegation(ALICE, BOB, collateralAmount/2);
         
@@ -246,7 +238,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
 
         vm.startPrank(OVERSEER);
         vm.expectEmit(address(DLGTE));
-        emit MaxDelegateAddressesSet(address(cooler), ALICE, 50);
+        emit MaxDelegateAddressesSet(ALICE, 50);
         cooler.setMaxDelegateAddresses(ALICE, 50);
 
         // The maxDelegateAddresses has increased

@@ -199,15 +199,17 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
 
-        requests = new Permissions[](8);
+        requests = new Permissions[](10);
         requests[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
         requests[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
         requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
-        requests[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        requests[6] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
+        requests[7] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
+        requests[8] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        requests[9] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
     }
 
     // --- COLLATERAL -----------------------------------------------
@@ -249,12 +251,15 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         totalCollateral += collateralAmount;
 
         // Apply the delegation requests to the newly added collateral
-        DLGTE.applyDelegations(
-            onBehalfOf,
-            int256(uint256(collateralAmount)),
-            delegationRequests, 
-            DLGTEv1.AllowedDelegationRequests.Any
-        );
+        DLGTE.depositUndelegatedGohm(msg.sender, collateralAmount);
+
+        if (delegationRequests.length > 0) {
+            // Apply the delegation requests on the latest undelegated gOHM
+            DLGTE.applyDelegations(
+                msg.sender,
+                delegationRequests
+            );
+        }
 
         // NB: No need to check if the position is healthy when adding collateral as this
         // only improves the liquidity.
@@ -286,15 +291,15 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         AccountState storage aState = allAccountState[msg.sender];
 
-        // Apply the delegation requests in order to pull the required collateral
-        // back into this contract.
-        // DLGTE will ensure the account must have at least `collateralAmount` undelegated afer applying these requests.
-        DLGTE.applyDelegations(
-            msg.sender,
-            int256(uint256(collateralAmount)) * -1, // Withdrawing the gOHM collateral
-            delegationRequests, 
-            DLGTEv1.AllowedDelegationRequests.Any
-        );
+        if (delegationRequests.length > 0) {
+            // Apply the delegation requests in order to pull the required collateral back into this contract.
+            DLGTE.applyDelegations(
+                msg.sender,
+                delegationRequests
+            );
+        }
+
+        DLGTE.withdrawUndelegatedGohm(msg.sender, collateralAmount);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
         aState.collateral -= collateralAmount;
@@ -402,17 +407,14 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     // --- GOV. DELEGATION ------------------------------------------
 
+    /// @inheritdoc IMonoCooler
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (
-        uint256 /*totalDelegated*/
+        uint256 /*totalDelegated*/, 
+        uint256 /*totalUndelegated*/
     ) {
-        return DLGTE.applyDelegations(
-            msg.sender, 
-            0,
-            delegationRequests, 
-            DLGTEv1.AllowedDelegationRequests.Any
-        );
+        return DLGTE.applyDelegations(msg.sender, delegationRequests);
     }
 
     // --- LIQUIDATIONS ---------------------------------------------
@@ -425,7 +427,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
      * @dev If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
      */
     function batchLiquidate(
-        address[] calldata accounts
+        address[] calldata accounts,
+        DLGTEv1.DelegationRequest[][] calldata delegationRequests
     ) external override returns (
         uint128 totalCollateralClaimed,
         uint128 totalDebtWiped
@@ -446,6 +449,24 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             // Skip if this account is still under the maxLTV
             if (status.exceededLiquidationLtv) {
                 emit Liquidated(account, status.collateral, status.currentDebt);
+                
+                // Apply any undelegation requests
+                DLGTEv1.DelegationRequest[] calldata dreqs = delegationRequests[i];
+                if (dreqs.length > 1) {
+                    // Note: More collateral may be undelegated than required for the liquidation here.
+                    // But this is assumed ok - the liquidated user will need to re-apply the delegations again.
+                    (uint256 appliedDelegations,) = DLGTE.applyDelegations(
+                        account, 
+                        dreqs
+                    );
+
+                    // For liquidations, only allow undelegation requests
+                    if (appliedDelegations > 0) revert InvalidDelegationRequests();
+                }
+
+                // Withdraw the undelegated gOHM
+                DLGTE.withdrawUndelegatedGohm(account, status.collateral);
+
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;
 
@@ -454,7 +475,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             }
         }
 
-        // burn the gOHM collateral by repaying to TRV. This will burn the equivalent dgOHM debt too.
+        // burn the gOHM collateral and update the total state.
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             collateralToken.safeApprove(address(staking), totalCollateralClaimed);
@@ -478,7 +499,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address account,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (
-        uint256 /*totalDelegated*/
+        uint256 totalUndelegated
     ) {
         if (liquidationsPaused) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
@@ -488,12 +509,16 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         );
         if (!status.exceededLiquidationLtv) revert CannotLiquidate();
 
-        return DLGTE.applyDelegations(
+        // Note: More collateral may be undelegated than required for the liquidation here.
+        // But this is assumed ok - the liquidated user will need to re-apply the delegations again.
+        uint256 totalDelegated;
+        (totalDelegated, totalUndelegated) = DLGTE.applyDelegations(
             account, 
-            0,
-            delegationRequests, 
-            DLGTEv1.AllowedDelegationRequests.RescindOnly
+            delegationRequests
         );
+
+        // Only allowed to undelegate.
+        if (totalDelegated > 0) revert InvalidDelegationRequests();
     }
 
     // --- ADMIN ----------------------------------------------------
@@ -604,7 +629,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             position.totalDelegated,
             position.numDelegateAddresses, 
             position.maxDelegateAddresses
-        ) = DLGTE.accountDelegationSummary(address(this), account);
+        ) = DLGTE.accountDelegationSummary(account);
     }
 
     /**
@@ -634,7 +659,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     ) external override view returns (
         DLGTEv1.AccountDelegation[] memory delegations
     ) {
-        return DLGTE.accountDelegationsList(address(this), account, startIndex, maxItems);
+        return DLGTE.accountDelegationsList(account, startIndex, maxItems);
     }
 
     /**
@@ -806,8 +831,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Ensure to round both the currentDebt and the currentLtv up
         status.currentDebt = _currentAccountDebt(
-            gState, 
-            aState.debtCheckpoint, 
+            gState,
+            aState.debtCheckpoint,
             aState.interestAccumulatorRay,
             true
         );

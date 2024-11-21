@@ -11,6 +11,7 @@ interface IMonoCooler {
     error ExpectedNonZero();
     error Paused();
     error CannotLiquidate();
+    error InvalidDelegationRequests();
 
     event LiquidationLtvSet(uint256 ltv);
     event MaxOriginationLtvSet(uint256 ltv);
@@ -205,7 +206,8 @@ interface IMonoCooler {
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (
-        uint256 totalDelegated
+        uint256 totalDelegated, 
+        uint256 totalUndelegated
     );
 
     /**
@@ -216,7 +218,8 @@ interface IMonoCooler {
      * then no action is performed for that account.
      */
     function batchLiquidate(
-        address[] calldata accounts
+        address[] calldata accounts,
+        DLGTEv1.DelegationRequest[][] calldata delegationRequests
     ) external returns (
         uint128 totalCollateralClaimed,
         uint128 totalDebtWiped
@@ -231,7 +234,7 @@ interface IMonoCooler {
         address account,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (
-        uint256 totalDelegated
+        uint256 totalUndelegated
     );
 
     // --- ADMIN ----------------------------------------------------
