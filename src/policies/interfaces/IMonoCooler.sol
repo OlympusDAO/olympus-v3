@@ -5,8 +5,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 interface IMonoCooler {
-    error ExceededMaxOriginationLtv(uint256 collateral, uint256 currentDebt);
+    error ExceededMaxOriginationLtv(uint256 newLtv, uint256 maxOriginationLtv);
     error MinDebtNotMet(uint256 minRequired, uint256 current);
+    error InvalidAddress();
     error InvalidParam();
     error ExpectedNonZero();
     error Paused();
@@ -74,7 +75,11 @@ interface IMonoCooler {
 
         /// @notice The maximum amount of debtToken's this account can borrow given the
         /// collateral posted, up to `maxOriginationLtv`
-        uint256 maxDebt;
+        uint256 maxOriginationDebtAmount;
+
+        /// @notice The maximum amount of debtToken's this account can accrue before being
+        /// eligable to be liquidated, up to `liquidationLtv`
+        uint256 liquidationDebtAmount;
 
         /// @notice The health factor of this accounts position.
         /// Anything less than 1 can be liquidated, relative to `liquidationLtv`
@@ -202,7 +207,13 @@ interface IMonoCooler {
      * @param onBehalfOf Another address can repay the debt on behalf of someone else
      */
     function repay(uint128 repayAmount, address onBehalfOf) external;
-
+    
+    /**
+     * @notice Apply a set of delegation requests on behalf of a given user.
+     *  - Each delegation request either delegates or undelegates to an address
+     *  - It applies across total gOHM balances for a given account across all calling policies
+     *    So this may (un)delegate the account's gOHM set by another policy
+     */
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (
@@ -211,11 +222,9 @@ interface IMonoCooler {
     );
 
     /**
-     * @notice Liquidate one or more accounts which have exceeded the 
-     * maximum allowed LTV.
-     * The gOHM collateral is seized, and the accounts debt wiped.
-     * @dev If one of the accounts in the batch hasn't exceeded the max LTV
-     * then no action is performed for that account.
+     * @notice Liquidate one or more accounts which have exceeded the `liquidationLtv`
+     * The gOHM collateral is seized (unstaked to OHM and burned), and the accounts debt is wiped.
+     * @dev If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
      */
     function batchLiquidate(
         address[] calldata accounts,
@@ -279,6 +288,12 @@ interface IMonoCooler {
         uint32 maxDelegateAddresses
     ) external;
 
+    /**
+     * @notice Update and checkpoint the total debt up until now
+     * @dev May be useful in case there are no new user actions for some time.
+     */
+    function checkpointDebt() external returns (uint128 totalDebt, uint256 interestAccumulatorRay);
+
     // --- AUX FUNCTIONS --------------------------------------------
 
     /**
@@ -317,4 +332,9 @@ interface IMonoCooler {
      * @notice A view of the last checkpoint of account data (not as of this block)
      */
     function accountState(address account) external view returns (AccountState memory);
+
+    /**
+     * @notice A view of the derived/internal cache data.
+     */
+    function globalState() external view returns (uint128 totalDebt, uint256 interestAccumulatorRay);
 }

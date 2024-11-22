@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {MonoCooler} from "policies/MonoCooler.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 
@@ -45,9 +45,11 @@ abstract contract MonoCoolerBaseTest is Test {
     uint96 internal constant DEFAULT_OLTV = 0.93e18;
     uint16 internal constant DEFAULT_INTEREST_RATE_BPS = 50; // 0.5%
     uint256 internal constant DEFAULT_MIN_DEBT_REQUIRED = 1_000e18;
+    uint256 internal constant INITIAL_TRSRY_MINT = 200_000_000e18;
+    uint256 internal constant START_TIMESTAMP = 1_000_000;
 
     function setUp() public {
-        vm.warp(1_000_000);
+        vm.warp(START_TIMESTAMP);
 
         staking = new MockStaking();
 
@@ -92,19 +94,18 @@ abstract contract MonoCoolerBaseTest is Test {
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
 
         // Setup Treasury
-        uint256 mintAmount = 200_000_000e18; // Init treasury with 200 million
-        dai.mint(address(TRSRY), mintAmount);
+        dai.mint(address(TRSRY), INITIAL_TRSRY_MINT);
         // Deposit all reserves into the DSR
         vm.startPrank(address(TRSRY));
-        dai.approve(address(sdai), mintAmount);
-        sdai.deposit(mintAmount, address(TRSRY));
+        dai.approve(address(sdai), INITIAL_TRSRY_MINT);
+        sdai.deposit(INITIAL_TRSRY_MINT, address(TRSRY));
         vm.stopPrank();
 
         // Fund others so that TRSRY is not the only account with sDAI shares
-        dai.mint(OTHERS, mintAmount * 33);
+        dai.mint(OTHERS, INITIAL_TRSRY_MINT * 33);
         vm.startPrank(OTHERS);
-        dai.approve(address(sdai), mintAmount * 33);
-        sdai.deposit(mintAmount * 33, OTHERS);
+        dai.approve(address(sdai), INITIAL_TRSRY_MINT * 33);
+        sdai.deposit(INITIAL_TRSRY_MINT * 33, OTHERS);
         vm.stopPrank();
     }
 
@@ -133,6 +134,26 @@ abstract contract MonoCoolerBaseTest is Test {
         vm.startPrank(account);
         gohm.approve(address(cooler), collateralAmount);
         cooler.addCollateral(collateralAmount, account, delegationRequests);
+        vm.stopPrank();
+    }
+
+    function withdrawCollateral(
+        address account, 
+        uint128 collateralAmount,
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) internal {
+        vm.startPrank(account);
+        cooler.withdrawCollateral(collateralAmount, account, delegationRequests);
+        vm.stopPrank();
+    }
+
+    function borrow(
+        address account,
+        uint128 amount,
+        address recipient
+    ) internal {
+        vm.startPrank(account);
+        cooler.borrow(amount, recipient);
         vm.stopPrank();
     }
 
@@ -187,7 +208,8 @@ abstract contract MonoCoolerBaseTest is Test {
         IMonoCooler.AccountPosition memory position = cooler.accountPosition(account);
         assertEq(position.collateral, expectedPosition.collateral, "AccountPosition::collateral");
         assertEq(position.currentDebt, expectedPosition.currentDebt, "AccountPosition::currentDebt");
-        assertEq(position.maxDebt, expectedPosition.maxDebt, "AccountPosition::maxDebt");
+        assertEq(position.maxOriginationDebtAmount, expectedPosition.maxOriginationDebtAmount, "AccountPosition::maxOriginationDebtAmount");
+        assertEq(position.liquidationDebtAmount, expectedPosition.liquidationDebtAmount, "AccountPosition::liquidationDebtAmount");
         assertEq(position.healthFactor, expectedPosition.healthFactor, "AccountPosition::healthFactor");
         assertEq(position.currentLtv, expectedPosition.currentLtv, "AccountPosition::currentLtv");
         assertEq(position.totalDelegated, expectedPosition.totalDelegated, "AccountPosition::totalDelegated");
@@ -208,6 +230,12 @@ abstract contract MonoCoolerBaseTest is Test {
         assertEq(status[0].currentLtv, expectedLiquidationStatus.currentLtv, "LiquidationStatus::currentLtv");
         assertEq(status[0].exceededLiquidationLtv, expectedLiquidationStatus.exceededLiquidationLtv, "LiquidationStatus::exceededLiquidationLtv");
         assertEq(status[0].exceededMaxOriginationLtv, expectedLiquidationStatus.exceededMaxOriginationLtv, "LiquidationStatus::exceededMaxOriginationLtv");
+    }
+
+    function noDelegationRequest() internal pure returns (
+        DLGTEv1.DelegationRequest[] memory
+    ) {
+        return new DLGTEv1.DelegationRequest[](0);
     }
 
     function delegationRequest(
