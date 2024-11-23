@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {MockLegacyInverseBondDepo} from "test/mocks/MockLegacyInverseBondDepo.sol";
+import {MockLegacyInverseBondDepo} from "src/test/mocks/MockLegacyInverseBondDepo.sol";
 
 contract LegacyBurnerDepsDeploy is Script {
     address public authority = 0x4A8c9502A34962a2C6d73c5D181dAaeF3dcDc88D;

@@ -14,7 +14,7 @@ import {Cooler} from "src/external/cooler/Cooler.sol";
 
 import {CoolerUtils} from "src/external/cooler/CoolerUtils.sol";
 
-contract CoolerUtilsTest is Test {
+contract CoolerUtilsForkTest is Test {
     CoolerUtils public utils;
 
     ERC20 public gohm;

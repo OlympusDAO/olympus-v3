@@ -6,19 +6,17 @@ import "forge-std/Test.sol";
 import {TestSuite} from "proposal-sim/test/TestSuite.t.sol";
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";
 
-// OIP_166 imports
-import {OIP_166} from "src/proposals/OIP_166.sol";
+import {OIP_170} from "src/proposals/OIP_170.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
 ///         flag to `true` once the proposal has been submitted on-chain.
 /// Note: this will fail if the OCGPermissions script has not been run yet.
-contract OIP_166_OCGProposalTest is Test {
+contract OIP_170_OCGProposalTest is Test {
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
     TestSuite public suite;
     Addresses public addresses;
@@ -27,16 +25,12 @@ contract OIP_166_OCGProposalTest is Test {
     // If true, the framework will check that calldatas match.
     bool public hasBeenSubmitted;
 
-    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
-
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
-        // Mainnet Fork at a fixed block
-        // Prior to actual deployment of the proposal (otherwise it will fail) - 20872023
-        vm.createSelectFork(RPC_URL, 20872022);
-
         /// @dev Deploy your proposal
-        OIP_166 proposal = new OIP_166();
+        OIP_170 proposal = new OIP_170();
+
+        console2.log(proposal.description());
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
         hasBeenSubmitted = false;
@@ -53,16 +47,6 @@ contract OIP_166_OCGProposalTest is Test {
 
             // Set addresses object
             addresses = suite.addresses();
-
-            // NOTE: unique to OIP 166
-            // In prepation for this particular proposal, we need to:
-            // Push the roles admin "admin" permission to the Timelock from the DAO MS (multisig)
-            address daoMS = addresses.getAddress("olympus-multisig-dao");
-            address timelock = addresses.getAddress("olympus-timelock");
-            RolesAdmin rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));
-
-            vm.prank(daoMS);
-            rolesAdmin.pushNewAdmin(timelock);
 
             // Set debug mode
             suite.setDebug(true);

@@ -3,10 +3,10 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockGenesisClaim} from "test/mocks/MockGenesisClaim.sol";
+import {MockGenesisClaim} from "src/test/mocks/MockGenesisClaim.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";

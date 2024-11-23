@@ -316,10 +316,25 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function queue(uint256 proposalId) external {
         Proposal storage proposal = proposals[proposalId];
 
-        if (_isEmergency()) {
-            // In an emergency state, only the veto guardian can queue proposals
+        // Check if this is an emergency proposal
+        // Emergency proposals do not set the startBlock, but they will have a set proposer
+        // This proposer is likely the vetoGuardian, but the vetoGuardian can be changed
+        // Therefore, we just check that the proposer has been set.
+        bool isEmergencyProposal = proposal.startBlock == 0 && proposal.proposer != address(0);
+
+        if (isEmergencyProposal) {
+            // Only the veto guardian can queue emergency proposals
             if (msg.sender != vetoGuardian) revert GovernorBravo_OnlyVetoGuardian();
+
+            // Check that the proposal state is emergency
+            // We already know that this is an emergency proposal,
+            // but we need to make sure it hasn't been vetoed or executed already
+            if (state(proposalId) != ProposalState.Emergency) revert GovernorBravo_NotEmergency();
         } else {
+            // In an emergency state, only the veto guardian can execute proposals
+            if (_isEmergency() && msg.sender != vetoGuardian)
+                revert GovernorBravo_OnlyVetoGuardian();
+
             // Check if proposal is succeeded
             if (state(proposalId) != ProposalState.Succeeded)
                 revert GovernorBravo_Queue_FailedProposal();
@@ -370,10 +385,25 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function execute(uint256 proposalId) external payable {
         Proposal storage proposal = proposals[proposalId];
 
-        if (_isEmergency()) {
-            // In an emergency state, only the veto guardian can queue proposals
+        // Check if this is an emergency proposal
+        // Emergency proposals do not set the startBlock, but they will have a set proposer
+        // This proposer is likely the vetoGuardian, but the vetoGuardian can be changed
+        // Therefore, we just check that the proposer has been set.
+        bool isEmergencyProposal = proposal.startBlock == 0 && proposal.proposer != address(0);
+
+        if (isEmergencyProposal) {
+            // Only the veto guardian can execute emergency proposals
             if (msg.sender != vetoGuardian) revert GovernorBravo_OnlyVetoGuardian();
+
+            // Check that the proposal state is emergency
+            // We already know that this is an emergency proposal,
+            // but we need to make sure it hasn't been vetoed or executed already
+            if (state(proposalId) != ProposalState.Emergency) revert GovernorBravo_NotEmergency();
         } else {
+            // In an emergency state, only the veto guardian can execute proposals
+            if (_isEmergency() && msg.sender != vetoGuardian)
+                revert GovernorBravo_OnlyVetoGuardian();
+
             // Check if proposal is succeeded
             if (state(proposalId) != ProposalState.Queued) revert GovernorBravo_Execute_NotQueued();
             // Check that proposer has not fallen below proposal threshold since proposal creation
@@ -898,6 +928,16 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function getVoteOutcome(uint256 proposalId) public view returns (bool) {
         Proposal storage proposal = proposals[proposalId];
 
+        // Check if it's an emergency proposal
+        // If so we need to check if it's vetoed
+        if (
+            proposal.proposer != address(0) &&
+            proposal.startBlock == 0 &&
+            proposal.targets.length > 0
+        ) {
+            return !proposal.vetoed;
+        }
+
         if (proposal.forVotes == 0 && proposal.againstVotes == 0) {
             return false;
         } else if (
@@ -919,15 +959,26 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
     function state(uint256 proposalId) public view returns (ProposalState) {
         if (proposalCount < proposalId) revert GovernorBravo_Proposal_IdInvalid();
         Proposal storage proposal = proposals[proposalId];
+
+        // Check if the proposal is an emergency proposal
+        // Start block is not set for emergency proposals
+        // Veto guardian may have changed so just check if proposer is set
         if (
             proposal.startBlock == 0 &&
-            proposal.proposer == vetoGuardian &&
+            proposal.proposer != address(0) &&
             proposal.targets.length > 0
         ) {
             // We want to short circuit the proposal state if it's an emergency proposal
             // We do not want to leave the proposal in a perpetual pending state (or otherwise)
             // where a user may be able to cancel or reuse it
-            return ProposalState.Emergency;
+            // However, we should check if vetoed or executed and show the final state in those cases
+            if (proposal.vetoed) {
+                return ProposalState.Vetoed;
+            } else if (proposal.executed) {
+                return ProposalState.Executed;
+            } else {
+                return ProposalState.Emergency;
+            }
         } else if (proposal.vetoed) {
             return ProposalState.Vetoed;
         } else if (proposal.canceled) {
@@ -948,7 +999,7 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
             return ProposalState.Succeeded;
         } else if (proposal.executed) {
             return ProposalState.Executed;
-        } else if (block.timestamp >= proposal.eta + timelock.GRACE_PERIOD()) {
+        } else if (block.timestamp > proposal.eta + timelock.GRACE_PERIOD()) {
             return ProposalState.Expired;
         } else {
             return ProposalState.Queued;
