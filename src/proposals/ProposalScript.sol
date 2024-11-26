@@ -49,7 +49,8 @@ abstract contract ProposalScript is ScriptSuite {
         // run the proposal to build it
         proposal.run(addresses, address(0));
 
-        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = proposal.getProposalActions();
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = proposal
+            .getProposalActions();
         uint256 len = targets.length;
         // print the targets
         console2.log("Targets:");

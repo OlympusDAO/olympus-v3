@@ -50,9 +50,9 @@ contract USDSMigration is OlyBatch {
     // 4. Initialize new policies and update certain configs - DAO MS
     //    + Set Operator on BondCallback to Operator v1.5
     //    + Set sUSDS as the wrapped token for USDS on BondCallback
-    //    + Initialize Operator v1.5
     //    + Activate Clearinghouse v2.1
     //    + Initialize YieldRepurchaseFacility v1.1
+
     // TODO set these
     uint256 initialReserveBalance = 0;
     uint256 initialConversionRate = 0;
@@ -197,13 +197,10 @@ contract USDSMigration is OlyBatch {
             abi.encodeWithSelector(BondCallback.useWrappedVersion.selector, usds, susds)
         );
 
-        // 4c. Initialize the new Operator policy
-        addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
-
-        // 4d. Activate the new Clearinghouse policy
+        // 4c. Activate the new Clearinghouse policy
         addToBatch(newClearinghouse, abi.encodeWithSelector(Clearinghouse.activate.selector));
 
-        // 4e. Initialize the new YRF
+        // 4d. Initialize the new YRF
         addToBatch(
             newYieldRepo,
             abi.encodeWithSelector(
