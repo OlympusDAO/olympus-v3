@@ -30,16 +30,12 @@ contract DLGTETestBase is Test {
     DelegateEscrowFactory escrowFactory;
 
     event DelegateEscrowCreated(
-        address indexed caller, 
-        address indexed delegate, 
+        address indexed caller,
+        address indexed delegate,
         address indexed escrow
     );
 
-    event DelegationApplied(
-        address indexed account,
-        address indexed delegate,
-        int256 amount
-    );
+    event DelegationApplied(address indexed account, address indexed delegate, int256 amount);
 
     function setUp() public {
         vm.warp(1_000_000);
@@ -75,7 +71,7 @@ contract DLGTETestBase is Test {
         uint256 expectedNumDelegateAddresses,
         uint256 expectedMaxAllowedDelegateAddresses,
         uint256 expectedPolicyAcctBalance
-        ) internal {
+    ) internal {
         (
             uint256 totalGOhm,
             uint256 delegatedGOhm,
@@ -84,16 +80,30 @@ contract DLGTETestBase is Test {
         ) = dlgte.accountDelegationSummary(account);
         assertEq(totalGOhm, expectedTotalGOhm, "expectedTotalGOhm");
         assertEq(delegatedGOhm, expectedDelegatedGOhm, "expectedDelegatedGOhm");
-        assertEq(numDelegateAddresses, expectedNumDelegateAddresses, "expectedNumDelegateAddresses");
-        assertEq(maxAllowedDelegateAddresses, expectedMaxAllowedDelegateAddresses, "expectedMaxAllowedDelegateAddresses");
+        assertEq(
+            numDelegateAddresses,
+            expectedNumDelegateAddresses,
+            "expectedNumDelegateAddresses"
+        );
+        assertEq(
+            maxAllowedDelegateAddresses,
+            expectedMaxAllowedDelegateAddresses,
+            "expectedMaxAllowedDelegateAddresses"
+        );
 
-        assertEq(dlgte.policyAccountBalances(forPolicy, account), expectedPolicyAcctBalance, "policyAccountBalances");
+        assertEq(
+            dlgte.policyAccountBalances(forPolicy, account),
+            expectedPolicyAcctBalance,
+            "policyAccountBalances"
+        );
     }
 
-    function verifyDelegationsZero(
-        address account
-    ) internal {
-        DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(account, 0, 10);
+    function verifyDelegationsZero(address account) internal {
+        DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            account,
+            0,
+            10
+        );
         assertEq(delegations.length, 0);
     }
 
@@ -103,7 +113,11 @@ contract DLGTETestBase is Test {
         address expectedEscrow,
         uint256 expectedTotalAmount
     ) internal {
-        DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(account, 0, 10);
+        DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            account,
+            0,
+            10
+        );
         assertEq(delegations.length, 1);
         assertEq(delegations[0].delegate, expectedDelegate, "delegate");
         assertEq(delegations[0].escrow, expectedEscrow, "escrow");
@@ -119,7 +133,11 @@ contract DLGTETestBase is Test {
         address expectedEscrow2,
         uint256 expectedTotalAmount2
     ) internal {
-        DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(account, 0, 10);
+        DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            account,
+            0,
+            10
+        );
         assertEq(delegations.length, 2);
         assertEq(delegations[0].delegate, expectedDelegate1, "delegate1");
         assertEq(delegations[0].escrow, expectedEscrow1, "escrow1");
@@ -132,22 +150,15 @@ contract DLGTETestBase is Test {
     function delegationRequest(
         address to,
         uint256 amount
-    ) internal pure returns (
-        DLGTEv1.DelegationRequest[] memory delegationRequests
-    ) {
+    ) internal pure returns (DLGTEv1.DelegationRequest[] memory delegationRequests) {
         delegationRequests = new DLGTEv1.DelegationRequest[](1);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({
-            delegate: to,
-            amount: int256(amount)
-        });
+        delegationRequests[0] = DLGTEv1.DelegationRequest({delegate: to, amount: int256(amount)});
     }
 
     function unDelegationRequest(
         address from,
         uint256 amount
-    ) internal pure returns (
-        DLGTEv1.DelegationRequest[] memory delegationRequests
-    ) {
+    ) internal pure returns (DLGTEv1.DelegationRequest[] memory delegationRequests) {
         delegationRequests = new DLGTEv1.DelegationRequest[](1);
         delegationRequests[0] = DLGTEv1.DelegationRequest({
             delegate: from,
@@ -159,18 +170,13 @@ contract DLGTETestBase is Test {
         address from,
         address to,
         uint256 amount
-    ) internal pure returns (
-        DLGTEv1.DelegationRequest[] memory delegationRequests
-    ) {
+    ) internal pure returns (DLGTEv1.DelegationRequest[] memory delegationRequests) {
         delegationRequests = new DLGTEv1.DelegationRequest[](2);
         delegationRequests[0] = DLGTEv1.DelegationRequest({
             delegate: from,
             amount: int256(amount) * -1
         });
-        delegationRequests[1] = DLGTEv1.DelegationRequest({
-            delegate: to,
-            amount: int256(amount)
-        });
+        delegationRequests[1] = DLGTEv1.DelegationRequest({delegate: to, amount: int256(amount)});
     }
 
     function verifyApplyDelegations(
@@ -197,12 +203,8 @@ contract DLGTETestBase is Test {
 }
 
 contract DLGTETestAdmin is DLGTETestBase {
+    event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
 
-    event MaxDelegateAddressesSet(
-        address indexed account, 
-        uint256 maxDelegateAddresses
-    );
-    
     function test_constructor() public {
         assertEq(address(dlgte.kernel()), address(kernel));
         assertEq(address(dlgte.gOHM()), address(gohm));
@@ -281,7 +283,7 @@ contract DLGTETestDeposit is DLGTETestBase {
         gohm.approve(address(dlgte), 75e18);
         vm.expectRevert("TRANSFER_FROM_FAILED");
         dlgte.depositUndelegatedGohm(
-            ALICE, 
+            ALICE,
             100e18 // more than what's approved
         );
     }
@@ -300,7 +302,7 @@ contract DLGTETestDeposit is DLGTETestBase {
         uint256 amount = 100e18;
         deal(address(gohm), address(policy), amount);
         gohm.approve(address(dlgte), amount);
-        
+
         dlgte.depositUndelegatedGohm(ALICE, amount);
         verifyAccountSummary(address(policy), ALICE, amount, 0, 0, 10, amount);
     }
@@ -333,7 +335,9 @@ contract DLGTETestWithdraw is DLGTETestBase {
         setupUndelegated(policy, ALICE, 100e18);
 
         vm.startPrank(policy2);
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 0, 123));
+        vm.expectRevert(
+            abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 0, 123)
+        );
         dlgte.withdrawUndelegatedGohm(ALICE, 123);
     }
 
@@ -341,7 +345,9 @@ contract DLGTETestWithdraw is DLGTETestBase {
         setupUndelegated(policy, ALICE, 100e18);
 
         dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 75e18, 100e18));
+        vm.expectRevert(
+            abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 75e18, 100e18)
+        );
         dlgte.withdrawUndelegatedGohm(ALICE, 100e18);
     }
 
@@ -382,8 +388,8 @@ contract DLGTETestWithdraw is DLGTETestBase {
         vm.startPrank(policy2);
         dlgte.withdrawUndelegatedGohm(ALICE, 65e18);
 
-        verifyAccountSummary(address(policy), ALICE, 200e18-90e18, 0, 0, 10, 75e18);
-        verifyAccountSummary(address(policy2), ALICE, 200e18-90e18, 0, 0, 10, 35e18);
+        verifyAccountSummary(address(policy), ALICE, 200e18 - 90e18, 0, 0, 10, 75e18);
+        verifyAccountSummary(address(policy2), ALICE, 200e18 - 90e18, 0, 0, 10, 35e18);
 
         assertEq(gohm.balanceOf(policy), 25e18);
         assertEq(gohm.balanceOf(policy2), 65e18);
@@ -396,19 +402,13 @@ contract DLGTETestApplyDelegationsOne is DLGTETestBase {
     function test_applyDelegations_fail_invalidOnBehalfOf() public {
         vm.startPrank(policy);
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidAddress.selector));
-        dlgte.applyDelegations(
-            address(0),
-            new DLGTEv1.DelegationRequest[](0)
-        );
+        dlgte.applyDelegations(address(0), new DLGTEv1.DelegationRequest[](0));
     }
 
     function test_applyDelegations_fail_invalidLength() public {
         vm.startPrank(policy);
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidDelegationRequests.selector));
-        dlgte.applyDelegations(
-            ALICE,
-            new DLGTEv1.DelegationRequest[](0)
-        );
+        dlgte.applyDelegations(ALICE, new DLGTEv1.DelegationRequest[](0));
     }
 
     function test_applyDelegations_success_oneDelegate() public {
@@ -449,7 +449,12 @@ contract DLGTETestApplyDelegationsOne is DLGTETestBase {
         emit DelegateEscrowCreated(address(dlgte), ALICE, expectedEscrow);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, ALICE, 100e18);
-        verifyApplyDelegations(ALICE, delegationRequest(ALICE, uint256(type(int256).max)), 100e18, 0);
+        verifyApplyDelegations(
+            ALICE,
+            delegationRequest(ALICE, uint256(type(int256).max)),
+            100e18,
+            0
+        );
         assertEq(gohm.balanceOf(address(dlgte)), 0);
         assertEq(gohm.balanceOf(expectedEscrow), 100e18);
         verifyAccountSummary(address(policy), ALICE, 100e18, 100e18, 1, 10, 100e18);
@@ -476,61 +481,49 @@ contract DLGTETestApplyDelegationsOne is DLGTETestBase {
     function test_applyDelegations_fail_delegateTooMuch() public {
         setupUndelegated(policy, ALICE, 100e18);
 
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 100e18, 100e18+1));
-        dlgte.applyDelegations(
-            ALICE, 
-            delegationRequest(BOB, 100e18+1)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector,
+                100e18,
+                100e18 + 1
+            )
         );
+        dlgte.applyDelegations(ALICE, delegationRequest(BOB, 100e18 + 1));
     }
 
     function test_applyDelegations_fail_badAddresses() public {
         setupUndelegated(policy, ALICE, 100e18);
 
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidAddress.selector));
-        dlgte.applyDelegations(
-            ALICE, 
-            delegationRequest(address(0), 100e18)
-        );
+        dlgte.applyDelegations(ALICE, delegationRequest(address(0), 100e18));
 
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidDelegateEscrow.selector));
-        dlgte.applyDelegations(
-            ALICE, 
-            transferDelegationRequest(ALICE, ALICE, 100e18)
-        );
+        dlgte.applyDelegations(ALICE, transferDelegationRequest(ALICE, ALICE, 100e18));
     }
 
     function test_applyDelegations_fail_badAmount() public {
         vm.startPrank(policy);
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidAmount.selector));
-        dlgte.applyDelegations(
-            ALICE, 
-            delegationRequest(ALICE, 0)
-        );
+        dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 0));
 
         setupUndelegated(policy, ALICE, 100e18);
 
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidAmount.selector));
-        dlgte.applyDelegations(
-            ALICE, 
-            delegationRequest(ALICE, 0)
-        );
+        dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 0));
     }
 }
 
 contract DLGTETestDelegationsFromOneDelegate is DLGTETestBase {
     function test_applyDelegations_fail_invalidEscrow() public {
         seedDelegate();
-        
+
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidDelegateEscrow.selector));
-        dlgte.applyDelegations(
-            ALICE,
-            unDelegationRequest(ALICE, 100e18)
-        );
+        dlgte.applyDelegations(ALICE, unDelegationRequest(ALICE, 100e18));
     }
 
     function test_applyDelegations_success_partialWithdraw() public {
         seedDelegate();
-        
+
         address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -25e18);
@@ -544,7 +537,7 @@ contract DLGTETestDelegationsFromOneDelegate is DLGTETestBase {
 
     function test_applyDelegations_success_fullyWithdraw() public {
         seedDelegate();
-        
+
         address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -100e18);
@@ -560,7 +553,7 @@ contract DLGTETestDelegationsFromOneDelegate is DLGTETestBase {
 contract DLGTETestDelegationsTransferDelegate is DLGTETestBase {
     function test_applyDelegations_success_fullyTransfer() public {
         seedDelegate();
-        
+
         address expectedBobEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
         address expectedCharlieEscrow = 0xA11d35fE4b9Ca9979F2FF84283a9Ce190F60Cd00;
         vm.expectEmit(address(dlgte));
@@ -569,7 +562,12 @@ contract DLGTETestDelegationsTransferDelegate is DLGTETestBase {
         emit DelegateEscrowCreated(address(dlgte), CHARLIE, expectedCharlieEscrow);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, CHARLIE, 100e18);
-        verifyApplyDelegations(ALICE, transferDelegationRequest(BOB, CHARLIE, 100e18), 100e18, 100e18);
+        verifyApplyDelegations(
+            ALICE,
+            transferDelegationRequest(BOB, CHARLIE, 100e18),
+            100e18,
+            100e18
+        );
         assertEq(gohm.balanceOf(address(dlgte)), 0);
         assertEq(gohm.balanceOf(address(policy)), 0);
         assertEq(gohm.balanceOf(expectedBobEscrow), 0);
@@ -580,7 +578,7 @@ contract DLGTETestDelegationsTransferDelegate is DLGTETestBase {
 
     function test_applyDelegations_success_partialTransfer() public {
         seedDelegate();
-        
+
         address expectedBobEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
         address expectedCharlieEscrow = 0xA11d35fE4b9Ca9979F2FF84283a9Ce190F60Cd00;
         vm.expectEmit(address(dlgte));
@@ -596,9 +594,13 @@ contract DLGTETestDelegationsTransferDelegate is DLGTETestBase {
         assertEq(gohm.balanceOf(expectedCharlieEscrow), 25e18);
         verifyAccountSummary(address(policy), ALICE, 100e18, 100e18, 2, 10, 100e18);
         verifyDelegationsTwo(
-            ALICE, 
-            BOB, expectedBobEscrow, 75e18,
-            CHARLIE, expectedCharlieEscrow, 25e18
+            ALICE,
+            BOB,
+            expectedBobEscrow,
+            75e18,
+            CHARLIE,
+            expectedCharlieEscrow,
+            25e18
         );
     }
 }
@@ -618,45 +620,34 @@ contract DLGTETestDelegationsMultipleDelegates is DLGTETestBase {
         address expectedCharlieEscrow = 0xA11d35fE4b9Ca9979F2FF84283a9Ce190F60Cd00;
         verifyAccountSummary(address(policy), ALICE, 100e18, 75e18, 2, 2, 100e18);
         verifyDelegationsTwo(
-            ALICE, 
-            BOB, expectedBobEscrow, 50e18,
-            CHARLIE, expectedCharlieEscrow, 25e18
+            ALICE,
+            BOB,
+            expectedBobEscrow,
+            50e18,
+            CHARLIE,
+            expectedCharlieEscrow,
+            25e18
         );
 
         vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_TooManyDelegates.selector));
-        dlgte.applyDelegations(
-            ALICE,
-            delegationRequest(DANIEL, 10e18)
-        );
+        dlgte.applyDelegations(ALICE, delegationRequest(DANIEL, 10e18));
     }
 
     function test_multipleUsers_multiplePolicies() public {
         // Add for policy 1
         {
             setupUndelegated(policy, ALICE, 25e18);
-            dlgte.applyDelegations(
-                ALICE,
-                delegationRequest(BOB, 25e18)
-            );
+            dlgte.applyDelegations(ALICE, delegationRequest(BOB, 25e18));
             setupUndelegated(policy, BOB, 33e18);
-            dlgte.applyDelegations(
-                BOB,
-                delegationRequest(ALICE, 10e18)
-            );
+            dlgte.applyDelegations(BOB, delegationRequest(ALICE, 10e18));
         }
 
         // Add again for policy 2
         {
             setupUndelegated(policy2, ALICE, 25e18);
-            dlgte.applyDelegations(
-                ALICE,
-                delegationRequest(BOB, 25e18)
-            );
+            dlgte.applyDelegations(ALICE, delegationRequest(BOB, 25e18));
             setupUndelegated(policy2, BOB, 33e18);
-            dlgte.applyDelegations(
-                BOB,
-                delegationRequest(ALICE, 10e18)
-            );
+            dlgte.applyDelegations(BOB, delegationRequest(ALICE, 10e18));
         }
 
         // Same escrow used for both

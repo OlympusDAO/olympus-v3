@@ -6,15 +6,9 @@ import {SafeCast} from "libraries/SafeCast.sol";
 
 contract SafeCastTest is Test {
     function test_encodeUInt128_success() public {
-        assertEq(
-            SafeCast.encodeUInt128(uint256(type(uint128).max)),
-            type(uint128).max
-        );
+        assertEq(SafeCast.encodeUInt128(uint256(type(uint128).max)), type(uint128).max);
 
-        assertEq(
-            SafeCast.encodeUInt128(uint256(0)),
-            uint128(0)
-        );
+        assertEq(SafeCast.encodeUInt128(uint256(0)), uint128(0));
     }
 
     function test_encodeUInt128_failure() public {

@@ -161,9 +161,6 @@ contract CompoundedInterestTest is Test {
 
     function test_compute_maxDays_expectInputTooBig() public {
         vm.expectRevert();
-        initialPrincipalAmount.continuouslyCompounded(
-            type(uint96).max,
-            TEN_PCT_INTEREST
-        );
+        initialPrincipalAmount.continuouslyCompounded(type(uint96).max, TEN_PCT_INTEREST);
     }
 }

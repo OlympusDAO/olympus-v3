@@ -7,10 +7,12 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 contract MonoCoolerAccessTest is MonoCoolerBaseTest {
     function expectOnlyOverseer() internal {
         vm.startPrank(OTHERS);
-        vm.expectRevert(abi.encodeWithSelector(
-            ROLESv1.ROLES_RequireRole.selector, 
-            cooler.COOLER_OVERSEER_ROLE()
-        ));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                cooler.COOLER_OVERSEER_ROLE()
+            )
+        );
         vm.stopPrank();
     }
 

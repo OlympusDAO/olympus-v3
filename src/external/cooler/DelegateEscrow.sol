@@ -41,12 +41,11 @@ contract DelegateEscrow is Clone {
     /// @notice Can only be called from the factory which created this contract
     error NotFactory();
 
-    /// @notice The mapping of delegation amounts. 
+    /// @notice The mapping of delegation amounts.
     /// @dev Partitioned by the calling address, and also by
     /// the address on behalf it is delegating for.
-    mapping(address /* caller */ => 
-        mapping(address /* onBehalfOf */ => uint256 /* amount */)
-    ) public delegations;
+    mapping(address /* caller */ => mapping(address /* onBehalfOf */ => uint256 /* amount */))
+        public delegations;
 
     constructor(address gohm_) {
         gohm = ERC20(gohm_);
@@ -67,9 +66,12 @@ contract DelegateEscrow is Clone {
     }
 
     /// @notice Delegate an amount of gOHM to the predefined `delegateAccount`
-    /// @dev gOHM is pulled from the caller (which must provide allowance), and only that 
+    /// @dev gOHM is pulled from the caller (which must provide allowance), and only that
     /// same caller may rescind the delegation to recall the gOHM at a future date.
-    function delegate(address onBehalfOf, uint256 gohmAmount) external returns (uint256 delegatedAmount) {
+    function delegate(
+        address onBehalfOf,
+        uint256 gohmAmount
+    ) external returns (uint256 delegatedAmount) {
         gohm.safeTransferFrom(msg.sender, address(this), gohmAmount);
 
         mapping(address => uint256) storage delegatorAmounts = delegations[msg.sender];
@@ -79,7 +81,10 @@ contract DelegateEscrow is Clone {
     }
 
     /// @notice Rescind a delegation of gOHM and send back to the caller.
-    function rescindDelegation(address onBehalfOf, uint256 gohmAmount) external returns (uint256 delegatedAmount) {
+    function rescindDelegation(
+        address onBehalfOf,
+        uint256 gohmAmount
+    ) external returns (uint256 delegatedAmount) {
         mapping(address => uint256) storage delegatorAmounts = delegations[msg.sender];
         uint256 existingDelegatedAmount = delegatorAmounts[onBehalfOf];
         if (gohmAmount > existingDelegatedAmount) revert ExceededDelegationBalance();

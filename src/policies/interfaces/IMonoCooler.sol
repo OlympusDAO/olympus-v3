@@ -21,8 +21,16 @@ interface IMonoCooler {
     event MinDebtRequiredSet(uint128 amount);
     event InterestRateSet(uint16 interestRateBps);
 
-    event CollateralAdded(address indexed fundedBy, address indexed onBehalfOf, uint128 collateralAmount);
-    event CollateralWithdrawn(address indexed account, address indexed recipient, uint128 collateralAmount);
+    event CollateralAdded(
+        address indexed fundedBy,
+        address indexed onBehalfOf,
+        uint128 collateralAmount
+    );
+    event CollateralWithdrawn(
+        address indexed account,
+        address indexed recipient,
+        uint128 collateralAmount
+    );
     event Borrow(address indexed account, address indexed recipient, uint128 amount);
     event Repay(address indexed fundedBy, address indexed onBehalfOf, uint128 repayAmount);
     event Liquidated(address indexed account, uint128 collateralSeized, uint128 debtWiped);
@@ -31,17 +39,15 @@ interface IMonoCooler {
     struct AccountState {
         /// @notice The amount of gOHM collateral the account has posted
         uint128 collateral;
-        
-        /** 
+        /**
          * @notice A checkpoint of user debt, updated after a borrow/repay/liquidation
          * @dev Debt as of now =  (
          *    `account.debtCheckpoint` *
-         *    `debtTokenData.interestAccumulator` / 
+         *    `debtTokenData.interestAccumulator` /
          *    `account.interestAccumulator`
          * )
          */
         uint128 debtCheckpoint;
-
         /// @notice The account's last interest accumulator checkpoint
         uint256 interestAccumulatorRay;
     }
@@ -50,16 +56,12 @@ interface IMonoCooler {
     struct LiquidationStatus {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint128 collateral;
-
         /// @notice The up to date amount of debt [in debtToken terms]
         uint128 currentDebt;
-
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
-
         /// @notice Has this account exceeded the liquidation LTV
         bool exceededLiquidationLtv;
-
         /// @notice Has this account exceeded the max origination LTV
         bool exceededMaxOriginationLtv;
     }
@@ -69,31 +71,23 @@ interface IMonoCooler {
     struct AccountPosition {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint256 collateral;
-
         /// @notice The up to date amount of debt [in debtToken terms]
         uint256 currentDebt;
-
         /// @notice The maximum amount of debtToken's this account can borrow given the
         /// collateral posted, up to `maxOriginationLtv`
         uint256 maxOriginationDebtAmount;
-
         /// @notice The maximum amount of debtToken's this account can accrue before being
         /// eligable to be liquidated, up to `liquidationLtv`
         uint256 liquidationDebtAmount;
-
         /// @notice The health factor of this accounts position.
         /// Anything less than 1 can be liquidated, relative to `liquidationLtv`
         uint256 healthFactor;
-
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
-
         /// @notice The total collateral delegated for this user across all delegates
         uint256 totalDelegated;
-
         /// @notice The current number of addresses this account has delegated to
         uint256 numDelegateAddresses;
-
         /// @notice The max number of delegates this account is allowed to delegate to
         uint256 maxDelegateAddresses;
     }
@@ -113,11 +107,11 @@ interface IMonoCooler {
     /// @notice The total amount of collateral posted across all accounts.
     function totalCollateral() external view returns (uint128);
 
-    /// @notice The total amount of debt which has been borrowed across all users 
+    /// @notice The total amount of debt which has been borrowed across all users
     /// as of the latest checkpoint
     function totalDebt() external view returns (uint128);
 
-    /// @notice Liquidations may be paused in order for users to recover/repay debt after 
+    /// @notice Liquidations may be paused in order for users to recover/repay debt after
     /// emergency actions or interest rate changes
     function liquidationsPaused() external view returns (bool);
 
@@ -142,7 +136,7 @@ interface IMonoCooler {
     /// @notice The accumulator index used to track the compounding of debt, starting at 1e27 at genesis
     /// @dev To RAY (1e27) precision
     function interestAccumulatorRay() external view returns (uint256);
-    
+
     /**
      * @notice Deposit gOHM as collateral
      * @param collateralAmount The amount to deposit
@@ -198,16 +192,16 @@ interface IMonoCooler {
     /**
      * @notice Repay a portion, or all of the debt
      *    - MUST NOT be called for an account which has no debt
-     *    - If the entire debt isn't paid off, then the total debt for this account 
+     *    - If the entire debt isn't paid off, then the total debt for this account
      *      MUST be greater than or equal to the `minDebtRequired` after the borrow is applied
      * @param repayAmount The amount to repay. Capped to the current debt as of this block.
      *    - MUST be greater than zero
-     *    - MAY be greater than the latest debt as of this block. In which case the 
+     *    - MAY be greater than the latest debt as of this block. In which case the
      *      debt will be fully paid off.
      * @param onBehalfOf Another address can repay the debt on behalf of someone else
      */
     function repay(uint128 repayAmount, address onBehalfOf) external;
-    
+
     /**
      * @notice Apply a set of delegation requests on behalf of a given user.
      *  - Each delegation request either delegates or undelegates to an address
@@ -216,10 +210,7 @@ interface IMonoCooler {
      */
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (
-        uint256 totalDelegated, 
-        uint256 totalUndelegated
-    );
+    ) external returns (uint256 totalDelegated, uint256 totalUndelegated);
 
     /**
      * @notice Liquidate one or more accounts which have exceeded the `liquidationLtv`
@@ -229,10 +220,7 @@ interface IMonoCooler {
     function batchLiquidate(
         address[] calldata accounts,
         DLGTEv1.DelegationRequest[][] calldata delegationRequests
-    ) external returns (
-        uint128 totalCollateralClaimed,
-        uint128 totalDebtWiped
-    );
+    ) external returns (uint128 totalCollateralClaimed, uint128 totalDebtWiped);
 
     /**
      * @notice If an account becomes unhealthy and has many delegations such that liquidation can't be
@@ -242,9 +230,7 @@ interface IMonoCooler {
     function applyUnhealthyDelegations(
         address account,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (
-        uint256 totalUndelegated
-    );
+    ) external returns (uint256 totalUndelegated);
 
     // --- ADMIN ----------------------------------------------------
 
@@ -258,10 +244,7 @@ interface IMonoCooler {
      *    - Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
      *    - MUST be greater than the `newLiquidationLtv`
      */
-    function setLoanToValue(
-        uint96 newLiquidationLtv,
-        uint96 newMaxOriginationLtv
-    ) external;
+    function setLoanToValue(uint96 newLiquidationLtv, uint96 newMaxOriginationLtv) external;
 
     /**
      * @notice Liquidation may be paused in order for users to recover/repay debt after emergency
@@ -280,13 +263,10 @@ interface IMonoCooler {
     function setInterestRateBps(uint16 newInterestRateBps) external;
 
     /**
-     * @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES 
+     * @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES
      * number of delegates.
      */
-    function setMaxDelegateAddresses(
-        address account, 
-        uint32 maxDelegateAddresses
-    ) external;
+    function setMaxDelegateAddresses(address account, uint32 maxDelegateAddresses) external;
 
     /**
      * @notice Update and checkpoint the total debt up until now
@@ -302,9 +282,7 @@ interface IMonoCooler {
      */
     function accountPosition(
         address account
-    ) external view returns (
-        AccountPosition memory position
-    );
+    ) external view returns (AccountPosition memory position);
 
     /**
      * @notice Compute the liquidity status for a set of accounts.
@@ -321,12 +299,10 @@ interface IMonoCooler {
      * until number of items returned is less than `maxItems`
      */
     function accountDelegationsList(
-        address account, 
-        uint256 startIndex, 
+        address account,
+        uint256 startIndex,
         uint256 maxItems
-    ) external view returns (
-        DLGTEv1.AccountDelegation[] memory delegations
-    );
+    ) external view returns (DLGTEv1.AccountDelegation[] memory delegations);
 
     /**
      * @notice A view of the last checkpoint of account data (not as of this block)
@@ -336,5 +312,8 @@ interface IMonoCooler {
     /**
      * @notice A view of the derived/internal cache data.
      */
-    function globalState() external view returns (uint128 totalDebt, uint256 interestAccumulatorRay);
+    function globalState()
+        external
+        view
+        returns (uint128 totalDebt, uint256 interestAccumulatorRay);
 }

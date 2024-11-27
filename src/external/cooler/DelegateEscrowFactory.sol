@@ -20,19 +20,19 @@ contract DelegateEscrowFactory {
 
     /// @notice A caller has created a new escrow for a delegate
     event DelegateEscrowCreated(
-        address indexed caller, 
-        address indexed delegate, 
+        address indexed caller,
+        address indexed delegate,
         address indexed escrow
     );
 
     /// @notice A `caller` has (un)delegated their gOHM amount from `escrow` on behalf of a user
-    /// @dev 
+    /// @dev
     ///      delegationAmountDelta > 0: It has been delegated to this escrow
     ///      delegationAmountDelta < 0: It has been undelegated from this escrow
     event Delegate(
-        address indexed escrow, 
-        address indexed caller, 
-        address indexed onBehalfOf, 
+        address indexed escrow,
+        address indexed caller,
+        address indexed onBehalfOf,
         int256 delegationAmountDelta
     );
 
@@ -90,11 +90,6 @@ contract DelegateEscrowFactory {
         address onBehalfOf,
         int256 delegationAmountDelta
     ) external onlyFromFactory {
-        emit Delegate(
-            msg.sender,
-            caller,
-            onBehalfOf,
-            delegationAmountDelta
-        );
+        emit Delegate(msg.sender, caller, onBehalfOf, delegationAmountDelta);
     }
 }
