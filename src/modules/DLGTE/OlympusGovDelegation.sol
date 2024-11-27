@@ -127,15 +127,15 @@ contract OlympusGovDelegation is DLGTEv1 {
         if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
         if (amount == 0) revert DLGTE_InvalidAmount();
 
-        // Pull gOHM from the calling policy
-        gOHM.safeTransferFrom(msg.sender, address(this), amount);
-
         // Update state 
         mapping(address => uint256) storage policyBalances = _policyAccountBalances[msg.sender];
         policyBalances[onBehalfOf] += amount;
 
         AccountState storage aState = _accountState[onBehalfOf];
         aState.totalGOhm += amount.encodeUInt112();
+
+        // Pull gOHM from the calling policy
+        gOHM.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function withdrawUndelegatedGohm(

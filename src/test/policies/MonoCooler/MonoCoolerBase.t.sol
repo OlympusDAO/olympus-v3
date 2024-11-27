@@ -191,6 +191,25 @@ abstract contract MonoCoolerBaseTest is Test {
         assertEq(gohm.balanceOf(delegations[1].escrow), expectedDelegationAmount2, "AccountDelegation::escrow2::gOHM::balanceOf");
     }
 
+    function expectAccountDelegationSummary(
+        address account,
+        uint256 expectedTotalGOhm,
+        uint256 expectedDelegatedGOhm,
+        uint256 expectedNumDelegateAddresses,
+        uint256 expectedMaxAllowedDelegateAddresses
+    ) internal {
+        (
+            uint256 totalGOhm,
+            uint256 delegatedGOhm,
+            uint256 numDelegateAddresses,
+            uint256 maxAllowedDelegateAddresses
+        ) = DLGTE.accountDelegationSummary(account);
+        assertEq(totalGOhm, expectedTotalGOhm, "DLGTE::accountDelegationSummary::totalGOhm");
+        assertEq(delegatedGOhm, expectedDelegatedGOhm, "DLGTE::accountDelegationSummary::delegatedGOhm");
+        assertEq(numDelegateAddresses, expectedNumDelegateAddresses, "DLGTE::accountDelegationSummary::expectedNumDelegateAddresses");
+        assertEq(maxAllowedDelegateAddresses, expectedMaxAllowedDelegateAddresses, "DLGTE::accountDelegationSummary::expectedMaxAllowedDelegateAddresses");
+    }
+
     function checkAccountState(
         address account,
         IMonoCooler.AccountState memory expectedAccountState

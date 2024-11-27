@@ -61,6 +61,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         }));
 
         expectNoDelegations(ALICE);
+        expectAccountDelegationSummary(ALICE, 50e18, 0, 0, 10);
 
         checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
             collateral: collateralAmount,
@@ -105,6 +106,9 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         }));
 
         expectNoDelegations(BOB);
+        expectAccountDelegationSummary(BOB, 50e18, 0, 0, 10);
+        expectNoDelegations(ALICE);
+        expectAccountDelegationSummary(ALICE, 0, 0, 0, 10);
 
         checkAccountPosition(BOB, IMonoCooler.AccountPosition({
             collateral: collateralAmount,
@@ -146,7 +150,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
 
-        address bobEscrow = 0x7bb886E6fCe69554E427e4DCC5CD8EAf5A3C9dd0;
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
         vm.expectEmit(address(escrowFactory));
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
@@ -167,6 +171,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         }));
 
         expectOneDelegation(ALICE, BOB, collateralAmount/2);
+        expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
+        expectAccountDelegationSummary(ALICE, 50e18, 25e18, 1, 10);
 
         checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
             collateral: collateralAmount,
@@ -181,6 +187,135 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         }));
 
         checkLiquidityStatus(ALICE, IMonoCooler.LiquidationStatus({
+            collateral: collateralAmount,
+            currentDebt: 0,
+            currentLtv: 0,
+            exceededLiquidationLtv: false,
+            exceededMaxOriginationLtv: false
+        }));
+    }
+
+    function test_addCollateral_thenApplyDelegations_sameUser() public {
+        uint128 collateralAmount = 50e18;
+        gohm.mint(ALICE, collateralAmount);
+        vm.startPrank(ALICE);
+        gohm.approve(address(cooler), collateralAmount);
+
+        vm.expectEmit(address(cooler));
+        emit CollateralAdded(ALICE, ALICE, collateralAmount);
+        cooler.addCollateral(collateralAmount, ALICE, noDelegationRequest());
+        
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
+        vm.expectEmit(address(escrowFactory));
+        emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
+        vm.expectEmit(address(DLGTE));
+        emit DelegationApplied(ALICE, BOB, int256(uint256(collateralAmount/2)));
+        (
+            uint256 totalDelegated, 
+            uint256 totalUndelegated
+        ) = cooler.applyDelegations(delegationRequest(BOB, collateralAmount/2));
+        assertEq(totalDelegated, collateralAmount/2);
+        assertEq(totalUndelegated, 0);
+
+        assertEq(cooler.totalCollateral(), collateralAmount);
+        assertEq(gohm.balanceOf(ALICE), 0);
+        assertEq(gohm.balanceOf(address(cooler)), 0);
+        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount/2);
+
+        checkAccountState(ALICE, IMonoCooler.AccountState({
+            collateral: collateralAmount,
+            debtCheckpoint: 0,
+            interestAccumulatorRay: 0
+        }));
+
+        expectOneDelegation(ALICE, BOB, collateralAmount/2);
+        expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
+        expectAccountDelegationSummary(ALICE, 50e18, 25e18, 1, 10);
+
+        checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
+            collateral: collateralAmount,
+            currentDebt: 0,
+            maxOriginationDebtAmount: 46.5e18,
+            liquidationDebtAmount: 47e18,
+            healthFactor: type(uint256).max,
+            currentLtv: 0,
+            totalDelegated: collateralAmount/2,
+            numDelegateAddresses: 1,
+            maxDelegateAddresses: 10
+        }));
+
+        checkLiquidityStatus(ALICE, IMonoCooler.LiquidationStatus({
+            collateral: collateralAmount,
+            currentDebt: 0,
+            currentLtv: 0,
+            exceededLiquidationLtv: false,
+            exceededMaxOriginationLtv: false
+        }));
+    }
+
+    function test_addCollateral_thenApplyDelegations_onBehalfOf() public {
+        uint128 collateralAmount = 50e18;
+        gohm.mint(ALICE, collateralAmount);
+        vm.startPrank(ALICE);
+        gohm.approve(address(cooler), collateralAmount);
+
+        vm.expectEmit(address(cooler));
+        emit CollateralAdded(ALICE, BOB, collateralAmount);
+        cooler.addCollateral(collateralAmount, BOB, noDelegationRequest());
+
+        // Need to prank BOB      
+        {  
+            vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 0, 25e18));
+            cooler.applyDelegations(delegationRequest(BOB, collateralAmount/2));
+        }
+
+        vm.startPrank(BOB);
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
+        vm.expectEmit(address(escrowFactory));
+        emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
+        vm.expectEmit(address(DLGTE));
+        emit DelegationApplied(BOB, BOB, int256(uint256(collateralAmount/2)));
+        (
+            uint256 totalDelegated, 
+            uint256 totalUndelegated
+        ) = cooler.applyDelegations(delegationRequest(BOB, collateralAmount/2));
+        assertEq(totalDelegated, collateralAmount/2);
+        assertEq(totalUndelegated, 0);
+
+        assertEq(cooler.totalCollateral(), collateralAmount);
+        assertEq(gohm.balanceOf(ALICE), 0);
+        assertEq(gohm.balanceOf(BOB), 0);
+        assertEq(gohm.balanceOf(address(cooler)), 0);
+        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount/2);
+
+        checkAccountState(ALICE, IMonoCooler.AccountState({
+            collateral: 0,
+            debtCheckpoint: 0,
+            interestAccumulatorRay: 0
+        }));
+        checkAccountState(BOB, IMonoCooler.AccountState({
+            collateral: collateralAmount,
+            debtCheckpoint: 0,
+            interestAccumulatorRay: 0
+        }));
+
+        expectOneDelegation(BOB, BOB, collateralAmount/2);
+        expectAccountDelegationSummary(BOB, 50e18, 25e18, 1, 10);
+        expectAccountDelegationSummary(ALICE, 0, 0, 0, 10);
+
+        checkAccountPosition(BOB, IMonoCooler.AccountPosition({
+            collateral: collateralAmount,
+            currentDebt: 0,
+            maxOriginationDebtAmount: 46.5e18,
+            liquidationDebtAmount: 47e18,
+            healthFactor: type(uint256).max,
+            currentLtv: 0,
+            totalDelegated: collateralAmount/2,
+            numDelegateAddresses: 1,
+            maxDelegateAddresses: 10
+        }));
+
+        checkLiquidityStatus(BOB, IMonoCooler.LiquidationStatus({
             collateral: collateralAmount,
             currentDebt: 0,
             currentLtv: 0,
@@ -223,13 +358,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             amount: -5e18
         });
 
-        address bobEscrow = 0x7bb886E6fCe69554E427e4DCC5CD8EAf5A3C9dd0;
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
         vm.expectEmit(address(escrowFactory));
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(ALICE, BOB, 10e18);
 
-        address othersEscrow = 0xb56A03fC845B8629AE2aDdfA1b509CF485936d28;
+        address othersEscrow = 0x6F67DD53F065131901fC8B45f183aD4977F75161;
         vm.expectEmit(address(escrowFactory));
         emit DelegateEscrowCreated(address(DLGTE), OTHERS, othersEscrow);
 
@@ -265,6 +400,9 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             BOB, 25e18,
             OTHERS, 10e18
         );
+        expectAccountDelegationSummary(ALICE, 50e18, 35e18, 2, 10);
+        expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
+        expectAccountDelegationSummary(OTHERS, 0, 0, 0, 10);
 
         checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
             collateral: collateralAmount,
@@ -339,6 +477,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         }));
 
         expectNoDelegations(ALICE);
+        expectAccountDelegationSummary(ALICE, 75e18, 0, 0, 10);
 
         checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
             collateral: 75e18,
@@ -382,6 +521,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         }));
 
         expectNoDelegations(ALICE);
+        expectAccountDelegationSummary(ALICE, 75e18, 0, 0, 10);
+        expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
 
         checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
             collateral: 75e18,
@@ -413,7 +554,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_success_withDelegations() public {
-        address bobEscrow = 0x7bb886E6fCe69554E427e4DCC5CD8EAf5A3C9dd0;
+        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
         addCollateral(ALICE, 100e18, delegationRequest(BOB, 50e18));
 
         vm.startPrank(ALICE);
@@ -435,6 +576,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         }));
 
         expectOneDelegation(ALICE, BOB, 50e18-1);
+        expectAccountDelegationSummary(ALICE, 50e18-1, 50e18-1, 1, 10);
+        expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
 
         checkAccountPosition(ALICE, IMonoCooler.AccountPosition({
             collateral: 50e18-1,

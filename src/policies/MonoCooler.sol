@@ -241,7 +241,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         totalCollateral += collateralAmount;
 
         // Deposit the gOHM into DLGTE (undelegated)
-        DLGTE.depositUndelegatedGohm(msg.sender, collateralAmount);
+        DLGTE.depositUndelegatedGohm(onBehalfOf, collateralAmount);
 
         // Apply any delegation requests on the undelegated gOHM
         if (delegationRequests.length > 0) {
