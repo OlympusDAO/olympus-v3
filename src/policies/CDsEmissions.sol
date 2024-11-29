@@ -26,7 +26,7 @@ interface Clearinghouse {
     function principalReceivables() external view returns (uint256);
 }
 
-contract EmissionManager is Policy, RolesConsumer {
+contract CDEmissionManager is Policy, RolesConsumer {
     using FullMath for uint256;
 
     // ========== ERRORS ========== //
@@ -42,7 +42,7 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== EVENTS ========== //
 
-    event SaleCreated(uint256 marketID, uint256 saleAmount);
+    event SaleCreated(uint256 marketID, uint256 saleAmount, bool isCD);
     event BackingUpdated(uint256 newBacking, uint256 supplyAdded, uint256 reservesAdded);
 
     // ========== DATA STRUCTURES ========== //
@@ -75,6 +75,7 @@ contract EmissionManager is Policy, RolesConsumer {
     // External contracts
     IBondSDA public auctioneer;
     address public teller;
+    address public cdEscrow; // Holds CD funds prior to conversion or reversion
 
     // Manager variables
     uint256 public baseEmissionRate;
@@ -83,7 +84,9 @@ contract EmissionManager is Policy, RolesConsumer {
     uint256 public backing;
     uint8 public beatCounter;
     bool public locallyActive;
-    uint256 public activeMarketId;
+    uint256 public activeBondMarketId;
+    uint256 public activeCDMarketId;
+    uint256 public minimumSpread; // Min % above current price for CD market
 
     uint8 internal _oracleDecimals;
     uint8 internal immutable _ohmDecimals;
@@ -173,13 +176,18 @@ contract EmissionManager is Policy, RolesConsumer {
             else baseEmissionRate -= rateChange.changeBy;
         }
 
-        // It then calculates the amount to sell for the coming day
-        (, , uint256 sell) = getNextSale();
-
+        uint256 bond = getUnsold();
         // And then opens a market if applicable
-        if (sell != 0) {
-            MINTR.increaseMintApproval(address(this), sell);
-            _createMarket(sell);
+        if (bond != 0) {
+            // Already has mint approval from prior day
+            _createMarket(bond);
+        }
+
+        // It then calculates the amount to sell for the coming day
+        (, , uint256 cd) = getNextSale();
+        if (cd != 0) {
+            MINTR.increaseMintApproval(address(this), cd);
+            _createCDMarket(cd);
         }
     }
 
@@ -223,43 +231,69 @@ contract EmissionManager is Policy, RolesConsumer {
 
     // ========== BOND CALLBACK ========== //
 
+    /// @dev Bond logic remains the same, CD proceeds go to CD escrow
     /// @notice callback function for bond market, only callable by the teller
     function callback(uint256 id_, uint256 inputAmount_, uint256 outputAmount_) external {
         // Only callable by the bond teller
         if (msg.sender != teller) revert OnlyTeller();
 
         // Market ID must match the active market ID stored locally, otherwise revert
-        if (id_ != activeMarketId) revert InvalidMarket();
+        if (id_ != activeBondMarketId || id_ != activeCDMarketId) revert InvalidMarket();
 
         // Reserve balance should have increased by atleast the input amount
         uint256 reserveBalance = reserve.balanceOf(address(this));
         if (reserveBalance < inputAmount_) revert InvalidCallback();
 
-        // Update backing value with the new reserves added and supply added
-        // We do this before depositing the received reserves and minting the output amount of OHM
-        // so that the getReserves and getSupply values equal the "previous" values
-        // This also conforms to the CEI pattern
-        _updateBacking(outputAmount_, inputAmount_);
+        address reserveTo;
+        address outputTo;
+        if (id_ == activeBondMarketId) {
+            reserveTo = address(TRSRY);
+            outputTo = teller;
+
+            // Update backing value with the new reserves added and supply added
+            // We do this before depositing the received reserves and minting the output amount of OHM
+            // so that the getReserves and getSupply values equal the "previous" values
+            // This also conforms to the CEI pattern
+            _updateBacking(outputAmount_, inputAmount_);
+        } else {
+            reserveTo = cdEscrow;
+            outputTo = cdEscrow;
+        }
 
         // Deposit the reserve balance into the sReserve contract with the TRSRY as the recipient
         // This will sweep any excess reserves into the TRSRY as well
-        sReserve.deposit(reserveBalance, address(TRSRY));
+        sReserve.deposit(reserveBalance, reserveTo);
 
         // Mint the output amount of OHM to the Teller
-        MINTR.mintOhm(teller, outputAmount_);
+        MINTR.mintOhm(outputTo, outputAmount_);
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
 
+    function _createBondMarket(uint256 saleAmount) internal {
+        uint256 minPrice = ((ONE_HUNDRED_PERCENT + minimumPremium) * backing) /
+            10 ** _reserveDecimals;
+
+        activeBondMarketId = _createMarket(saleAmount, minPrice);
+    }
+
+    function _createCDMarket(uint256 saleAmount) internal {
+        uint256 minPrice = (PRICE.getLastPrice * minimumSpread) / 10 ** _reserveDecimals;
+
+        activeCDMarketId = _createMarket(saleAmount, minPrice);
+    }
+
     /// @notice create bond protocol market with given budget
     /// @param saleAmount amount of DAI to fund bond market with
-    function _createMarket(uint256 saleAmount) internal {
+    function _createMarket(
+        uint256 saleAmount,
+        uint256 minPrice,
+        bool isCD
+    ) internal returns (uint256 id) {
         // Calculate scaleAdjustment for bond market
         // Price decimals are returned from the perspective of the quote token
         // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
         // is the priceDecimal value
-        uint256 minPrice = ((ONE_HUNDRED_PERCENT + minimumPremium) * backing) /
-            10 ** _reserveDecimals;
         int8 priceDecimals = _getPriceDecimals(minPrice);
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
@@ -271,10 +305,10 @@ contract EmissionManager is Policy, RolesConsumer {
             );
 
         // Create new bond market to buy the reserve with OHM
-        activeMarketId = auctioneer.createMarket(
+        id = auctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
-                    payoutToken: ohm,
+                    payoutToken: isCD ? ohm : cdToken, // idt this works
                     quoteToken: reserve,
                     callbackAddr: address(this),
                     capacityInQuote: false,
@@ -290,7 +324,7 @@ contract EmissionManager is Policy, RolesConsumer {
             )
         );
 
-        emit SaleCreated(activeMarketId, saleAmount);
+        emit SaleCreated(activeBondMarketId, saleAmount, isCD);
     }
 
     /// @notice allow emission manager to update backing price based on new supply and reserves added
@@ -465,5 +499,9 @@ contract EmissionManager is Policy, RolesConsumer {
                 (ONE_HUNDRED_PERCENT + minimumPremium); // in OHM scale
             emission = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
         }
+    }
+
+    function getUnsold() public view returns (uint256 tokens) {
+        // if CD sale undersubscribed, return amount of ohm that was not sold
     }
 }
