@@ -66,12 +66,17 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     ERC20 public immutable reserve;
     uint8 internal immutable _reserveDecimals;
     uint8 internal _oracleDecimals;
-    /// @dev _wrappedReserveDecimals == _reserveDecimals
-    ERC4626 public immutable wrappedReserve;
+    /// @dev _sReserveDecimals == _reserveDecimals
+    ERC4626 public immutable sReserve;
+
+    // During the reserve migration period, we need to track the reserve balance of the old reserve token
+    // This is because there are debts issued in the old reserve which count towards the capacity of the Operator
+    ERC20 public immutable oldReserve;
 
     // Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
-    uint32 internal constant ONE_PERCENT = 1e2;
+    bytes32 internal constant OPERATOR_POLICY_ROLE = "operator_policy";
+    bytes32 internal constant OPERATOR_ADMIN_ROLE = "operator_admin";
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -81,7 +86,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
-        address[3] memory tokens_, // [ohm, reserve, wrappedReserve]
+        address[4] memory tokens_, // [ohm, reserve, sReserve, oldReserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
@@ -94,9 +99,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             configParams[3] < uint32(1 hours) ||
             configParams[3] > configParams[1] ||
             configParams[0] > ONE_HUNDRED_PERCENT ||
-            configParams[0] < ONE_PERCENT ||
+            configParams[0] == 0 ||
             configParams[4] > ONE_HUNDRED_PERCENT ||
-            configParams[4] < ONE_PERCENT ||
+            configParams[4] == 0 ||
             configParams[5] < 1 hours ||
             configParams[6] > configParams[7] ||
             configParams[7] == uint32(0) ||
@@ -109,10 +114,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _ohmDecimals = ohm.decimals();
         reserve = ERC20(tokens_[1]);
         _reserveDecimals = reserve.decimals();
-        wrappedReserve = ERC4626(tokens_[2]);
+        sReserve = ERC4626(tokens_[2]);
+        oldReserve = ERC20(tokens_[3]);
 
-        // Ensure wrappedReserve decimals match reserve decimals
-        if (wrappedReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
+        // Ensure sReserve decimals match reserve decimals
+        if (sReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
 
         _config = Config({
             cushionFactor: configParams[0],
@@ -207,6 +213,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
+    // /// @notice Returns the version of the policy.
+    // ///
+    // /// @return major The major version of the policy.
+    // /// @return minor The minor version of the policy.
+    // function VERSION() external pure returns (uint8 major, uint8 minor) {
+    //     return (1, 5);
+    // }
+
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
@@ -215,12 +229,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     ///      This check is different from the price feed staleness checks in the PRICE module.
     ///      The PRICE module checks new price feed data for staleness when storing a new observations,
     ///      whereas this check ensures that the range data is using a recent observation.
-    modifier onlyWhileActive() {
-        _onlyWhileActive();
-        _;
-    }
-
-    function _onlyWhileActive() internal {
+    function _onlyWhileActive() internal view {
         if (
             !active ||
             uint48(block.timestamp) > PRICE.lastObservationTime() + 3 * PRICE.observationFrequency()
@@ -230,7 +239,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     // =========  HEART FUNCTIONS ========= //
 
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive onlyRole("operator_operate") {
+    function operate() external override onlyRole("heart") {
+        // Fail silently if not active locally so Operator can be disabled
+        if (!active) return;
+
+        // Check that the policy is active and price is not stale
+        // There is a redundant check on the active flag here
+        // but we leave it in because it requires fewer changes
+        _onlyWhileActive();
+
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -310,7 +327,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 tokenIn_,
         uint256 amountIn_,
         uint256 minAmountOut_
-    ) external override nonReentrant onlyWhileActive returns (uint256 amountOut) {
+    ) external override nonReentrant returns (uint256 amountOut) {
+        // Check that the policy is active
+        _onlyWhileActive();
+
         if (tokenIn_ == ohm) {
             // Revert if lower wall is inactive
             if (!RANGE.active(false)) revert Operator_WallDown();
@@ -338,16 +358,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Burn OHM
             MINTR.burnOhm(address(this), amountIn_);
 
-            // Calculate amount of wrappedReserve equivalent to amountOut
-            // and withdraw wrapped reserves from TRSRY
-            TRSRY.withdrawReserves(
-                address(this),
-                wrappedReserve,
-                wrappedReserve.previewWithdraw(amountOut)
-            );
+            // Calculate amount of sReserve equivalent to amountOut
+            // and withdraw from TRSRY
+            TRSRY.withdrawReserves(address(this), sReserve, sReserve.previewWithdraw(amountOut));
 
             // Unwrap reserves and transfer to sender
-            wrappedReserve.withdraw(amountOut, msg.sender, address(this));
+            sReserve.withdraw(amountOut, msg.sender, address(this));
 
             emit Swap(ohm, reserve, amountIn_, amountOut);
         } else if (tokenIn_ == reserve) {
@@ -375,8 +391,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
 
             // Wrap reserves and transfer to TRSRY
-            reserve.approve(address(wrappedReserve), amountIn_);
-            wrappedReserve.deposit(amountIn_, address(TRSRY));
+            reserve.approve(address(sReserve), amountIn_);
+            sReserve.deposit(amountIn_, address(TRSRY));
 
             // Mint OHM to sender
             MINTR.mintOhm(msg.sender, amountOut);
@@ -393,10 +409,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(
-        uint256 id_,
-        uint256 amountOut_
-    ) external onlyWhileActive onlyRole("operator_reporter") {
+    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyRole("operator_reporter") {
+        // Check that the policy is active
+        _onlyWhileActive();
+
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -650,21 +666,21 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Get approval from the TRSRY to withdraw up to the capacity in reserves
             // If current approval is higher than the capacity, reduce it
-            uint256 currentApproval = wrappedReserve.previewRedeem(
-                TRSRY.withdrawApproval(address(this), wrappedReserve)
+            uint256 currentApproval = sReserve.previewRedeem(
+                TRSRY.withdrawApproval(address(this), sReserve)
             );
             unchecked {
                 if (currentApproval < capacity) {
                     TRSRY.increaseWithdrawApproval(
                         address(this),
-                        wrappedReserve,
-                        wrappedReserve.previewWithdraw(capacity - currentApproval)
+                        sReserve,
+                        sReserve.previewWithdraw(capacity - currentApproval)
                     );
                 } else if (currentApproval > capacity) {
                     TRSRY.decreaseWithdrawApproval(
                         address(this),
-                        wrappedReserve,
-                        wrappedReserve.previewWithdraw(currentApproval - capacity)
+                        sReserve,
+                        sReserve.previewWithdraw(currentApproval - capacity)
                     );
                 }
             }
@@ -700,7 +716,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         bool high_,
         uint256 cushionSpread_,
         uint256 wallSpread_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Set spreads on the range module
         RANGE.setSpreads(high_, cushionSpread_, wallSpread_);
 
@@ -709,13 +725,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole("operator_policy") {
+    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Set threshold factor on the range module
         RANGE.setThresholdFactor(thresholdFactor_);
     }
 
     /// @inheritdoc IOperator
-    function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
+    function setCushionFactor(uint32 cushionFactor_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm factor is within allowed values
         _checkFactor(cushionFactor_);
 
@@ -730,7 +746,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 duration_,
         uint32 debtBuffer_,
         uint32 depositInterval_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm values are valid
         if (
             duration_ > uint256(7 days) ||
@@ -749,7 +765,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
+    function setReserveFactor(uint32 reserveFactor_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm factor is within allowed values
         _checkFactor(reserveFactor_);
 
@@ -764,7 +780,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 wait_,
         uint32 threshold_,
         uint32 observe_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Confirm regen parameters are within allowed values
         if (
             wait_ < 1 hours ||
@@ -795,7 +811,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     function setBondContracts(
         IBondSDA auctioneer_,
         IBondCallback callback_
-    ) external onlyRole("operator_policy") {
+    ) external onlyRole(OPERATOR_POLICY_ROLE) {
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
             revert Operator_InvalidParams();
         // Set contracts
@@ -804,7 +820,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function initialize() external onlyRole("operator_admin") {
+    function initialize() external onlyRole(OPERATOR_ADMIN_ROLE) {
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
@@ -821,18 +837,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external onlyRole("operator_policy") {
+    function regenerate(bool high_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Regenerate side
         _regenerate(high_);
     }
 
     /// @inheritdoc IOperator
-    function activate() external onlyRole("operator_policy") {
+    function activate() external onlyRole(OPERATOR_POLICY_ROLE) {
         active = true;
     }
 
     /// @inheritdoc IOperator
-    function deactivate() external onlyRole("operator_policy") {
+    function deactivate() external onlyRole(OPERATOR_POLICY_ROLE) {
         active = false;
         // Deactivate cushions
         _deactivate(true);
@@ -840,13 +856,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function deactivateCushion(bool high_) external onlyRole("operator_policy") {
+    function deactivateCushion(bool high_) external onlyRole(OPERATOR_POLICY_ROLE) {
         // Manually deactivate a cushion
         _deactivate(high_);
     }
 
     function _checkFactor(uint32 factor_) internal pure {
-        if (factor_ > ONE_HUNDRED_PERCENT || factor_ < ONE_PERCENT) revert Operator_InvalidParams();
+        if (factor_ > ONE_HUNDRED_PERCENT || factor_ == 0) revert Operator_InvalidParams();
     }
 
     //============================================================================================//
@@ -884,10 +900,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
-        uint256 reservesInTreasury = wrappedReserve.previewRedeem(
-            TRSRY.getReserveBalance(wrappedReserve)
-        ) + TRSRY.getReserveBalance(reserve);
-        uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
+        // Reserves in treasury * reserve factor
+        uint256 capacity = ((sReserve.previewRedeem(TRSRY.getReserveBalance(sReserve)) +
+            TRSRY.getReserveBalance(reserve) +
+            TRSRY.getReserveBalance(oldReserve)) * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
                 (capacity.mulDiv(

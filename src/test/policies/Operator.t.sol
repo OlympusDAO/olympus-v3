@@ -48,6 +48,7 @@ contract OperatorTest is Test {
     MockOhm internal ohm;
     MockERC20 internal reserve;
     MockERC4626 internal wrappedReserve;
+    MockERC20 internal oldReserve;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
@@ -95,6 +96,7 @@ contract OperatorTest is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
             wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
+            oldReserve = new MockERC20("Old Reserve", "oRSV", 18);
         }
 
         {
@@ -131,7 +133,7 @@ contract OperatorTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve), address(wrappedReserve)],
+                [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -171,7 +173,7 @@ contract OperatorTest is Test {
             /// Configure access control
 
             /// Operator ROLES
-            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("heart", address(heart));
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);
@@ -1614,7 +1616,7 @@ contract OperatorTest is Test {
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            bytes32("operator_operate")
+            bytes32("heart")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1855,24 +1857,99 @@ contract OperatorTest is Test {
         operator.setSpreads(false, 99, 2000);
     }
 
-    function testCorrectness_setCushionFactor() public {
+    function testCorrectness_setCushionFactor_fuzz(uint32 cushionFactor_) public {
+        uint32 cushionFactor = uint32(bound(cushionFactor_, 1, 100e2));
+
         /// Initialize operator
         vm.prank(guardian);
         operator.initialize();
 
-        /// Get starting cushion factor
-        Operator.Config memory startConfig = operator.config();
-
         /// Set cushion factor as admin
         vm.prank(policy);
-        operator.setCushionFactor(uint32(1000));
+        operator.setCushionFactor(cushionFactor);
 
         /// Get new cushion factor
         Operator.Config memory newConfig = operator.config();
 
         /// Check that the cushion factor has been set
-        assertEq(newConfig.cushionFactor, uint32(1000));
-        assertLt(newConfig.cushionFactor, startConfig.cushionFactor);
+        assertEq(newConfig.cushionFactor, cushionFactor, "incorrect cushion factor");
+    }
+
+    function testCorrectness_constructor_cushionFactor_fuzz(uint32 cushionFactor_) public {
+        uint32 cushionFactor = uint32(bound(cushionFactor_, 1, 100e2));
+
+        // Deploy a new Operator
+        Operator newOperator = new Operator(
+            kernel,
+            IBondSDA(address(auctioneer)),
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
+            [
+                cushionFactor, // cushionFactor
+                uint32(5 days), // duration
+                uint32(100_000), // debtBuffer
+                uint32(1 hours), // depositInterval
+                uint32(1000), // reserveFactor
+                uint32(1 hours), // regenWait
+                uint32(5), // regenThreshold
+                uint32(7) // regenObserve
+                // uint32(8 hours) // observationFrequency
+            ]
+        );
+
+        /// Get new cushion factor
+        Operator.Config memory newConfig = newOperator.config();
+
+        /// Check that the cushion factor has been set
+        assertEq(newConfig.cushionFactor, cushionFactor, "incorrect cushion factor");
+    }
+
+    function testCorrectness_constructor_cushionFactor_zero() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
+
+        // Deploy a new Operator
+        new Operator(
+            kernel,
+            IBondSDA(address(auctioneer)),
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
+            [
+                uint32(0), // cushionFactor
+                uint32(5 days), // duration
+                uint32(100_000), // debtBuffer
+                uint32(1 hours), // depositInterval
+                uint32(1000), // reserveFactor
+                uint32(1 hours), // regenWait
+                uint32(5), // regenThreshold
+                uint32(7) // regenObserve
+                // uint32(8 hours) // observationFrequency
+            ]
+        );
+    }
+
+    function testCorrectness_constructor_cushionFactor_aboveHundredPercent() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
+
+        // Deploy a new Operator
+        new Operator(
+            kernel,
+            IBondSDA(address(auctioneer)),
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
+            [
+                uint32(100e2 + 1), // cushionFactor
+                uint32(5 days), // duration
+                uint32(100_000), // debtBuffer
+                uint32(1 hours), // depositInterval
+                uint32(1000), // reserveFactor
+                uint32(1 hours), // regenWait
+                uint32(5), // regenThreshold
+                uint32(7) // regenObserve
+                // uint32(8 hours) // observationFrequency
+            ]
+        );
     }
 
     function testCorrectness_cannotSetCushionFactorWithInvalidParams() public {
@@ -1884,7 +1961,7 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setCushionFactor(uint32(99));
+        operator.setCushionFactor(uint32(0));
 
         /// Set cushion factor with invalid params as admin (too high)
         vm.expectRevert(err);
@@ -1943,24 +2020,99 @@ contract OperatorTest is Test {
         operator.setCushionParams(uint32(2 days), uint32(99), uint32(2 hours));
     }
 
-    function testCorrectness_setReserveFactor() public {
+    function testCorrectness_setReserveFactor_fuzz(uint32 reserveFactor_) public {
+        uint32 reserveFactor = uint32(bound(reserveFactor_, 1, 100e2));
+
         /// Initialize operator
         vm.prank(guardian);
         operator.initialize();
 
-        /// Get starting reserve factor
-        Operator.Config memory startConfig = operator.config();
-
         /// Set reserve factor as admin
         vm.prank(policy);
-        operator.setReserveFactor(uint32(500));
+        operator.setReserveFactor(reserveFactor);
 
         /// Get new reserve factor
         Operator.Config memory newConfig = operator.config();
 
         /// Check that the reserve factor has been set
-        assertEq(newConfig.reserveFactor, uint32(500));
-        assertLt(newConfig.reserveFactor, startConfig.reserveFactor);
+        assertEq(newConfig.reserveFactor, reserveFactor, "incorrect reserve factor");
+    }
+
+    function testCorrectness_constructor_reserveFactor_fuzz(uint32 reserveFactor_) public {
+        uint32 reserveFactor = uint32(bound(reserveFactor_, 1, 100e2));
+
+        // Deploy a new Operator
+        Operator newOperator = new Operator(
+            kernel,
+            IBondSDA(address(auctioneer)),
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
+            [
+                uint32(2000), // cushionFactor
+                uint32(5 days), // duration
+                uint32(100_000), // debtBuffer
+                uint32(1 hours), // depositInterval
+                reserveFactor, // reserveFactor
+                uint32(1 hours), // regenWait
+                uint32(5), // regenThreshold
+                uint32(7) // regenObserve
+                // uint32(8 hours) // observationFrequency
+            ]
+        );
+
+        /// Get new reserve factor
+        Operator.Config memory newConfig = newOperator.config();
+
+        /// Check that the reserve factor has been set
+        assertEq(newConfig.reserveFactor, reserveFactor, "incorrect reserve factor");
+    }
+
+    function testCorrectness_constructor_reserveFactor_zero() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
+
+        // Deploy a new Operator
+        new Operator(
+            kernel,
+            IBondSDA(address(auctioneer)),
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
+            [
+                uint32(2000), // cushionFactor
+                uint32(5 days), // duration
+                uint32(100_000), // debtBuffer
+                uint32(1 hours), // depositInterval
+                uint32(0), // reserveFactor
+                uint32(1 hours), // regenWait
+                uint32(5), // regenThreshold
+                uint32(7) // regenObserve
+                // uint32(8 hours) // observationFrequency
+            ]
+        );
+    }
+
+    function testCorrectness_constructor_reserveFactor_aboveHundredPercent() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("Operator_InvalidParams()"));
+
+        // Deploy a new Operator
+        new Operator(
+            kernel,
+            IBondSDA(address(auctioneer)),
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
+            [
+                uint32(2000), // cushionFactor
+                uint32(5 days), // duration
+                uint32(100_000), // debtBuffer
+                uint32(1 hours), // depositInterval
+                uint32(100e2 + 1), // reserveFactor
+                uint32(1 hours), // regenWait
+                uint32(5), // regenThreshold
+                uint32(7) // regenObserve
+                // uint32(8 hours) // observationFrequency
+            ]
+        );
     }
 
     function testCorrectness_cannotSetReserveFactorWithInvalidParams() public {
@@ -1972,7 +2124,7 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setReserveFactor(uint32(99));
+        operator.setReserveFactor(uint32(0));
 
         /// Set reserve factor with invalid params as admin (too high)
         vm.expectRevert(err);
@@ -2207,16 +2359,22 @@ contract OperatorTest is Test {
         vm.prank(guardian);
         operator.initialize();
 
+        /// Set the price to trigger a low cushion
+        PRICE.setLastPrice(89 * 1e18);
+
         /// Toggle the operator to inactive
         vm.prank(policy);
         operator.deactivate();
 
-        /// Try to call operator, swap, and bondPurchase, expect reverts
-        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
-        vm.expectRevert(err);
+        // Calling operate will not fail, but it will do nothing
         vm.prank(heart);
         operator.operate();
 
+        // Check that the market is not live
+        assertFalse(auctioneer.isLive(RANGE.market(false)));
+
+        /// Try to call operator, swap, and bondPurchase, expect reverts
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
         vm.prank(alice);
         operator.swap(ohm, 1e9, 1);
