@@ -53,10 +53,10 @@ contract USDSMigration is OlyBatch {
     //    + Activate Clearinghouse v2.1
     //    + Initialize YieldRepurchaseFacility v1.1
 
-    // TODO set these
-    uint256 initialReserveBalance = 0;
-    uint256 initialConversionRate = 0;
-    uint256 initialYield = 0;
+    // Initial YRF values
+    uint256 initialReserveBalance = 63056043132270355364383714;
+    uint256 initialConversionRate = 1011853995861235596;
+    uint256 initialYield = 121674750000000000000000;
 
     address kernel;
     address oldHeart;
