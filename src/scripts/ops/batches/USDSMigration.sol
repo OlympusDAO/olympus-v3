@@ -210,5 +210,8 @@ contract USDSMigration is OlyBatch {
                 initialYield
             )
         );
+
+        // 4e. Initialize the new Operator
+        addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
     }
 }
