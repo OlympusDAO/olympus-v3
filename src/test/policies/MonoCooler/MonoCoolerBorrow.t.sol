@@ -635,4 +635,115 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         );
         cooler.borrow(borrowAmount, ALICE);
     }
+
+    function test_borrow_success_maxBorrow() public {
+        uint128 collateralAmount = 10_000e18;
+        uint128 borrowAmount = type(uint128).max;
+        int128 expectedMaxBorrow = 9_300e18;
+        uint128 borrowedAmount = uint128(expectedMaxBorrow);
+
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 0);
+        assertEq(
+            cooler.debtDeltaForMaxOriginationLtv(ALICE, int128(collateralAmount)),
+            expectedMaxBorrow
+        );
+        addCollateral(ALICE, collateralAmount);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), expectedMaxBorrow);
+
+        vm.startPrank(ALICE);
+        vm.expectEmit(address(cooler));
+        emit Borrow(ALICE, ALICE, borrowedAmount);
+        uint128 borrowed = cooler.borrow(borrowAmount, ALICE);
+        assertEq(borrowed, borrowedAmount);
+
+        // Treasury Checks
+        {
+            assertEq(TRSRY.reserveDebt(dai, address(cooler)), borrowedAmount);
+            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+        }
+
+        // Immediate checks
+        {
+            assertEq(cooler.totalCollateral(), collateralAmount);
+            assertEq(cooler.totalDebt(), borrowedAmount);
+            assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
+            assertEq(cooler.interestAccumulatorRay(), 1e27);
+            assertEq(gohm.balanceOf(ALICE), 0);
+            assertEq(gohm.balanceOf(address(cooler)), 0);
+            assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
+            assertEq(dai.balanceOf(ALICE), borrowedAmount);
+            assertEq(dai.balanceOf(BOB), 0);
+
+            checkAccountState(
+                ALICE,
+                IMonoCooler.AccountState({
+                    collateral: collateralAmount,
+                    debtCheckpoint: borrowedAmount,
+                    interestAccumulatorRay: 1e27
+                })
+            );
+
+            checkAccountPosition(
+                ALICE,
+                IMonoCooler.AccountPosition({
+                    collateral: collateralAmount,
+                    currentDebt: borrowedAmount,
+                    maxOriginationDebtAmount: 9_300e18,
+                    liquidationDebtAmount: 9_400e18,
+                    healthFactor: 1.010752688172043010e18,
+                    currentLtv: DEFAULT_OLTV,
+                    totalDelegated: 0,
+                    numDelegateAddresses: 0,
+                    maxDelegateAddresses: 10
+                })
+            );
+
+            checkLiquidityStatus(
+                ALICE,
+                IMonoCooler.LiquidationStatus({
+                    collateral: collateralAmount,
+                    currentDebt: borrowedAmount,
+                    currentLtv: DEFAULT_OLTV,
+                    exceededLiquidationLtv: false,
+                    exceededMaxOriginationLtv: false
+                })
+            );
+
+            checkGlobalState(borrowedAmount, 1e27);
+        }
+    }
+
+    function test_borrow_fail_maxBorrow_overOriginationLtv() public {
+        uint128 collateralAmount = 10_000e18;
+        uint128 borrowAmount = type(uint128).max;
+        addCollateral(ALICE, collateralAmount);
+
+        vm.startPrank(ALICE);
+        cooler.borrow(borrowAmount, ALICE);
+
+        // Second time fails - already at origination LTV
+        IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
+        assertEq(position.currentLtv, DEFAULT_OLTV);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMonoCooler.ExceededMaxOriginationLtv.selector,
+                DEFAULT_OLTV,
+                DEFAULT_OLTV
+            )
+        );
+        cooler.borrow(borrowAmount, ALICE);
+
+        // Same moving forward in time.
+        skip(1 days);
+        position = cooler.accountPosition(ALICE);
+        assertGt(position.currentLtv, DEFAULT_OLTV);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMonoCooler.ExceededMaxOriginationLtv.selector,
+                0.930012739813212363e18,
+                DEFAULT_OLTV
+            )
+        );
+        cooler.borrow(borrowAmount, ALICE);
+    }
 }

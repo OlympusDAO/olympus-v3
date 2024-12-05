@@ -231,31 +231,16 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address onBehalfOf,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override {
-        if (collateralAmount == 0) revert ExpectedNonZero();
-        if (onBehalfOf == address(0)) revert InvalidAddress();
-
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
-
+        // Add collateral on behalf of another account
         AccountState storage aState = allAccountState[onBehalfOf];
-        uint128 newAccountCollateral = aState.collateral + collateralAmount;
-        aState.collateral = newAccountCollateral;
-        totalCollateral += collateralAmount;
-
-        // Deposit the gOHM into DLGTE (undelegated)
-        DLGTE.depositUndelegatedGohm(onBehalfOf, collateralAmount);
-
-        // Apply any delegation requests on the undelegated gOHM
-        if (delegationRequests.length > 0) {
-            // While adding collateral on another user's behalf is ok,
-            // delegating on behalf of someone else is not allowed.
-            if (onBehalfOf != msg.sender) revert InvalidAddress();
-
-            DLGTE.applyDelegations(msg.sender, delegationRequests);
-        }
-
-        // NB: No need to check if the position is healthy when adding collateral as this
-        // only improves the liquidity.
-        emit CollateralAdded(msg.sender, onBehalfOf, collateralAmount);
+        _addCollateral(
+            aState,
+            aState,
+            collateralAmount,
+            msg.sender,
+            onBehalfOf,
+            delegationRequests
+        );
     }
 
     /// @inheritdoc IMonoCooler
@@ -264,28 +249,16 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override {
-        if (collateralAmount == 0) revert ExpectedNonZero();
-        if (recipient == address(0)) revert InvalidAddress();
-
         AccountState storage aState = allAccountState[msg.sender];
-
-        if (delegationRequests.length > 0) {
-            // Apply the delegation requests in order to pull the required collateral back into this contract.
-            DLGTE.applyDelegations(msg.sender, delegationRequests);
-        }
-
-        DLGTE.withdrawUndelegatedGohm(msg.sender, collateralAmount);
-
-        // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
-        aState.collateral -= collateralAmount;
-        totalCollateral -= collateralAmount;
-
-        // Verify the account LTV given the reduction in collateral
-        _validateOriginationLtv(aState, _globalStateRO());
-
-        // Finally transfer the collateral to the recipient
-        collateralToken.safeTransfer(recipient, collateralAmount);
-        emit CollateralWithdrawn(msg.sender, recipient, collateralAmount);
+        _withdrawCollateral(
+            aState,
+            aState,
+            _globalStateRO(), // No need to sync global debt state when withdrawing collateral
+            collateralAmount,
+            msg.sender,
+            recipient,
+            delegationRequests
+        );
     }
 
     //============================================================================================//
@@ -293,74 +266,147 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function borrow(uint128 borrowAmount, address recipient) external override {
-        if (borrowsPaused) revert Paused();
-        if (borrowAmount == 0) revert ExpectedNonZero();
-        if (recipient == address(0)) revert InvalidAddress();
-
+    function borrow(
+        uint128 borrowAmount,
+        address recipient
+    ) external override returns (uint128 amountBorrowed) {
         AccountState storage aState = allAccountState[msg.sender];
-        GlobalStateCache memory gState = _globalStateRW();
-
-        // Apply the new borrow
-        uint128 accountTotalDebt = _currentAccountDebt(
-            gState,
-            aState.debtCheckpoint,
-            aState.interestAccumulatorRay,
-            false // don't round up on the way in
-        ) + borrowAmount;
-
-        if (accountTotalDebt < minDebtRequired)
-            revert MinDebtNotMet(minDebtRequired, accountTotalDebt);
-
-        // Update the state
-        aState.debtCheckpoint = accountTotalDebt;
-        aState.interestAccumulatorRay = gState.interestAccumulatorRay;
-        totalDebt = gState.totalDebt = gState.totalDebt + borrowAmount;
-
-        emit Borrow(msg.sender, recipient, borrowAmount);
-
-        _validateOriginationLtv(aState, gState);
-
-        // Finally, borrow the funds from the Treasury and send the tokens to the recipient.
-        _fundFromTreasury(borrowAmount, recipient);
+        (amountBorrowed, ) = _borrow(
+            aState,
+            aState,
+            _globalStateRW(),
+            msg.sender,
+            borrowAmount,
+            recipient
+        );
     }
 
     /// @inheritdoc IMonoCooler
-    function repay(uint128 repayAmount, address onBehalfOf) external override {
-        if (repayAmount == 0) revert ExpectedNonZero();
-        if (onBehalfOf == address(0)) revert InvalidAddress();
-
+    function repay(
+        uint128 repayAmount,
+        address onBehalfOf
+    ) external override returns (uint128 amountRepaid) {
         AccountState storage aState = allAccountState[onBehalfOf];
-        GlobalStateCache memory gState = _globalStateRW();
-
-        // Update the account's latest debt
-        uint128 latestDebt = _currentAccountDebt(
-            gState,
-            aState.debtCheckpoint,
-            aState.interestAccumulatorRay,
-            true // round up for repay balance
+        amountRepaid = _repay(
+            aState,
+            aState,
+            _globalStateRW(),
+            msg.sender,
+            onBehalfOf,
+            repayAmount
         );
-        if (latestDebt == 0) revert ExpectedNonZero();
+    }
 
-        // Cap the amount to be repaid to the current debt as of this block
-        if (repayAmount >= latestDebt) {
-            repayAmount = latestDebt;
-            aState.debtCheckpoint = 0;
-        } else {
-            // Ensure the minimum debt amounts are still maintained
-            aState.debtCheckpoint = latestDebt - repayAmount;
-            if (aState.debtCheckpoint < minDebtRequired)
-                revert MinDebtNotMet(minDebtRequired, aState.debtCheckpoint);
-        }
+    //============================================================================================//
+    //                                         COMPOSITE                                          //
+    //============================================================================================//
 
-        aState.interestAccumulatorRay = gState.interestAccumulatorRay;
+    /// @inheritdoc IMonoCooler
+    function addCollateralAndBorrow(
+        uint128 collateralAmount,
+        uint128 borrowAmount,
+        address recipient,
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
+    ) external override returns (uint128 amountBorrowed) {
+        AccountState storage aState = allAccountState[msg.sender];
+        AccountState memory aStateCache = aState;
+        GlobalStateCache memory gStateCache = _globalStateRW();
 
-        _reduceTotalDebt(gState, repayAmount);
+        // Add collateral on behalf of msg.sender
+        _addCollateral(
+            aState,
+            aStateCache,
+            collateralAmount,
+            msg.sender,
+            msg.sender,
+            delegationRequests
+        );
 
-        emit Repay(msg.sender, onBehalfOf, repayAmount);
-        // NB: Liquidity doesn't need to be checked after a repay, as that only improves the health.
+        // Borrow on behalf of msg.sender
+        (amountBorrowed, ) = _borrow(
+            aState,
+            aStateCache,
+            gStateCache,
+            msg.sender,
+            borrowAmount,
+            recipient
+        );
+    }
 
-        _repayTreasury(repayAmount, msg.sender);
+    /// @inheritdoc IMonoCooler
+    function addCollateralAndBorrowOnBehalfOf(
+        address onBehalfOf,
+        uint128 collateralAmount,
+        uint128 borrowAmount
+    ) external override returns (uint128 amountBorrowed) {
+        AccountState storage aState = allAccountState[onBehalfOf];
+        AccountState memory aStateCache = aState;
+        GlobalStateCache memory gStateCache = _globalStateRW();
+
+        // Calculate the current LTV (to check vs afterwards), rounding debt up.
+        uint256 oldLtv = _calculateCurrentLtv(
+            _currentAccountDebt(aStateCache, gStateCache, true),
+            aStateCache.collateral
+        );
+
+        // Add collateral on behalf of another account
+        // No delegations are allowed
+        _addCollateral(
+            aState,
+            aStateCache,
+            collateralAmount,
+            msg.sender,
+            onBehalfOf,
+            new DLGTEv1.DelegationRequest[](0)
+        );
+
+        // Borrow on behalf of another account
+        uint256 newLtv;
+        (amountBorrowed, newLtv) = _borrow(
+            aState,
+            aStateCache,
+            gStateCache,
+            onBehalfOf,
+            borrowAmount,
+            onBehalfOf
+        );
+
+        // When adding & borrowing on behalf of another account
+        // the new LTV must be the same or lower than the old LTV
+        if (newLtv > oldLtv) revert ExceededPreviousLtv(oldLtv, newLtv);
+    }
+
+    /// @inheritdoc IMonoCooler
+    function repayAndWithdrawCollateral(
+        uint128 repayAmount,
+        uint128 collateralAmount,
+        address recipient,
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
+    ) external override returns (uint128 amountRepaid) {
+        AccountState storage aState = allAccountState[msg.sender];
+        AccountState memory aStateCache = aState;
+        GlobalStateCache memory gStateCache = _globalStateRW();
+
+        // Repay debt on behalf of msg.sender
+        amountRepaid = _repay(
+            aState,
+            aStateCache,
+            gStateCache,
+            msg.sender,
+            msg.sender,
+            repayAmount
+        );
+
+        // Withdraw collateral on behalf of msg.sender
+        _withdrawCollateral(
+            aState,
+            aStateCache,
+            gStateCache,
+            collateralAmount,
+            msg.sender,
+            recipient,
+            delegationRequests
+        );
     }
 
     //============================================================================================//
@@ -398,6 +444,15 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     // @todo incentivise liquidations
+    /*
+Frontier:
+> I wasn't sure how we want to incentivise liquidations. Heart based model with increasing reward doesn't work here imo since we can't easily know the start time of when it first became unhealthy.
+
+Anon:
+> First thought that comes to mind is have interest keep accruing but give the keeper the delta above liq point? kind of an already there gda mechanism
+
+It means the liquidation won't happen until that accrued interest pays for gas++, but probably not a problem if it's a few hours/days after the fact. It’s a softer liquidation mechanism but that’s more in the nature of expiry time to debt threshold, ie you could top up or repay before liquidation bot actually liquidates
+*/
 
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
@@ -530,29 +585,37 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
+    function debtDeltaForMaxOriginationLtv(
+        address account,
+        int128 collateralDelta
+    ) external view override returns (int128 debtDelta) {
+        AccountState memory aStateCache = allAccountState[account];
+        GlobalStateCache memory gStateCache = _globalStateRO();
+
+        int128 newCollateral = collateralDelta + int128(aStateCache.collateral);
+        if (newCollateral < 0) revert InvalidCollateralDelta();
+
+        uint128 maxDebt = _maxBorrow(uint128(newCollateral));
+        uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        debtDelta = int128(maxDebt) - int128(currentDebt);
+    }
+
+    /// @inheritdoc IMonoCooler
     function accountPosition(
         address account
     ) external view override returns (AccountPosition memory position) {
-        AccountState storage aState = allAccountState[account];
-        GlobalStateCache memory gState = _globalStateRO();
+        AccountState memory aStateCache = allAccountState[account];
+        GlobalStateCache memory gStateCache = _globalStateRO();
+        LiquidationStatus memory status = _computeLiquidity(aStateCache, gStateCache);
 
-        LiquidationStatus memory status = _computeLiquidity(aState, gState);
-
-        position.collateral = status.collateral;
+        position.collateral = aStateCache.collateral;
         position.currentDebt = status.currentDebt;
         position.currentLtv = status.currentLtv;
-
-        // maxOriginationLtv [USDS/gOHM] * collateral [gOHM]
-        // Round down to get the conservative max debt allowed
-        position.maxOriginationDebtAmount = uint256(maxOriginationLtv)
-            .mulWadDown(position.collateral)
-            .encodeUInt128();
+        position.maxOriginationDebtAmount = _maxBorrow(aStateCache.collateral);
 
         // liquidationLtv [USDS/gOHM] * collateral [gOHM]
         // Round down to get the conservative max debt allowed
-        position.liquidationDebtAmount = uint256(liquidationLtv)
-            .mulWadDown(position.collateral)
-            .encodeUInt128();
+        position.liquidationDebtAmount = uint256(liquidationLtv).mulWadDown(position.collateral);
 
         // healthFactor = liquidationLtv [USDS/gOHM] * collateral [gOHM] / debt [USDS]
         position.healthFactor = position.currentDebt == 0
@@ -573,9 +636,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     ) external view override returns (LiquidationStatus[] memory status) {
         uint256 numAccounts = accounts.length;
         status = new LiquidationStatus[](numAccounts);
-        GlobalStateCache memory gState = _globalStateRO();
+        GlobalStateCache memory gStateCache = _globalStateRO();
         for (uint256 i; i < numAccounts; ++i) {
-            status[i] = _computeLiquidity(allAccountState[accounts[i]], gState);
+            status[i] = _computeLiquidity(allAccountState[accounts[i]], gStateCache);
         }
     }
 
@@ -600,8 +663,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         override
         returns (uint128 /*totalDebt*/, uint256 /*interestAccumulatorRay*/)
     {
-        GlobalStateCache memory gState = _globalStateRO();
-        return (gState.totalDebt, gState.interestAccumulatorRay);
+        GlobalStateCache memory gStateCache = _globalStateRO();
+        return (gStateCache.totalDebt, gStateCache.interestAccumulatorRay);
     }
 
     //============================================================================================//
@@ -627,13 +690,13 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
      * @dev Setup and refresh the global state
      * Update storage if and only if the timestamp has changed since last updated.
      */
-    function _globalStateRW() private returns (GlobalStateCache memory gState) {
-        if (_initGlobalStateCache(gState)) {
+    function _globalStateRW() private returns (GlobalStateCache memory gStateCache) {
+        if (_initGlobalStateCache(gStateCache)) {
             // If the cache is dirty (increase in time) then write the
             // updated state
             interestAccumulatorUpdatedAt = uint32(block.timestamp);
-            totalDebt = gState.totalDebt;
-            interestAccumulatorRay = gState.interestAccumulatorRay;
+            totalDebt = gStateCache.totalDebt;
+            interestAccumulatorRay = gStateCache.interestAccumulatorRay;
         }
     }
 
@@ -641,19 +704,19 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
      * @dev Setup the GlobalStateCache for a given token
      * read only -- storage isn't updated.
      */
-    function _globalStateRO() private view returns (GlobalStateCache memory gState) {
-        _initGlobalStateCache(gState);
+    function _globalStateRO() private view returns (GlobalStateCache memory gStateCache) {
+        _initGlobalStateCache(gStateCache);
     }
 
     /**
      * @dev Initialize the global state cache from storage to this block, for a given token.
      */
     function _initGlobalStateCache(
-        GlobalStateCache memory gState
+        GlobalStateCache memory gStateCache
     ) private view returns (bool dirty) {
         // Copies from storage
-        gState.interestAccumulatorRay = interestAccumulatorRay;
-        gState.totalDebt = totalDebt;
+        gStateCache.interestAccumulatorRay = interestAccumulatorRay;
+        gStateCache.totalDebt = totalDebt;
 
         // Convert annual IR [basis points] into WAD per second, assuming 365 days in a year
         uint96 interestRatePerSec = (uint96(interestRateBps) * 1e14) / ONE_YEAR;
@@ -668,16 +731,184 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             dirty = true;
 
             // Compound the accumulator
-            uint256 newInterestAccumulatorRay = gState
+            uint256 newInterestAccumulatorRay = gStateCache
                 .interestAccumulatorRay
                 .continuouslyCompounded(timeElapsed, interestRatePerSec);
 
             // Calculate the latest totalDebt from this
-            gState.totalDebt = newInterestAccumulatorRay
-                .mulDivUp(gState.totalDebt, gState.interestAccumulatorRay)
+            gStateCache.totalDebt = newInterestAccumulatorRay
+                .mulDivUp(gStateCache.totalDebt, gStateCache.interestAccumulatorRay)
                 .encodeUInt128();
-            gState.interestAccumulatorRay = newInterestAccumulatorRay;
+            gStateCache.interestAccumulatorRay = newInterestAccumulatorRay;
         }
+    }
+
+    //============================================================================================//
+    //                                   INTERNAL COLLATERAL                                      //
+    //============================================================================================//
+
+    function _addCollateral(
+        AccountState storage aState,
+        AccountState memory aStateCache,
+        uint128 collateralAmount,
+        address caller,
+        address onBehalfOf,
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) private {
+        if (collateralAmount == 0) revert ExpectedNonZero();
+        if (onBehalfOf == address(0)) revert InvalidAddress();
+
+        collateralToken.safeTransferFrom(caller, address(this), collateralAmount);
+
+        aState.collateral = aStateCache.collateral = aStateCache.collateral + collateralAmount;
+        totalCollateral += collateralAmount;
+
+        // Deposit the gOHM into DLGTE (undelegated)
+        DLGTE.depositUndelegatedGohm(onBehalfOf, collateralAmount);
+
+        // Apply any delegation requests on the undelegated gOHM
+        if (delegationRequests.length > 0) {
+            // While adding collateral on another user's behalf is ok,
+            // delegating on behalf of someone else is not allowed.
+            if (onBehalfOf != caller) revert InvalidAddress();
+            DLGTE.applyDelegations(onBehalfOf, delegationRequests);
+        }
+
+        // NB: No need to check if the position is healthy when adding collateral as this
+        // only improves the liquidity.
+        emit CollateralAdded(caller, onBehalfOf, collateralAmount);
+    }
+
+    function _withdrawCollateral(
+        AccountState storage aState,
+        AccountState memory aStateCache,
+        GlobalStateCache memory gStateCache,
+        uint128 collateralAmount,
+        address caller,
+        address recipient,
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
+    ) private {
+        if (collateralAmount == 0) revert ExpectedNonZero();
+        if (recipient == address(0)) revert InvalidAddress();
+
+        if (delegationRequests.length > 0) {
+            // Apply the delegation requests in order to pull the required collateral back into this contract.
+            DLGTE.applyDelegations(caller, delegationRequests);
+        }
+
+        DLGTE.withdrawUndelegatedGohm(caller, collateralAmount);
+
+        // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
+        aState.collateral = aStateCache.collateral = aStateCache.collateral - collateralAmount;
+        totalCollateral -= collateralAmount;
+
+        // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
+        uint256 newLtv = _calculateCurrentLtv(
+            _currentAccountDebt(aStateCache, gStateCache, true),
+            aStateCache.collateral
+        );
+        _validateOriginationLtv(newLtv);
+
+        // Finally transfer the collateral to the recipient
+        collateralToken.safeTransfer(recipient, collateralAmount);
+        emit CollateralWithdrawn(caller, recipient, collateralAmount);
+    }
+
+    //============================================================================================//
+    //                                  INTERNAL BORROW/REPAY                                     //
+    //============================================================================================//
+
+    function _borrow(
+        AccountState storage aState,
+        AccountState memory aStateCache,
+        GlobalStateCache memory gStateCache,
+        address onBehalfOf,
+        uint128 borrowAmount,
+        address recipient
+    ) private returns (uint128 amountBorrowed, uint256 newLtv) {
+        if (borrowsPaused) revert Paused();
+        if (borrowAmount == 0) revert ExpectedNonZero();
+        if (recipient == address(0)) revert InvalidAddress();
+
+        // don't round up the debt when borrowing.
+        uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, false);
+
+        // Apply the new borrow. If type(uint128).max was specified
+        // then borrow up to the maxOriginationLtv
+        uint128 accountTotalDebt;
+        if (borrowAmount == type(uint128).max) {
+            accountTotalDebt = _maxBorrow(aStateCache.collateral);
+            if (accountTotalDebt > currentDebt) {
+                amountBorrowed = accountTotalDebt - currentDebt;
+            } else {
+                // Already at/above the origination LTV
+                revert ExceededMaxOriginationLtv(
+                    _calculateCurrentLtv(currentDebt, aStateCache.collateral),
+                    maxOriginationLtv
+                );
+            }
+        } else {
+            amountBorrowed = borrowAmount;
+            accountTotalDebt = currentDebt + amountBorrowed;
+        }
+
+        if (accountTotalDebt < minDebtRequired)
+            revert MinDebtNotMet(minDebtRequired, accountTotalDebt);
+
+        // Update the state
+        aState.debtCheckpoint = aStateCache.debtCheckpoint = accountTotalDebt;
+        aState.interestAccumulatorRay = aStateCache.interestAccumulatorRay = gStateCache
+            .interestAccumulatorRay;
+        totalDebt = gStateCache.totalDebt = gStateCache.totalDebt + amountBorrowed;
+
+        emit Borrow(onBehalfOf, recipient, amountBorrowed);
+
+        // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
+        newLtv = _calculateCurrentLtv(accountTotalDebt, aStateCache.collateral);
+        _validateOriginationLtv(newLtv);
+
+        // Finally, borrow the funds from the Treasury and send the tokens to the recipient.
+        _fundFromTreasury(amountBorrowed, recipient);
+    }
+
+    function _repay(
+        AccountState storage aState,
+        AccountState memory aStateCache,
+        GlobalStateCache memory gStateCache,
+        address caller,
+        address onBehalfOf,
+        uint128 repayAmount
+    ) private returns (uint128 amountRepaid) {
+        if (repayAmount == 0) revert ExpectedNonZero();
+        if (onBehalfOf == address(0)) revert InvalidAddress();
+
+        // Update the account's latest debt
+        // round up for repay balance
+        uint128 latestDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        if (latestDebt == 0) revert ExpectedNonZero();
+
+        // Cap the amount to be repaid to the current debt as of this block
+        if (repayAmount < latestDebt) {
+            amountRepaid = repayAmount;
+
+            // Ensure the minimum debt amounts are still maintained
+            aState.debtCheckpoint = aStateCache.debtCheckpoint = latestDebt - amountRepaid;
+            if (aStateCache.debtCheckpoint < minDebtRequired)
+                revert MinDebtNotMet(minDebtRequired, aStateCache.debtCheckpoint);
+        } else {
+            amountRepaid = latestDebt;
+            aState.debtCheckpoint = aStateCache.debtCheckpoint = 0;
+        }
+
+        aState.interestAccumulatorRay = aStateCache.interestAccumulatorRay = gStateCache
+            .interestAccumulatorRay;
+
+        _reduceTotalDebt(gStateCache, amountRepaid);
+
+        emit Repay(caller, onBehalfOf, amountRepaid);
+        // NB: Liquidity doesn't need to be checked after a repay, as that only improves the health.
+
+        _repayTreasury(amountRepaid, caller);
     }
 
     //============================================================================================//
@@ -717,15 +948,15 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     /**
      * @dev Reduce the total debt in storage by a repayment amount.
-     * The sum each users debt may be slightly more than the recorded total debt
+     * NB: The sum of all users debt may be slightly more than the recorded total debt
      * because users debt is rounded up for dust.
-     * The Total debt is floored at 0.
+     * The total debt is floored at 0.
      */
-    function _reduceTotalDebt(GlobalStateCache memory gState, uint128 repayAmount) private {
+    function _reduceTotalDebt(GlobalStateCache memory gStateCache, uint128 repayAmount) private {
         unchecked {
-            totalDebt = gState.totalDebt = repayAmount > gState.totalDebt
+            totalDebt = gStateCache.totalDebt = repayAmount > gStateCache.totalDebt
                 ? 0
-                : gState.totalDebt - repayAmount;
+                : gStateCache.totalDebt - repayAmount;
         }
     }
 
@@ -733,14 +964,36 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //                                      INTERNAL HEALTH                                       //
     //============================================================================================//
 
-    function _validateOriginationLtv(
-        AccountState storage aState,
-        GlobalStateCache memory gState
-    ) private view {
-        LiquidationStatus memory status = _computeLiquidity(aState, gState);
-        if (status.exceededMaxOriginationLtv) {
-            revert ExceededMaxOriginationLtv(status.currentLtv, maxOriginationLtv);
+    /**
+     * @dev Calculate the maximum amount which can be borrowed up to the maxOriginationLtv, given
+     * a collateral amount
+     */
+    function _maxBorrow(uint128 collateral) private view returns (uint128) {
+        // maxOriginationLtv [USDS/gOHM] * collateral [gOHM]
+        // Round down to get the conservative max debt allowed
+        return uint256(maxOriginationLtv).mulWadDown(collateral).encodeUInt128();
+    }
+
+    /**
+     * @dev Ensure the LTV isn't higher than the maxOriginationLtv
+     */
+    function _validateOriginationLtv(uint256 ltv) private view {
+        if (ltv > maxOriginationLtv) {
+            revert ExceededMaxOriginationLtv(ltv, maxOriginationLtv);
         }
+    }
+
+    /**
+     * @dev Calculate the current LTV based on the latest debt
+     */
+    function _calculateCurrentLtv(
+        uint128 currentDebt,
+        uint128 collateral
+    ) private pure returns (uint256) {
+        return
+            collateral == 0
+                ? type(uint256).max // Represent 'undefined' as max uint256
+                : uint256(currentDebt).divWadUp(collateral);
     }
 
     /**
@@ -748,25 +1001,19 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
      * for this account.
      */
     function _computeLiquidity(
-        AccountState storage aState,
-        GlobalStateCache memory gState
+        AccountState memory aStateCache,
+        GlobalStateCache memory gStateCache
     ) private view returns (LiquidationStatus memory status) {
-        status.collateral = aState.collateral;
+        status.collateral = aStateCache.collateral;
 
-        // Ensure to round both the currentDebt and the currentLtv up
-        status.currentDebt = _currentAccountDebt(
-            gState,
-            aState.debtCheckpoint,
-            aState.interestAccumulatorRay,
-            true
-        );
+        // Round the debt up
+        status.currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        status.currentLtv = _calculateCurrentLtv(status.currentDebt, status.collateral);
 
-        status.currentLtv = status.collateral == 0
-            ? 0
-            : uint256(status.currentDebt).divWadUp(status.collateral);
-
-        status.exceededLiquidationLtv = status.currentLtv > liquidationLtv;
-        status.exceededMaxOriginationLtv = status.currentLtv > maxOriginationLtv;
+        status.exceededLiquidationLtv = status.collateral > 0 && status.currentLtv > liquidationLtv;
+        status.exceededMaxOriginationLtv =
+            status.collateral > 0 &&
+            status.currentLtv > maxOriginationLtv;
     }
 
     //============================================================================================//
@@ -778,21 +1025,25 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
      * Derived from the prior debt checkpoint, and the interest accumulator.
      */
     function _currentAccountDebt(
-        GlobalStateCache memory gState,
-        uint128 accountDebtCheckpoint,
-        uint256 accountInterestAccumulatorRay,
+        AccountState memory aStateCache,
+        GlobalStateCache memory gStateCache,
         bool roundUp
     ) private pure returns (uint128 result) {
-        if (accountDebtCheckpoint == 0) return 0;
+        if (aStateCache.debtCheckpoint == 0) return 0;
+
+        // Shortcut if no change.
+        if (aStateCache.interestAccumulatorRay == gStateCache.interestAccumulatorRay) {
+            return aStateCache.debtCheckpoint;
+        }
 
         uint256 debt = roundUp
-            ? gState.interestAccumulatorRay.mulDivUp(
-                accountDebtCheckpoint,
-                accountInterestAccumulatorRay
+            ? gStateCache.interestAccumulatorRay.mulDivUp(
+                aStateCache.debtCheckpoint,
+                aStateCache.interestAccumulatorRay
             )
-            : gState.interestAccumulatorRay.mulDivDown(
-                accountDebtCheckpoint,
-                accountInterestAccumulatorRay
+            : gStateCache.interestAccumulatorRay.mulDivDown(
+                aStateCache.debtCheckpoint,
+                aStateCache.interestAccumulatorRay
             );
         return debt.encodeUInt128();
     }

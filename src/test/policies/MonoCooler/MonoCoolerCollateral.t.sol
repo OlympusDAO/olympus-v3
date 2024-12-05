@@ -719,3 +719,40 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         cooler.withdrawCollateral(1, ALICE, noDelegationRequest());
     }
 }
+
+contract MonoCoolerCollateralViewTest is MonoCoolerBaseTest {
+    function test_debtDeltaForMaxOriginationLtv() public {
+        uint128 collateralAmount = 10_000e18;
+
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 0);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, int128(collateralAmount)), 9_300e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 9_000e18), 8_370e18);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidCollateralDelta.selector));
+        cooler.debtDeltaForMaxOriginationLtv(ALICE, -1);
+
+        addCollateral(ALICE, collateralAmount);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 9_300e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), 8_370e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 10_230e18);
+
+        // Borrow reduces available debt
+        vm.startPrank(ALICE);
+        cooler.borrow(1_000e18, ALICE);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 8_300e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), 7_370e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 9_230e18);
+
+        // Borrow max
+        cooler.borrow(type(uint128).max, ALICE);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 0); // Already at max
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), -930e18); // If removing collateral, need to reduce borrow
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 930e18); // If removing collateral, can borrow more
+
+        skip(30 days);
+        IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
+        assertEq(position.currentDebt, 9_300e18 + 3.822703219228218000e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), -3.822703219228218000e18); // Above max - would need to reduce some
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), -933.822703219228218e18); // If removing collateral, need to reduce borrow
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 926.177296780771782000e18); // If removing collateral, can borrow more
+    }
+}

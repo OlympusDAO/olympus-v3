@@ -13,6 +13,8 @@ interface IMonoCooler {
     error Paused();
     error CannotLiquidate();
     error InvalidDelegationRequests();
+    error ExceededPreviousLtv(uint256 oldLtv, uint256 newLtv);
+    error InvalidCollateralDelta();
 
     event LiquidationLtvSet(uint256 ltv);
     event MaxOriginationLtvSet(uint256 ltv);
@@ -137,6 +139,10 @@ interface IMonoCooler {
     /// @dev To RAY (1e27) precision
     function interestAccumulatorRay() external view returns (uint256);
 
+    //============================================================================================//
+    //                                        COLLATERAL                                          //
+    //============================================================================================//
+
     /**
      * @notice Deposit gOHM as collateral
      * @param collateralAmount The amount to deposit
@@ -172,10 +178,14 @@ interface IMonoCooler {
      *      the account has collateral for.
      */
     function withdrawCollateral(
-        uint128 collateralAmount,
+        uint128 collateralAmount, // @todo should all of these be uint256 and just revert instead?
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external;
+
+    //============================================================================================//
+    //                                       BORROW/REPAY                                         //
+    //============================================================================================//
 
     /**
      * @notice Borrow `debtToken`
@@ -184,23 +194,110 @@ interface IMonoCooler {
      *      after the borrow is applied
      * @param borrowAmount The amount of `debtToken` to borrow
      *    - MUST be greater than zero
+     *    - If set to type(uint128).max then borrow the max amount up to maxOriginationLtv
      * @param recipient Send the borrowed token to a specified recipient address.
      *    - MUST NOT be address(0)
+     * @return amountBorrowed The amount actually borrowed.
      */
-    function borrow(uint128 borrowAmount, address recipient) external;
+    function borrow(
+        uint128 borrowAmount,
+        address recipient
+    ) external returns (uint128 amountBorrowed);
 
     /**
      * @notice Repay a portion, or all of the debt
      *    - MUST NOT be called for an account which has no debt
      *    - If the entire debt isn't paid off, then the total debt for this account
      *      MUST be greater than or equal to the `minDebtRequired` after the borrow is applied
-     * @param repayAmount The amount to repay. Capped to the current debt as of this block.
+     * @param repayAmount The amount to repay.
      *    - MUST be greater than zero
-     *    - MAY be greater than the latest debt as of this block. In which case the
-     *      debt will be fully paid off.
+     *    - MAY be greater than the latest debt as of this block. In which case it will be capped
+     *      to that latest debt
      * @param onBehalfOf Another address can repay the debt on behalf of someone else
+     * @return amountRepaid The amount actually repaid.
      */
-    function repay(uint128 repayAmount, address onBehalfOf) external;
+    function repay(uint128 repayAmount, address onBehalfOf) external returns (uint128 amountRepaid);
+
+    //============================================================================================//
+    //                                         COMPOSITE                                          //
+    //============================================================================================//
+
+    /**
+     * @notice Caller adds collateral and borrows in the same transaction
+     *    - The same functionality as individually calling addCollateral() and then borrow()
+     *    - Cannot call 'on behalf of' another address.
+     * @param collateralAmount The amount to deposit
+     *    - MUST be greater than zero
+     * @param borrowAmount The amount of `debtToken` to borrow
+     *    - MUST be greater than zero
+     *    - If set to type(uint128).max then borrow the max amount up to maxOriginationLtv
+     * @param recipient Send the borrowed token to a specified recipient address.
+     *    - MUST NOT be address(0)
+     * @param delegationRequests The set of delegations to apply after adding collateral.
+     *    - MAY be empty, meaning no delegations are applied.
+     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
+     *    - MUST NOT apply delegations that results in more collateral being undelegated than
+     *      the account has collateral for.
+     * @return amountBorrowed The amount actually borrowed.
+     */
+    function addCollateralAndBorrow(
+        uint128 collateralAmount,
+        uint128 borrowAmount,
+        address recipient,
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
+    ) external returns (uint128 amountBorrowed);
+
+    /**
+     * @notice Caller adds collateral and borrows on behalf of another account, in the same transaction
+     *    - The new LTV of `onBehalfOf` must be less than or equal to the existing LTV
+     *    - The same functionality as individually calling addCollateral() and then borrow()
+     *      on behalf of another account.
+     * @param onBehalfOf An account can add collateral on behalf of themselves or another address.
+     *    - MUST NOT be address(0)
+     *    - This account also receives the borrowed funds
+     * @param collateralAmount The amount to deposit
+     *    - MUST be greater than zero
+     * @param borrowAmount The amount of `debtToken` to borrow
+     *    - MUST be greater than zero
+     *    - LTV for `onBehalfOf` MUST NOT exceed their LTV prior to calling this function, or it is
+     *      a new position
+     *    - If set to type(uint128).max then borrow the max amount up to the EXISTING LTV of that account
+     * @return amountBorrowed The amount actually borrowed.
+     */
+    function addCollateralAndBorrowOnBehalfOf(
+        address onBehalfOf,
+        uint128 collateralAmount,
+        uint128 borrowAmount
+    ) external returns (uint128 amountBorrowed);
+
+    /**
+     * @notice Caller repays a portion, or all of the debt and then withdraws collateral, in the same transaction
+     *    - The same functionality as individually calling repay() and then removeCollateral()
+     *    - MUST NOT be called for an account which has no debt
+     *    - If the entire debt isn't paid off, then the total debt for this account
+     *      MUST be greater than or equal to the `minDebtRequired` after the borrow is applied
+     * @param repayAmount The amount to repay.
+     *    - MUST be greater than zero
+     *    - MAY be greater than the latest debt as of this block. In which case it will be capped
+     *      to that latest debt
+     * @param collateralAmount The amount of collateral to remove
+     *    - MUST be greater than zero
+     *    - If set to type(uint128).max then withdraw the max amount up to maxOriginationLtv
+     * @param recipient Send the gOHM collateral to a specified recipient address.
+     *    - MUST NOT be address(0)
+     * @param delegationRequests The set of delegations to apply before removing collateral.
+     *    - MAY be empty, meaning no delegations are applied.
+     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
+     *    - MUST NOT apply delegations that results in more collateral being undelegated than
+     *      the account has collateral for.
+     * @return amountRepaid The amount actually repaid.
+     */
+    function repayAndWithdrawCollateral(
+        uint128 repayAmount,
+        uint128 collateralAmount,
+        address recipient,
+        DLGTEv1.DelegationRequest[] calldata delegationRequests
+    ) external returns (uint128 amountRepaid);
 
     /**
      * @notice Apply a set of delegation requests on behalf of a given user.
@@ -232,7 +329,9 @@ interface IMonoCooler {
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (uint256 totalUndelegated);
 
-    // --- ADMIN ----------------------------------------------------
+    //============================================================================================//
+    //                                           ADMIN                                            //
+    //============================================================================================//
 
     /**
      * @notice Set the Loan To Value's for both the `liquidationLtv` and `maxOriginationLtv`
@@ -274,7 +373,21 @@ interface IMonoCooler {
      */
     function checkpointDebt() external returns (uint128 totalDebt, uint256 interestAccumulatorRay);
 
-    // --- AUX FUNCTIONS --------------------------------------------
+    //============================================================================================//
+    //                                      AUX FUNCTIONS                                         //
+    //============================================================================================//
+
+    /**
+     * @notice Calculate the difference in debt required in order to be at or just under
+     * the maxOriginationLTV if `collateralDelta` was added/removed
+     * from the current position.
+     * A positive `debtDelta` means the account can borrow that amount after adding that `collateralDelta` collateral
+     * A negative `debtDelta` means it needs to repay that amount in order to withdraw that `collateralDelta` collateral
+     */
+    function debtDeltaForMaxOriginationLtv(
+        address account,
+        int128 collateralDelta
+    ) external view returns (int128 debtDelta);
 
     /**
      * @notice An view of an accounts current and up to date position as of this block
