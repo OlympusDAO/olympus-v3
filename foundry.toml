@@ -13,8 +13,8 @@ remappings = [
     'layer-zero/=lib/solidity-examples/contracts/',
     '@openzeppelin/=lib/openzeppelin-contracts/',
     'bonds/=lib/bonds/src/',
-    'test/=src/test/',
     'clones/=lib/clones-with-immutable-args/src/',
+    'proposal-sim/=lib/forge-proposal-simulator/',
 ]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
