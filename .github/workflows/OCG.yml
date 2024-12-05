@@ -34,4 +34,4 @@ jobs:
             - name: Run proposal simulation tests
               run: pnpm run test:proposal
               env:
-                  FORK_TEST_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
+                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
