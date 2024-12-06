@@ -41,7 +41,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         emit Borrow(ALICE, BOB, borrowedAmount);
         uint128 borrowed = cooler.addCollateralAndBorrow(
             collateralAmount,
-            borrowAmount, 
+            borrowAmount,
             BOB,
             delegationRequest(BOB, collateralAmount)
         );
@@ -105,12 +105,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         gohm.mint(ALICE, collateralAmount);
         gohm.approve(address(cooler), collateralAmount);
-        cooler.addCollateralAndBorrow(
-            collateralAmount,
-            borrowAmount, 
-            ALICE,
-            noDelegationRequest()
-        );
+        cooler.addCollateralAndBorrow(collateralAmount, borrowAmount, ALICE, noDelegationRequest());
 
         // And again
         gohm.mint(ALICE, collateralAmount);
@@ -118,30 +113,30 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, ALICE, collateralAmount);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowedAmount/2);
+        emit Borrow(ALICE, ALICE, borrowedAmount / 2);
         uint128 borrowed = cooler.addCollateralAndBorrow(
             collateralAmount,
-            borrowAmount, 
+            borrowAmount,
             ALICE,
             noDelegationRequest()
         );
-        assertEq(borrowed, borrowedAmount/2);
+        assertEq(borrowed, borrowedAmount / 2);
 
-        assertEq(cooler.totalCollateral(), collateralAmount*2);
+        assertEq(cooler.totalCollateral(), collateralAmount * 2);
         assertEq(cooler.totalDebt(), borrowedAmount);
         assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
         assertEq(cooler.interestAccumulatorRay(), 1e27);
         assertEq(gohm.balanceOf(ALICE), 0);
         assertEq(gohm.balanceOf(BOB), 0);
         assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount*2);
+        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount * 2);
         assertEq(dai.balanceOf(ALICE), borrowedAmount);
         assertEq(dai.balanceOf(BOB), 0);
 
         checkAccountState(
             ALICE,
             IMonoCooler.AccountState({
-                collateral: collateralAmount*2,
+                collateral: collateralAmount * 2,
                 debtCheckpoint: borrowedAmount,
                 interestAccumulatorRay: 1e27
             })
@@ -150,7 +145,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
-                collateral: collateralAmount*2,
+                collateral: collateralAmount * 2,
                 currentDebt: borrowedAmount,
                 maxOriginationDebtAmount: 9_300e18,
                 liquidationDebtAmount: 9_400e18,
@@ -165,7 +160,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         checkLiquidityStatus(
             ALICE,
             IMonoCooler.LiquidationStatus({
-                collateral: collateralAmount*2,
+                collateral: collateralAmount * 2,
                 currentDebt: borrowedAmount,
                 currentLtv: 0.93e18,
                 exceededLiquidationLtv: false,
@@ -175,7 +170,6 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
 
         checkGlobalState(borrowedAmount, 1e27);
     }
-
 
     function test_addCollateralAndBorrowOnBehalfOf_successNew() public {
         uint128 collateralAmount = 10_000e18;
@@ -254,12 +248,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         vm.startPrank(BOB);
         gohm.mint(BOB, collateralAmount);
         gohm.approve(address(cooler), collateralAmount);
-        cooler.addCollateralAndBorrow(
-            collateralAmount,
-            borrowAmount,
-            BOB,
-            noDelegationRequest()
-        );
+        cooler.addCollateralAndBorrow(collateralAmount, borrowAmount, BOB, noDelegationRequest());
 
         // Then Alice does the same on behalf of Bob
         uint128 borrowedAmount = 9_300e18;
@@ -278,13 +267,13 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         );
         assertEq(borrowed, 4_650e18);
 
-        assertEq(cooler.totalCollateral(), collateralAmount*2);
+        assertEq(cooler.totalCollateral(), collateralAmount * 2);
         assertEq(cooler.totalDebt(), borrowedAmount);
         assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
         assertEq(cooler.interestAccumulatorRay(), 1e27);
         assertEq(gohm.balanceOf(ALICE), 0);
         assertEq(gohm.balanceOf(BOB), 0);
-        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount*2);
+        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount * 2);
         assertEq(gohm.balanceOf(address(cooler)), 0);
         assertEq(dai.balanceOf(ALICE), 0);
         assertEq(dai.balanceOf(BOB), borrowedAmount);
@@ -292,7 +281,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         checkAccountState(
             BOB,
             IMonoCooler.AccountState({
-                collateral: collateralAmount*2,
+                collateral: collateralAmount * 2,
                 debtCheckpoint: borrowedAmount,
                 interestAccumulatorRay: 1e27
             })
@@ -301,7 +290,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         checkAccountPosition(
             BOB,
             IMonoCooler.AccountPosition({
-                collateral: collateralAmount*2,
+                collateral: collateralAmount * 2,
                 currentDebt: borrowedAmount,
                 maxOriginationDebtAmount: 9_300e18,
                 liquidationDebtAmount: 9_400e18,
@@ -316,7 +305,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         checkLiquidityStatus(
             BOB,
             IMonoCooler.LiquidationStatus({
-                collateral: collateralAmount*2,
+                collateral: collateralAmount * 2,
                 currentDebt: borrowedAmount,
                 currentLtv: 0.93e18,
                 exceededLiquidationLtv: false,
@@ -335,12 +324,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         vm.startPrank(BOB);
         gohm.mint(BOB, collateralAmount);
         gohm.approve(address(cooler), collateralAmount);
-        cooler.addCollateralAndBorrow(
-            collateralAmount,
-            borrowAmount,
-            BOB,
-            noDelegationRequest()
-        );
+        cooler.addCollateralAndBorrow(collateralAmount, borrowAmount, BOB, noDelegationRequest());
 
         // Then Alice does the same on behalf of Bob
         // but at a higher LTV
@@ -348,7 +332,7 @@ contract MonoCoolerAddCollatAndBorrowTest is MonoCoolerBaseTest {
         gohm.mint(ALICE, collateralAmount);
         gohm.approve(address(cooler), collateralAmount);
         vm.expectRevert(
-            abi.encodeWithSelector(IMonoCooler.ExceededPreviousLtv.selector, 0.8e18, 0.8e18+1)
+            abi.encodeWithSelector(IMonoCooler.ExceededPreviousLtv.selector, 0.8e18, 0.8e18 + 1)
         );
         cooler.addCollateralAndBorrowOnBehalfOf(
             BOB,
