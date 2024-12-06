@@ -15,11 +15,21 @@ import {FullMath} from "libraries/FullMath.sol";
 
 interface CDRC20 {
     function mint(address to, uint256 amount) external;
+    function burn(address from, uint256 amount) external;
     function convertFor(uint256 amount) external view returns (uint256);
+    function expiry() external view returns (uint256);
 }
 
 contract CDFacility is Policy, RolesConsumer {
     using FullMath for uint256;
+
+    error Misconfigured();
+
+    struct CD {
+        uint256 deposit;
+        uint256 convertable;
+        uint256 expiry;
+    }
 
     // ========== EVENTS ========== //
 
@@ -28,15 +38,10 @@ contract CDFacility is Policy, RolesConsumer {
     event ReclaimedCD(address user, uint256 deposit);
     event SweptYield(address receiver, uint256 amount);
 
-    // ========== DATA STRUCTURES ========== //
-
-    struct ConvertibleDebt {
-        uint256 deposit;
-        uint256 convert;
-        uint256 expiry;
-    }
-
     // ========== STATE VARIABLES ========== //
+
+    // Constants
+    uint256 public constant DECIMALS = 1e18;
 
     // Modules
     TRSRYv1 public TRSRY;
@@ -45,11 +50,13 @@ contract CDFacility is Policy, RolesConsumer {
     // Tokens
     ERC20 public reserve;
     ERC4626 public sReserve;
+    CDRC20 public cdUSDS;
 
     // State variables
-    mapping(address => ConvertibleDebt[]) public cdsFor;
     uint256 public totalDeposits;
     uint256 public totalShares;
+    mapping(address => CD[]) public cdInfo;
+    uint256 public redeemRate;
 
     // ========== SETUP ========== //
 
@@ -85,14 +92,16 @@ contract CDFacility is Policy, RolesConsumer {
     // ========== EMISSIONS MANAGER ========== //
 
     /// @notice allow emissions manager to create new convertible debt
-    /// @param user owner of the convertible debt
-    /// @param amount amount of reserve tokens deposited
-    /// @param token CD Token with terms for deposit
+    /// @param  user owner of the convertible debt
+    /// @param  amount amount of reserve tokens deposited
+    /// @param  convertable amount of OHM that can be converted into
+    /// @param  expiry timestamp when conversion expires
     function addNewCD(
         address user,
         uint256 amount,
-        CDRC20 token
-    ) external onlyRole("Emissions_Manager") {
+        uint256 convertable,
+        uint256 expiry
+    ) external onlyRole("CD_Auctioneer") {
         // transfer in debt token
         reserve.transferFrom(user, address(this), amount);
 
@@ -100,67 +109,116 @@ contract CDFacility is Policy, RolesConsumer {
         totalShares += sReserve.deposit(amount, address(this));
 
         // add mint approval for conversion
-        MINTR.increaseMintApproval(address(this), token.convertFor(amount));
+        MINTR.increaseMintApproval(address(this), convertable);
 
-        // mint CD token
-        token.mint(user, amount);
+        // store convertable deposit info and mint cdUSDS
+        cdInfo[user].push(CD(amount, convertable, expiry));
+        cdUSDS.mint(user, amount);
     }
 
     // ========== CD Position Owner ========== //
 
     /// @notice allow user to convert their convertible debt before expiration
-    /// @param ids IDs of convertible debts to convert
-    /// @return totalDeposit total reserve tokens relinquished
-    /// @return totalConvert total convert tokens sent
+    /// @param  cds CD indexes to convert
+    /// @param  amounts CD token amounts to convert
     function convertCD(
-        CDRC20[] memory tokens,
+        uint256[] memory cds,
         uint256[] memory amounts
-    ) external returns (uint256 totalDeposit, uint256 totalConvert) {
-        // iterate through list of ids, add to totals, and delete cd entries
-        for (uint256 i; i < ids.length; ++i) {
-            ConvertibleDebt memory cd = cdsFor[msg.sender][i];
-            if (cd.convert > 0 && cd.expiry <= block.timestamp) {
-                totalDeposit += cd.deposit;
-                totalConvert += cd.convert;
-                delete cdsFor[msg.sender][i];
-            }
+    ) external returns (uint256 converted) {
+        if (cds.length != amounts.length) revert Misconfigured();
+
+        uint256 totalDeposit;
+
+        // iterate through and burn CD tokens, adding deposit and conversion amounts to running totals
+        for (uint256 i; i < cds.length; ++i) {
+            CD storage cd = cdInfo[msg.sender][i];
+
+            uint256 amount = amounts[i];
+            uint256 converting = ((cd.convertable * amount) / cd.deposit);
+
+            // increment running totals
+            totalDeposit += amount;
+            converted += converting;
+
+            // decrement deposit info
+            cd.convertable -= converting; // reverts on overflow
+            cd.deposit -= amount;
         }
 
-        // compute shares to send
+        // compute and account for shares to send to treasury
         uint256 shares = sReserve.previewWithdraw(totalDeposit);
         totalShares -= shares;
 
-        // mint convert token, and send wrapped debt token to treasury
-        MINTR.mintOhm(msg.sender, totalConvert);
+        // burn cdUSDS
+        cdUSDS.burn(msg.sender, totalDeposit);
+
+        // mint ohm and send underlying debt token to treasury
+        MINTR.mintOhm(msg.sender, converted);
         sReserve.transfer(address(TRSRY), shares);
 
-        emit ConvertedCD(msg.sender, totalDeposit, totalConvert);
+        emit ConvertedCD(msg.sender, totalDeposit, converted);
     }
 
     /// @notice allow user to reclaim their convertible debt deposits after expiration
-    /// @param ids IDs of convertible debts to reclaim
-    /// @return totalDeposit total reserve tokens relinquished
-    function reclaimDeposit(uint256[] memory ids) external returns (uint256 totalDeposit) {
-        // iterate through list of ids, add to total, and delete cd entries
-        for (uint256 i; i < ids.length; ++i) {
-            ConvertibleDebt memory cd = cdsFor[msg.sender][i];
-            if (cd.expiry > block.timestamp) {
-                // reduce mint approval
-                MINTR.decreaseMintApproval(address(this), cd.convert);
+    /// @param  cds CD indexes to return
+    /// @param  amounts amounts of CD tokens to burn
+    /// @return returned total reserve tokens returned
+    function returnDeposit(
+        uint256[] memory cds,
+        uint256[] memory amounts
+    ) external returns (uint256 returned) {
+        if (cds.length != amounts.length) revert Misconfigured();
 
-                totalDeposit += cd.deposit;
-                delete cdsFor[msg.sender][i];
+        uint256 unconverted;
+
+        // iterate through and burn CD tokens, adding deposit and conversion amounts to running totals
+        for (uint256 i; i < cds.length; ++i) {
+            CD memory cd = cdInfo[msg.sender][cds[i]];
+            uint256 amount = amounts[i];
+            uint256 convertable = ((cd.convertable * amount) / cd.deposit);
+
+            if (cd.expiry < block.timestamp) {
+                returned += amount;
+                unconverted += convertable;
+
+                // decrement deposit info
+                cd.convertable -= convertable; // reverts on overflow
+                cd.deposit -= amount;
             }
         }
 
+        // burn cdUSDS
+        cdUSDS.burn(msg.sender, returned);
+
         // compute shares to redeem
-        uint256 shares = sReserve.previewWithdraw(totalDeposit);
+        uint256 shares = sReserve.previewWithdraw(returned);
         totalShares -= shares;
 
-        // undeploy and return debt token to user
+        // return debt token to user
         sReserve.redeem(shares, msg.sender, address(this));
 
-        emit ReclaimedCD(msg.sender, totalDeposit);
+        // decrease mint approval to reflect tokens that will not convert
+        MINTR.decreaseMintApproval(address(this), unconverted);
+
+        emit ReclaimedCD(msg.sender, returned);
+    }
+
+    // ========== cdUSDS ========== //
+
+    /// @notice allow non cd holder to sell cdUSDS for USDS
+    /// @notice the amount of USDS per cdUSDS is not 1:1
+    /// @notice convertible depositors should use returnDeposit() for 1:1
+    function redeem(uint256 amount) external returns (uint256 tokensOut) {
+        // burn cdUSDS
+        cdUSDS.burn(msg.sender, amount);
+
+        // compute shares to redeem
+        tokensOut = redeemOutput(amount);
+        uint256 shares = sReserve.previewWithdraw(tokensOut);
+        totalShares -= shares;
+
+        // return debt token to user
+        sReserve.redeem(shares, msg.sender, address(this));
     }
 
     // ========== YIELD MANAGER ========== //
@@ -180,6 +238,15 @@ contract CDFacility is Policy, RolesConsumer {
         emit SweptYield(msg.sender, yield);
     }
 
+    // ========== GOVERNOR ========== //
+
+    /// @notice allow admin to change redeem rate
+    /// @dev    redeem rate must be lower than or equal to 1:1
+    function setRedeemRate(uint256 newRate) external onlyRole("CD_Admin") {
+        if (newRate > DECIMALS) revert Misconfigured();
+        redeemRate = newRate;
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice get yield accrued on deposited reserve tokens
@@ -188,23 +255,10 @@ contract CDFacility is Policy, RolesConsumer {
         return sReserve.previewRedeem(totalShares) - totalDeposits;
     }
 
-    /// @notice return all existing CD IDs for user
-    /// @param user to search for
-    /// @return ids for user
-    function idsForUser(address user) external view returns (uint256[] memory ids) {
-        uint256 j;
-        for (uint256 i; i < cdsFor[user].length; ++i) {
-            ConvertibleDebt memory cd = cdsFor[user][i];
-            if (cd.deposit > 0) ids[j] = i;
-            ++j;
-        }
-    }
-
-    /// @notice query whether a given CD ID is expired
-    /// @param user who holds the CD
-    /// @param id of the CD to query
-    /// @return status whether the CD is expired
-    function idExpired(address user, uint256 id) external view returns (bool status) {
-        status = cdsFor[user][id].expiry > block.timestamp;
+    /// @notice amount of deposit tokens out for amount of cdUSDS redeemed
+    /// @param  amount of cdUSDS in
+    /// @return output amount of USDS out
+    function redeemOutput(uint256 amount) public view returns (uint256) {
+        return (amount * redeemRate) / DECIMALS;
     }
 }

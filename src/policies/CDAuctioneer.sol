@@ -24,6 +24,15 @@ contract CDAuctioneer is Policy, RolesConsumer {
 
     // ========== DATA STRUCTURES ========== //
 
+    struct State {
+        uint256 target; // number of ohm per day
+        uint256 tickSize; // number of ohm in a tick
+        uint256 tickStep; // percentage increase (decrease) per tick
+        uint256 minPrice; // minimum tick price
+        uint256 timeToExpiry; // time between creation and expiry of deposit
+        uint256 lastUpdate; // timestamp of last update to current tick
+    }
+
     struct Tick {
         uint256 price;
         uint256 capacity;
@@ -34,13 +43,7 @@ contract CDAuctioneer is Policy, RolesConsumer {
     // ========== STATE VARIABLES ========== //
 
     Tick public currentTick;
-    uint256 public target; // number of ohm per day
-    uint256 public tickSize; // number of ohm in a tick
-    uint256 public tickStep; // percentage increase (decrease) per tick
-    uint256 public lastUpdate; // timestamp of last update to current tick
-    uint256 public currentExpiry; // current CD token expiry
-    uint256 public timeBetweenExpiries; // time between CD token expiries
-    uint256 public minPrice; // minimum tick price
+    State public state;
 
     uint256 public decimals;
 
@@ -69,76 +72,53 @@ contract CDAuctioneer is Policy, RolesConsumer {
     // ========== AUCTION ========== //
 
     /// @notice use a deposit to bid for CDs
-    /// @param deposit amount of reserve tokens
-    /// @return tokens CD tokens minted to user
-    /// @return amounts amounts of CD tokens minted to user
-    function bid(
-        uint256 deposit
-    ) external returns (CDRC20[] memory tokens, uint256[] memory amounts) {
+    /// @param  deposit amount of reserve tokens
+    /// @return convertable amount of convertable tokens
+    function bid(uint256 deposit) external returns (uint256 convertable) {
         // update state
         currentTick = getCurrentTick();
-        currentExpiry = getCurrentExpiry();
-        lastUpdate = block.timestamp;
-
-        uint256 i;
+        state.lastUpdate = block.timestamp;
 
         // iterate until user has no more reserves to bid
         while (deposit > 0) {
-            // get CD token for tick price
-            CDRC20 token = CDRC20(tokenFor(currentTick.price));
-
             // handle spent/capacity for tick
-            uint256 amount = currentTick.capacity < token.convertFor(deposit) ? tickSize : deposit;
-            if (amount != tickSize) currentTick.capacity -= amount;
-
-            // mint amount of CD token
-            cdFacility.addNewCD(msg.sender, amount, token);
+            uint256 amount = currentTick.capacity < convertFor(deposit, currentTick.price)
+                ? state.tickSize
+                : deposit;
+            if (amount != state.tickSize) currentTick.capacity -= amount;
 
             // decrement bid and increment tick price
             deposit -= amount;
-            currentTick.price *= tickStep / decimals;
-
-            // add to return arrays
-            tokens[i] = token;
-            amounts[i] = token.convertFor(amount);
-            ++i;
+            currentTick.price *= state.tickStep / decimals;
+            convertable += convertFor(amount, currentTick.price);
         }
-    }
 
-    // ========== INTERNAL FUNCTIONS ========== //
-
-    /// @notice create, or return address for existing, CD token
-    /// @param price tick price of CD token
-    /// @return token address of CD token
-    function tokenFor(uint256 price) internal returns (address token) {
-        token = cdTokens[currentExpiry][price];
-        if (token == address(0)) {
-            // new token
-        }
+        // mint amount of CD token
+        cdFacility.addNewCD(msg.sender, deposit, convertable, block.timestamp + state.timeToExpiry);
     }
 
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice get current tick info
-    /// @dev time passing changes tick info
+    /// @dev    time passing changes tick info
     /// @return tick info in Tick struct
     function getCurrentTick() public view returns (Tick memory tick) {
         // find amount of time passed and new capacity to add
-        uint256 timePassed = block.timestamp - lastUpdate;
-        uint256 newCapacity = (target * timePassed) / 1 days;
+        uint256 timePassed = block.timestamp - state.lastUpdate;
+        uint256 newCapacity = (state.target * timePassed) / 1 days;
 
         tick = currentTick;
 
         // decrement price while ticks are full
-        while (tick.capacity + newCapacity > tickSize) {
-            newCapacity -= tickSize;
-            tick.price *= decimals / tickStep;
+        while (tick.capacity + newCapacity > state.tickSize) {
+            newCapacity -= state.tickSize;
+            tick.price *= decimals / state.tickStep;
 
             // tick price does not go below the minimum
             // tick capacity is full if the min price is exceeded
-            if (tick.price < minPrice) {
-                tick.price = minPrice;
-                newCapacity = tickSize;
+            if (tick.price < state.minPrice) {
+                tick.price = state.minPrice;
+                newCapacity = state.tickSize;
                 break;
             }
         }
@@ -147,33 +127,39 @@ contract CDAuctioneer is Policy, RolesConsumer {
         tick.capacity = newCapacity;
     }
 
-    /// @notice get current new CD expiry
-    /// @return expiry timestamp of expiration
-    function getCurrentExpiry() public view returns (uint256 expiry) {
-        uint256 nextExpiry = currentExpiry + timeBetweenExpiries;
-        expiry = nextExpiry > block.timestamp ? currentExpiry : nextExpiry;
+    /// @notice get amount of cdOHM for a deposit at a tick price
+    /// @return amount convertable
+    function convertFor(uint256 deposit, uint256 price) public view returns (uint256) {
+        return (deposit * decimals) / price;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice update auction parameters
-    /// @dev only callable by the auction admin
-    /// @param newTarget new target sale per day
-    /// @param newSize new size per tick
-    /// @param newMinPrice new minimum tick price
+    /// @dev    only callable by the auction admin
+    /// @param  newTarget new target sale per day
+    /// @param  newSize new size per tick
+    /// @param  newStep new percentage change per tick
+    /// @param  newMinPrice new minimum tick price
     function beat(
         uint256 newTarget,
         uint256 newSize,
+        uint256 newStep,
         uint256 newMinPrice
     ) external onlyRole("CD_Auction_Admin") {
-        target = newTarget;
-        tickSize = newSize;
-        minPrice = newMinPrice;
+        state = State(
+            newTarget,
+            newSize,
+            newStep,
+            newMinPrice,
+            state.timeToExpiry,
+            state.lastUpdate
+        );
     }
 
-    /// @notice update time between new CD expiries
-    /// @param newTime number of seconds between expiries
-    function setTimeBetweenExpiries(uint256 newTime) external onlyRole("CD_Auction_Admin") {
-        timeBetweenExpiries = newTime;
+    /// @notice update time between creation and expiry of deposit
+    /// @param  newTime number of seconds
+    function setTimeToExpiry(uint256 newTime) external onlyRole("CD_Admin") {
+        state.timeToExpiry = newTime;
     }
 }
