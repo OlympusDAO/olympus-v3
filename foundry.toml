@@ -1,6 +1,8 @@
 [profile.default]
 ffi = true
 ast = true
+legacy_assertions = true
+assertions_revert = false
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'forge-std/=lib/forge-std/src/',
