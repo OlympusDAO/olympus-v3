@@ -19,6 +19,7 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {CDAuctioneer} from "./CDAuctioneer.sol";
 
 interface BurnableERC20 {
     function burn(uint256 amount) external;
@@ -53,8 +54,9 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     ERC4626 public immutable sReserve;
 
     // External contracts
-    IBondSDA public auctioneer;
+    IBondSDA public bondAuctioneer;
     address public teller;
+    CDAuctioneer public cdAuctioneer;
 
     // Manager variables
     uint256 public baseEmissionRate;
@@ -64,6 +66,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     uint8 public beatCounter;
     bool public locallyActive;
     uint256 public activeMarketId;
+    uint256 public tickSizeScalar;
+    uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
     uint8 internal immutable _ohmDecimals;
@@ -85,7 +89,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         address gohm_,
         address reserve_,
         address sReserve_,
-        address auctioneer_,
+        address bondAuctioneer_,
+        address cdAuctioneer_,
         address teller_
     ) Policy(kernel_) {
         // Set immutable variables
@@ -93,13 +98,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (gohm_ == address(0)) revert("gOHM address cannot be 0");
         if (reserve_ == address(0)) revert("DAI address cannot be 0");
         if (sReserve_ == address(0)) revert("sDAI address cannot be 0");
-        if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
+        if (bondAuctioneer_ == address(0)) revert("Bond Auctioneer address cannot be 0");
+        if (cdAuctioneer_ == address(0)) revert("CD Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
-        auctioneer = IBondSDA(auctioneer_);
+        bondAuctioneer = IBondSDA(bondAuctioneer_);
+        cdAuctioneer = CDAuctioneer(cdAuctioneer_);
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
@@ -156,12 +163,18 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         }
 
         // It then calculates the amount to sell for the coming day
-        (, , uint256 sell) = getNextSale();
+        (, , uint256 emission) = getNextEmission();
+
+        uint256 remainder = cdAuctioneer.beat(
+            emission,
+            getSizeFor(emission),
+            getMinPriceFor(PRICE.getCurrentPrice())
+        );
 
         // And then opens a market if applicable
-        if (sell != 0) {
-            MINTR.increaseMintApproval(address(this), sell);
-            _createMarket(sell);
+        if (remainder != 0) {
+            MINTR.increaseMintApproval(address(this), remainder);
+            _createMarket(remainder);
         }
     }
 
@@ -176,6 +189,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         uint256 baseEmissionsRate_,
         uint256 minimumPremium_,
         uint256 backing_,
+        uint256 tickScalar,
+        uint256 priceScalar,
         uint48 restartTimeframe_
     ) external onlyRole("emissions_admin") {
         // Cannot initialize if currently active
@@ -192,12 +207,18 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (minimumPremium_ == 0) revert InvalidParam("minimumPremium");
         if (backing_ == 0) revert InvalidParam("backing");
         if (restartTimeframe_ == 0) revert InvalidParam("restartTimeframe");
+        if (tickScalar == 0 || tickScalar > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Tick Size Scalar");
+        if (priceScalar == 0 || priceScalar > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Tick Size Scalar");
 
         // Assign
         baseEmissionRate = baseEmissionsRate_;
         minimumPremium = minimumPremium_;
         backing = backing_;
         restartTimeframe = restartTimeframe_;
+        tickSizeScalar = tickScalar;
+        minPriceScalar = priceScalar;
 
         // Activate
         locallyActive = true;
@@ -258,7 +279,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             );
 
         // Create new bond market to buy the reserve with OHM
-        activeMarketId = auctioneer.createMarket(
+        activeMarketId = bondAuctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
                     payoutToken: ohm,
@@ -417,20 +438,45 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     }
 
     /// @notice allow governance to set the bond contracts used by the emission manager
-    /// @param auctioneer_ address of the bond auctioneer contract
+    /// @param bondAuctioneer_ address of the bond auctioneer contract
     /// @param teller_ address of the bond teller contract
     function setBondContracts(
-        address auctioneer_,
+        address bondAuctioneer_,
         address teller_
     ) external onlyRole("emissions_admin") {
         // Bond contracts cannot be set to the zero address
-        if (auctioneer_ == address(0)) revert InvalidParam("auctioneer");
+        if (bondAuctioneer_ == address(0)) revert InvalidParam("bondAuctioneer");
         if (teller_ == address(0)) revert InvalidParam("teller");
 
-        auctioneer = IBondSDA(auctioneer_);
+        bondAuctioneer = IBondSDA(bondAuctioneer_);
         teller = teller_;
 
         emit BondContractsSet(auctioneer_, teller_);
+    }
+
+    /// @notice allow governance to set the CD contract used by the emission manager
+    /// @param cdAuctioneer_ address of the cd auctioneer contract
+    function setCDAuctionContract(address cdAuctioneer_) external onlyRole("emissions_admin") {
+        // Auction contract cannot be set to the zero address
+        if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
+
+        cdAuctioneer = CDAuctioneer(cdAuctioneer_);
+    }
+
+    /// @notice allow governance to set the CD tick size scalar
+    /// @param newScalar as a percentage in 18 decimals
+    function setTickSizeScalar(uint256 newScalar) external onlyRole("emissions_admin") {
+        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Tick Size Scalar");
+        tickSizeScalar = newScalar;
+    }
+
+    /// @notice allow governance to set the CD minimum price scalar
+    /// @param newScalar as a percentage in 18 decimals
+    function setMinPriceScalar(uint256 newScalar) external onlyRole("emissions_admin") {
+        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Min Price Scalar");
+        minPriceScalar = newScalar;
     }
 
     // =========- VIEW FUNCTIONS ========== //
@@ -460,7 +506,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     }
 
     /// @notice return the next sale amount, premium, emission rate, and emissions based on the current premium
-    function getNextSale()
+    function getNextEmission()
         public
         view
         returns (uint256 premium, uint256 emissionRate, uint256 emission)
@@ -475,5 +521,19 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
                 (ONE_HUNDRED_PERCENT + minimumPremium); // in OHM scale
             emission = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
         }
+    }
+
+    /// @notice get CD auction tick size for a given target
+    /// @param  target size of day's CD auction
+    /// @return size of tick
+    function getSizeFor(uint256 target) public view returns (uint256) {
+        return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+    }
+
+    /// @notice get CD auction minimum price for given current price
+    /// @param  price of OHM on market according to PRICE module
+    /// @return minPrice for CD auction
+    function getMinPriceFor(uint256 price) public view returns (uint256) {
+        return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
     }
 }

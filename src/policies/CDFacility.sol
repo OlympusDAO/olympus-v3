@@ -18,6 +18,7 @@ interface CDRC20 {
     function burn(address from, uint256 amount) external;
     function convertFor(uint256 amount) external view returns (uint256);
     function expiry() external view returns (uint256);
+    function totalSupply() external view returns (uint256);
 }
 
 contract CDFacility is Policy, RolesConsumer {
@@ -132,6 +133,7 @@ contract CDFacility is Policy, RolesConsumer {
         // iterate through and burn CD tokens, adding deposit and conversion amounts to running totals
         for (uint256 i; i < cds.length; ++i) {
             CD storage cd = cdInfo[msg.sender][i];
+            if (cd.expiry < block.timestamp) continue;
 
             uint256 amount = amounts[i];
             uint256 converting = ((cd.convertable * amount) / cd.deposit);
@@ -174,17 +176,17 @@ contract CDFacility is Policy, RolesConsumer {
         // iterate through and burn CD tokens, adding deposit and conversion amounts to running totals
         for (uint256 i; i < cds.length; ++i) {
             CD memory cd = cdInfo[msg.sender][cds[i]];
+            if (cd.expiry >= block.timestamp) continue;
+
             uint256 amount = amounts[i];
             uint256 convertable = ((cd.convertable * amount) / cd.deposit);
 
-            if (cd.expiry < block.timestamp) {
-                returned += amount;
-                unconverted += convertable;
+            returned += amount;
+            unconverted += convertable;
 
-                // decrement deposit info
-                cd.convertable -= convertable; // reverts on overflow
-                cd.deposit -= amount;
-            }
+            // decrement deposit info
+            cd.deposit -= amount;
+            cd.convertable -= convertable; // reverts on overflow
         }
 
         // burn cdUSDS
@@ -204,6 +206,19 @@ contract CDFacility is Policy, RolesConsumer {
     }
 
     // ========== cdUSDS ========== //
+
+    /// @notice allow user to mint cdUSDS
+    /// @notice redeeming without a CD may be at a discount
+    /// @param  amount of reserve token
+    /// @return tokensOut cdUSDS out (1:1 with USDS in)
+    function mint(uint256 amount) external returns (uint256 tokensOut) {
+        tokensOut = amount;
+
+        reserve.transferFrom(msg.sender, address(this), amount);
+        totalShares += sReserve.deposit(amount, msg.sender);
+
+        cdUSDS.mint(msg.sender, amount);
+    }
 
     /// @notice allow non cd holder to sell cdUSDS for USDS
     /// @notice the amount of USDS per cdUSDS is not 1:1
@@ -231,8 +246,9 @@ contract CDFacility is Policy, RolesConsumer {
         onlyRole("CD_Yield_Manager")
         returns (uint256 yield, uint256 shares)
     {
-        yield = sReserve.previewRedeem(totalShares) - totalDeposits;
+        yield = sReserve.previewRedeem(totalShares) - cdUSDS.totalSupply();
         shares = sReserve.previewWithdraw(yield);
+        totalShares -= shares;
         sReserve.transfer(msg.sender, shares);
 
         emit SweptYield(msg.sender, yield);

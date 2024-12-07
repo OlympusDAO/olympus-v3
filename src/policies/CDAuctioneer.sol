@@ -27,10 +27,15 @@ contract CDAuctioneer is Policy, RolesConsumer {
     struct State {
         uint256 target; // number of ohm per day
         uint256 tickSize; // number of ohm in a tick
-        uint256 tickStep; // percentage increase (decrease) per tick
         uint256 minPrice; // minimum tick price
+        uint256 tickStep; // percentage increase (decrease) per tick
         uint256 timeToExpiry; // time between creation and expiry of deposit
         uint256 lastUpdate; // timestamp of last update to current tick
+    }
+
+    struct Day {
+        uint256 deposits; // total deposited for day
+        uint256 convertable; // total convertable for day
     }
 
     struct Tick {
@@ -50,6 +55,8 @@ contract CDAuctioneer is Policy, RolesConsumer {
     CDFacility public cdFacility;
 
     mapping(uint256 => mapping(uint256 => address)) public cdTokens; // mapping(expiry => price => token)
+
+    Day public today;
 
     // ========== SETUP ========== //
 
@@ -86,12 +93,15 @@ contract CDAuctioneer is Policy, RolesConsumer {
                 ? state.tickSize
                 : deposit;
             if (amount != state.tickSize) currentTick.capacity -= amount;
+            else currentTick.price *= state.tickStep / decimals;
 
             // decrement bid and increment tick price
             deposit -= amount;
-            currentTick.price *= state.tickStep / decimals;
             convertable += convertFor(amount, currentTick.price);
         }
+
+        today.deposits += deposit;
+        today.convertable += convertable;
 
         // mint amount of CD token
         cdFacility.addNewCD(msg.sender, deposit, convertable, block.timestamp + state.timeToExpiry);
@@ -139,19 +149,19 @@ contract CDAuctioneer is Policy, RolesConsumer {
     /// @dev    only callable by the auction admin
     /// @param  newTarget new target sale per day
     /// @param  newSize new size per tick
-    /// @param  newStep new percentage change per tick
     /// @param  newMinPrice new minimum tick price
     function beat(
         uint256 newTarget,
         uint256 newSize,
-        uint256 newStep,
         uint256 newMinPrice
-    ) external onlyRole("CD_Auction_Admin") {
+    ) external onlyRole("CD_Auction_Admin") returns (uint256 remainder) {
+        remainder = (state.target > today.convertable) ? state.target - today.convertable : 0;
+
         state = State(
             newTarget,
             newSize,
-            newStep,
             newMinPrice,
+            state.tickStep,
             state.timeToExpiry,
             state.lastUpdate
         );
@@ -161,5 +171,11 @@ contract CDAuctioneer is Policy, RolesConsumer {
     /// @param  newTime number of seconds
     function setTimeToExpiry(uint256 newTime) external onlyRole("CD_Admin") {
         state.timeToExpiry = newTime;
+    }
+
+    /// @notice update change between ticks
+    /// @param  newStep percentage in decimal terms
+    function setTickStep(uint256 newStep) external onlyRole("CD_Admin") {
+        state.tickStep = newStep;
     }
 }
