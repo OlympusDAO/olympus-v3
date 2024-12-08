@@ -1,8 +1,8 @@
 #!/bin/bash
 
 print_test_event() {
-	echo -e "\033[1m$1\033[0m"
-	echo
+    echo -e "\033[1m$1\033[0m"
+    echo
 }
 
 source .env

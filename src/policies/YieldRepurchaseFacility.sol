@@ -17,6 +17,7 @@ import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
+import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 interface BurnableERC20 {
     function burn(uint256 amount) external;
@@ -42,10 +43,10 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     ///////////////////////// STATE /////////////////////////
 
     // Tokens
-    ERC4626 public immutable sdai; // = ERC4626(0x83F20F44975D03b1b09e64809B757c47f942BEeA);
-    ERC20 public immutable dai; // = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
-    uint8 internal immutable _daiDecimals; // = 18;
-    ERC20 public immutable ohm; // = ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
+    ERC4626 public immutable sReserve;
+    ERC20 public immutable reserve;
+    uint8 internal immutable _reserveDecimals;
+    ERC20 public immutable ohm;
     uint8 internal immutable _ohmDecimals; // = 9;
     uint8 internal _oracleDecimals;
 
@@ -53,9 +54,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
     RANGEv2 public RANGE;
-
-    // Policies
-    Clearinghouse public immutable clearinghouse; // = Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
+    CHREGv1 public CHREG;
 
     // External contracts
     address public immutable teller; // = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
@@ -63,9 +62,9 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
     // System variables
     uint48 public epoch; // a running counter to keep time
-    uint256 public nextYield; // the amount of DAI to pull as yield at the start of the next week
-    uint256 public lastReserveBalance; // the SDAI reserve balance, in DAI, at the end of the last week
-    uint256 public lastConversionRate; // the SDAI conversion rate at the end of the last week
+    uint256 public nextYield; // the amount of reserve to pull as yield at the start of the next week
+    uint256 public lastReserveBalance; // the sReserve balance, in reserve units, at the end of the last week
+    uint256 public lastConversionRate; // the sReserve conversion rate at the end of the last week
     // we use this to compute yield accrued
     // yield = last reserve balance * ((current conversion rate / last conversion rate) - 1)
     //       + current clearinghouse principal receivables * clearinghouse APR / 52 weeks
@@ -80,22 +79,19 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     constructor(
         Kernel kernel_,
         address ohm_,
-        address dai_,
-        address sdai_,
+        address sReserve_,
         address teller_,
-        address auctioneer_,
-        address clearinghouse_
+        address auctioneer_
     ) Policy(kernel_) {
         // Set immutable variables
         ohm = ERC20(ohm_);
-        dai = ERC20(dai_);
-        sdai = ERC4626(sdai_);
+        sReserve = ERC4626(sReserve_);
+        reserve = ERC20(sReserve.asset());
         teller = teller_;
         auctioneer = IBondSDA(auctioneer_);
-        clearinghouse = Clearinghouse(clearinghouse_);
 
         // Cache token decimals
-        _daiDecimals = dai.decimals();
+        _reserveDecimals = reserve.decimals();
         _ohmDecimals = ohm.decimals();
 
         // Disable until initialization
@@ -119,16 +115,18 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
+        dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
         dependencies[2] = toKeycode("RANGE");
-        dependencies[3] = toKeycode("ROLES");
+        dependencies[3] = toKeycode("CHREG");
+        dependencies[4] = toKeycode("ROLES");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
         RANGE = RANGEv2(getModuleAddress(dependencies[2]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
+        CHREG = CHREGv1(getModuleAddress(dependencies[3]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
     }
@@ -146,6 +144,14 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         permissions[1] = Permissions(TRSRY_KEYCODE, TRSRYv1.increaseWithdrawApproval.selector);
     }
 
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 1);
+    }
+
     ///////////////////////// EXTERNAL /////////////////////////
 
     /// @notice create a new bond market at the end of the day with some portion of remaining funds
@@ -161,25 +167,30 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
             nextYield = getNextYield();
             emit NextYieldSet(nextYield);
-            lastConversionRate = sdai.previewRedeem(1e18);
+            lastConversionRate = sReserve.previewRedeem(1e18);
             lastReserveBalance = getReserveBalance();
         }
 
-        _getBackingForPurchased(); // convert yesterdays ohm purchases into sdai
+        _getBackingForPurchased(); // convert yesterdays ohm purchases into sReserve
 
-        uint256 daiBalance = dai.balanceOf(address(this));
-        uint256 totalBalanceInDAI = daiBalance + sdai.previewRedeem(sdai.balanceOf(address(this)));
+        uint256 reserveBalance = reserve.balanceOf(address(this));
+        uint256 totalBalanceInReserve = reserveBalance +
+            sReserve.previewRedeem(sReserve.balanceOf(address(this)));
 
-        // use portion of dai balance based on day of the week
+        // use portion of reserve balance based on day of the week
         // i.e. day one, use 1/7th; day two, use 1/6th; 1/5th; 1/4th; ...
-        uint256 bidAmount = totalBalanceInDAI / (7 - (epoch / 3));
+        uint256 bidAmount = totalBalanceInReserve / (7 - (epoch / 3));
 
-        // contract holds funds in sDAI except for the day's inventory, so we need to redeem before opening a market
-        uint256 bidAmountFromSDAI = daiBalance < bidAmount
-            ? bidAmount - dai.balanceOf(address(this))
+        // contract holds funds in sReserve except for the day's inventory, so we need to redeem before opening a market
+        uint256 bidAmountFromSReserve = reserveBalance < bidAmount
+            ? bidAmount - reserve.balanceOf(address(this))
             : 0;
-        if (bidAmountFromSDAI != 0)
-            sdai.redeem(sdai.previewWithdraw(bidAmountFromSDAI), address(this), address(this));
+        if (bidAmountFromSReserve != 0)
+            sReserve.redeem(
+                sReserve.previewWithdraw(bidAmountFromSReserve),
+                address(this),
+                address(this)
+            );
 
         _createMarket(bidAmount);
     }
@@ -195,7 +206,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     }
 
     /// @notice retire contract by burning ohm balance and transferring tokens to treasury
-    /// @param tokensToTransfer list of tokens to transfer back to treasury (i.e. DAI)
+    /// @param tokensToTransfer list of tokens to transfer back to treasury (i.e. reserves)
     function shutdown(ERC20[] memory tokensToTransfer) external onlyRole("loop_daddy") {
         isShutdown = true;
         emit Shutdown();
@@ -213,7 +224,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     ///////////////////////// INTERNAL /////////////////////////
 
     /// @notice create bond protocol market with given budget
-    /// @param bidAmount amount of DAI to fund bond market with
+    /// @param bidAmount amount of reserve to fund bond market with
     function _createMarket(uint256 bidAmount) internal {
         // Calculate inverse prices from the oracle feed
         // The start price is the current market price, which is also the last price since this is called on a heartbeat
@@ -229,21 +240,23 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
         // is the priceDecimal value
         int8 priceDecimals = _getPriceDecimals(initialPrice);
-        int8 scaleAdjustment = int8(_daiDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
+        int8 scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
         uint256 bondScale = 10 **
-            uint8(36 + scaleAdjustment + int8(_ohmDecimals) - int8(_daiDecimals) - priceDecimals);
+            uint8(
+                36 + scaleAdjustment + int8(_ohmDecimals) - int8(_reserveDecimals) - priceDecimals
+            );
 
-        // Approve DAI on the bond teller
-        dai.safeApprove(address(teller), bidAmount);
+        // Approve reserve on the bond teller
+        reserve.safeApprove(address(teller), bidAmount);
 
         // Create new bond market to buy OHM with the reserve
         uint256 marketId = auctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
-                    payoutToken: dai,
+                    payoutToken: reserve,
                     quoteToken: ohm,
                     callbackAddr: address(0),
                     capacityInQuote: false,
@@ -274,16 +287,16 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         _withdraw(backing);
     }
 
-    /// @notice internal function to withdraw sDAI from treasury
-    /// @dev note amount given is in DAI, not sDAI
-    /// @param amount an amount to withdraw, in DAI
+    /// @notice internal function to withdraw sReserve from treasury
+    /// @dev note amount given is in reserve, not sReserve
+    /// @param amount an amount to withdraw, in reserve
     function _withdraw(uint256 amount) internal {
-        // Get the amount of sDAI to withdraw
-        uint256 amountInSDAI = sdai.previewWithdraw(amount);
+        // Get the amount of sReserve to withdraw
+        uint256 amountInSReserve = sReserve.previewWithdraw(amount);
 
-        // Approve and withdraw sDAI from TRSRY
-        TRSRY.increaseWithdrawApproval(address(this), ERC20(address(sdai)), amountInSDAI);
-        TRSRY.withdrawReserves(address(this), ERC20(address(sdai)), amountInSDAI);
+        // Approve and withdraw sReserve from TRSRY
+        TRSRY.increaseWithdrawApproval(address(this), ERC20(address(sReserve)), amountInSReserve);
+        TRSRY.withdrawReserves(address(this), ERC20(address(sReserve)), amountInSReserve);
     }
 
     /// @notice         Helper function to calculate number of price decimals based on the value returned from the price feed.
@@ -303,22 +316,32 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
     ///////////////////////// VIEW /////////////////////////
 
-    /// @notice fetch combined sdai balance of clearinghouse and treasury, in DAI
+    /// @notice fetch combined sReserve balance of active clearinghouses and treasury, in reserve
     function getReserveBalance() public view override returns (uint256 balance) {
-        uint256 sBalance = sdai.balanceOf(address(clearinghouse));
-        sBalance += sdai.balanceOf(address(TRSRY));
+        uint256 sBalance = sReserve.balanceOf(address(TRSRY));
+        uint256 len = CHREG.activeCount();
+        for (uint256 i; i < len; i++) {
+            sBalance += sReserve.balanceOf(CHREG.active(i));
+        }
 
-        balance = sdai.previewRedeem(sBalance);
+        balance = sReserve.previewRedeem(sBalance);
     }
 
     /// @notice compute yield for the next week
     function getNextYield() public view override returns (uint256 yield) {
-        // add sDAI rewards accrued for week
+        // add sReserve rewards accrued for week
         yield +=
-            ((lastReserveBalance * sdai.previewRedeem(1e18)) / lastConversionRate) -
+            ((lastReserveBalance * sReserve.previewRedeem(1e18)) / lastConversionRate) -
             lastReserveBalance;
         // add clearinghouse interest accrued for week (0.5% divided by 52 weeks)
-        yield += (clearinghouse.principalReceivables() * 5) / 1000 / 52;
+        // iterate through clearinghouses in the CHREG and get the outstanding principal receivables
+        uint256 receivables;
+        uint256 len = CHREG.registryCount();
+        for (uint256 i; i < len; i++) {
+            receivables += Clearinghouse(CHREG.registry(i)).principalReceivables();
+        }
+
+        yield += (receivables * 5) / 1000 / 52;
     }
 
     /// @notice compute backing for ohm balance
@@ -328,7 +351,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         override
         returns (uint256 balance, uint256 backing)
     {
-        // balance and backingPerToken are 9 decimals, dai amount is 18 decimals
+        // balance and backingPerToken are 9 decimals, reserve amount is 18 decimals
         balance = ohm.balanceOf(address(this));
         backing = balance * backingPerToken;
     }

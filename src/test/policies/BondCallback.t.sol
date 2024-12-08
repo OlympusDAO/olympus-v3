@@ -66,6 +66,7 @@ contract BondCallbackTest is Test {
     MockERC4626 internal wrappedReserve;
     MockERC20 internal nakedReserve;
     MockERC20 internal other;
+    MockERC20 internal oldReserve;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
@@ -115,6 +116,7 @@ contract BondCallbackTest is Test {
             wrappedReserve = new MockERC4626(reserve, "Wrapped Reserve", "sRSV");
             nakedReserve = new MockERC20("Naked Reserve", "nRSV", 18);
             other = new MockERC20("Other", "OTH", 18);
+            oldReserve = new MockERC20("Old Reserve", "oRSV", 18);
         }
 
         {
@@ -154,7 +156,7 @@ contract BondCallbackTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve), address(wrappedReserve)],
+                [address(ohm), address(reserve), address(wrappedReserve), address(oldReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -196,7 +198,7 @@ contract BondCallbackTest is Test {
             /// Configure access control
 
             /// Operator ROLES
-            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("heart", guardian);
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);
