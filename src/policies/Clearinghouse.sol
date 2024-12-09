@@ -42,13 +42,13 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     event Deactivate();
     /// @notice Logs whenever the treasury is defunded.
     event Defund(address token, uint256 amount);
-    /// @notice Logs the balance change (in DAI terms) whenever a rebalance occurs.
-    event Rebalance(bool defund, uint256 daiAmount);
+    /// @notice Logs the balance change (in reserve terms) whenever a rebalance occurs.
+    event Rebalance(bool defund, uint256 reserveAmount);
 
     // --- RELEVANT CONTRACTS ----------------------------------------
 
-    ERC20 public immutable dai; // Debt token
-    ERC4626 public immutable sdai; // Idle DAI will be wrapped into sDAI
+    ERC20 public immutable reserve; // Debt token
+    ERC4626 public immutable sReserve; // Idle reserve will be wrapped into sReserve
     ERC20 public immutable gohm; // Collateral token
     ERC20 public immutable ohm; // Unwrapped gOHM
     IStaking public immutable staking; // Necessary to unstake (and burn) OHM from defaults
@@ -62,7 +62,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     // --- PARAMETER BOUNDS ------------------------------------------
 
     uint256 public constant INTEREST_RATE = 5e15; // 0.5% anually
-    uint256 public constant LOAN_TO_COLLATERAL = 289292e16; // 2,892.92 DAI/gOHM
+    uint256 public constant LOAN_TO_COLLATERAL = 289292e16; // 2,892.92 reserve/gOHM
     uint256 public constant DURATION = 121 days; // Four months
     uint256 public constant FUND_CADENCE = 7 days; // One week
     uint256 public constant FUND_AMOUNT = 18_000_000e18; // 18 million
@@ -88,7 +88,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         address ohm_,
         address gohm_,
         address staking_,
-        address sdai_,
+        address sReserve_,
         address coolerFactory_,
         address kernel_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
@@ -96,8 +96,8 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         ohm = ERC20(ohm_);
         gohm = ERC20(gohm_);
         staking = IStaking(staking_);
-        sdai = ERC4626(sdai_);
-        dai = ERC20(sdai.asset());
+        sReserve = ERC4626(sReserve_);
+        reserve = ERC20(sReserve.asset());
     }
 
     /// @notice Default framework setup. Configure dependencies for olympus-v3 modules.
@@ -147,13 +147,21 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
     }
 
+    /// @notice Returns the version of the policy.
+    ///
+    /// @return major The major version of the policy.
+    /// @return minor The minor version of the policy.
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 2);
+    }
+
     // --- OPERATION -------------------------------------------------
 
     /// @notice Lend to a cooler.
     /// @dev    To simplify the UX and easily ensure that all holders get the same terms,
     ///         this function requests a new loan and clears it in the same transaction.
     /// @param  cooler_ to lend to.
-    /// @param  amount_ of DAI to lend.
+    /// @param  amount_ of reserve to lend.
     /// @return the id of the granted loan.
     function lendToCooler(Cooler cooler_, uint256 amount_) external returns (uint256) {
         // Attempt a Clearinghouse <> Treasury rebalance.
@@ -163,7 +171,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         if (!factory.created(address(cooler_))) revert OnlyFromFactory();
 
         // Validate cooler collateral and debt tokens.
-        if (cooler_.collateral() != gohm || cooler_.debt() != dai) revert BadEscrow();
+        if (cooler_.collateral() != gohm || cooler_.debt() != reserve) revert BadEscrow();
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, LOAN_TO_COLLATERAL);
@@ -178,9 +186,9 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         gohm.approve(address(cooler_), collateral);
         uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, LOAN_TO_COLLATERAL, DURATION);
 
-        // Clear the created loan request by providing enough DAI.
-        sdai.withdraw(amount_, address(this), address(this));
-        dai.approve(address(cooler_), amount_);
+        // Clear the created loan request by providing enough reserve.
+        sReserve.withdraw(amount_, address(this), address(this));
+        reserve.approve(address(cooler_), amount_);
         uint256 loanID = cooler_.clearRequest(reqID, address(this), true);
 
         return loanID;
@@ -202,11 +210,11 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         uint256 interestBase = interestForLoan(loan.principal, loan.request.duration);
 
         // Transfer in extension interest from the caller.
-        dai.transferFrom(msg.sender, address(this), interestBase * times_);
+        reserve.transferFrom(msg.sender, address(this), interestBase * times_);
         if (active) {
-            _sweepIntoDSR(interestBase * times_);
+            _sweepIntoSavingsVault(interestBase * times_);
         } else {
-            _defund(dai, interestBase * times_);
+            _defund(reserve, interestBase * times_);
         }
 
         // Signal to cooler that loan should be extended.
@@ -266,12 +274,12 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
             : 0;
 
         // Update outstanding debt owed to the Treasury upon default.
-        uint256 outstandingDebt = TRSRY.reserveDebt(dai, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
 
         // debt owed to TRSRY = user debt - user interest
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: dai,
+            token_: reserve,
             amount_: (outstandingDebt > totalPrincipal) ? outstandingDebt - totalPrincipal : 0
         });
 
@@ -285,13 +293,13 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
 
     /// @notice Overridden callback to decrement loan receivables.
     /// @param *unused loadID_ of the load.
-    /// @param  principalPaid_ in DAI.
-    /// @param  interestPaid_ in DAI.
+    /// @param  principalPaid_ in reserve.
+    /// @param  interestPaid_ in reserve.
     function _onRepay(uint256, uint256 principalPaid_, uint256 interestPaid_) internal override {
         if (active) {
-            _sweepIntoDSR(principalPaid_ + interestPaid_);
+            _sweepIntoSavingsVault(principalPaid_ + interestPaid_);
         } else {
-            _defund(dai, principalPaid_ + interestPaid_);
+            _defund(reserve, principalPaid_ + interestPaid_);
         }
 
         // Decrement loan receivables.
@@ -323,45 +331,45 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         if (fundTime > block.timestamp) return false;
         fundTime += FUND_CADENCE;
 
-        // Sweep DAI into DSR if necessary.
-        uint256 idle = dai.balanceOf(address(this));
-        if (idle != 0) _sweepIntoDSR(idle);
+        // Sweep reserve into DSR if necessary.
+        uint256 idle = reserve.balanceOf(address(this));
+        if (idle != 0) _sweepIntoSavingsVault(idle);
 
-        uint256 daiBalance = sdai.maxWithdraw(address(this));
-        uint256 outstandingDebt = TRSRY.reserveDebt(dai, address(this));
+        uint256 reserveBalance = sReserve.maxWithdraw(address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
         // Rebalance funds on hand with treasury's reserves.
-        if (daiBalance < maxFundAmount) {
-            // Since users loans are denominated in DAI, the clearinghouse
-            // debt is set in DAI terms. It must be adjusted when funding.
-            uint256 fundAmount = maxFundAmount - daiBalance;
+        if (reserveBalance < maxFundAmount) {
+            // Since users loans are denominated in reserve, the clearinghouse
+            // debt is set in reserve terms. It must be adjusted when funding.
+            uint256 fundAmount = maxFundAmount - reserveBalance;
             TRSRY.setDebt({
                 debtor_: address(this),
-                token_: dai,
+                token_: reserve,
                 amount_: outstandingDebt + fundAmount
             });
 
-            // Since TRSRY holds sDAI, a conversion must be done before
+            // Since TRSRY holds sReserve, a conversion must be done before
             // funding the clearinghouse.
-            uint256 sdaiAmount = sdai.previewWithdraw(fundAmount);
-            TRSRY.increaseWithdrawApproval(address(this), sdai, sdaiAmount);
-            TRSRY.withdrawReserves(address(this), sdai, sdaiAmount);
+            uint256 sReserveAmount = sReserve.previewWithdraw(fundAmount);
+            TRSRY.increaseWithdrawApproval(address(this), sReserve, sReserveAmount);
+            TRSRY.withdrawReserves(address(this), sReserve, sReserveAmount);
 
             // Log the event.
             emit Rebalance(false, fundAmount);
-        } else if (daiBalance > maxFundAmount) {
-            // Since users loans are denominated in DAI, the clearinghouse
-            // debt is set in DAI terms. It must be adjusted when defunding.
-            uint256 defundAmount = daiBalance - maxFundAmount;
+        } else if (reserveBalance > maxFundAmount) {
+            // Since users loans are denominated in reserve, the clearinghouse
+            // debt is set in reserve terms. It must be adjusted when defunding.
+            uint256 defundAmount = reserveBalance - maxFundAmount;
             TRSRY.setDebt({
                 debtor_: address(this),
-                token_: dai,
+                token_: reserve,
                 amount_: (outstandingDebt > defundAmount) ? outstandingDebt - defundAmount : 0
             });
 
-            // Since TRSRY holds sDAI, a conversion must be done before
-            // sending sDAI back.
-            uint256 sdaiAmount = sdai.previewWithdraw(defundAmount);
-            sdai.transfer(address(TRSRY), sdaiAmount);
+            // Since TRSRY holds sReserve, a conversion must be done before
+            // sending sReserve back.
+            uint256 sReserveAmount = sReserve.previewWithdraw(defundAmount);
+            sReserve.transfer(address(TRSRY), sReserveAmount);
 
             // Log the event.
             emit Rebalance(true, defundAmount);
@@ -370,16 +378,16 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         return true;
     }
 
-    /// @notice Sweep excess DAI into vault.
-    function sweepIntoDSR() public {
-        uint256 daiBalance = dai.balanceOf(address(this));
-        _sweepIntoDSR(daiBalance);
+    /// @notice Sweep excess reserve into savings vault.
+    function sweepIntoSavingsVault() public {
+        uint256 reserveBalance = reserve.balanceOf(address(this));
+        _sweepIntoSavingsVault(reserveBalance);
     }
 
-    /// @notice Sweep excess DAI into vault.
-    function _sweepIntoDSR(uint256 amount_) internal {
-        dai.approve(address(sdai), amount_);
-        sdai.deposit(amount_, address(this));
+    /// @notice Sweep excess reserve into vault.
+    function _sweepIntoSavingsVault(uint256 amount_) internal {
+        reserve.approve(address(sReserve), amount_);
+        sReserve.deposit(amount_, address(this));
     }
 
     /// @notice Public function to burn gOHM.
@@ -408,13 +416,13 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     function emergencyShutdown() external onlyRole("emergency_shutdown") {
         active = false;
 
-        // If necessary, defund sDAI.
-        uint256 sdaiBalance = sdai.balanceOf(address(this));
-        if (sdaiBalance != 0) _defund(sdai, sdaiBalance);
+        // If necessary, defund sReserve.
+        uint256 sReserveBalance = sReserve.balanceOf(address(this));
+        if (sReserveBalance != 0) _defund(sReserve, sReserveBalance);
 
-        // If necessary, defund DAI.
-        uint256 daiBalance = dai.balanceOf(address(this));
-        if (daiBalance != 0) _defund(dai, daiBalance);
+        // If necessary, defund reserve.
+        uint256 reserveBalance = reserve.balanceOf(address(this));
+        if (reserveBalance != 0) _defund(reserve, reserveBalance);
 
         // Signal to CHREG that the contract has been deactivated.
         CHREG.deactivateClearinghouse(address(this));
@@ -434,16 +442,18 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     /// @param  token_ to transfer.
     /// @param  amount_ to transfer.
     function _defund(ERC20 token_, uint256 amount_) internal {
-        if (token_ == sdai || token_ == dai) {
-            // Since users loans are denominated in DAI, the clearinghouse
-            // debt is set in DAI terms. It must be adjusted when defunding.
-            uint256 outstandingDebt = TRSRY.reserveDebt(dai, address(this));
-            uint256 daiAmount = (token_ == sdai) ? sdai.previewRedeem(amount_) : amount_;
+        if (token_ == sReserve || token_ == reserve) {
+            // Since users loans are denominated in reserve, the clearinghouse
+            // debt is set in reserve terms. It must be adjusted when defunding.
+            uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
+            uint256 reserveAmount = (token_ == sReserve)
+                ? sReserve.previewRedeem(amount_)
+                : amount_;
 
             TRSRY.setDebt({
                 debtor_: address(this),
-                token_: dai,
-                amount_: (outstandingDebt > daiAmount) ? outstandingDebt - daiAmount : 0
+                token_: reserve,
+                amount_: (outstandingDebt > reserveAmount) ? outstandingDebt - reserveAmount : 0
             });
         }
 
@@ -469,14 +479,14 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     }
 
     /// @notice view function to compute the interest for given principal amount.
-    /// @param principal_ amount of DAI being lent.
+    /// @param principal_ amount of reserve being lent.
     /// @param duration_ elapsed time in seconds.
     function interestForLoan(uint256 principal_, uint256 duration_) public pure returns (uint256) {
         uint256 interestPercent = (INTEREST_RATE * duration_) / 365 days;
         return (principal_ * interestPercent) / 1e18;
     }
 
-    /// @notice Get total receivable DAI for the treasury.
+    /// @notice Get total receivable reserve for the treasury.
     ///         Includes both principal and interest.
     function getTotalReceivables() external view returns (uint256) {
         return principalReceivables + interestReceivables;

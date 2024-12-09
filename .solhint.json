@@ -12,6 +12,7 @@
     "reason-string": "off",
     "no-empty-blocks": "off",
     "no-console": "off",
-    "no-global-import": "off"
+    "no-global-import": "off",
+    "quotes": ["warn", "double"]
   }
 }

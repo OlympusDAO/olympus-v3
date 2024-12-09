@@ -8,7 +8,7 @@ interface IDelegate {
 }
 
 contract MockGohm is MockERC20, IDelegate {
-    uint256 public constant index = 10000;
+    uint256 public constant index = 10000 * 1e9;
     address public delegatee;
 
     constructor(

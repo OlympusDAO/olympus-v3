@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# This script submits a proposal to the governor.
+# This script prints the inputs for a proposal to the governor.
 #
-# Usage: src/scripts/proposals/submitProposal.sh --file <proposal-path> --contract <contract-name> --account <forge account> --fork <true|false> --broadcast <true|false> --env <env-file>
+# Usage: src/scripts/proposals/printInputs.sh --file <proposal-path> --contract <contract-name> --account <forge account> --fork <true|false> --env <env-file>
 #
 # Environment variables:
 # RPC_URL
@@ -32,7 +32,6 @@ set +a # Disable automatic export
 
 # Apply defaults to command-line arguments
 FORK=${fork:-false}
-BROADCAST=${broadcast:-false}
 
 # Check if the proposal file was specified
 if [ -z "$file" ]; then
@@ -58,15 +57,8 @@ if [ -z "$RPC_URL" ]; then
     exit 1
 fi
 
-# Check if the forge account was specified
-if [ -z "$account" ]; then
-    echo "Error: Forge account was not specified. Set up using 'cast wallet'."
-    exit 1
-fi
-
 echo "Using proposal contract: $file:$contract"
 echo "Using RPC at URL: $RPC_URL"
-echo "Using forge account: $account"
 
 # Set the fork flag
 FORK_FLAG=""
@@ -77,14 +69,5 @@ else
     echo "Fork: disabled"
 fi
 
-# Set the broadcast flag
-BROADCAST_FLAG=""
-if [ "$BROADCAST" = "true" ]; then
-    BROADCAST_FLAG="--broadcast"
-    echo "Broadcast: enabled"
-else
-    echo "Broadcast: disabled"
-fi
-
 # Run the forge script
-forge script $file:$contract -vvv --rpc-url $RPC_URL --account $account $FORK_FLAG $BROADCAST_FLAG
+forge script $file:$contract --sig "printProposalInputs()" -vvv --rpc-url $RPC_URL $FORK_FLAG

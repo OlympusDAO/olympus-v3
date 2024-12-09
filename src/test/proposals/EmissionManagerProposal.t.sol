@@ -11,14 +11,14 @@ import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDeleg
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";
 
-// OIP_166 imports
-import {OIP_166} from "src/proposals/OIP_166.sol";
+// EmissionManagerProposal imports
+import {EmissionManagerProposal} from "src/proposals/EmissionManagerProposal.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
 ///         flag to `true` once the proposal has been submitted on-chain.
 /// Note: this will fail if the OCGPermissions script has not been run yet.
-contract OIP_166_OCGProposalTest is Test {
+contract EmissionManagerProposalTest is Test {
     string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
     TestSuite public suite;
     Addresses public addresses;
@@ -32,11 +32,12 @@ contract OIP_166_OCGProposalTest is Test {
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
-        // Prior to actual deployment of the proposal (otherwise it will fail) - 20872023
-        vm.createSelectFork(RPC_URL, 20872022);
+        // Prior to actual deployment of the proposal (otherwise it will fail) - 21071000
+        // TODO: Update the block number once the proposal has been submitted on-chain.
+        vm.createSelectFork(RPC_URL, 21071000);
 
         /// @dev Deploy your proposal
-        OIP_166 proposal = new OIP_166();
+        EmissionManagerProposal proposal = new EmissionManagerProposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
         hasBeenSubmitted = false;
@@ -53,16 +54,6 @@ contract OIP_166_OCGProposalTest is Test {
 
             // Set addresses object
             addresses = suite.addresses();
-
-            // NOTE: unique to OIP 166
-            // In prepation for this particular proposal, we need to:
-            // Push the roles admin "admin" permission to the Timelock from the DAO MS (multisig)
-            address daoMS = addresses.getAddress("olympus-multisig-dao");
-            address timelock = addresses.getAddress("olympus-timelock");
-            RolesAdmin rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));
-
-            vm.prank(daoMS);
-            rolesAdmin.pushNewAdmin(timelock);
 
             // Set debug mode
             suite.setDebug(true);
