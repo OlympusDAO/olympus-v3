@@ -13,6 +13,7 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
+// TODO extract into external file
 interface CDRC20 {
     function mint(address to, uint256 amount) external;
 
@@ -24,6 +25,8 @@ interface CDRC20 {
 
     function totalSupply() external view returns (uint256);
 }
+
+// TODO extract CDFacility interface
 
 contract CDFacility is Policy, RolesConsumer {
     using FullMath for uint256;
@@ -68,6 +71,8 @@ contract CDFacility is Policy, RolesConsumer {
     error Misconfigured();
 
     // ========== SETUP ========== //
+
+    // TODO add cdUSDS parameter
 
     constructor(Kernel kernel_, address reserve_, address sReserve_) Policy(kernel_) {
         if (reserve_ == address(0)) revert CDFacility_InvalidParams("Reserve address cannot be 0");

@@ -6,9 +6,10 @@ import "src/Kernel.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {IConvertibleDebtAuctioneer} from "src/interfaces/IConvertibleDebtAuctioneer.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 import {CDFacility} from "./CDFacility.sol";
 
@@ -22,41 +23,15 @@ interface CDRC20 {
     function expiry() external view returns (uint256);
 }
 
-contract CDAuctioneer is Policy, RolesConsumer {
+contract CDAuctioneer is IConvertibleDebtAuctioneer, Policy, RolesConsumer {
     using FullMath for uint256;
-
-    // ========== DATA STRUCTURES ========== //
-
-    struct State {
-        uint256 target; // number of ohm per day
-        uint256 tickSize; // number of ohm in a tick
-        uint256 minPrice; // minimum tick price
-        uint256 tickStep; // percentage increase (decrease) per tick
-        uint256 timeToExpiry; // time between creation and expiry of deposit
-        uint256 lastUpdate; // timestamp of last update to current tick
-    }
-
-    struct Day {
-        uint256 deposits; // total deposited for day
-        uint256 convertable; // total convertable for day
-    }
-
-    struct Tick {
-        uint256 price;
-        uint256 capacity;
-    }
-
-    // ========== EVENTS ========== //
-
-    // ========== ERRORS ========== //
-
-    error CDAuctioneer_InvalidParams(string reason);
 
     // ========== STATE VARIABLES ========== //
 
     Tick public currentTick;
     State public state;
 
+    // TODO set decimals, make internal?
     uint256 public decimals;
 
     CDFacility public cdFacility;
@@ -90,10 +65,8 @@ contract CDAuctioneer is Policy, RolesConsumer {
 
     // ========== AUCTION ========== //
 
-    /// @notice use a deposit to bid for CDs
-    /// @param  deposit amount of reserve tokens
-    /// @return convertable amount of convertable tokens
-    function bid(uint256 deposit) external returns (uint256 convertable) {
+    /// @inheritdoc IConvertibleDebtAuctioneer
+    function bid(uint256 deposit) external override returns (uint256 convertable) {
         // update state
         currentTick = getCurrentTick();
         state.lastUpdate = block.timestamp;
@@ -121,10 +94,8 @@ contract CDAuctioneer is Policy, RolesConsumer {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice get current tick info
-    /// @dev    time passing changes tick info
-    /// @return tick info in Tick struct
-    function getCurrentTick() public view returns (Tick memory tick) {
+    /// @inheritdoc IConvertibleDebtAuctioneer
+    function getCurrentTick() public view override returns (Tick memory tick) {
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 newCapacity = (state.target * timePassed) / 1 days;
@@ -149,10 +120,19 @@ contract CDAuctioneer is Policy, RolesConsumer {
         tick.capacity = newCapacity;
     }
 
-    /// @notice get amount of cdOHM for a deposit at a tick price
-    /// @return amount convertable
-    function convertFor(uint256 deposit, uint256 price) public view returns (uint256) {
+    /// @inheritdoc IConvertibleDebtAuctioneer
+    function convertFor(uint256 deposit, uint256 price) public view override returns (uint256) {
         return (deposit * decimals) / price;
+    }
+
+    /// @inheritdoc IConvertibleDebtAuctioneer
+    function getState() external view override returns (State memory) {
+        return state;
+    }
+
+    /// @inheritdoc IConvertibleDebtAuctioneer
+    function getDay() external view override returns (Day memory) {
+        return today;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -166,7 +146,7 @@ contract CDAuctioneer is Policy, RolesConsumer {
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
-    ) external onlyRole("CD_Auction_Admin") returns (uint256 remainder) {
+    ) external override onlyRole("CD_Auction_Admin") returns (uint256 remainder) {
         remainder = (state.target > today.convertable) ? state.target - today.convertable : 0;
 
         state = State(
@@ -181,13 +161,13 @@ contract CDAuctioneer is Policy, RolesConsumer {
 
     /// @notice update time between creation and expiry of deposit
     /// @param  newTime number of seconds
-    function setTimeToExpiry(uint256 newTime) external onlyRole("CD_Admin") {
+    function setTimeToExpiry(uint256 newTime) external override onlyRole("CD_Admin") {
         state.timeToExpiry = newTime;
     }
 
     /// @notice update change between ticks
     /// @param  newStep percentage in decimal terms
-    function setTickStep(uint256 newStep) external onlyRole("CD_Admin") {
+    function setTickStep(uint256 newStep) external override onlyRole("CD_Admin") {
         state.tickStep = newStep;
     }
 }
