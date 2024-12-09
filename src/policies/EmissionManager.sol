@@ -188,16 +188,19 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     // ========== INITIALIZE ========== //
 
     /// @notice allow governance to initialize the emission manager
+    ///
     /// @param baseEmissionsRate_ percent of OHM supply to issue per day at the minimum premium, in OHM scale, i.e. 1e9 = 100%
     /// @param minimumPremium_ minimum premium at which to issue OHM, a percentage where 1e18 is 100%
     /// @param backing_ backing price of OHM in reserve token, in reserve scale
+    /// @param tickSizeScalar_ scalar for tick size
+    /// @param minPriceScalar_ scalar for min price
     /// @param restartTimeframe_ time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     function initialize(
         uint256 baseEmissionsRate_,
         uint256 minimumPremium_,
         uint256 backing_,
-        uint256 tickScalar,
-        uint256 priceScalar,
+        uint256 tickSizeScalar_,
+        uint256 minPriceScalar_,
         uint48 restartTimeframe_
     ) external onlyRole("emissions_admin") {
         // Cannot initialize if currently active
@@ -214,18 +217,18 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (minimumPremium_ == 0) revert InvalidParam("minimumPremium");
         if (backing_ == 0) revert InvalidParam("backing");
         if (restartTimeframe_ == 0) revert InvalidParam("restartTimeframe");
-        if (tickScalar == 0 || tickScalar > ONE_HUNDRED_PERCENT)
+        if (tickSizeScalar_ == 0 || tickSizeScalar_ > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Tick Size Scalar");
-        if (priceScalar == 0 || priceScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Tick Size Scalar");
+        if (minPriceScalar_ == 0 || minPriceScalar_ > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Min Price Scalar");
 
         // Assign
         baseEmissionRate = baseEmissionsRate_;
         minimumPremium = minimumPremium_;
         backing = backing_;
         restartTimeframe = restartTimeframe_;
-        tickSizeScalar = tickScalar;
-        minPriceScalar = priceScalar;
+        tickSizeScalar = tickSizeScalar_;
+        minPriceScalar = minPriceScalar_;
 
         // Activate
         locallyActive = true;
@@ -234,6 +237,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         emit MinimumPremiumChanged(minimumPremium_);
         emit BackingChanged(backing_);
         emit RestartTimeframeChanged(restartTimeframe_);
+        // TODO emit tickSizeScalar and minPriceScalar
     }
 
     // ========== BOND CALLBACK ========== //
