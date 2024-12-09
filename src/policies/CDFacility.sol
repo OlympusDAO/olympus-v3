@@ -15,9 +15,13 @@ import {FullMath} from "libraries/FullMath.sol";
 
 interface CDRC20 {
     function mint(address to, uint256 amount) external;
+
     function burn(address from, uint256 amount) external;
+
     function convertFor(uint256 amount) external view returns (uint256);
+
     function expiry() external view returns (uint256);
+
     function totalSupply() external view returns (uint256);
 }
 
