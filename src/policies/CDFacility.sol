@@ -7,24 +7,13 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
-import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
+import {IConvertibleDebtToken} from "src/interfaces/IConvertibleDebtToken.sol";
 
-// TODO extract into external file
-interface CDRC20 {
-    function mint(address to, uint256 amount) external;
-
-    function burn(address from, uint256 amount) external;
-
-    function convertFor(uint256 amount) external view returns (uint256);
-
-    function expiry() external view returns (uint256);
-
-    function totalSupply() external view returns (uint256);
-}
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // TODO extract CDFacility interface
 
@@ -56,7 +45,8 @@ contract CDFacility is Policy, RolesConsumer {
     // Tokens
     ERC20 public reserve;
     ERC4626 public sReserve;
-    CDRC20 public cdUSDS;
+    // TODO re-think whether this should use a factory pattern instead
+    IConvertibleDebtToken public cdUSDS;
 
     // State variables
     uint256 public totalDeposits;
@@ -72,15 +62,24 @@ contract CDFacility is Policy, RolesConsumer {
 
     // ========== SETUP ========== //
 
+    // TODO input approved convertible debt tokens in constructor, to allow for migration
+
     // TODO add cdUSDS parameter
 
-    constructor(Kernel kernel_, address reserve_, address sReserve_) Policy(kernel_) {
+    constructor(
+        Kernel kernel_,
+        address reserve_,
+        address sReserve_,
+        address cdUSDS_
+    ) Policy(kernel_) {
         if (reserve_ == address(0)) revert CDFacility_InvalidParams("Reserve address cannot be 0");
         if (sReserve_ == address(0))
             revert CDFacility_InvalidParams("sReserve address cannot be 0");
+        if (cdUSDS_ == address(0)) revert CDFacility_InvalidParams("cdUSDS address cannot be 0");
 
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
+        cdUSDS = IConvertibleDebtToken(cdUSDS_);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
