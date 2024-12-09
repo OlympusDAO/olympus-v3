@@ -344,8 +344,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         shutdownTimestamp = uint48(block.timestamp);
 
         // Shutdown the bond market, if it is active
-        if (auctioneer.isLive(activeMarketId)) {
-            auctioneer.closeMarket(activeMarketId);
+        if (bondAuctioneer.isLive(activeMarketId)) {
+            bondAuctioneer.closeMarket(activeMarketId);
         }
 
         emit Deactivated();
@@ -451,7 +451,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         bondAuctioneer = IBondSDA(bondAuctioneer_);
         teller = teller_;
 
-        emit BondContractsSet(auctioneer_, teller_);
+        emit BondContractsSet(bondAuctioneer_, teller_);
     }
 
     /// @notice allow governance to set the CD contract used by the emission manager
