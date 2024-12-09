@@ -1,0 +1,10 @@
+{
+    "sequence": [
+        {
+            "name": "LoanConsolidator",
+            "args": {
+                "feePercentage": 0
+            }
+        }
+    ]
+}
