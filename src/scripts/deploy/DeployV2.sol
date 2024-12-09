@@ -63,6 +63,8 @@ import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol";
 import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
+import {ReserveMigrator} from "policies/ReserveMigrator.sol";
+import {EmissionManager} from "policies/EmissionManager.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
@@ -111,6 +113,9 @@ contract OlympusDeploy is Script {
     LegacyBurner public legacyBurner;
     ContractRegistryAdmin public contractRegistryAdmin;
     LoanConsolidator public loanConsolidator;
+    YieldRepurchaseFacility public yieldRepo;
+    ReserveMigrator public reserveMigrator;
+    EmissionManager public emissionManager;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -119,7 +124,6 @@ contract OlympusDeploy is Script {
     address public inverseBondDepository;
     pOLY public poly;
     Clearinghouse public clearinghouse;
-    YieldRepurchaseFacility public yieldRepo;
 
     // Governance
     Timelock public timelock;
@@ -131,8 +135,10 @@ contract OlympusDeploy is Script {
     /// Token addresses
     ERC20 public ohm;
     ERC20 public gohm;
+    ERC20 public oldReserve;
+    ERC4626 public oldSReserve;
     ERC20 public reserve;
-    ERC4626 public wrappedReserve;
+    ERC4626 public sReserve;
     ERC20 public wsteth;
     ERC20 public lusd;
     ERC20 public aura;
@@ -158,6 +164,7 @@ contract OlympusDeploy is Script {
     address public previousPoly;
     address public previousGenesis;
     ClaimTransfer public claimTransfer;
+    address public externalMigrator;
 
     /// Balancer Contracts
     IVault public balancerVault;
@@ -222,6 +229,8 @@ contract OlympusDeploy is Script {
         selectorMap["LoanConsolidator"] = this._deployLoanConsolidator.selector;
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
         selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
+        selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
+        selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -234,12 +243,13 @@ contract OlympusDeploy is Script {
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
         gohm = ERC20(envAddress("olympus.legacy.gOHM"));
-        reserve = ERC20(envAddress("external.tokens.DAI"));
-        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
+        reserve = ERC20(envAddress("external.tokens.USDS"));
+        sReserve = ERC4626(envAddress("external.tokens.sUSDS"));
+        oldReserve = ERC20(envAddress("external.tokens.DAI"));
+        oldSReserve = ERC4626(envAddress("external.tokens.sDAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
-        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -274,6 +284,7 @@ contract OlympusDeploy is Script {
             envAddress("olympus.legacy.LegacyBurnerReplacementAuthority")
         );
         coolerFactory = CoolerFactory(envAddress("external.cooler.CoolerFactory"));
+        externalMigrator = envAddress("external.maker.daiUsdsMigrator");
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
@@ -314,6 +325,8 @@ contract OlympusDeploy is Script {
             envAddress("olympus.policies.ContractRegistryAdmin")
         );
         loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
+        reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
+        emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -548,7 +561,8 @@ contract OlympusDeploy is Script {
         console2.log("   callback", address(callback));
         console2.log("   ohm", address(ohm));
         console2.log("   reserve", address(reserve));
-        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   sReserve", address(sReserve));
+        console2.log("   oldReserve", address(oldReserve));
         console2.log("   cushionDebtBuffer", cushionDebtBuffer);
         console2.log("   cushionDepositInterval", cushionDepositInterval);
         console2.log("   cushionDuration", cushionDuration);
@@ -564,7 +578,7 @@ contract OlympusDeploy is Script {
             kernel,
             bondAuctioneer,
             callback,
-            [address(ohm), address(reserve), address(wrappedReserve)],
+            [address(ohm), address(reserve), address(sReserve), address(oldReserve)],
             configParams
         );
         console2.log("Operator deployed at:", address(operator));
@@ -593,6 +607,8 @@ contract OlympusDeploy is Script {
         console2.log("   operator", address(operator));
         console2.log("   zeroDistributor", address(zeroDistributor));
         console2.log("   yieldRepo", address(yieldRepo));
+        console2.log("   reserveMigrator", address(reserveMigrator));
+        console2.log("   emissionManager", address(emissionManager));
         console2.log("   maxReward", maxReward);
         console2.log("   auctionDuration", auctionDuration);
 
@@ -603,6 +619,8 @@ contract OlympusDeploy is Script {
             operator,
             zeroDistributor,
             yieldRepo,
+            reserveMigrator,
+            emissionManager,
             maxReward,
             auctionDuration
         );
@@ -1021,7 +1039,7 @@ contract OlympusDeploy is Script {
             ohm_: address(ohm),
             gohm_: address(gohm),
             staking_: address(staking),
-            sReserve_: address(wrappedReserve),
+            sReserve_: address(sReserve),
             coolerFactory_: address(coolerFactory),
             kernel_: address(kernel)
         });
@@ -1150,34 +1168,88 @@ contract OlympusDeploy is Script {
 
     // ========== YIELD REPURCHASE FACILITY ========== //
 
-    function _deployYieldRepurchaseFacility(bytes calldata args) public returns (address) {
+    function _deployYieldRepurchaseFacility(bytes calldata) public returns (address) {
         // No additional arguments for YieldRepurchaseFacility
 
         // Log dependencies
         console2.log("YieldRepurchaseFacility parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   ohm", address(ohm));
-        console2.log("   reserve", address(reserve));
-        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   sReserve", address(sReserve));
         console2.log("   teller", address(bondFixedTermTeller));
         console2.log("   auctioneer", address(bondAuctioneer));
-        console2.log("   clearinghouse", address(clearinghouse));
 
         // Deploy YieldRepurchaseFacility
         vm.broadcast();
         yieldRepo = new YieldRepurchaseFacility(
             kernel,
             address(ohm),
-            address(reserve),
-            address(wrappedReserve),
+            address(sReserve),
             address(bondFixedTermTeller),
-            address(bondAuctioneer),
-            address(clearinghouse)
+            address(bondAuctioneer)
         );
 
         console2.log("YieldRepurchaseFacility deployed at:", address(yieldRepo));
 
         return address(yieldRepo);
+    }
+
+    // ========== RESERVE MIGRATION ========== //
+
+    function _deployReserveMigrator(bytes calldata) public returns (address) {
+        // No additional arguments for ReserveMigrator
+
+        // Log dependencies
+        console2.log("ReserveMigrator parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   sFrom", address(oldSReserve));
+        console2.log("   sTo", address(sReserve));
+        console2.log("   migrator", address(externalMigrator));
+
+        // Deploy ReserveMigrator
+        vm.broadcast();
+        reserveMigrator = new ReserveMigrator(
+            kernel,
+            address(oldSReserve),
+            address(sReserve),
+            address(externalMigrator)
+        );
+
+        console2.log("ReserveMigrator deployed at:", address(reserveMigrator));
+
+        return address(reserveMigrator);
+    }
+
+    // ========== EMISSION MANAGER ========== //
+
+    function _deployEmissionManager(bytes calldata) public returns (address) {
+        // No additional arguments for EmissionManager
+
+        // Log dependencies
+        console2.log("EmissionManager parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   ohm", address(ohm));
+        console2.log("   gohm", address(gohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   sReserve", address(sReserve));
+        console2.log("   auctioneer", address(bondAuctioneer));
+        console2.log("   teller", address(bondFixedTermTeller));
+
+        // Deploy EmissionManager
+        vm.broadcast();
+        emissionManager = new EmissionManager(
+            kernel,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            address(sReserve),
+            address(bondAuctioneer),
+            address(bondFixedTermTeller)
+        );
+
+        console2.log("EmissionManager deployed at:", address(emissionManager));
+
+        return address(emissionManager);
     }
 
     // ========== VERIFICATION ========== //
@@ -1256,8 +1328,8 @@ contract OlympusDeploy is Script {
         kernel = Kernel(vm.envAddress("KERNEL"));
 
         /// Operator Roles
-        require(ROLES.hasRole(address(heart), "operator_operate"));
-        require(ROLES.hasRole(guardian_, "operator_operate"));
+        require(ROLES.hasRole(address(heart), "heart"));
+        require(ROLES.hasRole(guardian_, "heart"));
         require(ROLES.hasRole(address(callback), "operator_reporter"));
         require(ROLES.hasRole(policy_, "operator_policy"));
         require(ROLES.hasRole(guardian_, "operator_admin"));
@@ -1303,8 +1375,8 @@ contract OlympusDeploy is Script {
         burner = Burner(vm.envAddress("BURNER"));
 
         /// Operator Roles
-        require(ROLES.hasRole(address(heart), "operator_operate"));
-        require(ROLES.hasRole(guardian_, "operator_operate"));
+        require(ROLES.hasRole(address(heart), "heart"));
+        require(ROLES.hasRole(guardian_, "heart"));
         require(ROLES.hasRole(address(callback), "operator_reporter"));
         require(ROLES.hasRole(policy_, "operator_policy"));
         require(ROLES.hasRole(guardian_, "operator_admin"));

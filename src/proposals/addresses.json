@@ -80,6 +80,56 @@
         "chainId": 1
     },
     {
+        "addr": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+        "name": "external-tokens-usds",
+        "chainId": 1
+    },
+    {
+        "addr": "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
+        "name": "external-tokens-susds",
+        "chainId": 1
+    },
+    {
+        "addr": "0x73df08CE9dcC8d74d22F23282c4d49F13b4c795E",
+        "name": "olympus-policy-bondcallback",
+        "chainId": 1
+    },
+    {
+        "addr": "0x39F6AA3d445e6Dd8eC232c6Bd589889A88E3034d",
+        "name": "olympus-policy-heart-1_5",
+        "chainId": 1
+    },
+    {
+        "addr": "0x0AE561226896dA978EaDA0Bec4a7d3CfAE04f506",
+        "name": "olympus-policy-operator-1_4",
+        "chainId": 1
+    },
+    {
+        "addr": "0xf7602C0421c283A2fc113172EBDf64C30F21654D",
+        "name": "olympus-policy-heart-1_6",
+        "chainId": 1
+    },
+    {
+        "addr": "0x6417F206a0a6628Da136C0Faa39026d0134D2b52",
+        "name": "olympus-policy-operator-1_5",
+        "chainId": 1
+    },
+    {
+        "addr": "0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0",
+        "name": "olympus-policy-clearinghouse-1_2",
+        "chainId": 1
+    },
+    {
+        "addr": "0xcaA3d3E653A626e2656d2E799564fE952D39d855",
+        "name": "olympus-policy-yieldrepurchasefacility",
+        "chainId": 1
+    },
+    {
+        "addr": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
+        "name": "olympus-policy-emissionmanager",
+        "chainId": 1
+    },
+    {
         "addr": "0x0000000000000000000000000000000000000000",
         "name": "olympus-policy-loan-consolidator",
         "chainId": 1
