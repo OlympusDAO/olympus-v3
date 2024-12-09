@@ -48,6 +48,10 @@ contract CDAuctioneer is Policy, RolesConsumer {
 
     // ========== EVENTS ========== //
 
+    // ========== ERRORS ========== //
+
+    error CDAuctioneer_InvalidParams(string reason);
+
     // ========== STATE VARIABLES ========== //
 
     Tick public currentTick;
@@ -63,7 +67,12 @@ contract CDAuctioneer is Policy, RolesConsumer {
 
     // ========== SETUP ========== //
 
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_, address cdFacility_) Policy(kernel_) {
+        if (cdFacility_ == address(0))
+            revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
+
+        cdFacility = CDFacility(cdFacility_);
+    }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);

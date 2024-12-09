@@ -28,8 +28,6 @@ interface CDRC20 {
 contract CDFacility is Policy, RolesConsumer {
     using FullMath for uint256;
 
-    error Misconfigured();
-
     struct CD {
         uint256 deposit;
         uint256 convertable;
@@ -63,9 +61,19 @@ contract CDFacility is Policy, RolesConsumer {
     mapping(address => CD[]) public cdInfo;
     uint256 public redeemRate;
 
+    // ========== ERRORS ========== //
+
+    error CDFacility_InvalidParams(string reason);
+
+    error Misconfigured();
+
     // ========== SETUP ========== //
 
     constructor(Kernel kernel_, address reserve_, address sReserve_) Policy(kernel_) {
+        if (reserve_ == address(0)) revert CDFacility_InvalidParams("Reserve address cannot be 0");
+        if (sReserve_ == address(0))
+            revert CDFacility_InvalidParams("sReserve address cannot be 0");
+
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
     }

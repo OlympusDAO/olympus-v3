@@ -81,6 +81,10 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
 
+    // ========== ERRORS ========== //
+
+    error EmissionManager_InvalidParams(string reason);
+
     // ========== SETUP ========== //
 
     constructor(
@@ -94,12 +98,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         address teller_
     ) Policy(kernel_) {
         // Set immutable variables
-        if (ohm_ == address(0)) revert("OHM address cannot be 0");
-        if (gohm_ == address(0)) revert("gOHM address cannot be 0");
-        if (reserve_ == address(0)) revert("DAI address cannot be 0");
-        if (sReserve_ == address(0)) revert("sDAI address cannot be 0");
-        if (bondAuctioneer_ == address(0)) revert("Bond Auctioneer address cannot be 0");
-        if (cdAuctioneer_ == address(0)) revert("CD Auctioneer address cannot be 0");
+        if (ohm_ == address(0)) revert EmissionManager_InvalidParams("OHM address cannot be 0");
+        if (gohm_ == address(0)) revert EmissionManager_InvalidParams("gOHM address cannot be 0");
+        if (reserve_ == address(0)) revert EmissionManager_InvalidParams("DAI address cannot be 0");
+        if (sReserve_ == address(0))
+            revert EmissionManager_InvalidParams("sDAI address cannot be 0");
+        if (bondAuctioneer_ == address(0))
+            revert EmissionManager_InvalidParams("Bond Auctioneer address cannot be 0");
+        if (cdAuctioneer_ == address(0))
+            revert EmissionManager_InvalidParams("CD Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);

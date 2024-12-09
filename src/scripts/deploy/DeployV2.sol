@@ -64,6 +64,7 @@ import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
 import {CDAuctioneer} from "policies/CDAuctioneer.sol";
+import {CDFacility} from "policies/CDFacility.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
@@ -113,6 +114,7 @@ contract OlympusDeploy is Script {
     ReserveMigrator public reserveMigrator;
     EmissionManager public emissionManager;
     CDAuctioneer public cdAuctioneer;
+    CDFacility public cdFacility;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -226,6 +228,7 @@ contract OlympusDeploy is Script {
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
         selectorMap["ConvertibleDebtAuctioneer"] = this._deployConvertibleDebtAuctioneer.selector;
+        selectorMap["ConvertibleDebtFacility"] = this._deployConvertibleDebtFacility.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -316,6 +319,7 @@ contract OlympusDeploy is Script {
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
         cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDebtAuctioneer"));
+        cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDebtFacility"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1235,13 +1239,31 @@ contract OlympusDeploy is Script {
         // Log dependencies
         console2.log("ConvertibleDebtAuctioneer parameters:");
         console2.log("   kernel", address(kernel));
+        console2.log("   cdFacility", address(cdFacility));
 
         // Deploy ConvertibleDebtAuctioneer
         vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(kernel);
+        cdAuctioneer = new CDAuctioneer(kernel, address(cdFacility));
         console2.log("ConvertibleDebtAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);
+    }
+
+    function _deployConvertibleDebtFacility(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDebtFacility
+
+        // Log dependencies
+        console2.log("ConvertibleDebtFacility parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   reserve", address(reserve));
+        console2.log("   sReserve", address(sReserve));
+
+        // Deploy ConvertibleDebtFacility
+        vm.broadcast();
+        cdFacility = new CDFacility(kernel, address(reserve), address(sReserve));
+        console2.log("ConvertibleDebtFacility deployed at:", address(cdFacility));
+
+        return address(cdFacility);
     }
 
     // ========== VERIFICATION ========== //
