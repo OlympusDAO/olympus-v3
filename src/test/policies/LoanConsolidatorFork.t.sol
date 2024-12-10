@@ -20,7 +20,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {OlympusClearinghouseRegistry} from "src/modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel, Actions, toKeycode, Module} from "src/Kernel.sol";
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
@@ -779,6 +779,12 @@ contract LoanConsolidatorForkTest is Test {
     //  [X] it reverts
     // given the caller is not the owner of coolerTo
     //  [X] it reverts
+    // given clearinghouseFrom is not an active policy
+    //  given clearinghouseFrom is disabled
+    //   [X] it succeeds
+    //  [X] it succeeds
+    // given clearinghouseFrom is disabled
+    //  [X] it succeeds
     // given clearinghouseTo is disabled
     //  [X] it reverts
     // given coolerFrom is equal to coolerTo
@@ -976,6 +982,139 @@ contract LoanConsolidatorForkTest is Test {
             address(clearinghouse),
             address(coolerA),
             address(newCooler),
+            idsA
+        );
+    }
+
+    function test_consolidate_clearinghouseFromNotActive() public givenPolicyActive givenActivated {
+        uint256[] memory idsA = _idsA();
+
+        // Create a Cooler on the USDS Clearinghouse
+        address coolerUsds = _createCooler(coolerFactory, walletA, usds);
+        address coolerDai = address(coolerA);
+
+        (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
+            address(clearinghouseUsds),
+            coolerDai,
+            idsA
+        );
+
+        // Grant approvals
+        _grantCallerApprovals(walletA, address(clearinghouseUsds), coolerDai, coolerUsds, idsA);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Disable the previous clearinghouse
+        vm.prank(emergency);
+        clearinghouse.emergencyShutdown();
+
+        // Consolidate loans
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(clearinghouseUsds),
+            coolerDai,
+            coolerUsds,
+            idsA
+        );
+
+        _assertCoolerLoansCrossClearinghouse(coolerDai, coolerUsds, _GOHM_AMOUNT);
+    }
+
+    function test_consolidate_clearinghouseFromPolicyNotActive()
+        public
+        givenPolicyActive
+        givenActivated
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Create a Cooler on the USDS Clearinghouse
+        address coolerUsds = _createCooler(coolerFactory, walletA, usds);
+        address coolerDai = address(coolerA);
+
+        (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
+            address(clearinghouseUsds),
+            coolerDai,
+            idsA
+        );
+
+        // Grant approvals
+        _grantCallerApprovals(walletA, address(clearinghouseUsds), coolerDai, coolerUsds, idsA);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Uninstall the previous Clearinghouse as a policy
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.DeactivatePolicy, address(clearinghouse));
+
+        // Consolidate loans
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(clearinghouseUsds),
+            coolerDai,
+            coolerUsds,
+            idsA
+        );
+
+        _assertCoolerLoansCrossClearinghouse(coolerDai, coolerUsds, _GOHM_AMOUNT);
+    }
+
+    function test_consolidate_clearinghouseFromNotActive_clearinghouseFromPolicyNotActive_reverts()
+        public
+        givenPolicyActive
+        givenActivated
+    {
+        uint256[] memory idsA = _idsA();
+
+        // Create a Cooler on the USDS Clearinghouse
+        address coolerUsds = _createCooler(coolerFactory, walletA, usds);
+        address coolerDai = address(coolerA);
+
+        (, uint256 interest, , uint256 protocolFee) = utils.fundsRequired(
+            address(clearinghouseUsds),
+            coolerDai,
+            idsA
+        );
+
+        // Grant approvals
+        _grantCallerApprovals(walletA, address(clearinghouseUsds), coolerDai, coolerUsds, idsA);
+
+        // Deal fees in USDS to the wallet
+        deal(address(usds), walletA, interest + protocolFee);
+        // Make sure the wallet has no DAI
+        deal(address(dai), walletA, 0);
+
+        // Disable the previous Clearinghouse
+        vm.prank(emergency);
+        clearinghouse.emergencyShutdown();
+
+        // Uninstall the previous Clearinghouse as a policy
+        vm.prank(kernelExecutor);
+        kernel.executeAction(Actions.DeactivatePolicy, address(clearinghouse));
+
+        // Expect revert
+        // The Clearinghouse will attempt to be defunded, which will fail
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Module.Module_PolicyNotPermitted.selector,
+                address(clearinghouse)
+            )
+        );
+
+        // Consolidate loans
+        _consolidate(
+            walletA,
+            address(clearinghouse),
+            address(clearinghouseUsds),
+            coolerDai,
+            coolerUsds,
             idsA
         );
     }
