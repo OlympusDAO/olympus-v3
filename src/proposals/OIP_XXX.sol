@@ -14,7 +14,8 @@ import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 
-// OIP_XX proposal performs all the necessary steps to upgrade the Clearinghouse.
+/// @notice OIP_XXX proposal performs all the necessary steps to upgrade the Clearinghouse.
+// solhint-disable-next-line contract-name-camelcase
 contract OIP_XXX is GovernorBravoProposal {
     // Data struct to cache initial balances and used them in `_validate`.
     struct Cache {
@@ -30,7 +31,7 @@ contract OIP_XXX is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
+    function id() public pure override returns (uint256) {
         return 0;
     }
 
@@ -64,7 +65,7 @@ contract OIP_XXX is GovernorBravoProposal {
         addresses.addAddress("olympus-policy-clearinghouse-v1.1", address(clearinghouse));
     }
 
-    function _afterDeploy(Addresses addresses, address deployer) internal override {
+    function _afterDeploy(Addresses addresses, address) internal override {
         // Get relevant olympus contracts
         address TRSRY = address(_kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
         address clearinghouseV0 = addresses.getAddress("olympus-policy-clearinghouse");
