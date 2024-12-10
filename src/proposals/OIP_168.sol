@@ -202,7 +202,7 @@ contract OIP_168 is GovernorBravoProposal {
         address operator_1_5 = addresses.getAddress("olympus-policy-operator-1_5");
         address heart_1_5 = addresses.getAddress("olympus-policy-heart-1_5");
         address heart_1_6 = addresses.getAddress("olympus-policy-heart-1_6");
-        address clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
+        // address clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // Validate the new Heart policy has the "heart" role
         require(
