@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GLP-3.0
 pragma solidity ^0.8.15;
 
-import {Test, console2, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -19,6 +19,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {OlympusClearinghouseRegistry} from "src/modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 
@@ -28,7 +29,6 @@ import {ClearinghouseLowerLTC} from "src/test/lib/ClearinghouseLowerLTC.sol";
 import {ClearinghouseHigherLTC} from "src/test/lib/ClearinghouseHigherLTC.sol";
 
 contract LoanConsolidatorForkTest is Test {
-    using stdStorage for StdStorage;
     using ClonesWithImmutableArgs for address;
 
     LoanConsolidator public utils;
@@ -107,6 +107,46 @@ contract LoanConsolidatorForkTest is Test {
         // Determine the kernel executor
         kernelExecutor = Kernel(kernel).executor();
 
+        // CHREG v1 (0x24b96f2150BF1ed10D3e8B28Ed33E392fbB4Cad5) has a bug with the registryCount. If the version is 1.0, mimic upgrading the module
+        (uint8 chregMajor, uint8 chregMinor) = CHREG.VERSION();
+        if (chregMajor == 1 && chregMinor == 0) {
+            console2.log("CHREG v1.0 detected, upgrading to current version...");
+
+            // Determine the active clearinghouse
+            uint256 activeClearinghouseCount = CHREG.activeCount();
+            address activeClearinghouse;
+            if (activeClearinghouseCount >= 1) {
+                activeClearinghouse = CHREG.active(0);
+                console2.log("Setting active clearinghouse to:", activeClearinghouse);
+
+                // CHREG only accepts one active clearinghouse
+                activeClearinghouseCount = 1;
+            }
+
+            // Determine the inactive clearinghouses
+            uint256 inactiveClearinghouseCount = CHREG.registryCount();
+            address[] memory inactiveClearinghouses = new address[](
+                inactiveClearinghouseCount - activeClearinghouseCount
+            );
+            for (uint256 i = 0; i < inactiveClearinghouseCount; i++) {
+                // Skip if active, as the constructor will check for duplicates
+                if (CHREG.registry(i) == activeClearinghouse) continue;
+
+                inactiveClearinghouses[i] = CHREG.registry(i);
+            }
+
+            // Deploy the current version of CHREG
+            CHREG = new OlympusClearinghouseRegistry(
+                kernel,
+                activeClearinghouse,
+                inactiveClearinghouses
+            );
+
+            // Upgrade the module
+            vm.prank(kernelExecutor);
+            kernel.executeAction(Actions.UpgradeModule, address(CHREG));
+        }
+
         // Install RGSTY (since block is pinned, it won't be installed)
         RGSTY = new OlympusContractRegistry(address(kernel));
         vm.prank(kernelExecutor);
@@ -158,12 +198,6 @@ contract LoanConsolidatorForkTest is Test {
         trsrySDaiBalance = sdai.balanceOf(address(TRSRY));
         trsryUsdsBalance = usds.balanceOf(address(TRSRY));
         trsrySusdsBalance = susds.balanceOf(address(TRSRY));
-
-        // Increment the CHREG registry count
-        // The registryCount does not seem to be incremented on the fork, which is... weird.
-        console2.log("CHREG registry count before:", CHREG.registryCount());
-        stdstore.target(address(CHREG)).sig("registryCount()").checked_write(3);
-        console2.log("CHREG registry count after:", CHREG.registryCount());
 
         admin = vm.addr(0x2);
 
@@ -458,8 +492,6 @@ contract LoanConsolidatorForkTest is Test {
     }
 
     function _createClearinghouseWithLowerLTC() internal returns (Clearinghouse) {
-        uint256 registryCountBefore = CHREG.registryCount();
-
         ClearinghouseLowerLTC newClearinghouse = new ClearinghouseLowerLTC(
             address(ohm),
             address(gohm),
@@ -478,18 +510,10 @@ contract LoanConsolidatorForkTest is Test {
         // Rebalance the new clearinghouse
         newClearinghouse.rebalance();
 
-        // Increment the CHREG registry count
-        // The registryCount does not seem to be incremented on the fork, which is... weird.
-        stdstore.target(address(CHREG)).sig("registryCount()").checked_write(
-            registryCountBefore + 1
-        );
-
         return Clearinghouse(address(newClearinghouse));
     }
 
     function _createClearinghouseWithHigherLTC() internal returns (Clearinghouse) {
-        uint256 registryCountBefore = CHREG.registryCount();
-
         ClearinghouseHigherLTC newClearinghouse = new ClearinghouseHigherLTC(
             address(ohm),
             address(gohm),
@@ -507,12 +531,6 @@ contract LoanConsolidatorForkTest is Test {
         newClearinghouse.activate();
         // Rebalance the new clearinghouse
         newClearinghouse.rebalance();
-
-        // Increment the CHREG registry count
-        // The registryCount does not seem to be incremented on the fork, which is... weird.
-        stdstore.target(address(CHREG)).sig("registryCount()").checked_write(
-            registryCountBefore + 1
-        );
 
         return Clearinghouse(address(newClearinghouse));
     }
