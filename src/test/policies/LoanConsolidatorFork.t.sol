@@ -108,8 +108,7 @@ contract LoanConsolidatorForkTest is Test {
         kernelExecutor = Kernel(kernel).executor();
 
         // CHREG v1 (0x24b96f2150BF1ed10D3e8B28Ed33E392fbB4Cad5) has a bug with the registryCount. If the version is 1.0, mimic upgrading the module
-        (uint8 chregMajor, uint8 chregMinor) = CHREG.VERSION();
-        if (chregMajor == 1 && chregMinor == 0) {
+        if (address(CHREG) == 0x24b96f2150BF1ed10D3e8B28Ed33E392fbB4Cad5) {
             console2.log("CHREG v1.0 detected, upgrading to current version...");
 
             // Determine the active clearinghouse
