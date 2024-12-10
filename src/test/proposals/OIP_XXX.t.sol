@@ -32,12 +32,18 @@ contract OCGProposalTest is Test {
     // If true, the framework will check that calldatas match.
     bool public hasBeenSubmitted;
 
+    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
     // Clearinghouse Expected events
     event Defund(address token, uint256 amount);
     event Deactivate();
 
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
+        // Mainnet Fork at a fixed block
+        // Prior to actual deployment of the proposal (otherwise it will fail) and Clearinghouse v2 - 21216656
+        vm.createSelectFork(RPC_URL, 21216656 - 1);
+
         /// @dev Deploy your proposal
         OIP_XXX proposal = new OIP_XXX();
 
@@ -69,7 +75,7 @@ contract OCGProposalTest is Test {
                 address governor = addresses.getAddress("olympus-governor");
                 bool[] memory matches = suite.checkProposalCalldatas(governor);
                 for (uint256 i; i < matches.length; i++) {
-                    assertTrue(matches[i]);
+                    assertTrue(matches[i], "Calldata should match");
                 }
             } else {
                 console.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
@@ -80,7 +86,7 @@ contract OCGProposalTest is Test {
 
     // [DO NOT DELETE] Dummy test to ensure `setUp` is executed and the proposal simulated.
     function testProposal_simulate() public {
-        assertTrue(true);
+        assertTrue(true, "Proposal should be simulated");
     }
 
     /// -- OPTIONAL INTEGRATION TESTS ----------------------------------------------------
@@ -122,12 +128,28 @@ contract OCGProposalTest is Test {
         clearinghouseV1.emergencyShutdown();
 
         // Check that the system is shutdown and logged in the CHREG
-        assertFalse(clearinghouseV1.active());
+        assertFalse(clearinghouseV1.active(), "Clearinghouse should be shutdown");
         // assertEq(CHREGv1(CHREG).activeCount(), 0);
         // Check the token balances
-        assertEq(dai.balanceOf(address(clearinghouseV1)), 0);
-        assertEq(sdai.balanceOf(address(clearinghouseV1)), 0);
-        assertEq(dai.balanceOf(TRSRY), cacheCH.daiBalance + cacheTRSRY.daiBalance);
-        assertEq(sdai.balanceOf(TRSRY), cacheCH.sdaiBalance + cacheTRSRY.sdaiBalance);
+        assertEq(
+            dai.balanceOf(address(clearinghouseV1)),
+            0,
+            "DAI balance of clearinghouse should be 0"
+        );
+        assertEq(
+            sdai.balanceOf(address(clearinghouseV1)),
+            0,
+            "sDAI balance of clearinghouse should be 0"
+        );
+        assertEq(
+            dai.balanceOf(TRSRY),
+            cacheCH.daiBalance + cacheTRSRY.daiBalance,
+            "DAI balance of treasury should be correct"
+        );
+        assertEq(
+            sdai.balanceOf(TRSRY),
+            cacheCH.sdaiBalance + cacheTRSRY.sdaiBalance,
+            "sDAI balance of treasury should be correct"
+        );
     }
 }

@@ -19,8 +19,8 @@ contract OIP_166 is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
-        return 166;
+    function id() public pure override returns (uint256) {
+        return 1;
     }
 
     // Returns the name of the proposal.
@@ -178,7 +178,7 @@ contract OIP_166 is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
         RolesAdmin rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));

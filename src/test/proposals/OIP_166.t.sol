@@ -33,13 +33,13 @@ contract OIP_166_OCGProposalTest is Test {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail) - 20872023
-        vm.createSelectFork(RPC_URL, 20872022);
+        vm.createSelectFork(RPC_URL, 20872023 - 1);
 
         /// @dev Deploy your proposal
         OIP_166 proposal = new OIP_166();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         /// [DO NOT DELETE]
         /// @notice This section is used to simulate the proposal on the mainnet fork.
@@ -77,7 +77,7 @@ contract OIP_166_OCGProposalTest is Test {
                 address governor = addresses.getAddress("olympus-governor");
                 bool[] memory matches = suite.checkProposalCalldatas(governor);
                 for (uint256 i; i < matches.length; i++) {
-                    assertTrue(matches[i]);
+                    assertTrue(matches[i], "Calldata should match");
                 }
             } else {
                 console.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
@@ -88,6 +88,6 @@ contract OIP_166_OCGProposalTest is Test {
 
     // [DO NOT DELETE] Dummy test to ensure `setUp` is executed and the proposal simulated.
     function testProposal_simulate() public {
-        assertTrue(true);
+        assertTrue(true, "Proposal should be simulated");
     }
 }

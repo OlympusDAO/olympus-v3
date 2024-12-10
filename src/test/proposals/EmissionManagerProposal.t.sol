@@ -32,15 +32,14 @@ contract EmissionManagerProposalTest is Test {
     /// @notice Creates a sandboxed environment from a mainnet fork.
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
-        // Prior to actual deployment of the proposal (otherwise it will fail) - 21071000
-        // TODO: Update the block number once the proposal has been submitted on-chain.
-        vm.createSelectFork(RPC_URL, 21071000);
+        // Prior to actual deployment of the proposal (otherwise it will fail) - 21224026
+        vm.createSelectFork(RPC_URL, 21224026 - 1);
 
         /// @dev Deploy your proposal
         EmissionManagerProposal proposal = new EmissionManagerProposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         /// [DO NOT DELETE]
         /// @notice This section is used to simulate the proposal on the mainnet fork.
@@ -68,7 +67,7 @@ contract EmissionManagerProposalTest is Test {
                 address governor = addresses.getAddress("olympus-governor");
                 bool[] memory matches = suite.checkProposalCalldatas(governor);
                 for (uint256 i; i < matches.length; i++) {
-                    assertTrue(matches[i]);
+                    assertTrue(matches[i], "Calldata should match");
                 }
             } else {
                 console.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
@@ -79,6 +78,6 @@ contract EmissionManagerProposalTest is Test {
 
     // [DO NOT DELETE] Dummy test to ensure `setUp` is executed and the proposal simulated.
     function testProposal_simulate() public {
-        assertTrue(true);
+        assertTrue(true, "Proposal should be simulated");
     }
 }
