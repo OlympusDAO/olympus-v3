@@ -59,7 +59,6 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(address(cooler.staking()), address(staking));
         assertEq(address(cooler.debtSavingsVault()), address(sdai));
         assertEq(cooler.minDebtRequired(), DEFAULT_MIN_DEBT_REQUIRED);
-        assertEq(address(cooler.CHREG()), address(CHREG));
         assertEq(address(cooler.MINTR()), address(MINTR));
         assertEq(address(cooler.TRSRY()), address(TRSRY));
 
@@ -110,12 +109,11 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_configureDependencies_success() public {
-        Keycode[] memory expectedDeps = new Keycode[](5);
-        expectedDeps[0] = toKeycode("CHREG");
-        expectedDeps[1] = toKeycode("MINTR");
-        expectedDeps[2] = toKeycode("ROLES");
-        expectedDeps[3] = toKeycode("TRSRY");
-        expectedDeps[4] = toKeycode("DLGTE");
+        Keycode[] memory expectedDeps = new Keycode[](4);
+        expectedDeps[0] = toKeycode("MINTR");
+        expectedDeps[1] = toKeycode("ROLES");
+        expectedDeps[2] = toKeycode("TRSRY");
+        expectedDeps[3] = toKeycode("DLGTE");
 
         Keycode[] memory deps = cooler.configureDependencies();
         // Check: configured dependencies storage
@@ -124,12 +122,11 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
         assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
-        assertEq(fromKeycode(deps[4]), fromKeycode(expectedDeps[4]));
     }
 
     function test_configureDependencies_fail() public {
         vm.mockCall(
-            address(CHREG),
+            address(MINTR),
             abi.encodeWithSelector(Module.VERSION.selector),
             abi.encode(uint8(2), uint8(1))
         );
@@ -137,28 +134,25 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 Policy.Policy_WrongModuleVersion.selector,
-                abi.encode([1, 1, 1, 1, 1])
+                abi.encode([1, 1, 1, 1])
             )
         );
         cooler.configureDependencies();
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](10);
-        Keycode CHREG_KEYCODE = toKeycode("CHREG");
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
-        expectedPerms[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
-        expectedPerms[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
-        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-        expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPerms[6] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
-        expectedPerms[7] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
-        expectedPerms[8] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
-        expectedPerms[9] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPerms[4] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
+        expectedPerms[5] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
+        expectedPerms[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        expectedPerms[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
 
         Permissions[] memory perms = cooler.requestPermissions();
         // Check: permission storage

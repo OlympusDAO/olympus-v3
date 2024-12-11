@@ -14,7 +14,6 @@ import {RolesAdmin, Kernel, Actions} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {OlympusGovDelegation, DLGTEv1} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
 
@@ -29,7 +28,6 @@ abstract contract MonoCoolerBaseTest is Test {
     OlympusRoles internal ROLES;
     OlympusMinter internal MINTR;
     OlympusTreasury internal TRSRY;
-    OlympusClearinghouseRegistry internal CHREG;
     OlympusGovDelegation internal DLGTE;
     RolesAdmin internal rolesAdmin;
 
@@ -64,7 +62,6 @@ abstract contract MonoCoolerBaseTest is Test {
         TRSRY = new OlympusTreasury(kernel);
         MINTR = new OlympusMinter(kernel, address(ohm));
         ROLES = new OlympusRoles(kernel);
-        CHREG = new OlympusClearinghouseRegistry(kernel, address(0), new address[](0));
         DLGTE = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
 
         cooler = new MonoCooler(
@@ -84,7 +81,6 @@ abstract contract MonoCoolerBaseTest is Test {
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(MINTR));
         kernel.executeAction(Actions.InstallModule, address(ROLES));
-        kernel.executeAction(Actions.InstallModule, address(CHREG));
         kernel.executeAction(Actions.InstallModule, address(DLGTE));
 
         kernel.executeAction(Actions.ActivatePolicy, address(cooler));

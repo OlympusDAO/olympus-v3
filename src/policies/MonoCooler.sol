@@ -11,7 +11,6 @@ import {IStaking} from "interfaces/IStaking.sol";
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
@@ -70,7 +69,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //                                          MODULES                                           //
     //============================================================================================//
 
-    CHREGv1 public CHREG; // Olympus V3 Clearinghouse Registry Module
     MINTRv1 public MINTR; // Olympus V3 Minter Module
     TRSRYv1 public TRSRY; // Olympus V3 Treasury Module
     DLGTEv1 public DLGTE; // Olympus V3 Delegation Module
@@ -164,20 +162,17 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](5);
-        dependencies[0] = toKeycode("CHREG");
-        dependencies[1] = toKeycode("MINTR");
-        dependencies[2] = toKeycode("ROLES");
-        dependencies[3] = toKeycode("TRSRY");
-        dependencies[4] = toKeycode("DLGTE");
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("MINTR");
+        dependencies[1] = toKeycode("ROLES");
+        dependencies[2] = toKeycode("TRSRY");
+        dependencies[3] = toKeycode("DLGTE");
 
-        CHREG = CHREGv1(getModuleAddress(toKeycode("CHREG")));
         MINTR = MINTRv1(getModuleAddress(toKeycode("MINTR")));
         ROLES = ROLESv1(getModuleAddress(toKeycode("ROLES")));
         TRSRY = TRSRYv1(getModuleAddress(toKeycode("TRSRY")));
         DLGTE = DLGTEv1(getModuleAddress(toKeycode("DLGTE")));
 
-        (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
@@ -185,9 +180,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1, 1, 1]);
+        bytes memory expected = abi.encode([1, 1, 1, 1]);
         if (
-            CHREG_MAJOR != 1 ||
             MINTR_MAJOR != 1 ||
             ROLES_MAJOR != 1 ||
             TRSRY_MAJOR != 1 ||
@@ -203,22 +197,19 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
-        Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
 
-        requests = new Permissions[](10);
-        requests[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
-        requests[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
-        requests[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[6] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
-        requests[7] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
-        requests[8] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
-        requests[9] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        requests = new Permissions[](8);
+        requests[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        requests[4] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
+        requests[5] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
+        requests[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        requests[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
     }
 
     //============================================================================================//
