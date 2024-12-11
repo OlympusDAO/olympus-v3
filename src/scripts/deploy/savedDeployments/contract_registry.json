@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusContractRegistry",
+            "args": {}
+        },
+        {
+            "name": "ContractRegistryAdmin",
+            "args": {}
+        }
+    ]
+}
