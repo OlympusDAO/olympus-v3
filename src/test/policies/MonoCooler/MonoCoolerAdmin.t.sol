@@ -52,7 +52,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         );
     }
 
-    function test_construction_success() public {
+    function test_construction_success() public view {
         assertEq(address(cooler.collateralToken()), address(gohm));
         assertEq(address(cooler.debtToken()), address(dai));
         assertEq(address(cooler.ohm()), address(ohm));
@@ -143,7 +143,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         cooler.configureDependencies();
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](10);
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");

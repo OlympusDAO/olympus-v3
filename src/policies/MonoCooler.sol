@@ -248,9 +248,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint128 collateralAmount,
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external override {
+    ) external override returns (uint128 collateralWithdrawn) {
         AccountState storage aState = allAccountState[msg.sender];
-        _withdrawCollateral(
+        collateralWithdrawn = _withdrawCollateral(
             aState,
             aState,
             _globalStateRO(), // No need to sync global debt state when withdrawing collateral
@@ -382,7 +382,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint128 collateralAmount,
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external override returns (uint128 amountRepaid) {
+    ) external override returns (uint128 amountRepaid, uint128 collateralWithdrawn) {
         AccountState storage aState = allAccountState[msg.sender];
         AccountState memory aStateCache = aState;
         GlobalStateCache memory gStateCache = _globalStateRW();
@@ -398,7 +398,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         );
 
         // Withdraw collateral on behalf of msg.sender
-        _withdrawCollateral(
+        collateralWithdrawn = _withdrawCollateral(
             aState,
             aStateCache,
             gStateCache,
@@ -595,7 +595,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         int128 newCollateral = collateralDelta + int128(aStateCache.collateral);
         if (newCollateral < 0) revert InvalidCollateralDelta();
 
-        uint128 maxDebt = _maxBorrow(uint128(newCollateral));
+        uint128 maxDebt = _maxDebt(uint128(newCollateral));
         uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
         debtDelta = int128(maxDebt) - int128(currentDebt);
     }
@@ -611,7 +611,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         position.collateral = aStateCache.collateral;
         position.currentDebt = status.currentDebt;
         position.currentLtv = status.currentLtv;
-        position.maxOriginationDebtAmount = _maxBorrow(aStateCache.collateral);
+        position.maxOriginationDebtAmount = _maxDebt(aStateCache.collateral);
 
         // liquidationLtv [USDS/gOHM] * collateral [gOHM]
         // Round down to get the conservative max debt allowed
@@ -787,7 +787,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         address caller,
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) private {
+    ) private returns (uint128 collateralWithdrawn) {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
 
@@ -796,22 +796,41 @@ It means the liquidation won't happen until that accrued interest pays for gas++
             DLGTE.applyDelegations(caller, delegationRequests);
         }
 
-        DLGTE.withdrawUndelegatedGohm(caller, collateralAmount);
+        uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+
+        if (collateralAmount == type(uint128).max) {
+            uint128 minRequiredCollateral = _minCollateral(currentDebt);
+            if (aStateCache.collateral > minRequiredCollateral) {
+                collateralWithdrawn = aStateCache.collateral - minRequiredCollateral;
+            } else {
+                // Already at/above the origination LTV
+                revert ExceededMaxOriginationLtv(
+                    _calculateCurrentLtv(currentDebt, aStateCache.collateral),
+                    maxOriginationLtv
+                );
+            }
+            aStateCache.collateral = minRequiredCollateral;
+        } else {
+            collateralWithdrawn = collateralAmount;
+            if (aStateCache.collateral < collateralWithdrawn) revert ExceededCollateralBalance();
+            aStateCache.collateral = aStateCache.collateral - collateralWithdrawn;
+        }
+        
+        DLGTE.withdrawUndelegatedGohm(caller, collateralWithdrawn);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
-        aState.collateral = aStateCache.collateral = aStateCache.collateral - collateralAmount;
-        totalCollateral -= collateralAmount;
+        aState.collateral = aStateCache.collateral;
+        totalCollateral -= collateralWithdrawn;
 
         // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
-        uint256 newLtv = _calculateCurrentLtv(
-            _currentAccountDebt(aStateCache, gStateCache, true),
-            aStateCache.collateral
-        );
-        _validateOriginationLtv(newLtv);
+        if (currentDebt > 0) {
+            uint256 newLtv = _calculateCurrentLtv(currentDebt, aStateCache.collateral);
+            _validateOriginationLtv(newLtv);
+        }
 
         // Finally transfer the collateral to the recipient
-        collateralToken.safeTransfer(recipient, collateralAmount);
-        emit CollateralWithdrawn(caller, recipient, collateralAmount);
+        collateralToken.safeTransfer(recipient, collateralWithdrawn);
+        emit CollateralWithdrawn(caller, recipient, collateralWithdrawn);
     }
 
     //============================================================================================//
@@ -835,9 +854,8 @@ It means the liquidation won't happen until that accrued interest pays for gas++
 
         // Apply the new borrow. If type(uint128).max was specified
         // then borrow up to the maxOriginationLtv
-        uint128 accountTotalDebt;
         if (borrowAmount == type(uint128).max) {
-            accountTotalDebt = _maxBorrow(aStateCache.collateral);
+            uint128 accountTotalDebt = _maxDebt(aStateCache.collateral);
             if (accountTotalDebt > currentDebt) {
                 amountBorrowed = accountTotalDebt - currentDebt;
             } else {
@@ -847,16 +865,17 @@ It means the liquidation won't happen until that accrued interest pays for gas++
                     maxOriginationLtv
                 );
             }
+            aStateCache.debtCheckpoint = accountTotalDebt;
         } else {
             amountBorrowed = borrowAmount;
-            accountTotalDebt = currentDebt + amountBorrowed;
+            aStateCache.debtCheckpoint = currentDebt + amountBorrowed;
         }
 
-        if (accountTotalDebt < minDebtRequired)
-            revert MinDebtNotMet(minDebtRequired, accountTotalDebt);
+        if (aStateCache.debtCheckpoint < minDebtRequired)
+            revert MinDebtNotMet(minDebtRequired, aStateCache.debtCheckpoint);
 
         // Update the state
-        aState.debtCheckpoint = aStateCache.debtCheckpoint = accountTotalDebt;
+        aState.debtCheckpoint = aStateCache.debtCheckpoint;
         aState.interestAccumulatorRay = aStateCache.interestAccumulatorRay = gStateCache
             .interestAccumulatorRay;
         totalDebt = gStateCache.totalDebt = gStateCache.totalDebt + amountBorrowed;
@@ -864,7 +883,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         emit Borrow(onBehalfOf, recipient, amountBorrowed);
 
         // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
-        newLtv = _calculateCurrentLtv(accountTotalDebt, aStateCache.collateral);
+        newLtv = _calculateCurrentLtv(aStateCache.debtCheckpoint, aStateCache.collateral);
         _validateOriginationLtv(newLtv);
 
         // Finally, borrow the funds from the Treasury and send the tokens to the recipient.
@@ -968,10 +987,20 @@ It means the liquidation won't happen until that accrued interest pays for gas++
      * @dev Calculate the maximum amount which can be borrowed up to the maxOriginationLtv, given
      * a collateral amount
      */
-    function _maxBorrow(uint128 collateral) private view returns (uint128) {
-        // maxOriginationLtv [USDS/gOHM] * collateral [gOHM]
+    function _maxDebt(uint128 collateral) private view returns (uint128) {
+        // debt [USDS] = maxOriginationLtv [USDS/gOHM] * collateral [gOHM]
         // Round down to get the conservative max debt allowed
         return uint256(maxOriginationLtv).mulWadDown(collateral).encodeUInt128();
+    }
+
+    /**
+     * @dev Calculate the maximum collateral amount which can be withdrawn up to the maxOriginationLtv, given
+     * a current debt amount
+     */
+    function _minCollateral(uint128 debt) private view returns (uint128) {
+        // collateral [gOHM] = debt [USDS] / maxOriginationLtv [USDS/gOHM]
+        // Round up to get the conservative min collateral allowed
+        return uint256(debt).divWadUp(maxOriginationLtv).encodeUInt128();
     }
 
     /**

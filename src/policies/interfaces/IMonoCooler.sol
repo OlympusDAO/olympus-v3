@@ -6,6 +6,7 @@ import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 interface IMonoCooler {
     error ExceededMaxOriginationLtv(uint256 newLtv, uint256 maxOriginationLtv);
+    error ExceededCollateralBalance();
     error MinDebtNotMet(uint256 minRequired, uint256 current);
     error InvalidAddress();
     error InvalidParam();
@@ -169,6 +170,7 @@ interface IMonoCooler {
      *      Use the `delegationRequests` to rescind enough as part of this request.
      * @param collateralAmount The amount of collateral to remove
      *    - MUST be greater than zero
+     *    - If set to type(uint128).max then withdraw the max amount up to maxOriginationLtv
      * @param recipient Send the gOHM collateral to a specified recipient address.
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply before removing collateral.
@@ -178,10 +180,10 @@ interface IMonoCooler {
      *      the account has collateral for.
      */
     function withdrawCollateral(
-        uint128 collateralAmount, // @todo should all of these be uint256 and just revert instead?
+        uint128 collateralAmount,
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external;
+    ) external returns (uint128 collateralWithdrawn);
 
     //============================================================================================//
     //                                       BORROW/REPAY                                         //
@@ -297,7 +299,7 @@ interface IMonoCooler {
         uint128 collateralAmount,
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint128 amountRepaid);
+    ) external returns (uint128 amountRepaid, uint128 withdrawCollateral);
 
     /**
      * @notice Apply a set of delegation requests on behalf of a given user.

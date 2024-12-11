@@ -112,7 +112,7 @@ abstract contract MonoCoolerBaseTest is Test {
     function checkGlobalState(
         uint128 expectedTotalDebt,
         uint256 expectedInterestAccumulator
-    ) internal {
+    ) internal view {
         (uint128 totalDebt, uint256 interestAccumulatorRay) = cooler.globalState();
         assertEq(totalDebt, expectedTotalDebt, "globalState::totalDebt");
         assertEq(
@@ -154,7 +154,7 @@ abstract contract MonoCoolerBaseTest is Test {
         vm.stopPrank();
     }
 
-    function expectNoDelegations(address account) internal {
+    function expectNoDelegations(address account) internal view {
         DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
             account,
             0,
@@ -167,7 +167,7 @@ abstract contract MonoCoolerBaseTest is Test {
         address account,
         address expectedDelegate,
         uint256 expectedDelegationAmount
-    ) internal {
+    ) internal view {
         DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
             account,
             0,
@@ -193,7 +193,7 @@ abstract contract MonoCoolerBaseTest is Test {
         uint256 expectedDelegationAmount1,
         address expectedDelegate2,
         uint256 expectedDelegationAmount2
-    ) internal {
+    ) internal view {
         DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
             account,
             0,
@@ -230,7 +230,7 @@ abstract contract MonoCoolerBaseTest is Test {
         uint256 expectedDelegatedGOhm,
         uint256 expectedNumDelegateAddresses,
         uint256 expectedMaxAllowedDelegateAddresses
-    ) internal {
+    ) internal view {
         (
             uint256 totalGOhm,
             uint256 delegatedGOhm,
@@ -258,7 +258,7 @@ abstract contract MonoCoolerBaseTest is Test {
     function checkAccountState(
         address account,
         IMonoCooler.AccountState memory expectedAccountState
-    ) internal {
+    ) internal view {
         IMonoCooler.AccountState memory aState = cooler.accountState(account);
         assertEq(aState.collateral, expectedAccountState.collateral, "AccountState::collateral");
         assertEq(
@@ -276,7 +276,7 @@ abstract contract MonoCoolerBaseTest is Test {
     function checkAccountPosition(
         address account,
         IMonoCooler.AccountPosition memory expectedPosition
-    ) internal {
+    ) internal view {
         IMonoCooler.AccountPosition memory position = cooler.accountPosition(account);
         assertEq(position.collateral, expectedPosition.collateral, "AccountPosition::collateral");
         assertEq(
@@ -320,7 +320,7 @@ abstract contract MonoCoolerBaseTest is Test {
     function checkLiquidityStatus(
         address account,
         IMonoCooler.LiquidationStatus memory expectedLiquidationStatus
-    ) internal {
+    ) internal view {
         address[] memory accounts = new address[](1);
         accounts[0] = account;
         IMonoCooler.LiquidationStatus[] memory status = cooler.computeLiquidity(accounts);
