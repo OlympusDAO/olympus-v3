@@ -16,6 +16,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockGohm} from "src/test/mocks/MockGohm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
+import {MockConvertibleDebtAuctioneer} from "src/test/mocks/MockConvertibleDebtAuctioneer.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -44,7 +45,7 @@ contract EmissionManagerTest is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermSDA internal auctioneer;
+    BondFixedTermSDA internal bondAuctioneer;
     MockOhm internal ohm;
     MockGohm internal gohm;
     MockERC20 internal reserve;
@@ -59,6 +60,7 @@ contract EmissionManagerTest is Test {
     OlympusClearinghouseRegistry internal CHREG;
 
     MockClearinghouse internal clearinghouse;
+    MockConvertibleDebtAuctioneer internal cdAuctioneer;
     RolesAdmin internal rolesAdmin;
     EmissionManager internal emissionManager;
 
@@ -69,6 +71,8 @@ contract EmissionManagerTest is Test {
     uint48 internal restartTimeframe = 1 days;
     uint256 internal changeBy = 1e5; // 0.01% change per execution
     uint48 internal changeDuration = 2; // 2 executions
+    uint256 internal tickSizeScalar = 1e18; // 100%
+    uint256 internal minPriceScalar = 1e18; // 100%
 
     // test cases
     //
@@ -119,7 +123,7 @@ contract EmissionManagerTest is Test {
     //      [X] it returns 0
     //    [X] when price is greater than backing
     //      [X] it returns the (price - backing) / backing
-    // [X] getNextSale
+    // [X] getNextEmission
     //    [X] when the premium is less than the minimum premium
     //       [X] it returns the premium, 0, and 0
     //    [X] when the premium is greater than or equal to the minimum premium
@@ -205,11 +209,11 @@ contract EmissionManagerTest is Test {
     //    [X] when the caller doesn't have the emissions_admin role
     //       [X] it reverts
     //    [X] when the caller has the emissions_admin role
-    //       [X] when the new auctioneer address is the zero address
+    //       [X] when the new bondAuctioneer address is the zero address
     //          [X] it reverts
     //       [X] when the new teller address is the zero address
     //          [X] it reverts
-    //       [X] it sets the auctioneer address
+    //       [X] it sets the bondAuctioneer address
     //       [X] it sets the teller address
 
     function setUp() public {
@@ -227,11 +231,11 @@ contract EmissionManagerTest is Test {
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
+            bondAuctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
-            /// Register auctioneer on the bond system
+            /// Register bondAuctioneer on the bond system
             vm.prank(guardian);
-            aggregator.registerAuctioneer(auctioneer);
+            aggregator.registerAuctioneer(bondAuctioneer);
         }
 
         {
@@ -269,6 +273,9 @@ contract EmissionManagerTest is Test {
             /// Deploy ROLES administrator
             rolesAdmin = new RolesAdmin(kernel);
 
+            // Deploy the mock CD auctioneer
+            cdAuctioneer = new MockConvertibleDebtAuctioneer(kernel);
+
             // Deploy the emission manager
             emissionManager = new EmissionManager(
                 kernel,
@@ -276,7 +283,8 @@ contract EmissionManagerTest is Test {
                 address(gohm),
                 address(reserve),
                 address(sReserve),
-                address(auctioneer),
+                address(bondAuctioneer),
+                address(cdAuctioneer),
                 address(teller)
             );
         }
@@ -294,6 +302,7 @@ contract EmissionManagerTest is Test {
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(emissionManager));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+            kernel.executeAction(Actions.ActivatePolicy, address(cdAuctioneer));
         }
         {
             /// Configure access control
@@ -332,11 +341,18 @@ contract EmissionManagerTest is Test {
 
         // Initialize the emissions manager
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+        emissionManager.initialize(
+            baseEmissionRate,
+            minimumPremium,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
 
-        // Approve the emission manager to use a bond callback on the auctioneer
+        // Approve the emission manager to use a bond callback on the bondAuctioneer
         vm.prank(guardian);
-        auctioneer.setCallbackAuthStatus(address(emissionManager), true);
+        bondAuctioneer.setCallbackAuthStatus(address(emissionManager), true);
 
         // Total Reserves = $50M + $50 M = $100M
         // Total Supply = 10,000,000 OHM
@@ -579,7 +595,7 @@ contract EmissionManagerTest is Test {
         // Verify the bond market parameters
         // Check that the market params are correct
         {
-            uint256 marketPrice = auctioneer.marketPrice(nextBondMarketId);
+            uint256 marketPrice = bondAuctioneer.marketPrice(nextBondMarketId);
             (
                 address owner,
                 ERC20 payoutToken,
@@ -593,7 +609,7 @@ contract EmissionManagerTest is Test {
                 ,
                 ,
                 uint256 scale
-            ) = auctioneer.markets(nextBondMarketId);
+            ) = bondAuctioneer.markets(nextBondMarketId);
 
             assertEq(owner, address(emissionManager), "Owner");
             assertEq(address(payoutToken), address(ohm), "Payout token");
@@ -671,7 +687,7 @@ contract EmissionManagerTest is Test {
         // Verify the bond market parameters
         // Check that the market params are correct
         {
-            uint256 marketPrice = auctioneer.marketPrice(nextBondMarketId);
+            uint256 marketPrice = bondAuctioneer.marketPrice(nextBondMarketId);
             (
                 address owner,
                 ERC20 payoutToken,
@@ -685,7 +701,7 @@ contract EmissionManagerTest is Test {
                 ,
                 ,
                 uint256 scale
-            ) = auctioneer.markets(nextBondMarketId);
+            ) = bondAuctioneer.markets(nextBondMarketId);
 
             assertEq(owner, address(emissionManager), "Owner");
             assertEq(address(payoutToken), address(ohm), "Payout token");
@@ -765,7 +781,7 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the capacity of the bond market uses the new base rate
         assertEq(
-            auctioneer.currentCapacity(nextBondMarketId),
+            bondAuctioneer.currentCapacity(nextBondMarketId),
             expectedCapacity,
             "Capacity should be updated"
         );
@@ -827,7 +843,7 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the capacity of the bond market uses the new base rate
         assertEq(
-            auctioneer.currentCapacity(nextBondMarketId),
+            bondAuctioneer.currentCapacity(nextBondMarketId),
             expectedCapacity,
             "Capacity should be updated"
         );
@@ -997,7 +1013,7 @@ contract EmissionManagerTest is Test {
 
         // Store initial backing value
         uint256 bidAmount = 1000e18;
-        uint256 expectedPayout = auctioneer.payoutFor(bidAmount, nextBondMarketId, address(0));
+        uint256 expectedPayout = bondAuctioneer.payoutFor(bidAmount, nextBondMarketId, address(0));
         uint256 expectedBacking;
         {
             uint256 reserves = emissionManager.getReserves();
@@ -1085,7 +1101,7 @@ contract EmissionManagerTest is Test {
     {
         // We created a market, confirm it is active
         uint256 id = emissionManager.activeMarketId();
-        assertTrue(auctioneer.isLive(id));
+        assertTrue(bondAuctioneer.isLive(id));
 
         // Check that the contract is locally active
         assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
@@ -1111,7 +1127,7 @@ contract EmissionManagerTest is Test {
         );
 
         // Check that the market is no longer active
-        assertFalse(auctioneer.isLive(id));
+        assertFalse(bondAuctioneer.isLive(id));
     }
 
     // restart tests
@@ -1193,7 +1209,14 @@ contract EmissionManagerTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(rando_);
-        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+        emissionManager.initialize(
+            baseEmissionRate,
+            minimumPremium,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
     }
 
     function test_initialize_whenAlreadyActive_reverts() public {
@@ -1201,7 +1224,14 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("AlreadyActive()");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+        emissionManager.initialize(
+            baseEmissionRate,
+            minimumPremium,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
     }
 
     function test_initialize_whenRestartTimeframeNotElapsed_reverts(
@@ -1226,7 +1256,14 @@ contract EmissionManagerTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, restartTimeframe);
+        emissionManager.initialize(
+            baseEmissionRate,
+            minimumPremium,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
     }
 
     function test_initialize_whenBaseEmissionRateZero_reverts()
@@ -1240,7 +1277,14 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "baseEmissionRate");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(0, minimumPremium, backing, restartTimeframe);
+        emissionManager.initialize(
+            0,
+            minimumPremium,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
     }
 
     function test_initialize_whenMinimumPremiumZero_reverts()
@@ -1254,7 +1298,14 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "minimumPremium");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionRate, 0, backing, restartTimeframe);
+        emissionManager.initialize(
+            baseEmissionRate,
+            0,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
     }
 
     function test_initialize_whenBackingZero_reverts()
@@ -1268,7 +1319,14 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "backing");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionRate, minimumPremium, 0, restartTimeframe);
+        emissionManager.initialize(
+            baseEmissionRate,
+            minimumPremium,
+            0,
+            tickSizeScalar,
+            minPriceScalar,
+            restartTimeframe
+        );
     }
 
     function test_initialize_whenRestartTimeframeZero_reverts()
@@ -1282,7 +1340,14 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "restartTimeframe");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(baseEmissionRate, minimumPremium, backing, 0);
+        emissionManager.initialize(
+            baseEmissionRate,
+            minimumPremium,
+            backing,
+            tickSizeScalar,
+            minPriceScalar,
+            0
+        );
     }
 
     function test_initialize_success() public givenShutdown givenRestartTimeframeElapsed {
@@ -1296,6 +1361,8 @@ contract EmissionManagerTest is Test {
             baseEmissionRate + 1,
             minimumPremium + 1,
             backing + 1,
+            tickSizeScalar,
+            minPriceScalar,
             restartTimeframe + 1
         );
 
@@ -1537,7 +1604,7 @@ contract EmissionManagerTest is Test {
     }
 
     function test_setBondContracts_whenBondAuctioneerZero_reverts() public {
-        // Try to set bond auctioneer to 0, expect revert
+        // Try to set bondAuctioneer to 0, expect revert
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "auctioneer");
         vm.expectRevert(err);
         vm.prank(guardian);
@@ -1559,9 +1626,9 @@ contract EmissionManagerTest is Test {
 
         // Confirm new bond contracts
         assertEq(
-            address(emissionManager.auctioneer()),
+            address(emissionManager.bondAuctioneer()),
             address(1),
-            "Bond auctioneer should be updated"
+            "BondAuctioneer should be updated"
         );
         assertEq(emissionManager.teller(), address(1), "Bond teller should be updated");
     }
@@ -1640,11 +1707,12 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    // getNextSale tests
+    // getNextEmission tests
 
     function test_getNextSale_whenPremiumBelowMinimum() public givenPremiumBelowMinimum {
         // Get the next sale data
-        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager.getNextSale();
+        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager
+            .getNextEmission();
 
         // Expect that the premium is as set in the setup
         // and the other two values are zero
@@ -1655,7 +1723,8 @@ contract EmissionManagerTest is Test {
 
     function test_getNextSale_whenPremiumEqualToMinimum() public givenPremiumEqualToMinimum {
         // Get the next sale data
-        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager.getNextSale();
+        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager
+            .getNextEmission();
 
         uint256 expectedEmission = 10_000e9; // 10,000 OHM (as described in setup)
 
@@ -1668,7 +1737,8 @@ contract EmissionManagerTest is Test {
 
     function test_getNextSale_whenPremiumAboveMinimum() public givenPremiumAboveMinimum {
         // Get the next sale data
-        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager.getNextSale();
+        (uint256 premium, uint256 emissionRate, uint256 emission) = emissionManager
+            .getNextEmission();
 
         uint256 expectedEmission = 12_000e9; // 12,000 OHM (as described in setup)
 
