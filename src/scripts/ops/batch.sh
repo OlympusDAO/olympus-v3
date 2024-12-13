@@ -3,7 +3,7 @@
 # Run a multisig batch
 #
 # Usage:
-# ./batch.sh --contract <contract-name> --batch <batch-name> --broadcast <true|false> --testnet <true|false> --env <env-file>
+# ./batch.sh --contract <contract-name> --batch <batch-name> --ledger <true|false> --broadcast <true|false> --testnet <true|false> --env <env-file>
 #
 # Environment variables:
 # RPC_URL
@@ -36,6 +36,7 @@ set +a # Disable automatic export
 # Set sane defaults
 BROADCAST=${broadcast:-false}
 TESTNET=${testnet:-false}
+LEDGER=${ledger:-false}
 
 # Check if contract is set
 if [ -z "$contract" ]; then
@@ -61,12 +62,25 @@ if [ -z "$SIGNER_ADDRESS" ]; then
     exit 1
 fi
 
+# Validate that LEDGER is set to true or false
+if [ "$LEDGER" != "true" ] && [ "$LEDGER" != "false" ]; then
+    echo "Invalid value for LEDGER. Must be true or false."
+    exit 1
+fi
+
+# Set the LEDGER_FLAG
+LEDGER_FLAG=""
+if [ "$LEDGER" == "true" ]; then
+    LEDGER_FLAG="--ledger"
+fi
+
 echo "Contract name: $contract"
 echo "Batch name: $batch"
 echo "Using RPC at URL: $RPC_URL"
 echo "Using signer address: $SIGNER_ADDRESS"
 echo "Broadcasting: $BROADCAST"
 echo "Using testnet: $TESTNET"
+echo "Using ledger: $LEDGER"
 
 # Execute the batch
-TESTNET=$TESTNET forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL
+TESTNET=$TESTNET forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL $LEDGER_FLAG
