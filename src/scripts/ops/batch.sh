@@ -9,6 +9,11 @@
 # RPC_URL
 # SIGNER_ADDRESS
 # TESTNET
+# CHAIN
+# DAO_MS
+# POLICY_MS
+# EMERGENCY_MS
+# LEDGER_MNEMONIC_INDEX (ledger only)
 
 # Exit if any error occurs
 set -e
@@ -68,19 +73,59 @@ if [ "$LEDGER" != "true" ] && [ "$LEDGER" != "false" ]; then
     exit 1
 fi
 
+# If LEDGER is true, validate that MNEMONIC_INDEX is set
+if [ "$LEDGER" == "true" ] && [ -z "$LEDGER_MNEMONIC_INDEX" ]; then
+    echo "No LEDGER_MNEMONIC_INDEX provided. Specify the LEDGER_MNEMONIC_INDEX in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that CHAIN is set
+if [ -z "$CHAIN" ]; then
+    echo "No chain provided. Specify the CHAIN in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that DAO_MS is set
+if [ -z "$DAO_MS" ]; then
+    echo "No DAO MS provided. Specify the DAO_MS in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that POLICY_MS is set
+if [ -z "$POLICY_MS" ]; then
+    echo "No POLICY MS provided. Specify the POLICY_MS in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that EMERGENCY_MS is set
+if [ -z "$EMERGENCY_MS" ]; then
+    echo "No EMERGENCY MS provided. Specify the EMERGENCY_MS in the $ENV_FILE file."
+    exit 1
+fi
+
 # Set the LEDGER_FLAG
 LEDGER_FLAG=""
+WALLET_TYPE_ENV=""
+LEDGER_MNEMONIC_INDEX_ENV=""
 if [ "$LEDGER" == "true" ]; then
     LEDGER_FLAG="--ledger"
+    WALLET_TYPE_ENV="WALLET_TYPE=ledger"
+    LEDGER_MNEMONIC_INDEX_ENV="MNEMONIC_INDEX=$LEDGER_MNEMONIC_INDEX"
+else
+    WALLET_TYPE_ENV="WALLET_TYPE=local"
 fi
 
 echo "Contract name: $contract"
 echo "Batch name: $batch"
+echo "Using chain: $CHAIN"
 echo "Using RPC at URL: $RPC_URL"
 echo "Using signer address: $SIGNER_ADDRESS"
+echo "Using DAO MS: $DAO_MS"
+echo "Using POLICY MS: $POLICY_MS"
+echo "Using EMERGENCY MS: $EMERGENCY_MS"
 echo "Broadcasting: $BROADCAST"
 echo "Using testnet: $TESTNET"
 echo "Using ledger: $LEDGER"
 
 # Execute the batch
-TESTNET=$TESTNET forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL $LEDGER_FLAG
+TESTNET=$TESTNET $WALLET_TYPE_ENV $LEDGER_MNEMONIC_INDEX_ENV forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL $LEDGER_FLAG
