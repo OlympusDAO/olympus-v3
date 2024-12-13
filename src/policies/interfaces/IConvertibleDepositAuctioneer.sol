@@ -4,6 +4,12 @@ pragma solidity >=0.8.0;
 interface IConvertibleDepositAuctioneer {
     // ========== EVENTS ========== //
 
+    event AuctionParametersUpdated(uint256 newTarget, uint256 newSize, uint256 newMinPrice);
+
+    event TimeToExpiryUpdated(uint256 newTimeToExpiry);
+
+    event TickStepUpdated(uint256 newTickStep);
+
     // ========== ERRORS ========== //
 
     error CDAuctioneer_InvalidParams(string reason);
@@ -30,10 +36,10 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Tracks auction activity for a given day
     ///
     /// @param  deposits        total deposited for day
-    /// @param  convertable     total convertable for day
+    /// @param  convertible     total convertible for day
     struct Day {
         uint256 deposits;
-        uint256 convertable;
+        uint256 convertible;
     }
 
     /// @notice Information about a tick
@@ -47,60 +53,59 @@ interface IConvertibleDepositAuctioneer {
 
     // ========== AUCTION ========== //
 
-    /// @notice Use a deposit to bid for CDs
+    /// @notice Deposit reserve tokens to bid for convertible deposit tokens
     ///
-    /// @param  deposit     amount of reserve tokens
-    /// @return convertable amount of convertable tokens
-    function bid(uint256 deposit) external returns (uint256 convertable);
+    /// @param  deposit_        Amount of reserve tokens to deposit
+    /// @return convertible_    Amount of convertible tokens minted
+    function bid(uint256 deposit_) external returns (uint256 convertible_);
 
-    // ========== VIEW ========== //
-
-    /// @notice Get the current tick
+    /// @notice Get the amount of convertible deposit tokens issued for a deposit
     ///
-    /// @return tick info in Tick struct
+    /// @param  deposit_        Amount of reserve tokens
+    /// @return convertible_    Amount of convertible tokens
+    function previewBid(uint256 deposit_) external view returns (uint256 convertible_);
+
+    // ========== STATE VARIABLES ========== //
+
+    /// @notice Get the current tick of the auction
+    ///
+    /// @return tick Tick info
     function getCurrentTick() external view returns (Tick memory tick);
 
-    /// @notice Get the current state
+    /// @notice Get the current state of the auction
     ///
-    /// @return state info in State struct
+    /// @return state State info
     function getState() external view returns (State memory state);
 
     /// @notice Get the auction activity for the current day
     ///
-    /// @return day info in Day struct
+    /// @return day Day info
     function getDay() external view returns (Day memory day);
-
-    /// @notice Get the amount of convertable tokens for a deposit at a given price
-    ///
-    /// @param  deposit     amount of reserve tokens
-    /// @param  price       price of the tick
-    /// @return convertable amount of convertable tokens
-    function convertFor(uint256 deposit, uint256 price) external view returns (uint256 convertable);
 
     // ========== ADMIN ========== //
 
     /// @notice Update the auction parameters
     /// @dev    only callable by the auction admin
     ///
-    /// @param  newTarget     new target sale per day
-    /// @param  newSize       new size per tick
-    /// @param  newMinPrice   new minimum tick price
-    /// @return remainder     amount of ohm not sold
-    function beat(
-        uint256 newTarget,
-        uint256 newSize,
-        uint256 newMinPrice
+    /// @param  newTarget_     new target sale per day
+    /// @param  newSize_       new size per tick
+    /// @param  newMinPrice_   new minimum tick price
+    /// @return remainder      amount of ohm not sold
+    function setAuctionParameters(
+        uint256 newTarget_,
+        uint256 newSize_,
+        uint256 newMinPrice_
     ) external returns (uint256 remainder);
 
     /// @notice Set the time to expiry
     /// @dev    only callable by the admin
     ///
-    /// @param  newTime     new time to expiry
-    function setTimeToExpiry(uint256 newTime) external;
+    /// @param  newTime_     new time to expiry
+    function setTimeToExpiry(uint256 newTime_) external;
 
     /// @notice Set the tick step
     /// @dev    only callable by the admin
     ///
-    /// @param  newStep     new tick step
-    function setTickStep(uint256 newStep) external;
+    /// @param  newStep_     new tick step
+    function setTickStep(uint256 newStep_) external;
 }

@@ -13,16 +13,6 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 import {CDFacility} from "./CDFacility.sol";
 
-interface CDRC20 {
-    function mint(address to, uint256 amount) external;
-
-    function burn(address from, uint256 amount) external;
-
-    function convertFor(uint256 amount) external view returns (uint256);
-
-    function expiry() external view returns (uint256);
-}
-
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
     using FullMath for uint256;
 
@@ -46,6 +36,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         if (cdFacility_ == address(0))
             revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
 
+        // TODO set decimals
+
         cdFacility = CDFacility(cdFacility_);
     }
 
@@ -66,7 +58,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function bid(uint256 deposit) external override returns (uint256 convertable) {
+    function bid(uint256 deposit) external override returns (uint256 convertible) {
         // update state
         currentTick = getCurrentTick();
         state.lastUpdate = block.timestamp;
@@ -74,7 +66,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         // iterate until user has no more reserves to bid
         while (deposit > 0) {
             // handle spent/capacity for tick
-            uint256 amount = currentTick.capacity < convertFor(deposit, currentTick.price)
+            uint256 amount = currentTick.capacity < _convertFor(deposit, currentTick.price)
                 ? state.tickSize
                 : deposit;
             if (amount != state.tickSize) currentTick.capacity -= amount;
@@ -82,14 +74,20 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
 
             // decrement bid and increment tick price
             deposit -= amount;
-            convertable += convertFor(amount, currentTick.price);
+            convertible += _convertFor(amount, currentTick.price);
         }
 
         today.deposits += deposit;
-        today.convertable += convertable;
+        today.convertible += convertible;
 
         // mint amount of CD token
-        cdFacility.addNewCD(msg.sender, deposit, convertable, block.timestamp + state.timeToExpiry);
+        cdFacility.addNewCD(msg.sender, deposit, convertible, block.timestamp + state.timeToExpiry);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function previewBid(uint256 deposit) external view override returns (uint256 convertible) {
+        // TODO
+        return 0;
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -120,8 +118,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         tick.capacity = newCapacity;
     }
 
-    /// @inheritdoc IConvertibleDepositAuctioneer
-    function convertFor(uint256 deposit, uint256 price) public view override returns (uint256) {
+    function _convertFor(uint256 deposit, uint256 price) internal view returns (uint256) {
         return (deposit * decimals) / price;
     }
 
@@ -137,17 +134,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice update auction parameters
-    /// @dev    only callable by the auction admin
-    /// @param  newTarget new target sale per day
-    /// @param  newSize new size per tick
-    /// @param  newMinPrice new minimum tick price
-    function beat(
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function setAuctionParameters(
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
     ) external override onlyRole("CD_Auction_Admin") returns (uint256 remainder) {
-        remainder = (state.target > today.convertable) ? state.target - today.convertable : 0;
+        remainder = (state.target > today.convertible) ? state.target - today.convertible : 0;
 
         state = State(
             newTarget,
@@ -159,14 +152,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         );
     }
 
-    /// @notice update time between creation and expiry of deposit
-    /// @param  newTime number of seconds
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function setTimeToExpiry(uint256 newTime) external override onlyRole("CD_Admin") {
         state.timeToExpiry = newTime;
     }
 
-    /// @notice update change between ticks
-    /// @param  newStep percentage in decimal terms
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function setTickStep(uint256 newStep) external override onlyRole("CD_Admin") {
         state.tickStep = newStep;
     }

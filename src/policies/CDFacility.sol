@@ -15,8 +15,6 @@ import {IConvertibleDepositToken} from "src/policies/interfaces/IConvertibleDepo
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
-// TODO extract CDFacility interface
-
 contract CDFacility is Policy, RolesConsumer {
     using FullMath for uint256;
 
@@ -45,7 +43,6 @@ contract CDFacility is Policy, RolesConsumer {
     // Tokens
     ERC20 public reserve;
     ERC4626 public sReserve;
-    // TODO re-think whether this should use a factory pattern instead
     IConvertibleDepositToken public cdUSDS;
 
     // State variables
@@ -62,10 +59,6 @@ contract CDFacility is Policy, RolesConsumer {
 
     // ========== SETUP ========== //
 
-    // TODO input approved convertible debt tokens in constructor, to allow for migration
-
-    // TODO add cdUSDS parameter
-
     constructor(
         Kernel kernel_,
         address reserve_,
@@ -79,6 +72,8 @@ contract CDFacility is Policy, RolesConsumer {
 
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
+
+        // TODO shift to module and dependency injection
         cdUSDS = IConvertibleDepositToken(cdUSDS_);
     }
 
@@ -130,6 +125,8 @@ contract CDFacility is Policy, RolesConsumer {
 
         // store convertable deposit info and mint cdUSDS
         cdInfo[user].push(CD(amount, convertable, expiry));
+
+        // TODO consider if the ERC20 should custody the deposit token
         cdUSDS.mint(user, amount);
     }
 
