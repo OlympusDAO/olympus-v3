@@ -32,12 +32,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getDay() external view override returns (Day memory day) {}
 
-    function convertFor(
-        uint256 deposit,
-        uint256 price
-    ) external view override returns (uint256 convertable) {}
+    function previewBid(uint256 deposit) external view override returns (uint256 convertable) {}
 
-    function beat(
+    function setAuctionParameters(
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice

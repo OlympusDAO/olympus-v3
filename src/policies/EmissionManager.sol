@@ -172,7 +172,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         // It then calculates the amount to sell for the coming day
         (, , uint256 emission) = getNextEmission();
 
-        uint256 remainder = cdAuctioneer.beat(
+        uint256 remainder = cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),
             getMinPriceFor(PRICE.getCurrentPrice())
