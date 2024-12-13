@@ -103,16 +103,13 @@ if [ -z "$EMERGENCY_MS" ]; then
     exit 1
 fi
 
-# Set the LEDGER_FLAG
-LEDGER_FLAG=""
-WALLET_TYPE_ENV=""
-LEDGER_MNEMONIC_INDEX_ENV=""
+# Set the variables for using a Ledger wallet
+# Export variables that BatchScript.sol uses
 if [ "$LEDGER" == "true" ]; then
-    LEDGER_FLAG="--ledger"
-    WALLET_TYPE_ENV="WALLET_TYPE=ledger"
-    LEDGER_MNEMONIC_INDEX_ENV="MNEMONIC_INDEX=$LEDGER_MNEMONIC_INDEX"
+    export WALLET_TYPE="ledger"
+    export MNEMONIC_INDEX="$LEDGER_MNEMONIC_INDEX"
 else
-    WALLET_TYPE_ENV="WALLET_TYPE=local"
+    export WALLET_TYPE="local"
 fi
 
 echo "Contract name: $contract"
@@ -128,4 +125,4 @@ echo "Using testnet: $TESTNET"
 echo "Using ledger: $LEDGER"
 
 # Execute the batch
-TESTNET=$TESTNET $WALLET_TYPE_ENV $LEDGER_MNEMONIC_INDEX_ENV forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL $LEDGER_FLAG
+TESTNET=$TESTNET forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL
