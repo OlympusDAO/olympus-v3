@@ -5,7 +5,7 @@ import {IERC20} from "openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 
 // TODO see if there is a standard interface for this
 
-interface IConvertibleDebtToken is IERC20 {
+interface IConvertibleDepositToken is IERC20 {
     function mint(address to, uint256 amount) external;
 
     function burn(address from, uint256 amount) external;

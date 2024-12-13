@@ -3,9 +3,9 @@ pragma solidity 0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
-import {IConvertibleDebtAuctioneer} from "src/interfaces/IConvertibleDebtAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
-contract MockConvertibleDebtAuctioneer is IConvertibleDebtAuctioneer, Policy, RolesConsumer {
+contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {

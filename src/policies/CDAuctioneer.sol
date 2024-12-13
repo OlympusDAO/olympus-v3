@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
-import {IConvertibleDebtAuctioneer} from "src/interfaces/IConvertibleDebtAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
@@ -23,7 +23,7 @@ interface CDRC20 {
     function expiry() external view returns (uint256);
 }
 
-contract CDAuctioneer is IConvertibleDebtAuctioneer, Policy, RolesConsumer {
+contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
@@ -65,7 +65,7 @@ contract CDAuctioneer is IConvertibleDebtAuctioneer, Policy, RolesConsumer {
 
     // ========== AUCTION ========== //
 
-    /// @inheritdoc IConvertibleDebtAuctioneer
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function bid(uint256 deposit) external override returns (uint256 convertable) {
         // update state
         currentTick = getCurrentTick();
@@ -94,7 +94,7 @@ contract CDAuctioneer is IConvertibleDebtAuctioneer, Policy, RolesConsumer {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc IConvertibleDebtAuctioneer
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function getCurrentTick() public view override returns (Tick memory tick) {
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
@@ -120,17 +120,17 @@ contract CDAuctioneer is IConvertibleDebtAuctioneer, Policy, RolesConsumer {
         tick.capacity = newCapacity;
     }
 
-    /// @inheritdoc IConvertibleDebtAuctioneer
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function convertFor(uint256 deposit, uint256 price) public view override returns (uint256) {
         return (deposit * decimals) / price;
     }
 
-    /// @inheritdoc IConvertibleDebtAuctioneer
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function getState() external view override returns (State memory) {
         return state;
     }
 
-    /// @inheritdoc IConvertibleDebtAuctioneer
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function getDay() external view override returns (Day memory) {
         return today;
     }

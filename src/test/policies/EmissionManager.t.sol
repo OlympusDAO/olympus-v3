@@ -16,7 +16,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockGohm} from "src/test/mocks/MockGohm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
-import {MockConvertibleDebtAuctioneer} from "src/test/mocks/MockConvertibleDebtAuctioneer.sol";
+import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -60,7 +60,7 @@ contract EmissionManagerTest is Test {
     OlympusClearinghouseRegistry internal CHREG;
 
     MockClearinghouse internal clearinghouse;
-    MockConvertibleDebtAuctioneer internal cdAuctioneer;
+    MockConvertibleDepositAuctioneer internal cdAuctioneer;
     RolesAdmin internal rolesAdmin;
     EmissionManager internal emissionManager;
 
@@ -274,7 +274,7 @@ contract EmissionManagerTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             // Deploy the mock CD auctioneer
-            cdAuctioneer = new MockConvertibleDebtAuctioneer(kernel);
+            cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel);
 
             // Deploy the emission manager
             emissionManager = new EmissionManager(

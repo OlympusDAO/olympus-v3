@@ -11,7 +11,7 @@ import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-import {IConvertibleDebtToken} from "src/interfaces/IConvertibleDebtToken.sol";
+import {IConvertibleDepositToken} from "src/policies/interfaces/IConvertibleDepositToken.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
@@ -46,7 +46,7 @@ contract CDFacility is Policy, RolesConsumer {
     ERC20 public reserve;
     ERC4626 public sReserve;
     // TODO re-think whether this should use a factory pattern instead
-    IConvertibleDebtToken public cdUSDS;
+    IConvertibleDepositToken public cdUSDS;
 
     // State variables
     uint256 public totalDeposits;
@@ -79,7 +79,7 @@ contract CDFacility is Policy, RolesConsumer {
 
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
-        cdUSDS = IConvertibleDebtToken(cdUSDS_);
+        cdUSDS = IConvertibleDepositToken(cdUSDS_);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {

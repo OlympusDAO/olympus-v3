@@ -227,8 +227,10 @@ contract OlympusDeploy is Script {
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
-        selectorMap["ConvertibleDebtAuctioneer"] = this._deployConvertibleDebtAuctioneer.selector;
-        selectorMap["ConvertibleDebtFacility"] = this._deployConvertibleDebtFacility.selector;
+        selectorMap["ConvertibleDepositAuctioneer"] = this
+            ._deployConvertibleDepositAuctioneer
+            .selector;
+        selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -318,8 +320,8 @@ contract OlympusDeploy is Script {
         yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
-        cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDebtAuctioneer"));
-        cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDebtFacility"));
+        cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
+        cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1233,35 +1235,38 @@ contract OlympusDeploy is Script {
         return address(emissionManager);
     }
 
-    function _deployConvertibleDebtAuctioneer(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDebtAuctioneer
+    function _deployConvertibleDepositAuctioneer(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositAuctioneer
 
         // Log dependencies
-        console2.log("ConvertibleDebtAuctioneer parameters:");
+        console2.log("ConvertibleDepositAuctioneer parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   cdFacility", address(cdFacility));
 
-        // Deploy ConvertibleDebtAuctioneer
+        // Deploy ConvertibleDepositAuctioneer
         vm.broadcast();
         cdAuctioneer = new CDAuctioneer(kernel, address(cdFacility));
-        console2.log("ConvertibleDebtAuctioneer deployed at:", address(cdAuctioneer));
+        console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);
     }
 
-    function _deployConvertibleDebtFacility(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDebtFacility
+    function _deployConvertibleDepositFacility(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositFacility
 
         // Log dependencies
-        console2.log("ConvertibleDebtFacility parameters:");
+        console2.log("ConvertibleDepositFacility parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   reserve", address(reserve));
         console2.log("   sReserve", address(sReserve));
 
-        // Deploy ConvertibleDebtFacility
+        // TODO add deployment of cdUSDS
+        address cdUSDS = address(0);
+
+        // Deploy ConvertibleDepositFacility
         vm.broadcast();
-        cdFacility = new CDFacility(kernel, address(reserve), address(sReserve));
-        console2.log("ConvertibleDebtFacility deployed at:", address(cdFacility));
+        cdFacility = new CDFacility(kernel, address(reserve), address(sReserve), cdUSDS);
+        console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
 
         return address(cdFacility);
     }

@@ -19,7 +19,7 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
-import {IConvertibleDebtAuctioneer} from "src/interfaces/IConvertibleDebtAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 interface BurnableERC20 {
     function burn(uint256 amount) external;
@@ -56,7 +56,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     // External contracts
     IBondSDA public bondAuctioneer;
     address public teller;
-    IConvertibleDebtAuctioneer public cdAuctioneer;
+    IConvertibleDepositAuctioneer public cdAuctioneer;
 
     // Manager variables
     uint256 public baseEmissionRate;
@@ -113,7 +113,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
         bondAuctioneer = IBondSDA(bondAuctioneer_);
-        cdAuctioneer = IConvertibleDebtAuctioneer(cdAuctioneer_);
+        cdAuctioneer = IConvertibleDepositAuctioneer(cdAuctioneer_);
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
@@ -471,7 +471,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         // Auction contract cannot be set to the zero address
         if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
 
-        cdAuctioneer = IConvertibleDebtAuctioneer(cdAuctioneer_);
+        cdAuctioneer = IConvertibleDepositAuctioneer(cdAuctioneer_);
     }
 
     /// @notice allow governance to set the CD tick size scalar
