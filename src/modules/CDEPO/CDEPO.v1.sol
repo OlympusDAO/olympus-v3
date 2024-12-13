@@ -5,7 +5,8 @@ import {Kernel, Module} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
-/// @title Convertible Deposit Token
+/// @title  CDEPOv1
+/// @notice This is a base contract for a custodial convertible deposit token. It is designed to be used in conjunction with an ERC4626 vault.
 abstract contract CDEPOv1 is Module, ERC20 {
     // ========== CONSTANTS ========== //
 
