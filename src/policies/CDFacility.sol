@@ -126,6 +126,8 @@ contract CDFacility is Policy, RolesConsumer {
         // store convertable deposit info and mint cdUSDS
         cdInfo[user].push(CD(amount, convertable, expiry));
 
+        // TODO shift mint/transfer functionality to CDEPO
+
         // TODO consider if the ERC20 should custody the deposit token
         cdUSDS.mint(user, amount);
     }
@@ -202,6 +204,8 @@ contract CDFacility is Policy, RolesConsumer {
             cd.convertable -= convertable; // reverts on overflow
         }
 
+        // TODO shift burn and transfer functionality to CDEPO
+
         // burn cdUSDS
         cdUSDS.burn(msg.sender, returned);
 
@@ -219,6 +223,8 @@ contract CDFacility is Policy, RolesConsumer {
     }
 
     // ========== cdUSDS ========== //
+
+    // TODO shift these to CDEPO
 
     /// @notice allow user to mint cdUSDS
     /// @notice redeeming without a CD may be at a discount
@@ -250,6 +256,8 @@ contract CDFacility is Policy, RolesConsumer {
     }
 
     // ========== YIELD MANAGER ========== //
+
+    // TODO shift these to CDEPO
 
     /// @notice allow yield manager to sweep yield accrued on reserves
     /// @return yield yield in reserve token terms
