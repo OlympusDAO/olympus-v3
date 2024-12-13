@@ -47,5 +47,7 @@ contract ContractRegistryInstall is OlyBatch {
                 contractRegistryAdmin
             )
         );
+
+        console2.log("Batch completed");
     }
 }

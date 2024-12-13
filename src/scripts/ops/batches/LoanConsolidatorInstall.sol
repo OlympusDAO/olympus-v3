@@ -38,5 +38,7 @@ contract LoanConsolidatorInstall is OlyBatch {
                 loanConsolidator
             )
         );
+
+        console2.log("Batch completed");
     }
 }
