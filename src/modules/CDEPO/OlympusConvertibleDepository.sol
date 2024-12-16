@@ -38,25 +38,92 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== ERC20 OVERRIDES ========== //
 
-    function mint(uint256 amount_) external virtual override {}
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Calls `mintTo` with the caller as the recipient
+    function mint(uint256 amount_) external virtual override {
+        mintTo(msg.sender, amount_);
+    }
 
-    function mintTo(address to_, uint256 amount_) external virtual override {}
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Transfers the underlying asset from `to_` to the contract
+    ///             - Deposits the underlying asset into the ERC4626 vault
+    ///             - Mints the corresponding amount of convertible deposit tokens to `to_`
+    ///             - Emits a `Transfer` event
+    ///
+    /// @param  to_       The address to mint the tokens to
+    /// @param  amount_   The amount of underlying asset to transfer
+    function mintTo(address to_, uint256 amount_) public virtual override {
+        // Transfer the underlying asset to the contract
+        asset.transferFrom(to_, address(this), amount_);
 
+        // Deposit the underlying asset into the vault and update the total shares
+        totalShares += vault.deposit(amount_, to_);
+
+        // Mint the CD tokens to the caller
+        _mint(to_, amount_);
+    }
+
+    /// @inheritdoc CDEPOv1
+    /// @dev        CD tokens are minted 1:1 with underlying asset, so this function returns the amount of underlying asset
     function previewMint(
         uint256 amount_
-    ) external view virtual override returns (uint256 tokensOut) {}
+    ) external view virtual override returns (uint256 tokensOut) {
+        return amount_;
+    }
 
-    function burn(uint256 amount_) external virtual override {}
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Calls `burnFrom` with the caller as the address to burn the tokens from
+    function burn(uint256 amount_) external virtual override {
+        burnFrom(msg.sender, amount_);
+    }
 
-    function burnFrom(address from_, uint256 amount_) external virtual override {}
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Burns the CD tokens from `from_`
+    ///             - Calculates the quantity of underlying asset to withdraw and return
+    ///             - Returns the underlying asset to `from_`
+    ///             - Emits a `Transfer` event
+    ///
+    /// @param  from_     The address to burn the tokens from
+    /// @param  amount_   The amount of CD tokens to burn
+    function burnFrom(address from_, uint256 amount_) public virtual override {
+        // Burn the CD tokens from `from_`
+        _burn(from_, amount_);
 
-    function previewBurn(
-        uint256 amount_
-    ) external view virtual override returns (uint256 assetsOut) {}
+        // Calculate the quantity of underlying asset to withdraw and return
+        // This will create a difference between the quantity of underlying assets and the vault shares, which will be swept as yield
+        // TODO make sure there are no shares left over if all CD tokens are burned
+        uint256 discountedAssetsOut = previewBurn(amount_);
+        uint256 shares = vault.previewWithdraw(discountedAssetsOut);
+        totalShares -= shares;
+
+        // Return the underlying asset to `from_`
+        vault.redeem(shares, from_, address(this));
+    }
+
+    /// @inheritdoc CDEPOv1
+    function previewBurn(uint256 amount_) public view virtual override returns (uint256 assetsOut) {
+        assetsOut = (amount_ * burnRate) / ONE_HUNDRED_PERCENT;
+    }
 
     // ========== YIELD MANAGER ========== //
 
     /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Validates that the caller has the correct role
+    ///             - Computes the amount of yield that would be swept
+    ///             - Reduces the shares tracked by the contract
+    ///             - Transfers the yield to the caller
+    ///             - Emits an event
+    ///
+    ///             This function reverts if:
+    ///             - The caller is not permissioned
+    ///
+    /// @return yieldReserve  The amount of reserve token that was swept
+    /// @return yieldSReserve The amount of sReserve token that was swept
     function sweepYield()
         external
         virtual
