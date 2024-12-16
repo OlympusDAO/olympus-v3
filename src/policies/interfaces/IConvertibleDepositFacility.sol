@@ -10,18 +10,8 @@ interface IConvertibleDepositFacility {
     // ========== EVENTS ========== //
 
     event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
-    event ConvertedDeposit(
-        address indexed user,
-        uint256 indexed termId,
-        uint256 depositAmount,
-        uint256 convertedAmount
-    );
-    event ReclaimedDeposit(
-        address indexed user,
-        uint256 indexed termId,
-        uint256 depositAmount,
-        uint256 reclaimedAmount
-    );
+    event ConvertedDeposit(address indexed user, uint256 depositAmount, uint256 convertedAmount);
+    event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount);
 
     // ========== ERRORS ========== //
 

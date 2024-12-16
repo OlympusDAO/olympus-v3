@@ -12,7 +12,7 @@ import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
-import {CTERMv1} from "src/modules/CTERM/CTERM.v1.sol";
+import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
@@ -28,7 +28,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
     CDEPOv1 public CDEPO;
-    CTERMv1 public CTERM;
+    CDPOSv1 public CDPOS;
 
     // ========== ERRORS ========== //
 
@@ -46,13 +46,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
         dependencies[3] = toKeycode("CDEPO");
-        dependencies[4] = toKeycode("CTERM");
+        dependencies[4] = toKeycode("CDPOS");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
         CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
-        CTERM = CTERMv1(getModuleAddress(dependencies[4]));
+        CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
     }
 
     function requestPermissions()
@@ -63,14 +63,16 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     {
         Keycode mintrKeycode = toKeycode("MINTR");
         Keycode cdepoKeycode = toKeycode("CDEPO");
-        Keycode ctermKeycode = toKeycode("CTERM");
+        Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](5);
+        permissions = new Permissions[](7);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
-        permissions[2] = Permissions(cdepoKeycode, CDEPO.sweepYield.selector);
-        permissions[3] = Permissions(ctermKeycode, CTERM.create.selector);
-        permissions[4] = Permissions(ctermKeycode, CTERM.update.selector);
+        permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
+        permissions[3] = Permissions(cdepoKeycode, CDEPO.redeem.selector);
+        permissions[4] = Permissions(cdepoKeycode, CDEPO.sweepYield.selector);
+        permissions[5] = Permissions(cdposKeycode, CDPOS.create.selector);
+        permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
     }
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
@@ -82,19 +84,19 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         uint256 conversionPrice_,
         uint48 expiry_,
         bool wrap_
-    ) external onlyRole("CD_Auctioneer") returns (uint256 termId) {
+    ) external onlyRole("CD_Auctioneer") returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
         CDEPO.mintTo(account_, amount_);
 
-        // Create a new term record in the CTERM module
-        termId = CTERM.create(account_, amount_, conversionPrice_, expiry_, wrap_);
+        // Create a new term record in the CDPOS module
+        positionId = CDPOS.create(account_, amount_, conversionPrice_, expiry_, wrap_);
 
         // Pre-emptively increase the OHM mint approval
         MINTR.increaseMintApproval(address(this), amount_);
 
         // Emit an event
-        emit CreatedDeposit(account_, termId, amount_);
+        emit CreatedDeposit(account_, positionId, amount_);
     }
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -114,27 +116,27 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             uint256 depositAmount = amounts_[i];
 
             // Validate that the caller is the owner of the position
-            if (CTERM.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
+            if (CDPOS.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
 
             // Validate that the position is valid
             // This will revert if the position is not valid
-            CTERMv1.ConvertibleDepositTerm memory term = CTERM.getTerm(positionId);
+            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
 
-            // Validate that the term has not expired
-            if (block.timestamp >= term.expiry) revert CDF_PositionExpired(positionId);
+            // Validate that the position has not expired
+            if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId);
 
             // Validate that the deposit amount is not greater than the remaining deposit
-            if (depositAmount > term.remainingDeposit)
+            if (depositAmount > position.remainingDeposit)
                 revert CDF_InvalidAmount(positionId, depositAmount);
 
-            uint256 convertedAmount = (depositAmount * term.conversionPrice) / DECIMALS; // TODO check decimals, rounding
+            uint256 convertedAmount = (depositAmount * position.conversionPrice) / DECIMALS; // TODO check decimals, rounding
 
             // Increment running totals
             totalDeposits += depositAmount;
             converted += convertedAmount;
 
             // Update the position
-            CTERM.update(positionId, term.remainingDeposit - depositAmount);
+            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
         }
 
         // Redeem the CD deposits in bulk
@@ -169,27 +171,27 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             uint256 depositAmount = amounts_[i];
 
             // Validate that the caller is the owner of the position
-            if (CTERM.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
+            if (CDPOS.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
 
             // Validate that the position is valid
             // This will revert if the position is not valid
-            CTERMv1.ConvertibleDepositTerm memory term = CTERM.getTerm(positionId);
+            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
 
-            // Validate that the term has expired
-            if (block.timestamp < term.expiry) revert CDF_PositionNotExpired(positionId);
+            // Validate that the position has expired
+            if (block.timestamp < position.expiry) revert CDF_PositionNotExpired(positionId);
 
             // Validate that the deposit amount is not greater than the remaining deposit
-            if (depositAmount > term.remainingDeposit)
+            if (depositAmount > position.remainingDeposit)
                 revert CDF_InvalidAmount(positionId, depositAmount);
 
-            uint256 convertedAmount = (depositAmount * term.conversionPrice) / DECIMALS; // TODO check decimals, rounding
+            uint256 convertedAmount = (depositAmount * position.conversionPrice) / DECIMALS; // TODO check decimals, rounding
 
             // Increment running totals
             reclaimed += depositAmount;
             unconverted += convertedAmount;
 
             // Update the position
-            CTERM.update(positionId, term.remainingDeposit - depositAmount);
+            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
         }
 
         // Redeem the CD deposits in bulk
