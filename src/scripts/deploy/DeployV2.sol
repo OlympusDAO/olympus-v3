@@ -1257,15 +1257,10 @@ contract OlympusDeploy is Script {
         // Log dependencies
         console2.log("ConvertibleDepositFacility parameters:");
         console2.log("   kernel", address(kernel));
-        console2.log("   reserve", address(reserve));
-        console2.log("   sReserve", address(sReserve));
-
-        // TODO add deployment of cdUSDS
-        address cdUSDS = address(0);
 
         // Deploy ConvertibleDepositFacility
         vm.broadcast();
-        cdFacility = new CDFacility(kernel, address(reserve), address(sReserve), cdUSDS);
+        cdFacility = new CDFacility(address(kernel));
         console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
 
         return address(cdFacility);

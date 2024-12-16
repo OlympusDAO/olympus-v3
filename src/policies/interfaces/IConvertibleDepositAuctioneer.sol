@@ -22,15 +22,15 @@ interface IConvertibleDepositAuctioneer {
     /// @param  tickSize        number of ohm in a tick
     /// @param  minPrice        minimum tick price
     /// @param  tickStep        percentage increase (decrease) per tick
-    /// @param  timeToExpiry    time between creation and expiry of deposit
     /// @param  lastUpdate      timestamp of last update to current tick
+    /// @param  timeToExpiry    time between creation and expiry of deposit
     struct State {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
         uint256 tickStep;
-        uint256 timeToExpiry;
         uint256 lastUpdate;
+        uint48 timeToExpiry;
     }
 
     /// @notice Tracks auction activity for a given day
@@ -101,7 +101,7 @@ interface IConvertibleDepositAuctioneer {
     /// @dev    only callable by the admin
     ///
     /// @param  newTime_     new time to expiry
-    function setTimeToExpiry(uint256 newTime_) external;
+    function setTimeToExpiry(uint48 newTime_) external;
 
     /// @notice Set the tick step
     /// @dev    only callable by the admin

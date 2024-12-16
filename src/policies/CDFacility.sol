@@ -129,7 +129,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             if (depositAmount > position.remainingDeposit)
                 revert CDF_InvalidAmount(positionId, depositAmount);
 
-            uint256 convertedAmount = (depositAmount * position.conversionPrice) / DECIMALS; // TODO check decimals, rounding
+            uint256 convertedAmount = (depositAmount * DECIMALS) / position.conversionPrice; // TODO check decimals, rounding
 
             // Increment running totals
             totalDeposits += depositAmount;
@@ -184,7 +184,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             if (depositAmount > position.remainingDeposit)
                 revert CDF_InvalidAmount(positionId, depositAmount);
 
-            uint256 convertedAmount = (depositAmount * position.conversionPrice) / DECIMALS; // TODO check decimals, rounding
+            uint256 convertedAmount = (depositAmount * DECIMALS) / position.conversionPrice; // TODO check decimals, rounding
 
             // Increment running totals
             reclaimed += depositAmount;

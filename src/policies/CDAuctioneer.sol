@@ -26,8 +26,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
 
     CDFacility public cdFacility;
 
-    mapping(uint256 => mapping(uint256 => address)) public cdTokens; // mapping(expiry => price => token)
-
     Day public today;
 
     // ========== SETUP ========== //
@@ -77,11 +75,23 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
             convertible += _convertFor(amount, currentTick.price);
         }
 
+        // TODO extract logic to previewBid
+        // TODO update currentTick based on previewBid output
+
         today.deposits += deposit;
         today.convertible += convertible;
 
-        // mint amount of CD token
-        cdFacility.addNewCD(msg.sender, deposit, convertible, block.timestamp + state.timeToExpiry);
+        // TODO calculate average price for total deposit and convertible, check rounding, formula
+        uint256 conversionPrice = (deposit * decimals) / convertible;
+
+        // Create the CD tokens and position
+        cdFacility.create(
+            msg.sender,
+            deposit,
+            conversionPrice,
+            uint48(block.timestamp + state.timeToExpiry),
+            false
+        );
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -147,13 +157,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
             newSize,
             newMinPrice,
             state.tickStep,
-            state.timeToExpiry,
-            state.lastUpdate
+            state.lastUpdate,
+            state.timeToExpiry
         );
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function setTimeToExpiry(uint256 newTime) external override onlyRole("CD_Admin") {
+    function setTimeToExpiry(uint48 newTime) external override onlyRole("CD_Admin") {
         state.timeToExpiry = newTime;
     }
 
