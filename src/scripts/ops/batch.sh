@@ -3,12 +3,17 @@
 # Run a multisig batch
 #
 # Usage:
-# ./batch.sh --contract <contract-name> --batch <batch-name> --broadcast <true|false> --testnet <true|false> --env <env-file>
+# ./batch.sh --contract <contract-name> --batch <batch-name> --ledger <true|false> --broadcast <true|false> --testnet <true|false> --env <env-file>
 #
 # Environment variables:
 # RPC_URL
 # SIGNER_ADDRESS
 # TESTNET
+# CHAIN
+# DAO_MS
+# POLICY_MS
+# EMERGENCY_MS
+# LEDGER_MNEMONIC_INDEX (ledger only)
 
 # Exit if any error occurs
 set -e
@@ -36,6 +41,7 @@ set +a # Disable automatic export
 # Set sane defaults
 BROADCAST=${broadcast:-false}
 TESTNET=${testnet:-false}
+LEDGER=${ledger:-false}
 
 # Check if contract is set
 if [ -z "$contract" ]; then
@@ -61,12 +67,62 @@ if [ -z "$SIGNER_ADDRESS" ]; then
     exit 1
 fi
 
+# Validate that LEDGER is set to true or false
+if [ "$LEDGER" != "true" ] && [ "$LEDGER" != "false" ]; then
+    echo "Invalid value for LEDGER. Must be true or false."
+    exit 1
+fi
+
+# If LEDGER is true, validate that MNEMONIC_INDEX is set
+if [ "$LEDGER" == "true" ] && [ -z "$LEDGER_MNEMONIC_INDEX" ]; then
+    echo "No LEDGER_MNEMONIC_INDEX provided. Specify the LEDGER_MNEMONIC_INDEX in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that CHAIN is set
+if [ -z "$CHAIN" ]; then
+    echo "No chain provided. Specify the CHAIN in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that DAO_MS is set
+if [ -z "$DAO_MS" ]; then
+    echo "No DAO MS provided. Specify the DAO_MS in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that POLICY_MS is set
+if [ -z "$POLICY_MS" ]; then
+    echo "No POLICY MS provided. Specify the POLICY_MS in the $ENV_FILE file."
+    exit 1
+fi
+
+# Validate that EMERGENCY_MS is set
+if [ -z "$EMERGENCY_MS" ]; then
+    echo "No EMERGENCY MS provided. Specify the EMERGENCY_MS in the $ENV_FILE file."
+    exit 1
+fi
+
+# Set the variables for using a Ledger wallet
+# Export variables that BatchScript.sol uses
+if [ "$LEDGER" == "true" ]; then
+    export WALLET_TYPE="ledger"
+    export MNEMONIC_INDEX="$LEDGER_MNEMONIC_INDEX"
+else
+    export WALLET_TYPE="local"
+fi
+
 echo "Contract name: $contract"
 echo "Batch name: $batch"
+echo "Using chain: $CHAIN"
 echo "Using RPC at URL: $RPC_URL"
 echo "Using signer address: $SIGNER_ADDRESS"
+echo "Using DAO MS: $DAO_MS"
+echo "Using POLICY MS: $POLICY_MS"
+echo "Using EMERGENCY MS: $EMERGENCY_MS"
 echo "Broadcasting: $BROADCAST"
 echo "Using testnet: $TESTNET"
+echo "Using ledger: $LEDGER"
 
 # Execute the batch
 TESTNET=$TESTNET forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig "$batch(bool)()" $BROADCAST --slow -vvv --sender $SIGNER_ADDRESS --rpc-url $RPC_URL
