@@ -25,6 +25,30 @@ abstract contract CTERMv1 is Module, ERC721 {
         bool wrapped;
     }
 
+    // ========== EVENTS ========== //
+
+    /// @notice Emitted when a term is created
+    event TermCreated(
+        uint256 indexed termId,
+        address indexed owner,
+        uint256 remainingDeposit,
+        uint256 conversionPrice,
+        uint48 expiry,
+        bool wrapped
+    );
+
+    /// @notice Emitted when a term is updated
+    event TermUpdated(uint256 indexed termId, uint256 remainingDeposit);
+
+    /// @notice Emitted when a term is split
+    event TermSplit(uint256 indexed termId, uint256 newTermId, uint256 amount, uint256 to);
+
+    /// @notice Emitted when a term is wrapped
+    event TermWrapped(uint256 indexed termId);
+
+    /// @notice Emitted when a term is unwrapped
+    event TermUnwrapped(uint256 indexed termId);
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice The number of terms created
