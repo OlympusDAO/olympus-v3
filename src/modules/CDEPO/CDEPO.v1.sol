@@ -13,6 +13,18 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @notice Equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    // ========== STATE VARIABLES ========== //
+
+    /// @notice The burn rate of the convertible deposit token
+    /// @dev    A burn rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
+    uint16 internal _burnRate;
+
+    /// @notice The total amount of deposits in the contract
+    uint256 public totalDeposits;
+
+    /// @notice The total amount of vault shares in the contract
+    uint256 public totalShares;
+
     // // ========== CONSTRUCTOR ========== //
 
     // constructor(address kernel_, address erc4626Vault_) Module(Kernel(kernel_)) {
@@ -124,15 +136,15 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///         - Emitting an event
     ///
     /// @param  newBurnRate_    The new burn rate
-    function setBurnRate(uint256 newBurnRate_) external virtual;
+    function setBurnRate(uint16 newBurnRate_) external virtual;
 
     // ========== STATE VARIABLES ========== //
 
     /// @notice The ERC4626 vault that holds the underlying asset
-    function getVault() external view virtual returns (address);
+    function vault() external view virtual returns (ERC4626);
 
-    /// @notice The underlying asset
-    function getAsset() external view virtual returns (address);
+    /// @notice The underlying ERC20 asset
+    function asset() external view virtual returns (ERC20);
 
     /// @notice The burn rate of the convertible deposit token
     /// @dev    A burn rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
