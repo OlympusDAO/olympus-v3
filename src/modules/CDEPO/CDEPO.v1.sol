@@ -8,6 +8,19 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 /// @title  CDEPOv1
 /// @notice This is a base contract for a custodial convertible deposit token. It is designed to be used in conjunction with an ERC4626 vault.
 abstract contract CDEPOv1 is Module, ERC20 {
+    // ========== EVENTS ========== //
+
+    /// @notice Emitted when the burn rate is updated
+    event BurnRateUpdated(uint16 newBurnRate);
+
+    /// @notice Emitted when the yield is swept
+    event YieldSwept(address receiver, uint256 reserveAmount, uint256 sReserveAmount);
+
+    // ========== ERRORS ========== //
+
+    /// @notice Thrown when the caller provides invalid arguments
+    error CDEPO_InvalidArgs(string reason);
+
     // ========== CONSTANTS ========== //
 
     /// @notice Equivalent to 100%
@@ -19,28 +32,8 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @dev    A burn rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
     uint16 internal _burnRate;
 
-    /// @notice The total amount of deposits in the contract
-    uint256 public totalDeposits;
-
     /// @notice The total amount of vault shares in the contract
     uint256 public totalShares;
-
-    // // ========== CONSTRUCTOR ========== //
-
-    // constructor(address kernel_, address erc4626Vault_) Module(Kernel(kernel_)) {
-    //     // Store the vault and asset
-    //     vault = ERC4626(erc4626Vault_);
-    //     asset = ERC20(vault.asset());
-
-    //     // Set the name and symbol
-    //     name = string.concat("cd", asset.symbol());
-    //     symbol = string.concat("cd", asset.symbol());
-    //     decimals = asset.decimals();
-
-    //     // Set the initial chain id and domain separator (see solmate/tokens/ERC20.sol)
-    //     INITIAL_CHAIN_ID = block.chainid;
-    //     INITIAL_DOMAIN_SEPARATOR = computeDomainSeparator();
-    // }
 
     // ========== ERC20 OVERRIDES ========== //
 
