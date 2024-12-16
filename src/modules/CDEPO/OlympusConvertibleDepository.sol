@@ -109,6 +109,26 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         assetsOut = (amount_ * burnRate) / ONE_HUNDRED_PERCENT;
     }
 
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Validates that the caller is permissioned
+    ///             - Burns the CD tokens from the caller
+    ///             - Calculates the quantity of underlying asset to withdraw and return
+    ///             - Returns the underlying asset to the caller
+    ///
+    /// @param  amount_   The amount of CD tokens to burn
+    function redeem(uint256 amount_) external override permissioned returns (uint256 sharesOut) {
+        // Burn the CD tokens from the caller
+        _burn(msg.sender, amount_);
+
+        // Calculate the quantity of shares to transfer
+        sharesOut = vault.previewWithdraw(amount_);
+        totalShares -= sharesOut;
+
+        // Transfer the shares to the caller
+        vault.transfer(msg.sender, sharesOut);
+    }
+
     // ========== YIELD MANAGER ========== //
 
     /// @inheritdoc CDEPOv1

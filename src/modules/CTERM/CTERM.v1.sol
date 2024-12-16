@@ -8,6 +8,8 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 /// @notice This defines the interface for the CTERM module.
 ///         The objective of this module is to track the terms of a convertible deposit.
 abstract contract CTERMv1 is Module, ERC721 {
+    // TODO rename to CDPOS
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Data structure for the terms of a convertible deposit

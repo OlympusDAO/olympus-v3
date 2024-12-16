@@ -48,7 +48,7 @@ abstract contract CDEPOv1 is Module, ERC20 {
     function mint(uint256 amount_) external virtual;
 
     /// @notice Mint tokens to `to_` in exchange for the underlying asset
-    /// @dev    This function behaves the same as `mint`, but allows the caller to
+    ///         This function behaves the same as `mint`, but allows the caller to
     ///         specify the address to mint the tokens to and pull the underlying
     ///         asset from.
     ///
@@ -79,7 +79,7 @@ abstract contract CDEPOv1 is Module, ERC20 {
     function burn(uint256 amount_) external virtual;
 
     /// @notice Burn tokens from `from_` and return the underlying asset
-    /// @dev    This function behaves the same as `burn`, but allows the caller to
+    ///         This function behaves the same as `burn`, but allows the caller to
     ///         specify the address to burn the tokens from and transfer the underlying
     ///         asset to.
     ///
@@ -95,6 +95,17 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @param  amount_   The amount of convertible deposit tokens to burn
     /// @return assetsOut The amount of underlying asset that would be returned
     function previewBurn(uint256 amount_) external view virtual returns (uint256 assetsOut);
+
+    /// @notice Redeem convertible deposit tokens for the underlying asset
+    ///         This differs from the burn function, in that it is an admin-level and permissioned function that does not apply the burn rate.
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Transfers the corresponding vault shares to the caller
+    ///         - Burns the corresponding amount of convertible deposit tokens from the caller
+    ///
+    /// @param  amount_   The amount of convertible deposit tokens to burn
+    /// @return sharesOut The amount of shares that were transferred to the caller
+    function redeem(uint256 amount_) external virtual returns (uint256 sharesOut);
 
     // ========== YIELD MANAGER ========== //
 

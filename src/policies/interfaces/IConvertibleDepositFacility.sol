@@ -7,137 +7,92 @@ import {IERC4626} from "openzeppelin-contracts/contracts/interfaces/IERC4626.sol
 /// @title  IConvertibleDepositFacility
 /// @notice Interface for a contract that can perform functions related to convertible deposit tokens
 interface IConvertibleDepositFacility {
+    // ========== EVENTS ========== //
+
+    event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
+    event ConvertedDeposit(
+        address indexed user,
+        uint256 indexed termId,
+        uint256 depositAmount,
+        uint256 convertedAmount
+    );
+    event ReclaimedDeposit(
+        address indexed user,
+        uint256 indexed termId,
+        uint256 depositAmount,
+        uint256 reclaimedAmount
+    );
+
+    // ========== ERRORS ========== //
+
+    error CDF_InvalidArgs(string reason_);
+
+    error CDF_NotOwner(uint256 positionId_);
+
+    error CDF_PositionExpired(uint256 positionId_);
+
+    error CDF_PositionNotExpired(uint256 positionId_);
+
+    error CDF_InvalidAmount(uint256 positionId_, uint256 amount_);
+
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
+
+    /// @notice Creates a new convertible deposit position
+    ///
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Depositing the reserve token into the CDEPO module and minting the convertible deposit token
+    ///         - Creating a new term record in the CTERM module
+    ///         - Pre-emptively increasing the OHM mint approval
+    ///         - Emitting an event
+    ///
+    /// @param  account_            The address to create the position for
+    /// @param  amount_             The amount of reserve token to deposit
+    /// @param  conversionPrice_    The price of the reserve token in USD
+    /// @param  expiry_             The timestamp when the position expires
+    /// @param  wrap_               Whether the position should be wrapped
+    /// @return termId              The ID of the new term
+    function create(
+        address account_,
+        uint256 amount_,
+        uint256 conversionPrice_,
+        uint48 expiry_,
+        bool wrap_
+    ) external returns (uint256 termId);
 
     /// @notice Converts convertible deposit tokens to OHM before expiry
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that `account_` has an active convertible deposit position
-    ///         - Validating that `account_` has the required amount of convertible deposit tokens
+    ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have not expired
     ///         - Burning the convertible deposit tokens
     ///         - Minting OHM to `account_`
-    ///         - Transferring the reserve token to the treasury
+    ///         - Transferring the sReserve token to the treasury
     ///         - Emitting an event
     ///
-    /// @param  account_        The address to convert for
-    /// @param  positionIds_    An array of position ids that will be converted
-    /// @param  amounts_        An array of amounts of convertible deposit tokens to convert
-    /// @return converted       The amount of OHM minted to `account_`
-    function convertFor(
-        address account_,
+    /// @param  positionIds_        An array of position ids that will be converted
+    /// @param  amounts_            An array of amounts of convertible deposit tokens to convert
+    /// @return totalDeposit        The total amount of convertible deposit tokens converted
+    /// @return converted           The amount of OHM minted during conversion
+    function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external returns (uint256 converted);
+    ) external returns (uint256 totalDeposit, uint256 converted);
 
     /// @notice Reclaims convertible deposit tokens after expiry
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that `account_` has an active convertible deposit position
-    ///         - Validating that `account_` has the required amount of convertible deposit tokens
+    ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have expired
     ///         - Burning the convertible deposit tokens
     ///         - Transferring the reserve token to `account_`
     ///         - Emitting an event
     ///
-    /// @param  account_        The address to reclaim for
     /// @param  positionIds_    An array of position ids that will be reclaimed
     /// @param  amounts_        An array of amounts of convertible deposit tokens to reclaim
-    /// @return reclaimed       The amount of reserve token returned to `account_`
-    function reclaimFor(
-        address account_,
+    /// @return reclaimed       The amount of reserve token returned to the caller
+    function reclaim(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external returns (uint256 reclaimed);
-
-    // TODO decide in the depositFor and withdrawTo functions should be in the ERC20 contract (aka ERC20Wrapper)
-
-    /// @notice Deposits the reserve token in exchange for convertible deposit tokens
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the required amount of reserve tokens
-    ///         - Minting the convertible deposit tokens to the caller
-    ///         - Emitting an event
-    ///
-    /// @param  account_  The address to mint to
-    /// @param  amount_   The amount of reserve token to mint
-    /// @return minted    The amount of convertible deposit tokens minted to the caller
-    function depositFor(address account_, uint256 amount_) external returns (uint256 minted);
-
-    /// @notice Preview the amount of convertible deposit tokens that would be minted for a given amount of reserve token
-    ///
-    /// @param  account_  The address to mint to
-    /// @param  amount_   The amount of reserve token to mint
-    /// @return minted    The amount of convertible deposit tokens that would be minted
-    function previewDepositFor(
-        address account_,
-        uint256 amount_
-    ) external view returns (uint256 minted);
-
-    /// @notice Withdraws the reserve token in exchange for convertible deposit tokens
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the required amount of convertible deposit tokens
-    ///         - Burning the convertible deposit tokens
-    ///         - Transferring the reserve token to the caller
-    ///         - Emitting an event
-    ///
-    /// @param  account_    The address to withdraw to
-    /// @param  amount_     The amount of convertible deposit tokens to burn
-    /// @return withdrawn   The amount of reserve tokens returned to the caller
-    function withdrawTo(address account_, uint256 amount_) external returns (uint256 withdrawn);
-
-    /// @notice Preview the amount of reserve token that would be returned for a given amount of convertible deposit tokens
-    ///
-    /// @param  account_    The address to withdraw to
-    /// @param  amount_     The amount of convertible deposit tokens to burn
-    /// @return withdrawn   The amount of reserve tokens that would be returned
-    function previewWithdrawTo(
-        address account_,
-        uint256 amount_
-    ) external view returns (uint256 withdrawn);
-
-    // ========== YIELD MANAGEMENT ========== //
-
-    /// @notice Claim the yield accrued on the reserve token
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Withdrawing the yield from the sReserve token
-    ///         - Transferring the yield to the caller
-    ///         - Emitting an event
-    ///
-    /// @return yieldReserve  The amount of reserve token that was swept
-    /// @return yieldSReserve The amount of sReserve token that was swept
-    function sweepYield() external returns (uint256 yieldReserve, uint256 yieldSReserve);
-
-    /// @notice Preview the amount of yield that would be swept
-    ///
-    /// @return yieldReserve  The amount of reserve token that would be swept
-    /// @return yieldSReserve The amount of sReserve token that would be swept
-    function previewSweepYield()
-        external
-        view
-        returns (uint256 yieldReserve, uint256 yieldSReserve);
-
-    // ========== ADMIN ========== /
-
-    /// @notice Set the withdraw rate when withdrawing the convertible deposit token, where withdraw rate = reserve token output / convertible deposit token input
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Validating that the new rate is within bounds
-    ///         - Setting the new redeem rate
-    ///         - Emitting an event
-    ///
-    /// @param  newRate_    The new withdraw rate
-    function setWithdrawRate(uint256 newRate_) external;
-
-    // ========== STATE VARIABLES ========== //
-
-    /// @notice The reserve token that is exchanged for the convertible deposit token
-    function reserveToken() external view returns (IERC20);
-
-    /// @notice The sReserve token that the reserve token is deposited into
-    function sReserveToken() external view returns (IERC4626);
-
-    /// @notice The convertible deposit token that is minted to the user
-    function convertibleDepositToken() external view returns (IERC20);
-
-    /// @notice The withdraw rate when withdrawing the convertible deposit token
-    function withdrawRate() external view returns (uint256);
 }

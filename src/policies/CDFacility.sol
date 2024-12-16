@@ -7,29 +7,17 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
+import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-
-import {IConvertibleDepositToken} from "src/policies/interfaces/IConvertibleDepositToken.sol";
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {CTERMv1} from "src/modules/CTERM/CTERM.v1.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
-contract CDFacility is Policy, RolesConsumer {
+contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     using FullMath for uint256;
-
-    struct CD {
-        uint256 deposit;
-        uint256 convertable;
-        uint256 expiry;
-    }
-
-    // ========== EVENTS ========== //
-
-    event CreatedCD(address user, uint48 expiry, uint256 deposit, uint256 convert);
-    event ConvertedCD(address user, uint256 deposit, uint256 convert);
-    event ReclaimedCD(address user, uint256 deposit);
-    event SweptYield(address receiver, uint256 amount);
 
     // ========== STATE VARIABLES ========== //
 
@@ -39,17 +27,8 @@ contract CDFacility is Policy, RolesConsumer {
     // Modules
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
-
-    // Tokens
-    ERC20 public reserve;
-    ERC4626 public sReserve;
-    IConvertibleDepositToken public cdUSDS;
-
-    // State variables
-    uint256 public totalDeposits;
-    uint256 public totalShares;
-    mapping(address => CD[]) public cdInfo;
-    uint256 public redeemRate;
+    CDEPOv1 public CDEPO;
+    CTERMv1 public CTERM;
 
     // ========== ERRORS ========== //
 
@@ -59,33 +38,21 @@ contract CDFacility is Policy, RolesConsumer {
 
     // ========== SETUP ========== //
 
-    constructor(
-        Kernel kernel_,
-        address reserve_,
-        address sReserve_,
-        address cdUSDS_
-    ) Policy(kernel_) {
-        if (reserve_ == address(0)) revert CDFacility_InvalidParams("Reserve address cannot be 0");
-        if (sReserve_ == address(0))
-            revert CDFacility_InvalidParams("sReserve address cannot be 0");
-        if (cdUSDS_ == address(0)) revert CDFacility_InvalidParams("cdUSDS address cannot be 0");
-
-        reserve = ERC20(reserve_);
-        sReserve = ERC4626(sReserve_);
-
-        // TODO shift to module and dependency injection
-        cdUSDS = IConvertibleDepositToken(cdUSDS_);
-    }
+    constructor(address kernel_) Policy(Kernel(kernel_)) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
+        dependencies[3] = toKeycode("CDEPO");
+        dependencies[4] = toKeycode("CTERM");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
+        CTERM = CTERMv1(getModuleAddress(dependencies[4]));
     }
 
     function requestPermissions()
@@ -95,207 +62,148 @@ contract CDFacility is Policy, RolesConsumer {
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = toKeycode("MINTR");
+        Keycode cdepoKeycode = toKeycode("CDEPO");
+        Keycode ctermKeycode = toKeycode("CTERM");
 
-        permissions = new Permissions[](2);
+        permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+        permissions[2] = Permissions(cdepoKeycode, CDEPO.sweepYield.selector);
+        permissions[3] = Permissions(ctermKeycode, CTERM.create.selector);
+        permissions[4] = Permissions(ctermKeycode, CTERM.update.selector);
     }
 
-    // ========== EMISSIONS MANAGER ========== //
+    // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
-    /// @notice allow emissions manager to create new convertible debt
-    /// @param  user owner of the convertible debt
-    /// @param  amount amount of reserve tokens deposited
-    /// @param  convertable amount of OHM that can be converted into
-    /// @param  expiry timestamp when conversion expires
-    function addNewCD(
-        address user,
-        uint256 amount,
-        uint256 convertable,
-        uint256 expiry
-    ) external onlyRole("CD_Auctioneer") {
-        // transfer in debt token
-        reserve.transferFrom(user, address(this), amount);
+    /// @inheritdoc IConvertibleDepositFacility
+    function create(
+        address account_,
+        uint256 amount_,
+        uint256 conversionPrice_,
+        uint48 expiry_,
+        bool wrap_
+    ) external onlyRole("CD_Auctioneer") returns (uint256 termId) {
+        // Mint the CD token to the account
+        // This will also transfer the reserve token
+        CDEPO.mintTo(account_, amount_);
 
-        // deploy debt token into vault
-        totalShares += sReserve.deposit(amount, address(this));
+        // Create a new term record in the CTERM module
+        termId = CTERM.create(account_, amount_, conversionPrice_, expiry_, wrap_);
 
-        // add mint approval for conversion
-        MINTR.increaseMintApproval(address(this), convertable);
+        // Pre-emptively increase the OHM mint approval
+        MINTR.increaseMintApproval(address(this), amount_);
 
-        // store convertable deposit info and mint cdUSDS
-        cdInfo[user].push(CD(amount, convertable, expiry));
-
-        // TODO shift mint/transfer functionality to CDEPO
-
-        // TODO consider if the ERC20 should custody the deposit token
-        cdUSDS.mint(user, amount);
+        // Emit an event
+        emit CreatedDeposit(account_, termId, amount_);
     }
 
-    // ========== CD Position Owner ========== //
+    /// @inheritdoc IConvertibleDepositFacility
+    function convert(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external returns (uint256 totalDeposit, uint256 converted) {
+        // Make sure the lengths of the arrays are the same
+        if (positionIds_.length != amounts_.length)
+            revert CDF_InvalidArgs("array lengths must match");
 
-    /// @notice allow user to convert their convertible debt before expiration
-    /// @param  cds CD indexes to convert
-    /// @param  amounts CD token amounts to convert
-    function convertCD(
-        uint256[] memory cds,
-        uint256[] memory amounts
-    ) external returns (uint256 converted) {
-        if (cds.length != amounts.length) revert Misconfigured();
+        uint256 totalDeposits;
 
-        uint256 totalDeposit;
+        // Iterate over all positions
+        for (uint256 i; i < positionIds_.length; ++i) {
+            uint256 positionId = positionIds_[i];
+            uint256 depositAmount = amounts_[i];
 
-        // iterate through and burn CD tokens, adding deposit and conversion amounts to running totals
-        for (uint256 i; i < cds.length; ++i) {
-            CD storage cd = cdInfo[msg.sender][i];
-            if (cd.expiry < block.timestamp) continue;
+            // Validate that the caller is the owner of the position
+            if (CTERM.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
 
-            uint256 amount = amounts[i];
-            uint256 converting = ((cd.convertable * amount) / cd.deposit);
+            // Validate that the position is valid
+            // This will revert if the position is not valid
+            CTERMv1.ConvertibleDepositTerm memory term = CTERM.getTerm(positionId);
 
-            // increment running totals
-            totalDeposit += amount;
-            converted += converting;
+            // Validate that the term has not expired
+            if (block.timestamp >= term.expiry) revert CDF_PositionExpired(positionId);
 
-            // decrement deposit info
-            cd.convertable -= converting; // reverts on overflow
-            cd.deposit -= amount;
+            // Validate that the deposit amount is not greater than the remaining deposit
+            if (depositAmount > term.remainingDeposit)
+                revert CDF_InvalidAmount(positionId, depositAmount);
+
+            uint256 convertedAmount = (depositAmount * term.conversionPrice) / DECIMALS; // TODO check decimals, rounding
+
+            // Increment running totals
+            totalDeposits += depositAmount;
+            converted += convertedAmount;
+
+            // Update the position
+            CTERM.update(positionId, term.remainingDeposit - depositAmount);
         }
 
-        // compute and account for shares to send to treasury
-        uint256 shares = sReserve.previewWithdraw(totalDeposit);
-        totalShares -= shares;
+        // Redeem the CD deposits in bulk
+        uint256 sharesOut = CDEPO.redeem(totalDeposits);
 
-        // burn cdUSDS
-        cdUSDS.burn(msg.sender, totalDeposit);
+        // Transfer the redeemed assets to the TRSRY
+        CDEPO.vault().transfer(address(TRSRY), sharesOut);
 
-        // mint ohm and send underlying debt token to treasury
+        // Mint OHM to the owner/caller
         MINTR.mintOhm(msg.sender, converted);
-        sReserve.transfer(address(TRSRY), shares);
 
-        emit ConvertedCD(msg.sender, totalDeposit, converted);
+        // Emit event
+        emit ConvertedDeposit(msg.sender, totalDeposits, converted);
+
+        return (totalDeposits, converted);
     }
 
-    /// @notice allow user to reclaim their convertible debt deposits after expiration
-    /// @param  cds CD indexes to return
-    /// @param  amounts amounts of CD tokens to burn
-    /// @return returned total reserve tokens returned
-    function returnDeposit(
-        uint256[] memory cds,
-        uint256[] memory amounts
-    ) external returns (uint256 returned) {
-        if (cds.length != amounts.length) revert Misconfigured();
+    /// @inheritdoc IConvertibleDepositFacility
+    function reclaim(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external override returns (uint256 reclaimed) {
+        // Make sure the lengths of the arrays are the same
+        if (positionIds_.length != amounts_.length)
+            revert CDF_InvalidArgs("array lengths must match");
 
         uint256 unconverted;
 
-        // iterate through and burn CD tokens, adding deposit and conversion amounts to running totals
-        for (uint256 i; i < cds.length; ++i) {
-            CD memory cd = cdInfo[msg.sender][cds[i]];
-            if (cd.expiry >= block.timestamp) continue;
+        // Iterate over all positions
+        for (uint256 i; i < positionIds_.length; ++i) {
+            uint256 positionId = positionIds_[i];
+            uint256 depositAmount = amounts_[i];
 
-            uint256 amount = amounts[i];
-            uint256 convertable = ((cd.convertable * amount) / cd.deposit);
+            // Validate that the caller is the owner of the position
+            if (CTERM.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
 
-            returned += amount;
-            unconverted += convertable;
+            // Validate that the position is valid
+            // This will revert if the position is not valid
+            CTERMv1.ConvertibleDepositTerm memory term = CTERM.getTerm(positionId);
 
-            // decrement deposit info
-            cd.deposit -= amount;
-            cd.convertable -= convertable; // reverts on overflow
+            // Validate that the term has expired
+            if (block.timestamp < term.expiry) revert CDF_PositionNotExpired(positionId);
+
+            // Validate that the deposit amount is not greater than the remaining deposit
+            if (depositAmount > term.remainingDeposit)
+                revert CDF_InvalidAmount(positionId, depositAmount);
+
+            uint256 convertedAmount = (depositAmount * term.conversionPrice) / DECIMALS; // TODO check decimals, rounding
+
+            // Increment running totals
+            reclaimed += depositAmount;
+            unconverted += convertedAmount;
+
+            // Update the position
+            CTERM.update(positionId, term.remainingDeposit - depositAmount);
         }
 
-        // TODO shift burn and transfer functionality to CDEPO
+        // Redeem the CD deposits in bulk
+        uint256 sharesOut = CDEPO.redeem(unconverted);
 
-        // burn cdUSDS
-        cdUSDS.burn(msg.sender, returned);
+        // Transfer the underlying assets to the caller
+        CDEPO.vault().redeem(sharesOut, msg.sender, address(this));
 
-        // compute shares to redeem
-        uint256 shares = sReserve.previewWithdraw(returned);
-        totalShares -= shares;
-
-        // return debt token to user
-        sReserve.redeem(shares, msg.sender, address(this));
-
-        // decrease mint approval to reflect tokens that will not convert
+        // Decrease the mint approval
         MINTR.decreaseMintApproval(address(this), unconverted);
 
-        emit ReclaimedCD(msg.sender, returned);
-    }
+        // Emit event
+        emit ReclaimedDeposit(msg.sender, reclaimed);
 
-    // ========== cdUSDS ========== //
-
-    // TODO shift these to CDEPO
-
-    /// @notice allow user to mint cdUSDS
-    /// @notice redeeming without a CD may be at a discount
-    /// @param  amount of reserve token
-    /// @return tokensOut cdUSDS out (1:1 with USDS in)
-    function mint(uint256 amount) external returns (uint256 tokensOut) {
-        tokensOut = amount;
-
-        reserve.transferFrom(msg.sender, address(this), amount);
-        totalShares += sReserve.deposit(amount, msg.sender);
-
-        cdUSDS.mint(msg.sender, amount);
-    }
-
-    /// @notice allow non cd holder to sell cdUSDS for USDS
-    /// @notice the amount of USDS per cdUSDS is not 1:1
-    /// @notice convertible depositors should use returnDeposit() for 1:1
-    function redeem(uint256 amount) external returns (uint256 tokensOut) {
-        // burn cdUSDS
-        cdUSDS.burn(msg.sender, amount);
-
-        // compute shares to redeem
-        tokensOut = redeemOutput(amount);
-        uint256 shares = sReserve.previewWithdraw(tokensOut);
-        totalShares -= shares;
-
-        // return debt token to user
-        sReserve.redeem(shares, msg.sender, address(this));
-    }
-
-    // ========== YIELD MANAGER ========== //
-
-    // TODO shift these to CDEPO
-
-    /// @notice allow yield manager to sweep yield accrued on reserves
-    /// @return yield yield in reserve token terms
-    /// @return shares yield in sReserve token terms
-    function sweepYield()
-        external
-        onlyRole("CD_Yield_Manager")
-        returns (uint256 yield, uint256 shares)
-    {
-        yield = sReserve.previewRedeem(totalShares) - cdUSDS.totalSupply();
-        shares = sReserve.previewWithdraw(yield);
-        totalShares -= shares;
-        sReserve.transfer(msg.sender, shares);
-
-        emit SweptYield(msg.sender, yield);
-    }
-
-    // ========== GOVERNOR ========== //
-
-    /// @notice allow admin to change redeem rate
-    /// @dev    redeem rate must be lower than or equal to 1:1
-    function setRedeemRate(uint256 newRate) external onlyRole("CD_Admin") {
-        if (newRate > DECIMALS) revert Misconfigured();
-        redeemRate = newRate;
-    }
-
-    // ========== VIEW FUNCTIONS ========== //
-
-    /// @notice get yield accrued on deposited reserve tokens
-    /// @return yield in reserve token terms
-    function yieldAccrued() external view returns (uint256) {
-        return sReserve.previewRedeem(totalShares) - totalDeposits;
-    }
-
-    /// @notice amount of deposit tokens out for amount of cdUSDS redeemed
-    /// @param  amount of cdUSDS in
-    /// @return output amount of USDS out
-    function redeemOutput(uint256 amount) public view returns (uint256) {
-        return (amount * redeemRate) / DECIMALS;
+        return reclaimed;
     }
 }
