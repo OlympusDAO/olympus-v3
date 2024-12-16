@@ -12,13 +12,11 @@ abstract contract CTERMv1 is Module, ERC721 {
 
     /// @notice Data structure for the terms of a convertible deposit
     ///
-    /// @param  owner            The address of the owner of the term
     /// @param  remainingDeposit Amount of reserve tokens remaining to be converted
     /// @param  conversionPrice  Price of the reserve token in USD
     /// @param  expiry           Timestamp when the term expires
     /// @param  wrapped          Whether the term is wrapped
     struct ConvertibleDepositTerm {
-        address owner;
         uint256 remainingDeposit;
         uint256 conversionPrice;
         uint48 expiry;
@@ -41,7 +39,13 @@ abstract contract CTERMv1 is Module, ERC721 {
     event TermUpdated(uint256 indexed termId, uint256 remainingDeposit);
 
     /// @notice Emitted when a term is split
-    event TermSplit(uint256 indexed termId, uint256 newTermId, uint256 amount, uint256 to);
+    event TermSplit(
+        uint256 indexed termId,
+        uint256 newTermId,
+        uint256 amount,
+        address to,
+        bool wrap
+    );
 
     /// @notice Emitted when a term is wrapped
     event TermWrapped(uint256 indexed termId);
@@ -64,6 +68,9 @@ abstract contract CTERMv1 is Module, ERC721 {
 
     // ========== ERRORS ========== //
 
+    /// @notice Error thrown when the caller is not the owner of the term
+    error CTERM_NotOwner(uint256 termId_);
+
     /// @notice Error thrown when an invalid term ID is provided
     error CTERM_InvalidTermId(uint256 id_);
 
@@ -73,8 +80,8 @@ abstract contract CTERMv1 is Module, ERC721 {
     /// @notice Error thrown when a term has not been wrapped
     error CTERM_NotWrapped(uint256 termId_);
 
-    /// @notice Error thrown when an invalid amount is provided
-    error CTERM_InvalidAmount(uint256 amount_);
+    /// @notice Error thrown when an invalid parameter is provided
+    error CTERM_InvalidParams(string reason_);
 
     // ========== WRAPPING ========== //
 
@@ -105,6 +112,7 @@ abstract contract CTERMv1 is Module, ERC721 {
     /// @notice Creates a new convertible deposit term
     /// @dev    The implementing function should do the following:
     ///         - Validate that the caller is permissioned
+    ///         - Validate that the owner is not the zero address
     ///         - Validate that the remaining deposit is greater than 0
     ///         - Validate that the conversion price is greater than 0
     ///         - Validate that the expiry is in the future
@@ -128,7 +136,7 @@ abstract contract CTERMv1 is Module, ERC721 {
     /// @notice Updates the remaining deposit of a term
     /// @dev    The implementing function should do the following:
     ///         - Validate that the caller is permissioned
-    ///         - Validate that the amount is greater than 0
+    ///         - Validate that the term ID is valid
     ///         - Update the remaining deposit of the term
     ///
     /// @param  termId_ The ID of the term to update
@@ -141,7 +149,7 @@ abstract contract CTERMv1 is Module, ERC721 {
     ///         - Validate that the caller is the owner of the term
     ///         - Validate that the amount is greater than 0
     ///         - Validate that the amount is less than or equal to the remaining deposit
-    ///         - Validate that the to address is not the zero address
+    ///         - Validate that `to_` is not the zero address
     ///         - Update the remaining deposit of the original term
     ///         - Create the new term record
     ///         - Wrap the new term if requested
@@ -162,9 +170,9 @@ abstract contract CTERMv1 is Module, ERC721 {
 
     /// @notice Get the IDs of all terms for a given user
     ///
-    /// @param  user        The address of the user
+    /// @param  user_       The address of the user
     /// @return termIds     An array of term IDs
-    function getUserTermIds(address user) external view virtual returns (uint256[] memory termIds);
+    function getUserTermIds(address user_) external view virtual returns (uint256[] memory termIds);
 
     /// @notice Get the terms for a given ID
     ///
