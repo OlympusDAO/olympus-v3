@@ -23,7 +23,7 @@ contract ContractRegistryProposalTest is ProposalTest {
         ContractRegistryProposal proposal = new ContractRegistryProposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         // Populate addresses array
         {
