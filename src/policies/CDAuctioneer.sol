@@ -57,29 +57,22 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function bid(uint256 deposit) external override returns (uint256 convertible) {
-        // update state
+        // Update state
         currentTick = getCurrentTick();
         state.lastUpdate = block.timestamp;
 
-        // iterate until user has no more reserves to bid
-        while (deposit > 0) {
-            // handle spent/capacity for tick
-            uint256 amount = currentTick.capacity < _convertFor(deposit, currentTick.price)
-                ? state.tickSize
-                : deposit;
-            if (amount != state.tickSize) currentTick.capacity -= amount;
-            else currentTick.price *= state.tickStep / decimals;
+        // Get bid results
+        uint256 currentTickCapacity;
+        uint256 currentTickPrice;
+        (currentTickCapacity, currentTickPrice, convertible) = _previewBid(deposit);
 
-            // decrement bid and increment tick price
-            deposit -= amount;
-            convertible += _convertFor(amount, currentTick.price);
-        }
-
-        // TODO extract logic to previewBid
-        // TODO update currentTick based on previewBid output
-
+        // Update day state
         today.deposits += deposit;
         today.convertible += convertible;
+
+        // Update current tick
+        currentTick.capacity = currentTickCapacity;
+        currentTick.price = currentTickPrice;
 
         // TODO calculate average price for total deposit and convertible, check rounding, formula
         uint256 conversionPrice = (deposit * decimals) / convertible;
@@ -92,12 +85,39 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
             uint48(block.timestamp + state.timeToExpiry),
             false
         );
+
+        return convertible;
+    }
+
+    function _previewBid(
+        uint256 deposit_
+    )
+        internal
+        view
+        returns (uint256 currentTickCapacity, uint256 currentTickPrice, uint256 convertible)
+    {
+        Tick memory tick = getCurrentTick();
+        uint256 remainingDeposit = deposit_;
+
+        while (remainingDeposit > 0) {
+            uint256 amount = tick.capacity < _convertFor(remainingDeposit, tick.price)
+                ? state.tickSize
+                : remainingDeposit;
+            if (amount != state.tickSize) tick.capacity -= amount;
+            else tick.price *= state.tickStep / decimals;
+
+            remainingDeposit -= amount;
+            convertible += _convertFor(amount, tick.price);
+        }
+
+        return (tick.capacity, tick.price, convertible);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function previewBid(uint256 deposit) external view override returns (uint256 convertible) {
-        // TODO
-        return 0;
+        (, , convertible) = _previewBid(deposit);
+
+        return convertible;
     }
 
     // ========== VIEW FUNCTIONS ========== //
