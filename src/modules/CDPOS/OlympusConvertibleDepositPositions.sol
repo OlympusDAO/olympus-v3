@@ -4,11 +4,14 @@ pragma solidity 0.8.15;
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {CDPOSv1} from "./CDPOS.v1.sol";
 import {Kernel, Module} from "src/Kernel.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Timestamp} from "src/libraries/Timestamp.sol";
 
 contract OlympusConvertibleDepositPositions is CDPOSv1 {
     constructor(
         address kernel_
-    ) Module(Kernel(kernel_)) ERC721("Olympus Convertible Deposit Positions", "OCDP") {}
+    ) Module(Kernel(kernel_)) ERC721("Olympus Convertible Deposit Position", "OCDP") {}
 
     // ========== WRAPPING ========== //
 
@@ -222,11 +225,82 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
 
     // ========== ERC721 OVERRIDES ========== //
 
-    /// @inheritdoc ERC721
-    function tokenURI(uint256 id_) public view virtual override returns (string memory) {
-        // TODO implement tokenURI SVG
-        return "";
+    function _getTimeString(uint48 time_) internal pure returns (string memory) {
+        (string memory year, string memory month, string memory day) = Timestamp.toPaddedString(
+            time_
+        );
+
+        return string.concat(year, "-", month, "-", day);
     }
+
+    // solhint-disable quotes
+    function _render(
+        uint256 positionId_,
+        Position memory position_
+    ) internal pure returns (string memory) {
+        // TODO consider adding conversion price and remaining deposit to the SVG. How to display as decimal values?
+        return
+            string.concat(
+                '<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">',
+                '<rect width="100" height="100" fill="#ffffff" />',
+                string.concat(
+                    '<text x="50" y="45" font-size="50" text-anchor="middle" fill="#000000">',
+                    unicode"Ω",
+                    "</text>"
+                ),
+                '<text x="50" y="60" font-size="7" text-anchor="middle" fill="#000000">Convertible Deposit</text>',
+                string.concat(
+                    '<text x="10" y="75" font-size="7" text-anchor="left" fill="#000000">Position ID: ',
+                    Strings.toString(positionId_),
+                    "</text>"
+                ),
+                string.concat(
+                    '<text x="10" y="85" font-size="7" text-anchor="left" fill="#000000">Expiry: ',
+                    _getTimeString(position_.expiry),
+                    "</text>"
+                ),
+                "</svg>"
+            );
+    }
+
+    // solhint-enable quotes
+
+    /// @inheritdoc ERC721
+    // solhint-disable quotes
+    function tokenURI(uint256 id_) public view virtual override returns (string memory) {
+        Position memory position = _getPosition(id_);
+
+        // solhint-disable-next-line quotes
+        string memory jsonContent = string.concat(
+            "{",
+            string.concat('"name": "', name, '",'),
+            string.concat('"symbol": "', symbol, '",'),
+            '"attributes": [',
+            string.concat('{"trait_type": "Position ID", "value": "', Strings.toString(id_), '"},'),
+            string.concat(
+                '{"trait_type": "Convertible Deposit Token", "value": "',
+                Strings.toHexString(position.convertibleDepositToken),
+                '"},'
+            ),
+            string.concat(
+                '{"trait_type": "Expiry", "display_type": "date", "value": "',
+                Strings.toString(position.expiry),
+                '"},'
+            ),
+            "]",
+            string.concat(
+                '"image": "',
+                "data:image/svg+xml;base64,",
+                Base64.encode(bytes(_render(id_, position))),
+                '"}'
+            ),
+            "}"
+        );
+
+        return string.concat("data:application/json;base64,", Base64.encode(bytes(jsonContent)));
+    }
+
+    // solhint-enable quotes
 
     /// @inheritdoc ERC721
     /// @dev        This function performs the following:
