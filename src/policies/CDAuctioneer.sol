@@ -89,6 +89,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         return convertible;
     }
 
+    /// @notice Internal function to preview the number of convertible tokens that can be purchased for a given deposit amount
+    /// @dev    The function also returns the adjusted capacity and price of the current tick
+    ///
+    /// @param  deposit_            The amount of deposit to be bid
+    /// @return currentTickCapacity The adjusted capacity of the current tick
+    /// @return currentTickPrice    The adjusted price of the current tick
+    /// @return convertible         The number of convertible tokens that can be purchased
     function _previewBid(
         uint256 deposit_
     )
