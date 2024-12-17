@@ -25,6 +25,8 @@ interface IConvertibleDepositFacility {
 
     error CDF_InvalidAmount(uint256 positionId_, uint256 amount_);
 
+    error CDF_InvalidToken(uint256 positionId_, address token_);
+
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
     /// @notice Creates a new convertible deposit position
@@ -53,6 +55,7 @@ interface IConvertibleDepositFacility {
     /// @notice Converts convertible deposit tokens to OHM before expiry
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have not expired
     ///         - Burning the convertible deposit tokens
@@ -72,6 +75,7 @@ interface IConvertibleDepositFacility {
     /// @notice Reclaims convertible deposit tokens after expiry
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have expired
     ///         - Burning the convertible deposit tokens

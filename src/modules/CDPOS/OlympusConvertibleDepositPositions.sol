@@ -62,6 +62,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
 
     function _create(
         address owner_,
+        address convertibleDepositToken_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 expiry_,
@@ -70,6 +71,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         // Create the position record
         positionId = ++positionCount;
         _positions[positionId] = Position({
+            convertibleDepositToken: convertibleDepositToken_,
             remainingDeposit: remainingDeposit_,
             conversionPrice: conversionPrice_,
             expiry: expiry_,
@@ -90,6 +92,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         emit PositionCreated(
             positionId,
             owner_,
+            convertibleDepositToken_,
             remainingDeposit_,
             conversionPrice_,
             expiry_,
@@ -103,11 +106,13 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The owner is the zero address
+    ///             - The convertible deposit token is the zero address
     ///             - The remaining deposit is 0
     ///             - The conversion price is 0
     ///             - The expiry is in the past
     function create(
         address owner_,
+        address convertibleDepositToken_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 expiry_,
@@ -115,6 +120,10 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ) external virtual override permissioned returns (uint256 positionId) {
         // Validate that the owner is not the zero address
         if (owner_ == address(0)) revert CDPOS_InvalidParams("owner");
+
+        // Validate that the convertible deposit token is not the zero address
+        if (convertibleDepositToken_ == address(0))
+            revert CDPOS_InvalidParams("convertible deposit token");
 
         // Validate that the remaining deposit is greater than 0
         if (remainingDeposit_ == 0) revert CDPOS_InvalidParams("deposit");
@@ -125,7 +134,15 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         // Validate that the expiry is in the future
         if (expiry_ <= block.timestamp) revert CDPOS_InvalidParams("expiry");
 
-        return _create(owner_, remainingDeposit_, conversionPrice_, expiry_, wrap_);
+        return
+            _create(
+                owner_,
+                convertibleDepositToken_,
+                remainingDeposit_,
+                conversionPrice_,
+                expiry_,
+                wrap_
+            );
     }
 
     /// @inheritdoc CDPOSv1
@@ -181,10 +198,24 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         position.remainingDeposit = remainingDeposit;
 
         // Create the new position
-        newPositionId = _create(to_, amount_, position.conversionPrice, position.expiry, wrap_);
+        newPositionId = _create(
+            to_,
+            position.convertibleDepositToken,
+            amount_,
+            position.conversionPrice,
+            position.expiry,
+            wrap_
+        );
 
         // Emit the event
-        emit PositionSplit(positionId_, newPositionId, amount_, to_, wrap_);
+        emit PositionSplit(
+            positionId_,
+            newPositionId,
+            position.convertibleDepositToken,
+            amount_,
+            to_,
+            wrap_
+        );
 
         return newPositionId;
     }

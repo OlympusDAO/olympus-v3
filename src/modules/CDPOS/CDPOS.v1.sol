@@ -12,11 +12,13 @@ abstract contract CDPOSv1 is Module, ERC721 {
 
     /// @notice Data structure for the terms of a convertible deposit
     ///
-    /// @param  remainingDeposit Amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice  Price of the reserve token in USD
-    /// @param  expiry           Timestamp when the term expires
-    /// @param  wrapped          Whether the term is wrapped
+    /// @param  convertibleDepositToken Address of the convertible deposit token
+    /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
+    /// @param  conversionPrice         Price of the reserve token in USD
+    /// @param  expiry                  Timestamp when the term expires
+    /// @param  wrapped                 Whether the term is wrapped
     struct Position {
+        address convertibleDepositToken;
         uint256 remainingDeposit;
         uint256 conversionPrice;
         uint48 expiry;
@@ -29,6 +31,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
+        address indexed convertibleDepositToken,
         uint256 remainingDeposit,
         uint256 conversionPrice,
         uint48 expiry,
@@ -42,6 +45,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
     event PositionSplit(
         uint256 indexed positionId,
         uint256 indexed newPositionId,
+        address indexed convertibleDepositToken,
         uint256 amount,
         address to,
         bool wrap
@@ -113,20 +117,23 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @dev    The implementing function should do the following:
     ///         - Validate that the caller is permissioned
     ///         - Validate that the owner is not the zero address
+    ///         - Validate that the convertible deposit token is not the zero address
     ///         - Validate that the remaining deposit is greater than 0
     ///         - Validate that the conversion price is greater than 0
     ///         - Validate that the expiry is in the future
     ///         - Create the position record
     ///         - Wrap the position if requested
     ///
-    /// @param  owner_              The address of the owner of the position
-    /// @param  remainingDeposit_   The amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice_    The price of the reserve token in USD
-    /// @param  expiry_             The timestamp when the position expires
-    /// @param  wrap_               Whether the position should be wrapped
-    /// @return positionId          The ID of the new position
+    /// @param  owner_                      The address of the owner of the position
+    /// @param  convertibleDepositToken_    The address of the convertible deposit token
+    /// @param  remainingDeposit_           The amount of reserve tokens remaining to be converted
+    /// @param  conversionPrice_            The price of the reserve token in USD
+    /// @param  expiry_                     The timestamp when the position expires
+    /// @param  wrap_                       Whether the position should be wrapped
+    /// @return positionId                  The ID of the new position
     function create(
         address owner_,
+        address convertibleDepositToken_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 expiry_,

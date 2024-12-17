@@ -90,7 +90,14 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         CDEPO.mintTo(account_, amount_);
 
         // Create a new term record in the CDPOS module
-        positionId = CDPOS.create(account_, amount_, conversionPrice_, expiry_, wrap_);
+        positionId = CDPOS.create(
+            account_,
+            address(CDEPO),
+            amount_,
+            conversionPrice_,
+            expiry_,
+            wrap_
+        );
 
         // Pre-emptively increase the OHM mint approval
         MINTR.increaseMintApproval(address(this), amount_);
@@ -121,6 +128,10 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             // Validate that the position is valid
             // This will revert if the position is not valid
             CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
+
+            // Validate that the position is CDEPO
+            if (position.convertibleDepositToken != address(CDEPO))
+                revert CDF_InvalidToken(positionId, position.convertibleDepositToken);
 
             // Validate that the position has not expired
             if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId);
@@ -176,6 +187,10 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             // Validate that the position is valid
             // This will revert if the position is not valid
             CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
+
+            // Validate that the position is CDEPO
+            if (position.convertibleDepositToken != address(CDEPO))
+                revert CDF_InvalidToken(positionId, position.convertibleDepositToken);
 
             // Validate that the position has expired
             if (block.timestamp < position.expiry) revert CDF_PositionNotExpired(positionId);
