@@ -2,13 +2,17 @@
 pragma solidity 0.8.15;
 
 import {ERC721} from "solmate/tokens/ERC721.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {CDPOSv1} from "./CDPOS.v1.sol";
 import {Kernel, Module} from "src/Kernel.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
+import {DecimalString} from "src/libraries/DecimalString.sol";
 
 contract OlympusConvertibleDepositPositions is CDPOSv1 {
+    uint8 internal _displayDecimals = 2;
+
     constructor(
         address kernel_
     ) Module(Kernel(kernel_)) ERC721("Olympus Convertible Deposit Position", "OCDP") {}
@@ -237,28 +241,48 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     function _render(
         uint256 positionId_,
         Position memory position_
-    ) internal pure returns (string memory) {
-        // TODO consider adding conversion price and remaining deposit to the SVG. How to display as decimal values?
+    ) internal view returns (string memory) {
+        // Get the decimals of the deposit token
+        uint8 depositDecimals = ERC20(position_.convertibleDepositToken).decimals();
+
         return
             string.concat(
                 '<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">',
                 '<rect width="100" height="100" fill="#ffffff" />',
                 string.concat(
-                    '<text x="50" y="45" font-size="50" text-anchor="middle" fill="#768299">',
+                    '<text x="50" y="40" font-size="50" text-anchor="middle" fill="#768299">',
                     unicode"Ω",
                     "</text>"
                 ),
-                '<text x="50" y="60" font-size="7" text-anchor="middle" fill="#768299">Convertible Deposit</text>',
+                '<text x="50" y="50" font-size="7" text-anchor="middle" fill="#768299">Convertible Deposit</text>',
                 string.concat(
-                    '<text x="5" y="75" font-size="7" text-anchor="left" fill="#768299">ID: ',
+                    '<text x="5" y="65" font-size="7" text-anchor="left" fill="#768299">ID: ',
                     Strings.toString(positionId_),
                     "</text>"
                 ),
                 string.concat(
-                    '<text x="5" y="85" font-size="7" text-anchor="left" fill="#768299">Expiry: ',
+                    '<text x="5" y="75" font-size="7" text-anchor="left" fill="#768299">Expiry: ',
                     _getTimeString(position_.expiry),
                     "</text>"
                 ),
+                string.concat(
+                    '<text x="5" y="85" font-size="7" text-anchor="left" fill="#768299">Remaining: ',
+                    DecimalString.toDecimalString(
+                        position_.remainingDeposit,
+                        depositDecimals,
+                        _displayDecimals
+                    ),
+                    "</text>"
+                ),
+                string.concat(
+                    '<text x="5" y="95" font-size="7" text-anchor="left" fill="#768299">Conversion: ',
+                    DecimalString.toDecimalString(
+                        position_.conversionPrice,
+                        depositDecimals,
+                        _displayDecimals
+                    ),
+                    "</text>"
+                ), // TODO check decimals of conversion price. This probably isn't correct.
                 "</svg>"
             );
     }
@@ -269,6 +293,9 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     // solhint-disable quotes
     function tokenURI(uint256 id_) public view virtual override returns (string memory) {
         Position memory position = _getPosition(id_);
+
+        // Get the decimals of the deposit token
+        uint8 depositDecimals = ERC20(position.convertibleDepositToken).decimals();
 
         // solhint-disable-next-line quotes
         string memory jsonContent = string.concat(
@@ -285,6 +312,24 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             string.concat(
                 '{"trait_type": "Expiry", "display_type": "date", "value": "',
                 Strings.toString(position.expiry),
+                '"},'
+            ),
+            string.concat(
+                '{"trait_type": "Remaining Deposit", "value": "',
+                DecimalString.toDecimalString(
+                    position.remainingDeposit,
+                    depositDecimals,
+                    _displayDecimals
+                ),
+                '"},'
+            ),
+            string.concat(
+                '{"trait_type": "Conversion Price", "value": "',
+                DecimalString.toDecimalString(
+                    position.conversionPrice,
+                    depositDecimals,
+                    _displayDecimals
+                ),
                 '"},'
             ),
             "]",
