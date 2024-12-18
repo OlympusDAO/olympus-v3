@@ -244,18 +244,18 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                 '<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">',
                 '<rect width="100" height="100" fill="#ffffff" />',
                 string.concat(
-                    '<text x="50" y="45" font-size="50" text-anchor="middle" fill="#000000">',
+                    '<text x="50" y="45" font-size="50" text-anchor="middle" fill="#768299">',
                     unicode"Ω",
                     "</text>"
                 ),
-                '<text x="50" y="60" font-size="7" text-anchor="middle" fill="#000000">Convertible Deposit</text>',
+                '<text x="50" y="60" font-size="7" text-anchor="middle" fill="#768299">Convertible Deposit</text>',
                 string.concat(
-                    '<text x="10" y="75" font-size="7" text-anchor="left" fill="#000000">Position ID: ',
+                    '<text x="5" y="75" font-size="7" text-anchor="left" fill="#768299">ID: ',
                     Strings.toString(positionId_),
                     "</text>"
                 ),
                 string.concat(
-                    '<text x="10" y="85" font-size="7" text-anchor="left" fill="#000000">Expiry: ',
+                    '<text x="5" y="85" font-size="7" text-anchor="left" fill="#768299">Expiry: ',
                     _getTimeString(position_.expiry),
                     "</text>"
                 ),
