@@ -413,6 +413,14 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         return _getPosition(positionId_).expiry <= block.timestamp;
     }
 
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Set the number of decimal places to display when rendering values as decimal strings.
+    /// @dev    This affects the display of the remaining deposit and conversion price in the SVG and JSON metadata.
+    function setDisplayDecimals(uint8 decimals_) external permissioned {
+        _displayDecimals = decimals_;
+    }
+
     // ========== MODIFIERS ========== //
 
     modifier onlyValidPosition(uint256 positionId_) {
