@@ -11,6 +11,9 @@ import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
 
 contract OlympusConvertibleDepositPositions is CDPOSv1 {
+    /// @notice The number of decimal places to display when rendering values as decimal strings.
+    /// @dev    This affects the display of the remaining deposit and conversion price in the SVG and JSON metadata.
+    ///         It can be adjusted using the `setDisplayDecimals` function, which is permissioned.
     uint8 internal _displayDecimals = 2;
 
     constructor(
