@@ -359,6 +359,15 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         return _getPosition(positionId_);
     }
 
+    /// @inheritdoc CDPOSv1
+    /// @dev        This function reverts if:
+    ///             - The position ID is invalid
+    ///
+    /// @return     Returns true if the expiry timestamp is now or in the past
+    function isExpired(uint256 positionId_) external view virtual override returns (bool) {
+        return _getPosition(positionId_).expiry <= block.timestamp;
+    }
+
     // ========== MODIFIERS ========== //
 
     modifier onlyValidPosition(uint256 positionId_) {

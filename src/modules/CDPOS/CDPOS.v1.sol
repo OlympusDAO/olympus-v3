@@ -188,4 +188,10 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  positionId_ The ID of the position
     /// @return position    The positions for the given ID
     function getPosition(uint256 positionId_) external view virtual returns (Position memory);
+
+    /// @notice Check if a position is expired
+    ///
+    /// @param  positionId_ The ID of the position
+    /// @return expired_    Whether the position is expired
+    function isExpired(uint256 positionId_) external view virtual returns (bool);
 }
