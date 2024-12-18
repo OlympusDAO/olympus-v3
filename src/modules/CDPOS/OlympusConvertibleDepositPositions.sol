@@ -11,10 +11,16 @@ import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
 
 contract OlympusConvertibleDepositPositions is CDPOSv1 {
+    // ========== STATE VARIABLES ========== //
+
+    uint256 public constant DECIMALS = 1e18;
+
     /// @notice The number of decimal places to display when rendering values as decimal strings.
     /// @dev    This affects the display of the remaining deposit and conversion price in the SVG and JSON metadata.
     ///         It can be adjusted using the `setDisplayDecimals` function, which is permissioned.
     uint8 internal _displayDecimals = 2;
+
+    // ========== CONSTRUCTOR ========== //
 
     constructor(
         address kernel_
@@ -414,6 +420,21 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     /// @return     Returns true if the expiry timestamp is now or in the past
     function isExpired(uint256 positionId_) external view virtual override returns (bool) {
         return _getPosition(positionId_).expiry <= block.timestamp;
+    }
+
+    function _previewConvert(
+        uint256 amount_,
+        uint256 conversionPrice_
+    ) internal pure returns (uint256) {
+        return (amount_ * DECIMALS) / conversionPrice_; // TODO check decimals, rounding
+    }
+
+    /// @inheritdoc CDPOSv1
+    function previewConvert(
+        uint256 positionId_,
+        uint256 amount_
+    ) public view virtual override onlyValidPosition(positionId_) returns (uint256) {
+        return _previewConvert(amount_, _getPosition(positionId_).conversionPrice);
     }
 
     // ========== ADMIN FUNCTIONS ========== //
