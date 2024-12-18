@@ -12,12 +12,14 @@ abstract contract CDPOSv1 is Module, ERC721 {
 
     /// @notice Data structure for the terms of a convertible deposit
     ///
+    /// @param  owner                   Address of the owner of the position
     /// @param  convertibleDepositToken Address of the convertible deposit token
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
     /// @param  conversionPrice         Price of the reserve token in USD
     /// @param  expiry                  Timestamp when the term expires
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
+        address owner;
         address convertibleDepositToken;
         uint256 remainingDeposit;
         uint256 conversionPrice;

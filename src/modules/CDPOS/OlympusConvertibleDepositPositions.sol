@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {CDPOSv1} from "./CDPOS.v1.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
@@ -25,6 +25,19 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     constructor(
         address kernel_
     ) Module(Kernel(kernel_)) ERC721("Olympus Convertible Deposit Position", "OCDP") {}
+
+    // ========== MODULE FUNCTIONS ========== //
+
+    /// @inheritdoc Module
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("CDPOS");
+    }
+
+    /// @inheritdoc Module
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
 
     // ========== WRAPPING ========== //
 
@@ -85,8 +98,9 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         bool wrap_
     ) internal returns (uint256 positionId) {
         // Create the position record
-        positionId = ++positionCount;
+        positionId = positionCount++;
         _positions[positionId] = Position({
+            owner: owner_,
             convertibleDepositToken: convertibleDepositToken_,
             remainingDeposit: remainingDeposit_,
             conversionPrice: conversionPrice_,
@@ -95,8 +109,9 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         });
 
         // Update ERC721 storage
-        _ownerOf[positionId] = owner_;
-        _balanceOf[owner_]++;
+        // TODO remove this, only when wrapped
+        // _ownerOf[positionId] = owner_;
+        // _balanceOf[owner_]++;
 
         // Add the position ID to the user's list of positions
         _userPositions[owner_].push(positionId);
