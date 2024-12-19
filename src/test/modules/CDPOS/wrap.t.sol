@@ -90,7 +90,7 @@ contract WrapCDPOSTest is CDPOSTest {
         _assertERC721Owner(0, address(this), true);
 
         // Assert owner's list of positions is updated
-        _assertUserPosition(address(this), 1, 1);
+        _assertUserPosition(address(this), 0, 1);
     }
 
     function test_multiplePositions()
@@ -117,7 +117,7 @@ contract WrapCDPOSTest is CDPOSTest {
         _assertERC721Owner(1, address(this), true);
 
         // Assert owner's list of positions is updated
+        _assertUserPosition(address(this), 0, 2);
         _assertUserPosition(address(this), 1, 2);
-        _assertUserPosition(address(this), 2, 2);
     }
 }

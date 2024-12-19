@@ -40,6 +40,8 @@ contract CreateCDPOSTest is CDPOSTest {
     // when the conversion would result in an underflow
     //  [X] it reverts
     // when the wrap flag is true
+    //  when the receiver cannot receive ERC721 tokens
+    //   [X] it reverts
     //  [X] it mints the ERC721 token
     //  [X] it marks the position as wrapped
     //  [X] the position is listed as owned by the owner
@@ -161,6 +163,20 @@ contract CreateCDPOSTest is CDPOSTest {
         _assertUserPosition(address(this), 0, 1);
     }
 
+    function test_singlePosition_whenWrapped_unsafeRecipient_reverts() public {
+        // Expect revert
+        vm.expectRevert();
+
+        // Call function
+        _createPosition(
+            address(convertibleDepositToken), // Needs to be a contract
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            uint48(block.timestamp + EXPIRY_DELAY),
+            true
+        );
+    }
+
     function test_singlePosition_whenWrapped() public {
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -233,8 +249,8 @@ contract CreateCDPOSTest is CDPOSTest {
     }
 
     function test_multiplePositions_multipleOwners() public {
-        address owner1 = address(0x1);
-        address owner2 = address(0x2);
+        address owner1 = address(this);
+        address owner2 = address(mockERC721Receiver);
 
         // Create 5 positions for owner1
         for (uint256 i = 0; i < 5; i++) {

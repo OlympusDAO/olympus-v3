@@ -59,7 +59,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         position.wrapped = true;
 
         // Mint the ERC721 token
-        _mint(msg.sender, positionId_);
+        _safeMint(msg.sender, positionId_);
 
         emit PositionWrapped(positionId_);
     }
@@ -108,16 +108,11 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             wrapped: wrap_
         });
 
-        // Update ERC721 storage
-        // TODO remove this, only when wrapped
-        // _ownerOf[positionId] = owner_;
-        // _balanceOf[owner_]++;
-
         // Add the position ID to the user's list of positions
         _userPositions[owner_].push(positionId);
 
         // If specified, wrap the position
-        if (wrap_) _mint(owner_, positionId);
+        if (wrap_) _safeMint(owner_, positionId);
 
         // Emit the event
         emit PositionCreated(

@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 import {MockERC20} from "forge-std/mocks/MockERC20.sol";
+import {ERC721ReceiverMock} from "@openzeppelin/contracts/mocks/ERC721ReceiverMock.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/interfaces/IERC721Receiver.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
@@ -21,6 +23,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
     Kernel public kernel;
     OlympusConvertibleDepositPositions public CDPOS;
+    ERC721ReceiverMock public mockERC721Receiver;
     address public godmode;
     address public convertibleDepositToken;
     uint8 public convertibleDepositTokenDecimals = 18;
@@ -32,6 +35,10 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
         kernel = new Kernel();
         CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
+        mockERC721Receiver = new ERC721ReceiverMock(
+            IERC721Receiver.onERC721Received.selector,
+            ERC721ReceiverMock.Error.None
+        );
 
         // Set up the convertible deposit token
         MockERC20 mockERC20 = new MockERC20();
