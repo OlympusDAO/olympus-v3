@@ -65,7 +65,9 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @return tokensOut The amount of convertible deposit tokens that would be minted
     function previewMint(uint256 amount_) external view virtual returns (uint256 tokensOut);
 
-    /// @notice Burn tokens from the caller and return the underlying asset
+    // TODO review docs
+
+    /// @notice Burn tokens from the caller and reclaim the underlying asset
     ///         The amount of underlying asset may not be 1:1 with the amount of
     ///         convertible deposit tokens, depending on the value of `burnRate`
     /// @dev    The implementing function should perform the following:
@@ -76,25 +78,25 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///         - Emits a `Transfer` event
     ///
     /// @param  amount_   The amount of convertible deposit tokens to burn
-    function burn(uint256 amount_) external virtual;
+    function reclaim(uint256 amount_) external virtual;
 
-    /// @notice Burn tokens from `from_` and return the underlying asset
-    ///         This function behaves the same as `burn`, but allows the caller to
+    /// @notice Burn tokens from `from_` and reclaim the underlying asset
+    ///         This function behaves the same as `reclaim`, but allows the caller to
     ///         specify the address to burn the tokens from and transfer the underlying
     ///         asset to.
     ///
-    /// @param  from_     The address to burn the tokens from
+    /// @param  to_       The address to reclaim the underlying asset to
     /// @param  amount_   The amount of convertible deposit tokens to burn
-    function burnFrom(address from_, uint256 amount_) external virtual;
+    function reclaimTo(address to_, uint256 amount_) external virtual;
 
-    /// @notice Preview the amount of underlying asset that would be returned for a given amount of convertible deposit tokens
+    /// @notice Preview the amount of underlying asset that would be reclaimed for a given amount of convertible deposit tokens
     /// @dev    The implementing function should perform the following:
     ///         - Computes the amount of underlying asset that would be returned for the given amount of convertible deposit tokens
     ///         - Returns the computed amount
     ///
     /// @param  amount_   The amount of convertible deposit tokens to burn
-    /// @return assetsOut The amount of underlying asset that would be returned
-    function previewBurn(uint256 amount_) external view virtual returns (uint256 assetsOut);
+    /// @return assetsOut The amount of underlying asset that would be reclaimed
+    function previewReclaim(uint256 amount_) external view virtual returns (uint256 assetsOut);
 
     /// @notice Redeem convertible deposit tokens for the underlying asset
     ///         This differs from the burn function, in that it is an admin-level and permissioned function that does not apply the burn rate.

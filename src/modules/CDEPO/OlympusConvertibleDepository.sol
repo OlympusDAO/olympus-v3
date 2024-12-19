@@ -75,37 +75,39 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Calls `burnFrom` with the caller as the address to burn the tokens from
-    function burn(uint256 amount_) external virtual override {
-        burnFrom(msg.sender, amount_);
+    ///             - Calls `reclaimTo` with the caller as the address to reclaim the tokens to
+    function reclaim(uint256 amount_) external virtual override {
+        reclaimTo(msg.sender, amount_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Burns the CD tokens from `from_`
+    ///             - Burns the CD tokens from the caller
     ///             - Calculates the quantity of underlying asset to withdraw and return
-    ///             - Returns the underlying asset to `from_`
+    ///             - Returns the underlying asset to `to_`
     ///             - Emits a `Transfer` event
     ///
-    /// @param  from_     The address to burn the tokens from
+    /// @param  to_       The address to reclaim the tokens to
     /// @param  amount_   The amount of CD tokens to burn
-    function burnFrom(address from_, uint256 amount_) public virtual override {
+    function reclaimTo(address to_, uint256 amount_) public virtual override {
         // Burn the CD tokens from `from_`
-        _burn(from_, amount_);
+        _burn(msg.sender, amount_);
 
         // Calculate the quantity of underlying asset to withdraw and return
         // This will create a difference between the quantity of underlying assets and the vault shares, which will be swept as yield
         // TODO make sure there are no shares left over if all CD tokens are burned
-        uint256 discountedAssetsOut = previewBurn(amount_);
+        uint256 discountedAssetsOut = previewReclaim(amount_);
         uint256 shares = vault.previewWithdraw(discountedAssetsOut);
         totalShares -= shares;
 
-        // Return the underlying asset to `from_`
-        vault.redeem(shares, from_, address(this));
+        // Return the underlying asset to `to_`
+        vault.redeem(shares, to_, address(this));
     }
 
     /// @inheritdoc CDEPOv1
-    function previewBurn(uint256 amount_) public view virtual override returns (uint256 assetsOut) {
+    function previewReclaim(
+        uint256 amount_
+    ) public view virtual override returns (uint256 assetsOut) {
         assetsOut = (amount_ * burnRate) / ONE_HUNDRED_PERCENT;
     }
 
