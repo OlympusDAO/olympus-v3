@@ -107,6 +107,29 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         assertEq(CDPOS.balanceOf(owner_), balance_, "balanceOf");
     }
 
+    function _assertERC721PositionReceived(
+        uint256 positionId_,
+        uint256 total_,
+        bool received_
+    ) internal {
+        assertEq(positions.length, total_, "positions.length");
+
+        // Iterate over the positions and assert that the positionId_ is in the array
+        bool found = false;
+        for (uint256 i = 0; i < positions.length; i++) {
+            if (positions[i] == positionId_) {
+                found = true;
+                break;
+            }
+        }
+
+        if (received_) {
+            assertTrue(found, "positionId_ not found in positions");
+        } else {
+            assertFalse(found, "positionId_ found in positions");
+        }
+    }
+
     // ========== MODIFIERS ========== //
 
     modifier givenConvertibleDepositTokenDecimals(uint8 decimals_) {
@@ -161,5 +184,25 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
     ) internal {
         vm.prank(owner_);
         CDPOS.split(positionId_, amount_, to_, wrap_);
+    }
+
+    function _wrapPosition(address owner_, uint256 positionId_) internal {
+        vm.prank(owner_);
+        CDPOS.wrap(positionId_);
+    }
+
+    modifier givenPositionWrapped(address owner_, uint256 positionId_) {
+        _wrapPosition(owner_, positionId_);
+        _;
+    }
+
+    function _unwrapPosition(address owner_, uint256 positionId_) internal {
+        vm.prank(owner_);
+        CDPOS.unwrap(positionId_);
+    }
+
+    modifier givenPositionUnwrapped(address owner_, uint256 positionId_) {
+        _unwrapPosition(owner_, positionId_);
+        _;
     }
 }

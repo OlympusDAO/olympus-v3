@@ -148,29 +148,17 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         // Assert that this contract did not receive the position ERC721
-        assertEq(positions.length, 0, "positions.length");
+        _assertERC721PositionReceived(0, 0, false);
 
         // Assert that the ERC721 balances were not updated
         _assertERC721Balance(address(this), 0);
         _assertERC721Owner(0, address(this), false);
 
         // Assert that the position is correct
-        CDPOSv1.Position memory position = CDPOS.getPosition(0);
-        assertEq(position.owner, address(this), "position.owner");
-        assertEq(
-            position.convertibleDepositToken,
-            convertibleDepositToken,
-            "position.convertibleDepositToken"
-        );
-        assertEq(position.remainingDeposit, REMAINING_DEPOSIT, "position.remainingDeposit");
-        assertEq(position.conversionPrice, CONVERSION_PRICE, "position.conversionPrice");
-        assertEq(position.expiry, block.timestamp + EXPIRY_DELAY, "position.expiry");
-        assertEq(position.wrapped, false, "position.wrapped");
+        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false);
 
         // Assert that the owner's list of positions is updated
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
-        assertEq(ownerPositions.length, 1, "ownerPositions.length");
-        assertEq(ownerPositions[0], 0, "ownerPositions[0]");
+        _assertUserPosition(address(this), 0, 1);
     }
 
     function test_singlePosition_whenWrapped() public {
@@ -196,8 +184,7 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         // Assert that this contract received the position ERC721
-        assertEq(positions.length, 1, "positions.length");
-        assertEq(positions[0], 0, "positions[0]");
+        _assertERC721PositionReceived(0, 1, true);
 
         // Assert that the ERC721 balances were updated
         _assertERC721Balance(address(this), 1);
