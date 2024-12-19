@@ -381,7 +381,16 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         // Validate that the position is valid
         if (position.conversionPrice == 0) revert CDPOS_InvalidPositionId(tokenId_);
 
-        // Ownership is validated in `transferFrom` on the parent contract
+        // Validate that the position is wrapped/minted
+        if (!position.wrapped) revert CDPOS_NotWrapped(tokenId_);
+
+        // Additional validation performed in super.transferForm():
+        // - Approvals
+        // - Ownership
+        // - Destination address
+
+        // Update the position record
+        position.owner = to_;
 
         // Add to user positions on the destination address
         _userPositions[to_].push(tokenId_);

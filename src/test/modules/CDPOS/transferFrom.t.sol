@@ -55,7 +55,12 @@ contract TransferFromCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
     {
         // Expect revert
-        vm.expectRevert("WRONG_FROM");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CDPOSv1.CDPOS_NotWrapped.selector,
+                0
+            )
+        );
 
         // Call function
         vm.prank(address(this));
