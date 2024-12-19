@@ -470,7 +470,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
 
     modifier onlyPositionOwner(uint256 positionId_) {
         // This validates that the caller is the owner of the position
-        if (_ownerOf[positionId_] != msg.sender) revert CDPOS_NotOwner(positionId_);
+        if (_getPosition(positionId_).owner != msg.sender) revert CDPOS_NotOwner(positionId_);
         _;
     }
 }

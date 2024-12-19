@@ -36,9 +36,9 @@ contract CreateCDPOSTest is CDPOSTest {
     // when the expiry is in the future
     //  [X] it sets the expiry
     // when the conversion would result in an overflow
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the conversion would result in an underflow
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the wrap flag is true
     //  [X] it mints the ERC721 token
     //  [X] it marks the position as wrapped
@@ -151,9 +151,8 @@ contract CreateCDPOSTest is CDPOSTest {
         assertEq(positions.length, 0, "positions.length");
 
         // Assert that the ERC721 balances were not updated
-        vm.expectRevert("NOT_MINTED");
-        CDPOS.ownerOf(0);
-        assertEq(CDPOS.balanceOf(address(this)), 0, "balanceOf(address(this))");
+        _assertERC721Balance(address(this), 0);
+        _assertERC721Owner(0, address(this), false);
 
         // Assert that the position is correct
         CDPOSv1.Position memory position = CDPOS.getPosition(0);
@@ -201,26 +200,14 @@ contract CreateCDPOSTest is CDPOSTest {
         assertEq(positions[0], 0, "positions[0]");
 
         // Assert that the ERC721 balances were updated
-        assertEq(CDPOS.ownerOf(0), address(this), "ownerOf(0)");
-        assertEq(CDPOS.balanceOf(address(this)), 1, "balanceOf(address(this))");
+        _assertERC721Balance(address(this), 1);
+        _assertERC721Owner(0, address(this), true);
 
         // Assert that the position is correct
-        CDPOSv1.Position memory position = CDPOS.getPosition(0);
-        assertEq(position.owner, address(this), "position.owner");
-        assertEq(
-            position.convertibleDepositToken,
-            convertibleDepositToken,
-            "position.convertibleDepositToken"
-        );
-        assertEq(position.remainingDeposit, REMAINING_DEPOSIT, "position.remainingDeposit");
-        assertEq(position.conversionPrice, CONVERSION_PRICE, "position.conversionPrice");
-        assertEq(position.expiry, block.timestamp + EXPIRY_DELAY, "position.expiry");
-        assertEq(position.wrapped, true, "position.wrapped");
+        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
 
         // Assert that the owner's list of positions is updated
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
-        assertEq(ownerPositions.length, 1, "ownerPositions.length");
-        assertEq(ownerPositions[0], 0, "ownerPositions[0]");
+        _assertUserPosition(address(this), 0, 1);
     }
 
     function test_multiplePositions_singleOwner() public {
@@ -244,12 +231,11 @@ contract CreateCDPOSTest is CDPOSTest {
             assertEq(position.owner, address(this), "position.owner");
 
             // Assert that the ERC721 position is not updated
-            vm.expectRevert("NOT_MINTED");
-            CDPOS.ownerOf(i);
+            _assertERC721Owner(i, address(this), false);
         }
 
         // Assert that the ERC721 balance of the owner is not updated
-        assertEq(CDPOS.balanceOf(address(this)), 0, "balanceOf(address(this))");
+        _assertERC721Balance(address(this), 0);
 
         // Assert that the owner's positions list is correct
         uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
@@ -301,8 +287,8 @@ contract CreateCDPOSTest is CDPOSTest {
         }
 
         // Assert that the ERC721 balances of the owners are correct
-        assertEq(CDPOS.balanceOf(owner1), 0, "balanceOf(owner1)");
-        assertEq(CDPOS.balanceOf(owner2), 0, "balanceOf(owner2)");
+        _assertERC721Balance(owner1, 0);
+        _assertERC721Balance(owner2, 0);
 
         // Assert that the owner1's positions list is correct
         uint256[] memory owner1Positions = CDPOS.getUserPositionIds(owner1);
@@ -338,8 +324,7 @@ contract CreateCDPOSTest is CDPOSTest {
         _createPosition(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
 
         // Assert that the position is correct
-        CDPOSv1.Position memory position = CDPOS.getPosition(0);
-        assertEq(position.expiry, expiry, "position.expiry");
+        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
     }
 
     function test_conversionOverflow_reverts() public {
