@@ -61,6 +61,6 @@ contract MintCDEPOTest is CDEPOTest {
         // Assert balances
         _assertReserveTokenBalance(0, 0);
         _assertCDEPOBalance(10e18, 0);
-        _assertVaultBalance(10e18, 0);
+        _assertVaultBalance(10e18, 0, 0);
     }
 }

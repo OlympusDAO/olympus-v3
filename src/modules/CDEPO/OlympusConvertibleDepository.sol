@@ -5,6 +5,7 @@ import {CDEPOv1} from "./CDEPO.v1.sol";
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== STATE VARIABLES ========== //
@@ -79,7 +80,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
         // Deposit the underlying asset into the vault and update the total shares
         asset.approve(address(vault), amount_);
-        totalShares += vault.deposit(amount_, to_);
+        totalShares += vault.deposit(amount_, address(this));
 
         // Mint the CD tokens to the caller
         _mint(to_, amount_);
@@ -109,17 +110,25 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Burns the CD tokens from the caller
     ///             - Calculates the quantity of underlying asset to withdraw and return
     ///             - Returns the underlying asset to `to_`
-    ///             - Emits a `Transfer` event
+    ///
+    ///             This function reverts if:
+    ///             - The amount is zero
+    ///             - The caller has not approved spending of the CD tokens
     ///
     /// @param  to_       The address to reclaim the tokens to
     /// @param  amount_   The amount of CD tokens to burn
     function reclaimTo(address to_, uint256 amount_) public virtual override {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Ensure that the caller has approved spending of the CD tokens
+        if (allowance[msg.sender][address(this)] < amount_) revert CDEPO_InvalidArgs("allowance");
+
         // Burn the CD tokens from `from_`
         _burn(msg.sender, amount_);
 
         // Calculate the quantity of underlying asset to withdraw and return
         // This will create a difference between the quantity of underlying assets and the vault shares, which will be swept as yield
-        // TODO make sure there are no shares left over if all CD tokens are burned
         uint256 discountedAssetsOut = previewReclaim(amount_);
         uint256 shares = vault.previewWithdraw(discountedAssetsOut);
         totalShares -= shares;
@@ -132,7 +141,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function previewReclaim(
         uint256 amount_
     ) public view virtual override returns (uint256 assetsOut) {
-        assetsOut = (amount_ * reclaimRate) / ONE_HUNDRED_PERCENT;
+        assetsOut = FullMath.mulDiv(amount_, reclaimRate, ONE_HUNDRED_PERCENT);
     }
 
     /// @inheritdoc CDEPOv1
