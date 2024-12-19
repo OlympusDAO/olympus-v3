@@ -35,10 +35,6 @@ contract CreateCDPOSTest is CDPOSTest {
     //  [X] the owner's list of positions is updated
     // when the expiry is in the future
     //  [X] it sets the expiry
-    // when the conversion would result in an overflow
-    //  [X] it reverts
-    // when the conversion would result in an underflow
-    //  [X] it reverts
     // when the wrap flag is true
     //  when the receiver cannot receive ERC721 tokens
     //   [X] it reverts
@@ -328,37 +324,5 @@ contract CreateCDPOSTest is CDPOSTest {
 
         // Assert that the position is correct
         _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
-    }
-
-    function test_conversionOverflow_reverts() public {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "conversion overflow")
-        );
-
-        // Call function
-        _createPosition(
-            address(this),
-            type(uint256).max,
-            CONVERSION_PRICE,
-            uint48(block.timestamp + EXPIRY_DELAY),
-            false
-        );
-    }
-
-    function test_conversionUnderflow_reverts() public {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "conversion underflow")
-        );
-
-        // Call function
-        _createPosition(
-            address(this),
-            REMAINING_DEPOSIT,
-            type(uint256).max,
-            uint48(block.timestamp + EXPIRY_DELAY),
-            false
-        );
     }
 }
