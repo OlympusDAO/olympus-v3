@@ -18,7 +18,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     /// @notice The number of decimal places to display when rendering values as decimal strings.
     /// @dev    This affects the display of the remaining deposit and conversion price in the SVG and JSON metadata.
     ///         It can be adjusted using the `setDisplayDecimals` function, which is permissioned.
-    uint8 internal _displayDecimals = 2;
+    uint8 public displayDecimals = 2;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -294,7 +294,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                     DecimalString.toDecimalString(
                         position_.remainingDeposit,
                         depositDecimals,
-                        _displayDecimals
+                        displayDecimals
                     ),
                     "</text>"
                 ),
@@ -303,7 +303,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                     DecimalString.toDecimalString(
                         position_.conversionPrice,
                         depositDecimals,
-                        _displayDecimals
+                        displayDecimals
                     ),
                     "</text>"
                 ), // TODO check decimals of conversion price. This probably isn't correct.
@@ -343,7 +343,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                 DecimalString.toDecimalString(
                     position.remainingDeposit,
                     depositDecimals,
-                    _displayDecimals
+                    displayDecimals
                 ),
                 '"},'
             ),
@@ -352,7 +352,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                 DecimalString.toDecimalString(
                     position.conversionPrice,
                     depositDecimals,
-                    _displayDecimals
+                    displayDecimals
                 ),
                 '"},'
             ),
@@ -468,7 +468,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     /// @notice Set the number of decimal places to display when rendering values as decimal strings.
     /// @dev    This affects the display of the remaining deposit and conversion price in the SVG and JSON metadata.
     function setDisplayDecimals(uint8 decimals_) external permissioned {
-        _displayDecimals = decimals_;
+        displayDecimals = decimals_;
     }
 
     // ========== MODIFIERS ========== //
