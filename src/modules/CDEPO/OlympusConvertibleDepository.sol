@@ -60,18 +60,25 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Transfers the underlying asset from `to_` to the contract
+    ///             - Transfers the underlying asset from the caller to the contract
     ///             - Deposits the underlying asset into the ERC4626 vault
     ///             - Mints the corresponding amount of convertible deposit tokens to `to_`
     ///             - Emits a `Transfer` event
     ///
+    ///             This function reverts if:
+    ///             - The amount is zero
+    ///
     /// @param  to_       The address to mint the tokens to
     /// @param  amount_   The amount of underlying asset to transfer
     function mintTo(address to_, uint256 amount_) public virtual override {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
         // Transfer the underlying asset to the contract
-        asset.transferFrom(to_, address(this), amount_);
+        asset.transferFrom(msg.sender, address(this), amount_);
 
         // Deposit the underlying asset into the vault and update the total shares
+        asset.approve(address(vault), amount_);
         totalShares += vault.deposit(amount_, to_);
 
         // Mint the CD tokens to the caller
@@ -83,6 +90,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function previewMint(
         uint256 amount_
     ) external view virtual override returns (uint256 tokensOut) {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Return the same amount of CD tokens
         return amount_;
     }
 

@@ -20,6 +20,7 @@ abstract contract CDEPOTest is Test {
     address public godmode;
     address public recipient = address(0x1);
     address public recipientTwo = address(0x2);
+    uint256 public constant INITIAL_VAULT_BALANCE = 10e18;
 
     uint48 public constant INITIAL_BLOCK = 100000000;
 
@@ -30,7 +31,7 @@ abstract contract CDEPOTest is Test {
         vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
 
         // Mint reserve tokens to the vault without depositing, so that the conversion is not 1
-        reserveToken.mint(address(vault), 10e18);
+        reserveToken.mint(address(vault), INITIAL_VAULT_BALANCE);
 
         kernel = new Kernel();
         CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault));
@@ -77,7 +78,7 @@ abstract contract CDEPOTest is Test {
     function _assertVaultBalance(uint256 recipientAmount_, uint256 recipientTwoAmount_) public {
         assertEq(
             vault.totalAssets(),
-            recipientAmount_ + recipientTwoAmount_,
+            recipientAmount_ + recipientTwoAmount_ + INITIAL_VAULT_BALANCE,
             "vault: total assets"
         );
     }
