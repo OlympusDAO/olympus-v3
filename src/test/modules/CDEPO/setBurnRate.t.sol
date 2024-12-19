@@ -5,12 +5,12 @@ import {Test} from "forge-std/Test.sol";
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
-contract SetBurnRateCDEPOTest is CDEPOTest {
+contract SetReclaimRateCDEPOTest is CDEPOTest {
     // when the caller is not permissioned
     //  [ ] it reverts
-    // when the new burn rate is greater than the maximum burn rate
+    // when the new reclaim rate is greater than the maximum reclaim rate
     //  [ ] it reverts
-    // when the new burn rate is within bounds
-    //  [ ] it sets the new burn rate
+    // when the new reclaim rate is within bounds
+    //  [ ] it sets the new reclaim rate
     //  [ ] it emits an event
 }

@@ -10,8 +10,8 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 abstract contract CDEPOv1 is Module, ERC20 {
     // ========== EVENTS ========== //
 
-    /// @notice Emitted when the burn rate is updated
-    event BurnRateUpdated(uint16 newBurnRate);
+    /// @notice Emitted when the reclaim rate is updated
+    event ReclaimRateUpdated(uint16 newReclaimRate);
 
     /// @notice Emitted when the yield is swept
     event YieldSwept(address receiver, uint256 reserveAmount, uint256 sReserveAmount);
@@ -28,9 +28,9 @@ abstract contract CDEPOv1 is Module, ERC20 {
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The burn rate of the convertible deposit token
-    /// @dev    A burn rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
-    uint16 internal _burnRate;
+    /// @notice The reclaim rate of the convertible deposit token
+    /// @dev    A reclaim rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
+    uint16 internal _reclaimRate;
 
     /// @notice The total amount of vault shares in the contract
     uint256 public totalShares;
@@ -134,15 +134,15 @@ abstract contract CDEPOv1 is Module, ERC20 {
 
     // ========== ADMIN ========== //
 
-    /// @notice Set the burn rate of the convertible deposit token
+    /// @notice Set the reclaim rate of the convertible deposit token
     /// @dev    The implementing function should perform the following:
     ///         - Validating that the caller has the correct role
     ///         - Validating that the new rate is within bounds
-    ///         - Setting the new burn rate
+    ///         - Setting the new reclaim rate
     ///         - Emitting an event
     ///
-    /// @param  newBurnRate_    The new burn rate
-    function setBurnRate(uint16 newBurnRate_) external virtual;
+    /// @param  newReclaimRate_    The new reclaim rate
+    function setReclaimRate(uint16 newReclaimRate_) external virtual;
 
     // ========== STATE VARIABLES ========== //
 
@@ -152,7 +152,7 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @notice The underlying ERC20 asset
     function asset() external view virtual returns (ERC20);
 
-    /// @notice The burn rate of the convertible deposit token
-    /// @dev    A burn rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
-    function burnRate() external view virtual returns (uint16);
+    /// @notice The reclaim rate of the convertible deposit token
+    /// @dev    A reclaim rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned
+    function reclaimRate() external view virtual returns (uint16);
 }

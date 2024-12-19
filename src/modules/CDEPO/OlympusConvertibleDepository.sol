@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {CDEPOv1} from "./CDEPO.v1.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
@@ -16,7 +16,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ERC20 public immutable override asset;
 
     /// @inheritdoc CDEPOv1
-    uint16 public override burnRate;
+    uint16 public override reclaimRate;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -34,6 +34,19 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Store the vault and asset
         vault = ERC4626(erc4626Vault_);
         asset = ERC20(vault.asset());
+    }
+
+    // ========== MODULE FUNCTIONS ========== //
+
+    /// @inheritdoc Module
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("CDEPO");
+    }
+
+    /// @inheritdoc Module
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
     }
 
     // ========== ERC20 OVERRIDES ========== //
@@ -108,7 +121,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function previewReclaim(
         uint256 amount_
     ) public view virtual override returns (uint256 assetsOut) {
-        assetsOut = (amount_ * burnRate) / ONE_HUNDRED_PERCENT;
+        assetsOut = (amount_ * reclaimRate) / ONE_HUNDRED_PERCENT;
     }
 
     /// @inheritdoc CDEPOv1
@@ -189,15 +202,15 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
-    ///             - The new burn rate is not within bounds
-    function setBurnRate(uint16 newBurnRate_) external virtual override permissioned {
-        // Validate that the burn rate is within bounds
-        if (newBurnRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("Greater than 100%");
+    ///             - The new reclaim rate is not within bounds
+    function setReclaimRate(uint16 newReclaimRate_) external virtual override permissioned {
+        // Validate that the reclaim rate is within bounds
+        if (newReclaimRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("Greater than 100%");
 
-        // Update the burn rate
-        burnRate = newBurnRate_;
+        // Update the reclaim rate
+        reclaimRate = newReclaimRate_;
 
         // Emit the event
-        emit BurnRateUpdated(newBurnRate_);
+        emit ReclaimRateUpdated(newReclaimRate_);
     }
 }

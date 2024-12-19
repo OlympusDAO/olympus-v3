@@ -18,6 +18,8 @@ abstract contract CDEPOTest is Test {
     MockERC20 public reserveToken;
     MockERC4626 public vault;
     address public godmode;
+    address public recipient = address(0x1);
+    address public recipientTwo = address(0x2);
 
     uint48 public constant INITIAL_BLOCK = 100000000;
 
@@ -43,6 +45,43 @@ abstract contract CDEPOTest is Test {
 
     // ========== ASSERTIONS ========== //
 
+    function _assertReserveTokenBalance(
+        uint256 recipientAmount_,
+        uint256 recipientTwoAmount_
+    ) public {
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            recipientAmount_,
+            "recipient: reserve token balance"
+        );
+        assertEq(
+            reserveToken.balanceOf(recipientTwo),
+            recipientTwoAmount_,
+            "recipientTwo: reserve token balance"
+        );
+
+        assertEq(
+            reserveToken.totalSupply(),
+            reserveToken.balanceOf(address(CDEPO.vault())) + recipientAmount_ + recipientTwoAmount_,
+            "total supply"
+        );
+    }
+
+    function _assertCDEPOBalance(uint256 recipientAmount_, uint256 recipientTwoAmount_) public {
+        assertEq(CDEPO.balanceOf(recipient), recipientAmount_, "recipient: CDEPO balance");
+        assertEq(CDEPO.balanceOf(recipientTwo), recipientTwoAmount_, "recipientTwo: CDEPO balance");
+
+        assertEq(CDEPO.totalSupply(), recipientAmount_ + recipientTwoAmount_, "total supply");
+    }
+
+    function _assertVaultBalance(uint256 recipientAmount_, uint256 recipientTwoAmount_) public {
+        assertEq(
+            vault.totalAssets(),
+            recipientAmount_ + recipientTwoAmount_,
+            "vault: total assets"
+        );
+    }
+
     // ========== MODIFIERS ========== //
 
     function _mintReserveToken(address to_, uint256 amount_) internal {
@@ -51,6 +90,39 @@ abstract contract CDEPOTest is Test {
 
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
         _mintReserveToken(to_, amount_);
+        _;
+    }
+
+    function _approveReserveTokenSpending(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) internal {
+        vm.prank(owner_);
+        reserveToken.approve(spender_, amount_);
+    }
+
+    modifier givenReserveTokenSpendingIsApproved(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) {
+        _approveReserveTokenSpending(owner_, spender_, amount_);
+        _;
+    }
+
+    function _mint(uint256 amount_) internal {
+        vm.prank(recipient);
+        CDEPO.mint(amount_);
+    }
+
+    function _mintTo(address owner_, address to_, uint256 amount_) internal {
+        vm.prank(owner_);
+        CDEPO.mintTo(to_, amount_);
+    }
+
+    modifier givenRecipientHasCDEPO(uint256 amount_) {
+        _mint(amount_);
         _;
     }
 }
