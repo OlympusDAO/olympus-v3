@@ -40,7 +40,7 @@ interface IConvertibleDepositFacility {
     ///
     /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of reserve token to deposit
-    /// @param  conversionPrice_    The price of the reserve token in USD
+    /// @param  conversionPrice_    The amount of convertible deposit tokens per OHM token
     /// @param  expiry_             The timestamp when the position expires
     /// @param  wrap_               Whether the position should be wrapped
     /// @return termId              The ID of the new term

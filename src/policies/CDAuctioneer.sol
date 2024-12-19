@@ -23,6 +23,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
 
     // TODO set decimals, make internal?
     uint256 public decimals;
+    uint8 internal constant _ohmDecimals = 9;
 
     CDFacility public cdFacility;
 
@@ -56,7 +57,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function bid(uint256 deposit) external override returns (uint256 convertible) {
+    function bid(uint256 deposit) external override returns (uint256 ohmOut) {
         // Update state
         currentTick = getCurrentTick();
         state.lastUpdate = block.timestamp;
@@ -64,18 +65,20 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         // Get bid results
         uint256 currentTickCapacity;
         uint256 currentTickPrice;
-        (currentTickCapacity, currentTickPrice, convertible) = _previewBid(deposit);
+        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit);
 
         // Update day state
         today.deposits += deposit;
-        today.convertible += convertible;
+        today.convertible += ohmOut;
 
         // Update current tick
         currentTick.capacity = currentTickCapacity;
         currentTick.price = currentTickPrice;
 
-        // TODO calculate average price for total deposit and convertible, check rounding, formula
-        uint256 conversionPrice = (deposit * decimals) / convertible;
+        // Calculate average price based on the total deposit and ohmOut
+        // This is the number of deposit tokens per OHM token
+        // TODO check rounding
+        uint256 conversionPrice = (deposit * _ohmDecimals) / ohmOut;
 
         // Create the CD tokens and position
         cdFacility.create(
@@ -86,22 +89,24 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
             false
         );
 
-        return convertible;
+        // TODO add position id to return value
+
+        return ohmOut;
     }
 
-    /// @notice Internal function to preview the number of convertible tokens that can be purchased for a given deposit amount
+    /// @notice Internal function to preview the quantity of OHM tokens that can be purchased for a given deposit amount
     /// @dev    The function also returns the adjusted capacity and price of the current tick
     ///
     /// @param  deposit_            The amount of deposit to be bid
     /// @return currentTickCapacity The adjusted capacity of the current tick
     /// @return currentTickPrice    The adjusted price of the current tick
-    /// @return convertible         The number of convertible tokens that can be purchased
+    /// @return ohmOut              The quantity of OHM tokens that can be purchased
     function _previewBid(
         uint256 deposit_
     )
         internal
         view
-        returns (uint256 currentTickCapacity, uint256 currentTickPrice, uint256 convertible)
+        returns (uint256 currentTickCapacity, uint256 currentTickPrice, uint256 ohmOut)
     {
         Tick memory tick = getCurrentTick();
         uint256 remainingDeposit = deposit_;
@@ -114,17 +119,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
             else tick.price *= state.tickStep / decimals;
 
             remainingDeposit -= amount;
-            convertible += _convertFor(amount, tick.price);
+            ohmOut += _convertFor(amount, tick.price);
         }
 
-        return (tick.capacity, tick.price, convertible);
+        return (tick.capacity, tick.price, ohmOut);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function previewBid(uint256 deposit) external view override returns (uint256 convertible) {
-        (, , convertible) = _previewBid(deposit);
+    function previewBid(uint256 deposit) external view override returns (uint256 ohmOut) {
+        (, , ohmOut) = _previewBid(deposit);
 
-        return convertible;
+        return ohmOut;
     }
 
     // ========== VIEW FUNCTIONS ========== //

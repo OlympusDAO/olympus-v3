@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {CDPOSTest} from "./CDPOSTest.sol";
 
-contract TokenURITest is CDPOSTest {
+contract TokenURICDPOSTest is CDPOSTest {
     // when the position does not exist
     //  [ ] it reverts
     // [ ] the value is Base64 encoded

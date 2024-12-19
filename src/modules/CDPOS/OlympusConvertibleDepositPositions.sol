@@ -441,7 +441,10 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         uint256 amount_,
         uint256 conversionPrice_
     ) internal pure returns (uint256) {
-        return (amount_ * DECIMALS) / conversionPrice_; // TODO check decimals, rounding
+        // amount_ and conversionPrice_ are in the same decimals and cancel each other out
+        // The output needs to be in OHM, so we multiply by 1e9
+        // This also deliberately rounds down
+        return (amount_ * 1e9) / conversionPrice_;
     }
 
     /// @inheritdoc CDPOSv1
@@ -449,7 +452,15 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         uint256 positionId_,
         uint256 amount_
     ) public view virtual override onlyValidPosition(positionId_) returns (uint256) {
-        return _previewConvert(amount_, _getPosition(positionId_).conversionPrice);
+        Position memory position = _getPosition(positionId_);
+
+        // If expired, conversion output is 0
+        if (position.expiry <= block.timestamp) return 0;
+
+        // If the amount is greater than the remaining deposit, revert
+        if (amount_ > position.remainingDeposit) revert CDPOS_InvalidParams("amount");
+
+        return _previewConvert(amount_, position.conversionPrice);
     }
 
     // ========== ADMIN FUNCTIONS ========== //

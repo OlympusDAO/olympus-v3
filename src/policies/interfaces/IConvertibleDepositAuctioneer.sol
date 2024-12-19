@@ -56,14 +56,14 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Deposit reserve tokens to bid for convertible deposit tokens
     ///
     /// @param  deposit_        Amount of reserve tokens to deposit
-    /// @return convertible_    Amount of convertible tokens minted
-    function bid(uint256 deposit_) external returns (uint256 convertible_);
+    /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
+    function bid(uint256 deposit_) external returns (uint256 ohmOut);
 
-    /// @notice Get the amount of convertible deposit tokens issued for a deposit
+    /// @notice Get the amount of OHM tokens issued for a deposit
     ///
     /// @param  deposit_        Amount of reserve tokens
-    /// @return convertible_    Amount of convertible tokens
-    function previewBid(uint256 deposit_) external view returns (uint256 convertible_);
+    /// @return ohmOut          Amount of OHM tokens
+    function previewBid(uint256 deposit_) external view returns (uint256 ohmOut);
 
     // ========== STATE VARIABLES ========== //
 

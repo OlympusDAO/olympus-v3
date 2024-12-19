@@ -23,6 +23,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
     OlympusConvertibleDepositPositions public CDPOS;
     address public godmode;
     address public convertibleDepositToken;
+    uint8 public convertibleDepositTokenDecimals = 18;
 
     uint256[] public positions;
 
@@ -34,7 +35,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
         // Set up the convertible deposit token
         MockERC20 mockERC20 = new MockERC20();
-        mockERC20.initialize("Convertible Deposit Token", "CDT", 18);
+        mockERC20.initialize("Convertible Deposit Token", "CDT", convertibleDepositTokenDecimals);
         convertibleDepositToken = address(mockERC20);
 
         // Generate fixtures
