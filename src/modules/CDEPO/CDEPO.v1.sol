@@ -118,9 +118,12 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
+    /// @param  to_         The address to sweep the yield to
     /// @return yieldReserve  The amount of reserve token that was swept
     /// @return yieldSReserve The amount of sReserve token that was swept
-    function sweepYield() external virtual returns (uint256 yieldReserve, uint256 yieldSReserve);
+    function sweepYield(
+        address to_
+    ) external virtual returns (uint256 yieldReserve, uint256 yieldSReserve);
 
     /// @notice Preview the amount of yield that would be swept
     ///

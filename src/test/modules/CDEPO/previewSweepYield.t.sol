@@ -2,12 +2,93 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-
 import {CDEPOTest} from "./CDEPOTest.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 contract PreviewSweepYieldCDEPOTest is CDEPOTest {
     // when there are no deposits
-    //  [ ] it returns zero
+    //  [X] it returns zero
     // when there are deposits
-    //  [ ] it returns the difference between the total deposits and the total assets in the vault
+    //  when there have been reclaimed deposits
+    //   [X] the forfeited amount is included in the yield
+    //  [X] it returns the difference between the total deposits and the total assets in the vault
+
+    function test_noDeposits() public {
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+
+        // Assert values
+        assertEq(yieldReserve, 0, "yieldReserve");
+        assertEq(yieldSReserve, 0, "yieldSReserve");
+    }
+
+    function test_withDeposits()
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
+        givenAddressHasCDEPO(recipient, 10e18)
+    {
+        // Call function
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+
+        // Assert values
+        assertEq(yieldReserve, INITIAL_VAULT_BALANCE, "yieldReserve");
+        assertEq(yieldSReserve, vault.previewWithdraw(INITIAL_VAULT_BALANCE), "yieldSReserve");
+    }
+
+    function test_withReclaimedDeposits()
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
+        givenAddressHasCDEPO(recipient, 10e18)
+    {
+        // Recipient has reclaimed all of their deposit, leaving behind a forfeited amount
+        // The forfeited amount is included in the yield
+        vm.prank(recipient);
+        CDEPO.reclaim(10e18);
+
+        uint256 reclaimedAmount = CDEPO.previewReclaim(10e18);
+        uint256 forfeitedAmount = 10e18 - reclaimedAmount;
+
+        // Call function
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+
+        // Assert values
+        assertEq(yieldReserve, INITIAL_VAULT_BALANCE + forfeitedAmount, "yieldReserve");
+        assertEq(
+            yieldSReserve,
+            vault.previewWithdraw(INITIAL_VAULT_BALANCE + forfeitedAmount),
+            "yieldSReserve"
+        );
+    }
+
+    function test_withReclaimedDeposits_fuzz(
+        uint256 amount_
+    )
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
+        givenAddressHasCDEPO(recipient, 10e18)
+    {
+        // Start from 2 as it will revert due to 0 shares if amount is 1
+        uint256 amount = bound(amount_, 2, 10e18);
+
+        // Recipient has reclaimed their deposit, leaving behind a forfeited amount
+        // The forfeited amount is included in the yield
+        vm.prank(recipient);
+        CDEPO.reclaim(amount);
+
+        uint256 reclaimedAmount = CDEPO.previewReclaim(amount);
+        uint256 forfeitedAmount = amount - reclaimedAmount;
+
+        // Call function
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+
+        // Assert values
+        assertEq(yieldReserve, INITIAL_VAULT_BALANCE + forfeitedAmount, "yieldReserve");
+        assertEq(
+            yieldSReserve,
+            vault.previewWithdraw(INITIAL_VAULT_BALANCE + forfeitedAmount),
+            "yieldSReserve"
+        );
+    }
 }

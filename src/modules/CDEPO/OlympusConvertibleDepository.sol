@@ -204,26 +204,26 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     ///             This function reverts if:
     ///             - The caller is not permissioned
-    ///
-    /// @return yieldReserve  The amount of reserve token that was swept
-    /// @return yieldSReserve The amount of sReserve token that was swept
-    function sweepYield()
-        external
-        virtual
-        override
-        permissioned
-        returns (uint256 yieldReserve, uint256 yieldSReserve)
-    {
+    ///             - The recipient_ address is the zero address
+    function sweepYield(
+        address recipient_
+    ) external virtual override permissioned returns (uint256 yieldReserve, uint256 yieldSReserve) {
+        // Validate that the recipient_ address is not the zero address
+        if (recipient_ == address(0)) revert CDEPO_InvalidArgs("recipient");
+
         (yieldReserve, yieldSReserve) = previewSweepYield();
+
+        // Skip if there is no yield to sweep
+        if (yieldSReserve == 0) return (0, 0);
 
         // Reduce the shares tracked by the contract
         totalShares -= yieldSReserve;
 
-        // Transfer the yield to the permissioned caller
-        vault.safeTransfer(msg.sender, yieldSReserve);
+        // Transfer the yield to the recipient
+        vault.safeTransfer(recipient_, yieldSReserve);
 
         // Emit the event
-        emit YieldSwept(msg.sender, yieldReserve, yieldSReserve);
+        emit YieldSwept(recipient_, yieldReserve, yieldSReserve);
 
         return (yieldReserve, yieldSReserve);
     }
