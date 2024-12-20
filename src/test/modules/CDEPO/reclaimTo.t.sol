@@ -12,17 +12,14 @@ import {console2} from "forge-std/console2.sol";
 contract ReclaimToCDEPOTest is CDEPOTest {
     // when the amount is zero
     //  [X] it reverts
-    // when the caller has not approved CDEPO to spend convertible deposit tokens
+    // when the caller has an insufficient balance of convertible deposit tokens
     //  [X] it reverts
-    // when the caller has approved CDEPO to spend convertible deposit tokens
-    //  when the caller has an insufficient balance of convertible deposit tokens
-    //   [X] it reverts
-    //  when the caller has a sufficient balance of convertible deposit tokens
-    //   [X] it burns the corresponding amount of convertible deposit tokens
-    //   [X] it withdraws the underlying asset from the vault
-    //   [X] it transfers the underlying asset to the `to_` address after applying the reclaim rate
-    //   [X] it marks the forfeited amount of the underlying asset as yield
-    //   [X] it updates the total deposits
+    // when the caller has a sufficient balance of convertible deposit tokens
+    //  [X] it burns the corresponding amount of convertible deposit tokens
+    //  [X] it withdraws the underlying asset from the vault
+    //  [X] it transfers the underlying asset to the `to_` address after applying the reclaim rate
+    //  [X] it marks the forfeited amount of the underlying asset as yield
+    //  [X] it updates the total deposits
 
     function test_amountIsZero_reverts() public {
         // Expect revert
@@ -33,29 +30,14 @@ contract ReclaimToCDEPOTest is CDEPOTest {
         CDEPO.reclaimTo(recipientTwo, 0);
     }
 
-    function test_spendingNotApproved_reverts()
-        public
-        givenAddressHasReserveToken(recipient, 10e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenRecipientHasCDEPO(10e18)
-    {
-        // Expect revert
-        vm.expectRevert(stdError.arithmeticError);
-
-        // Call function
-        vm.prank(recipient);
-        CDEPO.reclaimTo(recipientTwo, 10e18);
-    }
-
     function test_insufficientBalance_reverts()
         public
         givenAddressHasReserveToken(recipient, 5e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
         givenRecipientHasCDEPO(5e18)
-        givenCDEPOSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "allowance"));
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
@@ -67,7 +49,6 @@ contract ReclaimToCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenRecipientHasCDEPO(10e18)
-        givenCDEPOSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 expectedReserveTokenAmount = FullMath.mulDiv(10e18, reclaimRate, 100e2);
         assertEq(expectedReserveTokenAmount, 99e17, "expectedReserveTokenAmount");

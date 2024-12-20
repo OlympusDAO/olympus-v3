@@ -6,8 +6,12 @@ import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 contract OlympusConvertibleDepository is CDEPOv1 {
+    using SafeTransferLib for ERC20;
+    using SafeTransferLib for ERC4626;
+
     // ========== STATE VARIABLES ========== //
 
     /// @inheritdoc CDEPOv1
@@ -68,6 +72,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     ///             This function reverts if:
     ///             - The amount is zero
+    ///             - The caller has not approved this contract to spend `asset`
     ///
     /// @param  to_       The address to mint the tokens to
     /// @param  amount_   The amount of underlying asset to transfer
@@ -76,10 +81,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Transfer the underlying asset to the contract
-        asset.transferFrom(msg.sender, address(this), amount_);
+        asset.safeTransferFrom(msg.sender, address(this), amount_);
 
         // Deposit the underlying asset into the vault and update the total shares
-        asset.approve(address(vault), amount_);
+        asset.safeApprove(address(vault), amount_);
         totalShares += vault.deposit(amount_, address(this));
 
         // Mint the CD tokens to the caller
@@ -113,7 +118,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     ///             This function reverts if:
     ///             - The amount is zero
-    ///             - The caller has not approved spending of the CD tokens
     ///
     /// @param  to_       The address to reclaim the tokens to
     /// @param  amount_   The amount of CD tokens to burn
@@ -121,10 +125,11 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        // Ensure that the caller has approved spending of the CD tokens
-        if (allowance[msg.sender][address(this)] < amount_) revert CDEPO_InvalidArgs("allowance");
-
         // Burn the CD tokens from `from_`
+        // This uses the standard ERC20 implementation from solmate
+        // It will revert if the caller does not have enough CD tokens
+        // Allowance is not checked, because the CD tokens belonging to the caller
+        // will be burned, and this function cannot be called on behalf of another address
         _burn(msg.sender, amount_);
 
         // Calculate the quantity of underlying asset to withdraw and return
@@ -138,9 +143,13 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     }
 
     /// @inheritdoc CDEPOv1
+    /// @dev        This function reverts if:
+    ///             - The amount is zero
     function previewReclaim(
         uint256 amount_
     ) public view virtual override returns (uint256 assetsOut) {
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
         assetsOut = FullMath.mulDiv(amount_, reclaimRate, ONE_HUNDRED_PERCENT);
     }
 
@@ -161,7 +170,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         totalShares -= sharesOut;
 
         // Transfer the shares to the caller
-        vault.transfer(msg.sender, sharesOut);
+        vault.safeTransfer(msg.sender, sharesOut);
     }
 
     // ========== YIELD MANAGER ========== //
@@ -192,7 +201,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         totalShares -= yieldSReserve;
 
         // Transfer the yield to the permissioned caller
-        vault.transfer(msg.sender, yieldSReserve);
+        vault.safeTransfer(msg.sender, yieldSReserve);
 
         // Emit the event
         emit YieldSwept(msg.sender, yieldReserve, yieldSReserve);

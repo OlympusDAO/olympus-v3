@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {Test, stdError} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
@@ -34,7 +34,7 @@ contract MintToCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
     {
         // Expect revert
-        vm.expectRevert(stdError.arithmeticError);
+        vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
         _mintTo(recipient, recipientTwo, 10e18);
@@ -46,7 +46,7 @@ contract MintToCDEPOTest is CDEPOTest {
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Expect revert
-        vm.expectRevert(stdError.arithmeticError);
+        vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
         _mintTo(recipient, recipientTwo, 10e18);

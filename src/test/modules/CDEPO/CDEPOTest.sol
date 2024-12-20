@@ -150,20 +150,6 @@ abstract contract CDEPOTest is Test {
         _;
     }
 
-    function _approveCDEPOSpending(address owner_, address spender_, uint256 amount_) internal {
-        vm.prank(owner_);
-        CDEPO.approve(spender_, amount_);
-    }
-
-    modifier givenCDEPOSpendingIsApproved(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) {
-        _approveCDEPOSpending(owner_, spender_, amount_);
-        _;
-    }
-
     modifier givenReclaimRateIsSet(uint16 reclaimRate_) {
         vm.prank(godmode);
         CDEPO.setReclaimRate(reclaimRate_);

@@ -34,7 +34,6 @@ contract ReclaimCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 5e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
         givenRecipientHasCDEPO(5e18)
-        givenCDEPOSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Expect revert
         vm.expectRevert(stdError.arithmeticError);
@@ -49,7 +48,6 @@ contract ReclaimCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenRecipientHasCDEPO(10e18)
-        givenCDEPOSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 expectedReserveTokenAmount = FullMath.mulDiv(10e18, reclaimRate, 100e2);
         assertEq(expectedReserveTokenAmount, 99e17, "expectedReserveTokenAmount");
