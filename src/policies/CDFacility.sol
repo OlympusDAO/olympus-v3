@@ -107,6 +107,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     }
 
     /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
+    ///             - The caller is not the owner of all of the positions
+    ///             - The position is not valid
+    ///             - The position is not CDEPO
+    ///             - The position has expired
+    ///             - The deposit amount is greater than the remaining deposit
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
