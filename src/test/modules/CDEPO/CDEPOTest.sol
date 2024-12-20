@@ -69,7 +69,7 @@ abstract contract CDEPOTest is Test {
         assertEq(
             reserveToken.totalSupply(),
             reserveToken.balanceOf(address(CDEPO.vault())) + recipientAmount_ + recipientTwoAmount_,
-            "total supply"
+            "reserve token balance: total supply"
         );
     }
 
@@ -77,7 +77,11 @@ abstract contract CDEPOTest is Test {
         assertEq(CDEPO.balanceOf(recipient), recipientAmount_, "recipient: CDEPO balance");
         assertEq(CDEPO.balanceOf(recipientTwo), recipientTwoAmount_, "recipientTwo: CDEPO balance");
 
-        assertEq(CDEPO.totalSupply(), recipientAmount_ + recipientTwoAmount_, "total supply");
+        assertEq(
+            CDEPO.totalSupply(),
+            recipientAmount_ + recipientTwoAmount_,
+            "CDEPO balance: total supply"
+        );
     }
 
     function _assertVaultBalance(
@@ -147,6 +151,11 @@ abstract contract CDEPOTest is Test {
 
     modifier givenRecipientHasCDEPO(uint256 amount_) {
         _mint(amount_);
+        _;
+    }
+
+    modifier givenAddressHasCDEPO(address to_, uint256 amount_) {
+        _mintTo(to_, to_, amount_);
         _;
     }
 

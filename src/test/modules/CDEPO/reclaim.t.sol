@@ -11,10 +11,14 @@ import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 contract ReclaimCDEPOTest is CDEPOTest {
     // when the amount is zero
     //  [X] it reverts
+    // when the discounted amount is zero
+    //  [X] it reverts
+    // when the shares for the discounted amount is zero
+    //  [X] it reverts
     // when the amount is greater than the caller's balance
     //  [X] it reverts
     // when the amount is greater than zero
-    //  [ X] it burns the corresponding amount of convertible deposit tokens
+    //  [X] it burns the corresponding amount of convertible deposit tokens
     //  [X] it withdraws the underlying asset from the vault
     //  [X] it transfers the underlying asset to the caller after applying the burn rate
     //  [X] it updates the total deposits
@@ -27,6 +31,23 @@ contract ReclaimCDEPOTest is CDEPOTest {
         // Call function
         vm.prank(recipient);
         CDEPO.reclaim(0);
+    }
+
+    function test_discountedAmountIsZero_reverts()
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
+        givenRecipientHasCDEPO(10e18)
+    {
+        // This amount would result in 0 shares being withdrawn, and should revert
+        uint256 amount = 1;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "shares"));
+
+        // Call function
+        vm.prank(recipient);
+        CDEPO.reclaim(amount);
     }
 
     function test_insufficientBalance_reverts()
@@ -61,6 +82,32 @@ contract ReclaimCDEPOTest is CDEPOTest {
         _assertReserveTokenBalance(expectedReserveTokenAmount, 0);
         _assertCDEPOBalance(0, 0);
         _assertVaultBalance(0, 0, forfeitedAmount);
+
+        // Assert deposits
+        _assertTotalShares(expectedReserveTokenAmount);
+    }
+
+    function test_success_fuzz(
+        uint256 amount_
+    )
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
+        givenRecipientHasCDEPO(10e18)
+    {
+        uint256 amount = bound(amount_, 2, 10e18);
+
+        uint256 expectedReserveTokenAmount = FullMath.mulDiv(amount, reclaimRate, 100e2);
+        uint256 forfeitedAmount = amount - expectedReserveTokenAmount;
+
+        // Call function
+        vm.prank(recipient);
+        CDEPO.reclaim(amount);
+
+        // Assert balances
+        _assertReserveTokenBalance(expectedReserveTokenAmount, 0);
+        _assertCDEPOBalance(10e18 - amount, 0);
+        _assertVaultBalance(10e18 - amount, 0, forfeitedAmount);
 
         // Assert deposits
         _assertTotalShares(expectedReserveTokenAmount);

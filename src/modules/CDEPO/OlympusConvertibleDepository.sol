@@ -118,12 +118,23 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     ///             This function reverts if:
     ///             - The amount is zero
+    ///             - The quantity of vault shares for the amount is zero
     ///
     /// @param  to_       The address to reclaim the tokens to
     /// @param  amount_   The amount of CD tokens to burn
     function reclaimTo(address to_, uint256 amount_) public virtual override {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Calculate the quantity of underlying asset to withdraw and return
+        // This will create a difference between the quantity of underlying assets and the vault shares, which will be swept as yield
+        uint256 discountedAssetsOut = previewReclaim(amount_);
+        uint256 sharesOut = vault.previewWithdraw(discountedAssetsOut);
+        totalShares -= sharesOut;
+
+        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
+        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `discountedAssetsOut` is low enough, it will round down to 0 and `sharesOut` will be 0
+        if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
 
         // Burn the CD tokens from `from_`
         // This uses the standard ERC20 implementation from solmate
@@ -132,14 +143,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // will be burned, and this function cannot be called on behalf of another address
         _burn(msg.sender, amount_);
 
-        // Calculate the quantity of underlying asset to withdraw and return
-        // This will create a difference between the quantity of underlying assets and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(amount_);
-        uint256 shares = vault.previewWithdraw(discountedAssetsOut);
-        totalShares -= shares;
-
         // Return the underlying asset to `to_`
-        vault.redeem(shares, to_, address(this));
+        vault.withdraw(discountedAssetsOut, to_, address(this));
     }
 
     /// @inheritdoc CDEPOv1
@@ -150,6 +155,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ) public view virtual override returns (uint256 assetsOut) {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
+        // This is rounded down to keep assets in the vault, otherwise the contract may end up
+        // in a state where there are not enough of the assets in the vault to redeem/reclaim
         assetsOut = FullMath.mulDiv(amount_, reclaimRate, ONE_HUNDRED_PERCENT);
     }
 
@@ -160,17 +167,29 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Calculates the quantity of underlying asset to withdraw and return
     ///             - Returns the underlying asset to the caller
     ///
+    ///             This function reverts if:
+    ///             - The amount is zero
+    ///             - The quantity of vault shares for the amount is zero
+    ///
     /// @param  amount_   The amount of CD tokens to burn
     function redeem(uint256 amount_) external override permissioned returns (uint256 sharesOut) {
-        // Burn the CD tokens from the caller
-        _burn(msg.sender, amount_);
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Calculate the quantity of shares to transfer
         sharesOut = vault.previewWithdraw(amount_);
         totalShares -= sharesOut;
 
-        // Transfer the shares to the caller
-        vault.safeTransfer(msg.sender, sharesOut);
+        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
+        // This is unlikely to happen, as the vault will typically round up the number of shares withdrawn
+        // However a different ERC4626 vault implementation may trigger the condition
+        if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
+
+        // Burn the CD tokens from the caller
+        _burn(msg.sender, amount_);
+
+        // Transfer the assets to the caller
+        vault.withdraw(amount_, msg.sender, address(this));
     }
 
     // ========== YIELD MANAGER ========== //
