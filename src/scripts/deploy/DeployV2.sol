@@ -63,6 +63,8 @@ import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
+import {CDAuctioneer} from "policies/CDAuctioneer.sol";
+import {CDFacility} from "policies/CDFacility.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
@@ -111,6 +113,8 @@ contract OlympusDeploy is Script {
     YieldRepurchaseFacility public yieldRepo;
     ReserveMigrator public reserveMigrator;
     EmissionManager public emissionManager;
+    CDAuctioneer public cdAuctioneer;
+    CDFacility public cdFacility;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -223,6 +227,10 @@ contract OlympusDeploy is Script {
         selectorMap["YieldRepurchaseFacility"] = this._deployYieldRepurchaseFacility.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
+        selectorMap["ConvertibleDepositAuctioneer"] = this
+            ._deployConvertibleDepositAuctioneer
+            .selector;
+        selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -312,6 +320,8 @@ contract OlympusDeploy is Script {
         yieldRepo = YieldRepurchaseFacility(envAddress("olympus.policies.YieldRepurchaseFacility"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
+        cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
+        cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1203,7 +1213,8 @@ contract OlympusDeploy is Script {
         console2.log("   gohm", address(gohm));
         console2.log("   reserve", address(reserve));
         console2.log("   sReserve", address(sReserve));
-        console2.log("   auctioneer", address(bondAuctioneer));
+        console2.log("   bondAuctioneer", address(bondAuctioneer));
+        console2.log("   cdAuctioneer", address(cdAuctioneer));
         console2.log("   teller", address(bondFixedTermTeller));
 
         // Deploy EmissionManager
@@ -1215,12 +1226,44 @@ contract OlympusDeploy is Script {
             address(reserve),
             address(sReserve),
             address(bondAuctioneer),
+            address(cdAuctioneer),
             address(bondFixedTermTeller)
         );
 
         console2.log("EmissionManager deployed at:", address(emissionManager));
 
         return address(emissionManager);
+    }
+
+    function _deployConvertibleDepositAuctioneer(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositAuctioneer
+
+        // Log dependencies
+        console2.log("ConvertibleDepositAuctioneer parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   cdFacility", address(cdFacility));
+
+        // Deploy ConvertibleDepositAuctioneer
+        vm.broadcast();
+        cdAuctioneer = new CDAuctioneer(kernel, address(cdFacility));
+        console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
+
+        return address(cdAuctioneer);
+    }
+
+    function _deployConvertibleDepositFacility(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositFacility
+
+        // Log dependencies
+        console2.log("ConvertibleDepositFacility parameters:");
+        console2.log("   kernel", address(kernel));
+
+        // Deploy ConvertibleDepositFacility
+        vm.broadcast();
+        cdFacility = new CDFacility(address(kernel));
+        console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
+
+        return address(cdFacility);
     }
 
     // ========== VERIFICATION ========== //
