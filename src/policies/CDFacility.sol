@@ -87,7 +87,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     ) external onlyRole("CD_Auctioneer") returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
-        CDEPO.mintTo(account_, amount_);
+        CDEPO.mintFor(account_, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.create(

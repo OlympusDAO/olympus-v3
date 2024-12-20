@@ -139,14 +139,32 @@ abstract contract CDEPOTest is Test {
         _;
     }
 
+    function _approveConvertibleDepositTokenSpending(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) internal {
+        vm.prank(owner_);
+        CDEPO.approve(spender_, amount_);
+    }
+
+    modifier givenConvertibleDepositTokenSpendingIsApproved(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) {
+        _approveConvertibleDepositTokenSpending(owner_, spender_, amount_);
+        _;
+    }
+
     function _mint(uint256 amount_) internal {
         vm.prank(recipient);
         CDEPO.mint(amount_);
     }
 
-    function _mintTo(address owner_, address to_, uint256 amount_) internal {
+    function _mintFor(address owner_, address to_, uint256 amount_) internal {
         vm.prank(owner_);
-        CDEPO.mintTo(to_, amount_);
+        CDEPO.mintFor(to_, amount_);
     }
 
     modifier givenRecipientHasCDEPO(uint256 amount_) {
@@ -155,7 +173,7 @@ abstract contract CDEPOTest is Test {
     }
 
     modifier givenAddressHasCDEPO(address to_, uint256 amount_) {
-        _mintTo(to_, to_, amount_);
+        _mintFor(to_, to_, amount_);
         _;
     }
 

@@ -47,14 +47,19 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @param  amount_   The amount of underlying asset to transfer
     function mint(uint256 amount_) external virtual;
 
-    /// @notice Mint tokens to `to_` in exchange for the underlying asset
+    /// @notice Mint tokens to `account_` in exchange for the underlying asset
     ///         This function behaves the same as `mint`, but allows the caller to
-    ///         specify the address to mint the tokens to and pull the underlying
-    ///         asset from.
+    ///         specify the address to mint the tokens to and pull the asset from.
+    ///         The `account_` address must have approved the contract to spend the underlying asset.
+    /// @dev    The implementing function should perform the following:
+    ///         - Transfers the underlying asset from the `account_` address to the contract
+    ///         - Mints the corresponding amount of convertible deposit tokens to the `account_` address
+    ///         - Deposits the underlying asset into the ERC4626 vault
+    ///         - Emits a `Transfer` event
     ///
-    /// @param  to_       The address to mint the tokens to
-    /// @param  amount_   The amount of underlying asset to transfer
-    function mintTo(address to_, uint256 amount_) external virtual;
+    /// @param  account_    The address to mint the tokens to and pull the asset from
+    /// @param  amount_     The amount of asset to transfer
+    function mintFor(address account_, uint256 amount_) external virtual;
 
     /// @notice Preview the amount of convertible deposit tokens that would be minted for a given amount of underlying asset
     /// @dev    The implementing function should perform the following:
@@ -65,8 +70,6 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @return tokensOut The amount of convertible deposit tokens that would be minted
     function previewMint(uint256 amount_) external view virtual returns (uint256 tokensOut);
 
-    // TODO review docs
-
     /// @notice Burn tokens from the caller and reclaim the underlying asset
     ///         The amount of underlying asset may not be 1:1 with the amount of
     ///         convertible deposit tokens, depending on the value of `burnRate`
@@ -75,19 +78,25 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///         - Transfers the underlying asset to the caller
     ///         - Burns the corresponding amount of convertible deposit tokens from the caller
     ///         - Marks the forfeited amount of the underlying asset as yield
-    ///         - Emits a `Transfer` event
     ///
     /// @param  amount_   The amount of convertible deposit tokens to burn
     function reclaim(uint256 amount_) external virtual;
 
-    /// @notice Burn tokens from `from_` and reclaim the underlying asset
+    /// @notice Burn tokens from `account_` and reclaim the underlying asset
     ///         This function behaves the same as `reclaim`, but allows the caller to
     ///         specify the address to burn the tokens from and transfer the underlying
     ///         asset to.
+    ///         The `account_` address must have approved the contract to spend the convertible deposit tokens.
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the `account_` address has approved the contract to spend the convertible deposit tokens
+    ///         - Withdraws the underlying asset from the ERC4626 vault
+    ///         - Transfers the underlying asset to the `account_` address
+    ///         - Burns the corresponding amount of convertible deposit tokens from the `account_` address
+    ///         - Marks the forfeited amount of the underlying asset as yield
     ///
-    /// @param  to_       The address to reclaim the underlying asset to
-    /// @param  amount_   The amount of convertible deposit tokens to burn
-    function reclaimTo(address to_, uint256 amount_) external virtual;
+    /// @param  account_    The address to burn the convertible deposit tokens from and transfer the underlying asset to
+    /// @param  amount_     The amount of convertible deposit tokens to burn
+    function reclaimFor(address account_, uint256 amount_) external virtual;
 
     /// @notice Preview the amount of underlying asset that would be reclaimed for a given amount of convertible deposit tokens
     /// @dev    The implementing function should perform the following:
@@ -99,15 +108,32 @@ abstract contract CDEPOv1 is Module, ERC20 {
     function previewReclaim(uint256 amount_) external view virtual returns (uint256 assetsOut);
 
     /// @notice Redeem convertible deposit tokens for the underlying asset
-    ///         This differs from the burn function, in that it is an admin-level and permissioned function that does not apply the burn rate.
+    ///         This differs from the reclaim function, in that it is an admin-level and permissioned function that does not apply the burn rate.
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the caller is permissioned
-    ///         - Transfers the corresponding vault shares to the caller
+    ///         - Transfers the corresponding underlying assets to the caller
     ///         - Burns the corresponding amount of convertible deposit tokens from the caller
     ///
     /// @param  amount_   The amount of convertible deposit tokens to burn
-    /// @return sharesOut The amount of shares that were transferred to the caller
-    function redeem(uint256 amount_) external virtual returns (uint256 sharesOut);
+    /// @return tokensOut The amount of underlying assets that were transferred to the caller
+    function redeem(uint256 amount_) external virtual returns (uint256 tokensOut);
+
+    /// @notice Redeem convertible deposit tokens for the underlying asset
+    ///         This differs from the redeem function, in that it allows the caller to specify the address to burn the convertible deposit tokens from.
+    ///         The `account_` address must have approved the contract to spend the convertible deposit tokens.
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Validates that the `account_` address has approved the contract to spend the convertible deposit tokens
+    ///         - Burns the corresponding amount of convertible deposit tokens from the `account_` address
+    ///         - Transfers the corresponding underlying assets to the caller (not the `account_` address)
+    ///
+    /// @param  account_    The address to burn the convertible deposit tokens from
+    /// @param  amount_     The amount of convertible deposit tokens to burn
+    /// @return tokensOut   The amount of underlying assets that were transferred to the caller
+    function redeemFor(
+        address account_,
+        uint256 amount_
+    ) external virtual returns (uint256 tokensOut);
 
     // ========== YIELD MANAGER ========== //
 

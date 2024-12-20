@@ -60,35 +60,32 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @dev        This function performs the following:
     ///             - Calls `mintTo` with the caller as the recipient
     function mint(uint256 amount_) external virtual override {
-        mintTo(msg.sender, amount_);
+        mintFor(msg.sender, amount_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Transfers the underlying asset from the caller to the contract
+    ///             - Transfers the underlying asset from the `account_` address to the contract
     ///             - Deposits the underlying asset into the ERC4626 vault
-    ///             - Mints the corresponding amount of convertible deposit tokens to `to_`
+    ///             - Mints the corresponding amount of convertible deposit tokens to `account_`
     ///             - Emits a `Transfer` event
     ///
     ///             This function reverts if:
     ///             - The amount is zero
-    ///             - The caller has not approved this contract to spend `asset`
-    ///
-    /// @param  to_       The address to mint the tokens to
-    /// @param  amount_   The amount of underlying asset to transfer
-    function mintTo(address to_, uint256 amount_) public virtual override {
+    ///             - The `account_` address has not approved this contract to spend `asset`
+    function mintFor(address account_, uint256 amount_) public virtual override {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Transfer the underlying asset to the contract
-        asset.safeTransferFrom(msg.sender, address(this), amount_);
+        asset.safeTransferFrom(account_, address(this), amount_);
 
         // Deposit the underlying asset into the vault and update the total shares
         asset.safeApprove(address(vault), amount_);
         totalShares += vault.deposit(amount_, address(this));
 
-        // Mint the CD tokens to the caller
-        _mint(to_, amount_);
+        // Mint the CD tokens to the `account_` address
+        _mint(account_, amount_);
     }
 
     /// @inheritdoc CDEPOv1
@@ -105,24 +102,23 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Calls `reclaimTo` with the caller as the address to reclaim the tokens to
+    ///             - Calls `reclaimFor` with the caller as the address to reclaim the tokens to
     function reclaim(uint256 amount_) external virtual override {
-        reclaimTo(msg.sender, amount_);
+        reclaimFor(msg.sender, amount_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Burns the CD tokens from the caller
+    ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
+    ///             - Burns the CD tokens from the `account_` address
     ///             - Calculates the quantity of underlying asset to withdraw and return
-    ///             - Returns the underlying asset to `to_`
+    ///             - Returns the underlying asset to `account_`
     ///
     ///             This function reverts if:
     ///             - The amount is zero
+    ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
     ///             - The quantity of vault shares for the amount is zero
-    ///
-    /// @param  to_       The address to reclaim the tokens to
-    /// @param  amount_   The amount of CD tokens to burn
-    function reclaimTo(address to_, uint256 amount_) public virtual override {
+    function reclaimFor(address account_, uint256 amount_) public virtual override {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
@@ -136,15 +132,18 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `discountedAssetsOut` is low enough, it will round down to 0 and `sharesOut` will be 0
         if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
 
-        // Burn the CD tokens from `from_`
+        // Validate that the `account_` address has approved this contract to spend the convertible deposit tokens
+        // Only if the caller is not the account address
+        if (account_ != msg.sender && allowance[account_][address(this)] < amount_)
+            revert CDEPO_InvalidArgs("allowance");
+
+        // Burn the CD tokens from `account_`
         // This uses the standard ERC20 implementation from solmate
         // It will revert if the caller does not have enough CD tokens
-        // Allowance is not checked, because the CD tokens belonging to the caller
-        // will be burned, and this function cannot be called on behalf of another address
-        _burn(msg.sender, amount_);
+        _burn(account_, amount_);
 
-        // Return the underlying asset to `to_`
-        vault.withdraw(discountedAssetsOut, to_, address(this));
+        // Return the underlying asset to `account_`
+        vault.withdraw(discountedAssetsOut, account_, address(this));
     }
 
     /// @inheritdoc CDEPOv1
@@ -162,22 +161,32 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
+    ///             - Calls `redeemFor` with the caller as the address to redeem the tokens to
+    function redeem(uint256 amount_) external override permissioned returns (uint256 tokensOut) {
+        return redeemFor(msg.sender, amount_);
+    }
+
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
     ///             - Validates that the caller is permissioned
-    ///             - Burns the CD tokens from the caller
+    ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
+    ///             - Burns the CD tokens from the `account_` address
     ///             - Calculates the quantity of underlying asset to withdraw and return
     ///             - Returns the underlying asset to the caller
     ///
     ///             This function reverts if:
     ///             - The amount is zero
     ///             - The quantity of vault shares for the amount is zero
-    ///
-    /// @param  amount_   The amount of CD tokens to burn
-    function redeem(uint256 amount_) external override permissioned returns (uint256 sharesOut) {
+    ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
+    function redeemFor(
+        address account_,
+        uint256 amount_
+    ) public override permissioned returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Calculate the quantity of shares to transfer
-        sharesOut = vault.previewWithdraw(amount_);
+        uint256 sharesOut = vault.previewWithdraw(amount_);
         totalShares -= sharesOut;
 
         // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
@@ -185,11 +194,18 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // However a different ERC4626 vault implementation may trigger the condition
         if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
 
-        // Burn the CD tokens from the caller
-        _burn(msg.sender, amount_);
+        // Validate that the `account_` address has approved this contract to spend the convertible deposit tokens
+        // Only if the caller is not the account address
+        if (account_ != msg.sender && allowance[account_][address(this)] < amount_)
+            revert CDEPO_InvalidArgs("allowance");
 
-        // Transfer the assets to the caller
+        // Burn the CD tokens from the `account_` address
+        _burn(account_, amount_);
+
+        // Return the underlying asset to the caller
         vault.withdraw(amount_, msg.sender, address(this));
+
+        return amount_;
     }
 
     // ========== YIELD MANAGER ========== //
