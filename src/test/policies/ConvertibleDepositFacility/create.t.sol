@@ -7,9 +7,9 @@ import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleD
 contract CreateCDFTest is ConvertibleDepositFacilityTest {
     // when the caller does not have the CD_Auctioneer role
     //  [ ] it reverts
-    // when the caller has not approved CDEPO to spend the reserve token
+    // when the caller has not approved CDEPO to spend the reserve tokens
     //  [ ] it reverts
-    // [ ] it mints the CD token to account_
+    // [ ] it mints the CD tokens to account_
     // [ ] it creates a new position in the CDPOS module
     // [ ] it pre-emptively increases the mint approval equivalent to the converted amount of OHM
     // [ ] it returns the position ID

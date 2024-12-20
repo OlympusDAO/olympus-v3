@@ -17,6 +17,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [ ] it reverts
     // when any position has an amount greater than the remaining deposit
     //  [ ] it reverts
+    // when the caller has not approved CDEPO to spend the total amount of CD tokens
+    //  [ ] it reverts
     // [ ] it mints the converted amount of OHM to the account_
     // [ ] it updates the remaining deposit of each position
     // [ ] it transfers the redeemed vault shares to the TRSRY
