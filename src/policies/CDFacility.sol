@@ -22,7 +22,10 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     // ========== STATE VARIABLES ========== //
 
     // Constants
-    uint256 public constant DECIMALS = 1e18;
+
+    /// @notice The scale of the convertible deposit token
+    /// @dev    This will typically be 10 ** decimals
+    uint256 public SCALE;
 
     // Modules
     TRSRYv1 public TRSRY;
@@ -32,9 +35,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
 
     // ========== ERRORS ========== //
 
+    /// @notice An error that is thrown when the parameters are invalid
     error CDFacility_InvalidParams(string reason);
-
-    error Misconfigured();
 
     // ========== SETUP ========== //
 
@@ -54,7 +56,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
         CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
 
-        // TODO set decimals
+        SCALE = 10 ** CDEPO.decimals();
     }
 
     function requestPermissions()
@@ -102,13 +104,72 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         );
 
         // Calculate the expected OHM amount
-        uint256 expectedOhmAmount = (amount_ * DECIMALS) / conversionPrice_;
+        uint256 expectedOhmAmount = (amount_ * SCALE) / conversionPrice_;
 
         // Pre-emptively increase the OHM mint approval
         MINTR.increaseMintApproval(address(this), expectedOhmAmount);
 
         // Emit an event
         emit CreatedDeposit(account_, positionId, amount_);
+    }
+
+    function _previewConvert(
+        uint256 positionId_,
+        uint256 amount_,
+        bool checkOwner_
+    ) internal view returns (uint256 convertedTokenOut) {
+        // Validate that the position is valid
+        // This will revert if the position is not valid
+        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
+
+        // Validate that the caller is the owner of the position
+        if (checkOwner_ && position.owner != msg.sender) revert CDF_NotOwner(positionId_);
+
+        // Validate that the position is CDEPO
+        if (position.convertibleDepositToken != address(CDEPO))
+            revert CDF_InvalidToken(positionId_, position.convertibleDepositToken);
+
+        // Validate that the position has not expired
+        if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId_);
+
+        // Validate that the deposit amount is not greater than the remaining deposit
+        if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
+
+        convertedTokenOut = (amount_ * SCALE) / position.conversionPrice; // TODO check SCALE, rounding
+
+        return convertedTokenOut;
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
+    ///             - The position is not valid
+    ///             - The position is not CDEPO
+    ///             - The position has expired
+    ///             - The deposit amount is greater than the remaining deposit
+    ///             - The deposit amount is 0
+    ///             - The converted amount is 0
+    function previewConvert(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender) {
+        // Make sure the lengths of the arrays are the same
+        if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
+
+        for (uint256 i; i < positionIds_.length; ++i) {
+            uint256 positionId = positionIds_[i];
+            uint256 amount = amounts_[i];
+            cdTokenIn += amount;
+            convertedTokenOut += _previewConvert(positionId, amount, false);
+        }
+
+        // If the amount is 0, revert
+        if (cdTokenIn == 0) revert CDF_InvalidArgs("amount");
+
+        // If the converted amount is 0, revert
+        if (convertedTokenOut == 0) revert CDF_InvalidArgs("converted amount");
+
+        return (cdTokenIn, convertedTokenOut, address(CDEPO));
     }
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -119,50 +180,33 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     ///             - The position is not CDEPO
     ///             - The position has expired
     ///             - The deposit amount is greater than the remaining deposit
+    ///             - The deposit amount is 0
+    ///             - The converted amount is 0
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external returns (uint256 totalDeposit, uint256 converted) {
+    ) external returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
-
-        uint256 totalDeposits;
 
         // Iterate over all positions
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
             uint256 depositAmount = amounts_[i];
 
-            // Validate that the position is valid
-            // This will revert if the position is not valid
-            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
-
-            // Validate that the caller is the owner of the position
-            if (position.owner != msg.sender) revert CDF_NotOwner(positionId);
-
-            // Validate that the position is CDEPO
-            if (position.convertibleDepositToken != address(CDEPO))
-                revert CDF_InvalidToken(positionId, position.convertibleDepositToken);
-
-            // Validate that the position has not expired
-            if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId);
-
-            // Validate that the deposit amount is not greater than the remaining deposit
-            if (depositAmount > position.remainingDeposit)
-                revert CDF_InvalidAmount(positionId, depositAmount);
-
-            uint256 convertedAmount = (depositAmount * DECIMALS) / position.conversionPrice; // TODO check decimals, rounding
-
-            // Increment running totals
-            totalDeposits += depositAmount;
-            converted += convertedAmount;
+            cdTokenIn += depositAmount;
+            convertedTokenOut += _previewConvert(positionId, depositAmount, true);
 
             // Update the position
-            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
+            CDPOS.update(
+                positionId,
+                CDPOS.getPosition(positionId).remainingDeposit - depositAmount
+            );
         }
 
         // Redeem the CD deposits in bulk
-        uint256 tokensOut = CDEPO.redeemFor(msg.sender, totalDeposits);
+        // This will revert if cdTokenIn is 0
+        uint256 tokensOut = CDEPO.redeemFor(msg.sender, cdTokenIn);
 
         // Wrap the tokens and transfer to the TRSRY
         ERC4626 vault = CDEPO.vault();
@@ -170,19 +214,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         vault.deposit(tokensOut, address(TRSRY));
 
         // Mint OHM to the owner/caller
-        MINTR.mintOhm(msg.sender, converted);
+        // No need to check if `convertedTokenOut` is 0, as MINTR will revert
+        MINTR.mintOhm(msg.sender, convertedTokenOut);
 
         // Emit event
-        emit ConvertedDeposit(msg.sender, totalDeposits, converted);
+        emit ConvertedDeposit(msg.sender, cdTokenIn, convertedTokenOut);
 
-        return (totalDeposits, converted);
-    }
-
-    function previewConvert(
-        uint256[] memory positionIds_,
-        uint256[] memory amounts_
-    ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender) {
-        return (0, 0, address(0));
+        return (cdTokenIn, convertedTokenOut);
     }
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -219,7 +257,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             if (depositAmount > position.remainingDeposit)
                 revert CDF_InvalidAmount(positionId, depositAmount);
 
-            uint256 convertedAmount = (depositAmount * DECIMALS) / position.conversionPrice; // TODO check decimals, rounding
+            uint256 convertedAmount = (depositAmount * SCALE) / position.conversionPrice; // TODO check SCALE, rounding
 
             // Increment running totals
             reclaimed += depositAmount;

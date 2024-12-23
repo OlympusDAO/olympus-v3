@@ -5,6 +5,7 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
 contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     event ConvertedDeposit(address indexed user, uint256 depositAmount, uint256 convertedAmount);
@@ -20,6 +21,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     // when any position has an amount greater than the remaining deposit
     //  [X] it reverts
     // when the caller has not approved CDEPO to spend the total amount of CD tokens
+    //  [X] it reverts
+    // when the converted amount is 0
     //  [X] it reverts
     // [X] it mints the converted amount of OHM to the account_
     // [X] it updates the remaining deposit of each position
@@ -234,6 +237,35 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.convert(positionIds_, amounts_);
     }
 
+    function test_convertedAmountIsZero_reverts()
+        public
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT)
+        givenConvertibleDepositTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        uint256[] memory positionIds_ = new uint256[](1);
+        uint256[] memory amounts_ = new uint256[](1);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 1; // 1 / 2 = 0
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(MINTRv1.MINTR_ZeroAmount.selector));
+
+        // Call function
+        vm.prank(recipient);
+        facility.convert(positionIds_, amounts_);
+    }
+
     function test_success()
         public
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
@@ -325,5 +357,70 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         );
         assertEq(vault.balanceOf(address(facility)), 0, "vault.balanceOf(address(facility))");
         assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
+    }
+
+    function test_success_fuzz(
+        uint256 amountOne_,
+        uint256 amountTwo_
+    )
+        public
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasPosition(recipient, 5e18)
+        givenAddressHasPosition(recipient, 5e18)
+        givenConvertibleDepositTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        // Both 2+ so that the converted amount is not 0
+        uint256 amountOne = bound(amountOne_, 2, 5e18);
+        uint256 amountTwo = bound(amountTwo_, 2, 5e18);
+
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0;
+        amounts_[0] = amountOne;
+        positionIds_[1] = 1;
+        amounts_[1] = amountTwo;
+
+        uint256 expectedConvertedAmount = (amountOne * 1e18) /
+            CONVERSION_PRICE +
+            (amountTwo * 1e18) /
+            CONVERSION_PRICE;
+        uint256 expectedVaultShares = vault.previewDeposit(amountOne + amountTwo);
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 totalDeposit, uint256 convertedAmount) = facility.convert(positionIds_, amounts_);
+
+        // Assert total deposit
+        assertEq(totalDeposit, amountOne + amountTwo, "totalDeposit");
+
+        // Assert converted amount
+        assertEq(convertedAmount, expectedConvertedAmount, "convertedAmount");
+
+        // Assert convertible deposit tokens are transferred from the recipient
+        assertEq(
+            convertibleDepository.balanceOf(recipient),
+            RESERVE_TOKEN_AMOUNT - amountOne - amountTwo,
+            "convertibleDepository.balanceOf(recipient)"
+        );
+
+        // Assert OHM minted to the recipient
+        assertEq(ohm.balanceOf(recipient), expectedConvertedAmount, "ohm.balanceOf(recipient)");
+
+        // Vault shares are transferred to the TRSRY
+        assertEq(
+            vault.balanceOf(address(treasury)),
+            expectedVaultShares,
+            "vault.balanceOf(address(treasury))"
+        );
     }
 }

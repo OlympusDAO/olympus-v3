@@ -14,6 +14,10 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when any position has an amount greater than the remaining deposit
     //  [X] it reverts
+    // when the amount is 0
+    //  [X] it reverts
+    // when the converted amount is 0
+    //  [X] it reverts
     // [X] it returns the total CD token amount that would be converted
     // [X] it returns the amount of OHM that would be minted
     // [X] it returns the address that will spend the convertible deposit tokens
@@ -153,6 +157,51 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.previewConvert(positionIds_, amounts_);
     }
 
+    function test_amountIsZero_reverts()
+        public
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+    {
+        uint256[] memory positionIds_ = new uint256[](1);
+        uint256[] memory amounts_ = new uint256[](1);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 0;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_InvalidArgs.selector, "amount")
+        );
+
+        // Call function
+        facility.previewConvert(positionIds_, amounts_);
+    }
+
+    function test_convertedAmountIsZero_reverts()
+        public
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+    {
+        uint256[] memory positionIds_ = new uint256[](1);
+        uint256[] memory amounts_ = new uint256[](1);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 1;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "converted amount"
+            )
+        );
+
+        // Call function
+        facility.previewConvert(positionIds_, amounts_);
+    }
+
     function test_success(
         uint256 amountOne_,
         uint256 amountTwo_,
@@ -185,9 +234,23 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
             amounts_
         );
 
-        // Assertions
-        assertEq(totalDeposits, amountOne + amountTwo + amountThree);
-        assertEq(converted, ((amountOne + amountTwo + amountThree) * 1e18) / CONVERSION_PRICE);
-        assertEq(spender, address(convertibleDepository));
+        // Assertion that the total deposits are the sum of the amounts
+        assertEq(totalDeposits, amountOne + amountTwo + amountThree, "totalDeposits");
+
+        // Assertion that the converted amount is the sum of the amounts converted at the conversion price
+        // Each amount is converted separately to avoid rounding errors
+        assertEq(
+            converted,
+            (amountOne * 1e18) /
+                CONVERSION_PRICE +
+                (amountTwo * 1e18) /
+                CONVERSION_PRICE +
+                (amountThree * 1e18) /
+                CONVERSION_PRICE,
+            "converted"
+        );
+
+        // Assertion that the spender is the convertible depository
+        assertEq(spender, address(convertibleDepository), "spender");
     }
 }
