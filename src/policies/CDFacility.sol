@@ -84,7 +84,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         uint256 conversionPrice_,
         uint48 expiry_,
         bool wrap_
-    ) external onlyRole("CD_Auctioneer") returns (uint256 positionId) {
+    ) external onlyRole("cd_auctioneer") returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
         CDEPO.mintFor(account_, amount_);
@@ -119,8 +119,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         uint256[] memory amounts_
     ) external returns (uint256 totalDeposit, uint256 converted) {
         // Make sure the lengths of the arrays are the same
-        if (positionIds_.length != amounts_.length)
-            revert CDF_InvalidArgs("array lengths must match");
+        if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
         uint256 totalDeposits;
 

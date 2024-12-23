@@ -74,11 +74,9 @@ interface IConvertibleDepositFacility {
 
     /// @notice Preview the amount of convertible deposit tokens and OHM that would be converted
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have not expired
-    ///         - Validating that the caller has approved CDEPO to spend the total amount of CD tokens
     ///         - Returning the total amount of convertible deposit tokens and OHM that would be converted
     ///
     /// @param  positionIds_        An array of position ids that will be converted
@@ -111,11 +109,9 @@ interface IConvertibleDepositFacility {
 
     /// @notice Preview the amount of reserve token that would be reclaimed
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have expired
-    ///         - Validating that the caller has approved CDEPO to spend the total amount of CD tokens
     ///         - Returning the total amount of reserve token that would be reclaimed
     ///
     /// @param  positionIds_    An array of position ids that will be reclaimed

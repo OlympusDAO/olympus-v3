@@ -34,6 +34,7 @@ contract ConvertibleDepositFacilityTest is Test {
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
     uint48 public constant EXPIRY = INITIAL_BLOCK + 1 days;
+    uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -62,7 +63,7 @@ contract ConvertibleDepositFacilityTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
-        rolesAdmin.grantRole(bytes32("CD_Auctioneer"), auctioneer);
+        rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
     }
 
     // ========== MODIFIERS ========== //
@@ -88,9 +89,9 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 conversionPrice_,
         uint48 expiry_,
         bool wrap_
-    ) internal {
+    ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        facility.create(account_, amount_, conversionPrice_, expiry_, wrap_);
+        positionId = facility.create(account_, amount_, conversionPrice_, expiry_, wrap_);
     }
 
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
