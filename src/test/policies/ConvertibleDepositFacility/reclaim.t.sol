@@ -19,6 +19,8 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
     //  [ ] it reverts
     // when the caller has not approved CDEPO to spend the total amount of CD tokens
     //  [ ] it reverts
+    // when the reclaim amount is 0
+    //  [ ] it reverts
     // [ ] it updates the remaining deposit of each position
     // [ ] it transfers the redeemed reserve tokens to the owner
     // [ ] it decreases the OHM mint approval by the amount of OHM that would have been converted

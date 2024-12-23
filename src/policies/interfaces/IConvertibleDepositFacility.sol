@@ -112,16 +112,19 @@ interface IConvertibleDepositFacility {
 
     /// @notice Preview the amount of reserve token that would be reclaimed
     /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that `account_` is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have expired
     ///         - Returning the total amount of reserve token that would be reclaimed
     ///
+    /// @param  account_        The address to preview the reclaim for
     /// @param  positionIds_    An array of position ids that will be reclaimed
     /// @param  amounts_        An array of amounts of convertible deposit tokens to reclaim
     /// @return reclaimed       The amount of reserve token returned to the caller
     /// @return cdTokenSpender  The address that will spend the convertible deposit tokens. The caller must have approved this address to spend the total amount of CD tokens.
     function previewReclaim(
+        address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view returns (uint256 reclaimed, address cdTokenSpender);

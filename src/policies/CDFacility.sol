@@ -285,6 +285,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     }
 
     function previewReclaim(
+        address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view returns (uint256 reclaimed, address cdTokenSpender) {
