@@ -74,17 +74,20 @@ interface IConvertibleDepositFacility {
 
     /// @notice Preview the amount of convertible deposit tokens and OHM that would be converted
     /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that `account_` is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
     ///         - Validating that all of the positions have not expired
     ///         - Returning the total amount of convertible deposit tokens and OHM that would be converted
     ///
+    /// @param  account_            The address to preview the conversion for
     /// @param  positionIds_        An array of position ids that will be converted
     /// @param  amounts_            An array of amounts of convertible deposit tokens to convert
     /// @return cdTokenIn           The total amount of convertible deposit tokens converted
     /// @return convertedTokenOut   The amount of OHM minted during conversion
     /// @return cdTokenSpender      The address that will spend the convertible deposit tokens. The caller must have approved this address to spend the total amount of CD tokens.
     function previewConvert(
+        address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender);

@@ -18,6 +18,8 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the converted amount is 0
     //  [X] it reverts
+    // when the account is not the owner of all of the positions
+    //  [X] it reverts
     // [X] it returns the total CD token amount that would be converted
     // [X] it returns the amount of OHM that would be minted
     // [X] it returns the address that will spend the convertible deposit tokens
@@ -35,7 +37,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewConvert(positionIds_, amounts_);
+        facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
     function test_anyPositionIsNotValid_reverts(
@@ -73,7 +75,69 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
 
         // Call function
-        facility.previewConvert(positionIds_, amounts_);
+        facility.previewConvert(recipient, positionIds_, amounts_);
+    }
+
+    function test_anyPositionHasDifferentOwner_reverts(
+        uint256 positionIndex_
+    )
+        public
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasReserveToken(recipientTwo, 9e18)
+        givenReserveTokenSpendingIsApproved(recipientTwo, address(convertibleDepository), 9e18)
+    {
+        uint256 positionIndex = bound(positionIndex_, 0, 2);
+
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        for (uint256 i; i < 3; i++) {
+            uint256 positionId;
+            if (positionIndex == i) {
+                positionId = _createPosition(recipientTwo, 3e18, CONVERSION_PRICE, EXPIRY, false);
+            } else {
+                positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, EXPIRY, false);
+            }
+
+            positionIds_[i] = positionId;
+            amounts_[i] = 3e18;
+        }
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, positionIndex)
+        );
+
+        // Call function
+        facility.previewConvert(recipient, positionIds_, amounts_);
+    }
+
+    function test_allPositionsHaveDifferentOwner_reverts()
+        public
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasPosition(recipient, 3e18)
+    {
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 3e18;
+        positionIds_[1] = 1;
+        amounts_[1] = 3e18;
+        positionIds_[2] = 2;
+        amounts_[2] = 3e18;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, 0)
+        );
+
+        // Call function
+        facility.previewConvert(recipientTwo, positionIds_, amounts_);
     }
 
     function test_anyPositionHasExpired_reverts(
@@ -113,7 +177,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewConvert(positionIds_, amounts_);
+        facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
     function test_anyAmountIsGreaterThanRemainingDeposit_reverts(
@@ -154,7 +218,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewConvert(positionIds_, amounts_);
+        facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
     function test_amountIsZero_reverts()
@@ -175,7 +239,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewConvert(positionIds_, amounts_);
+        facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
     function test_convertedAmountIsZero_reverts()
@@ -199,7 +263,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewConvert(positionIds_, amounts_);
+        facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
     function test_success(
@@ -230,6 +294,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         (uint256 totalDeposits, uint256 converted, address spender) = facility.previewConvert(
+            recipient,
             positionIds_,
             amounts_
         );

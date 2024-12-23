@@ -114,16 +114,16 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     }
 
     function _previewConvert(
+        address account_,
         uint256 positionId_,
-        uint256 amount_,
-        bool checkOwner_
+        uint256 amount_
     ) internal view returns (uint256 convertedTokenOut) {
         // Validate that the position is valid
         // This will revert if the position is not valid
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
 
         // Validate that the caller is the owner of the position
-        if (checkOwner_ && position.owner != msg.sender) revert CDF_NotOwner(positionId_);
+        if (position.owner != account_) revert CDF_NotOwner(positionId_);
 
         // Validate that the position is CDEPO
         if (position.convertibleDepositToken != address(CDEPO))
@@ -143,6 +143,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
+    ///             - account_ is not the owner of all of the positions
     ///             - The position is not valid
     ///             - The position is not CDEPO
     ///             - The position has expired
@@ -150,6 +151,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     ///             - The deposit amount is 0
     ///             - The converted amount is 0
     function previewConvert(
+        address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender) {
@@ -160,7 +162,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             uint256 positionId = positionIds_[i];
             uint256 amount = amounts_[i];
             cdTokenIn += amount;
-            convertedTokenOut += _previewConvert(positionId, amount, false);
+            convertedTokenOut += _previewConvert(account_, positionId, amount);
         }
 
         // If the amount is 0, revert
@@ -195,7 +197,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             uint256 depositAmount = amounts_[i];
 
             cdTokenIn += depositAmount;
-            convertedTokenOut += _previewConvert(positionId, depositAmount, true);
+            convertedTokenOut += _previewConvert(msg.sender, positionId, depositAmount);
 
             // Update the position
             CDPOS.update(
