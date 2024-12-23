@@ -30,6 +30,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     address public recipient = address(0x1);
     address public auctioneer = address(0x2);
+    address public recipientTwo = address(0x3);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -96,6 +97,16 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
         _createPosition(account_, amount_, CONVERSION_PRICE, EXPIRY, false);
+        _;
+    }
+
+    modifier givenConvertibleDepositTokenSpendingIsApproved(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) {
+        vm.prank(owner_);
+        convertibleDepository.approve(spender_, amount_);
         _;
     }
 }

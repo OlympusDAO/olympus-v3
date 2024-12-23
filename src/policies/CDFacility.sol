@@ -53,6 +53,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
         CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
         CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
+
+        // TODO set decimals
     }
 
     function requestPermissions()
@@ -69,7 +71,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(cdepoKeycode, CDEPO.redeem.selector);
+        permissions[3] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
         permissions[4] = Permissions(cdepoKeycode, CDEPO.sweepYield.selector);
         permissions[5] = Permissions(cdposKeycode, CDPOS.create.selector);
         permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
@@ -99,8 +101,11 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             wrap_
         );
 
+        // Calculate the expected OHM amount
+        uint256 expectedOhmAmount = (amount_ * DECIMALS) / conversionPrice_;
+
         // Pre-emptively increase the OHM mint approval
-        MINTR.increaseMintApproval(address(this), amount_);
+        MINTR.increaseMintApproval(address(this), expectedOhmAmount);
 
         // Emit an event
         emit CreatedDeposit(account_, positionId, amount_);
@@ -128,12 +133,12 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
             uint256 positionId = positionIds_[i];
             uint256 depositAmount = amounts_[i];
 
-            // Validate that the caller is the owner of the position
-            if (CDPOS.ownerOf(positionId) != msg.sender) revert CDF_NotOwner(positionId);
-
             // Validate that the position is valid
             // This will revert if the position is not valid
             CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
+
+            // Validate that the caller is the owner of the position
+            if (position.owner != msg.sender) revert CDF_NotOwner(positionId);
 
             // Validate that the position is CDEPO
             if (position.convertibleDepositToken != address(CDEPO))
@@ -157,10 +162,12 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         }
 
         // Redeem the CD deposits in bulk
-        uint256 sharesOut = CDEPO.redeem(totalDeposits);
+        uint256 tokensOut = CDEPO.redeemFor(msg.sender, totalDeposits);
 
-        // Transfer the redeemed assets to the TRSRY
-        CDEPO.vault().transfer(address(TRSRY), sharesOut);
+        // Wrap the tokens and transfer to the TRSRY
+        ERC4626 vault = CDEPO.vault();
+        CDEPO.asset().approve(address(vault), tokensOut);
+        vault.deposit(tokensOut, address(TRSRY));
 
         // Mint OHM to the owner/caller
         MINTR.mintOhm(msg.sender, converted);

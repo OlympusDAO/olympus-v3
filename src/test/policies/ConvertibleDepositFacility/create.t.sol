@@ -54,6 +54,9 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
+        // Calculate the expected OHM amount
+        uint256 expectedOhmAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
+
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit CreatedDeposit(recipient, 0, RESERVE_TOKEN_AMOUNT);
@@ -68,21 +71,29 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Assert that the position ID is 0
-        assertEq(positionId, 0);
+        assertEq(positionId, 0, "positionId");
 
         // Assert that the reserve token was transferred from the recipient
-        assertEq(reserveToken.balanceOf(recipient), 0);
+        assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
 
         // Assert that the CDEPO token was minted to the recipient
-        assertEq(convertibleDepository.balanceOf(recipient), RESERVE_TOKEN_AMOUNT);
+        assertEq(
+            convertibleDepository.balanceOf(recipient),
+            RESERVE_TOKEN_AMOUNT,
+            "convertibleDepository.balanceOf(recipient)"
+        );
 
         // Assert that the recipient has a CDPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
-        assertEq(positionIds.length, 1);
-        assertEq(positionIds[0], 0);
+        assertEq(positionIds.length, 1, "positionIds.length");
+        assertEq(positionIds[0], 0, "positionIds[0]");
 
         // Assert that the mint approval was increased
-        assertEq(minter.mintApproval(address(facility)), RESERVE_TOKEN_AMOUNT);
+        assertEq(
+            minter.mintApproval(address(facility)),
+            expectedOhmAmount,
+            "minter.mintApproval(address(facility))"
+        );
     }
 
     function test_success_multiple()
@@ -94,6 +105,9 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
+        // Calculate the expected OHM amount
+        uint256 expectedOhmAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
+
         // Call function
         _createPosition(recipient, RESERVE_TOKEN_AMOUNT / 2, CONVERSION_PRICE, EXPIRY, false);
 
@@ -107,21 +121,29 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Assert that the position ID is 1
-        assertEq(positionId2, 1);
+        assertEq(positionId2, 1, "positionId2");
 
         // Assert that the reserve token was transferred from the recipient
-        assertEq(reserveToken.balanceOf(recipient), 0);
+        assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
 
         // Assert that the CDEPO token was minted to the recipient
-        assertEq(convertibleDepository.balanceOf(recipient), RESERVE_TOKEN_AMOUNT);
+        assertEq(
+            convertibleDepository.balanceOf(recipient),
+            RESERVE_TOKEN_AMOUNT,
+            "convertibleDepository.balanceOf(recipient)"
+        );
 
         // Assert that the recipient has two CDPOS positions
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
-        assertEq(positionIds.length, 2);
-        assertEq(positionIds[0], 0);
-        assertEq(positionIds[1], 1);
+        assertEq(positionIds.length, 2, "positionIds.length");
+        assertEq(positionIds[0], 0, "positionIds[0]");
+        assertEq(positionIds[1], 1, "positionIds[1]");
 
         // Assert that the mint approval was increased
-        assertEq(minter.mintApproval(address(facility)), RESERVE_TOKEN_AMOUNT);
+        assertEq(
+            minter.mintApproval(address(facility)),
+            expectedOhmAmount,
+            "minter.mintApproval(address(facility))"
+        );
     }
 }

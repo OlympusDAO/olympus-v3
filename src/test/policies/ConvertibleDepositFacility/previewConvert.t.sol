@@ -66,9 +66,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         }
 
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, positionIndex)
-        );
+        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
 
         // Call function
         facility.previewConvert(positionIds_, amounts_);
@@ -98,6 +96,9 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
             positionIds_[i] = positionId;
             amounts_[i] = 3e18;
         }
+
+        // Warp to beyond the expiry of positionIndex
+        vm.warp(INITIAL_BLOCK + 1);
 
         // Expect revert
         vm.expectRevert(
