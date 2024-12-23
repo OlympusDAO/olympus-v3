@@ -65,12 +65,31 @@ interface IConvertibleDepositFacility {
     ///
     /// @param  positionIds_        An array of position ids that will be converted
     /// @param  amounts_            An array of amounts of convertible deposit tokens to convert
-    /// @return totalDeposit        The total amount of convertible deposit tokens converted
-    /// @return converted           The amount of OHM minted during conversion
+    /// @return cdTokenIn           The total amount of convertible deposit tokens converted
+    /// @return convertedTokenOut   The amount of OHM minted during conversion
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external returns (uint256 totalDeposit, uint256 converted);
+    ) external returns (uint256 cdTokenIn, uint256 convertedTokenOut);
+
+    /// @notice Preview the amount of convertible deposit tokens and OHM that would be converted
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that convertible deposit token in the position is CDEPO
+    ///         - Validating that all of the positions are valid
+    ///         - Validating that all of the positions have not expired
+    ///         - Validating that the caller has approved CDEPO to spend the total amount of CD tokens
+    ///         - Returning the total amount of convertible deposit tokens and OHM that would be converted
+    ///
+    /// @param  positionIds_        An array of position ids that will be converted
+    /// @param  amounts_            An array of amounts of convertible deposit tokens to convert
+    /// @return cdTokenIn           The total amount of convertible deposit tokens converted
+    /// @return convertedTokenOut   The amount of OHM minted during conversion
+    /// @return cdTokenSpender      The address that will spend the convertible deposit tokens. The caller must have approved this address to spend the total amount of CD tokens.
+    function previewConvert(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender);
 
     /// @notice Reclaims convertible deposit tokens after expiry
     /// @dev    The implementing contract is expected to handle the following:
@@ -89,4 +108,33 @@ interface IConvertibleDepositFacility {
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external returns (uint256 reclaimed);
+
+    /// @notice Preview the amount of reserve token that would be reclaimed
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that convertible deposit token in the position is CDEPO
+    ///         - Validating that all of the positions are valid
+    ///         - Validating that all of the positions have expired
+    ///         - Validating that the caller has approved CDEPO to spend the total amount of CD tokens
+    ///         - Returning the total amount of reserve token that would be reclaimed
+    ///
+    /// @param  positionIds_    An array of position ids that will be reclaimed
+    /// @param  amounts_        An array of amounts of convertible deposit tokens to reclaim
+    /// @return reclaimed       The amount of reserve token returned to the caller
+    /// @return cdTokenSpender  The address that will spend the convertible deposit tokens. The caller must have approved this address to spend the total amount of CD tokens.
+    function previewReclaim(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external view returns (uint256 reclaimed, address cdTokenSpender);
+
+    // ========== VIEW FUNCTIONS ========== //
+
+    /// @notice The address of token accepted by the facility
+    function depositToken() external view returns (address);
+
+    /// @notice The address of the convertible deposit token that is minted by the facility
+    function convertibleDepositToken() external view returns (address);
+
+    /// @notice The address of the token that is converted to by the facility
+    function convertedToken() external view returns (address);
 }

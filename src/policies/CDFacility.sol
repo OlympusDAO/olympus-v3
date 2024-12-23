@@ -172,6 +172,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         return (totalDeposits, converted);
     }
 
+    function previewConvert(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender) {
+        return (0, 0, address(0));
+    }
+
     /// @inheritdoc IConvertibleDepositFacility
     function reclaim(
         uint256[] memory positionIds_,
@@ -229,5 +236,26 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         emit ReclaimedDeposit(msg.sender, reclaimed);
 
         return reclaimed;
+    }
+
+    function previewReclaim(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external view returns (uint256 reclaimed, address cdTokenSpender) {
+        return (0, address(0));
+    }
+
+    // ========== VIEW FUNCTIONS ========== //
+
+    function depositToken() external view returns (address) {
+        return address(CDEPO.asset());
+    }
+
+    function convertibleDepositToken() external view returns (address) {
+        return address(CDEPO);
+    }
+
+    function convertedToken() external view returns (address) {
+        return address(MINTR.ohm());
     }
 }
