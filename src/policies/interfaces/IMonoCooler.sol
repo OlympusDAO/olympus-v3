@@ -343,7 +343,8 @@ interface IMonoCooler {
      * @param newMaxOriginationLtv The maximum Loan To Value an account is allowed to have when
      *      borrowing or withdrawing collateral
      *    - Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-     *    - MUST be greater than the `newLiquidationLtv`
+     *    - MUST be less than the `newLiquidationLtv`
+     *    - MUST NOT decrease compared to the existing `maxOriginationLtv`
      */
     function setLoanToValue(uint96 newLiquidationLtv, uint96 newMaxOriginationLtv) external;
 
@@ -423,6 +424,16 @@ interface IMonoCooler {
      * @notice A view of the last checkpoint of account data (not as of this block)
      */
     function accountState(address account) external view returns (AccountState memory);
+
+    /**
+     * @notice An account's current collateral
+     */
+    function accountCollateral(address account) external view returns (uint128 collateral);
+
+    /**
+     * @notice An account's current debt as of this block
+     */
+    function accountDebt(address account) external view returns (uint128 debt);
 
     /**
      * @notice A view of the derived/internal cache data.

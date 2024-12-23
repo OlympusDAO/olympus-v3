@@ -52,6 +52,21 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         );
     }
 
+    function test_construction_failLtv() public {
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler = new MonoCooler(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(sdai),
+            address(kernel),
+            DEFAULT_LLTV,
+            DEFAULT_LLTV,
+            DEFAULT_INTEREST_RATE_BPS,
+            DEFAULT_MIN_DEBT_REQUIRED
+        );
+    }
+
     function test_construction_success() public view {
         assertEq(address(cooler.collateralToken()), address(gohm));
         assertEq(address(cooler.debtToken()), address(dai));
@@ -217,6 +232,15 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
         assertEq(cooler.liquidationLtv(), newLiquidationLtv);
         assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
+    }
+
+    function test_setLoanToValue_failDecreaseOLTV() public {
+        vm.startPrank(OVERSEER);
+
+        uint96 newLiquidationLtv = DEFAULT_LLTV;
+        uint96 newMaxOriginationLtv = DEFAULT_OLTV - 1;
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
     }
 
     function test_setLiquidationsPaused() public {

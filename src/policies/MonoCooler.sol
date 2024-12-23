@@ -152,8 +152,10 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (collateralToken.decimals() != 18) revert InvalidParam();
         if (debtToken.decimals() != 18) revert InvalidParam();
 
+        if (maxOriginationLtv_ >= liquidationLtv_) revert InvalidParam();
         liquidationLtv = liquidationLtv_;
         maxOriginationLtv = maxOriginationLtv_;
+
         interestRateBps = interestRateBps_;
 
         interestAccumulatorUpdatedAt = uint32(block.timestamp);
@@ -336,7 +338,12 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Calculate the current LTV (to check vs afterwards), rounding debt up.
         uint256 oldLtv = _calculateCurrentLtv(
-            _currentAccountDebt(aStateCache, gStateCache, true),
+            _currentAccountDebt(
+                aStateCache.debtCheckpoint, 
+                aStateCache.interestAccumulatorRay, 
+                gStateCache.interestAccumulatorRay, 
+                true
+            ),
             aStateCache.collateral
         );
 
@@ -513,18 +520,21 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         uint96 newLiquidationLtv,
         uint96 newMaxOriginationLtv
     ) external override onlyRole(COOLER_OVERSEER_ROLE) {
-        uint256 currentLiquidationLtv = liquidationLtv;
-        if (newLiquidationLtv != currentLiquidationLtv) {
-            // Not allowed to decrease
-            if (newLiquidationLtv < currentLiquidationLtv) revert InvalidParam();
+        // Origination LTV must be less than the liquidation LTV
+        if (newMaxOriginationLtv >= newLiquidationLtv) revert InvalidParam();
+
+        uint256 currentLtv = liquidationLtv;
+        if (newLiquidationLtv != currentLtv) {
+            // Not allowed to decrease the liquidation LTV
+            if (newLiquidationLtv < currentLtv) revert InvalidParam();
             emit LiquidationLtvSet(newLiquidationLtv);
             liquidationLtv = newLiquidationLtv;
         }
 
-        uint256 currentMaxOriginationLtv = maxOriginationLtv;
-        if (newMaxOriginationLtv != currentMaxOriginationLtv) {
-            // Must be less than the liquidationLtv
-            if (newMaxOriginationLtv >= newLiquidationLtv) revert InvalidParam();
+        currentLtv = maxOriginationLtv;
+        if (newMaxOriginationLtv != currentLtv) {
+            // Not allowed to decrease the origination LTV
+            if (newMaxOriginationLtv < currentLtv) revert InvalidParam();
             emit MaxOriginationLtvSet(newMaxOriginationLtv);
             maxOriginationLtv = newMaxOriginationLtv;
         }
@@ -587,7 +597,12 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         if (newCollateral < 0) revert InvalidCollateralDelta();
 
         uint128 maxDebt = _maxDebt(uint128(newCollateral));
-        uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        uint128 currentDebt = _currentAccountDebt(
+            aStateCache.debtCheckpoint, 
+            aStateCache.interestAccumulatorRay, 
+            gStateCache.interestAccumulatorRay, 
+            true
+        );
         debtDelta = int128(maxDebt) - int128(currentDebt);
     }
 
@@ -645,6 +660,23 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     /// @inheritdoc IMonoCooler
     function accountState(address account) external view override returns (AccountState memory) {
         return allAccountState[account];
+    }
+
+    /// @inheritdoc IMonoCooler
+    function accountCollateral(address account) external view override returns (uint128) {
+        return allAccountState[account].collateral;
+    }
+
+    /// @inheritdoc IMonoCooler
+    function accountDebt(address account) external view override returns (uint128) {
+        AccountState storage aState = allAccountState[account];
+        GlobalStateCache memory gStateCache = _globalStateRO();
+        return _currentAccountDebt(
+            aState.debtCheckpoint,
+            aState.interestAccumulatorRay,
+            gStateCache.interestAccumulatorRay,
+            true
+        );
     }
 
     /// @inheritdoc IMonoCooler
@@ -787,7 +819,12 @@ It means the liquidation won't happen until that accrued interest pays for gas++
             DLGTE.applyDelegations(caller, delegationRequests);
         }
 
-        uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        uint128 currentDebt = _currentAccountDebt(
+            aStateCache.debtCheckpoint, 
+            aStateCache.interestAccumulatorRay, 
+            gStateCache.interestAccumulatorRay, 
+            true
+        );
 
         if (collateralAmount == type(uint128).max) {
             uint128 minRequiredCollateral = _minCollateral(currentDebt);
@@ -841,7 +878,12 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         if (recipient == address(0)) revert InvalidAddress();
 
         // don't round up the debt when borrowing.
-        uint128 currentDebt = _currentAccountDebt(aStateCache, gStateCache, false);
+        uint128 currentDebt = _currentAccountDebt(
+            aStateCache.debtCheckpoint, 
+            aStateCache.interestAccumulatorRay, 
+            gStateCache.interestAccumulatorRay, 
+            false
+        );
 
         // Apply the new borrow. If type(uint128).max was specified
         // then borrow up to the maxOriginationLtv
@@ -894,7 +936,12 @@ It means the liquidation won't happen until that accrued interest pays for gas++
 
         // Update the account's latest debt
         // round up for repay balance
-        uint128 latestDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        uint128 latestDebt = _currentAccountDebt(
+            aStateCache.debtCheckpoint, 
+            aStateCache.interestAccumulatorRay, 
+            gStateCache.interestAccumulatorRay, 
+            true
+        );
         if (latestDebt == 0) revert ExpectedNonZero();
 
         // Cap the amount to be repaid to the current debt as of this block
@@ -1027,7 +1074,12 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         status.collateral = aStateCache.collateral;
 
         // Round the debt up
-        status.currentDebt = _currentAccountDebt(aStateCache, gStateCache, true);
+        status.currentDebt = _currentAccountDebt(
+            aStateCache.debtCheckpoint, 
+            aStateCache.interestAccumulatorRay, 
+            gStateCache.interestAccumulatorRay, 
+            true
+        );
         status.currentLtv = _calculateCurrentLtv(status.currentDebt, status.collateral);
 
         status.exceededLiquidationLtv = status.collateral > 0 && status.currentLtv > liquidationLtv;
@@ -1045,25 +1097,26 @@ It means the liquidation won't happen until that accrued interest pays for gas++
      * Derived from the prior debt checkpoint, and the interest accumulator.
      */
     function _currentAccountDebt(
-        AccountState memory aStateCache,
-        GlobalStateCache memory gStateCache,
+        uint128 accountDebtCheckpoint_,
+        uint256 accountInterestAccumulatorRay_,
+        uint256 globalInterestAccumulatorRay_,
         bool roundUp
     ) private pure returns (uint128 result) {
-        if (aStateCache.debtCheckpoint == 0) return 0;
+        if (accountDebtCheckpoint_ == 0) return 0;
 
         // Shortcut if no change.
-        if (aStateCache.interestAccumulatorRay == gStateCache.interestAccumulatorRay) {
-            return aStateCache.debtCheckpoint;
+        if (accountInterestAccumulatorRay_ == globalInterestAccumulatorRay_) {
+            return accountDebtCheckpoint_;
         }
 
         uint256 debt = roundUp
-            ? gStateCache.interestAccumulatorRay.mulDivUp(
-                aStateCache.debtCheckpoint,
-                aStateCache.interestAccumulatorRay
+            ? globalInterestAccumulatorRay_.mulDivUp(
+                accountDebtCheckpoint_,
+                accountInterestAccumulatorRay_
             )
-            : gStateCache.interestAccumulatorRay.mulDivDown(
-                aStateCache.debtCheckpoint,
-                aStateCache.interestAccumulatorRay
+            : globalInterestAccumulatorRay_.mulDivDown(
+                accountDebtCheckpoint_,
+                accountInterestAccumulatorRay_
             );
         return debt.encodeUInt128();
     }

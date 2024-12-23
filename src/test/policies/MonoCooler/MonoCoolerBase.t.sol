@@ -32,7 +32,7 @@ abstract contract MonoCoolerBaseTest is Test {
     RolesAdmin internal rolesAdmin;
 
     MonoCooler public cooler;
-    DelegateEscrowFactory escrowFactory;
+    DelegateEscrowFactory public escrowFactory;
 
     address internal immutable OVERSEER = makeAddr("overseer");
     address internal immutable ALICE = makeAddr("alice");
@@ -311,6 +311,9 @@ abstract contract MonoCoolerBaseTest is Test {
             expectedPosition.maxDelegateAddresses,
             "AccountPosition::maxDelegateAddresses"
         );
+        
+        assertEq(cooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
+        assertEq(cooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
     }
 
     function checkLiquidityStatus(
