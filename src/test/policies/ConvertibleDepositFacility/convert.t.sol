@@ -122,6 +122,34 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.convert(positionIds_, amounts_);
     }
 
+    function test_allPositionsHaveDifferentOwner_reverts()
+        public
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasPosition(recipient, 3e18)
+    {
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 3e18;
+        positionIds_[1] = 1;
+        amounts_[1] = 3e18;
+        positionIds_[2] = 2;
+        amounts_[2] = 3e18;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, 0)
+        );
+
+        // Call function
+        vm.prank(recipientTwo);
+        facility.convert(positionIds_, amounts_);
+    }
+
     function test_anyPositionHasExpired_reverts(
         uint256 positionIndex_
     )
@@ -336,7 +364,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
             "convertibleDepositPositions.getPosition(1).remainingDeposit"
         );
 
-        // Deposit token is transferred to the TRSRY
+        // Deposit token is not transferred to the TRSRY
         assertEq(
             reserveToken.balanceOf(address(treasury)),
             0,
@@ -390,6 +418,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         positionIds_[1] = 1;
         amounts_[1] = amountTwo;
 
+        uint256 originalMintApproval = minter.mintApproval(address(facility));
         uint256 expectedConvertedAmount = (amountOne * 1e18) /
             CONVERSION_PRICE +
             (amountTwo * 1e18) /
@@ -416,11 +445,32 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         // Assert OHM minted to the recipient
         assertEq(ohm.balanceOf(recipient), expectedConvertedAmount, "ohm.balanceOf(recipient)");
 
+        // Assert the remaining mint approval
+        assertEq(
+            minter.mintApproval(address(facility)),
+            originalMintApproval - expectedConvertedAmount,
+            "mintApproval"
+        );
+
+        // Assert the remaining deposit of each position
+        assertEq(
+            convertibleDepositPositions.getPosition(0).remainingDeposit,
+            5e18 - amountOne,
+            "remainingDeposit[0]"
+        );
+        assertEq(
+            convertibleDepositPositions.getPosition(1).remainingDeposit,
+            5e18 - amountTwo,
+            "remainingDeposit[1]"
+        );
+
         // Vault shares are transferred to the TRSRY
         assertEq(
             vault.balanceOf(address(treasury)),
             expectedVaultShares,
             "vault.balanceOf(address(treasury))"
         );
+        assertEq(vault.balanceOf(address(facility)), 0, "vault.balanceOf(address(facility))");
+        assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
     }
 }
