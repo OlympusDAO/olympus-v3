@@ -1,35 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
+/// @title  IConvertibleDepositAuctioneer
+/// @notice Interface for a contract that runs auctions for convertible deposit tokens
 interface IConvertibleDepositAuctioneer {
     // ========== EVENTS ========== //
 
-    event AuctionParametersUpdated(uint256 newTarget, uint256 newSize, uint256 newMinPrice);
+    /// @notice Emitted when the auction parameters are updated
+    ///
+    /// @param  newTarget       Target for OHM sold per day
+    /// @param  newTickSize     Number of OHM in a tick
+    /// @param  newMinPrice     Minimum tick price
+    event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
 
-    event TimeToExpiryUpdated(uint256 newTimeToExpiry);
+    /// @notice Emitted when the time to expiry is updated
+    ///
+    /// @param  newTimeToExpiry Time to expiry
+    event TimeToExpiryUpdated(uint48 newTimeToExpiry);
 
+    /// @notice Emitted when the tick step is updated
+    ///
+    /// @param  newTickStep     Percentage increase (decrease) per tick
     event TickStepUpdated(uint256 newTickStep);
 
     // ========== ERRORS ========== //
 
+    /// @notice Emitted when the parameters are invalid
+    ///
+    /// @param  reason          Reason for invalid parameters
     error CDAuctioneer_InvalidParams(string reason);
 
     // ========== DATA STRUCTURES ========== //
 
+    // TODO document decimals for State.price, Tick.price
+
     /// @notice State of the auction
     ///
-    /// @param  target          number of ohm per day
-    /// @param  tickSize        number of ohm in a tick
-    /// @param  minPrice        minimum tick price
-    /// @param  tickStep        percentage increase (decrease) per tick
-    /// @param  lastUpdate      timestamp of last update to current tick
-    /// @param  timeToExpiry    time between creation and expiry of deposit
+    /// @param  target          Number of OHM available to sell per day
+    /// @param  tickSize        Number of OHM in a tick
+    /// @param  minPrice        Minimum price that OHM can be sold for
+    /// @param  tickStep        Percentage increase (decrease) per tick, in terms of `decimals`.
+    /// @param  lastUpdate      Timestamp of last update to current tick
+    /// @param  timeToExpiry    Time between creation and expiry of deposit
     struct State {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
         uint256 tickStep;
-        uint256 lastUpdate;
+        uint48 lastUpdate;
         uint48 timeToExpiry;
     }
 
@@ -103,9 +121,10 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newTime_     new time to expiry
     function setTimeToExpiry(uint48 newTime_) external;
 
-    /// @notice Set the tick step
-    /// @dev    only callable by the admin
+    /// @notice Set the percentage increase/decrease when a tick is filled, in terms of `decimals`.
+    ///         A tick step of 1e18 (assuming 18 decimals) will result in no change to the tick price, whereas a tick step of 9e17 will result in a 10% decrease.
+    /// @dev    This function should only be callable by the admin
     ///
-    /// @param  newStep_     new tick step
+    /// @param  newStep_     new tick step, in terms of `decimals`.
     function setTickStep(uint256 newStep_) external;
 }

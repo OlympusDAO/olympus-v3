@@ -4,7 +4,6 @@ pragma solidity 0.8.15;
 import "src/Kernel.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
@@ -13,7 +12,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 import {CDFacility} from "./CDFacility.sol";
 
-contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
+contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
@@ -57,10 +56,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function bid(uint256 deposit) external override returns (uint256 ohmOut) {
+    function bid(uint256 deposit) external override nonReentrant returns (uint256 ohmOut) {
+        // TODO day state needs to be reset at the start of each day
+        // if the block timestamp is the first in a new day (since lastUpdate), reset day state
+
         // Update state
         currentTick = getCurrentTick();
-        state.lastUpdate = block.timestamp;
+        state.lastUpdate = uint48(block.timestamp);
 
         // Get bid results
         uint256 currentTickCapacity;
@@ -112,14 +114,24 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         uint256 remainingDeposit = deposit_;
 
         while (remainingDeposit > 0) {
+            // TODO what happens if there is a remaining deposit that cannot be converted? Needs an escape hatch
+            // consider returning the remaining deposit as a value
+
+            // Calculate the amount of OHM that can be converted
+            // given tick capacity
             uint256 amount = tick.capacity < _convertFor(remainingDeposit, tick.price)
                 ? state.tickSize
                 : remainingDeposit;
-            if (amount != state.tickSize) tick.capacity -= amount;
-            else tick.price *= state.tickStep / decimals;
 
+            // Record updates to the deposit and OHM
+            // These updates are done before the tick updates, otherwise the price/capacity will differ from the first calculation above
             remainingDeposit -= amount;
             ohmOut += _convertFor(amount, tick.price);
+
+            // Decrement tick capacity if it is not the full tick size
+            // Otherwise, increase the tick price
+            if (amount != state.tickSize) tick.capacity -= amount;
+            else tick.price *= state.tickStep / decimals;
         }
 
         return (tick.capacity, tick.price, ohmOut);
@@ -182,6 +194,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
         uint256 newSize,
         uint256 newMinPrice
     ) external override onlyRole("CD_Auction_Admin") returns (uint256 remainder) {
+        // TODO should this be newTarget instead of state.target?
         remainder = (state.target > today.convertible) ? state.target - today.convertible : 0;
 
         state = State(
