@@ -29,9 +29,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    This is populated by the `configureDependencies()` function
     address public bidToken;
 
-    /// @notice Decimals of the bid token
+    /// @notice Scale of the bid token
     /// @dev    This is populated by the `configureDependencies()` function
-    uint256 public bidTokenDecimals;
+    uint256 public bidTokenScale;
 
     /// @notice Current tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -43,8 +43,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Auction state for the current day
     Day internal dayState;
 
-    /// @notice Decimals of the OHM token
-    uint8 internal constant _ohmDecimals = 9;
+    /// @notice Scale of the OHM token
+    uint256 internal constant _ohmScale = 10 ** 9;
 
     /// @notice Address of the Convertible Deposit Facility
     CDFacility public cdFacility;
@@ -74,7 +74,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
         bidToken = address(CDEPO.asset());
-        bidTokenDecimals = ERC20(bidToken).decimals();
+        bidTokenScale = 10 ** ERC20(bidToken).decimals();
     }
 
     /// @inheritdoc Policy
@@ -111,8 +111,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Calculate average price based on the total deposit and ohmOut
         // This is the number of deposit tokens per OHM token
-        // TODO check rounding
-        uint256 conversionPrice = (deposit * _ohmDecimals) / ohmOut;
+        // We round up to be conservative
+        uint256 conversionPrice = deposit.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
         // The position ID is emitted as an event, so doesn't need to be returned
@@ -162,7 +162,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // Decrement tick capacity if it is not the full tick size
             // Otherwise, increase the tick price
             if (amount != state.tickSize) tick.capacity -= amount;
-            else tick.price *= state.tickStep / bidTokenDecimals;
+            else tick.price = tick.price.mulDivUp(state.tickStep, bidTokenScale);
         }
 
         return (tick.capacity, tick.price, ohmOut);
@@ -172,6 +172,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     function previewBid(
         uint256 bidAmount_
     ) external view override returns (uint256 ohmOut, address depositSpender) {
+        // TODO this will likely not be idempotent. Need to pass current tick to the _previewBid() function
         (, , ohmOut) = _previewBid(bidAmount_);
 
         return (ohmOut, address(CDEPO));
@@ -190,7 +191,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // decrement price while ticks are full
         while (tick.capacity + newCapacity > state.tickSize) {
             newCapacity -= state.tickSize;
-            tick.price *= bidTokenDecimals / state.tickStep;
+            tick.price *= bidTokenScale / state.tickStep;
 
             // tick price does not go below the minimum
             // tick capacity is full if the min price is exceeded
@@ -206,7 +207,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     function _convertFor(uint256 deposit, uint256 price) internal view returns (uint256) {
-        return (deposit * bidTokenDecimals) / price;
+        return deposit.mulDiv(bidTokenScale, price);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
