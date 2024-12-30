@@ -40,8 +40,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Current state of the auction
     State internal state;
 
-    /// @notice Bidding activity for the current day
-    Day internal today;
+    /// @notice Auction state for the current day
+    Day internal dayState;
 
     /// @notice Decimals of the OHM token
     uint8 internal constant _ohmDecimals = 9;
@@ -102,8 +102,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit);
 
         // Update day state
-        today.deposits += deposit;
-        today.convertible += ohmOut;
+        dayState.deposits += deposit;
+        dayState.convertible += ohmOut;
 
         // Update current tick
         currentTick.capacity = currentTickCapacity;
@@ -215,8 +215,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function getDay() external view override returns (Day memory) {
-        return today;
+    function getDayState() external view override returns (Day memory) {
+        return dayState;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -228,7 +228,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 newMinPrice
     ) external override onlyRole("cd_admin") returns (uint256 remainder) {
         // TODO should this be newTarget instead of state.target?
-        remainder = (state.target > today.convertible) ? state.target - today.convertible : 0;
+        remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
 
         state = State(
             newTarget,

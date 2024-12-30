@@ -98,10 +98,10 @@ interface IConvertibleDepositAuctioneer {
     /// @return state State info
     function getState() external view returns (State memory state);
 
-    /// @notice Get the auction activity for the current day
+    /// @notice Get the auction state for the current day
     ///
     /// @return day Day info
-    function getDay() external view returns (Day memory day);
+    function getDayState() external view returns (Day memory day);
 
     /// @notice The token that is being bid
     ///
