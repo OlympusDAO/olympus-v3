@@ -5,7 +5,7 @@ import {ProposalTest} from "./ProposalTest.sol";
 import {TestSuite} from "proposal-sim/test/TestSuite.t.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 // Proposal imports
