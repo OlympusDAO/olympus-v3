@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -16,7 +16,7 @@ import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
-contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
+contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
@@ -88,7 +88,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
         uint256 conversionPrice_,
         uint48 expiry_,
         bool wrap_
-    ) external onlyRole("cd_auctioneer") returns (uint256 positionId) {
+    ) external onlyRole("cd_auctioneer") nonReentrant returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
         CDEPO.mintFor(account_, amount_);
@@ -187,7 +187,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
+    ) external nonReentrant returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -284,7 +284,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility {
     function reclaim(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external override returns (uint256 reclaimed) {
+    ) external override nonReentrant returns (uint256 reclaimed) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 

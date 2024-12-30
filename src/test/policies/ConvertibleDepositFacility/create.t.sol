@@ -2,9 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
 contract CreateCDFTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
