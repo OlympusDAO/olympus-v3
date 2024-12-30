@@ -40,7 +40,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Current state of the auction
     State internal state;
 
-    /// @notice Auction state for the current day
+    /// @notice Auction state at the time of the last bid (`state.lastUpdate`)
     Day internal dayState;
 
     /// @notice Scale of the OHM token
@@ -89,9 +89,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function bid(uint256 deposit) external override nonReentrant returns (uint256 ohmOut) {
-        // TODO day state needs to be reset at the start of each day
-        // if the block timestamp is the first in a new day (since lastUpdate), reset day state
-
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
         currentTick = _getUpdatedTick();
@@ -100,6 +97,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 currentTickCapacity;
         uint256 currentTickPrice;
         (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit, currentTick);
+
+        // Reset the day state if this is the first bid of the day
+        if (block.timestamp / 86400 > state.lastUpdate / 86400) {
+            dayState = Day(0, 0);
+        }
 
         // Update state
         state.lastUpdate = uint48(block.timestamp);
@@ -231,6 +233,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function returns the day state at the time of the last bid (`state.lastUpdate`)
     function getDayState() external view override returns (Day memory) {
         return dayState;
     }
@@ -244,6 +247,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 newMinPrice
     ) external override onlyRole("cd_admin") returns (uint256 remainder) {
         // TODO should this be newTarget instead of state.target?
+        // TODO Should the newTarget - dayState.convertible be used instead?
         remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
 
         state = State(
