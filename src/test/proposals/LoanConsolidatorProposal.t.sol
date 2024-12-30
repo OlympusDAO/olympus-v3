@@ -40,7 +40,7 @@ contract LoanConsolidatorProposalTest is ProposalTest {
             kernel = Kernel(addresses.getAddress("olympus-kernel"));
         }
 
-        // Simulate the ContractRegistryInstall batch script having been run
+        // Simulate the LoanConsolidatorInstall batch script having been run
         // The simulation will revert otherwise
         // This proposal will also fail until the RGSTY proposal has been executed
         // Install LoanConsolidator
