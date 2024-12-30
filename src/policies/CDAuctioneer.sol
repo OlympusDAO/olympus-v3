@@ -92,16 +92,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // TODO day state needs to be reset at the start of each day
         // if the block timestamp is the first in a new day (since lastUpdate), reset day state
 
-        // Update state
-        currentTick = getCurrentTick();
-        state.lastUpdate = uint48(block.timestamp);
+        // Update the current tick based on the current state
+        // lastUpdate is updated after this, otherwise time calculations will be incorrect
+        currentTick = _getUpdatedTick();
 
         // Get bid results
         uint256 currentTickCapacity;
         uint256 currentTickPrice;
-        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit);
+        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit, currentTick);
 
-        // Update day state
+        // Update state
+        state.lastUpdate = uint48(block.timestamp);
         dayState.deposits += deposit;
         dayState.convertible += ohmOut;
 
@@ -135,14 +136,16 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @return currentTickPrice    The adjusted price of the current tick
     /// @return ohmOut              The quantity of OHM tokens that can be purchased
     function _previewBid(
-        uint256 deposit_
+        uint256 deposit_,
+        Tick memory tick_
     )
         internal
         view
         returns (uint256 currentTickCapacity, uint256 currentTickPrice, uint256 ohmOut)
     {
-        Tick memory tick = getCurrentTick();
         uint256 remainingDeposit = deposit_;
+        currentTickCapacity = tick_.capacity;
+        currentTickPrice = tick_.price;
 
         while (remainingDeposit > 0) {
             // TODO what happens if there is a remaining deposit that cannot be converted? Needs an escape hatch
@@ -150,38 +153,47 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
             // Calculate the amount of OHM that can be converted
             // given tick capacity
-            uint256 amount = tick.capacity < _convertFor(remainingDeposit, tick.price)
+            uint256 amount = currentTickCapacity < _convertFor(remainingDeposit, currentTickPrice)
                 ? state.tickSize
                 : remainingDeposit;
 
             // Record updates to the deposit and OHM
             // These updates are done before the tick updates, otherwise the price/capacity will differ from the first calculation above
             remainingDeposit -= amount;
-            ohmOut += _convertFor(amount, tick.price);
+            ohmOut += _convertFor(amount, currentTickPrice);
 
             // Decrement tick capacity if it is not the full tick size
             // Otherwise, increase the tick price
-            if (amount != state.tickSize) tick.capacity -= amount;
-            else tick.price = tick.price.mulDivUp(state.tickStep, bidTokenScale);
+            if (amount != state.tickSize) currentTickCapacity -= amount;
+            else currentTickPrice = currentTickPrice.mulDivUp(state.tickStep, bidTokenScale);
         }
 
-        return (tick.capacity, tick.price, ohmOut);
+        return (currentTickCapacity, currentTickPrice, ohmOut);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function previewBid(
         uint256 bidAmount_
     ) external view override returns (uint256 ohmOut, address depositSpender) {
-        // TODO this will likely not be idempotent. Need to pass current tick to the _previewBid() function
-        (, , ohmOut) = _previewBid(bidAmount_);
+        // Get the updated tick based on the current state
+        Tick memory updatedTick = _getUpdatedTick();
+
+        // Preview the bid results
+        (, , ohmOut) = _previewBid(bidAmount_, updatedTick);
 
         return (ohmOut, address(CDEPO));
     }
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc IConvertibleDepositAuctioneer
-    function getCurrentTick() public view override returns (Tick memory tick) {
+    function _convertFor(uint256 deposit, uint256 price) internal view returns (uint256) {
+        return deposit.mulDiv(bidTokenScale, price);
+    }
+
+    /// @notice Calculates an updated tick based on the current state
+    ///
+    /// @return tick    The updated tick
+    function _getUpdatedTick() internal view returns (Tick memory tick) {
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 newCapacity = (state.target * timePassed) / 1 days;
@@ -204,10 +216,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // decrement capacity by remainder
         tick.capacity = newCapacity;
+
+        return tick;
     }
 
-    function _convertFor(uint256 deposit, uint256 price) internal view returns (uint256) {
-        return deposit.mulDiv(bidTokenScale, price);
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getCurrentTick() public view override returns (Tick memory tick) {
+        return currentTick;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
