@@ -17,8 +17,7 @@ contract LoanConsolidatorProposalTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to the proposal deployment (otherwise it will fail)
-        // TODO fill in the block number for the RGSTY proposal execution
-        vm.createSelectFork(RPC_URL, 21371786);
+        vm.createSelectFork(RPC_URL, 21501128 + 1);
 
         /// @dev Deploy your proposal
         LoanConsolidatorProposal proposal = new LoanConsolidatorProposal();
