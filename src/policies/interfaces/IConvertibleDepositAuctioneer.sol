@@ -77,11 +77,14 @@ interface IConvertibleDepositAuctioneer {
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
     function bid(uint256 deposit_) external returns (uint256 ohmOut);
 
-    /// @notice Get the amount of OHM tokens issued for a deposit
+    /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///
-    /// @param  deposit_        Amount of reserve tokens
-    /// @return ohmOut          Amount of OHM tokens
-    function previewBid(uint256 deposit_) external view returns (uint256 ohmOut);
+    /// @param  bidAmount_      Amount of reserve tokens
+    /// @return ohmOut          Amount of OHM tokens that the bid amount could be converted to
+    /// @return depositSpender  The address of the contract that would spend the reserve tokens
+    function previewBid(
+        uint256 bidAmount_
+    ) external view returns (uint256 ohmOut, address depositSpender);
 
     // ========== STATE VARIABLES ========== //
 
@@ -99,6 +102,11 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @return day Day info
     function getDay() external view returns (Day memory day);
+
+    /// @notice The token that is being bid
+    ///
+    /// @return token The token that is being bid
+    function bidToken() external view returns (address token);
 
     // ========== ADMIN ========== //
 

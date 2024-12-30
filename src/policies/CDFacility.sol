@@ -40,7 +40,9 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
     // ========== SETUP ========== //
 
-    constructor(address kernel_) Policy(Kernel(kernel_)) {}
+    constructor(address kernel_) Policy(Kernel(kernel_)) {
+        // TODO disable until activated
+    }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](5);

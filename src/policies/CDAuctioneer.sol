@@ -7,26 +7,50 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
 import {CDFacility} from "./CDFacility.sol";
 
+/// @title  Convertible Deposit Auctioneer
+/// @notice Implementation of the IConvertibleDepositAuctioneer interface
+/// @dev    This contract requires the "cd_admin" role to be assigned to an admin account.
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
 
-    Tick public currentTick;
-    State public state;
+    /// @notice Address of the CDEPO module
+    CDEPOv1 public CDEPO;
 
-    // TODO set decimals, make internal?
-    uint256 public decimals;
+    /// @notice Address of the token that is being bid
+    /// @dev    This is populated by the `configureDependencies()` function
+    address public bidToken;
+
+    /// @notice Decimals of the bid token
+    /// @dev    This is populated by the `configureDependencies()` function
+    uint256 public bidTokenDecimals;
+
+    /// @notice Current tick of the auction
+    /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
+    Tick internal currentTick;
+
+    /// @notice Current state of the auction
+    State internal state;
+
+    /// @notice Bidding activity for the current day
+    Day internal today;
+
+    /// @notice Decimals of the OHM token
     uint8 internal constant _ohmDecimals = 9;
 
+    /// @notice Address of the Convertible Deposit Facility
     CDFacility public cdFacility;
 
-    Day public today;
+    /// @notice Whether the contract functionality has been activated
+    bool public locallyActive;
 
     // ========== SETUP ========== //
 
@@ -34,18 +58,26 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         if (cdFacility_ == address(0))
             revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
 
-        // TODO set decimals
-
         cdFacility = CDFacility(cdFacility_);
+
+        // Disable functionality until activated
+        locallyActive = false;
     }
 
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
-        dependencies[2] = toKeycode("ROLES");
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("CDEPO");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
+
+        bidToken = address(CDEPO.asset());
+        bidTokenDecimals = ERC20(bidToken).decimals();
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -83,6 +115,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 conversionPrice = (deposit * _ohmDecimals) / ohmOut;
 
         // Create the CD tokens and position
+        // The position ID is emitted as an event, so doesn't need to be returned
         cdFacility.create(
             msg.sender,
             deposit,
@@ -90,8 +123,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             uint48(block.timestamp + state.timeToExpiry),
             false
         );
-
-        // TODO add position id to return value
 
         return ohmOut;
     }
@@ -131,17 +162,19 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // Decrement tick capacity if it is not the full tick size
             // Otherwise, increase the tick price
             if (amount != state.tickSize) tick.capacity -= amount;
-            else tick.price *= state.tickStep / decimals;
+            else tick.price *= state.tickStep / bidTokenDecimals;
         }
 
         return (tick.capacity, tick.price, ohmOut);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function previewBid(uint256 deposit) external view override returns (uint256 ohmOut) {
-        (, , ohmOut) = _previewBid(deposit);
+    function previewBid(
+        uint256 bidAmount_
+    ) external view override returns (uint256 ohmOut, address depositSpender) {
+        (, , ohmOut) = _previewBid(bidAmount_);
 
-        return ohmOut;
+        return (ohmOut, address(CDEPO));
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -157,7 +190,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // decrement price while ticks are full
         while (tick.capacity + newCapacity > state.tickSize) {
             newCapacity -= state.tickSize;
-            tick.price *= decimals / state.tickStep;
+            tick.price *= bidTokenDecimals / state.tickStep;
 
             // tick price does not go below the minimum
             // tick capacity is full if the min price is exceeded
@@ -173,7 +206,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     function _convertFor(uint256 deposit, uint256 price) internal view returns (uint256) {
-        return (deposit * decimals) / price;
+        return (deposit * bidTokenDecimals) / price;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -193,7 +226,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
-    ) external override onlyRole("CD_Auction_Admin") returns (uint256 remainder) {
+    ) external override onlyRole("cd_admin") returns (uint256 remainder) {
         // TODO should this be newTarget instead of state.target?
         remainder = (state.target > today.convertible) ? state.target - today.convertible : 0;
 
@@ -208,12 +241,24 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function setTimeToExpiry(uint48 newTime) external override onlyRole("CD_Admin") {
+    function setTimeToExpiry(uint48 newTime) external override onlyRole("cd_admin") {
         state.timeToExpiry = newTime;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function setTickStep(uint256 newStep) external override onlyRole("CD_Admin") {
+    function setTickStep(uint256 newStep) external override onlyRole("cd_admin") {
         state.tickStep = newStep;
+    }
+
+    /// @notice Activate the contract functionality
+    /// @dev    This function is only callable by the "cd_admin" role
+    function activate() external onlyRole("cd_admin") {
+        locallyActive = true;
+    }
+
+    /// @notice Deactivate the contract functionality
+    /// @dev    This function is only callable by the "cd_admin" role
+    function deactivate() external onlyRole("cd_admin") {
+        locallyActive = false;
     }
 }
