@@ -38,7 +38,7 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  target          Number of OHM available to sell per day
     /// @param  tickSize        Number of OHM in a tick
-    /// @param  minPrice        Minimum price that OHM can be sold for
+    /// @param  minPrice        Minimum price that OHM can be sold for, in terms of the bid token
     /// @param  tickStep        Percentage increase (decrease) per tick, in terms of `decimals`.
     /// @param  lastUpdate      Timestamp of last update to current tick
     /// @param  timeToExpiry    Time between creation and expiry of deposit
@@ -53,8 +53,8 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Tracks auction activity for a given day
     ///
-    /// @param  deposits        total deposited for day
-    /// @param  convertible     total convertible for day
+    /// @param  deposits        Quantity of bid tokens deposited for the day
+    /// @param  convertible     Quantity of OHM that will be issued for the day's deposits
     struct Day {
         uint256 deposits;
         uint256 convertible;
@@ -62,8 +62,8 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Information about a tick
     ///
-    /// @param  price           price of the tick
-    /// @param  capacity        capacity of the tick
+    /// @param  price           Price of the tick, in terms of the bid token
+    /// @param  capacity        Capacity of the tick, in terms of OHM
     struct Tick {
         uint256 price;
         uint256 capacity;

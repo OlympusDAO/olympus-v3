@@ -153,21 +153,26 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // TODO what happens if there is a remaining deposit that cannot be converted? Needs an escape hatch
             // consider returning the remaining deposit as a value
 
-            // Calculate the amount of OHM that can be converted
-            // given tick capacity
-            uint256 amount = currentTickCapacity < _convertFor(remainingDeposit, currentTickPrice)
-                ? state.tickSize
-                : remainingDeposit;
+            uint256 depositAmount = remainingDeposit;
+            uint256 convertibleAmount = _convertFor(remainingDeposit, currentTickPrice);
+
+            // If there is not enough capacity in the current tick, use the remaining capacity
+            if (currentTickCapacity < convertibleAmount) {
+                convertibleAmount = currentTickCapacity;
+                depositAmount = _convertFor(convertibleAmount, currentTickPrice);
+
+                // The tick has also been depleted, so update the price
+                currentTickPrice = currentTickPrice.mulDivUp(state.tickStep, bidTokenScale);
+                currentTickCapacity = state.tickSize;
+            }
+            // Otherwise, the tick has enough capacity and needs to be updated
+            else {
+                currentTickCapacity -= convertibleAmount;
+            }
 
             // Record updates to the deposit and OHM
-            // These updates are done before the tick updates, otherwise the price/capacity will differ from the first calculation above
-            remainingDeposit -= amount;
-            ohmOut += _convertFor(amount, currentTickPrice);
-
-            // Decrement tick capacity if it is not the full tick size
-            // Otherwise, increase the tick price
-            if (amount != state.tickSize) currentTickCapacity -= amount;
-            else currentTickPrice = currentTickPrice.mulDivUp(state.tickStep, bidTokenScale);
+            remainingDeposit -= depositAmount;
+            ohmOut += convertibleAmount;
         }
 
         return (currentTickCapacity, currentTickPrice, ohmOut);
