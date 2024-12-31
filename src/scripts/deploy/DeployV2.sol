@@ -1245,7 +1245,7 @@ contract OlympusDeploy is Script {
 
         // Deploy ConvertibleDepositAuctioneer
         vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(kernel, address(cdFacility));
+        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility));
         console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);

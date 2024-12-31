@@ -30,9 +30,11 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getState() external view override returns (State memory state) {}
 
-    function getDay() external view override returns (Day memory day) {}
+    function getDayState() external view override returns (Day memory day) {}
 
-    function previewBid(uint256 deposit) external view override returns (uint256 convertable) {}
+    function bidToken() external view override returns (address token) {}
+
+    function previewBid(uint256 deposit) external view override returns (uint256 convertable, address depositSpender) {}
 
     function setAuctionParameters(
         uint256 newTarget,

@@ -62,7 +62,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     // ========== SETUP ========== //
 
-    constructor(Kernel kernel_, address cdFacility_) Policy(kernel_) {
+    constructor(address kernel_, address cdFacility_) Policy(Kernel(kernel_)) {
         if (cdFacility_ == address(0))
             revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
 
@@ -101,7 +101,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ) external override nonReentrant onlyActive returns (uint256 ohmOut) {
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
-        currentTick = _getUpdatedTick();
+        currentTick = getUpdatedTick();
 
         // Get bid results
         uint256 currentTickCapacity;
@@ -193,7 +193,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 bidAmount_
     ) external view override returns (uint256 ohmOut, address depositSpender) {
         // Get the updated tick based on the current state
-        Tick memory updatedTick = _getUpdatedTick();
+        Tick memory updatedTick = getUpdatedTick();
 
         // Preview the bid results
         (, , ohmOut) = _previewBid(bidAmount_, updatedTick);
@@ -210,7 +210,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Calculates an updated tick based on the current state
     ///
     /// @return tick    The updated tick
-    function _getUpdatedTick() internal view returns (Tick memory tick) {
+    function getUpdatedTick() public view returns (Tick memory tick) {
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 newCapacity = (state.target * timePassed) / 1 days;
