@@ -163,6 +163,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // TODO what happens if there is a remaining deposit that cannot be converted? Needs an escape hatch
             // consider returning the remaining deposit as a value
 
+            // TODO what if the target is reached?
+
             uint256 depositAmount = remainingDeposit;
             uint256 convertibleAmount = _convertFor(remainingDeposit, currentTickPrice);
 

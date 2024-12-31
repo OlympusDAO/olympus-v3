@@ -23,6 +23,12 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newTickStep     Percentage increase (decrease) per tick
     event TickStepUpdated(uint256 newTickStep);
 
+    /// @notice Emitted when the contract is activated
+    event Activated();
+
+    /// @notice Emitted when the contract is deactivated
+    event Deactivated();
+
     // ========== ERRORS ========== //
 
     /// @notice Emitted when the parameters are invalid

@@ -14,9 +14,14 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
     //  [ ] the tick price is unchanged
     //  [ ] the tick capacity is unchanged
     // when the total capacity is greater than the tick size
-    //  when the new price is lower than the minimum price
-    //   [ ] the tick price is set to the minimum price
-    //   [ ] the capacity is set to the tick size
-    //  [ ] it adjusts the price by the tick step until the total capacity is less than the tick size
-    //  [ ] the tick capacity is set to the remainder
+    //  given the tick step is > 1e18
+    //   [ ] the tick price increases
+    //  given the tick step is = 1e18
+    //   [ ] the tick price is unchanged
+    //  given the tick step is < 1e18
+    //   when the new price is lower than the minimum price
+    //    [ ] the tick price is set to the minimum price
+    //    [ ] the capacity is set to the tick size
+    //   [ ] it reduces the price by the tick step until the total capacity is less than the tick size
+    //   [ ] the tick capacity is set to the remainder
 }

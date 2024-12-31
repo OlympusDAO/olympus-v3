@@ -14,6 +14,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract ConvertibleDepositAuctioneerTest is Test {
     Kernel public kernel;
@@ -31,8 +32,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
     MockERC4626 public vault;
 
     address public recipient = address(0x1);
-    address public emissionsManager = address(0x2);
-    address public recipientTwo = address(0x3);
+    address public recipientTwo = address(0x2);
+    address public heart = address(0x3);
+    address public admin = address(0x4);
+    address public emergency = address(0x5);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -68,10 +71,30 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
-        rolesAdmin.grantRole(bytes32("heart"), emissionsManager);
+        rolesAdmin.grantRole(bytes32("heart"), heart);
+        rolesAdmin.grantRole(bytes32("cd_admin"), admin);
+        rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
+    }
+
+    // ========== HELPERS ========== //
+
+    function _expectRoleRevert(bytes32 role_) internal {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
     // ========== MODIFIERS ========== //
+
+    modifier givenContractActive() {
+        vm.prank(emergency);
+        auctioneer.activate();
+        _;
+    }
+
+    modifier givenContractInactive() {
+        vm.prank(emergency);
+        auctioneer.deactivate();
+        _;
+    }
 
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
         reserveToken.mint(to_, amount_);

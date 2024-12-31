@@ -26,7 +26,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  when the calculated deposit amount is 0
     //   [ ] it completes bidding and leaves a remainder of the bid token
     //  [ ] it returns the amount of OHM that can be converted
-    //  [ ] it issues CD terms with the current tick price
+    //  [ ] it issues CD terms with the current tick price and time to expiry
     //  [ ] it updates the day's deposit balance
     //  [ ] it updates the day's converted balance
     //  [ ] it deducts the converted amount from the tick capacity
@@ -35,7 +35,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     // when the bid amount converted is equal to the remaining tick capacity
     //  when the tick step is > 1e18
     //   [ ] it returns the amount of OHM that can be converted using the current tick price
-    //   [ ] it issues CD terms with the current tick price
+    //   [ ] it issues CD terms with the current tick price and time to expiry
     //   [ ] it updates the day's deposit balance
     //   [ ] it updates the day's converted balance
     //   [ ] it updates the tick capacity to the tick size
@@ -43,7 +43,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [ ] it sets the lastUpdate to the current block timestamp
     //  when the tick step is < 1e18
     //   [ ] it returns the amount of OHM that can be converted using the current tick price
-    //   [ ] it issues CD terms with the current tick price
+    //   [ ] it issues CD terms with the current tick price and time to expiry
     //   [ ] it updates the day's deposit balance
     //   [ ] it updates the day's converted balance
     //   [ ] it updates the tick capacity to the tick size
@@ -51,7 +51,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [ ] it sets the lastUpdate to the current block timestamp
     //  when the tick step is = 1e18
     //   [ ] it returns the amount of OHM that can be converted using the current tick price
-    //   [ ] it issues CD terms with the current tick price
+    //   [ ] it issues CD terms with the current tick price and time to expiry
     //   [ ] it updates the day's deposit balance
     //   [ ] it updates the day's converted balance
     //   [ ] it updates the tick capacity to the tick size
@@ -60,7 +60,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     // when the bid amount converted is greater than the remaining tick capacity
     //  when the tick step is > 1e18
     //   [ ] it returns the amount of OHM that can be converted at multiple prices
-    //   [ ] it issues CD terms with the average price
+    //   [ ] it issues CD terms with the average price and time to expiry
     //   [ ] it updates the day's deposit balance
     //   [ ] it updates the day's converted balance
     //   [ ] it updates the tick capacity to the tick size minus the converted amount at the new tick price
@@ -68,7 +68,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [ ] it sets the lastUpdate to the current block timestamp
     //  when the tick step is < 1e18
     //   [ ] it returns the amount of OHM that can be converted at multiple prices
-    //   [ ] it issues CD terms with the average price
+    //   [ ] it issues CD terms with the average price and time to expiry
     //   [ ] it updates the day's deposit balance
     //   [ ] it updates the day's converted balance
     //   [ ] it updates the tick capacity to the tick size minus the converted amount at the new tick price
@@ -76,7 +76,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [ ] it sets the lastUpdate to the current block timestamp
     //  when the tick step is = 1e18
     //   [ ] it returns the amount of OHM that can be converted at multiple prices
-    //   [ ] it issues CD terms with the average price
+    //   [ ] it issues CD terms with the average price and time to expiry
     //   [ ] it updates the day's deposit balance
     //   [ ] it updates the day's converted balance
     //   [ ] it updates the tick capacity to the tick size minus the converted amount at the new tick price
