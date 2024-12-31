@@ -34,7 +34,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function bidToken() external view override returns (address token) {}
 
-    function previewBid(uint256 deposit) external view override returns (uint256 convertable, address depositSpender) {}
+    function previewBid(
+        uint256 deposit
+    ) external view override returns (uint256 convertable, address depositSpender) {}
 
     function setAuctionParameters(
         uint256 newTarget,
