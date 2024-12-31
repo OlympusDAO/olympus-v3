@@ -172,6 +172,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         // It then calculates the amount to sell for the coming day
         (, , uint256 emission) = getNextEmission();
 
+        // Update the parameters for the convertible deposit auction
         uint256 remainder = cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),

@@ -30,9 +30,10 @@ interface IConvertibleDepositAuctioneer {
     /// @param  reason          Reason for invalid parameters
     error CDAuctioneer_InvalidParams(string reason);
 
-    // ========== DATA STRUCTURES ========== //
+    /// @notice Emitted when the contract is not active
+    error CDAuctioneer_NotActive();
 
-    // TODO document decimals for State.price, Tick.price
+    // ========== DATA STRUCTURES ========== //
 
     /// @notice State of the auction
     ///

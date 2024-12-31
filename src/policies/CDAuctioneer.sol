@@ -1,26 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
-
+// Libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-
-import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-
 import {FullMath} from "src/libraries/FullMath.sol";
 
+// Bophades dependencies
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {CDFacility} from "./CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
 /// @notice Implementation of the IConvertibleDepositAuctioneer interface
-/// @dev    This contract requires the "cd_admin" role to be assigned to an admin account.
+/// @dev    This contract requires the ROLE_ADMIN role to be assigned to an admin account.
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
+
+    /// @notice The role that can perform periodic actions, such as updating the auction parameters
+    bytes32 public constant ROLE_HEART = "heart";
+
+    /// @notice The role that can perform administrative actions, such as changing parameters
+    bytes32 public constant ROLE_ADMIN = "cd_admin";
+
+    /// @notice The role that can perform emergency actions, such as shutting down the contract
+    bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
 
     /// @notice Address of the CDEPO module
     CDEPOv1 public CDEPO;
@@ -88,7 +96,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function bid(uint256 deposit) external override nonReentrant returns (uint256 ohmOut) {
+    function bid(
+        uint256 deposit
+    ) external override nonReentrant onlyActive returns (uint256 ohmOut) {
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
         currentTick = _getUpdatedTick();
@@ -246,13 +256,15 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function is gated to the ROLE_HEART role
     function setAuctionParameters(
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
-    ) external override onlyRole("cd_admin") returns (uint256 remainder) {
+    ) external override onlyRole(ROLE_HEART) returns (uint256 remainder) {
         // TODO should this be newTarget instead of state.target?
         // TODO Should the newTarget - dayState.convertible be used instead?
+        // TODO how to handle if deactivated?
         remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
 
         state = State(
@@ -266,24 +278,33 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function setTimeToExpiry(uint48 newTime) external override onlyRole("cd_admin") {
+    /// @dev        This function is gated to the ROLE_ADMIN role
+    function setTimeToExpiry(uint48 newTime) external override onlyRole(ROLE_ADMIN) {
         state.timeToExpiry = newTime;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function setTickStep(uint256 newStep) external override onlyRole("cd_admin") {
+    /// @dev        This function is gated to the ROLE_ADMIN role
+    function setTickStep(uint256 newStep) external override onlyRole(ROLE_ADMIN) {
         state.tickStep = newStep;
     }
 
     /// @notice Activate the contract functionality
-    /// @dev    This function is only callable by the "cd_admin" role
-    function activate() external onlyRole("cd_admin") {
+    /// @dev        This function is gated to the ROLE_EMERGENCY_SHUTDOWN role
+    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         locallyActive = true;
     }
 
     /// @notice Deactivate the contract functionality
-    /// @dev    This function is only callable by the "cd_admin" role
-    function deactivate() external onlyRole("cd_admin") {
+    /// @dev        This function is gated to the ROLE_EMERGENCY_SHUTDOWN role
+    function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         locallyActive = false;
+    }
+
+    // ========== MODIFIERS ========== //
+
+    modifier onlyActive() {
+        if (!locallyActive) revert CDAuctioneer_NotActive();
+        _;
     }
 }

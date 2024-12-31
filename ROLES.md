@@ -10,15 +10,18 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
+| cd_admin | CDAuctioneer | Allows updating the parameters |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_restart | EmissionManager | Reactivates the EmissionManager |
+| emergency_shutdown | CDAuctioneer | Activate/deactivate the CDAuctioneer |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | EmissionManager | Deactivates the EmissionManager |
 | emissions_admin | EmissionManager | Set configuration parameters |
+| heart | CDAuctioneer | Calls the setAuctionParameters() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
