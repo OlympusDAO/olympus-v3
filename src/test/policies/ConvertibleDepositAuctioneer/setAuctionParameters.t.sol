@@ -37,9 +37,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(100, 101, 102);
 
         // Assert state
-        assertEq(auctioneer.target(), 100);
-        assertEq(auctioneer.tickSize(), 101);
-        assertEq(auctioneer.minPrice(), 102);
+        assertEq(auctioneer.getState().target, 100);
+        assertEq(auctioneer.getState().tickSize, 101);
+        assertEq(auctioneer.getState().minPrice, 102);
     }
 
     function test_contractActive() public givenContractActive {
@@ -52,8 +52,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(100, 101, 102);
 
         // Assert state
-        assertEq(auctioneer.target(), 100);
-        assertEq(auctioneer.tickSize(), 101);
-        assertEq(auctioneer.minPrice(), 102);
+        assertEq(auctioneer.getState().target, 100);
+        assertEq(auctioneer.getState().tickSize, 101);
+        assertEq(auctioneer.getState().minPrice, 102);
     }
 }

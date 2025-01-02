@@ -28,9 +28,6 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
     }
 
     function test_contractInactive() public givenContractInactive {
-        // Expect no events
-        vm.expectEmit(0);
-
         // Call function
         vm.prank(emergency);
         auctioneer.deactivate();

@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctioneerTest {
     event TickStepUpdated(uint256 newTickStep);
@@ -51,7 +52,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(100);
 
         // Assert state
-        assertEq(auctioneer.tickStep(), 100);
+        assertEq(auctioneer.getState().tickStep, 100);
     }
 
     function test_contractActive(uint256 tickStep_) public givenContractActive {
@@ -66,6 +67,6 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(tickStep_);
 
         // Assert state
-        assertEq(auctioneer.tickStep(), tickStep_);
+        assertEq(auctioneer.getState().tickStep, tickStep_);
     }
 }
