@@ -60,13 +60,13 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit TickStepUpdated(tickStep_);
+        emit TickStepUpdated(tickStep);
 
         // Call function
         vm.prank(admin);
-        auctioneer.setTickStep(tickStep_);
+        auctioneer.setTickStep(tickStep);
 
         // Assert state
-        assertEq(auctioneer.getState().tickStep, tickStep_);
+        assertEq(auctioneer.getState().tickStep, tickStep);
     }
 }

@@ -8,6 +8,12 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     // when the caller does not have the "heart" role
     //  [X] it reverts
+    // when the new target is 0
+    //  [ ] it succeeds
+    // when the new tick size is 0
+    //  [ ] it reverts
+    // when the new min price is 0
+    //  [ ] it succeeds
     // when the contract is deactivated
     //  [X] it sets the parameters
     // [X] it sets the parameters

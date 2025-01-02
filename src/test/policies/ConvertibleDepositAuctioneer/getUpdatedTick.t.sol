@@ -4,6 +4,8 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 
 contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctioneerTest {
+    // given the initial auction parameters have not been set
+    //  [ ] it reverts
     // given less than 1 day has passed
     //  [ ] the tick capacity is unchanged
     //  [ ] the tick price is unchanged

@@ -38,16 +38,18 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         assertEq(auctioneer.getState().timeToExpiry, 100);
     }
 
-    function test_contractActive() public givenContractActive {
+    function test_contractActive(uint48 timeToExpiry_) public givenContractActive {
+        uint48 timeToExpiry = uint48(bound(timeToExpiry_, 1, 1 years));
+
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit TimeToExpiryUpdated(100);
+        emit TimeToExpiryUpdated(timeToExpiry);
 
         // Call function
         vm.prank(admin);
-        auctioneer.setTimeToExpiry(100);
+        auctioneer.setTimeToExpiry(timeToExpiry);
 
         // Assert state
-        assertEq(auctioneer.getState().timeToExpiry, 100);
+        assertEq(auctioneer.getState().timeToExpiry, timeToExpiry);
     }
 }
