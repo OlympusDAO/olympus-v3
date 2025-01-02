@@ -95,4 +95,4 @@ fi
 # Run the forge script
 echo ""
 echo "Running forge script..."
-forge script $file:$contract --rpc-url $RPC_URL --account $account --froms $CAST_ADDRESS $FORK_FLAG $BROADCAST_FLAG -vvv
+forge script $file:$contract --rpc-url $RPC_URL --account $account --sender $CAST_ADDRESS $FORK_FLAG $BROADCAST_FLAG -vvv
