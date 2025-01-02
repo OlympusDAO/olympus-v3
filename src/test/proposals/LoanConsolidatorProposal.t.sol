@@ -44,7 +44,7 @@ contract LoanConsolidatorProposalTest is ProposalTest {
         // The simulation will revert otherwise
         // This proposal will also fail until the RGSTY proposal has been executed
         // Install LoanConsolidator
-        {
+        if (!hasBeenSubmitted) {
             address loanConsolidator = addresses.getAddress("olympus-policy-loan-consolidator");
 
             if (!LoanConsolidator(loanConsolidator).isActive()) {
