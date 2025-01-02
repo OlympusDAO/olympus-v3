@@ -23,7 +23,7 @@ contract LoanConsolidatorProposalTest is ProposalTest {
         LoanConsolidatorProposal proposal = new LoanConsolidatorProposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         // Populate addresses array
         {
