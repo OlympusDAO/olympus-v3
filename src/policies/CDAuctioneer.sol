@@ -237,6 +237,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @notice Calculates an updated tick based on the current state
+    /// TODO document approach
     ///
     /// @return tick    The updated tick
     function getUpdatedTick() public view returns (Tick memory tick) {
@@ -246,10 +247,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         tick = currentTick;
 
-        // decrement price while ticks are full
+        // Iterate over the ticks until the capacity is within the tick size
+        // This is the opposite of what happens in the bid function
         while (tick.capacity + newCapacity > state.tickSize) {
             newCapacity -= state.tickSize;
-            tick.price = _getNewTickPrice(tick.price, state.tickStep);
+
+            // Adjust the tick price by the tick step, in the opposite direction to the bid function
+            tick.price = tick.price.mulDivUp(bidTokenScale, state.tickStep);
 
             // tick price does not go below the minimum
             // tick capacity is full if the min price is exceeded
