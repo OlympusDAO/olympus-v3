@@ -16,6 +16,7 @@ import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConve
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
+// solhint-disable max-states-count
 contract ConvertibleDepositAuctioneerTest is Test {
     Kernel public kernel;
     CDFacility public facility;
@@ -41,6 +42,12 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant CONVERSION_PRICE = 2e18;
     uint48 public constant EXPIRY = INITIAL_BLOCK + 1 days;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
+
+    uint256 public constant TICK_SIZE = 10e9;
+    uint256 public constant TICK_STEP = 9e17; // 90%
+    uint256 public constant MIN_PRICE = 15e18;
+    uint256 public constant TARGET = 20e9;
+    uint256 public constant TIME_TO_EXPIRY = 1 days;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -82,6 +89,24 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
+    function _assertState(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_,
+        uint256 tickStep_,
+        uint48 timeToExpiry_,
+        uint48 lastUpdate_
+    ) internal {
+        IConvertibleDepositAuctioneer.State memory state = auctioneer.getState();
+
+        assertEq(state.target, target_);
+        assertEq(state.tickSize, tickSize_);
+        assertEq(state.minPrice, minPrice_);
+        assertEq(state.tickStep, tickStep_);
+        assertEq(state.timeToExpiry, timeToExpiry_);
+        assertEq(state.lastUpdate, lastUpdate_);
+    }
+
     // ========== MODIFIERS ========== //
 
     modifier givenContractActive() {
@@ -118,6 +143,37 @@ contract ConvertibleDepositAuctioneerTest is Test {
     ) {
         vm.prank(owner_);
         convertibleDepository.approve(spender_, amount_);
+        _;
+    }
+
+    modifier givenTimeToExpiry(uint48 timeToExpiry_) {
+        vm.prank(admin);
+        auctioneer.setTimeToExpiry(timeToExpiry_);
+        _;
+    }
+
+    modifier givenTickStep(uint256 tickStep_) {
+        vm.prank(admin);
+        auctioneer.setTickStep(tickStep_);
+        _;
+    }
+
+    function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
+        vm.prank(heart);
+        auctioneer.setAuctionParameters(target_, tickSize_, minPrice_);
+    }
+
+    modifier givenAuctionParametersStandard() {
+        _setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+        _;
+    }
+
+    modifier givenAuctionParameters(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_
+    ) {
+        _setAuctionParameters(target_, tickSize_, minPrice_);
         _;
     }
 }

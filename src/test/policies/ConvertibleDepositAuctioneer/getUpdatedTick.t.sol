@@ -2,10 +2,15 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctioneerTest {
     // given the initial auction parameters have not been set
+    //  [X] it reverts
+    // given the contract is inactive
     //  [ ] it reverts
+    // given a bid has never been received
+    //  [ ] it calculates the new capacity based on the time since contact activation
     // given less than 1 day has passed
     //  [ ] the tick capacity is unchanged
     //  [ ] the tick price is unchanged
@@ -26,4 +31,17 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
     //    [ ] the capacity is set to the tick size
     //   [ ] it reduces the price by the tick step until the total capacity is less than the tick size
     //   [ ] the tick capacity is set to the remainder
+
+    function test_invalidAuctionParameters_reverts() public givenContractActive {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "auction parameters"
+            )
+        );
+
+        // Call function
+        auctioneer.getUpdatedTick();
+    }
 }

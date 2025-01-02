@@ -42,7 +42,19 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(0);
     }
 
-    function test_contractInactive() public givenContractInactive {
+    function test_contractInactive()
+        public
+        givenContractActive
+        givenAuctionParametersStandard
+        givenTickStep(TICK_STEP)
+        givenTickSize(TICK_SIZE)
+        givenContractInactive
+    {
+        uint48 lastUpdate = block.timestamp;
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit TickStepUpdated(100);
@@ -52,11 +64,24 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(100);
 
         // Assert state
-        assertEq(auctioneer.getState().tickStep, 100);
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, 100, TIME_TO_EXPIRY, lastUpdate);
     }
 
-    function test_contractActive(uint256 tickStep_) public givenContractActive {
+    function test_contractActive(
+        uint256 tickStep_
+    )
+        public
+        givenContractActive
+        givenAuctionParametersStandard
+        givenTickStep(TICK_STEP)
+        givenTickSize(TICK_SIZE)
+    {
         uint256 tickStep = bound(tickStep_, 1, 10e18);
+
+        uint48 lastUpdate = block.timestamp;
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -67,6 +92,6 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(tickStep);
 
         // Assert state
-        assertEq(auctioneer.getState().tickStep, tickStep);
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, tickStep, TIME_TO_EXPIRY, lastUpdate);
     }
 }

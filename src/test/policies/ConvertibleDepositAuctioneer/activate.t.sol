@@ -11,9 +11,11 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
     // when the contract is already activated
     //  [X] the state is unchanged
     //  [X] it does not emit an event
+    //  [ ] it does not change the last update
     // when the contract is not activated
     //  [X] it activates the contract
     //  [X] it emits an event
+    //  [ ] it sets the last update to the current block timestamp
 
     function test_callerDoesNotHaveEmergencyShutdownRole_reverts(address caller_) public {
         // Ensure caller is not emergency address
