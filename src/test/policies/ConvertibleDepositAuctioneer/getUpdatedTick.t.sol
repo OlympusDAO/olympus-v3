@@ -10,7 +10,7 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
     // given the contract is inactive
     //  [X] it reverts
     // given a bid has never been received
-    //  [ ] it calculates the new capacity based on the time since contact activation
+    //  [X] it calculates the new capacity based on the time since contract activation
     // given less than 1 day has passed
     //  [ ] the tick capacity is unchanged
     //  [ ] the tick price is unchanged
@@ -35,10 +35,7 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
     function test_invalidAuctionParameters_reverts() public givenContractActive {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
-                "auction parameters"
-            )
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
         );
 
         // Call function
@@ -67,26 +64,33 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
 
         // Expected values
         // Tick size = 10e9
+        // Tick step = 9e17
         // Current tick capacity = tick size = 10e9
-        // Current tick price =
+        // Current tick price = min price = 15e18
         // New capacity added = target * days passed = 20e9 * 2 = 40e9
         // New capacity = 10e9 + 40e9 = 50e9
         // Iteration 1:
         //   New capacity = 50e9 - 10e9 = 40e9
-        //   Tick price = 10e9 * 1e18 / 9e17 = 10e9
+        //   Tick price = 15e18 * 1e18 / 9e17 = 16666666666666666667 (rounded up)
         // Iteration 2:
         //   New capacity = 40e9 - 10e9 = 30e9
-        //   Tick price = 10e9 * 9e17 / 9e17 = 10e9
+        //   Tick price = 16666666666666666667 * 1e18 / 9e17 = 18518518518518518519 (rounded up)
         // Iteration 3:
         //   New capacity = 30e9 - 10e9 = 20e9
-        //   Tick price = 10e9 * 9e17 / 9e17 = 10e9
-        // uint256 expectedCapacity = TARGET + TARGET * 2;
-        // uint256 expectedPrice = expectedCapacity - TICK_SIZE
+        //   Tick price = 18518518518518518519 * 1e18 / 9e17 = 20576131687242798355 (rounded up)
+        // Iteration 4:
+        //   New capacity = 20e9 - 10e9 = 10e9
+        //   Tick price = 20576131687242798355 * 1e18 / 9e17 = 22862368541380887062
+        //
+        // New capacity is not > tick size, so we stop
+        uint256 expectedTickPrice = 22862368541380887062;
+        uint256 expectedTickCapacity = 10e9;
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getUpdatedTick();
 
-        // Assertions
-        assertEq(tick.capacity, TICK_SIZE);
+        // Assert current tick
+        assertEq(tick.capacity, expectedTickCapacity, "capacity");
+        assertEq(tick.price, expectedTickPrice, "price");
     }
 }

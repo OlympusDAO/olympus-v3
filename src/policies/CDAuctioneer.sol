@@ -240,7 +240,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// TODO document approach
     ///
     /// @return tick    The updated tick
-    function getUpdatedTick() public view returns (Tick memory tick) {
+    function getUpdatedTick() public view onlyActive returns (Tick memory tick) {
+        // If the price is 0, the auction parameters have not been set and we cannot determine the new tick
+        if (currentTick.price == 0) revert CDAuctioneer_InvalidState();
+
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 newCapacity = (state.target * timePassed) / 1 days;
