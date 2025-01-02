@@ -27,16 +27,28 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
         auctioneer.deactivate();
     }
 
-    function test_contractInactive() public givenContractInactive {
+    function test_contractInactive() public givenContractActive givenContractInactive {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
         // Call function
         vm.prank(emergency);
         auctioneer.deactivate();
 
         // Assert state
         assertEq(auctioneer.locallyActive(), false);
+        // lastUpdate has not changed
+        assertEq(auctioneer.getState().lastUpdate, lastUpdate);
     }
 
     function test_contractActive() public givenContractActive {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit Deactivated();
@@ -47,5 +59,7 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
 
         // Assert state
         assertEq(auctioneer.locallyActive(), false);
+        // lastUpdate has not changed
+        assertEq(auctioneer.getState().lastUpdate, lastUpdate);
     }
 }

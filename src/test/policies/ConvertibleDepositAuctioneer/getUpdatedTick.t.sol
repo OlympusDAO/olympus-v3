@@ -8,7 +8,7 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
     // given the initial auction parameters have not been set
     //  [X] it reverts
     // given the contract is inactive
-    //  [ ] it reverts
+    //  [X] it reverts
     // given a bid has never been received
     //  [ ] it calculates the new capacity based on the time since contact activation
     // given less than 1 day has passed
@@ -43,5 +43,50 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
 
         // Call function
         auctioneer.getUpdatedTick();
+    }
+
+    function test_contractInactive_reverts() public givenContractInactive {
+        // Expect revert
+        vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
+
+        // Call function
+        auctioneer.getUpdatedTick();
+    }
+
+    function test_noBidReceived()
+        public
+        givenContractActive
+        givenTickStep(TICK_STEP)
+        givenTimeToExpiry(TIME_TO_EXPIRY)
+        givenAuctionParametersStandard
+    {
+        uint48 daysPassed = 2 days;
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + daysPassed);
+
+        // Expected values
+        // Tick size = 10e9
+        // Current tick capacity = tick size = 10e9
+        // Current tick price =
+        // New capacity added = target * days passed = 20e9 * 2 = 40e9
+        // New capacity = 10e9 + 40e9 = 50e9
+        // Iteration 1:
+        //   New capacity = 50e9 - 10e9 = 40e9
+        //   Tick price = 10e9 * 1e18 / 9e17 = 10e9
+        // Iteration 2:
+        //   New capacity = 40e9 - 10e9 = 30e9
+        //   Tick price = 10e9 * 9e17 / 9e17 = 10e9
+        // Iteration 3:
+        //   New capacity = 30e9 - 10e9 = 20e9
+        //   Tick price = 10e9 * 9e17 / 9e17 = 10e9
+        // uint256 expectedCapacity = TARGET + TARGET * 2;
+        // uint256 expectedPrice = expectedCapacity - TICK_SIZE
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getUpdatedTick();
+
+        // Assertions
+        assertEq(tick.capacity, TICK_SIZE);
     }
 }

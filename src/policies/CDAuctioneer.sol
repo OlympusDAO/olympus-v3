@@ -289,16 +289,33 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function is gated to the ROLE_HEART role
+    /// @dev        This function performs the following:
+    ///             - TODO
+    ///
+    ///             This function reverts if:
+    ///             - The caller does not have the ROLE_HEART role
+    ///             - The new tick size is 0
+    ///             - The new min price is 0
+    ///
+    /// @param  newTarget       The new target for OHM sold per day
+    /// @param  newSize         The new tick size
+    /// @param  newMinPrice     The new minimum price
+    /// @return remainder       The remainder of OHM that cannot be sold
     function setAuctionParameters(
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
     ) external override onlyRole(ROLE_HEART) returns (uint256 remainder) {
+        // Tick size must be non-zero
+        if (newSize == 0) revert CDAuctioneer_InvalidParams("tick size");
+
+        // Min price must be non-zero
+        if (newMinPrice == 0) revert CDAuctioneer_InvalidParams("min price");
+
         // TODO should this be newTarget instead of state.target?
         // TODO Should the newTarget - dayState.convertible be used instead?
         // TODO how to handle if deactivated?
-        remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
+        // remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
 
         state = State(
             newTarget,
@@ -308,30 +325,78 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             state.lastUpdate,
             state.timeToExpiry
         );
+
+        // If this is the first run, capacity and price must be set
+        // We know that this is the first run, since min price cannot be 0, and bidding will not result in a tick price below the min price
+        if (currentTick.price == 0) {
+            currentTick.capacity = newSize;
+            currentTick.price = newMinPrice;
+        }
+
+        // Emit event
+        emit AuctionParametersUpdated(newTarget, newSize, newMinPrice);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function is gated to the ROLE_ADMIN role
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN role
+    ///             - The new time to expiry is 0
+    ///
+    /// @param  newTime The new time to expiry
     function setTimeToExpiry(uint48 newTime) external override onlyRole(ROLE_ADMIN) {
+        // Value must be non-zero
+        if (newTime == 0) revert CDAuctioneer_InvalidParams("time to expiry");
+
         state.timeToExpiry = newTime;
+
+        // Emit event
+        emit TimeToExpiryUpdated(newTime);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function is gated to the ROLE_ADMIN role
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN role
+    ///             - The new tick step is 0
+    ///
+    /// @param  newStep The new tick step
     function setTickStep(uint256 newStep) external override onlyRole(ROLE_ADMIN) {
+        // Value must be non-zero
+        if (newStep == 0) revert CDAuctioneer_InvalidParams("tick step");
+
         state.tickStep = newStep;
+
+        // Emit event
+        emit TickStepUpdated(newStep);
     }
 
     /// @notice Activate the contract functionality
     /// @dev        This function is gated to the ROLE_EMERGENCY_SHUTDOWN role
     function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+        // If the contract is already active, do nothing
+        if (locallyActive) return;
+
+        // Set the contract to active
         locallyActive = true;
+
+        // Also set the lastUpdate to the current block timestamp
+        // Otherwise, getUpdatedTick() will calculate a long period of time having passed
+        state.lastUpdate = uint48(block.timestamp);
+
+        // Emit event
+        emit Activated();
     }
 
     /// @notice Deactivate the contract functionality
     /// @dev        This function is gated to the ROLE_EMERGENCY_SHUTDOWN role
     function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+        // If the contract is already inactive, do nothing
+        if (!locallyActive) return;
+
+        // Set the contract to inactive
         locallyActive = false;
+
+        // Emit event
+        emit Deactivated();
     }
 
     // ========== MODIFIERS ========== //

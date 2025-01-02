@@ -11,11 +11,11 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
     // when the contract is already activated
     //  [X] the state is unchanged
     //  [X] it does not emit an event
-    //  [ ] it does not change the last update
+    //  [X] it does not change the last update
     // when the contract is not activated
     //  [X] it activates the contract
     //  [X] it emits an event
-    //  [ ] it sets the last update to the current block timestamp
+    //  [X] it sets the last update to the current block timestamp
 
     function test_callerDoesNotHaveEmergencyShutdownRole_reverts(address caller_) public {
         // Ensure caller is not emergency address
@@ -30,15 +30,28 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
     }
 
     function test_contractActivated() public givenContractActive {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
         // Call function
         vm.prank(emergency);
         auctioneer.activate();
 
         // Assert state
         assertEq(auctioneer.locallyActive(), true);
+        // lastUpdate has not changed
+        assertEq(auctioneer.getState().lastUpdate, lastUpdate);
     }
 
     function test_contractInactive() public givenContractInactive {
+        uint48 lastUpdate = uint48(block.timestamp);
+        uint48 newBlock = lastUpdate + 1;
+
+        // Warp to change the block timestamp
+        vm.warp(newBlock);
+
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit Activated();
@@ -49,5 +62,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
 
         // Assert state
         assertEq(auctioneer.locallyActive(), true);
+        // lastUpdate has changed
+        assertEq(auctioneer.getState().lastUpdate, newBlock);
     }
 }

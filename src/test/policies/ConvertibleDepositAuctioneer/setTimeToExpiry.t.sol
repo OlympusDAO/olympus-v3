@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAuctioneerTest {
     event TimeToExpiryUpdated(uint48 newTimeToExpiry);
@@ -46,10 +47,10 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         givenContractActive
         givenAuctionParametersStandard
         givenTickStep(TICK_STEP)
-        givenTickSize(TICK_SIZE)
+        givenTimeToExpiry(TIME_TO_EXPIRY)
         givenContractInactive
     {
-        uint48 lastUpdate = block.timestamp;
+        uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
@@ -73,11 +74,11 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         givenContractActive
         givenAuctionParametersStandard
         givenTickStep(TICK_STEP)
-        givenTickSize(TICK_SIZE)
+        givenTimeToExpiry(TIME_TO_EXPIRY)
     {
-        uint48 timeToExpiry = uint48(bound(timeToExpiry_, 1, 1 years));
+        uint48 timeToExpiry = uint48(bound(timeToExpiry_, 1, 1 weeks));
 
-        uint48 lastUpdate = block.timestamp;
+        uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);

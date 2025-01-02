@@ -16,6 +16,10 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
     // [X] it sets the tick step
     // [X] it emits an event
 
+    // TODO can this be positive (> 1e18) or only negative (< 1e18)?
+    // positive: price increases with each tick when bidding
+    // negative: price decreases with each tick when bidding
+
     function test_callerDoesNotHaveCdAdminRole_reverts(address caller_) public {
         // Ensure caller is not admin
         vm.assume(caller_ != admin);
@@ -47,10 +51,10 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         givenContractActive
         givenAuctionParametersStandard
         givenTickStep(TICK_STEP)
-        givenTickSize(TICK_SIZE)
+        givenTimeToExpiry(TIME_TO_EXPIRY)
         givenContractInactive
     {
-        uint48 lastUpdate = block.timestamp;
+        uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
@@ -74,11 +78,11 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         givenContractActive
         givenAuctionParametersStandard
         givenTickStep(TICK_STEP)
-        givenTickSize(TICK_SIZE)
+        givenTimeToExpiry(TIME_TO_EXPIRY)
     {
         uint256 tickStep = bound(tickStep_, 1, 10e18);
 
-        uint48 lastUpdate = block.timestamp;
+        uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);

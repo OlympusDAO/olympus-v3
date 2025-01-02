@@ -15,6 +15,7 @@ import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertible
 import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositAuctioneerTest is Test {
@@ -33,7 +34,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
     MockERC4626 public vault;
 
     address public recipient = address(0x1);
-    address public recipientTwo = address(0x2);
     address public heart = address(0x3);
     address public admin = address(0x4);
     address public emergency = address(0x5);
@@ -47,7 +47,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant TICK_STEP = 9e17; // 90%
     uint256 public constant MIN_PRICE = 15e18;
     uint256 public constant TARGET = 20e9;
-    uint256 public constant TIME_TO_EXPIRY = 1 days;
+    uint48 public constant TIME_TO_EXPIRY = 1 days;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -99,12 +99,19 @@ contract ConvertibleDepositAuctioneerTest is Test {
     ) internal {
         IConvertibleDepositAuctioneer.State memory state = auctioneer.getState();
 
-        assertEq(state.target, target_);
-        assertEq(state.tickSize, tickSize_);
-        assertEq(state.minPrice, minPrice_);
-        assertEq(state.tickStep, tickStep_);
-        assertEq(state.timeToExpiry, timeToExpiry_);
-        assertEq(state.lastUpdate, lastUpdate_);
+        assertEq(state.target, target_, "target");
+        assertEq(state.tickSize, tickSize_, "tickSize");
+        assertEq(state.minPrice, minPrice_, "minPrice");
+        assertEq(state.tickStep, tickStep_, "tickStep");
+        assertEq(state.timeToExpiry, timeToExpiry_, "timeToExpiry");
+        assertEq(state.lastUpdate, lastUpdate_, "lastUpdate");
+    }
+
+    function _assertCurrentTick(uint256 capacity_, uint256 price_) internal {
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick();
+
+        assertEq(tick.capacity, capacity_, "capacity");
+        assertEq(tick.price, price_, "price");
     }
 
     // ========== MODIFIERS ========== //
@@ -121,9 +128,22 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 
-    modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
+    function _mintReserveToken(address to_, uint256 amount_) internal {
         reserveToken.mint(to_, amount_);
+    }
+
+    modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
+        _mintReserveToken(to_, amount_);
         _;
+    }
+
+    function _approveReserveTokenSpending(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) internal {
+        vm.prank(owner_);
+        reserveToken.approve(spender_, amount_);
     }
 
     modifier givenReserveTokenSpendingIsApproved(
@@ -131,8 +151,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         address spender_,
         uint256 amount_
     ) {
-        vm.prank(owner_);
-        reserveToken.approve(spender_, amount_);
+        _approveReserveTokenSpending(owner_, spender_, amount_);
         _;
     }
 
@@ -174,6 +193,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 minPrice_
     ) {
         _setAuctionParameters(target_, tickSize_, minPrice_);
+        _;
+    }
+
+    function _bid(address owner_, uint256 deposit_) internal {
+        vm.prank(owner_);
+        auctioneer.bid(deposit_);
+    }
+
+    modifier givenRecipientHasBid(uint256 deposit_) {
+        // Mint
+        _mintReserveToken(recipient, deposit_);
+
+        // Approve spending
+        _approveReserveTokenSpending(recipient, address(auctioneer), deposit_);
+
+        // Bid
+        _bid(recipient, deposit_);
         _;
     }
 }
