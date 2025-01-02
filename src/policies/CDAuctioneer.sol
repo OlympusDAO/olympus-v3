@@ -96,6 +96,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    // TODO document approach
     function bid(
         uint256 deposit
     ) external override nonReentrant onlyActive returns (uint256 ohmOut) {
@@ -166,15 +167,15 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // TODO what if the target is reached?
 
             uint256 depositAmount = remainingDeposit;
-            uint256 convertibleAmount = _convertFor(remainingDeposit, currentTickPrice);
+            uint256 convertibleAmount = _getConvertedDeposit(remainingDeposit, currentTickPrice);
 
             // If there is not enough capacity in the current tick, use the remaining capacity
             if (currentTickCapacity < convertibleAmount) {
                 convertibleAmount = currentTickCapacity;
-                depositAmount = _convertFor(convertibleAmount, currentTickPrice);
+                depositAmount = _getConvertedDeposit(convertibleAmount, currentTickPrice);
 
                 // The tick has also been depleted, so update the price
-                currentTickPrice = currentTickPrice.mulDivUp(state.tickStep, bidTokenScale);
+                currentTickPrice = _getNewTickPrice(currentTickPrice, state.tickStep);
                 currentTickCapacity = state.tickSize;
             }
             // Otherwise, the tick has enough capacity and needs to be updated
@@ -205,8 +206,34 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     // ========== VIEW FUNCTIONS ========== //
 
-    function _convertFor(uint256 deposit, uint256 price) internal view returns (uint256) {
-        return deposit.mulDiv(bidTokenScale, price);
+    /// @notice Internal function to preview the quantity of OHM tokens that can be purchased for a given deposit amount
+    /// @dev    This function does not take into account the capacity of the current tick
+    ///
+    /// @param  deposit_            The amount of deposit to be converted
+    /// @param  price_              The price of the deposit in OHM
+    /// @return convertibleAmount   The quantity of OHM tokens that can be purchased
+    function _getConvertedDeposit(
+        uint256 deposit_,
+        uint256 price_
+    ) internal view returns (uint256 convertibleAmount) {
+        // As price represents the number of bid tokens per OHM, we can convert the deposit to OHM by dividing by the price and adjusting for the decimal scale
+        convertibleAmount = deposit_.mulDiv(bidTokenScale, price_);
+        return convertibleAmount;
+    }
+
+    /// @notice Internal function to preview the new price of the current tick after applying the tick step
+    /// @dev    This function does not take into account the capacity of the current tick
+    ///
+    /// @param  currentPrice_       The current price of the tick in terms of the bid token
+    /// @param  tickStep_           The step size of the tick
+    /// @return newPrice            The new price of the tick
+    function _getNewTickPrice(
+        uint256 currentPrice_,
+        uint256 tickStep_
+    ) internal view returns (uint256 newPrice) {
+        // The tick step is a percentage increase (decrease) per tick, in terms of `decimals`, so we need to adjust for the decimal scale
+        newPrice = currentPrice_.mulDivUp(tickStep_, bidTokenScale);
+        return newPrice;
     }
 
     /// @notice Calculates an updated tick based on the current state
@@ -222,7 +249,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // decrement price while ticks are full
         while (tick.capacity + newCapacity > state.tickSize) {
             newCapacity -= state.tickSize;
-            tick.price *= bidTokenScale / state.tickStep;
+            tick.price = _getNewTickPrice(tick.price, state.tickStep);
 
             // tick price does not go below the minimum
             // tick capacity is full if the min price is exceeded
