@@ -33,7 +33,9 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
     function test_contractNotInitialized() public {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_NotInitialized.selector)
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_NotInitialized.selector
+            )
         );
 
         // Call function

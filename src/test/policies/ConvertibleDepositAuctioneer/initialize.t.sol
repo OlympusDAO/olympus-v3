@@ -127,7 +127,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         assertEq(auctioneer.getTickStep(), TICK_STEP, "tick step");
         assertEq(auctioneer.getTimeToExpiry(), TIME_TO_EXPIRY, "time to expiry");
         assertEq(auctioneer.locallyActive(), true, "locally active");
-        assertEq(auctioneer.getCurrentTick().capacity, TICK_SIZE, "current tick capacity");
-        assertEq(auctioneer.getCurrentTick().price, MIN_PRICE, "current tick price");
+        assertEq(auctioneer.getPreviousTick().capacity, TICK_SIZE, "current tick capacity");
+        assertEq(auctioneer.getPreviousTick().price, MIN_PRICE, "current tick price");
     }
 }

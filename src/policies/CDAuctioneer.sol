@@ -52,10 +52,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    This is populated by the `configureDependencies()` function
     uint256 public bidTokenScale;
 
-    /// @notice Current tick of the auction
+    /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
-    // TODO rename to previousTick
-    Tick internal currentTick;
+    Tick internal _previousTick;
 
     /// @notice Current state of the auction
     State internal state;
@@ -92,9 +91,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         cdFacility = CDFacility(cdFacility_);
 
-        // TODO take initial values for tick step, time to expiry
-
-        // Disable functionality until activated
+        // Disable functionality until initialized
         locallyActive = false;
     }
 
@@ -128,12 +125,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ) external override nonReentrant onlyActive returns (uint256 ohmOut) {
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
-        currentTick = getUpdatedTick();
+        _previousTick = getCurrentTick();
 
         // Get bid results
         uint256 currentTickCapacity;
         uint256 currentTickPrice;
-        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit, currentTick);
+        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit, _previousTick);
 
         // Reset the day state if this is the first bid of the day
         if (block.timestamp / 86400 > state.lastUpdate / 86400) {
@@ -146,8 +143,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         dayState.convertible += ohmOut;
 
         // Update current tick
-        currentTick.capacity = currentTickCapacity;
-        currentTick.price = currentTickPrice;
+        _previousTick.capacity = currentTickCapacity;
+        _previousTick.price = currentTickPrice;
 
         // Calculate average price based on the total deposit and ohmOut
         // This is the number of deposit tokens per OHM token
@@ -222,10 +219,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 bidAmount_
     ) external view override returns (uint256 ohmOut, address depositSpender) {
         // Get the updated tick based on the current state
-        Tick memory updatedTick = getUpdatedTick();
+        Tick memory currentTick = getCurrentTick();
 
         // Preview the bid results
-        (, , ohmOut) = _previewBid(bidAmount_, updatedTick);
+        (, , ohmOut) = _previewBid(bidAmount_, currentTick);
 
         return (ohmOut, address(CDEPO));
     }
@@ -262,22 +259,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         return newPrice;
     }
 
-    /// @notice Calculates an updated tick based on the current state
-    /// TODO document approach
+    /// @inheritdoc IConvertibleDepositAuctioneer
     ///
     /// @return tick    The updated tick
-    function getUpdatedTick() public view onlyActive returns (Tick memory tick) {
-        // If the price is 0, the auction parameters have not been set and we cannot determine the new tick
-        // TODO can be removed
-        if (currentTick.price == 0) revert CDAuctioneer_InvalidState();
-
+    function getCurrentTick() public view onlyActive returns (Tick memory tick) {
+        // TODO document approach
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 newCapacity = (state.target * timePassed) / 1 days;
 
-        tick = currentTick;
+        tick = _previousTick;
 
-        // TODO rename back to getCurrentTick()
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
@@ -303,8 +295,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function getCurrentTick() public view override returns (Tick memory tick) {
-        return currentTick;
+    function getPreviousTick() public view override returns (Tick memory tick) {
+        return _previousTick;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -428,8 +420,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         setTimeToExpiry(timeToExpiry_);
 
         // Initialize the current tick
-        currentTick.capacity = tickSize_;
-        currentTick.price = minPrice_;
+        _previousTick.capacity = tickSize_;
+        _previousTick.price = minPrice_;
 
         // Activate the contract
         // This emits the event
@@ -448,7 +440,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         locallyActive = true;
 
         // Also set the lastUpdate to the current block timestamp
-        // Otherwise, getUpdatedTick() will calculate a long period of time having passed
+        // Otherwise, getCurrentTick() will calculate a long period of time having passed
         state.lastUpdate = uint48(block.timestamp);
 
         // Emit event

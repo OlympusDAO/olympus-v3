@@ -97,7 +97,13 @@ interface IConvertibleDepositAuctioneer {
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice Get the current tick of the auction
+    /// @notice Get the previous tick of the auction
+    ///
+    /// @return tick Tick info
+    function getPreviousTick() external view returns (Tick memory tick);
+
+    /// @notice Calculate the current tick of the auction
+    /// @dev    This function should calculate the current tick based on the previous tick and the time passed since the last update
     ///
     /// @return tick Tick info
     function getCurrentTick() external view returns (Tick memory tick);

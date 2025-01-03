@@ -43,7 +43,7 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
         assertEq(auctioneer.getState().lastUpdate, lastUpdate);
     }
 
-    function test_contractActive() public givenInitialized() {
+    function test_contractActive() public givenInitialized {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp

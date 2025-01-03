@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
-contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctioneerTest {
+contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctioneerTest {
     // given the contract has not been initialized
     //  [ ] it reverts
     // given the contract is inactive
@@ -37,7 +37,7 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
         vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
 
         // Call function
-        auctioneer.getUpdatedTick();
+        auctioneer.getCurrentTick();
     }
 
     function test_noBidReceived() public givenInitialized {
@@ -71,7 +71,7 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
         uint256 expectedTickCapacity = 10e9;
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getUpdatedTick();
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick();
 
         // Assert current tick
         assertEq(tick.capacity, expectedTickCapacity, "capacity");

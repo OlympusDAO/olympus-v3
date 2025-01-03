@@ -38,6 +38,8 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         return deposit;
     }
 
+    function getPreviousTick() external view override returns (Tick memory tick) {}
+
     function getCurrentTick() external view override returns (Tick memory tick) {}
 
     function getState() external view override returns (State memory state) {}
