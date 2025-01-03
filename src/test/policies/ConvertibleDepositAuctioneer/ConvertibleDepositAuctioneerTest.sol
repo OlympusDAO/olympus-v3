@@ -93,7 +93,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_,
-        uint48 timeToExpiry_,
         uint48 lastUpdate_
     ) internal {
         IConvertibleDepositAuctioneer.State memory state = auctioneer.getState();
@@ -101,7 +100,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(state.target, target_, "target");
         assertEq(state.tickSize, tickSize_, "tickSize");
         assertEq(state.minPrice, minPrice_, "minPrice");
-        assertEq(state.timeToExpiry, timeToExpiry_, "timeToExpiry");
         assertEq(state.lastUpdate, lastUpdate_, "lastUpdate");
     }
 

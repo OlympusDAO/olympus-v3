@@ -77,8 +77,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    /// @notice The number of seconds between creation and expiry of convertible deposits
+    /// @dev    See `getTimeToExpiry()` for more information
+    uint48 internal _timeToExpiry;
+
     // TODO rename state to parameters
-    // TODO split tick step and time to expiry into separate variables
 
     // ========== SETUP ========== //
 
@@ -87,6 +90,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
 
         cdFacility = CDFacility(cdFacility_);
+
+        // TODO take initial values for tick step, time to expiry
 
         // Disable functionality until activated
         locallyActive = false;
@@ -154,7 +159,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             msg.sender,
             deposit,
             conversionPrice,
-            uint48(block.timestamp + state.timeToExpiry),
+            uint48(block.timestamp + _timeToExpiry),
             false
         );
 
@@ -314,6 +319,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         return _tickStep;
     }
 
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getTimeToExpiry() external view override returns (uint48) {
+        return _timeToExpiry;
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -345,7 +355,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // TODO how to handle if deactivated?
         // remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
 
-        state = State(newTarget, newSize, newMinPrice, state.lastUpdate, state.timeToExpiry);
+        state = State(newTarget, newSize, newMinPrice, state.lastUpdate);
 
         // If this is the first run, capacity and price must be set
         // We know that this is the first run, since min price cannot be 0, and bidding will not result in a tick price below the min price
@@ -363,15 +373,15 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The caller does not have the ROLE_ADMIN role
     ///             - The new time to expiry is 0
     ///
-    /// @param  newTime The new time to expiry
-    function setTimeToExpiry(uint48 newTime) external override onlyRole(ROLE_ADMIN) {
+    /// @param  newTime_ The new time to expiry
+    function setTimeToExpiry(uint48 newTime_) external override onlyRole(ROLE_ADMIN) {
         // Value must be non-zero
-        if (newTime == 0) revert CDAuctioneer_InvalidParams("time to expiry");
+        if (newTime_ == 0) revert CDAuctioneer_InvalidParams("time to expiry");
 
-        state.timeToExpiry = newTime;
+        _timeToExpiry = newTime_;
 
         // Emit event
-        emit TimeToExpiryUpdated(newTime);
+        emit TimeToExpiryUpdated(newTime_);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer

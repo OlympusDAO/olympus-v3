@@ -50,13 +50,11 @@ interface IConvertibleDepositAuctioneer {
     /// @param  tickSize        Number of OHM in a tick
     /// @param  minPrice        Minimum price that OHM can be sold for, in terms of the bid token
     /// @param  lastUpdate      Timestamp of last update to current tick
-    /// @param  timeToExpiry    Time between creation and expiry of deposit
     struct State {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
         uint48 lastUpdate;
-        uint48 timeToExpiry;
     }
 
     /// @notice Tracks auction activity for a given day
@@ -117,6 +115,11 @@ interface IConvertibleDepositAuctioneer {
     /// @return tickStep The tick step, in terms of `ONE_HUNDRED_PERCENT`
     function getTickStep() external view returns (uint24 tickStep);
 
+    /// @notice Get the number of seconds between creation and expiry of convertible deposits
+    ///
+    /// @return timeToExpiry The time to expiry
+    function getTimeToExpiry() external view returns (uint48 timeToExpiry);
+
     /// @notice The token that is being bid
     ///
     /// @return token The token that is being bid
@@ -138,13 +141,15 @@ interface IConvertibleDepositAuctioneer {
     ) external returns (uint256 remainder);
 
     /// @notice Set the time to expiry
-    /// @dev    only callable by the admin
+    /// @dev    See `getTimeToExpiry()` for more information
+    ///         Only callable by the admin
     ///
     /// @param  newTime_     new time to expiry
     function setTimeToExpiry(uint48 newTime_) external;
 
     /// @notice Sets the multiplier applied to the conversion price at every tick, in terms of `ONE_HUNDRED_PERCENT`
     /// @dev    See `getTickStep()` for more information
+    ///         Only callable by the admin
     ///
     /// @param  newStep_     new tick step, in terms of `ONE_HUNDRED_PERCENT`
     function setTickStep(uint24 newStep_) external;

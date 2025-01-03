@@ -64,7 +64,7 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         auctioneer.setTimeToExpiry(100);
 
         // Assert state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, 100, lastUpdate);
+        assertEq(auctioneer.getTimeToExpiry(), 100, "time to expiry");
     }
 
     function test_contractActive(
@@ -92,6 +92,6 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         auctioneer.setTimeToExpiry(timeToExpiry);
 
         // Assert state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, timeToExpiry, lastUpdate);
+        assertEq(auctioneer.getTimeToExpiry(), timeToExpiry, "time to expiry");
     }
 }
