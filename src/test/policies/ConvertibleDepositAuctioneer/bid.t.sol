@@ -10,6 +10,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [ ] it reverts
     // when the caller has not approved CDEPO to spend the bid token
     //  [ ] it reverts
+    // when the "cd_auctioneer" role is not granted to the auctioneer contract
+    //  [ ] it reverts
     // when the bid amount converted is 0
     //  [ ] it reverts
     // when the tick price is below the minimum price

@@ -240,7 +240,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 price_
     ) internal view returns (uint256 convertibleAmount) {
         // As price represents the number of bid tokens per OHM, we can convert the deposit to OHM by dividing by the price and adjusting for the decimal scale
-        convertibleAmount = deposit_.mulDiv(bidTokenScale, price_);
+        convertibleAmount = deposit_.mulDiv(_ohmScale, price_);
         return convertibleAmount;
     }
 
@@ -254,8 +254,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 currentPrice_,
         uint256 tickStep_
     ) internal view returns (uint256 newPrice) {
-        // The tick step is a percentage increase (decrease) per tick, in terms of `decimals`, so we need to adjust for the decimal scale
-        newPrice = currentPrice_.mulDivUp(tickStep_, bidTokenScale);
+        newPrice = currentPrice_.mulDivUp(tickStep_, ONE_HUNDRED_PERCENT);
         return newPrice;
     }
 
@@ -268,13 +267,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 newCapacity = (state.target * timePassed) / 1 days;
 
+        // Skip if the new capacity is 0
+        if (newCapacity == 0) return _previousTick;
+
         tick = _previousTick;
 
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
         while (tick.capacity + newCapacity > state.tickSize) {
-            newCapacity -= state.tickSize;
+            // Adjust the new capacity so that the total is <= to the tick size
+            newCapacity -= newCapacity < state.tickSize ? newCapacity : state.tickSize;
 
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);

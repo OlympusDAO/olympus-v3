@@ -39,9 +39,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
     address public emergency = address(0x5);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
-    uint256 public constant CONVERSION_PRICE = 2e18;
-    uint48 public constant EXPIRY = INITIAL_BLOCK + 1 days;
-    uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
+
+    // @dev This should result in multiple ticks being filled
+    uint256 public constant BID_LARGE_AMOUNT = 3000e18;
 
     uint256 public constant TICK_SIZE = 10e9;
     uint24 public constant TICK_STEP = 110e2; // 110%
@@ -87,6 +87,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         rolesAdmin.grantRole(bytes32("heart"), heart);
         rolesAdmin.grantRole(bytes32("cd_admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
+        rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
     }
 
     // ========== HELPERS ========== //
@@ -214,7 +215,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _mintReserveToken(recipient, deposit_);
 
         // Approve spending
-        _approveReserveTokenSpending(recipient, address(auctioneer), deposit_);
+        _approveReserveTokenSpending(recipient, address(convertibleDepository), deposit_);
 
         // Bid
         _bid(recipient, deposit_);

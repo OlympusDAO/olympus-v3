@@ -6,14 +6,15 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 
 contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctioneerTest {
     // given the contract has not been initialized
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the contract is inactive
     //  [X] it reverts
-    // given a bid has never been received
-    //  [X] it calculates the new capacity based on the time since contract activation
-    // given less than 1 day has passed
-    //  [ ] the tick capacity is unchanged
-    //  [ ] the tick price is unchanged
+    // given a bid has never been received and the tick price is at the minimum price
+    //  given no time has passed
+    //   [X] the tick capacity remains at the tick size
+    //   [X] the tick price remains at the min price
+    //  [X] the tick capacity remains at the tick size
+    //  [X] the tick price remains at the min price
     // when the total capacity (current tick capacity + new capacity) is equal to the tick size
     //  [ ] the tick price is unchanged
     //  [ ] the tick capacity is unchanged
@@ -21,18 +22,16 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     //  [ ] the tick price is unchanged
     //  [ ] the tick capacity is unchanged
     // when the total capacity is greater than the tick size
-    //  given the tick step is > 1e18
-    //   [ ] the tick price increases
-    //  given the tick step is = 1e18
+    //  given the tick step is = 100e2
     //   [ ] the tick price is unchanged
-    //  given the tick step is < 1e18
+    //  given the tick step is > 100e2
     //   when the new price is lower than the minimum price
     //    [ ] the tick price is set to the minimum price
     //    [ ] the capacity is set to the tick size
     //   [ ] it reduces the price by the tick step until the total capacity is less than the tick size
     //   [ ] the tick capacity is set to the remainder
 
-    function test_contractInactive_reverts() public givenContractInactive {
+    function test_contractNotInitialized_reverts() public {
         // Expect revert
         vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
 
@@ -40,34 +39,50 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         auctioneer.getCurrentTick();
     }
 
-    function test_noBidReceived() public givenInitialized {
-        uint48 daysPassed = 2 days;
+    function test_contractInactive_reverts() public givenInitialized givenContractInactive {
+        // Expect revert
+        vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
+
+        // Call function
+        auctioneer.getCurrentTick();
+    }
+
+    function test_minimumPrice_sameTime(uint48 secondsPassed_) public givenInitialized {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 0, 86400 - 1));
 
         // Warp to change the block timestamp
-        vm.warp(block.timestamp + daysPassed);
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick();
+
+        uint256 expectedTickPrice = 15e18;
+        uint256 expectedTickCapacity = 10e9;
+
+        // Assert current tick
+        assertEq(tick.capacity, expectedTickCapacity, "capacity");
+        assertEq(tick.price, expectedTickPrice, "price");
+    }
+
+    function test_minimumPrice(uint48 secondsPassed_) public givenInitialized {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
 
         // Expected values
         // Tick size = 10e9
-        // Tick step = 9e17
+        // Tick step = 110e2
         // Current tick capacity = tick size = 10e9
         // Current tick price = min price = 15e18
         // New capacity added = target * days passed = 20e9 * 2 = 40e9
         // New capacity = 10e9 + 40e9 = 50e9
         // Iteration 1:
         //   New capacity = 50e9 - 10e9 = 40e9
-        //   Tick price = 15e18 * 1e18 / 9e17 = 16666666666666666667 (rounded up)
-        // Iteration 2:
-        //   New capacity = 40e9 - 10e9 = 30e9
-        //   Tick price = 16666666666666666667 * 1e18 / 9e17 = 18518518518518518519 (rounded up)
-        // Iteration 3:
-        //   New capacity = 30e9 - 10e9 = 20e9
-        //   Tick price = 18518518518518518519 * 1e18 / 9e17 = 20576131687242798355 (rounded up)
-        // Iteration 4:
-        //   New capacity = 20e9 - 10e9 = 10e9
-        //   Tick price = 20576131687242798355 * 1e18 / 9e17 = 22862368541380887062
+        //   Tick price = 15e18 * 100e2 / 110e2 = 13636363636363636364
         //
-        // New capacity is not > tick size, so we stop
-        uint256 expectedTickPrice = 22862368541380887062;
+        // Updated tick price is < min price, so it is set to the min price
+        uint256 expectedTickPrice = 15e18;
         uint256 expectedTickCapacity = 10e9;
 
         // Call function
