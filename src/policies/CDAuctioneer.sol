@@ -15,7 +15,18 @@ import {CDFacility} from "./CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
 /// @notice Implementation of the IConvertibleDepositAuctioneer interface
-/// @dev    This contract requires the ROLE_ADMIN role to be assigned to an admin account.
+/// @dev    This contract implements an auction for convertible deposit tokens. It runs these auctions according to the following principles:
+///         - Auctions are of infinite duration
+///         - Auctions are of infinite capacity
+///         - Users place bids by supplying an amount of the quote token
+///         - The quote token is the deposit token from the CDEPO module
+///         - The payout token is the CDEPO token, which can be converted to OHM at the conversion price that was set at the time of the bid
+///         - During periods of greater demand, the conversion price will increase
+///         - During periods of lower demand, the conversion price will decrease
+///         - The auction has a minimum price, below which the conversion price will not decrease
+///         - The auction has a target amount of convertible OHM to sell per day
+///         - When the target is reached, the amount of OHM required to increase the conversion price will decrease, resulting in more rapid price increases (assuming there is demand)
+///         - The auction parameters are able to be updated in order to tweak the auction's behaviour
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
 
@@ -59,6 +70,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     /// @notice Whether the contract functionality has been activated
     bool public locallyActive;
+
+    // TODO rename state to parameters
+    // TODO split tick step and time to expiry into separate variables
 
     // ========== SETUP ========== //
 
@@ -365,6 +379,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     function setTickStep(uint256 newStep) external override onlyRole(ROLE_ADMIN) {
         // Value must be non-zero
         if (newStep == 0) revert CDAuctioneer_InvalidParams("tick step");
+
+        // TODO tick step should be positive, > 1e18
 
         state.tickStep = newStep;
 
