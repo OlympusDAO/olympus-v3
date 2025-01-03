@@ -44,7 +44,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
 
     uint256 public constant TICK_SIZE = 10e9;
-    uint256 public constant TICK_STEP = 9e17; // 90%
+    uint24 public constant TICK_STEP = 110e2; // 110%
     uint256 public constant MIN_PRICE = 15e18;
     uint256 public constant TARGET = 20e9;
     uint48 public constant TIME_TO_EXPIRY = 1 days;
@@ -93,7 +93,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_,
-        uint256 tickStep_,
         uint48 timeToExpiry_,
         uint48 lastUpdate_
     ) internal {
@@ -102,7 +101,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(state.target, target_, "target");
         assertEq(state.tickSize, tickSize_, "tickSize");
         assertEq(state.minPrice, minPrice_, "minPrice");
-        assertEq(state.tickStep, tickStep_, "tickStep");
         assertEq(state.timeToExpiry, timeToExpiry_, "timeToExpiry");
         assertEq(state.lastUpdate, lastUpdate_, "lastUpdate");
     }
@@ -171,7 +169,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 
-    modifier givenTickStep(uint256 tickStep_) {
+    modifier givenTickStep(uint24 tickStep_) {
         vm.prank(admin);
         auctioneer.setTickStep(tickStep_);
         _;

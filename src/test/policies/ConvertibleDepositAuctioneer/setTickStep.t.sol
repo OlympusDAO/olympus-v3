@@ -5,20 +5,16 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctioneerTest {
-    event TickStepUpdated(uint256 newTickStep);
+    event TickStepUpdated(uint24 newTickStep);
 
     // when the caller does not have the "cd_admin" role
     //  [X] it reverts
-    // when the value is 0
+    // when the value is < 100e2
     //  [X] it reverts
     // when the contract is deactivated
     //  [X] it sets the tick step
     // [X] it sets the tick step
     // [X] it emits an event
-
-    // TODO can this be positive (> 1e18) or only negative (< 1e18)?
-    // positive: price increases with each tick when bidding
-    // negative: price decreases with each tick when bidding
 
     function test_callerDoesNotHaveCdAdminRole_reverts(address caller_) public {
         // Ensure caller is not admin
@@ -32,7 +28,9 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(100);
     }
 
-    function test_valueIsZero_reverts() public {
+    function test_valueIsOutOfBounds_reverts(uint24 tickStep_) public {
+        uint24 tickStep = uint24(bound(tickStep_, 0, 100e2 - 1));
+
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -43,10 +41,12 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
 
         // Call function
         vm.prank(admin);
-        auctioneer.setTickStep(0);
+        auctioneer.setTickStep(tickStep);
     }
 
-    function test_contractInactive()
+    function test_contractInactive(
+        uint24 tickStep_
+    )
         public
         givenContractActive
         givenAuctionParametersStandard
@@ -54,33 +54,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         givenTimeToExpiry(TIME_TO_EXPIRY)
         givenContractInactive
     {
-        uint48 lastUpdate = uint48(block.timestamp);
-
-        // Warp to change the block timestamp
-        vm.warp(lastUpdate + 1);
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit TickStepUpdated(100);
-
-        // Call function
-        vm.prank(admin);
-        auctioneer.setTickStep(100);
-
-        // Assert state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, 100, TIME_TO_EXPIRY, lastUpdate);
-    }
-
-    function test_contractActive(
-        uint256 tickStep_
-    )
-        public
-        givenContractActive
-        givenAuctionParametersStandard
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-    {
-        uint256 tickStep = bound(tickStep_, 1, 10e18);
+        uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
 
         uint48 lastUpdate = uint48(block.timestamp);
 
@@ -96,6 +70,34 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(tickStep);
 
         // Assert state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, tickStep, TIME_TO_EXPIRY, lastUpdate);
+        assertEq(auctioneer.getTickStep(), tickStep, "tick step");
+    }
+
+    function test_contractActive(
+        uint24 tickStep_
+    )
+        public
+        givenContractActive
+        givenAuctionParametersStandard
+        givenTickStep(TICK_STEP)
+        givenTimeToExpiry(TIME_TO_EXPIRY)
+    {
+        uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
+
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit TickStepUpdated(tickStep);
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(tickStep);
+
+        // Assert state
+        assertEq(auctioneer.getTickStep(), tickStep, "tick step");
     }
 }

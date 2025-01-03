@@ -72,7 +72,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, TICK_STEP, TIME_TO_EXPIRY, lastUpdate);
+        _assertState(newTarget, newTickSize, newMinPrice, TIME_TO_EXPIRY, lastUpdate);
 
         // Assert current tick
         _assertCurrentTick(newTickSize, newMinPrice);
@@ -131,7 +131,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, TICK_STEP, TIME_TO_EXPIRY, lastUpdate);
+        _assertState(newTarget, newTickSize, newMinPrice, TIME_TO_EXPIRY, lastUpdate);
 
         // Assert current tick
         _assertCurrentTick(newTickSize, newMinPrice);
@@ -166,7 +166,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, TICK_STEP, TIME_TO_EXPIRY, lastUpdate);
+        _assertState(newTarget, newTickSize, newMinPrice, TIME_TO_EXPIRY, lastUpdate);
 
         // Assert current tick
         // Values are unchanged
@@ -197,7 +197,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, TICK_STEP, TIME_TO_EXPIRY, lastUpdate);
+        _assertState(newTarget, newTickSize, newMinPrice, TIME_TO_EXPIRY, lastUpdate);
 
         // Assert current tick
         _assertCurrentTick(newTickSize, newMinPrice);
@@ -231,7 +231,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, TICK_STEP, TIME_TO_EXPIRY, lastUpdate);
+        _assertState(newTarget, newTickSize, newMinPrice, TIME_TO_EXPIRY, lastUpdate);
 
         // Assert current tick
         // Values are unchanged

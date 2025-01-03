@@ -71,6 +71,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Whether the contract functionality has been activated
     bool public locallyActive;
 
+    /// @notice The tick step
+    /// @dev    See `getTickStep()` for more information
+    uint24 internal _tickStep;
+
+    uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
+
     // TODO rename state to parameters
     // TODO split tick step and time to expiry into separate variables
 
@@ -189,7 +195,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
                 depositAmount = _getConvertedDeposit(convertibleAmount, currentTickPrice);
 
                 // The tick has also been depleted, so update the price
-                currentTickPrice = _getNewTickPrice(currentTickPrice, state.tickStep);
+                currentTickPrice = _getNewTickPrice(currentTickPrice, _tickStep);
                 currentTickCapacity = state.tickSize;
             }
             // Otherwise, the tick has enough capacity and needs to be updated
@@ -270,7 +276,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             newCapacity -= state.tickSize;
 
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
-            tick.price = tick.price.mulDivUp(bidTokenScale, state.tickStep);
+            tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
 
             // tick price does not go below the minimum
             // tick capacity is full if the min price is exceeded
@@ -301,6 +307,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev        This function returns the day state at the time of the last bid (`state.lastUpdate`)
     function getDayState() external view override returns (Day memory) {
         return dayState;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getTickStep() external view override returns (uint24) {
+        return _tickStep;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -334,14 +345,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // TODO how to handle if deactivated?
         // remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
 
-        state = State(
-            newTarget,
-            newSize,
-            newMinPrice,
-            state.tickStep,
-            state.lastUpdate,
-            state.timeToExpiry
-        );
+        state = State(newTarget, newSize, newMinPrice, state.lastUpdate, state.timeToExpiry);
 
         // If this is the first run, capacity and price must be set
         // We know that this is the first run, since min price cannot be 0, and bidding will not result in a tick price below the min price
@@ -373,19 +377,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
-    ///             - The new tick step is 0
+    ///             - The new tick step is < 100e2
     ///
-    /// @param  newStep The new tick step
-    function setTickStep(uint256 newStep) external override onlyRole(ROLE_ADMIN) {
-        // Value must be non-zero
-        if (newStep == 0) revert CDAuctioneer_InvalidParams("tick step");
+    /// @param      newStep_    The new tick step
+    function setTickStep(uint24 newStep_) external override onlyRole(ROLE_ADMIN) {
+        // Value must be more than 100e2
+        if (newStep_ < ONE_HUNDRED_PERCENT) revert CDAuctioneer_InvalidParams("tick step");
 
-        // TODO tick step should be positive, > 1e18
-
-        state.tickStep = newStep;
+        _tickStep = newStep_;
 
         // Emit event
-        emit TickStepUpdated(newStep);
+        emit TickStepUpdated(newStep_);
     }
 
     /// @notice Activate the contract functionality

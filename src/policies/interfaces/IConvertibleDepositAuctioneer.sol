@@ -21,7 +21,7 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Emitted when the tick step is updated
     ///
     /// @param  newTickStep     Percentage increase (decrease) per tick
-    event TickStepUpdated(uint256 newTickStep);
+    event TickStepUpdated(uint24 newTickStep);
 
     /// @notice Emitted when the contract is activated
     event Activated();
@@ -49,14 +49,12 @@ interface IConvertibleDepositAuctioneer {
     /// @param  target          Number of OHM available to sell per day
     /// @param  tickSize        Number of OHM in a tick
     /// @param  minPrice        Minimum price that OHM can be sold for, in terms of the bid token
-    /// @param  tickStep        Percentage increase (decrease) per tick, in terms of `decimals`.
     /// @param  lastUpdate      Timestamp of last update to current tick
     /// @param  timeToExpiry    Time between creation and expiry of deposit
     struct State {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
-        uint256 tickStep;
         uint48 lastUpdate;
         uint48 timeToExpiry;
     }
@@ -113,6 +111,12 @@ interface IConvertibleDepositAuctioneer {
     /// @return day Day info
     function getDayState() external view returns (Day memory day);
 
+    /// @notice The multiplier applied to the conversion price at every tick, in terms of `ONE_HUNDRED_PERCENT`
+    /// @dev    This is stored as a percentage, where 100e2 = 100% (no increase)
+    ///
+    /// @return tickStep The tick step, in terms of `ONE_HUNDRED_PERCENT`
+    function getTickStep() external view returns (uint24 tickStep);
+
     /// @notice The token that is being bid
     ///
     /// @return token The token that is being bid
@@ -139,10 +143,9 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newTime_     new time to expiry
     function setTimeToExpiry(uint48 newTime_) external;
 
-    /// @notice Set the percentage increase/decrease when a tick is filled, in terms of `decimals`.
-    ///         A tick step of 1e18 (assuming 18 decimals) will result in no change to the tick price, whereas a tick step of 9e17 will result in a 10% decrease.
-    /// @dev    This function should only be callable by the admin
+    /// @notice Sets the multiplier applied to the conversion price at every tick, in terms of `ONE_HUNDRED_PERCENT`
+    /// @dev    See `getTickStep()` for more information
     ///
-    /// @param  newStep_     new tick step, in terms of `decimals`.
-    function setTickStep(uint256 newStep_) external;
+    /// @param  newStep_     new tick step, in terms of `ONE_HUNDRED_PERCENT`
+    function setTickStep(uint24 newStep_) external;
 }
