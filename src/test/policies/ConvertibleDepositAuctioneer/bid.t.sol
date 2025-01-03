@@ -6,6 +6,8 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
     // when the contract is deactivated
     //  [ ] it reverts
+    // when the contract has not been initialized
+    //  [ ] it reverts
     // when the caller has not approved CDEPO to spend the bid token
     //  [ ] it reverts
     // when the bid amount converted is 0

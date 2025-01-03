@@ -130,27 +130,51 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Update the auction parameters
     /// @dev    only callable by the auction admin
     ///
-    /// @param  newTarget_     new target sale per day
-    /// @param  newSize_       new size per tick
-    /// @param  newMinPrice_   new minimum tick price
+    /// @param  target_        new target sale per day
+    /// @param  tickSize_      new size per tick
+    /// @param  minPrice_      new minimum tick price
     /// @return remainder      amount of ohm not sold
     function setAuctionParameters(
-        uint256 newTarget_,
-        uint256 newSize_,
-        uint256 newMinPrice_
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_
     ) external returns (uint256 remainder);
 
     /// @notice Set the time to expiry
     /// @dev    See `getTimeToExpiry()` for more information
     ///         Only callable by the admin
     ///
-    /// @param  newTime_     new time to expiry
-    function setTimeToExpiry(uint48 newTime_) external;
+    /// @param  timeToExpiry_     new time to expiry
+    function setTimeToExpiry(uint48 timeToExpiry_) external;
 
     /// @notice Sets the multiplier applied to the conversion price at every tick, in terms of `ONE_HUNDRED_PERCENT`
     /// @dev    See `getTickStep()` for more information
     ///         Only callable by the admin
     ///
-    /// @param  newStep_     new tick step, in terms of `ONE_HUNDRED_PERCENT`
-    function setTickStep(uint24 newStep_) external;
+    /// @param  tickStep_     new tick step, in terms of `ONE_HUNDRED_PERCENT`
+    function setTickStep(uint24 tickStep_) external;
+
+    /// @notice Enables governance to initialize and activate the contract. This ensures that the contract is in a valid state when activated.
+    /// @dev    Only callable by the admin role
+    ///
+    /// @param  target_          The target for OHM sold per day
+    /// @param  tickSize_        The size of each tick
+    /// @param  minPrice_        The minimum price that OHM can be sold for, in terms of the bid token
+    /// @param  tickStep_        The tick step, in terms of `ONE_HUNDRED_PERCENT`
+    /// @param  timeToExpiry_    The number of seconds between creation and expiry of convertible deposits
+    function initialize(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_,
+        uint24 tickStep_,
+        uint48 timeToExpiry_
+    ) external;
+
+    /// @notice Activate the contract functionality
+    /// @dev    Only callable by the emergency role
+    function activate() external;
+
+    /// @notice Deactivate the contract functionality
+    /// @dev    Only callable by the emergency role
+    function deactivate() external;
 }

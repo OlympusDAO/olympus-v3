@@ -5,8 +5,6 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctioneerTest {
-    event TickStepUpdated(uint24 newTickStep);
-
     // when the caller does not have the "cd_admin" role
     //  [X] it reverts
     // when the value is < 100e2
@@ -44,16 +42,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(tickStep);
     }
 
-    function test_contractInactive(
-        uint24 tickStep_
-    )
-        public
-        givenContractActive
-        givenAuctionParametersStandard
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-        givenContractInactive
-    {
+    function test_contractInactive(uint24 tickStep_) public givenInitialized givenContractInactive {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
 
         uint48 lastUpdate = uint48(block.timestamp);
@@ -73,15 +62,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         assertEq(auctioneer.getTickStep(), tickStep, "tick step");
     }
 
-    function test_contractActive(
-        uint24 tickStep_
-    )
-        public
-        givenContractActive
-        givenAuctionParametersStandard
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-    {
+    function test_contractActive(uint24 tickStep_) public givenInitialized {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
 
         uint48 lastUpdate = uint48(block.timestamp);

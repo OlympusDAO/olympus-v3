@@ -4,10 +4,16 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 
 contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctioneerTest {
-    event Activated();
-
     // when the caller does not have the "emergency_shutdown" role
     //  [X] it reverts
+    // given the tick step has not been set
+    //  [ ] it reverts
+    // given the time to expiry has not been set
+    //  [ ] it reverts
+    // given the tick size has not been set
+    //  [ ] it reverts
+    // given the min price has not been set
+    //  [ ] it reverts
     // when the contract is already activated
     //  [X] the state is unchanged
     //  [X] it does not emit an event

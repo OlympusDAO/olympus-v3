@@ -5,9 +5,9 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
-    event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
-
     // when the caller does not have the "heart" role
+    //  [X] it reverts
+    // given the contract has not been initialized
     //  [X] it reverts
     // when the new target is 0
     //  [X] it succeeds
@@ -17,18 +17,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     // when the new min price is 0
     //  [X] it reverts
     // when the contract is deactivated
-    //  given the tick price has never been set
-    //   [X] it sets the current tick capacity to the new tick size
-    //   [X] it sets the current tick price to the new minimum price
-    //   [X] it sets the parameters
     //  [X] it sets the parameters
     //  [X] it emits an event
     //  [X] it does not change the current tick capacity
     //  [X] it does not change the current tick price
     // given the tick price has never been set
-    //  [X] it sets the current tick capacity to the new tick size
-    //  [X] it sets the current tick price to the new minimum price
-    //  [X] it sets the parameters
     // [X] it sets the parameters
     // [X] it emits an event
     // [X] it does not set the tick capacity
@@ -48,12 +41,18 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(100, 100, 100);
     }
 
-    function test_targetZero()
-        public
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-        givenContractActive
-    {
+    function test_contractNotInitialized() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
+        );
+
+        // Call function
+        vm.prank(heart);
+        auctioneer.setAuctionParameters(100, 100, 100);
+    }
+
+    function test_targetZero() public givenInitialized {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -78,7 +77,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertCurrentTick(newTickSize, newMinPrice);
     }
 
-    function test_tickSizeZero_reverts() public givenContractActive {
+    function test_tickSizeZero_reverts() public givenInitialized {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -92,7 +91,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(100, 0, 102);
     }
 
-    function test_minPriceZero_reverts() public givenContractActive {
+    function test_minPriceZero_reverts() public givenInitialized {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -106,42 +105,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(100, 101, 0);
     }
 
-    function test_contractInactive_initial()
-        public
-        givenContractActive
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-        givenContractInactive
-    {
-        uint48 lastUpdate = uint48(block.timestamp);
-
-        // Warp to change the block timestamp
-        vm.warp(lastUpdate + 1);
-
-        uint256 newTarget = 100;
-        uint256 newTickSize = 101;
-        uint256 newMinPrice = 102;
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit AuctionParametersUpdated(newTarget, newTickSize, newMinPrice);
-
-        // Call function
-        vm.prank(heart);
-        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
-
-        // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, lastUpdate);
-
-        // Assert current tick
-        _assertCurrentTick(newTickSize, newMinPrice);
-    }
-
     function test_contractInactive()
         public
-        givenContractActive
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
+        givenInitialized
         givenRecipientHasBid(1e18)
         givenContractInactive
     {
@@ -173,43 +139,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertCurrentTick(lastCapacity, lastPrice);
     }
 
-    function test_contractActive_initial()
-        public
-        givenContractActive
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-    {
-        uint48 lastUpdate = uint48(block.timestamp);
-
-        // Warp to change the block timestamp
-        vm.warp(lastUpdate + 1);
-
-        uint256 newTarget = 100;
-        uint256 newTickSize = 101;
-        uint256 newMinPrice = 102;
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit AuctionParametersUpdated(newTarget, newTickSize, newMinPrice);
-
-        // Call function
-        vm.prank(heart);
-        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
-
-        // Assert state
-        _assertState(newTarget, newTickSize, newMinPrice, lastUpdate);
-
-        // Assert current tick
-        _assertCurrentTick(newTickSize, newMinPrice);
-    }
-
-    function test_contractActive()
-        public
-        givenContractActive
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-        givenRecipientHasBid(1e18)
-    {
+    function test_contractActive() public givenInitialized givenRecipientHasBid(1e18) {
         uint256 lastCapacity = auctioneer.getCurrentTick().capacity;
         uint256 lastPrice = auctioneer.getCurrentTick().price;
 

@@ -15,6 +15,18 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
     }
 
+    function activate() external override {}
+
+    function deactivate() external override {}
+
+    function initialize(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_,
+        uint24 tickStep_,
+        uint48 timeToExpiry_
+    ) external override {}
+
     function requestPermissions()
         external
         view

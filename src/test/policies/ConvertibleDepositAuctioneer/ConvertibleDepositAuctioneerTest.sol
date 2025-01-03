@@ -49,6 +49,12 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant TARGET = 20e9;
     uint48 public constant TIME_TO_EXPIRY = 1 days;
 
+    // Events
+    event Activated();
+    event TickStepUpdated(uint24 newTickStep);
+    event TimeToExpiryUpdated(uint48 newTimeToExpiry);
+    event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
+
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
 
@@ -176,6 +182,12 @@ contract ConvertibleDepositAuctioneerTest is Test {
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
         vm.prank(heart);
         auctioneer.setAuctionParameters(target_, tickSize_, minPrice_);
+    }
+
+    modifier givenInitialized() {
+        vm.prank(admin);
+        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        _;
     }
 
     modifier givenAuctionParametersStandard() {

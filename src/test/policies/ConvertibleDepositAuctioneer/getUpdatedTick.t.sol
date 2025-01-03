@@ -5,8 +5,8 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctioneerTest {
-    // given the initial auction parameters have not been set
-    //  [X] it reverts
+    // given the contract has not been initialized
+    //  [ ] it reverts
     // given the contract is inactive
     //  [X] it reverts
     // given a bid has never been received
@@ -32,16 +32,6 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
     //   [ ] it reduces the price by the tick step until the total capacity is less than the tick size
     //   [ ] the tick capacity is set to the remainder
 
-    function test_invalidAuctionParameters_reverts() public givenContractActive {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
-        );
-
-        // Call function
-        auctioneer.getUpdatedTick();
-    }
-
     function test_contractInactive_reverts() public givenContractInactive {
         // Expect revert
         vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
@@ -50,13 +40,7 @@ contract ConvertibleDepositAuctioneerUpdatedTickTest is ConvertibleDepositAuctio
         auctioneer.getUpdatedTick();
     }
 
-    function test_noBidReceived()
-        public
-        givenContractActive
-        givenTickStep(TICK_STEP)
-        givenTimeToExpiry(TIME_TO_EXPIRY)
-        givenAuctionParametersStandard
-    {
+    function test_noBidReceived() public givenInitialized {
         uint48 daysPassed = 2 days;
 
         // Warp to change the block timestamp

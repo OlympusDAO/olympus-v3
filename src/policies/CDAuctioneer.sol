@@ -54,6 +54,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     /// @notice Current tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
+    // TODO rename to previousTick
     Tick internal currentTick;
 
     /// @notice Current state of the auction
@@ -275,6 +276,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         tick = currentTick;
 
+        // TODO rename back to getCurrentTick()
+
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
         while (tick.capacity + newCapacity > state.tickSize) {
@@ -326,6 +329,19 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     // ========== ADMIN FUNCTIONS ========== //
 
+    function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
+        // Tick size must be non-zero
+        if (tickSize_ == 0) revert CDAuctioneer_InvalidParams("tick size");
+
+        // Min price must be non-zero
+        if (minPrice_ == 0) revert CDAuctioneer_InvalidParams("min price");
+
+        state = State(target_, tickSize_, minPrice_, state.lastUpdate);
+
+        // Emit event
+        emit AuctionParametersUpdated(target_, tickSize_, minPrice_);
+    }
+
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function performs the following:
     ///             - TODO
@@ -334,38 +350,20 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The caller does not have the ROLE_HEART role
     ///             - The new tick size is 0
     ///             - The new min price is 0
-    ///
-    /// @param  newTarget       The new target for OHM sold per day
-    /// @param  newSize         The new tick size
-    /// @param  newMinPrice     The new minimum price
-    /// @return remainder       The remainder of OHM that cannot be sold
     function setAuctionParameters(
-        uint256 newTarget,
-        uint256 newSize,
-        uint256 newMinPrice
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_
     ) external override onlyRole(ROLE_HEART) returns (uint256 remainder) {
-        // Tick size must be non-zero
-        if (newSize == 0) revert CDAuctioneer_InvalidParams("tick size");
-
-        // Min price must be non-zero
-        if (newMinPrice == 0) revert CDAuctioneer_InvalidParams("min price");
-
         // TODO should this be newTarget instead of state.target?
         // TODO Should the newTarget - dayState.convertible be used instead?
         // TODO how to handle if deactivated?
         // remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
+        // TODO handling remainder moving average
 
-        state = State(newTarget, newSize, newMinPrice, state.lastUpdate);
+        _setAuctionParameters(target_, tickSize_, minPrice_);
 
-        // If this is the first run, capacity and price must be set
-        // We know that this is the first run, since min price cannot be 0, and bidding will not result in a tick price below the min price
-        if (currentTick.price == 0) {
-            currentTick.capacity = newSize;
-            currentTick.price = newMinPrice;
-        }
-
-        // Emit event
-        emit AuctionParametersUpdated(newTarget, newSize, newMinPrice);
+        return remainder;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -374,7 +372,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The new time to expiry is 0
     ///
     /// @param  newTime_ The new time to expiry
-    function setTimeToExpiry(uint48 newTime_) external override onlyRole(ROLE_ADMIN) {
+    function setTimeToExpiry(uint48 newTime_) public override onlyRole(ROLE_ADMIN) {
         // Value must be non-zero
         if (newTime_ == 0) revert CDAuctioneer_InvalidParams("time to expiry");
 
@@ -390,7 +388,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The new tick step is < 100e2
     ///
     /// @param      newStep_    The new tick step
-    function setTickStep(uint24 newStep_) external override onlyRole(ROLE_ADMIN) {
+    function setTickStep(uint24 newStep_) public override onlyRole(ROLE_ADMIN) {
         // Value must be more than 100e2
         if (newStep_ < ONE_HUNDRED_PERCENT) revert CDAuctioneer_InvalidParams("tick step");
 
@@ -400,9 +398,48 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         emit TickStepUpdated(newStep_);
     }
 
-    /// @notice Activate the contract functionality
-    /// @dev        This function is gated to the ROLE_EMERGENCY_SHUTDOWN role
-    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN role
+    ///             - The contract is already active
+    ///             - Validation of the inputs fails
+    ///
+    ///             The outcome of running this function is that the contract will be in a valid state for bidding to take place.
+    function initialize(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_,
+        uint24 tickStep_,
+        uint48 timeToExpiry_
+    ) external onlyRole(ROLE_ADMIN) {
+        // If active, revert
+        if (locallyActive) revert CDAuctioneer_InvalidState();
+
+        // Set the auction parameters
+        _setAuctionParameters(target_, tickSize_, minPrice_);
+
+        // Set the tick step
+        // This emits the event
+        setTickStep(tickStep_);
+
+        // Set the time to expiry
+        // This emits the event
+        setTimeToExpiry(timeToExpiry_);
+
+        // Initialize the current tick
+        currentTick.capacity = tickSize_;
+        currentTick.price = minPrice_;
+
+        // Activate the contract
+        // This emits the event
+        _activate();
+    }
+
+    function _activate() internal {
+        // If the tick step, time to expiry, tick size, or min price have not been set, then the contract has not previously been initialized
+        if (_tickStep == 0 || _timeToExpiry == 0 || state.tickSize == 0 || state.minPrice == 0)
+            revert CDAuctioneer_InvalidState();
+
         // If the contract is already active, do nothing
         if (locallyActive) return;
 
@@ -417,8 +454,21 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         emit Activated();
     }
 
+    /// @notice Activate the contract functionality
+    /// @dev    This function will revert if:
+    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
+    ///         - The contract has not previously been initialized
+    ///
+    ///         Note that if the contract is already active, this function will do nothing.
+    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+        _activate();
+    }
+
     /// @notice Deactivate the contract functionality
-    /// @dev        This function is gated to the ROLE_EMERGENCY_SHUTDOWN role
+    /// @dev    This function will revert if:
+    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
+    ///
+    ///         Note that if the contract is already inactive, this function will do nothing.
     function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         // If the contract is already inactive, do nothing
         if (!locallyActive) return;
