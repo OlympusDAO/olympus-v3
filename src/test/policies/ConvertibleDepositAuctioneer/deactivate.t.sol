@@ -27,7 +27,7 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
         auctioneer.deactivate();
     }
 
-    function test_contractInactive() public givenContractActive givenContractInactive {
+    function test_contractInactive() public givenInitialized givenContractInactive {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -43,7 +43,7 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
         assertEq(auctioneer.getState().lastUpdate, lastUpdate);
     }
 
-    function test_contractActive() public givenContractActive {
+    function test_contractActive() public givenInitialized() {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp

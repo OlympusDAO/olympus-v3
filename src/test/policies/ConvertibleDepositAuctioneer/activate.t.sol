@@ -2,18 +2,13 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "emergency_shutdown" role
     //  [X] it reverts
-    // given the tick step has not been set
-    //  [ ] it reverts
-    // given the time to expiry has not been set
-    //  [ ] it reverts
-    // given the tick size has not been set
-    //  [ ] it reverts
-    // given the min price has not been set
-    //  [ ] it reverts
+    // given the contract is not initialized
+    //  [X] it reverts
     // when the contract is already activated
     //  [X] the state is unchanged
     //  [X] it does not emit an event
@@ -35,7 +30,18 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         auctioneer.activate();
     }
 
-    function test_contractActivated() public givenContractActive {
+    function test_contractNotInitialized() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_NotInitialized.selector)
+        );
+
+        // Call function
+        vm.prank(emergency);
+        auctioneer.activate();
+    }
+
+    function test_contractActivated() public givenInitialized {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -51,7 +57,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         assertEq(auctioneer.getState().lastUpdate, lastUpdate);
     }
 
-    function test_contractInactive() public givenContractInactive {
+    function test_contractInactive() public givenInitialized givenContractInactive {
         uint48 lastUpdate = uint48(block.timestamp);
         uint48 newBlock = lastUpdate + 1;
 

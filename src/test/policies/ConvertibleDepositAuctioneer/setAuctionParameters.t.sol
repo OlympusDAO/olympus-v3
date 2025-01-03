@@ -7,8 +7,8 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "heart" role
     //  [X] it reverts
-    // given the contract has not been initialized
-    //  [X] it reverts
+    // given the contract is not initialized
+    //  [X] it sets the parameters
     // when the new target is 0
     //  [X] it succeeds
     //  [X] the current tick capacity is the new tick size
@@ -42,14 +42,12 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     }
 
     function test_contractNotInitialized() public {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
-        );
-
         // Call function
         vm.prank(heart);
-        auctioneer.setAuctionParameters(100, 100, 100);
+        auctioneer.setAuctionParameters(100, 101, 102);
+
+        // Assert state
+        _assertState(100, 101, 102, 0);
     }
 
     function test_targetZero() public givenInitialized {

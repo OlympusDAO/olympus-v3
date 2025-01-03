@@ -42,6 +42,9 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Emitted when the state is invalid
     error CDAuctioneer_InvalidState();
 
+    /// @notice Emitted when the contract is not initialized
+    error CDAuctioneer_NotInitialized();
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice State of the auction

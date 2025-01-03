@@ -268,6 +268,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @return tick    The updated tick
     function getUpdatedTick() public view onlyActive returns (Tick memory tick) {
         // If the price is 0, the auction parameters have not been set and we cannot determine the new tick
+        // TODO can be removed
         if (currentTick.price == 0) revert CDAuctioneer_InvalidState();
 
         // find amount of time passed and new capacity to add
@@ -436,9 +437,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     function _activate() internal {
-        // If the tick step, time to expiry, tick size, or min price have not been set, then the contract has not previously been initialized
+        // If these variables have not been set, then the contract has not previously been initialized
         if (_tickStep == 0 || _timeToExpiry == 0 || state.tickSize == 0 || state.minPrice == 0)
-            revert CDAuctioneer_InvalidState();
+            revert CDAuctioneer_NotInitialized();
 
         // If the contract is already active, do nothing
         if (locallyActive) return;

@@ -7,6 +7,8 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "cd_admin" role
     //  [X] it reverts
+    // given the contract is not initialized
+    //  [X] it sets the tick step
     // when the value is < 100e2
     //  [X] it reverts
     // when the contract is deactivated
@@ -23,7 +25,16 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
 
         // Call function
         vm.prank(caller_);
-        auctioneer.setTickStep(100);
+        auctioneer.setTickStep(100e2);
+    }
+
+    function test_contractNotInitialized() public {
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(100e2);
+
+        // Assert state
+        assertEq(auctioneer.getTickStep(), 100e2, "tick step");
     }
 
     function test_valueIsOutOfBounds_reverts(uint24 tickStep_) public {

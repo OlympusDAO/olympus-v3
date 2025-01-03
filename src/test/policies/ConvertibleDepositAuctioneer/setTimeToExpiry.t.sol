@@ -9,6 +9,8 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
     //  [X] it reverts
     // when the new time to expiry is 0
     //  [X] it reverts
+    // given the contract is not initialized
+    //  [X] it sets the time to expiry
     // when the contract is deactivated
     //  [X] it sets the time to expiry
     // [X] it sets the time to expiry
@@ -24,6 +26,15 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         // Call function
         vm.prank(caller_);
         auctioneer.setTimeToExpiry(100);
+    }
+
+    function test_contractNotInitialized() public {
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTimeToExpiry(100);
+
+        // Assert state
+        assertEq(auctioneer.getTimeToExpiry(), 100, "time to expiry");
     }
 
     function test_newTimeToExpiryZero_reverts() public {
