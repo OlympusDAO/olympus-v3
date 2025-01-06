@@ -63,7 +63,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     Day internal dayState;
 
     /// @notice Scale of the OHM token
-    uint256 internal constant _ohmScale = 10 ** 9;
+    uint256 internal constant _ohmScale = 1e9;
 
     /// @notice Address of the Convertible Deposit Facility
     CDFacility public cdFacility;
@@ -195,7 +195,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // If there is not enough capacity in the current tick, use the remaining capacity
             if (currentTickCapacity < convertibleAmount) {
                 convertibleAmount = currentTickCapacity;
-                depositAmount = _getConvertedDeposit(convertibleAmount, currentTickPrice);
+                // Convertible = deposit * OHM scale / price, so this is the inverse
+                depositAmount = convertibleAmount.mulDiv(currentTickPrice, _ohmScale);
 
                 // The tick has also been depleted, so update the price
                 currentTickPrice = _getNewTickPrice(currentTickPrice, _tickStep);
@@ -265,19 +266,20 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // TODO document approach
         // find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
-        uint256 newCapacity = (state.target * timePassed) / 1 days;
+        uint256 capacityToAdd = (state.target * timePassed) / 1 days;
 
         // Skip if the new capacity is 0
-        if (newCapacity == 0) return _previousTick;
+        if (capacityToAdd == 0) return _previousTick;
 
         tick = _previousTick;
+        uint256 newCapacity = tick.capacity + capacityToAdd;
 
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
-        while (tick.capacity + newCapacity > state.tickSize) {
-            // Adjust the new capacity so that the total is <= to the tick size
-            newCapacity -= newCapacity < state.tickSize ? newCapacity : state.tickSize;
+        while (newCapacity > state.tickSize) {
+            // Reduce the capacity by the tick size
+            newCapacity -= state.tickSize;
 
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
