@@ -132,6 +132,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 currentTickPrice;
         (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit, _previousTick);
 
+        // Reject if the OHM out is 0
+        if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
+
         // Reset the day state if this is the first bid of the day
         if (block.timestamp / 86400 > state.lastUpdate / 86400) {
             dayState = Day(0, 0);
@@ -260,11 +263,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function calculates the tick at the current time.
     ///
-    /// @return tick    The updated tick
+    ///             It uses the following approach:
+    ///             - Calculate the added capacity based on the time passed since the last bid, and add it to the current capacity to get the new capacity
+    ///             - Until the new capacity is <= to the tick size, reduce the capacity by the tick size and reduce the price by the tick step
+    ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
     function getCurrentTick() public view onlyActive returns (Tick memory tick) {
-        // TODO document approach
-        // find amount of time passed and new capacity to add
+        // Find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - state.lastUpdate;
         uint256 capacityToAdd = (state.target * timePassed) / 1 days;
 
@@ -273,7 +279,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         tick = _previousTick;
         uint256 newCapacity = tick.capacity + capacityToAdd;
-
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
@@ -284,8 +289,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
 
-            // tick price does not go below the minimum
-            // tick capacity is full if the min price is exceeded
+            // Tick price does not go below the minimum
+            // Tick capacity is full if the min price is exceeded
             if (tick.price < state.minPrice) {
                 tick.price = state.minPrice;
                 newCapacity = state.tickSize;
@@ -293,7 +298,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             }
         }
 
-        // decrement capacity by remainder
+        // Set the capacity
         tick.capacity = newCapacity;
 
         return tick;
