@@ -2,7 +2,11 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+
+import {FullMath} from "src/libraries/FullMath.sol";
+
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
     function _assertConvertibleDepositPosition(
@@ -35,6 +39,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, previousPositionCount_ + 1, "position count");
         assertEq(positionIds[positionIds.length - 1], returnedPositionId_, "position id");
+
+        uint256 conversionPrice = FullMath.mulDivUp(bidAmount_, 1e9, expectedConvertedAmount_);
+
+        // Assert that the position terms are correct
+        CDPOSv1.Position memory position = convertibleDepositPositions.getPosition(
+            returnedPositionId_
+        );
+        assertEq(position.owner, recipient, "position owner");
+        assertEq(position.remainingDeposit, bidAmount_, "position remaining deposit");
+        assertEq(position.conversionPrice, conversionPrice, "position conversion price");
+        assertEq(position.expiry, uint48(block.timestamp) + TIME_TO_EXPIRY, "position expiry");
+        assertEq(position.wrapped, false, "position wrapped");
     }
 
     // when the contract is deactivated
@@ -72,67 +88,51 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [ ] it completes bidding and leaves a remainder of the bid token
     //  when the convertible amount of OHM will exceed the day target
     //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
-    //  [ ] it returns the amount of OHM that can be converted
-    //  [ ] it issues CD terms with the current tick price and time to expiry
-    //  [ ] it updates the day's deposit balance
-    //  [ ] it updates the day's converted balance
-    //  [ ] it deducts the converted amount from the tick capacity
-    //  [ ] it does not update the tick price
-    //  [ ] it sets the lastUpdate to the current block timestamp
+    //  [X] it returns the amount of OHM that can be converted
+    //  [X] it issues CD terms with the current tick price and time to expiry
+    //  [X] it updates the day's deposit balance
+    //  [X] it updates the day's converted balance
+    //  [X] it deducts the converted amount from the tick capacity
+    //  [X] it does not update the tick price
+    //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is equal to the remaining tick capacity
     //  when the convertible amount of OHM will exceed the day target
     //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
-    //  when the tick step is > 1e18
-    //   [ ] it returns the amount of OHM that can be converted using the current tick price
-    //   [ ] it issues CD terms with the current tick price and time to expiry
-    //   [ ] it updates the day's deposit balance
-    //   [ ] it updates the day's converted balance
-    //   [ ] it updates the tick capacity to the tick size
-    //   [ ] it updates the tick price to be higher than the current tick price
-    //   [ ] it sets the lastUpdate to the current block timestamp
-    //  when the tick step is < 1e18
-    //   [ ] it returns the amount of OHM that can be converted using the current tick price
-    //   [ ] it issues CD terms with the current tick price and time to expiry
-    //   [ ] it updates the day's deposit balance
-    //   [ ] it updates the day's converted balance
-    //   [ ] it updates the tick capacity to the tick size
-    //   [ ] it updates the tick price to be lower than the current tick price
-    //   [ ] it sets the lastUpdate to the current block timestamp
-    //  when the tick step is = 1e18
-    //   [ ] it returns the amount of OHM that can be converted using the current tick price
-    //   [ ] it issues CD terms with the current tick price and time to expiry
-    //   [ ] it updates the day's deposit balance
-    //   [ ] it updates the day's converted balance
-    //   [ ] it updates the tick capacity to the tick size
-    //   [ ] the tick price is unchanged
-    //   [ ] it sets the lastUpdate to the current block timestamp
+    //  when the tick step is > 100e2
+    //   [X] it returns the amount of OHM that can be converted using the current tick price
+    //   [X] it issues CD terms with the current tick price and time to expiry
+    //   [X] it updates the day's deposit balance
+    //   [X] it updates the day's converted balance
+    //   [X] it updates the tick capacity to the tick size
+    //   [X] it updates the tick price to be higher than the current tick price
+    //   [X] it sets the lastUpdate to the current block timestamp
+    //  when the tick step is = 100e2
+    //   [X] it returns the amount of OHM that can be converted using the current tick price
+    //   [X] it issues CD terms with the current tick price and time to expiry
+    //   [X] it updates the day's deposit balance
+    //   [X] it updates the day's converted balance
+    //   [X] it updates the tick capacity to the tick size
+    //   [X] the tick price is unchanged
+    //   [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is greater than the remaining tick capacity
     //  when the convertible amount of OHM will exceed the day target
     //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
-    //  when the tick step is > 1e18
-    //   [ ] it returns the amount of OHM that can be converted at multiple prices
-    //   [ ] it issues CD terms with the average price and time to expiry
-    //   [ ] it updates the day's deposit balance
-    //   [ ] it updates the day's converted balance
-    //   [ ] it updates the tick capacity to the tick size minus the converted amount at the new tick price
-    //   [ ] it updates the new tick price to be higher than the current tick price
-    //   [ ] it sets the lastUpdate to the current block timestamp
-    //  when the tick step is < 1e18
-    //   [ ] it returns the amount of OHM that can be converted at multiple prices
-    //   [ ] it issues CD terms with the average price and time to expiry
-    //   [ ] it updates the day's deposit balance
-    //   [ ] it updates the day's converted balance
-    //   [ ] it updates the tick capacity to the tick size minus the converted amount at the new tick price
-    //   [ ] it updates the new tick price to be lower than the current tick price
-    //   [ ] it sets the lastUpdate to the current block timestamp
-    //  when the tick step is = 1e18
-    //   [ ] it returns the amount of OHM that can be converted at multiple prices
-    //   [ ] it issues CD terms with the average price and time to expiry
-    //   [ ] it updates the day's deposit balance
-    //   [ ] it updates the day's converted balance
-    //   [ ] it updates the tick capacity to the tick size minus the converted amount at the new tick price
-    //   [ ] the tick price is unchanged
-    //   [ ] it sets the lastUpdate to the current block timestamp
+    //  when the tick step is > 100e2
+    //   [X] it returns the amount of OHM that can be converted at multiple prices
+    //   [X] it issues CD terms with the average price and time to expiry
+    //   [X] it updates the day's deposit balance
+    //   [X] it updates the day's converted balance
+    //   [X] it updates the tick capacity to the tick size minus the converted amount at the new tick price
+    //   [X] it updates the new tick price to be higher than the current tick price
+    //   [X] it sets the lastUpdate to the current block timestamp
+    //  when the tick step is = 100e2
+    //   [X] it returns the amount of OHM that can be converted at multiple prices
+    //   [X] it issues CD terms with the average price and time to expiry
+    //   [X] it updates the day's deposit balance
+    //   [X] it updates the day's converted balance
+    //   [X] it updates the tick capacity to the tick size minus the converted amount at the new tick price
+    //   [X] the tick price is unchanged
+    //   [X] it sets the lastUpdate to the current block timestamp
 
     function test_givenContractNotInitialized_reverts() public {
         // Expect revert
@@ -398,5 +398,259 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             TICK_SIZE - previousConvertedAmount - expectedConvertedAmount,
             MIN_PRICE
         );
+    }
+
+    function test_convertedAmountLessThanTickCapacity(
+        uint256 bidAmount_
+    )
+        public
+        givenInitialized
+        givenAddressHasReserveToken(recipient, 150e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 150e18)
+    {
+        // We want the converted amount to be less than the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 = 10e9 - 1
+        // Bid amount = (10e9 - 1) * 15e18 / 1e9
+        // Bid amount = 150e18 - 1 (it will round down)
+
+        uint256 bidAmount = bound(bidAmount_, 1e18, 150e18 - 1);
+        uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            150e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+
+        // Assert the tick
+        _assertPreviousTick(TICK_SIZE - expectedConvertedAmount, MIN_PRICE);
+    }
+
+    function test_convertedAmountEqualToTickCapacity(
+        uint256 bidAmount_
+    )
+        public
+        givenInitialized
+        givenAddressHasReserveToken(recipient, 151e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 151e18)
+    {
+        // We want the converted amount to be equal to the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 = 10e9
+        // Bid amount = 10e9 * 15e18 / 1e9
+        // Bid amount = 150e18 (it will round down)
+
+        // We expect the range of bid amounts when converted to round down to 10e9
+        uint256 bidAmount = bound(bidAmount_, 150e18, 150e18 + 15e9 - 1);
+        uint256 expectedConvertedAmount = 10e9;
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            151e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+
+        // Assert the tick
+        // As the capacity was depleted exactly, it shifts to the next tick
+        uint256 nextTickPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
+        _assertPreviousTick(TICK_SIZE, nextTickPrice);
+    }
+
+    function test_convertedAmountEqualToTickCapacity_givenTickStepIsEqual(
+        uint256 bidAmount_
+    )
+        public
+        givenInitialized
+        givenTickStep(100e2)
+        givenAddressHasReserveToken(recipient, 151e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 151e18)
+    {
+        // We want the converted amount to be equal to the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 = 10e9
+        // Bid amount = 10e9 * 15e18 / 1e9
+        // Bid amount = 150e18 (it will round down)
+
+        // We expect the range of bid amounts when converted to round down to 10e9
+        uint256 bidAmount = bound(bidAmount_, 150e18, 150e18 + 15e9 - 1);
+        uint256 expectedConvertedAmount = 10e9;
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            151e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+
+        // Assert the tick
+        // As the capacity was depleted exactly, it shifts to the next tick
+        // As the tick step is 100e2, the price is unchanged
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE);
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity(
+        uint256 bidAmount_
+    )
+        public
+        givenInitialized
+        givenAddressHasReserveToken(recipient, 300e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 300e18)
+    {
+        // We want the converted amount to be greater than the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 >= 11e9
+        // Bid amount = 11e9 * 15e18 / 1e9
+        // Bid amount = 165e18 (it will round down)
+        // At most it should be 300e18 - 1 to stay within the tick capacity
+
+        uint256 bidAmount = bound(bidAmount_, 165e18, 300e18 - 1);
+        uint256 tickTwoPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
+
+        uint256 tickOneConvertedAmount = (150e18 * 1e9) / 15e18;
+        uint256 tickTwoConvertedAmount = ((bidAmount - 150e18) * 1e9) / tickTwoPrice;
+        uint256 expectedConvertedAmount = tickOneConvertedAmount + tickTwoConvertedAmount;
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            300e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+
+        // Assert the tick
+        _assertPreviousTick(TICK_SIZE * 2 - expectedConvertedAmount, tickTwoPrice);
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity_givenTickStepIsEqual(
+        uint256 bidAmount_
+    )
+        public
+        givenInitialized
+        givenTickStep(100e2)
+        givenAddressHasReserveToken(recipient, 300e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 300e18)
+    {
+        // We want the converted amount to be greater than the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 >= 11e9
+        // Bid amount = 11e9 * 15e18 / 1e9
+        // Bid amount = 165e18 (it will round down)
+        // At most it should be 300e18 - 1 to stay within the tick capacity
+
+        uint256 bidAmount = bound(bidAmount_, 165e18, 300e18 - 1);
+        uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            300e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+
+        // Assert the tick
+        _assertPreviousTick(TICK_SIZE * 2 - expectedConvertedAmount, MIN_PRICE);
     }
 }
