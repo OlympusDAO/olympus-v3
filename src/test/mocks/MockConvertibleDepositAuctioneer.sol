@@ -44,7 +44,12 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getCurrentTick() external view override returns (Tick memory tick) {}
 
-    function getState() external view override returns (State memory state) {}
+    function getAuctionParameters()
+        external
+        view
+        override
+        returns (AuctionParameters memory auctionParameters)
+    {}
 
     function getDayState() external view override returns (Day memory day) {}
 

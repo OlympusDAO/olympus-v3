@@ -123,7 +123,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
 
         // Assert state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, INITIAL_BLOCK);
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, INITIAL_BLOCK);
         assertEq(auctioneer.getTickStep(), TICK_STEP, "tick step");
         assertEq(auctioneer.getTimeToExpiry(), TIME_TO_EXPIRY, "time to expiry");
         assertEq(auctioneer.locallyActive(), true, "locally active");

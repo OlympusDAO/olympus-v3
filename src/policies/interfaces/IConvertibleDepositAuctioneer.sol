@@ -47,13 +47,14 @@ interface IConvertibleDepositAuctioneer {
 
     // ========== DATA STRUCTURES ========== //
 
-    /// @notice State of the auction
+    /// @notice Auction parameters
+    /// @dev    These values should only be set through the `setAuctionParameters()` function
     ///
     /// @param  target          Number of OHM available to sell per day
     /// @param  tickSize        Number of OHM in a tick
     /// @param  minPrice        Minimum price that OHM can be sold for, in terms of the bid token
     /// @param  lastUpdate      Timestamp of last update to current tick
-    struct State {
+    struct AuctionParameters {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
@@ -109,10 +110,13 @@ interface IConvertibleDepositAuctioneer {
     /// @return tick Tick info
     function getCurrentTick() external view returns (Tick memory tick);
 
-    /// @notice Get the current state of the auction
+    /// @notice Get the current auction parameters
     ///
-    /// @return state State info
-    function getState() external view returns (State memory state);
+    /// @return auctionParameters Auction parameters
+    function getAuctionParameters()
+        external
+        view
+        returns (AuctionParameters memory auctionParameters);
 
     /// @notice Get the auction state for the current day
     ///

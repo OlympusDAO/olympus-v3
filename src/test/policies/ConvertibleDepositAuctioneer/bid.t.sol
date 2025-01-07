@@ -287,7 +287,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         _assertPreviousTick(TICK_SIZE - expectedConvertedAmount, MIN_PRICE);
@@ -339,7 +339,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(nextDay));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(nextDay));
 
         // Assert the tick
         _assertPreviousTick(beforeTick.capacity - expectedConvertedAmount, beforeTick.price);
@@ -393,7 +393,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         _assertPreviousTick(
@@ -444,7 +444,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         _assertPreviousTick(TICK_SIZE - expectedConvertedAmount, MIN_PRICE);
@@ -494,7 +494,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         // As the capacity was depleted exactly, it shifts to the next tick
@@ -547,7 +547,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         // As the capacity was depleted exactly, it shifts to the next tick
@@ -602,7 +602,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         _assertPreviousTick(TICK_SIZE * 2 - expectedConvertedAmount, tickTwoPrice);
@@ -652,7 +652,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         _assertPreviousTick(TICK_SIZE * 2 - expectedConvertedAmount, MIN_PRICE);
@@ -703,7 +703,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
-        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
 
         // Assert the tick
         _assertPreviousTick(TICK_SIZE, tickTwoPrice);

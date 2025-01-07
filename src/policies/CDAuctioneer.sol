@@ -56,8 +56,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
     Tick internal _previousTick;
 
-    /// @notice Current state of the auction
-    State internal state;
+    /// @notice Auction parameters
+    /// @dev    These values should only be set through the `setAuctionParameters()` function
+    AuctionParameters internal _auctionParameters;
 
     /// @notice Auction state at the time of the last bid (`state.lastUpdate`)
     Day internal dayState;
@@ -80,8 +81,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice The number of seconds between creation and expiry of convertible deposits
     /// @dev    See `getTimeToExpiry()` for more information
     uint48 internal _timeToExpiry;
-
-    // TODO rename state to parameters
 
     // ========== SETUP ========== //
 
@@ -148,12 +147,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
 
         // Reset the day state if this is the first bid of the day
-        if (block.timestamp / 86400 > state.lastUpdate / 86400) {
+        if (block.timestamp / 86400 > _auctionParameters.lastUpdate / 86400) {
             dayState = Day(0, 0);
         }
 
         // Update state
-        state.lastUpdate = uint48(block.timestamp);
+        _auctionParameters.lastUpdate = uint48(block.timestamp);
         dayState.deposits += depositIn;
         dayState.convertible += ohmOut;
 
@@ -231,7 +230,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
                 // The tick has also been depleted, so update the price
                 updatedTickPrice = _getNewTickPrice(updatedTickPrice, _tickStep);
-                updatedTickCapacity = state.tickSize;
+                updatedTickCapacity = _auctionParameters.tickSize;
             }
             // Otherwise, the tick has enough capacity and needs to be updated
             else {
@@ -299,8 +298,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
     function getCurrentTick() public view onlyActive returns (Tick memory tick) {
         // Find amount of time passed and new capacity to add
-        uint256 timePassed = block.timestamp - state.lastUpdate;
-        uint256 capacityToAdd = (state.target * timePassed) / 1 days;
+        uint256 timePassed = block.timestamp - _auctionParameters.lastUpdate;
+        uint256 capacityToAdd = (_auctionParameters.target * timePassed) / 1 days;
 
         // Skip if the new capacity is 0
         if (capacityToAdd == 0) return _previousTick;
@@ -310,18 +309,18 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
-        while (newCapacity > state.tickSize) {
+        while (newCapacity > _auctionParameters.tickSize) {
             // Reduce the capacity by the tick size
-            newCapacity -= state.tickSize;
+            newCapacity -= _auctionParameters.tickSize;
 
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
 
             // Tick price does not go below the minimum
             // Tick capacity is full if the min price is exceeded
-            if (tick.price < state.minPrice) {
-                tick.price = state.minPrice;
-                newCapacity = state.tickSize;
+            if (tick.price < _auctionParameters.minPrice) {
+                tick.price = _auctionParameters.minPrice;
+                newCapacity = _auctionParameters.tickSize;
                 break;
             }
         }
@@ -338,12 +337,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function getState() external view override returns (State memory) {
-        return state;
+    function getAuctionParameters() external view override returns (AuctionParameters memory) {
+        return _auctionParameters;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function returns the day state at the time of the last bid (`state.lastUpdate`)
+    /// @dev        This function returns the day state at the time of the last bid (`_auctionParameters.lastUpdate`)
     function getDayState() external view override returns (Day memory) {
         return dayState;
     }
@@ -367,7 +366,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Min price must be non-zero
         if (minPrice_ == 0) revert CDAuctioneer_InvalidParams("min price");
 
-        state = State(target_, tickSize_, minPrice_, state.lastUpdate);
+        _auctionParameters = AuctionParameters(
+            target_,
+            tickSize_,
+            minPrice_,
+            _auctionParameters.lastUpdate
+        );
 
         // Emit event
         emit AuctionParametersUpdated(target_, tickSize_, minPrice_);
@@ -386,10 +390,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 tickSize_,
         uint256 minPrice_
     ) external override onlyRole(ROLE_HEART) returns (uint256 remainder) {
-        // TODO should this be newTarget instead of state.target?
+        // TODO should this be newTarget instead of _auctionParameters.target?
         // TODO Should the newTarget - dayState.convertible be used instead?
         // TODO how to handle if deactivated?
-        // remainder = (state.target > dayState.convertible) ? state.target - dayState.convertible : 0;
+        // remainder = (_auctionParameters.target > dayState.convertible) ? _auctionParameters.target - dayState.convertible : 0;
         // TODO handling remainder moving average
 
         _setAuctionParameters(target_, tickSize_, minPrice_);
@@ -468,8 +472,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     function _activate() internal {
         // If these variables have not been set, then the contract has not previously been initialized
-        if (_tickStep == 0 || _timeToExpiry == 0 || state.tickSize == 0 || state.minPrice == 0)
-            revert CDAuctioneer_NotInitialized();
+        if (
+            _tickStep == 0 ||
+            _timeToExpiry == 0 ||
+            _auctionParameters.tickSize == 0 ||
+            _auctionParameters.minPrice == 0
+        ) revert CDAuctioneer_NotInitialized();
 
         // If the contract is already active, do nothing
         if (locallyActive) return;
@@ -479,7 +487,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Also set the lastUpdate to the current block timestamp
         // Otherwise, getCurrentTick() will calculate a long period of time having passed
-        state.lastUpdate = uint48(block.timestamp);
+        _auctionParameters.lastUpdate = uint48(block.timestamp);
 
         // Emit event
         emit Activated();

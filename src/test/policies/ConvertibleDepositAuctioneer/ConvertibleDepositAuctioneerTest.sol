@@ -96,18 +96,19 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
-    function _assertState(
+    function _assertAuctionParameters(
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_,
         uint48 lastUpdate_
     ) internal {
-        IConvertibleDepositAuctioneer.State memory state = auctioneer.getState();
+        IConvertibleDepositAuctioneer.AuctionParameters memory auctionParameters = auctioneer
+            .getAuctionParameters();
 
-        assertEq(state.target, target_, "target");
-        assertEq(state.tickSize, tickSize_, "tickSize");
-        assertEq(state.minPrice, minPrice_, "minPrice");
-        assertEq(state.lastUpdate, lastUpdate_, "lastUpdate");
+        assertEq(auctionParameters.target, target_, "target");
+        assertEq(auctionParameters.tickSize, tickSize_, "tickSize");
+        assertEq(auctionParameters.minPrice, minPrice_, "minPrice");
+        assertEq(auctionParameters.lastUpdate, lastUpdate_, "lastUpdate");
     }
 
     function _assertPreviousTick(uint256 capacity_, uint256 price_) internal {

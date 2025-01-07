@@ -119,7 +119,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert that the time passed will result in the correct capacity
         uint48 timePassed = 21600;
         assertEq(
-            (auctioneer.getState().target * timePassed) / 1 days,
+            (auctioneer.getAuctionParameters().target * timePassed) / 1 days,
             5e9,
             "expected new capacity"
         );
