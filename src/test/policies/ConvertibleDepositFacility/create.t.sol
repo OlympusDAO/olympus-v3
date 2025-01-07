@@ -2,11 +2,15 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
+
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 
 contract CreateCDFTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
 
+    // given the contract is inactive
+    //  [X] it reverts
     // when the caller does not have the cd_auctioneer role
     //  [X] it reverts
     // when the recipient has not approved CDEPO to spend the reserve tokens
@@ -19,8 +23,18 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
     // [X] it returns the position ID
     // [X] it emits a CreatedDeposit event
 
+    function test_contractInactive_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
+
+        // Call function
+        vm.prank(auctioneer);
+        facility.create(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, EXPIRY, false);
+    }
+
     function test_callerNotAuctioneer_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
     {
         // Expect revert
@@ -34,6 +48,7 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
     function test_spendingNotApproved_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
     {
         // Expect revert
@@ -45,6 +60,7 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
     function test_success()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -96,6 +112,7 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
     function test_success_multiple()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,

@@ -88,6 +88,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
         rolesAdmin.grantRole(bytes32("cd_admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
+
+        // Activate policy dependencies
+        vm.prank(emergency);
+        facility.activate();
     }
 
     // ========== HELPERS ========== //

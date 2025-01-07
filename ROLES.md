@@ -17,6 +17,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_restart | EmissionManager | Reactivates the EmissionManager |
 | emergency_shutdown | CDAuctioneer | Activate/deactivate the CDAuctioneer |
+| emergency_shutdown | CDFacility | Activate/deactivate the CDFacility |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | EmissionManager | Deactivates the EmissionManager |

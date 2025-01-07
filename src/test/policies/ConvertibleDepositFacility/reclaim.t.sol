@@ -9,6 +9,8 @@ import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
     event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount);
 
+    // given the contract is inactive
+    //  [X] it reverts
     // when the length of the positionIds_ array does not match the length of the amounts_ array
     //  [X] it reverts
     // when any position is not valid
@@ -29,7 +31,15 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
     // [X] it returns the reclaimed amount
     // [X] it emits a ReclaimedDeposit event
 
-    function test_arrayLengthMismatch_reverts() public {
+    function test_contractInactive_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
+
+        // Call function
+        facility.reclaim(new uint256[](0), new uint256[](0));
+    }
+
+    function test_arrayLengthMismatch_reverts() public givenLocallyActive {
         uint256[] memory positionIds_ = new uint256[](1);
         uint256[] memory amounts_ = new uint256[](2);
 
@@ -50,6 +60,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 10e18)
         givenAddressHasReserveToken(recipientTwo, 5e18)
@@ -87,6 +98,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     function test_allPositionsHaveDifferentOwner_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -120,6 +132,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -162,6 +175,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
     {
@@ -203,6 +217,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -246,6 +261,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     function test_amountIsZero_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -269,6 +285,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     function test_spendingIsNotApproved_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -296,6 +313,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     function test_success()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -389,6 +407,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 amountTwo_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,

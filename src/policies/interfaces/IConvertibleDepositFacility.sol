@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
-import {IERC20} from "openzeppelin-contracts/contracts/interfaces/IERC20.sol";
-import {IERC4626} from "openzeppelin-contracts/contracts/interfaces/IERC4626.sol";
-
 /// @title  IConvertibleDepositFacility
 /// @notice Interface for a contract that can perform functions related to convertible deposit tokens
 interface IConvertibleDepositFacility {
@@ -12,6 +9,9 @@ interface IConvertibleDepositFacility {
     event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
     event ConvertedDeposit(address indexed user, uint256 depositAmount, uint256 convertedAmount);
     event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount);
+
+    event Activated();
+    event Deactivated();
 
     // ========== ERRORS ========== //
 
@@ -26,6 +26,8 @@ interface IConvertibleDepositFacility {
     error CDF_InvalidAmount(uint256 positionId_, uint256 amount_);
 
     error CDF_InvalidToken(uint256 positionId_, address token_);
+
+    error CDF_NotActive();
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 

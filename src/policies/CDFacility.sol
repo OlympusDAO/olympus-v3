@@ -24,7 +24,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     // Constants
 
     /// @notice The scale of the convertible deposit token
-    /// @dev    This will typically be 10 ** decimals
+    /// @dev    This will typically be 10 ** decimals, and is set by the `configureDependencies()` function
     uint256 public SCALE;
 
     // Modules
@@ -32,6 +32,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     MINTRv1 public MINTR;
     CDEPOv1 public CDEPO;
     CDPOSv1 public CDPOS;
+
+    /// @notice Whether the contract functionality has been activated
+    bool public locallyActive;
+
+    bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
+
+    bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
 
     // ========== ERRORS ========== //
 
@@ -41,7 +48,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {
-        // TODO disable until activated
+        // Disable functionality until initialized
+        locallyActive = false;
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -84,13 +92,16 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The caller does not have the ROLE_AUCTIONEER role
+    ///             - The contract is not active
     function create(
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
         uint48 expiry_,
         bool wrap_
-    ) external onlyRole("cd_auctioneer") nonReentrant returns (uint256 positionId) {
+    ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyActive returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
         CDEPO.mintFor(account_, amount_);
@@ -144,6 +155,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
+    ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - account_ is not the owner of all of the positions
     ///             - The position is not valid
@@ -156,7 +168,12 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender) {
+    )
+        external
+        view
+        onlyActive
+        returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender)
+    {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -178,6 +195,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
+    ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - The position is not valid
@@ -189,7 +207,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external nonReentrant returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
+    ) external nonReentrant onlyActive returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -254,11 +272,20 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     }
 
     /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The contract is not active
+    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
+    ///             - The caller is not the owner of all of the positions
+    ///             - The position is not valid
+    ///             - The position is not CDEPO
+    ///             - The position has not expired
+    ///             - The deposit amount is greater than the remaining deposit
+    ///             - The deposit amount is 0
     function previewReclaim(
         address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external view returns (uint256 reclaimed, address cdTokenSpender) {
+    ) external view onlyActive returns (uint256 reclaimed, address cdTokenSpender) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -276,6 +303,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
+    ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - The position is not valid
@@ -286,7 +314,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     function reclaim(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external override nonReentrant returns (uint256 reclaimed) {
+    ) external nonReentrant onlyActive returns (uint256 reclaimed) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -347,5 +375,46 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
     function convertedToken() external view returns (address) {
         return address(MINTR.ohm());
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Activate the contract functionality
+    /// @dev    This function will revert if:
+    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
+    ///
+    ///         Note that if the contract is already active, this function will do nothing.
+    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+        // If the contract is already active, do nothing
+        if (locallyActive) return;
+
+        // Set the contract to active
+        locallyActive = true;
+
+        // Emit event
+        emit Activated();
+    }
+
+    /// @notice Deactivate the contract functionality
+    /// @dev    This function will revert if:
+    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
+    ///
+    ///         Note that if the contract is already inactive, this function will do nothing.
+    function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
+        // If the contract is already inactive, do nothing
+        if (!locallyActive) return;
+
+        // Set the contract to inactive
+        locallyActive = false;
+
+        // Emit event
+        emit Deactivated();
+    }
+
+    // ========== MODIFIERS ========== //
+
+    modifier onlyActive() {
+        if (!locallyActive) revert CDF_NotActive();
+        _;
     }
 }

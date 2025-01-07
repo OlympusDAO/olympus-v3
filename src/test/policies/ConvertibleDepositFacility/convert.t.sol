@@ -10,6 +10,8 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     event ConvertedDeposit(address indexed user, uint256 depositAmount, uint256 convertedAmount);
 
+    // given the contract is inactive
+    //  [X] it reverts
     // when the length of the positionIds_ array does not match the length of the amounts_ array
     //  [X] it reverts
     // when any position is not valid
@@ -30,7 +32,15 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     // [X] it returns the total deposit amount and the converted amount
     // [X] it emits a ConvertedDeposit event
 
-    function test_arrayLengthMismatch_reverts() public {
+    function test_contractInactive_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
+
+        // Call function
+        facility.convert(new uint256[](0), new uint256[](0));
+    }
+
+    function test_arrayLengthMismatch_reverts() public givenLocallyActive {
         uint256[] memory positionIds_ = new uint256[](1);
         uint256[] memory amounts_ = new uint256[](2);
 
@@ -51,6 +61,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -90,6 +101,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 10e18)
         givenAddressHasReserveToken(recipientTwo, 5e18)
@@ -124,6 +136,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
     function test_allPositionsHaveDifferentOwner_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -154,6 +167,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
     {
@@ -195,6 +209,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -235,6 +250,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
     function test_spendingIsNotApproved_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -267,6 +283,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
     function test_convertedAmountIsZero_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -296,6 +313,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
     function test_success()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -392,6 +410,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         uint256 amountTwo_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,

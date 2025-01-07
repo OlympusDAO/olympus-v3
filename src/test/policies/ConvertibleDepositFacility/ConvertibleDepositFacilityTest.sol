@@ -13,6 +13,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract ConvertibleDepositFacilityTest is Test {
     Kernel public kernel;
@@ -31,6 +32,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public recipient = address(0x1);
     address public auctioneer = address(0x2);
     address public recipientTwo = address(0x3);
+    address public emergency = address(0x4);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -65,6 +67,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Grant roles
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
+        rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
     }
 
     // ========== MODIFIERS ========== //
@@ -108,5 +111,23 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.prank(owner_);
         convertibleDepository.approve(spender_, amount_);
         _;
+    }
+
+    modifier givenLocallyActive() {
+        vm.prank(emergency);
+        facility.activate();
+        _;
+    }
+
+    modifier givenLocallyInactive() {
+        vm.prank(emergency);
+        facility.deactivate();
+        _;
+    }
+
+    // ========== ASSERTIONS ========== //
+
+    function _expectRoleRevert(bytes32 role_) internal {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 }

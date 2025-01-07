@@ -6,6 +6,8 @@ import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleD
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
 contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
+    // given the contract is inactive
+    //  [X] it reverts
     // when the length of the positionIds_ array does not match the length of the amounts_ array
     //  [X] it reverts
     // when the account_ is not the owner of all of the positions
@@ -21,7 +23,15 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
     // [X] it returns the total amount of deposit token that would be reclaimed
     // [X] it returns the address that will spend the convertible deposit tokens
 
-    function test_arrayLengthMismatch_reverts() public {
+    function test_contractInactive_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
+
+        // Call function
+        facility.previewReclaim(recipient, new uint256[](0), new uint256[](0));
+    }
+
+    function test_arrayLengthMismatch_reverts() public givenLocallyActive {
         uint256[] memory positionIds_ = new uint256[](1);
         uint256[] memory amounts_ = new uint256[](2);
 
@@ -41,6 +51,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 10e18)
         givenAddressHasReserveToken(recipientTwo, 5e18)
@@ -77,6 +88,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     function test_allPositionsHaveDifferentOwner_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -109,6 +121,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenReserveTokenSpendingIsApproved(
             recipient,
@@ -150,6 +163,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
     {
@@ -190,6 +204,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 positionIndex_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -232,6 +247,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     function test_amountIsZero_reverts()
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -260,6 +276,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 amountThree_
     )
         public
+        givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
         givenAddressHasPosition(recipient, 3e18)
