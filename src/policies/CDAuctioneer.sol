@@ -119,9 +119,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    // TODO document approach
+    /// @dev        This function performs the following:
+    ///             - Updates the current tick based on the current state
+    ///             - Determines the amount of OHM that can be purchased for the deposit amount, and the updated tick capacity and price
+    ///             - Updates the day state, if necessary
+    ///             - Creates a convertible deposit position using the deposit amount, the average conversion price and the configured time to expiry
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not active
+    ///             - The calculated converted amount is 0
     function bid(
-        uint256 deposit
+        uint256 deposit_
     ) external override nonReentrant onlyActive returns (uint256 ohmOut, uint256 positionId) {
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
@@ -130,7 +138,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Get bid results
         uint256 currentTickCapacity;
         uint256 currentTickPrice;
-        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit, _previousTick);
+        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit_, _previousTick);
 
         // Reject if the OHM out is 0
         if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
@@ -142,7 +150,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Update state
         state.lastUpdate = uint48(block.timestamp);
-        dayState.deposits += deposit;
+        dayState.deposits += deposit_;
         dayState.convertible += ohmOut;
 
         // Update current tick
@@ -152,12 +160,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Calculate average price based on the total deposit and ohmOut
         // This is the number of deposit tokens per OHM token
         // We round up to be conservative
-        uint256 conversionPrice = deposit.mulDivUp(_ohmScale, ohmOut);
+        uint256 conversionPrice = deposit_.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
         positionId = cdFacility.create(
             msg.sender,
-            deposit,
+            deposit_,
             conversionPrice,
             uint48(block.timestamp + _timeToExpiry),
             false
@@ -167,7 +175,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @notice Internal function to preview the quantity of OHM tokens that can be purchased for a given deposit amount
-    /// @dev    The function also returns the adjusted capacity and price of the current tick
+    /// @dev    This function performs the following:
+    ///         - Cycles through ticks until the deposit is fully converted
+    ///         - If the current tick has enough capacity, it will be used
+    ///         - If the current tick does not have enough capacity, the remaining capacity will be used. The current tick will then shift to the next tick, resulting in the capacity being filled to the tick size, and the price being multiplied by the tick step.
+    ///
+    ///         Notes:
+    ///         - The function returns the updated tick capacity and price after the bid
+    ///         - If the capacity of a tick is depleted (but does not cross into the next tick), the current tick will be shifted to the next one. This ensures that `getCurrentTick()` will not return a tick that has been depleted.
     ///
     /// @param  deposit_            The amount of deposit to be bid
     /// @return currentTickCapacity The adjusted capacity of the current tick
@@ -185,6 +200,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         currentTickCapacity = tick_.capacity;
         currentTickPrice = tick_.price;
 
+        // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
             // TODO what happens if there is a remaining deposit that cannot be converted? Needs an escape hatch
             // consider returning the remaining deposit as a value
@@ -195,7 +211,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             uint256 convertibleAmount = _getConvertedDeposit(remainingDeposit, currentTickPrice);
 
             // If there is not enough capacity in the current tick, use the remaining capacity
-            if (currentTickCapacity < convertibleAmount) {
+            if (currentTickCapacity <= convertibleAmount) {
                 convertibleAmount = currentTickCapacity;
                 // Convertible = deposit * OHM scale / price, so this is the inverse
                 depositAmount = convertibleAmount.mulDiv(currentTickPrice, _ohmScale);
@@ -241,7 +257,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     function _getConvertedDeposit(
         uint256 deposit_,
         uint256 price_
-    ) internal view returns (uint256 convertibleAmount) {
+    ) internal pure returns (uint256 convertibleAmount) {
         // As price represents the number of bid tokens per OHM, we can convert the deposit to OHM by dividing by the price and adjusting for the decimal scale
         convertibleAmount = deposit_.mulDiv(_ohmScale, price_);
         return convertibleAmount;
@@ -256,7 +272,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     function _getNewTickPrice(
         uint256 currentPrice_,
         uint256 tickStep_
-    ) internal view returns (uint256 newPrice) {
+    ) internal pure returns (uint256 newPrice) {
         newPrice = currentPrice_.mulDivUp(tickStep_, ONE_HUNDRED_PERCENT);
         return newPrice;
     }
