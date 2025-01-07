@@ -211,9 +211,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
-            // TODO what happens if there is a remaining deposit that cannot be converted? Needs an escape hatch
-            // consider returning the remaining deposit as a value
-
             // TODO what if the target is reached?
 
             uint256 depositAmount = remainingDeposit;
@@ -379,7 +376,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function performs the following:
-    ///             - TODO
+    ///             - Performs validation of the inputs
+    ///             - Sets the auction parameters
+    ///             - Adjusts the current tick capacity and price, if necessary
     ///
     ///             This function reverts if:
     ///             - The caller does not have the ROLE_HEART role
@@ -397,6 +396,18 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // TODO handling remainder moving average
 
         _setAuctionParameters(target_, tickSize_, minPrice_);
+
+        // Ensure that the tick capacity is not larger than the new tick size
+        // Otherwise, excess OHM will be converted
+        if (tickSize_ < _previousTick.capacity) {
+            _previousTick.capacity = tickSize_;
+        }
+
+        // Ensure that the minimum price is enforced
+        // Otherwise, OHM will be converted at a price lower than the minimum
+        if (minPrice_ < _previousTick.price) {
+            _previousTick.price = minPrice_;
+        }
 
         return remainder;
     }

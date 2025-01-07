@@ -11,8 +11,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     //  [X] it sets the parameters
     // when the new target is 0
     //  [X] it succeeds
-    //  [X] it does not set the tick capacity
-    //  [X] it does not set the tick price
+    //  [X] it does not change the current tick capacity
+    //  [X] it does not change the current tick price
     // when the new tick size is 0
     //  [X] it reverts
     // when the new min price is 0
@@ -24,9 +24,17 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     //  [X] it does not change the current tick price
     // given the tick price has never been set
     //  [X] it sets the parameters
-    //  [X] it does not set the tick capacity
-    //  [X] it does not set the tick price
+    //  [X] it does not change the current tick capacity
+    //  [X] it does not change the current tick price
     //  [X] it emits an event
+    // when the new tick size is less than the current tick capacity
+    //  [X] the tick capacity is set to the new tick size
+    // when the new tick size is >= the current tick capacity
+    //  [X] the tick capacity is unchanged
+    // when the new min price is > than the current tick price
+    //  [X] the tick price is set to the new min price
+    // when the new min price is <= the current tick price
+    //  [X] the tick price is unchanged
 
     // TODO determine expected behaviour of remainder
 
@@ -61,8 +69,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(lastUpdate + 1);
 
         uint256 newTarget = 0;
-        uint256 newTickSize = 101;
-        uint256 newMinPrice = 102;
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 16e18;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -90,7 +98,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Call function
         vm.prank(heart);
-        auctioneer.setAuctionParameters(100, 0, 102);
+        auctioneer.setAuctionParameters(21e9, 0, 16e18);
     }
 
     function test_minPriceZero_reverts() public givenInitialized {
@@ -104,7 +112,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Call function
         vm.prank(heart);
-        auctioneer.setAuctionParameters(100, 101, 0);
+        auctioneer.setAuctionParameters(21e9, 11e9, 0);
     }
 
     function test_contractInactive()
@@ -121,9 +129,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
-        uint256 newTarget = 100;
-        uint256 newTickSize = 101;
-        uint256 newMinPrice = 102;
+        uint256 newTarget = 21e9;
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 16e18;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -150,9 +158,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
-        uint256 newTarget = 100;
-        uint256 newTickSize = 101;
-        uint256 newMinPrice = 102;
+        uint256 newTarget = 21e9;
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 16e18;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -168,5 +176,93 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Assert current tick
         // Values are unchanged
         _assertPreviousTick(lastCapacity, lastPrice);
+    }
+
+    function test_newTickSizeLessThanCurrentTickCapacity(
+        uint256 newTickSize_
+    ) public givenInitialized {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        uint256 newTickSize = bound(newTickSize_, 1, TICK_SIZE);
+
+        // Call function
+        vm.prank(heart);
+        auctioneer.setAuctionParameters(TARGET, newTickSize, MIN_PRICE);
+
+        // Assert state
+        _assertAuctionParameters(TARGET, newTickSize, MIN_PRICE, lastUpdate);
+
+        // Assert current tick
+        // Tick capacity has been adjusted to the new tick size
+        _assertPreviousTick(newTickSize, MIN_PRICE);
+    }
+
+    function test_newTickSizeGreaterThanCurrentTickCapacity(
+        uint256 newTickSize_
+    ) public givenInitialized {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        uint256 newTickSize = bound(newTickSize_, TICK_SIZE, 2 * TICK_SIZE);
+
+        // Call function
+        vm.prank(heart);
+        auctioneer.setAuctionParameters(TARGET, newTickSize, MIN_PRICE);
+
+        // Assert state
+        _assertAuctionParameters(TARGET, newTickSize, MIN_PRICE, lastUpdate);
+
+        // Assert current tick
+        // Tick capacity has been unchanged
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE);
+    }
+
+    function test_newMinPriceGreaterThanCurrentTickPrice(
+        uint256 newMinPrice_
+    ) public givenInitialized {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        uint256 newMinPrice = bound(newMinPrice_, MIN_PRICE + 1, 2 * MIN_PRICE);
+
+        // Call function
+        vm.prank(heart);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
+
+        // Assert state
+        _assertAuctionParameters(TARGET, TICK_SIZE, newMinPrice, lastUpdate);
+
+        // Assert current tick
+        // Tick price has been set to the new min price
+        _assertPreviousTick(TICK_SIZE, newMinPrice);
+    }
+
+    function test_newMinPriceLessThanCurrentTickPrice(
+        uint256 newMinPrice_
+    ) public givenInitialized {
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        uint256 newMinPrice = bound(newMinPrice_, 1, MIN_PRICE);
+
+        // Call function
+        vm.prank(heart);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
+
+        // Assert state
+        _assertAuctionParameters(TARGET, TICK_SIZE, newMinPrice, lastUpdate);
+
+        // Assert current tick
+        // Tick price has been unchanged
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE);
     }
 }
