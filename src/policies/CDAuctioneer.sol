@@ -405,7 +405,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Ensure that the minimum price is enforced
         // Otherwise, OHM will be converted at a price lower than the minimum
-        if (minPrice_ < _previousTick.price) {
+        if (minPrice_ > _previousTick.price) {
             _previousTick.price = minPrice_;
         }
 

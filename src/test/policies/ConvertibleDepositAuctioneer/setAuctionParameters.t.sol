@@ -51,12 +51,16 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     }
 
     function test_contractNotInitialized() public {
+        uint256 newTarget = 21e9;
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 14e18;
+
         // Call function
         vm.prank(heart);
-        auctioneer.setAuctionParameters(100, 101, 102);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(100, 101, 102, 0);
+        _assertAuctionParameters(newTarget, newTickSize, newMinPrice, 0);
     }
 
     function test_targetZero() public givenInitialized {
@@ -70,7 +74,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         uint256 newTarget = 0;
         uint256 newTickSize = 11e9;
-        uint256 newMinPrice = 16e18;
+        uint256 newMinPrice = 14e18;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -131,7 +135,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         uint256 newTarget = 21e9;
         uint256 newTickSize = 11e9;
-        uint256 newMinPrice = 16e18;
+        uint256 newMinPrice = 14e18;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -160,7 +164,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         uint256 newTarget = 21e9;
         uint256 newTickSize = 11e9;
-        uint256 newMinPrice = 16e18;
+        uint256 newMinPrice = 14e18;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
