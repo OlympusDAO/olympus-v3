@@ -137,7 +137,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
-        convertedTokenOut = (amount_ * SCALE) / position.conversionPrice; // TODO check SCALE, rounding
+        convertedTokenOut = (amount_ * SCALE) / position.conversionPrice;
 
         return convertedTokenOut;
     }

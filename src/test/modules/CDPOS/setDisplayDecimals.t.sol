@@ -7,8 +7,8 @@ import {Module} from "src/Kernel.sol";
 
 contract SetDisplayDecimalsCDPOSTest is CDPOSTest {
     // when the caller is not a permissioned address
-    //  [ ] it reverts
-    // [ ] it sets the display decimals
+    //  [X] it reverts
+    // [X] it sets the display decimals
 
     function test_notPermissioned_reverts() public {
         // Expect revert
