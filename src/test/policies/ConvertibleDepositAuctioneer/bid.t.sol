@@ -84,8 +84,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it updates the day's converted balance
     //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is less than the remaining tick capacity
-    //  when the calculated deposit amount is 0
-    //   [ ] it completes bidding and leaves a remainder of the bid token
+    //  when the calculated converted amount is 0
+    //   [X] it reverts
     //  when the convertible amount of OHM will exceed the day target
     //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
     //  [X] it returns the amount of OHM that can be converted
@@ -115,6 +115,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] the tick price is unchanged
     //   [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is greater than the remaining tick capacity
+    //  when the remaining deposit results in a converted amount of 0
+    //   [X] it returns the amount of the reserve token that can be converted
     //  when the convertible amount of OHM will exceed the day target
     //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
     //  when the tick step is > 100e2
@@ -463,6 +465,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // We expect the range of bid amounts when converted to round down to 10e9
         uint256 bidAmount = bound(bidAmount_, 150e18, 150e18 + 15e9 - 1);
+        uint256 expectedDepositIn = 150e18;
         uint256 expectedConvertedAmount = 10e9;
 
         // Check preview
@@ -477,9 +480,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert returned values
         _assertConvertibleDepositPosition(
-            bidAmount,
+            expectedDepositIn,
             expectedConvertedAmount,
-            151e18 - bidAmount,
+            151e18 - expectedDepositIn,
             0,
             0,
             ohmOut,
@@ -487,7 +490,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -515,6 +518,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // We expect the range of bid amounts when converted to round down to 10e9
         uint256 bidAmount = bound(bidAmount_, 150e18, 150e18 + 15e9 - 1);
+        uint256 expectedDepositIn = 150e18;
         uint256 expectedConvertedAmount = 10e9;
 
         // Check preview
@@ -529,9 +533,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert returned values
         _assertConvertibleDepositPosition(
-            bidAmount,
+            expectedDepositIn,
             expectedConvertedAmount,
-            151e18 - bidAmount,
+            151e18 - expectedDepositIn,
             0,
             0,
             ohmOut,
@@ -539,7 +543,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -652,5 +656,56 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert the tick
         _assertPreviousTick(TICK_SIZE * 2 - expectedConvertedAmount, MIN_PRICE);
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity_convertedAmountIsZero(
+        uint256 bidAmount_
+    )
+        public
+        givenInitialized
+        givenAddressHasReserveToken(recipient, 300e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 300e18)
+    {
+        // We want the converted amount to be greater than the tick capacity (10e9)
+        // But also for the remaining deposit to result in a converted amount of 0
+        // Bid amount > 150e18
+        // Bid amount < 150e18 + 165e8
+        uint256 bidAmount = bound(bidAmount_, 150e18 + 1, 150e18 + 165e8 - 1);
+        uint256 expectedDepositIn = 150e18;
+
+        // Only uses the first tick
+        uint256 expectedConvertedAmount = (150e18 * 1e9) / 15e18;
+        uint256 tickTwoPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            expectedDepositIn,
+            expectedConvertedAmount,
+            300e18 - expectedDepositIn, // Does not transfer excess deposit
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertState(TARGET, TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+
+        // Assert the tick
+        _assertPreviousTick(TICK_SIZE, tickTwoPrice);
     }
 }

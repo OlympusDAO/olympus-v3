@@ -138,7 +138,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Get bid results
         uint256 currentTickCapacity;
         uint256 currentTickPrice;
-        (currentTickCapacity, currentTickPrice, ohmOut) = _previewBid(deposit_, _previousTick);
+        uint256 depositIn;
+        (currentTickCapacity, currentTickPrice, depositIn, ohmOut) = _previewBid(
+            deposit_,
+            _previousTick
+        );
 
         // Reject if the OHM out is 0
         if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
@@ -150,7 +154,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Update state
         state.lastUpdate = uint48(block.timestamp);
-        dayState.deposits += deposit_;
+        dayState.deposits += depositIn;
         dayState.convertible += ohmOut;
 
         // Update current tick
@@ -160,12 +164,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Calculate average price based on the total deposit and ohmOut
         // This is the number of deposit tokens per OHM token
         // We round up to be conservative
-        uint256 conversionPrice = deposit_.mulDivUp(_ohmScale, ohmOut);
+        uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
         positionId = cdFacility.create(
             msg.sender,
-            deposit_,
+            depositIn,
             conversionPrice,
             uint48(block.timestamp + _timeToExpiry),
             false
@@ -185,8 +189,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///         - If the capacity of a tick is depleted (but does not cross into the next tick), the current tick will be shifted to the next one. This ensures that `getCurrentTick()` will not return a tick that has been depleted.
     ///
     /// @param  deposit_            The amount of deposit to be bid
-    /// @return currentTickCapacity The adjusted capacity of the current tick
-    /// @return currentTickPrice    The adjusted price of the current tick
+    /// @return updatedTickCapacity The adjusted capacity of the current tick
+    /// @return updatedTickPrice    The adjusted price of the current tick
+    /// @return depositIn           The amount of deposit that was converted
     /// @return ohmOut              The quantity of OHM tokens that can be purchased
     function _previewBid(
         uint256 deposit_,
@@ -194,11 +199,16 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     )
         internal
         view
-        returns (uint256 currentTickCapacity, uint256 currentTickPrice, uint256 ohmOut)
+        returns (
+            uint256 updatedTickCapacity,
+            uint256 updatedTickPrice,
+            uint256 depositIn,
+            uint256 ohmOut
+        )
     {
         uint256 remainingDeposit = deposit_;
-        currentTickCapacity = tick_.capacity;
-        currentTickPrice = tick_.price;
+        updatedTickCapacity = tick_.capacity;
+        updatedTickPrice = tick_.price;
 
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
@@ -208,21 +218,24 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             // TODO what if the target is reached?
 
             uint256 depositAmount = remainingDeposit;
-            uint256 convertibleAmount = _getConvertedDeposit(remainingDeposit, currentTickPrice);
+            uint256 convertibleAmount = _getConvertedDeposit(remainingDeposit, updatedTickPrice);
+
+            // No point in continuing if the converted amount is 0
+            if (convertibleAmount == 0) break;
 
             // If there is not enough capacity in the current tick, use the remaining capacity
-            if (currentTickCapacity <= convertibleAmount) {
-                convertibleAmount = currentTickCapacity;
+            if (updatedTickCapacity <= convertibleAmount) {
+                convertibleAmount = updatedTickCapacity;
                 // Convertible = deposit * OHM scale / price, so this is the inverse
-                depositAmount = convertibleAmount.mulDiv(currentTickPrice, _ohmScale);
+                depositAmount = convertibleAmount.mulDiv(updatedTickPrice, _ohmScale);
 
                 // The tick has also been depleted, so update the price
-                currentTickPrice = _getNewTickPrice(currentTickPrice, _tickStep);
-                currentTickCapacity = state.tickSize;
+                updatedTickPrice = _getNewTickPrice(updatedTickPrice, _tickStep);
+                updatedTickCapacity = state.tickSize;
             }
             // Otherwise, the tick has enough capacity and needs to be updated
             else {
-                currentTickCapacity -= convertibleAmount;
+                updatedTickCapacity -= convertibleAmount;
             }
 
             // Record updates to the deposit and OHM
@@ -230,7 +243,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             ohmOut += convertibleAmount;
         }
 
-        return (currentTickCapacity, currentTickPrice, ohmOut);
+        return (updatedTickCapacity, updatedTickPrice, deposit_ - remainingDeposit, ohmOut);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -241,7 +254,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         Tick memory currentTick = getCurrentTick();
 
         // Preview the bid results
-        (, , ohmOut) = _previewBid(bidAmount_, currentTick);
+        (, , , ohmOut) = _previewBid(bidAmount_, currentTick);
 
         return (ohmOut, address(CDEPO));
     }
