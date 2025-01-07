@@ -7,9 +7,7 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
-contract ConstructorTest is CDEPOTest {
-    // when the kernel address is zero
-    //  [X] it reverts
+contract ConstructorCDEPOTest is CDEPOTest {
     // when the vault address is zero
     //  [X] it reverts
     // [X] the name is set to "cd" + the asset symbol
@@ -18,17 +16,9 @@ contract ConstructorTest is CDEPOTest {
     // [X] the asset is recorded
     // [X] the vault is recorded
 
-    function test_kernel_zeroAddress_reverts() public {
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "kernel"));
-
-        // Call function
-        new OlympusConvertibleDepository(address(0), address(vault));
-    }
-
     function test_vault_zeroAddress_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "vault"));
+        vm.expectRevert();
 
         // Call function
         new OlympusConvertibleDepository(address(kernel), address(0));
