@@ -5,6 +5,38 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
+    function _assertConvertibleDepositPosition(
+        uint256 bidAmount_,
+        uint256 expectedConvertedAmount_,
+        uint256 expectedReserveTokenBalance_,
+        uint256 previousConvertibleDepositBalance_,
+        uint256 previousPositionCount_,
+        uint256 returnedOhmOut_,
+        uint256 returnedPositionId_
+    ) internal {
+        // Assert that the converted amount is as expected
+        assertEq(returnedOhmOut_, expectedConvertedAmount_, "converted amount");
+
+        // Assert that the CD tokens were transferred to the recipient
+        assertEq(
+            convertibleDepository.balanceOf(recipient),
+            previousConvertibleDepositBalance_ + bidAmount_,
+            "CD token balance"
+        );
+
+        // Assert that the reserve tokens were transferred from the recipient
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            expectedReserveTokenBalance_,
+            "reserve token balance"
+        );
+
+        // Assert that the CD position terms were created
+        uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
+        assertEq(positionIds.length, previousPositionCount_ + 1, "position count");
+        assertEq(positionIds[positionIds.length - 1], returnedPositionId_, "position id");
+    }
+
     // when the contract is deactivated
     //  [X] it reverts
     // when the contract has not been initialized
@@ -202,10 +234,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        uint256 ohmOut = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
 
-        // Assert that the converted amount is as expected
-        assertEq(ohmOut, expectedConvertedAmount, "converted amount");
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            1e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
     }
 
     function test_givenFirstBid()
@@ -227,10 +267,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        uint256 ohmOut = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
 
-        // Assert that the converted amount is as expected
-        assertEq(ohmOut, expectedConvertedAmount, "converted amount");
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            0,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
 
         // Assert the day state
         assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
@@ -270,10 +318,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        uint256 ohmOut = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
 
-        // Assert that the converted amount is as expected
-        assertEq(ohmOut, expectedConvertedAmount, "converted amount");
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            0,
+            120e18,
+            1,
+            ohmOut,
+            positionId
+        );
 
         // Assert the day state
         // Not affected by the previous day's bid
@@ -312,10 +368,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        uint256 ohmOut = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
 
-        // Assert that the converted amount is as expected
-        assertEq(ohmOut, expectedConvertedAmount, "converted amount");
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            0,
+            3e18,
+            1,
+            ohmOut,
+            positionId
+        );
 
         // Assert the day state
         // Not affected by the previous day's bid

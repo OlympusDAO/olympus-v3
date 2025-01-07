@@ -34,8 +34,10 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         returns (Permissions[] memory permissions)
     {}
 
-    function bid(uint256 deposit) external override returns (uint256 convertable) {
-        return deposit;
+    function bid(
+        uint256 deposit
+    ) external override returns (uint256 convertable, uint256 positionId) {
+        return (deposit, 0);
     }
 
     function getPreviousTick() external view override returns (Tick memory tick) {}

@@ -122,7 +122,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // TODO document approach
     function bid(
         uint256 deposit
-    ) external override nonReentrant onlyActive returns (uint256 ohmOut) {
+    ) external override nonReentrant onlyActive returns (uint256 ohmOut, uint256 positionId) {
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
         _previousTick = getCurrentTick();
@@ -155,8 +155,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 conversionPrice = deposit.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
-        // The position ID is emitted as an event, so doesn't need to be returned
-        cdFacility.create(
+        positionId = cdFacility.create(
             msg.sender,
             deposit,
             conversionPrice,
@@ -164,7 +163,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             false
         );
 
-        return ohmOut;
+        return (ohmOut, positionId);
     }
 
     /// @notice Internal function to preview the quantity of OHM tokens that can be purchased for a given deposit amount
