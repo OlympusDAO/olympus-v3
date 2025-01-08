@@ -241,7 +241,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
                 // The tick has also been depleted, so update the price
                 updatedTickPrice = _getNewTickPrice(updatedTickPrice, _tickStep);
-                updatedTickCapacity = _auctionParameters.tickSize;
+                updatedTickSize = _getNewTickSize(
+                    dayState.convertible + convertibleAmount + ohmOut
+                );
+                updatedTickCapacity = updatedTickSize;
             }
             // Otherwise, the tick has enough capacity and needs to be updated
             else {
@@ -304,6 +307,25 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ) internal pure returns (uint256 newPrice) {
         newPrice = currentPrice_.mulDivUp(tickStep_, ONE_HUNDRED_PERCENT);
         return newPrice;
+    }
+
+    /// @notice Internal function to calculate the new tick size based on the amount of OHM that has been converted in the current day
+    ///
+    /// @param  ohmOut_     The amount of OHM that has been converted in the current day
+    /// @return newTickSize The new tick size
+    function _getNewTickSize(uint256 ohmOut_) internal view returns (uint256 newTickSize) {
+        // Calculate the multiplier
+        uint256 multiplier = ohmOut_ / _auctionParameters.target;
+
+        // If the day target has not been met, the tick size remains the standard
+        if (multiplier == 0) {
+            newTickSize = _auctionParameters.tickSize;
+            return newTickSize;
+        }
+
+        // Otherwise the tick size is halved as many times as the multiplier
+        newTickSize = _auctionParameters.tickSize / (multiplier * 2);
+        return newTickSize;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer

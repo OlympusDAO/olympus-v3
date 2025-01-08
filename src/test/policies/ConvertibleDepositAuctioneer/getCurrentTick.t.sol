@@ -41,6 +41,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     //   [X] it reduces the price by the tick step until the total capacity is less than the standard tick size
     //   [X] the tick capacity is set to the remainder
 
+    // TODO test that the tick size is reset to the standard tick size at the next day
+
     function test_contractNotInitialized_reverts() public {
         // Expect revert
         vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
