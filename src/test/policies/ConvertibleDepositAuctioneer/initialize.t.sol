@@ -111,9 +111,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
     function test_contractInitialized_reverts() public givenInitialized {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector
-            )
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
         );
 
         // Call function
@@ -121,12 +119,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
     }
 
-    function test_contractInitialized_disabled_reverts() public givenInitialized givenContractInactive {
+    function test_contractInitialized_disabled_reverts()
+        public
+        givenInitialized
+        givenContractInactive
+    {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector
-            )
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
         );
 
         // Call function
