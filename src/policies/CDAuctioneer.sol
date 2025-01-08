@@ -144,10 +144,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         _previousTick = getCurrentTick();
 
         // Get bid results
-        uint256 currentTickCapacity;
         uint256 currentTickPrice;
+        uint256 currentTickCapacity;
+        uint256 currentTickSize;
         uint256 depositIn;
-        (currentTickCapacity, currentTickPrice, depositIn, ohmOut) = _previewBid(
+        (currentTickCapacity, currentTickPrice, currentTickSize, depositIn, ohmOut) = _previewBid(
             deposit_,
             _previousTick
         );
@@ -165,9 +166,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         dayState.convertible += ohmOut;
 
         // Update current tick
-        _previousTick.lastUpdate = uint48(block.timestamp);
-        _previousTick.capacity = currentTickCapacity;
         _previousTick.price = currentTickPrice;
+        _previousTick.capacity = currentTickCapacity;
+        _previousTick.tickSize = currentTickSize;
+        _previousTick.lastUpdate = uint48(block.timestamp);
 
         // Calculate average price based on the total deposit and ohmOut
         // This is the number of deposit tokens per OHM token
@@ -199,6 +201,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @param  deposit_            The amount of deposit to be bid
     /// @return updatedTickCapacity The adjusted capacity of the current tick
     /// @return updatedTickPrice    The adjusted price of the current tick
+    /// @return updatedTickSize     The adjusted size of the current tick
     /// @return depositIn           The amount of deposit that was converted
     /// @return ohmOut              The quantity of OHM tokens that can be purchased
     function _previewBid(
@@ -210,6 +213,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         returns (
             uint256 updatedTickCapacity,
             uint256 updatedTickPrice,
+            uint256 updatedTickSize,
             uint256 depositIn,
             uint256 ohmOut
         )
@@ -217,6 +221,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 remainingDeposit = deposit_;
         updatedTickCapacity = tick_.capacity;
         updatedTickPrice = tick_.price;
+        updatedTickSize = tick_.tickSize;
 
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
@@ -248,7 +253,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             ohmOut += convertibleAmount;
         }
 
-        return (updatedTickCapacity, updatedTickPrice, deposit_ - remainingDeposit, ohmOut);
+        return (
+            updatedTickCapacity,
+            updatedTickPrice,
+            updatedTickSize,
+            deposit_ - remainingDeposit,
+            ohmOut
+        );
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -259,7 +270,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         Tick memory currentTick = getCurrentTick();
 
         // Preview the bid results
-        (, , , ohmOut) = _previewBid(bidAmount_, currentTick);
+        (, , , , ohmOut) = _previewBid(bidAmount_, currentTick);
 
         return (ohmOut, address(CDEPO));
     }
@@ -402,6 +413,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         _setAuctionParameters(target_, tickSize_, minPrice_);
 
         // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price
+
+        // Set the tick size
+        _previousTick.tickSize = tickSize_;
+
         // Ensure that the tick capacity is not larger than the new tick size
         // Otherwise, excess OHM will be converted
         if (tickSize_ < _previousTick.capacity) {
@@ -480,6 +495,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Initialize the current tick
         _previousTick.capacity = tickSize_;
         _previousTick.price = minPrice_;
+        _previousTick.tickSize = tickSize_;
 
         // Set the initialized flag
         initialized = true;

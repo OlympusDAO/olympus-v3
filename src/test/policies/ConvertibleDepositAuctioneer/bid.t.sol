@@ -66,7 +66,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     // when the bid is the first bid
     //  [X] it sets the day's deposit balance
     //  [X] it sets the day's converted balance
-    //  [ ] it sets the current tick size to the standard tick size
+    //  [X] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
     //  [X] it deducts the converted amount from the tick capacity
     //  [X] it does not update the tick price
@@ -78,7 +78,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it resets the day's deposit and converted balances
     //  [X] it updates the day's deposit balance
     //  [X] it updates the day's converted balance
-    //  [ ] it sets the current tick size to the standard tick size
+    //  [X] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid is not the first bid of the day
     //  when the convertible amount of OHM will exceed the day target
@@ -88,6 +88,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it does not reset the day's deposit and converted balances
     //  [X] it updates the day's deposit balance
     //  [X] it updates the day's converted balance
+    //  [X] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is less than the remaining tick capacity
     //  when the calculated converted amount is 0
@@ -102,6 +103,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it updates the day's converted balance
     //  [X] it deducts the converted amount from the tick capacity
     //  [X] it does not update the tick price
+    //  [X] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is equal to the remaining tick capacity
     //  when the convertible amount of OHM will exceed the day target
@@ -115,6 +117,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] it updates the day's converted balance
     //   [X] it updates the tick capacity to the tick size
     //   [X] it updates the tick price to be higher than the current tick price
+    //   [X] it sets the current tick size to the standard tick size
     //   [X] it sets the lastUpdate to the current block timestamp
     //  when the tick step is = 100e2
     //   [X] it returns the amount of OHM that can be converted using the current tick price
@@ -123,6 +126,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] it updates the day's converted balance
     //   [X] it updates the tick capacity to the tick size
     //   [X] the tick price is unchanged
+    //   [X] it sets the current tick size to the standard tick size
     //   [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is greater than the remaining tick capacity
     //  when the remaining deposit results in a converted amount of 0
@@ -138,6 +142,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] it updates the day's converted balance
     //   [X] it updates the tick capacity to the tick size minus the converted amount at the new tick price
     //   [X] it updates the new tick price to be higher than the current tick price
+    //   [X] it sets the current tick size to the standard tick size
     //   [X] it sets the lastUpdate to the current block timestamp
     //  when the tick step is = 100e2
     //   [X] it returns the amount of OHM that can be converted at multiple prices
@@ -146,6 +151,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] it updates the day's converted balance
     //   [X] it updates the tick capacity to the tick size minus the converted amount at the new tick price
     //   [X] the tick price is unchanged
+    //   [X] it sets the current tick size to the standard tick size
     //   [X] it sets the lastUpdate to the current block timestamp
 
     function test_givenContractNotInitialized_reverts() public {
@@ -305,6 +311,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             TICK_SIZE - expectedConvertedAmount,
             MIN_PRICE,
+            TICK_SIZE,
             uint48(block.timestamp)
         );
     }
@@ -361,6 +368,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             beforeTick.capacity - expectedConvertedAmount,
             beforeTick.price,
+            TICK_SIZE,
             uint48(nextDay)
         );
     }
@@ -419,6 +427,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             TICK_SIZE - previousConvertedAmount - expectedConvertedAmount,
             MIN_PRICE,
+            TICK_SIZE,
             uint48(block.timestamp)
         );
     }
@@ -471,6 +480,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             TICK_SIZE - expectedConvertedAmount,
             MIN_PRICE,
+            TICK_SIZE,
             uint48(block.timestamp)
         );
     }
@@ -524,7 +534,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert the tick
         // As the capacity was depleted exactly, it shifts to the next tick
         uint256 nextTickPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
-        _assertPreviousTick(TICK_SIZE, nextTickPrice, uint48(block.timestamp));
+        _assertPreviousTick(TICK_SIZE, nextTickPrice, TICK_SIZE, uint48(block.timestamp));
     }
 
     function test_convertedAmountEqualToTickCapacity_givenTickStepIsEqual(
@@ -577,7 +587,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert the tick
         // As the capacity was depleted exactly, it shifts to the next tick
         // As the tick step is 100e2, the price is unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, uint48(block.timestamp));
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
     }
 
     function test_convertedAmountGreaterThanTickCapacity(
@@ -633,6 +643,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             TICK_SIZE * 2 - expectedConvertedAmount,
             tickTwoPrice,
+            TICK_SIZE,
             uint48(block.timestamp)
         );
     }
@@ -687,6 +698,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             TICK_SIZE * 2 - expectedConvertedAmount,
             MIN_PRICE,
+            TICK_SIZE,
             uint48(block.timestamp)
         );
     }
@@ -739,6 +751,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Assert the tick
-        _assertPreviousTick(TICK_SIZE, tickTwoPrice, uint48(block.timestamp));
+        _assertPreviousTick(TICK_SIZE, tickTwoPrice, TICK_SIZE, uint48(block.timestamp));
     }
 }

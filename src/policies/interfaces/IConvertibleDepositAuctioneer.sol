@@ -72,10 +72,12 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  price           Price of the tick, in terms of the bid token
     /// @param  capacity        Capacity of the tick, in terms of OHM
+    /// @param  tickSize        Size of the tick, in terms of OHM
     /// @param  lastUpdate      Timestamp of last update to the tick
     struct Tick {
         uint256 price;
         uint256 capacity;
+        uint256 tickSize;
         uint48 lastUpdate;
     }
 

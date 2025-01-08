@@ -113,11 +113,17 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(auctionParameters.minPrice, minPrice_, "minPrice");
     }
 
-    function _assertPreviousTick(uint256 capacity_, uint256 price_, uint48 lastUpdate_) internal {
+    function _assertPreviousTick(
+        uint256 capacity_,
+        uint256 price_,
+        uint256 tickSize_,
+        uint48 lastUpdate_
+    ) internal {
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick();
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
         assertEq(tick.price, price_, "previous tick price");
+        assertEq(tick.tickSize, tickSize_, "previous tick size");
         assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
     }
 

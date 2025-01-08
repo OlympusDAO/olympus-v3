@@ -64,6 +64,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertPreviousTick(
             0,
             newMinPrice, // Set to new min price. Will be overriden when initialized.
+            newTickSize,
             0
         );
     }
@@ -71,7 +72,6 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_targetZero() public givenInitialized {
         uint256 lastCapacity = auctioneer.getPreviousTick().capacity;
         uint256 lastPrice = auctioneer.getPreviousTick().price;
-
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -93,7 +93,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert current tick
-        _assertPreviousTick(lastCapacity, lastPrice, lastUpdate);
+        _assertPreviousTick(lastCapacity, lastPrice, newTickSize, lastUpdate);
     }
 
     function test_tickSizeZero_reverts() public givenInitialized {
@@ -132,7 +132,6 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     {
         uint256 lastCapacity = auctioneer.getPreviousTick().capacity;
         uint256 lastPrice = auctioneer.getPreviousTick().price;
-
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -155,13 +154,12 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Values are unchanged
-        _assertPreviousTick(lastCapacity, lastPrice, lastUpdate);
+        _assertPreviousTick(lastCapacity, lastPrice, newTickSize, lastUpdate);
     }
 
     function test_contractActive() public givenInitialized givenRecipientHasBid(1e18) {
         uint256 lastCapacity = auctioneer.getPreviousTick().capacity;
         uint256 lastPrice = auctioneer.getPreviousTick().price;
-
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -184,7 +182,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Values are unchanged
-        _assertPreviousTick(lastCapacity, lastPrice, lastUpdate);
+        _assertPreviousTick(lastCapacity, lastPrice, newTickSize, lastUpdate);
     }
 
     function test_newTickSizeLessThanCurrentTickCapacity(
@@ -206,7 +204,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been adjusted to the new tick size
-        _assertPreviousTick(newTickSize, MIN_PRICE, lastUpdate);
+        _assertPreviousTick(newTickSize, MIN_PRICE, newTickSize, lastUpdate);
     }
 
     function test_newTickSizeGreaterThanCurrentTickCapacity(
@@ -228,7 +226,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, lastUpdate);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, lastUpdate);
     }
 
     function test_newMinPriceGreaterThanCurrentTickPrice(
@@ -250,7 +248,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been set to the new min price
-        _assertPreviousTick(TICK_SIZE, newMinPrice, lastUpdate);
+        _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, lastUpdate);
     }
 
     function test_newMinPriceLessThanCurrentTickPrice(
@@ -272,6 +270,6 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, lastUpdate);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, lastUpdate);
     }
 }
