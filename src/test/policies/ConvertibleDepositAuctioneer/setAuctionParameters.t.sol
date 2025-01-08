@@ -61,7 +61,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert state
         _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
-        _assertPreviousTick(0, 0, 0);
+        _assertPreviousTick(
+            0,
+            newMinPrice, // Set to new min price. Will be overriden when initialized.
+            0
+        );
     }
 
     function test_targetZero() public givenInitialized {
