@@ -66,19 +66,25 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     // when the bid is the first bid
     //  [X] it sets the day's deposit balance
     //  [X] it sets the day's converted balance
+    //  [ ] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
     //  [X] it deducts the converted amount from the tick capacity
     //  [X] it does not update the tick price
     // when the bid is the first bid of the day
     //  when the convertible amount of OHM will exceed the day target
-    //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
+    //   [ ] the next tick size is set to half of the standard tick size
+    //  when the convertible amount of OHM will exceed multiples of the day target
+    //   [ ] the next tick size is set to half of the previous tick size
     //  [X] it resets the day's deposit and converted balances
     //  [X] it updates the day's deposit balance
     //  [X] it updates the day's converted balance
+    //  [ ] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid is not the first bid of the day
     //  when the convertible amount of OHM will exceed the day target
-    //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
+    //   [ ] the next tick size is set to half of the standard tick size
+    //  when the convertible amount of OHM will exceed multiples of the day target
+    //   [ ] the next tick size is set to half of the previous tick size
     //  [X] it does not reset the day's deposit and converted balances
     //  [X] it updates the day's deposit balance
     //  [X] it updates the day's converted balance
@@ -87,7 +93,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  when the calculated converted amount is 0
     //   [X] it reverts
     //  when the convertible amount of OHM will exceed the day target
-    //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
+    //   [ ] the next tick size is set to half of the standard tick size
+    //  when the convertible amount of OHM will exceed multiples of the day target
+    //   [ ] the next tick size is set to half of the previous tick size
     //  [X] it returns the amount of OHM that can be converted
     //  [X] it issues CD terms with the current tick price and time to expiry
     //  [X] it updates the day's deposit balance
@@ -97,7 +105,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it sets the lastUpdate to the current block timestamp
     // when the bid amount converted is equal to the remaining tick capacity
     //  when the convertible amount of OHM will exceed the day target
-    //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
+    //   [ ] the next tick size is set to half of the standard tick size
+    //  when the convertible amount of OHM will exceed multiples of the day target
+    //   [ ] the next tick size is set to half of the previous tick size
     //  when the tick step is > 100e2
     //   [X] it returns the amount of OHM that can be converted using the current tick price
     //   [X] it issues CD terms with the current tick price and time to expiry
@@ -118,7 +128,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  when the remaining deposit results in a converted amount of 0
     //   [X] it returns the amount of the reserve token that can be converted
     //  when the convertible amount of OHM will exceed the day target
-    //   [ ] it returns the amount of OHM that can be converted at the current tick price to fill but not exceed the target
+    //   [ ] the next tick size is set to half of the standard tick size
+    //  when the convertible amount of OHM will exceed multiples of the day target
+    //   [ ] the next tick size is set to half of the previous tick size
     //  when the tick step is > 100e2
     //   [X] it returns the amount of OHM that can be converted at multiple prices
     //   [X] it issues CD terms with the average price and time to expiry

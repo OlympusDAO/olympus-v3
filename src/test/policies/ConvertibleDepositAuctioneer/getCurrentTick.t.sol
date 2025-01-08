@@ -11,25 +11,34 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     //  [X] it reverts
     // given a bid has never been received and the tick price is at the minimum price
     //  given no time has passed
-    //   [X] the tick capacity remains at the tick size
     //   [X] the tick price remains at the min price
-    //  [X] the tick capacity remains at the tick size
+    //   [X] the tick capacity remains at the standard tick size
     //  [X] the tick price remains at the min price
-    // when the new capacity (current tick capacity + added capacity) is equal to the tick size
+    //  [X] the tick capacity remains at the standard tick size
+    // when the new capacity (current tick capacity + added capacity) is equal to the current tick size
+    //  given the current tick size is less than the standard tick size
+    //   [ ] the tick price is unchanged
+    //   [ ] the tick capacity is set to the current tick size
     //  [X] the tick price is unchanged
-    //  [X] the tick capacity is the tick size
-    // when the new capacity is less than the tick size
+    //  [X] the tick capacity is set to the standard tick size
+    // when the new capacity is less than the current tick size
     //  [X] the tick price is unchanged
-    //  [X] the tick capacity is the new capacity
-    // when the new capacity is greater than the tick size
+    //  [X] the tick capacity is set to the new capacity
+    // when the new capacity is greater than the current tick size
     //  given the tick step is = 100e2
     //   [X] the tick price is unchanged
-    //   [X] the tick capacity is the new capacity
+    //   [X] the tick capacity is set to the new capacity
     //  given the tick step is > 100e2
     //   when the new price is lower than the minimum price
+    //    given the current tick size is less than the standard tick size
+    //     [ ] the tick price is set to the minimum price
+    //     [ ] the tick capacity is set to the current tick size
     //    [X] the tick price is set to the minimum price
-    //    [X] the capacity is set to the tick size
-    //   [X] it reduces the price by the tick step until the total capacity is less than the tick size
+    //    [X] the capacity is set to the standard tick size
+    //   given the current tick size is less than the standard tick size
+    //    [ ] it reduces the price by the tick step until the total capacity is less than the current tick size
+    //    [ ] the tick capacity is set to the remainder
+    //   [X] it reduces the price by the tick step until the total capacity is less than the standard tick size
     //   [X] the tick capacity is set to the remainder
 
     function test_contractNotInitialized_reverts() public {
