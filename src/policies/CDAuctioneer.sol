@@ -72,6 +72,15 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Whether the contract functionality has been activated
     bool public locallyActive;
 
+    /// @notice Whether the contract has been initialized
+    /// @dev    When the contract has been initialized, the following can be assumed:
+    ///         - The auction parameters have been set
+    ///         - The tick step has been set
+    ///         - The time to expiry has been set
+    ///         - The tick capacity and price have been set to the standard tick size and minimum price
+    ///         - The last update has been set to the current block timestamp
+    bool public initialized;
+
     /// @notice The tick step
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
@@ -392,6 +401,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         _setAuctionParameters(target_, tickSize_, minPrice_);
 
+        // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price
         // Ensure that the tick capacity is not larger than the new tick size
         // Otherwise, excess OHM will be converted
         if (tickSize_ < _previousTick.capacity) {
@@ -453,8 +463,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint24 tickStep_,
         uint48 timeToExpiry_
     ) external onlyRole(ROLE_ADMIN) {
-        // If active, revert
-        if (locallyActive) revert CDAuctioneer_InvalidState();
+        // If initialized, revert
+        if (initialized) revert CDAuctioneer_InvalidState();
 
         // Set the auction parameters
         _setAuctionParameters(target_, tickSize_, minPrice_);
@@ -471,19 +481,17 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         _previousTick.capacity = tickSize_;
         _previousTick.price = minPrice_;
 
+        // Set the initialized flag
+        initialized = true;
+
         // Activate the contract
         // This emits the event
         _activate();
     }
 
     function _activate() internal {
-        // If these variables have not been set, then the contract has not previously been initialized
-        if (
-            _tickStep == 0 ||
-            _timeToExpiry == 0 ||
-            _auctionParameters.tickSize == 0 ||
-            _auctionParameters.minPrice == 0
-        ) revert CDAuctioneer_NotInitialized();
+        // If not initialized, revert
+        if (!initialized) revert CDAuctioneer_NotInitialized();
 
         // If the contract is already active, do nothing
         if (locallyActive) return;

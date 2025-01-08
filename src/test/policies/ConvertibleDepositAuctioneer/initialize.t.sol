@@ -17,6 +17,10 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
     //  [X] it reverts
     // when the time to expiry is 0
     //  [X] it reverts
+    // given the contract is already initialized
+    //  given the contract is disabled
+    //   [X] it reverts
+    //  [X] it reverts
     // [X] it sets the auction parameters
     // [X] it sets the tick step
     // [X] it sets the time to expiry
@@ -104,7 +108,36 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, 0);
     }
 
+    function test_contractInitialized_reverts() public givenInitialized {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+    }
+
+    function test_contractInitialized_disabled_reverts() public givenInitialized givenContractInactive {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+    }
+
     function test_success() public {
+        // Not yet initialized
+        assertEq(auctioneer.initialized(), false, "initialized");
+
         // Expect events
         vm.expectEmit(true, true, true, true);
         emit AuctionParametersUpdated(TARGET, TICK_SIZE, MIN_PRICE);
@@ -130,5 +163,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         assertEq(auctioneer.locallyActive(), true, "locally active");
 
         _assertPreviousTick(TICK_SIZE, MIN_PRICE, INITIAL_BLOCK);
+
+        assertEq(auctioneer.initialized(), true, "initialized");
     }
 }
