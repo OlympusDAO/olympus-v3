@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {Test, stdError} from "forge-std/Test.sol";
+import {stdError} from "forge-std/Test.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {console2} from "forge-std/console2.sol";
 
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 

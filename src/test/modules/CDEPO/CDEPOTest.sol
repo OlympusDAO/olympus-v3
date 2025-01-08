@@ -7,7 +7,6 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 
 abstract contract CDEPOTest is Test {
