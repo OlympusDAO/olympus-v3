@@ -60,7 +60,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    These values should only be set through the `setAuctionParameters()` function
     AuctionParameters internal _auctionParameters;
 
-    /// @notice Auction state at the time of the last bid (`state.lastUpdate`)
+    /// @notice Auction state at the time of the last bid (`_previousTick.lastUpdate`)
     Day internal dayState;
 
     /// @notice Scale of the OHM token
@@ -147,16 +147,16 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
 
         // Reset the day state if this is the first bid of the day
-        if (block.timestamp / 86400 > _auctionParameters.lastUpdate / 86400) {
+        if (block.timestamp / 86400 > _previousTick.lastUpdate / 86400) {
             dayState = Day(0, 0);
         }
 
         // Update state
-        _auctionParameters.lastUpdate = uint48(block.timestamp);
         dayState.deposits += depositIn;
         dayState.convertible += ohmOut;
 
         // Update current tick
+        _previousTick.lastUpdate = uint48(block.timestamp);
         _previousTick.capacity = currentTickCapacity;
         _previousTick.price = currentTickPrice;
 
@@ -295,7 +295,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
     function getCurrentTick() public view onlyActive returns (Tick memory tick) {
         // Find amount of time passed and new capacity to add
-        uint256 timePassed = block.timestamp - _auctionParameters.lastUpdate;
+        uint256 timePassed = block.timestamp - _previousTick.lastUpdate;
         uint256 capacityToAdd = (_auctionParameters.target * timePassed) / 1 days;
 
         // Skip if the new capacity is 0
@@ -339,7 +339,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function returns the day state at the time of the last bid (`_auctionParameters.lastUpdate`)
+    /// @dev        This function returns the day state at the time of the last bid (`_previousTick.lastUpdate`)
     function getDayState() external view override returns (Day memory) {
         return dayState;
     }
@@ -363,12 +363,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Min price must be non-zero
         if (minPrice_ == 0) revert CDAuctioneer_InvalidParams("min price");
 
-        _auctionParameters = AuctionParameters(
-            target_,
-            tickSize_,
-            minPrice_,
-            _auctionParameters.lastUpdate
-        );
+        _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
 
         // Emit event
         emit AuctionParametersUpdated(target_, tickSize_, minPrice_);
@@ -498,7 +493,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Also set the lastUpdate to the current block timestamp
         // Otherwise, getCurrentTick() will calculate a long period of time having passed
-        _auctionParameters.lastUpdate = uint48(block.timestamp);
+        _previousTick.lastUpdate = uint48(block.timestamp);
 
         // Emit event
         emit Activated();

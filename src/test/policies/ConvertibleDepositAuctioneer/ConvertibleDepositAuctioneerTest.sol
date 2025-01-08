@@ -103,8 +103,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     function _assertAuctionParameters(
         uint256 target_,
         uint256 tickSize_,
-        uint256 minPrice_,
-        uint48 lastUpdate_
+        uint256 minPrice_
     ) internal {
         IConvertibleDepositAuctioneer.AuctionParameters memory auctionParameters = auctioneer
             .getAuctionParameters();
@@ -112,14 +111,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(auctionParameters.target, target_, "target");
         assertEq(auctionParameters.tickSize, tickSize_, "tickSize");
         assertEq(auctionParameters.minPrice, minPrice_, "minPrice");
-        assertEq(auctionParameters.lastUpdate, lastUpdate_, "lastUpdate");
     }
 
-    function _assertPreviousTick(uint256 capacity_, uint256 price_) internal {
+    function _assertPreviousTick(uint256 capacity_, uint256 price_, uint48 lastUpdate_) internal {
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick();
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
         assertEq(tick.price, price_, "previous tick price");
+        assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
     }
 
     // ========== MODIFIERS ========== //

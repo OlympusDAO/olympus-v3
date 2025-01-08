@@ -53,12 +53,10 @@ interface IConvertibleDepositAuctioneer {
     /// @param  target          Number of OHM available to sell per day
     /// @param  tickSize        Number of OHM in a tick
     /// @param  minPrice        Minimum price that OHM can be sold for, in terms of the bid token
-    /// @param  lastUpdate      Timestamp of last update to current tick
     struct AuctionParameters {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
-        uint48 lastUpdate;
     }
 
     /// @notice Tracks auction activity for a given day
@@ -74,9 +72,11 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  price           Price of the tick, in terms of the bid token
     /// @param  capacity        Capacity of the tick, in terms of OHM
+    /// @param  lastUpdate      Timestamp of last update to the tick
     struct Tick {
         uint256 price;
         uint256 capacity;
+        uint48 lastUpdate;
     }
 
     // ========== AUCTION ========== //

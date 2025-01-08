@@ -56,7 +56,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         // Assert state
         assertEq(auctioneer.locallyActive(), true);
         // lastUpdate has not changed
-        assertEq(auctioneer.getAuctionParameters().lastUpdate, lastUpdate);
+        assertEq(auctioneer.getPreviousTick().lastUpdate, lastUpdate);
     }
 
     function test_contractInactive() public givenInitialized givenContractInactive {
@@ -77,6 +77,6 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         // Assert state
         assertEq(auctioneer.locallyActive(), true);
         // lastUpdate has changed
-        assertEq(auctioneer.getAuctionParameters().lastUpdate, newBlock);
+        assertEq(auctioneer.getPreviousTick().lastUpdate, newBlock);
     }
 }

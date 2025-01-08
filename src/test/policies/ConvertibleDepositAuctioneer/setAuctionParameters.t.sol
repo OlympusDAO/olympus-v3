@@ -60,7 +60,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(newTarget, newTickSize, newMinPrice, 0);
+        _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
+        _assertPreviousTick(0, 0, 0);
     }
 
     function test_targetZero() public givenInitialized {
@@ -85,10 +86,10 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(newTarget, newTickSize, newMinPrice, lastUpdate);
+        _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert current tick
-        _assertPreviousTick(lastCapacity, lastPrice);
+        _assertPreviousTick(lastCapacity, lastPrice, lastUpdate);
     }
 
     function test_tickSizeZero_reverts() public givenInitialized {
@@ -146,11 +147,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(newTarget, newTickSize, newMinPrice, lastUpdate);
+        _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert current tick
         // Values are unchanged
-        _assertPreviousTick(lastCapacity, lastPrice);
+        _assertPreviousTick(lastCapacity, lastPrice, lastUpdate);
     }
 
     function test_contractActive() public givenInitialized givenRecipientHasBid(1e18) {
@@ -175,11 +176,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(newTarget, newTickSize, newMinPrice, lastUpdate);
+        _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert current tick
         // Values are unchanged
-        _assertPreviousTick(lastCapacity, lastPrice);
+        _assertPreviousTick(lastCapacity, lastPrice, lastUpdate);
     }
 
     function test_newTickSizeLessThanCurrentTickCapacity(
@@ -197,11 +198,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(TARGET, newTickSize, MIN_PRICE);
 
         // Assert state
-        _assertAuctionParameters(TARGET, newTickSize, MIN_PRICE, lastUpdate);
+        _assertAuctionParameters(TARGET, newTickSize, MIN_PRICE);
 
         // Assert current tick
         // Tick capacity has been adjusted to the new tick size
-        _assertPreviousTick(newTickSize, MIN_PRICE);
+        _assertPreviousTick(newTickSize, MIN_PRICE, lastUpdate);
     }
 
     function test_newTickSizeGreaterThanCurrentTickCapacity(
@@ -219,11 +220,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(TARGET, newTickSize, MIN_PRICE);
 
         // Assert state
-        _assertAuctionParameters(TARGET, newTickSize, MIN_PRICE, lastUpdate);
+        _assertAuctionParameters(TARGET, newTickSize, MIN_PRICE);
 
         // Assert current tick
         // Tick capacity has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, lastUpdate);
     }
 
     function test_newMinPriceGreaterThanCurrentTickPrice(
@@ -241,11 +242,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(TARGET, TICK_SIZE, newMinPrice, lastUpdate);
+        _assertAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
 
         // Assert current tick
         // Tick price has been set to the new min price
-        _assertPreviousTick(TICK_SIZE, newMinPrice);
+        _assertPreviousTick(TICK_SIZE, newMinPrice, lastUpdate);
     }
 
     function test_newMinPriceLessThanCurrentTickPrice(
@@ -263,10 +264,10 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
 
         // Assert state
-        _assertAuctionParameters(TARGET, TICK_SIZE, newMinPrice, lastUpdate);
+        _assertAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
 
         // Assert current tick
         // Tick price has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, lastUpdate);
     }
 }
