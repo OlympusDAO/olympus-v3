@@ -8,8 +8,6 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
     function _assertConvertibleDepositPosition(
         uint256 bidAmount_,
@@ -703,25 +701,25 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Tick two: 10e9, price is 165e17, max bid amount is 165e18
         // Tick three: 5e9, price is 1815e16, max bid amount is 9075e16
         // Total bid amount = 150e18 + 165e18 + 9075e16 = 40575e16
-        uint256 reserveTokenBalance = 150e18 + 165e18 + 9075e16;
-        uint256 bidAmount = bound(bidAmount_, 315e18, reserveTokenBalance - 1);
+        uint256 bidOneAmount = 150e18;
+        uint256 bidTwoAmount = 165e18;
+        uint256 bidThreeMaxAmount = 9075e16;
+        uint256 reserveTokenBalance = bidOneAmount + bidTwoAmount + bidThreeMaxAmount;
+        uint256 bidAmount = bound(bidAmount_, bidOneAmount + bidTwoAmount, reserveTokenBalance - 1);
         uint256 tickThreePrice = 1815e16;
+        uint256 tickThreeBidAmount = bidAmount - bidOneAmount - bidTwoAmount;
 
-        uint256 tickOneConvertedAmount = (150e18 * 1e9) / 15e18;
-        uint256 tickTwoConvertedAmount = (165e18 * 1e9) / 165e17;
-        uint256 tickThreeConvertedAmount = ((bidAmount - 150e18 - 165e18) * 1e9) / tickThreePrice;
+        uint256 tickOneConvertedAmount = (bidOneAmount * 1e9) / 15e18;
+        uint256 tickTwoConvertedAmount = (bidTwoAmount * 1e9) / 165e17;
+        uint256 tickThreeConvertedAmount = (tickThreeBidAmount * 1e9) / tickThreePrice;
         uint256 expectedConvertedAmount = tickOneConvertedAmount +
             tickTwoConvertedAmount +
             tickThreeConvertedAmount;
 
-        console2.log("tickOneConvertedAmount", tickOneConvertedAmount);
-        console2.log("tickTwoConvertedAmount", tickTwoConvertedAmount);
-        console2.log("tickThreeConvertedAmount", tickThreeConvertedAmount);
-
         // Recalculate the bid amount, in case tickThreeConvertedAmount is 0
-        uint256 expectedDepositIn = 150e18 + 165e18 + tickThreeConvertedAmount * tickThreePrice / 1e9;
-        console2.log("expectedDepositIn", expectedDepositIn);
-        console2.log("tick three deposit", tickThreeConvertedAmount * tickThreePrice / 1e9);
+        uint256 expectedDepositIn = bidOneAmount +
+            bidTwoAmount +
+            (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
 
         // Check preview
         (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
@@ -765,8 +763,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenInitialized
-        givenAddressHasReserveToken(recipient, 795064875e12)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 795064875e12)
+        givenAddressHasReserveToken(recipient, 796064875e12)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 796064875e12)
     {
         // We want the converted amount to be >= 2 * day target, 40e9
         // Tick one: 10e9, price is 15e18, max bid amount is 150e18
@@ -774,35 +772,30 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Tick three: 5e9, price is 1815e16, max bid amount is 9075e16
         // Tick four: 5e9, price is 19965e15, max bid amount is 99825e15
         // Tick five: 5e9, price is 219615e14, max bid amount is 1098075e14
-        // Tick six: 5e9, price is 2395765e13, max bid amount is 11978825e13
-        // Tick seven: 2.5e9, price is 25954315e12, max bid amount is 59894125e12
-        // Total bid amount = 150e18 + 165e18 + 9075e16 + 99825e15 + 1098075e14 + 11978825e13 + 59894125e12 = 795064875e12
-        uint256 reserveTokenBalance = 795064875e12;
-        uint256 bidAmount = bound(bidAmount_, 73517075e13, reserveTokenBalance - 1);
+        // Tick six: 5e9, price is 2415765e13, max bid amount is 12078825e13
+        // Tick seven: 2.5e9, price is 26573415e12, max bid amount is 59894125e12
+        // Max bid amount = 150e18 + 165e18 + 9075e16 + 99825e15 + 1098075e14 + 12078825e13 + 59894125e12 = 796064875e12
+        // Ticks one to six bid amount = 150e18 + 165e18 + 9075e16 + 99825e15 + 1098075e14 + 12078825e13 = 73617075e13
+        uint256 reserveTokenBalance = 796064875e12;
+        uint256 bidAmount = bound(bidAmount_, 73617075e13, reserveTokenBalance - 1);
 
         uint256 expectedConvertedAmount;
+        uint256 expectedDepositIn;
         {
-            uint256 tickOneConvertedAmount = (150e18 * 1e9) / 15e18;
-            uint256 tickTwoConvertedAmount = (165e18 * 1e9) / 165e17;
-            uint256 tickThreeConvertedAmount = (9075e16 * 1e9) / 1815e16;
-            uint256 tickFourConvertedAmount = (99825e15 * 1e9) / 19965e15;
-            uint256 tickFiveConvertedAmount = (1098075e14 * 1e9) / 219615e14;
-            uint256 tickSixConvertedAmount = (11978825e13 * 1e9) / 2395765e13;
-            uint256 tickSevenConvertedAmount = ((bidAmount -
-                150e18 -
-                165e18 -
-                9075e16 -
-                99825e15 -
-                1098075e14 -
-                11978825e13) * 1e9) / 25954315e12;
-            expectedConvertedAmount =
-                tickOneConvertedAmount +
-                tickTwoConvertedAmount +
-                tickThreeConvertedAmount +
-                tickFourConvertedAmount +
-                tickFiveConvertedAmount +
-                tickSixConvertedAmount +
-                tickSevenConvertedAmount;
+            // Tick one: 150e18 * 1e9 / 15e18 = 10e9
+            // Tick two: 165e18 * 1e9 / 165e17 = 10e9
+            // Tick three: 9075e16 * 1e9 / 1815e16 = 5e9
+            // Tick four: 99825e15 * 1e9 / 19965e15 = 5e9
+            // Tick five: 1098075e14 * 1e9 / 219615e14 = 5e9
+            // Tick six: 12078825e23 * 1e9 / 2395765e13 = 5e9
+            uint256 ticksOneToSixConvertedAmount = 40e9;
+            uint256 tickSevenConvertedAmount = ((bidAmount - 73617075e13) * 1e9) / 26573415e12;
+            expectedConvertedAmount = ticksOneToSixConvertedAmount + tickSevenConvertedAmount;
+
+            // Recalculate the bid amount, in case tickSevenConvertedAmount is 0
+            expectedDepositIn =
+                73617075e13 +
+                (tickSevenConvertedAmount == 0 ? 0 : (bidAmount - 73617075e13));
         }
 
         // Check preview
@@ -817,9 +810,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert returned values
         _assertConvertibleDepositPosition(
-            bidAmount,
+            expectedDepositIn,
             expectedConvertedAmount,
-            reserveTokenBalance - bidAmount,
+            reserveTokenBalance - expectedDepositIn,
             0,
             0,
             ohmOut,
@@ -827,7 +820,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -836,7 +829,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert the tick
         _assertPreviousTick(
             10e9 + 10e9 + 5e9 + 5e9 + 5e9 + 5e9 + 25e8 - expectedConvertedAmount,
-            25954315e12,
+            26573415e12,
             25e8, // The tick size is halved twice as the target is met or exceeded twice
             uint48(block.timestamp)
         );
