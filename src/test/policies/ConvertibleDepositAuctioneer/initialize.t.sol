@@ -17,6 +17,8 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
     //  [X] it reverts
     // when the time to expiry is 0
     //  [X] it reverts
+    // when the auction tracking period is 0
+    //  [X] it reverts
     // given the contract is already initialized
     //  given the contract is disabled
     //   [X] it reverts
@@ -26,6 +28,8 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
     // [X] it sets the time to expiry
     // [X] it initializes the current tick
     // [X] it activates the contract
+    // [X] it initializes the day state
+    // [X] it initializes the auction results history and index
 
     function test_callerNotAdmin_reverts(address caller_) public {
         // Ensure caller is not admin
@@ -36,7 +40,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(caller_);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_contractAlreadyActive_reverts() public givenInitialized {
@@ -47,7 +58,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_tickSizeZero_reverts() public {
@@ -61,7 +79,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, 0, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            0,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_minPriceZero_reverts() public {
@@ -75,7 +100,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, 0, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            0,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_tickStepOutOfBounds_reverts(uint24 tickStep_) public {
@@ -91,7 +123,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, tickStep, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            tickStep,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_timeToExpiryZero_reverts() public {
@@ -105,7 +144,21 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, 0);
+        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, 0, AUCTION_TRACKING_PERIOD);
+    }
+
+    function test_auctionTrackingPeriodZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "auction tracking period"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY, 0);
     }
 
     function test_contractInitialized_reverts() public givenInitialized {
@@ -116,7 +169,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_contractInitialized_disabled_reverts()
@@ -131,7 +191,14 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_success() public {
@@ -149,21 +216,69 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         emit TimeToExpiryUpdated(TIME_TO_EXPIRY);
 
         vm.expectEmit(true, true, true, true);
+        emit AuctionTrackingPeriodUpdated(AUCTION_TRACKING_PERIOD);
+
+        vm.expectEmit(true, true, true, true);
         emit Activated();
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
 
         // Assert state
         _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         assertEq(auctioneer.getTickStep(), TICK_STEP, "tick step");
         assertEq(auctioneer.getTimeToExpiry(), TIME_TO_EXPIRY, "time to expiry");
+        assertEq(
+            auctioneer.getAuctionTrackingPeriod(),
+            AUCTION_TRACKING_PERIOD,
+            "auction tracking period"
+        );
         assertEq(auctioneer.locallyActive(), true, "locally active");
+        assertEq(auctioneer.initialized(), true, "initialized");
 
         _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, INITIAL_BLOCK);
 
-        assertEq(auctioneer.initialized(), true, "initialized");
+        _assertAuctionResults(0, 0, 0, 0, 0, 0, 0);
+        _assertAuctionResultsNextIndex(0);
+    }
+
+    function test_auctionTrackingPeriodDifferent() public {
+        // Not yet initialized
+        assertEq(auctioneer.initialized(), false, "initialized");
+
+        vm.expectEmit(true, true, true, true);
+        emit AuctionTrackingPeriodUpdated(AUCTION_TRACKING_PERIOD + 1);
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD + 1
+        );
+
+        // Assert state
+        assertEq(
+            auctioneer.getAuctionTrackingPeriod(),
+            AUCTION_TRACKING_PERIOD,
+            "auction tracking period"
+        );
+        assertEq(
+            auctioneer.getAuctionResults().length,
+            AUCTION_TRACKING_PERIOD + 1,
+            "auction results length"
+        );
     }
 }

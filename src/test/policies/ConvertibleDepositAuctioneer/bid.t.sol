@@ -72,7 +72,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it sets the current tick size to the standard tick size
     //  [X] it does not update the tick price
     // when the bid is the first bid of the day
-    //  [X] it resets the day's deposit and converted balances
+    //  [X] the day state is not reset
     //  [X] it updates the day's deposit balance
     //  [X] it updates the day's converted balance
     //  [X] it sets the current tick size to the standard tick size
@@ -311,6 +311,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Warp to the next day
         uint48 nextDay = uint48(block.timestamp) + 1 days;
         vm.warp(nextDay);
+
+        // Mimic auction parameters being set
+        _setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Get the current tick for the new day
         IConvertibleDepositAuctioneer.Tick memory beforeTick = auctioneer.getCurrentTick();

@@ -10,13 +10,13 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
     // given the contract is not initialized
     //  [X] it reverts
     // when the contract is already activated
-    //  [X] the state is unchanged
-    //  [X] it does not emit an event
-    //  [X] it does not change the last update
+    //  [X] it reverts
     // when the contract is not activated
     //  [X] it activates the contract
     //  [X] it emits an event
     //  [X] it sets the last update to the current block timestamp
+    //  [X] it resets the day state
+    //  [X] it resets the auction results history and index
 
     function test_callerDoesNotHaveEmergencyShutdownRole_reverts(address caller_) public {
         // Ensure caller is not emergency address
@@ -43,23 +43,23 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         auctioneer.activate();
     }
 
-    function test_contractActivated() public givenInitialized {
-        uint48 lastUpdate = uint48(block.timestamp);
-
-        // Warp to change the block timestamp
-        vm.warp(lastUpdate + 1);
+    function test_contractActivated_reverts() public givenInitialized {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
+        );
 
         // Call function
         vm.prank(emergency);
         auctioneer.activate();
-
-        // Assert state
-        assertEq(auctioneer.locallyActive(), true);
-        // lastUpdate has not changed
-        assertEq(auctioneer.getPreviousTick().lastUpdate, lastUpdate);
     }
 
-    function test_contractInactive() public givenInitialized givenContractInactive {
+    function test_contractInactive()
+        public
+        givenInitialized
+        givenRecipientHasBid(1e18)
+        givenContractInactive
+    {
         uint48 lastUpdate = uint48(block.timestamp);
         uint48 newBlock = lastUpdate + 1;
 
@@ -78,5 +78,10 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         assertEq(auctioneer.locallyActive(), true);
         // lastUpdate has changed
         assertEq(auctioneer.getPreviousTick().lastUpdate, newBlock);
+        // Day state is reset
+        _assertDayState(0, 0);
+        // Auction results are reset
+        _assertAuctionResults(0, 0, 0, 0, 0, 0, 0);
+        _assertAuctionResultsNextIndex(0);
     }
 }

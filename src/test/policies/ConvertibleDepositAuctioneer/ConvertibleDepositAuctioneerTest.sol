@@ -48,12 +48,15 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant MIN_PRICE = 15e18;
     uint256 public constant TARGET = 20e9;
     uint48 public constant TIME_TO_EXPIRY = 1 days;
+    uint8 public constant AUCTION_TRACKING_PERIOD = 7;
 
     // Events
     event Activated();
     event TickStepUpdated(uint24 newTickStep);
     event TimeToExpiryUpdated(uint48 newTimeToExpiry);
     event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
+    event AuctionTrackingPeriodUpdated(uint8 newAuctionTrackingPeriod);
+    event AuctionResult(uint256 ohmConvertible, uint256 target, uint8 periodIndex);
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -127,6 +130,38 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
     }
 
+    function _assertDayState(uint256 deposits_, uint256 convertible_) internal {
+        IConvertibleDepositAuctioneer.Day memory day = auctioneer.getDayState();
+
+        assertEq(day.deposits, deposits_, "deposits");
+        assertEq(day.convertible, convertible_, "convertible");
+    }
+
+    function _assertAuctionResults(
+        int256 resultOne_,
+        int256 resultTwo_,
+        int256 resultThree_,
+        int256 resultFour_,
+        int256 resultFive_,
+        int256 resultSix_,
+        int256 resultSeven_
+    ) internal {
+        int256[] memory auctionResults = auctioneer.getAuctionResults();
+
+        assertEq(auctionResults.length, 7, "auction results length");
+        assertEq(auctionResults[0], resultOne_, "result one");
+        assertEq(auctionResults[1], resultTwo_, "result two");
+        assertEq(auctionResults[2], resultThree_, "result three");
+        assertEq(auctionResults[3], resultFour_, "result four");
+        assertEq(auctionResults[4], resultFive_, "result five");
+        assertEq(auctionResults[5], resultSix_, "result six");
+        assertEq(auctionResults[6], resultSeven_, "result seven");
+    }
+
+    function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal {
+        assertEq(auctioneer.getAuctionResultsNextIndex(), nextIndex_, "next index");
+    }
+
     // ========== MODIFIERS ========== //
 
     modifier givenContractActive() {
@@ -197,7 +232,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     modifier givenInitialized() {
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
         _;
     }
 
@@ -220,15 +262,19 @@ contract ConvertibleDepositAuctioneerTest is Test {
         auctioneer.bid(deposit_);
     }
 
-    modifier givenRecipientHasBid(uint256 deposit_) {
+    function _mintAndBid(address owner_, uint256 deposit_) internal {
         // Mint
-        _mintReserveToken(recipient, deposit_);
+        _mintReserveToken(owner_, deposit_);
 
         // Approve spending
-        _approveReserveTokenSpending(recipient, address(convertibleDepository), deposit_);
+        _approveReserveTokenSpending(owner_, address(convertibleDepository), deposit_);
 
         // Bid
-        _bid(recipient, deposit_);
+        _bid(owner_, deposit_);
+    }
+
+    modifier givenRecipientHasBid(uint256 deposit_) {
+        _mintAndBid(recipient, deposit_);
         _;
     }
 }

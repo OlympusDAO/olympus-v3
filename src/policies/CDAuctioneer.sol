@@ -91,6 +91,16 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    See `getTimeToExpiry()` for more information
     uint48 internal _timeToExpiry;
 
+    /// @notice The index of the next auction result
+    uint8 internal _auctionResultsNextIndex;
+
+    /// @notice The number of days that auction results are tracked for
+    uint8 internal _auctionTrackingPeriod;
+
+    /// @notice The auction results, where a positive number indicates an over-subscription for the day.
+    /// @dev    The length of this array is equal to the auction tracking period
+    int256[] internal _auctionResults;
+
     // ========== SETUP ========== //
 
     constructor(address kernel_, address cdFacility_) Policy(Kernel(kernel_)) {
@@ -399,6 +409,21 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         return _timeToExpiry;
     }
 
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getAuctionTrackingPeriod() external view override returns (uint8) {
+        return _auctionTrackingPeriod;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getAuctionResultsNextIndex() external view override returns (uint8) {
+        return _auctionResultsNextIndex;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getAuctionResults() external view override returns (int256[] memory) {
+        return _auctionResults;
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
@@ -489,6 +514,18 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         emit TickStepUpdated(newStep_);
     }
 
+    function setAuctionTrackingPeriod(uint8 days_) external onlyRole(ROLE_ADMIN) {
+        // Value must be non-zero
+        if (days_ == 0) revert CDAuctioneer_InvalidParams("auction tracking period");
+
+        _auctionTrackingPeriod = days_;
+
+        // Emit event
+        emit AuctionTrackingPeriodUpdated(days_);
+    }
+
+    // ========== ACTIVATION/DEACTIVATION ========== //
+
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
@@ -501,7 +538,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 tickSize_,
         uint256 minPrice_,
         uint24 tickStep_,
-        uint48 timeToExpiry_
+        uint48 timeToExpiry_,
+        uint8 auctionTrackingPeriod_
     ) external onlyRole(ROLE_ADMIN) {
         // If initialized, revert
         if (initialized) revert CDAuctioneer_InvalidState();

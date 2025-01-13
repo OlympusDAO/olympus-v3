@@ -13,6 +13,13 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newMinPrice     Minimum tick price
     event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
 
+    /// @notice Emitted when the auction result is recorded
+    ///
+    /// @param  ohmConvertible  Amount of OHM that was converted
+    /// @param  target          Target for OHM sold per day
+    /// @param  periodIndex     The index of the auction result in the tracking period
+    event AuctionResult(uint256 ohmConvertible, uint256 target, uint8 periodIndex);
+
     /// @notice Emitted when the time to expiry is updated
     ///
     /// @param  newTimeToExpiry Time to expiry
@@ -22,6 +29,11 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  newTickStep     Percentage increase (decrease) per tick
     event TickStepUpdated(uint24 newTickStep);
+
+    /// @notice Emitted when the auction tracking period is updated
+    ///
+    /// @param  newAuctionTrackingPeriod The number of days that auction results are tracked for
+    event AuctionTrackingPeriodUpdated(uint8 newAuctionTrackingPeriod);
 
     /// @notice Emitted when the contract is activated
     event Activated();
@@ -141,10 +153,26 @@ interface IConvertibleDepositAuctioneer {
     /// @return token The token that is being bid
     function bidToken() external view returns (address token);
 
+    /// @notice Get the number of days that auction results are tracked for
+    ///
+    /// @return daysTracked The number of days that auction results are tracked for
+    function getAuctionTrackingPeriod() external view returns (uint8 daysTracked);
+
+    /// @notice Get the auction results for the tracking period
+    ///
+    /// @return results The auction results, where a positive number indicates an over-subscription for the day.
+    function getAuctionResults() external view returns (int256[] memory results);
+
+    /// @notice Get the index of the next auction result
+    ///
+    /// @return index The index where the next auction result will be stored
+    function getAuctionResultsNextIndex() external view returns (uint8 index);
+
     // ========== ADMIN ========== //
 
     /// @notice Update the auction parameters
-    /// @dev    only callable by the auction admin
+    /// @dev    This function is expected to be called periodically.
+    ///         Only callable by the auction admin
     ///
     /// @param  target_        new target sale per day
     /// @param  tickSize_      new size per tick
@@ -170,6 +198,14 @@ interface IConvertibleDepositAuctioneer {
     /// @param  tickStep_     new tick step, in terms of `ONE_HUNDRED_PERCENT`
     function setTickStep(uint24 tickStep_) external;
 
+    /// @notice Set the number of days that auction results are tracked for
+    /// @dev    Only callable by the admin
+    ///
+    /// @param  days_ The number of days that auction results are tracked for
+    function setAuctionTrackingPeriod(uint8 days_) external;
+
+    // ========== ACTIVATION/DEACTIVATION ========== //
+
     /// @notice Enables governance to initialize and activate the contract. This ensures that the contract is in a valid state when activated.
     /// @dev    Only callable by the admin role
     ///
@@ -178,12 +214,14 @@ interface IConvertibleDepositAuctioneer {
     /// @param  minPrice_        The minimum price that OHM can be sold for, in terms of the bid token
     /// @param  tickStep_        The tick step, in terms of `ONE_HUNDRED_PERCENT`
     /// @param  timeToExpiry_    The number of seconds between creation and expiry of convertible deposits
+    /// @param  auctionTrackingPeriod_ The number of days that auction results are tracked for
     function initialize(
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_,
         uint24 tickStep_,
-        uint48 timeToExpiry_
+        uint48 timeToExpiry_,
+        uint8 auctionTrackingPeriod_
     ) external;
 
     /// @notice Activate the contract functionality
