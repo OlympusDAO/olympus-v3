@@ -73,9 +73,11 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Tracks auction activity for a given day
     ///
+    /// @param  initTimestamp   Timestamp when the day state was initialized
     /// @param  deposits        Quantity of bid tokens deposited for the day
     /// @param  convertible     Quantity of OHM that will be issued for the day's deposits
     struct Day {
+        uint48 initTimestamp;
         uint256 deposits;
         uint256 convertible;
     }

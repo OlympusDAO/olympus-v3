@@ -272,7 +272,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         // Assert state
         assertEq(
             auctioneer.getAuctionTrackingPeriod(),
-            AUCTION_TRACKING_PERIOD,
+            AUCTION_TRACKING_PERIOD + 1,
             "auction tracking period"
         );
         assertEq(

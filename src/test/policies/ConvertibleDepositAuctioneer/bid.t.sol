@@ -158,7 +158,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_givenSpendingNotApproved_reverts()
         public
         givenInitialized
-        givenContractActive
         givenAddressHasReserveToken(recipient, 1e18)
     {
         // Expect revert
@@ -172,7 +171,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_givenAuctioneerRoleNotGranted_reverts()
         public
         givenInitialized
-        givenContractActive
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
     {
@@ -192,7 +190,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenInitialized
-        givenContractActive
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
     {
@@ -219,7 +216,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenInitialized
-        givenContractActive
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
     {

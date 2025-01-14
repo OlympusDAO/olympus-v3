@@ -60,8 +60,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    These values should only be set through the `setAuctionParameters()` function
     AuctionParameters internal _auctionParameters;
 
-    /// @notice Auction state at the time of the last bid (`_previousTick.lastUpdate`)
-    Day internal dayState;
+    /// @notice Auction state for the day
+    Day internal _dayState;
 
     /// @notice Scale of the OHM token
     uint256 internal constant _ohmScale = 1e9;
@@ -166,14 +166,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Reject if the OHM out is 0
         if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
 
-        // Reset the day state if this is the first bid of the day
-        if (block.timestamp / 86400 > _previousTick.lastUpdate / 86400) {
-            dayState = Day(0, 0);
-        }
-
         // Update state
-        dayState.deposits += depositIn;
-        dayState.convertible += ohmOut;
+        _dayState.deposits += depositIn;
+        _dayState.convertible += ohmOut;
 
         // Update current tick
         _previousTick.price = currentTickPrice;
@@ -250,7 +245,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
                 // The tick has also been depleted, so update the price
                 updatedTickPrice = _getNewTickPrice(updatedTickPrice, _tickStep);
                 updatedTickSize = _getNewTickSize(
-                    dayState.convertible + convertibleAmount + ohmOut
+                    _dayState.convertible + convertibleAmount + ohmOut
                 );
                 updatedTickCapacity = updatedTickSize;
             }
@@ -396,7 +391,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function returns the day state at the time of the last bid (`_previousTick.lastUpdate`)
     function getDayState() external view override returns (Day memory) {
-        return dayState;
+        return _dayState;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -433,10 +428,46 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Min price must be non-zero
         if (minPrice_ == 0) revert CDAuctioneer_InvalidParams("min price");
 
+        // Target must be non-zero
+        if (target_ == 0) revert CDAuctioneer_InvalidParams("target");
+
         _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
 
         // Emit event
         emit AuctionParametersUpdated(target_, tickSize_, minPrice_);
+    }
+
+    function _storeAuctionResults(uint256 previousTarget_) internal {
+        // Skip if inactive
+        if (!locallyActive) return;
+
+        // Skip if the day state was set on the same day
+        if (block.timestamp / 86400 <= _dayState.initTimestamp / 86400) return;
+
+        // If the next index is 0, reset the results before inserting
+        // This ensures that the previous results are available for 24 hours
+        if (_auctionResultsNextIndex == 0) {
+            _auctionResults = new int256[](_auctionTrackingPeriod);
+        }
+
+        // Store the auction results
+        // Negative values will indicate under-selling
+        _auctionResults[_auctionResultsNextIndex] =
+            int256(_dayState.convertible) -
+            int256(previousTarget_);
+
+        // Emit event
+        emit AuctionResult(_dayState.convertible, previousTarget_, _auctionResultsNextIndex);
+
+        // Increment the index (or loop around)
+        _auctionResultsNextIndex++;
+        // Loop around if necessary
+        if (_auctionResultsNextIndex >= _auctionTrackingPeriod) {
+            _auctionResultsNextIndex = 0;
+        }
+
+        // Reset the day state
+        _dayState = Day(uint48(block.timestamp), 0, 0);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -449,16 +480,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The caller does not have the ROLE_HEART role
     ///             - The new tick size is 0
     ///             - The new min price is 0
+    ///             - The new target is 0
     function setAuctionParameters(
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_
     ) external override onlyRole(ROLE_HEART) returns (uint256 remainder) {
-        // TODO should this be newTarget instead of _auctionParameters.target?
-        // TODO Should the newTarget - dayState.convertible be used instead?
-        // TODO how to handle if deactivated?
-        // remainder = (_auctionParameters.target > dayState.convertible) ? _auctionParameters.target - dayState.convertible : 0;
-        // TODO handling remainder moving average
+        uint256 previousTarget = _auctionParameters.target;
 
         _setAuctionParameters(target_, tickSize_, minPrice_);
 
@@ -478,6 +506,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         if (minPrice_ > _previousTick.price) {
             _previousTick.price = minPrice_;
         }
+
+        // Store the auction results, if necessary
+        _storeAuctionResults(previousTarget);
 
         return remainder;
     }
@@ -514,11 +545,21 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         emit TickStepUpdated(newStep_);
     }
 
-    function setAuctionTrackingPeriod(uint8 days_) external onlyRole(ROLE_ADMIN) {
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN role
+    ///             - The new auction tracking period is 0
+    ///
+    /// @param      days_    The new auction tracking period
+    function setAuctionTrackingPeriod(uint8 days_) public override onlyRole(ROLE_ADMIN) {
         // Value must be non-zero
         if (days_ == 0) revert CDAuctioneer_InvalidParams("auction tracking period");
 
         _auctionTrackingPeriod = days_;
+
+        // Reset the auction results and index and set to the new length
+        _auctionResults = new int256[](days_);
+        _auctionResultsNextIndex = 0;
 
         // Emit event
         emit AuctionTrackingPeriodUpdated(days_);
@@ -529,6 +570,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
+    ///             - The contract is already initialized
     ///             - The contract is already active
     ///             - Validation of the inputs fails
     ///
@@ -555,6 +597,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // This emits the event
         setTimeToExpiry(timeToExpiry_);
 
+        // Set the auction tracking period
+        // This emits the event
+        setAuctionTrackingPeriod(auctionTrackingPeriod_);
+
         // Initialize the current tick
         _previousTick.capacity = tickSize_;
         _previousTick.price = minPrice_;
@@ -572,8 +618,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // If not initialized, revert
         if (!initialized) revert CDAuctioneer_NotInitialized();
 
-        // If the contract is already active, do nothing
-        if (locallyActive) return;
+        // If the contract is already active, revert
+        if (locallyActive) revert CDAuctioneer_InvalidState();
 
         // Set the contract to active
         locallyActive = true;
@@ -581,6 +627,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Also set the lastUpdate to the current block timestamp
         // Otherwise, getCurrentTick() will calculate a long period of time having passed
         _previousTick.lastUpdate = uint48(block.timestamp);
+
+        // Reset the day state
+        _dayState = Day(uint48(block.timestamp), 0, 0);
+
+        // Reset the auction results
+        _auctionResults = new int256[](_auctionTrackingPeriod);
+        _auctionResultsNextIndex = 0;
 
         // Emit event
         emit Activated();
@@ -590,8 +643,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    This function will revert if:
     ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
     ///         - The contract has not previously been initialized
-    ///
-    ///         Note that if the contract is already active, this function will do nothing.
+    ///         - The contract is already active
     function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
         _activate();
     }
@@ -599,11 +651,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Deactivate the contract functionality
     /// @dev    This function will revert if:
     ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
-    ///
-    ///         Note that if the contract is already inactive, this function will do nothing.
+    ///         - The contract is already inactive
     function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
-        // If the contract is already inactive, do nothing
-        if (!locallyActive) return;
+        // If the contract is already inactive, revert
+        if (!locallyActive) revert CDAuctioneer_InvalidState();
 
         // Set the contract to inactive
         locallyActive = false;
