@@ -1,9 +1,9 @@
 {
-  "recommendations": [
-    "nomicfoundation.hardhat-solidity",
-    "gruntfuggly.todo-tree",
-    "ryanluker.vscode-coverage-gutters",
-    "github.vscode-github-actions",
-    "d-koppenhagen.file-tree-to-text-generator"
-  ]
+    "recommendations": [
+        "nomicfoundation.hardhat-solidity",
+        "gruntfuggly.todo-tree",
+        "ryanluker.vscode-coverage-gutters",
+        "github.vscode-github-actions",
+        "d-koppenhagen.file-tree-to-text-generator"
+    ]
 }
