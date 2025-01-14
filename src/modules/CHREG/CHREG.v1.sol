@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Module} from "src/Kernel.sol";
 
 /// @title  Olympus Clearinghouse Registry
 /// @notice Olympus Clearinghouse Registry (Module) Contract
 /// @dev    The Olympus Clearinghouse Registry Module tracks the lending facilities that the Olympus
-///         protocol deploys to satisfy the Cooler Loan demand. This allows for a single-soure of truth
+///         protocol deploys to satisfy the Cooler Loan demand. This allows for a single-source of truth
 ///         for reporting purposes around the total Treasury holdings as well as its projected receivables.
 abstract contract CHREGv1 is Module {
     // =========  ERRORS ========= //
@@ -42,11 +42,13 @@ abstract contract CHREGv1 is Module {
 
     /// @notice Adds a Clearinghouse to the registry.
     ///         Only callable by permissioned policies.
+    ///
     /// @param  clearinghouse_ The address of the clearinghouse.
     function activateClearinghouse(address clearinghouse_) external virtual;
 
     /// @notice Deactivates a clearinghouse from the registry.
     ///         Only callable by permissioned policies.
-    /// @param  clearinghouse_ The address of the clearginhouse.
+    ///
+    /// @param  clearinghouse_ The address of the clearinghouse.
     function deactivateClearinghouse(address clearinghouse_) external virtual;
 }

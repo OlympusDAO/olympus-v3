@@ -133,5 +133,20 @@
         "addr": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
         "name": "olympus-policy-emissionmanager",
         "chainId": 1
+    },
+    {
+        "addr": "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc",
+        "name": "olympus-policy-loan-consolidator",
+        "chainId": 1
+    },
+    {
+        "addr": "0x89631595649Cc6dEBa249A8012a5b2d88C8ddE48",
+        "name": "olympus-module-rgsty",
+        "chainId": 1
+    },
+    {
+        "addr": "0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5",
+        "name": "olympus-policy-contract-registry-admin",
+        "chainId": 1
     }
 ]
