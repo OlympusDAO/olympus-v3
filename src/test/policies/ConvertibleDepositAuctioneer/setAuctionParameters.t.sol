@@ -369,7 +369,6 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     {
         uint256 dayOneTarget = TARGET;
         uint256 dayOneConvertible = auctioneer.getDayState().convertible;
-        uint256 dayOneDeposits = auctioneer.getDayState().deposits;
 
         // Warp to day two
         vm.warp(INITIAL_BLOCK + 1 days);
@@ -398,62 +397,91 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         givenRecipientHasBid(1e18)
         givenAuctionParametersStandard
     {
-        uint256 dayOneTarget = TARGET;
-        uint256 dayOneConvertible = auctioneer.getDayState().convertible;
-        uint256 dayOneDeposits = auctioneer.getDayState().deposits;
+        int256[] memory expectedAuctionResults = new int256[](7);
+        {
+            uint256 dayOneTarget = TARGET;
+            uint256 dayOneConvertible = auctioneer.getDayState().convertible;
+
+            expectedAuctionResults[0] = int256(dayOneConvertible - dayOneTarget);
+        }
 
         // Warp to day two
         vm.warp(INITIAL_BLOCK + 1 days);
-        uint256 dayTwoDeposit = 2e18;
-        uint256 dayTwoTarget = TARGET + 1;
-        (uint256 dayTwoConvertible, ) = auctioneer.previewBid(dayTwoDeposit);
-        _mintAndBid(recipient, dayTwoDeposit);
-        _setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
+        {
+            uint256 dayTwoDeposit = 2e18;
+            uint256 dayTwoTarget = TARGET + 1;
+            (uint256 dayTwoConvertible, ) = auctioneer.previewBid(dayTwoDeposit);
+            _mintAndBid(recipient, dayTwoDeposit);
+            _setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
+
+            expectedAuctionResults[1] = int256(dayTwoConvertible - dayTwoTarget);
+        }
 
         // Warp to day three
         vm.warp(INITIAL_BLOCK + 2 days);
-        uint256 dayThreeDeposit = 3e18;
-        uint256 dayThreeTarget = TARGET + 2;
-        (uint256 dayThreeConvertible, ) = auctioneer.previewBid(dayThreeDeposit);
-        _mintAndBid(recipient, dayThreeDeposit);
-        _setAuctionParameters(dayThreeTarget, TICK_SIZE, MIN_PRICE);
+        {
+            uint256 dayThreeDeposit = 3e18;
+            uint256 dayThreeTarget = TARGET + 2;
+            (uint256 dayThreeConvertible, ) = auctioneer.previewBid(dayThreeDeposit);
+            _mintAndBid(recipient, dayThreeDeposit);
+            _setAuctionParameters(dayThreeTarget, TICK_SIZE, MIN_PRICE);
+
+            expectedAuctionResults[2] = int256(dayThreeConvertible - dayThreeTarget);
+        }
 
         // Warp to day four
         vm.warp(INITIAL_BLOCK + 3 days);
-        uint256 dayFourDeposit = 4e18;
-        uint256 dayFourTarget = TARGET + 3;
-        (uint256 dayFourConvertible, ) = auctioneer.previewBid(dayFourDeposit);
-        _mintAndBid(recipient, dayFourDeposit);
-        _setAuctionParameters(dayFourTarget, TICK_SIZE, MIN_PRICE);
+        {
+            uint256 dayFourDeposit = 4e18;
+            uint256 dayFourTarget = TARGET + 3;
+            (uint256 dayFourConvertible, ) = auctioneer.previewBid(dayFourDeposit);
+            _mintAndBid(recipient, dayFourDeposit);
+            _setAuctionParameters(dayFourTarget, TICK_SIZE, MIN_PRICE);
+
+            expectedAuctionResults[3] = int256(dayFourConvertible - dayFourTarget);
+        }
 
         // Warp to day five
         vm.warp(INITIAL_BLOCK + 4 days);
-        uint256 dayFiveDeposit = 5e18;
-        uint256 dayFiveTarget = TARGET + 4;
-        (uint256 dayFiveConvertible, ) = auctioneer.previewBid(dayFiveDeposit);
-        _mintAndBid(recipient, dayFiveDeposit);
-        _setAuctionParameters(dayFiveTarget, TICK_SIZE, MIN_PRICE);
+        {
+            uint256 dayFiveDeposit = 5e18;
+            uint256 dayFiveTarget = TARGET + 4;
+            (uint256 dayFiveConvertible, ) = auctioneer.previewBid(dayFiveDeposit);
+            _mintAndBid(recipient, dayFiveDeposit);
+            _setAuctionParameters(dayFiveTarget, TICK_SIZE, MIN_PRICE);
+
+            expectedAuctionResults[4] = int256(dayFiveConvertible - dayFiveTarget);
+        }
 
         // Warp to day six
         vm.warp(INITIAL_BLOCK + 5 days);
-        uint256 daySixDeposit = 6e18;
-        uint256 daySixTarget = TARGET + 5;
-        (uint256 daySixConvertible, ) = auctioneer.previewBid(daySixDeposit);
-        _mintAndBid(recipient, daySixDeposit);
-        _setAuctionParameters(daySixTarget, TICK_SIZE, MIN_PRICE);
+        {
+            uint256 daySixDeposit = 6e18;
+            uint256 daySixTarget = TARGET + 5;
+            (uint256 daySixConvertible, ) = auctioneer.previewBid(daySixDeposit);
+            _mintAndBid(recipient, daySixDeposit);
+            _setAuctionParameters(daySixTarget, TICK_SIZE, MIN_PRICE);
+
+            expectedAuctionResults[5] = int256(daySixConvertible - daySixTarget);
+        }
 
         // Warp to day seven
         vm.warp(INITIAL_BLOCK + 6 days);
-        uint256 daySevenDeposit = 7e18;
         uint256 daySevenTarget = TARGET + 6;
-        (uint256 daySevenConvertible, ) = auctioneer.previewBid(daySevenDeposit);
-        _mintAndBid(recipient, daySevenDeposit);
-        _setAuctionParameters(daySevenTarget, TICK_SIZE, MIN_PRICE);
+        uint256 daySevenConvertible;
+        {
+            uint256 daySevenDeposit = 7e18;
+            (daySevenConvertible, ) = auctioneer.previewBid(daySevenDeposit);
+            _mintAndBid(recipient, daySevenDeposit);
+            _setAuctionParameters(daySevenTarget, TICK_SIZE, MIN_PRICE);
+
+            expectedAuctionResults[6] = int256(daySevenConvertible - daySevenTarget);
+        }
 
         // Warp to day eight
         vm.warp(INITIAL_BLOCK + 7 days);
-        uint256 dayEightDeposit = 8e18;
         uint256 dayEightTarget = TARGET + 7;
+        uint256 dayEightDeposit = 8e18;
         (uint256 dayEightConvertible, ) = auctioneer.previewBid(dayEightDeposit);
         _mintAndBid(recipient, dayEightDeposit);
 
@@ -471,15 +499,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert auction results
         // Values are updated for the previous day
-        _assertAuctionResults(
-            int256(dayOneConvertible - dayOneTarget),
-            int256(dayTwoConvertible - dayTwoTarget),
-            int256(dayThreeConvertible - dayThreeTarget),
-            int256(dayFourConvertible - dayFourTarget),
-            int256(dayFiveConvertible - dayFiveTarget),
-            int256(daySixConvertible - daySixTarget),
-            int256(daySevenConvertible - daySevenTarget)
-        );
+        _assertAuctionResults(expectedAuctionResults);
         _assertAuctionResultsNextIndex(0);
     }
 
@@ -489,15 +509,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         givenRecipientHasBid(1e18)
         givenAuctionParametersStandard
     {
-        uint256 dayOneTarget = TARGET;
-        uint256 dayOneConvertible = auctioneer.getDayState().convertible;
-        uint256 dayOneDeposits = auctioneer.getDayState().deposits;
-
         // Warp to day two
         vm.warp(INITIAL_BLOCK + 1 days);
         uint256 dayTwoDeposit = 2e18;
         uint256 dayTwoTarget = TARGET + 1;
-        (uint256 dayTwoConvertible, ) = auctioneer.previewBid(dayTwoDeposit);
+        auctioneer.previewBid(dayTwoDeposit);
         _mintAndBid(recipient, dayTwoDeposit);
         _setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
 
@@ -505,7 +521,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(INITIAL_BLOCK + 2 days);
         uint256 dayThreeDeposit = 3e18;
         uint256 dayThreeTarget = TARGET + 2;
-        (uint256 dayThreeConvertible, ) = auctioneer.previewBid(dayThreeDeposit);
+        auctioneer.previewBid(dayThreeDeposit);
         _mintAndBid(recipient, dayThreeDeposit);
         _setAuctionParameters(dayThreeTarget, TICK_SIZE, MIN_PRICE);
 
@@ -513,7 +529,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(INITIAL_BLOCK + 3 days);
         uint256 dayFourDeposit = 4e18;
         uint256 dayFourTarget = TARGET + 3;
-        (uint256 dayFourConvertible, ) = auctioneer.previewBid(dayFourDeposit);
+        auctioneer.previewBid(dayFourDeposit);
         _mintAndBid(recipient, dayFourDeposit);
         _setAuctionParameters(dayFourTarget, TICK_SIZE, MIN_PRICE);
 
@@ -521,7 +537,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(INITIAL_BLOCK + 4 days);
         uint256 dayFiveDeposit = 5e18;
         uint256 dayFiveTarget = TARGET + 4;
-        (uint256 dayFiveConvertible, ) = auctioneer.previewBid(dayFiveDeposit);
+        auctioneer.previewBid(dayFiveDeposit);
         _mintAndBid(recipient, dayFiveDeposit);
         _setAuctionParameters(dayFiveTarget, TICK_SIZE, MIN_PRICE);
 
@@ -529,7 +545,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(INITIAL_BLOCK + 5 days);
         uint256 daySixDeposit = 6e18;
         uint256 daySixTarget = TARGET + 5;
-        (uint256 daySixConvertible, ) = auctioneer.previewBid(daySixDeposit);
+        auctioneer.previewBid(daySixDeposit);
         _mintAndBid(recipient, daySixDeposit);
         _setAuctionParameters(daySixTarget, TICK_SIZE, MIN_PRICE);
 
@@ -537,7 +553,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(INITIAL_BLOCK + 6 days);
         uint256 daySevenDeposit = 7e18;
         uint256 daySevenTarget = TARGET + 6;
-        (uint256 daySevenConvertible, ) = auctioneer.previewBid(daySevenDeposit);
+        auctioneer.previewBid(daySevenDeposit);
         _mintAndBid(recipient, daySevenDeposit);
         _setAuctionParameters(daySevenTarget, TICK_SIZE, MIN_PRICE);
 

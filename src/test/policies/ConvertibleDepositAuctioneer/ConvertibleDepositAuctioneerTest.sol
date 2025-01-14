@@ -158,6 +158,19 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(auctionResults[6], resultSeven_, "result seven");
     }
 
+    function _assertAuctionResults(int256[] memory auctionResults_) internal {
+        int256[] memory auctionResults = auctioneer.getAuctionResults();
+
+        assertEq(auctionResults.length, auctionResults_.length, "auction results length");
+        for (uint256 i = 0; i < auctionResults.length; i++) {
+            assertEq(
+                auctionResults[i],
+                auctionResults_[i],
+                string.concat("result ", vm.toString(i))
+            );
+        }
+    }
+
     function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal {
         assertEq(auctioneer.getAuctionResultsNextIndex(), nextIndex_, "next index");
     }
