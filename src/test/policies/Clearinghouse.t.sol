@@ -48,8 +48,8 @@ import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Cle
 // [X] lendToCooler
 //     [X] only lend to coolers issued by coolerFactory.
 //     [X] only collateral = gOHM + only debt = DAI.
-//     [x] user and cooler new gOHM balances are correct.
-//     [x] user and cooler new DAI balances are correct.
+//     [X] user and cooler new gOHM balances are correct.
+//     [X] user and cooler new DAI balances are correct.
 // [X] extendLoan
 //     [X] only roll coolers issued by coolerFactory.
 //     [X] roll by adding more collateral.

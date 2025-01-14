@@ -2,7 +2,16 @@
 
 This directory contains scripts for submitting proposals to the Olympus Governor.
 
-## Setup
+## Environment
+
+The following are required:
+
+- `bash` shell
+- A [foundry](https://getfoundry.sh/) installation
+- A `.env` file with the following environment variables:
+    - `RPC_URL`: The RPC URL of the chain you wish to submit the proposal on.
+
+## Creating a Proposal Script
 
 The OCG proposal must have a separate contract that inherits from `ProposalScript`. See the `ContractRegistryProposal` for an example.
 
@@ -25,9 +34,10 @@ It is possible to test proposal submission (and execution) on a forked chain. To
 6. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
 7. Alternatively, you can execute the proposal (as if the proposal has passed) by running `./executeOnTestnet.sh` with the appropriate arguments.
 
-## Mainnet
+## Submitting a Proposal
 
 1. Configure a wallet with `cast wallet`
 2. Delegate your gOHM voting power to your wallet address.
     - This can be done by running `./delegate.sh` with the appropriate arguments, or through the Tenderly dashboard.
 3. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
+    - Example: `./src/scripts/proposals/submitProposal.sh --file src/proposals/ContractRegistryProposal.sol --contract ContractRegistryProposalScript --account <cast wallet name> --broadcast true --env .env`

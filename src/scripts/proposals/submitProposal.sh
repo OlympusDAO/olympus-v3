@@ -64,9 +64,15 @@ if [ -z "$account" ]; then
     exit 1
 fi
 
+# Get the address of the cast wallet
+echo "Getting address for cast account $account"
+CAST_ADDRESS=$(cast wallet address --account $account)
+echo ""
+
 echo "Using proposal contract: $file:$contract"
 echo "Using RPC at URL: $RPC_URL"
 echo "Using forge account: $account"
+echo "Sender address: $CAST_ADDRESS"
 
 # Set the fork flag
 FORK_FLAG=""
@@ -87,4 +93,6 @@ else
 fi
 
 # Run the forge script
-forge script $file:$contract -vvv --rpc-url $RPC_URL --account $account $FORK_FLAG $BROADCAST_FLAG
+echo ""
+echo "Running forge script..."
+forge script $file:$contract --rpc-url $RPC_URL --account $account --sender $CAST_ADDRESS $FORK_FLAG $BROADCAST_FLAG -vvv
