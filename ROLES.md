@@ -10,21 +10,28 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
+| contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
+| emergency_restart | EmissionManager | Reactivates the EmissionManager |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
+| emergency_shutdown | EmissionManager | Deactivates the EmissionManager |
+| emissions_admin | EmissionManager | Set configuration parameters |
+| heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
 | heart_admin | Heart | Allows configuring heart parameters and activation/deactivation |
+| loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | loop_daddy | YieldRepurchaseFacility | Activate/deactivate the functionality |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
+| reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 
 ## Role Allocations
 
@@ -62,9 +69,7 @@ This document describes the roles that are used in the Olympus protocol.
         "bridge_admin",
         "heart_admin",
         "operator_policy",
-        "loop_daddy",
-        "contract_registry_admin",
-        "loan_consolidator_admin"
+        "loop_daddy"
     ],
     "0xda9fEDBcAF319Ecf8AB11fe874Fb1AbFc2181766": [ // pOly MS
         "poly_admin"

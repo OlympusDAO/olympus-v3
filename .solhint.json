@@ -11,6 +11,7 @@
         "no-global-import": "off",
         "no-inline-assembly": "off",
         "not-rely-on-time": "off",
+        "quotes": ["warn", "double"],
         "reason-string": "off",
         "var-name-mixedcase": "off"
     }

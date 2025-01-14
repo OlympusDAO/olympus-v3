@@ -57,6 +57,16 @@ interface IHeart {
     /// @param  yieldRepo_ The address of the new YieldRepo contract
     function setYieldRepo(address yieldRepo_) external;
 
+    /// @notice Updates the ReserveMigrator contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  reserveMigrator_ The address of the new ReserveMigrator contract
+    function setReserveMigrator(address reserveMigrator_) external;
+
+    /// @notice Updates the EmissionManager contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  emissionManager_ The address of the new EmissionManager contract
+    function setEmissionManager(address emissionManager_) external;
+
     /// @notice Sets the max reward amount, and auction duration for the beat function
     /// @notice Access restricted
     /// @param  maxReward_ - New max reward amount, in units of the reward token

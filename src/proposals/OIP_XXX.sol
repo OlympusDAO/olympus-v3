@@ -14,7 +14,8 @@ import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 
-// OIP_XX proposal performs all the necessary steps to upgrade the Clearinghouse.
+/// @notice OIP_XXX proposal performs all the necessary steps to upgrade the Clearinghouse.
+// solhint-disable-next-line contract-name-camelcase
 contract OIP_XXX is GovernorBravoProposal {
     // Data struct to cache initial balances and used them in `_validate`.
     struct Cache {
@@ -30,7 +31,7 @@ contract OIP_XXX is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
+    function id() public pure override returns (uint256) {
         return 0;
     }
 
@@ -54,7 +55,7 @@ contract OIP_XXX is GovernorBravoProposal {
             ohm_: addresses.getAddress("olympus-legacy-ohm"),
             gohm_: addresses.getAddress("olympus-legacy-gohm"),
             staking_: addresses.getAddress("olympus-legacy-staking"),
-            sdai_: addresses.getAddress("external-tokens-sdai"),
+            sReserve_: addresses.getAddress("external-tokens-sdai"),
             coolerFactory_: addresses.getAddress("external-coolers-factory"),
             kernel_: address(_kernel)
         });
@@ -64,7 +65,7 @@ contract OIP_XXX is GovernorBravoProposal {
         addresses.addAddress("olympus-policy-clearinghouse-v1.1", address(clearinghouse));
     }
 
-    function _afterDeploy(Addresses addresses, address deployer) internal override {
+    function _afterDeploy(Addresses addresses, address) internal override {
         // Get relevant olympus contracts
         address TRSRY = address(_kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
         address clearinghouseV0 = addresses.getAddress("olympus-policy-clearinghouse");
@@ -143,34 +144,47 @@ contract OIP_XXX is GovernorBravoProposal {
         IERC20 dai = IERC20(addresses.getAddress("external-tokens-dai"));
         IERC4626 sdai = IERC4626(addresses.getAddress("external-tokens-sdai"));
         // Validate token balances
-        assertEq(dai.balanceOf(clearinghouseV0), 0);
-        assertEq(sdai.balanceOf(clearinghouseV0), 0);
-        assertEq(sdai.maxRedeem(clearinghouseV1), 0); // Should be 0 DAI since rebalance wasn't called
-        assertEq(dai.balanceOf(TRSRY), cacheTRSRY.daiBalance + cacheCH0.daiBalance);
+        assertEq(dai.balanceOf(clearinghouseV0), 0, "DAI balance of clearinghouse v1 should be 0");
+        assertEq(
+            sdai.balanceOf(clearinghouseV0),
+            0,
+            "sDAI balance of clearinghouse v1 should be 0"
+        );
+        assertEq(sdai.maxRedeem(clearinghouseV1), 0, "Max redeem should be 0"); // Should be 0 DAI since rebalance wasn't called
+        assertEq(
+            dai.balanceOf(TRSRY),
+            cacheTRSRY.daiBalance + cacheCH0.daiBalance,
+            "DAI balance of treasury should be correct"
+        );
         assertEq(
             sdai.balanceOf(TRSRY),
-            cacheTRSRY.sdaiBalance + cacheCH0.sdaiBalance - sdai.balanceOf(clearinghouseV1)
+            cacheTRSRY.sdaiBalance + cacheCH0.sdaiBalance - sdai.balanceOf(clearinghouseV1),
+            "sDAI balance of treasury should be correct"
         );
         // Validate Clearinghouse state
         Clearinghouse CHv0 = Clearinghouse(clearinghouseV0);
-        assertEq(CHv0.active(), false);
+        assertEq(CHv0.active(), false, "Clearinghouse v1 should be shutdown");
         // Validate Clearinghouse parameters
         Clearinghouse CHv1 = Clearinghouse(clearinghouseV1);
-        assertEq(CHv1.active(), true);
-        assertEq(CHv1.INTEREST_RATE(), 5e15);
-        assertEq(CHv1.LOAN_TO_COLLATERAL(), 289292e16);
-        assertEq(CHv1.DURATION(), 121 days);
-        assertEq(CHv1.FUND_CADENCE(), 7 days);
-        assertEq(CHv1.FUND_AMOUNT(), 18_000_000e18);
-        assertEq(CHv1.MAX_REWARD(), 1e17);
+        assertEq(CHv1.active(), true, "Clearinghouse v1.1 should be active");
+        assertEq(CHv1.INTEREST_RATE(), 5e15, "Interest rate should be correct");
+        assertEq(CHv1.LOAN_TO_COLLATERAL(), 289292e16, "Loan to collateral should be correct");
+        assertEq(CHv1.DURATION(), 121 days, "Duration should be correct");
+        assertEq(CHv1.FUND_CADENCE(), 7 days, "Fund cadence should be correct");
+        assertEq(CHv1.FUND_AMOUNT(), 18_000_000e18, "Fund amount should be correct");
+        assertEq(CHv1.MAX_REWARD(), 1e17, "Max reward should be correct");
         // Validate Clearinghouse Registry state
         // The V0 Clearinghouse's emergencyShutdown function does NOT remove it from the registry.
         CHREGv1 CHRegistry = CHREGv1(CHREG);
-        assertEq(CHRegistry.activeCount(), 2);
-        assertEq(CHRegistry.active(0), clearinghouseV0);
-        assertEq(CHRegistry.active(1), clearinghouseV1);
-        assertEq(CHRegistry.registryCount(), 2);
-        assertEq(CHRegistry.registry(1), clearinghouseV0);
-        assertEq(CHRegistry.registry(2), clearinghouseV1);
+        assertEq(CHRegistry.activeCount(), 2, "Active count should be correct");
+        assertEq(CHRegistry.active(0), clearinghouseV0, "Clearinghouse v0 should be active");
+        assertEq(CHRegistry.active(1), clearinghouseV1, "Clearinghouse v1.1 should be active");
+        assertEq(CHRegistry.registryCount(), 2, "Registry count should be correct");
+        assertEq(CHRegistry.registry(1), clearinghouseV0, "Clearinghouse v0 should be in registry");
+        assertEq(
+            CHRegistry.registry(2),
+            clearinghouseV1,
+            "Clearinghouse v1.1 should be in registry"
+        );
     }
 }
