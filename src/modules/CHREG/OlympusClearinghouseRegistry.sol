@@ -7,7 +7,7 @@ import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 /// @title  Olympus Clearinghouse Registry
 /// @notice Olympus Clearinghouse Registry (Module) Contract
 /// @dev    The Olympus Clearinghouse Registry Module tracks the lending facilities that the Olympus
-///         protocol deploys to satisfy the Cooler Loan demand. This allows for a single-soure of truth
+///         protocol deploys to satisfy the Cooler Loan demand. This allows for a single-source of truth
 ///         for reporting purposes around the total Treasury holdings as well as its projected receivables.
 contract OlympusClearinghouseRegistry is CHREGv1 {
     //============================================================================================//

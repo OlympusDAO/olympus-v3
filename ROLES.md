@@ -11,6 +11,7 @@ This document describes the roles that are used in the Olympus protocol.
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_admin | CDAuctioneer | Allows updating the parameters |
+| contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
@@ -28,6 +29,7 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
 | heart_admin | Heart | Allows configuring heart parameters and activation/deactivation |
+| loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | loop_daddy | YieldRepurchaseFacility | Activate/deactivate the functionality |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |

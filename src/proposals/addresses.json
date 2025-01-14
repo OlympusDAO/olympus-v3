@@ -1,132 +1,147 @@
 [
     {
         "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
-        "name": "proposer",
-        "chainId": 1
+        "chainId": 1,
+        "name": "proposer"
     },
     {
         "addr": "0x0941233c964e7d7Efeb05D253176E5E634cEFfcD",
-        "name": "olympus-governor",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-governor"
     },
     {
         "addr": "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39",
-        "name": "olympus-timelock",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-timelock"
     },
     {
         "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
-        "name": "olympus-multisig-dao",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-multisig-dao"
     },
     {
         "addr": "0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55",
-        "name": "olympus-multisig-emergency",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-multisig-emergency"
     },
     {
         "addr": "0x2286d7f9639e8158FaD1169e76d1FbC38247f54b",
-        "name": "olympus-kernel",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-kernel"
     },
     {
         "addr": "0xb216d714d91eeC4F7120a732c11428857C659eC8",
-        "name": "olympus-policy-roles-admin",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-roles-admin"
     },
     {
         "addr": "0xB63cac384247597756545b500253ff8E607a8020",
-        "name": "olympus-legacy-staking",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-legacy-staking"
     },
     {
         "addr": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
-        "name": "olympus-legacy-ohm",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-legacy-ohm"
     },
     {
         "addr": "0x0ab87046fBb341D058F17CBC4c1133F25a20a52f",
-        "name": "olympus-legacy-gohm",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-legacy-gohm"
     },
     {
         "addr": "0x04906695D6D12CF5459975d7C3C03356E4Ccd460",
-        "name": "olympus-legacy-sohm",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-legacy-sohm"
     },
     {
         "addr": "0x6b175474e89094c44da98b954eedeac495271d0f",
-        "name": "external-tokens-dai",
-        "chainId": 1
+        "chainId": 1,
+        "name": "external-tokens-dai"
     },
     {
         "addr": "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
-        "name": "external-tokens-sdai",
-        "chainId": 1
+        "chainId": 1,
+        "name": "external-tokens-sdai"
     },
     {
         "addr": "0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216",
-        "name": "external-coolers-factory",
-        "chainId": 1
+        "chainId": 1,
+        "name": "external-coolers-factory"
     },
     {
         "addr": "0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c",
-        "name": "olympus-policy-clearinghouse",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-clearinghouse"
     },
     {
         "addr": "0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59",
-        "name": "olympus-module-roles",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-module-roles"
     },
     {
         "addr": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
-        "name": "external-tokens-usds",
-        "chainId": 1
+        "chainId": 1,
+        "name": "external-tokens-usds"
     },
     {
         "addr": "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
-        "name": "external-tokens-susds",
-        "chainId": 1
+        "chainId": 1,
+        "name": "external-tokens-susds"
     },
     {
         "addr": "0x73df08CE9dcC8d74d22F23282c4d49F13b4c795E",
-        "name": "olympus-policy-bondcallback",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-bondcallback"
     },
     {
         "addr": "0x39F6AA3d445e6Dd8eC232c6Bd589889A88E3034d",
-        "name": "olympus-policy-heart-1_5",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-heart-1_5"
     },
     {
         "addr": "0x0AE561226896dA978EaDA0Bec4a7d3CfAE04f506",
-        "name": "olympus-policy-operator-1_4",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-operator-1_4"
     },
     {
         "addr": "0xf7602C0421c283A2fc113172EBDf64C30F21654D",
-        "name": "olympus-policy-heart-1_6",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-heart-1_6"
     },
     {
         "addr": "0x6417F206a0a6628Da136C0Faa39026d0134D2b52",
-        "name": "olympus-policy-operator-1_5",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-operator-1_5"
     },
     {
         "addr": "0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0",
-        "name": "olympus-policy-clearinghouse-1_2",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-clearinghouse-1_2"
     },
     {
         "addr": "0xcaA3d3E653A626e2656d2E799564fE952D39d855",
-        "name": "olympus-policy-yieldrepurchasefacility",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-yieldrepurchasefacility"
     },
     {
         "addr": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
-        "name": "olympus-policy-emissionmanager",
-        "chainId": 1
+        "chainId": 1,
+        "name": "olympus-policy-emissionmanager"
+    },
+    {
+        "addr": "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc",
+        "chainId": 1,
+        "name": "olympus-policy-loan-consolidator"
+    },
+    {
+        "addr": "0x89631595649Cc6dEBa249A8012a5b2d88C8ddE48",
+        "chainId": 1,
+        "name": "olympus-module-rgsty"
+    },
+    {
+        "addr": "0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5",
+        "chainId": 1,
+        "name": "olympus-policy-contract-registry-admin"
     }
 ]

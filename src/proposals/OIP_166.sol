@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
+
 import {console2} from "forge-std/console2.sol";
+
+import {ProposalScript} from "src/proposals/ProposalScript.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -14,13 +17,14 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 
-// OIP_166 is the first step in activating Olympus Onchain Governance.
+/// @notice OIP_166 is the first step in activating Olympus Onchain Governance.
+// solhint-disable-next-line contract-name-camelcase
 contract OIP_166 is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
-        return 166;
+    function id() public pure override returns (uint256) {
+        return 1;
     }
 
     // Returns the name of the proposal.
@@ -178,7 +182,7 @@ contract OIP_166 is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
         RolesAdmin rolesAdmin = RolesAdmin(addresses.getAddress("olympus-policy-roles-admin"));
@@ -256,28 +260,7 @@ contract OIP_166 is GovernorBravoProposal {
     }
 }
 
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
-
-// @notice GovernorBravoScript is a script that runs BRAVO_01 proposal.
-// BRAVO_01 proposal deploys a Vault contract and an ERC20 token contract
-// Then the proposal transfers ownership of both Vault and ERC20 to the timelock address
-// Finally the proposal whitelist the ERC20 token in the Vault contract
-// @dev Use this script to simulates or run a single proposal
-// Use this as a template to create your own script
-// `forge script script/GovernorBravo.s.sol:GovernorBravoScript -vvvv --rpc-url {rpc} --broadcast --verify --etherscan-api-key {key}`
-contract OIP_166_Script is ScriptSuite {
-    string public constant ADDRESSES_PATH = "./src/proposals/addresses.json";
-
-    constructor() ScriptSuite(ADDRESSES_PATH, new OIP_166()) {}
-
-    function run() public override {
-        // set debug mode to true and run it to build the actions list
-        proposal.setDebug(true);
-
-        // run the proposal to build it
-        proposal.run(addresses, address(0));
-
-        // get the calldata for the proposal, doing so in debug mode prints it to the console
-        proposal.getCalldata();
-    }
+// solhint-disable-next-line contract-name-camelcase
+contract OIP_166ProposalScript is ProposalScript {
+    constructor() ProposalScript(new OIP_166()) {}
 }
