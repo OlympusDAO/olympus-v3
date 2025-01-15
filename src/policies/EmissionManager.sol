@@ -189,7 +189,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
-        if (cdAuctioneer.getAuctionResultsNextIndex() == 0 && isDayComplete) {
+        if (isDayComplete && cdAuctioneer.getAuctionResultsNextIndex() == 0) {
             int256[] memory auctionResults = cdAuctioneer.getAuctionResults();
             int256 difference;
             for (uint256 i = 0; i < auctionResults.length; i++) {
