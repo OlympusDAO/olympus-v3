@@ -84,10 +84,6 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
 
-    // ========== ERRORS ========== //
-
-    error EmissionManager_InvalidParams(string reason);
-
     // ========== SETUP ========== //
 
     constructor(
@@ -101,15 +97,13 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         address teller_
     ) Policy(kernel_) {
         // Set immutable variables
-        if (ohm_ == address(0)) revert EmissionManager_InvalidParams("OHM address cannot be 0");
-        if (gohm_ == address(0)) revert EmissionManager_InvalidParams("gOHM address cannot be 0");
-        if (reserve_ == address(0)) revert EmissionManager_InvalidParams("DAI address cannot be 0");
-        if (sReserve_ == address(0))
-            revert EmissionManager_InvalidParams("sDAI address cannot be 0");
+        if (ohm_ == address(0)) revert InvalidParam("OHM address cannot be 0");
+        if (gohm_ == address(0)) revert InvalidParam("gOHM address cannot be 0");
+        if (reserve_ == address(0)) revert InvalidParam("DAI address cannot be 0");
+        if (sReserve_ == address(0)) revert InvalidParam("sDAI address cannot be 0");
         if (bondAuctioneer_ == address(0))
-            revert EmissionManager_InvalidParams("Bond Auctioneer address cannot be 0");
-        if (cdAuctioneer_ == address(0))
-            revert EmissionManager_InvalidParams("CD Auctioneer address cannot be 0");
+            revert InvalidParam("Bond Auctioneer address cannot be 0");
+        if (cdAuctioneer_ == address(0)) revert InvalidParam("CD Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
@@ -254,7 +248,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         emit MinimumPremiumChanged(minimumPremium_);
         emit BackingChanged(backing_);
         emit RestartTimeframeChanged(restartTimeframe_);
-        // TODO emit tickSizeScalar and minPriceScalar
+        emit TickSizeScalarChanged(tickSizeScalar_);
+        emit MinPriceScalarChanged(minPriceScalar_);
     }
 
     // ========== BOND CALLBACK ========== //
@@ -497,6 +492,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Tick Size Scalar");
         tickSizeScalar = newScalar;
+
+        emit TickSizeScalarChanged(newScalar);
     }
 
     /// @notice allow governance to set the CD minimum price scalar
@@ -505,6 +502,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Min Price Scalar");
         minPriceScalar = newScalar;
+
+        emit MinPriceScalarChanged(newScalar);
     }
 
     // =========- VIEW FUNCTIONS ========== //

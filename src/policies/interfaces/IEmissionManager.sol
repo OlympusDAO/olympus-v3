@@ -37,6 +37,12 @@ interface IEmissionManager {
     /// @notice Emitted when the bond contracts are set
     event BondContractsSet(address auctioneer, address teller);
 
+    /// @notice Emitted when the tick size scalar is changed
+    event TickSizeScalarChanged(uint256 newTickSizeScalar);
+
+    /// @notice Emitted when the minimum price scalar is changed
+    event MinPriceScalarChanged(uint256 newMinPriceScalar);
+
     /// @notice Emitted when the contract is activated
     event Activated();
 
