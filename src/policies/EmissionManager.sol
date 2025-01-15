@@ -117,6 +117,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         reserve.approve(address(sReserve), type(uint256).max);
     }
 
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
@@ -132,8 +133,11 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
+
+        return dependencies;
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -145,6 +149,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         permissions = new Permissions[](2);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+
+        return permissions;
+    }
+
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 2;
+
+        return (major, minor);
     }
 
     // ========== HEARTBEAT ========== //
