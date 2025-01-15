@@ -10,9 +10,11 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
-        dependencies[2] = toKeycode("ROLES");
+        dependencies[0] = toKeycode("ROLES");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+
+        return dependencies;
     }
 
     function activate() external override {}
