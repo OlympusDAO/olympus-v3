@@ -6,6 +6,13 @@ import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
+    uint48 internal _initTimestamp;
+    int256[] internal _auctionResults;
+
+    uint256 public target;
+    uint256 public tickSize;
+    uint256 public minPrice;
+
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -56,7 +63,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getDayState() external view override returns (Day memory day) {}
 
-    function isDayComplete() external view override returns (bool isComplete) {}
+    function isDayComplete() public view override returns (bool isComplete) {
+        return block.timestamp / 86400 > _initTimestamp / 86400;
+    }
 
     function bidToken() external view override returns (address token) {}
 
@@ -68,7 +77,19 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
-    ) external override {}
+    ) external override {
+        if (isDayComplete()) {
+            _initTimestamp = uint48(block.timestamp);
+        }
+
+        target = newTarget;
+        tickSize = newSize;
+        minPrice = newMinPrice;
+    }
+
+    function setAuctionResults(int256[] memory results) external {
+        _auctionResults = results;
+    }
 
     function setTimeToExpiry(uint48 newTime) external override {}
 
@@ -80,7 +101,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getAuctionTrackingPeriod() external view override returns (uint8) {}
 
-    function getAuctionResults() external view override returns (int256[] memory) {}
+    function getAuctionResults() external view override returns (int256[] memory) {
+        return _auctionResults;
+    }
 
     function getAuctionResultsNextIndex() external view override returns (uint8) {}
 

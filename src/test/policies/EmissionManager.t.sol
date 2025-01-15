@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
@@ -11,19 +10,16 @@ import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockGohm} from "src/test/mocks/MockGohm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
 
-import {IBondSDA} from "interfaces/IBondSDA.sol";
-import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-
 import {FullMath} from "libraries/FullMath.sol";
 
-import "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
@@ -73,6 +69,12 @@ contract EmissionManagerTest is Test {
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSizeScalar = 1e18; // 100%
     uint256 internal minPriceScalar = 1e18; // 100%
+
+    uint256 internal DEFICIT = 1000e9;
+    uint256 internal SURPLUS = 1001e9;
+
+    // TODO revise test cases
+    // TODO no deficit in auction results
 
     // test cases
     //
@@ -373,6 +375,25 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
         emissionManager.execute();
         vm.stopPrank();
+
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+        _;
+    }
+
+    modifier givenCDAuctioneerHasDeficit() {
+        int256[] memory results = new int256[](2);
+        results[0] = -int256(DEFICIT) * 2;
+        results[1] = int256(DEFICIT);
+        cdAuctioneer.setAuctionResults(results);
+        _;
+    }
+
+    modifier givenCDAuctioneerHasSurplus() {
+        int256[] memory results = new int256[](2);
+        results[0] = int256(SURPLUS) * 2;
+        results[1] = -int256(SURPLUS);
+        cdAuctioneer.setAuctionResults(results);
         _;
     }
 
@@ -404,6 +425,10 @@ contract EmissionManagerTest is Test {
         vm.startPrank(heart);
         emissionManager.execute();
         emissionManager.execute();
+
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+
         emissionManager.execute();
         vm.stopPrank();
     }
@@ -447,7 +472,11 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
 
         // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
 
         // Check that the contract is locally active
         assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
@@ -464,7 +493,11 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
 
         // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
 
         // Check that the beat counter did not increment
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
@@ -518,7 +551,11 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
 
         // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
 
         // Check the beat counter is 1
         assertEq(emissionManager.beatCounter(), 1, "Beat counter should be 1");
@@ -528,7 +565,11 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
 
         // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
 
         // Check that the beat counter is now 2
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
@@ -554,7 +595,11 @@ contract EmissionManagerTest is Test {
         emissionManager.execute();
 
         // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
 
         // Confirm that the token balances are still 0
         assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
@@ -568,6 +613,7 @@ contract EmissionManagerTest is Test {
         public
         givenNextBeatIsZero
         givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
     {
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
@@ -582,12 +628,19 @@ contract EmissionManagerTest is Test {
         // Check that the beat counter is 2
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
 
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+
         // Call execute
         vm.prank(heart);
         emissionManager.execute();
 
         // Check that a bond market was created
-        assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "Market counter should increment"
+        );
 
         // Confirm that the beat counter is now 0
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
@@ -620,14 +673,7 @@ contract EmissionManagerTest is Test {
                 "Callback address should be the emissions manager"
             );
             assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
-            assertEq(
-                capacity,
-                (((baseEmissionRate * PRICE.getLastPrice()) /
-                    ((backing * (1e18 + minimumPremium)) / 1e18)) *
-                    gohm.totalSupply() *
-                    gohm.index()) / 1e27,
-                "Capacity"
-            );
+            assertEq(capacity, DEFICIT, "Capacity");
             assertEq(maxPayout, capacity / 6, "Max payout");
 
             assertEq(scale, 10 ** uint8(36 + 9 - 18 + 0), "Scale");
@@ -654,12 +700,35 @@ contract EmissionManagerTest is Test {
                 "Mint approval should be the capacity"
             );
         }
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
     }
 
     function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_whenNoAdjustment()
         public
         givenNextBeatIsZero
         givenPremiumAboveMinimum
+        givenCDAuctioneerHasDeficit
     {
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
@@ -674,15 +743,44 @@ contract EmissionManagerTest is Test {
         // Check that the beat counter is 2
         assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
 
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+
         // Call execute
         vm.prank(heart);
         emissionManager.execute();
 
         // Check that a bond market was created
-        assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "Market counter should increment"
+        );
 
         // Confirm that the beat counter is now 0
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
 
         // Verify the bond market parameters
         // Check that the market params are correct
@@ -712,14 +810,7 @@ contract EmissionManagerTest is Test {
                 "Callback address should be the emissions manager"
             );
             assertEq(isCapacityInQuote, false, "Capacity should not be in quote token");
-            assertEq(
-                capacity,
-                (((baseEmissionRate * PRICE.getLastPrice()) /
-                    ((backing * (1e18 + minimumPremium)) / 1e18)) *
-                    gohm.totalSupply() *
-                    gohm.index()) / 1e27,
-                "Capacity"
-            );
+            assertEq(capacity, DEFICIT, "Capacity");
             assertEq(maxPayout, capacity / 6, "Max payout");
 
             assertEq(scale, 10 ** uint8(36 + 9 - 18 + 0), "Scale");
@@ -752,6 +843,7 @@ contract EmissionManagerTest is Test {
         public
         givenNextBeatIsZero
         givenPositiveRateAdjustment
+        givenCDAuctioneerHasDeficit
     {
         // Cache the current base rate
         uint256 baseRate = emissionManager.baseEmissionRate();
@@ -762,11 +854,8 @@ contract EmissionManagerTest is Test {
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
-        // Calculate the expected capacity of the bond market
-        uint256 expectedCapacity = (((expectedBaseRate * PRICE.getLastPrice()) /
-            ((backing * (1e18 + minimumPremium)) / 1e18)) *
-            gohm.totalSupply() *
-            gohm.index()) / 1e27;
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
 
         // Execute to trigger the rate adjustment
         vm.prank(heart);
@@ -782,9 +871,31 @@ contract EmissionManagerTest is Test {
         // Confirm that the capacity of the bond market uses the new base rate
         assertEq(
             bondAuctioneer.currentCapacity(nextBondMarketId),
-            expectedCapacity,
+            DEFICIT,
             "Capacity should be updated"
         );
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
 
         // Calculate the expected base rate after the next adjustment
         expectedBaseRate += changeBy;
@@ -799,6 +910,28 @@ contract EmissionManagerTest is Test {
             "Base rate should be updated"
         );
 
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
+
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
         triggerFullCycle();
 
@@ -808,12 +941,35 @@ contract EmissionManagerTest is Test {
             expectedBaseRate,
             "Base rate should not be updated"
         );
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
     }
 
     function test_execute_whenNextBeatIsZero_whenNegativeRateAdjustment()
         public
         givenNextBeatIsZero
         givenNegativeRateAdjustment
+        givenCDAuctioneerHasDeficit
     {
         // Cache the current base rate
         uint256 baseRate = emissionManager.baseEmissionRate();
@@ -824,11 +980,8 @@ contract EmissionManagerTest is Test {
         // Get the ID of the next bond market from the aggregator
         uint256 nextBondMarketId = aggregator.marketCounter();
 
-        // Calculate the expected capacity of the bond market
-        uint256 expectedCapacity = (((expectedBaseRate * PRICE.getLastPrice()) /
-            ((backing * (1e18 + minimumPremium)) / 1e18)) *
-            gohm.totalSupply() *
-            gohm.index()) / 1e27;
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
 
         // Execute to trigger the rate adjustment
         vm.prank(heart);
@@ -841,10 +994,32 @@ contract EmissionManagerTest is Test {
             "Base rate should be updated"
         );
 
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
+
         // Confirm that the capacity of the bond market uses the new base rate
         assertEq(
             bondAuctioneer.currentCapacity(nextBondMarketId),
-            expectedCapacity,
+            DEFICIT,
             "Capacity should be updated"
         );
 
@@ -861,6 +1036,28 @@ contract EmissionManagerTest is Test {
             "Base rate should be updated"
         );
 
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
+
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
         triggerFullCycle();
 
@@ -870,6 +1067,28 @@ contract EmissionManagerTest is Test {
             expectedBaseRate,
             "Base rate should not be updated"
         );
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(
+                cdAuctioneer.minPrice(),
+                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
+                "Min price"
+            );
+        }
     }
 
     // callback test cases
@@ -897,7 +1116,7 @@ contract EmissionManagerTest is Test {
 
     function test_callback_whenActiveMarketIdNotZero_whenIdNotActiveMarket_reverts(
         uint256 id_
-    ) public {
+    ) public givenCDAuctioneerHasDeficit {
         // Trigger two sales so that the active market ID is 1
         triggerFullCycle();
         triggerFullCycle();
@@ -994,12 +1213,15 @@ contract EmissionManagerTest is Test {
 
     // execute -> callback (full cycle bond purchase) tests
 
-    function test_executeCallback_success() public givenNextBeatIsZero {
+    function test_executeCallback_success() public givenNextBeatIsZero givenCDAuctioneerHasDeficit {
         // Change the price to 20 reserve per OHM for easier math
         PRICE.setLastPrice(20 * 1e18);
 
         // Cache the next bond market id
         uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
 
         // Call execute to create the bond market
         vm.prank(heart);
@@ -1097,11 +1319,12 @@ contract EmissionManagerTest is Test {
     function test_shutdown_whenMarketIsActive_closesMarket()
         public
         givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
         givenThereIsPreviousSale
     {
         // We created a market, confirm it is active
         uint256 id = emissionManager.activeMarketId();
-        assertTrue(bondAuctioneer.isLive(id));
+        assertTrue(bondAuctioneer.isLive(id), "Market should be active");
 
         // Check that the contract is locally active
         assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
@@ -1127,7 +1350,7 @@ contract EmissionManagerTest is Test {
         );
 
         // Check that the market is no longer active
-        assertFalse(bondAuctioneer.isLive(id));
+        assertFalse(bondAuctioneer.isLive(id), "Market should be closed");
     }
 
     // restart tests
@@ -1605,7 +1828,7 @@ contract EmissionManagerTest is Test {
 
     function test_setBondContracts_whenBondAuctioneerZero_reverts() public {
         // Try to set bondAuctioneer to 0, expect revert
-        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "auctioneer");
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "bondAuctioneer");
         vm.expectRevert(err);
         vm.prank(guardian);
         emissionManager.setBondContracts(address(0), address(1));
