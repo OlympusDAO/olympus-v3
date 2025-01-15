@@ -134,6 +134,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         returns (Permissions[] memory permissions)
     {}
 
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+
+        return (major, minor);
+    }
+
     // ========== AUCTION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer

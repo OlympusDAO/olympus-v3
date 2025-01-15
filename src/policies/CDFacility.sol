@@ -52,6 +52,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         locallyActive = false;
     }
 
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
@@ -69,6 +70,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         SCALE = 10 ** CDEPO.decimals();
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -87,6 +89,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         permissions[4] = Permissions(cdepoKeycode, CDEPO.sweepYield.selector);
         permissions[5] = Permissions(cdposKeycode, CDPOS.create.selector);
         permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
+    }
+
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+
+        return (major, minor);
     }
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
