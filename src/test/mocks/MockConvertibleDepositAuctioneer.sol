@@ -54,6 +54,8 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getDayState() external view override returns (Day memory day) {}
 
+    function isDayComplete() external view override returns (bool isComplete) {}
+
     function bidToken() external view override returns (address token) {}
 
     function previewBid(
@@ -64,7 +66,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256 newTarget,
         uint256 newSize,
         uint256 newMinPrice
-    ) external override returns (uint256 remainder) {}
+    ) external override {}
 
     function setTimeToExpiry(uint48 newTime) external override {}
 

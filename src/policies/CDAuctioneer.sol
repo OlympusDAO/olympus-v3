@@ -351,8 +351,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 newCapacity = tick.capacity + capacityToAdd;
 
         // If the current date is on a different day to the last bid, the tick size will reset to the standard
-        if (block.timestamp / 86400 > _previousTick.lastUpdate / 86400)
+        if (isDayComplete()) {
             tick.tickSize = _auctionParameters.tickSize;
+        }
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
@@ -389,7 +390,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function returns the day state at the time of the last bid (`_previousTick.lastUpdate`)
     function getDayState() external view override returns (Day memory) {
         return _dayState;
     }
@@ -419,6 +419,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         return _auctionResults;
     }
 
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function isDayComplete() public view override returns (bool) {
+        return block.timestamp / 86400 > _dayState.initTimestamp / 86400;
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
@@ -442,7 +447,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         if (!locallyActive) return;
 
         // Skip if the day state was set on the same day
-        if (block.timestamp / 86400 <= _dayState.initTimestamp / 86400) return;
+        if (!isDayComplete()) return;
 
         // If the next index is 0, reset the results before inserting
         // This ensures that the previous results are available for 24 hours
@@ -485,7 +490,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_
-    ) external override onlyRole(ROLE_HEART) returns (uint256 remainder) {
+    ) external override onlyRole(ROLE_HEART) {
         uint256 previousTarget = _auctionParameters.target;
 
         _setAuctionParameters(target_, tickSize_, minPrice_);
@@ -509,8 +514,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         // Store the auction results, if necessary
         _storeAuctionResults(previousTarget);
-
-        return remainder;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer

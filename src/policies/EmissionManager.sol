@@ -47,11 +47,12 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     CHREGv1 public CHREG;
 
     // Tokens
-    // solhint-disable const-name-snakecase
+    // solhint-disable immutable-vars-naming
     ERC20 public immutable ohm;
     IgOHM public immutable gohm;
     ERC20 public immutable reserve;
     ERC4626 public immutable sReserve;
+    // solhint-enable immutable-vars-naming
 
     // External contracts
     IBondSDA public bondAuctioneer;
@@ -70,9 +71,11 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
+    // solhint-disable immutable-vars-naming
     uint8 internal immutable _ohmDecimals;
     uint8 internal immutable _gohmDecimals;
     uint8 internal immutable _reserveDecimals;
+    // solhint-enable immutable-vars-naming
 
     /// @notice timestamp of last shutdown
     uint48 public shutdownTimestamp;
@@ -169,20 +172,33 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             else baseEmissionRate -= rateChange.changeBy;
         }
 
+        // Cache if the day is complete
+        bool isDayComplete = cdAuctioneer.isDayComplete();
+
         // It then calculates the amount to sell for the coming day
         (, , uint256 emission) = getNextEmission();
 
         // Update the parameters for the convertible deposit auction
-        uint256 remainder = cdAuctioneer.setAuctionParameters(
+        cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),
             getMinPriceFor(PRICE.getCurrentPrice())
         );
 
-        // And then opens a market if applicable
-        if (remainder != 0) {
-            MINTR.increaseMintApproval(address(this), remainder);
-            _createMarket(remainder);
+        // If the tracking period is complete, determine if there was under-selling of OHM
+        if (cdAuctioneer.getAuctionResultsNextIndex() == 0 && isDayComplete) {
+            int256[] memory auctionResults = cdAuctioneer.getAuctionResults();
+            int256 difference;
+            for (uint256 i = 0; i < auctionResults.length; i++) {
+                difference += auctionResults[i];
+            }
+
+            // If there was under-selling, create a market to sell the remaining OHM
+            if (difference < 0) {
+                uint256 remainder = uint256(-difference);
+                MINTR.increaseMintApproval(address(this), remainder);
+                _createMarket(remainder);
+            }
         }
     }
 

@@ -170,6 +170,11 @@ interface IConvertibleDepositAuctioneer {
     /// @return index The index where the next auction result will be stored
     function getAuctionResultsNextIndex() external view returns (uint8 index);
 
+    /// @notice Check if enough time has passed since the last day to allow for a new day to start
+    ///
+    /// @return isComplete  True if the day is complete, false otherwise
+    function isDayComplete() external view returns (bool isComplete);
+
     // ========== ADMIN ========== //
 
     /// @notice Update the auction parameters
@@ -179,12 +184,7 @@ interface IConvertibleDepositAuctioneer {
     /// @param  target_        new target sale per day
     /// @param  tickSize_      new size per tick
     /// @param  minPrice_      new minimum tick price
-    /// @return remainder      amount of ohm not sold
-    function setAuctionParameters(
-        uint256 target_,
-        uint256 tickSize_,
-        uint256 minPrice_
-    ) external returns (uint256 remainder);
+    function setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) external;
 
     /// @notice Set the time to expiry
     /// @dev    See `getTimeToExpiry()` for more information
