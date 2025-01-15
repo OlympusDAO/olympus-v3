@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -20,10 +20,6 @@ import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-
-interface BurnableERC20 {
-    function burn(uint256 amount) external;
-}
 
 interface Clearinghouse {
     function principalReceivables() external view returns (uint256);
