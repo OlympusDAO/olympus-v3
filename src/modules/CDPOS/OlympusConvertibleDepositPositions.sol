@@ -334,22 +334,22 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                 "},"
             ),
             string.concat(
-                '{"trait_type": "Remaining Deposit", "value": "',
+                '{"trait_type": "Remaining Deposit", "value": ',
                 DecimalString.toDecimalString(
                     position.remainingDeposit,
                     depositDecimals,
                     displayDecimals
                 ),
-                '"},'
+                "},"
             ),
             string.concat(
-                '{"trait_type": "Conversion Price", "value": "',
+                '{"trait_type": "Conversion Price", "value": ',
                 DecimalString.toDecimalString(
                     position.conversionPrice,
                     depositDecimals,
                     displayDecimals
                 ),
-                '"}'
+                "}"
             ),
             "],",
             string.concat(
