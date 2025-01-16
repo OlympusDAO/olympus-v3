@@ -301,7 +301,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                         displayDecimals
                     ),
                     "</text>"
-                ), // TODO check decimals of conversion price. This probably isn't correct.
+                ),
                 "</svg>"
             );
     }
