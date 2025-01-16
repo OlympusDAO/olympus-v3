@@ -6,6 +6,41 @@ The purpose of this audit is to review the Convertible Deposits (CD) contracts.
 
 These contracts will be installed in the Olympus V3 "Bophades" system, based on the [Default Framework](https://palm-cause-2bd.notion.site/Default-A-Design-Pattern-for-Better-Protocol-Development-7f8ace6d263c4303b108dc5f8c3055b1).
 
+## Design
+
+The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`CDEPO`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+
+### Auction Design
+
+The auction is designed to be infinite duration and infinite capacity. The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
+
+The auction has a number of parameters that affect its behaviour:
+
+- Minimum Price: the minimum price of reserve token per OHM
+- Tick Size: the size/capacity of each tick, in terms of OHM
+- Tick Step: the percentage increase per tick
+- Target: the target amount of OHM sold per day
+
+The `EmissionManager` is responsible for periodically tuning these auction parameters according to the protocol's emission schedule.
+
+There are a few additional behaviours:
+
+- As tick capacity is depleted, the auctioneer will increase the price of the subsequent tick.
+- With each multiple of the day target being reached, the auctioneer will progressively halve the size of each tick.
+- The active tick price will decay over time, in the absence of any bids.
+
+### Convertible Deposit Design
+
+A successful bidder will receive a convertible deposit that can be converted into OHM or redeemed for the deposited reserve token. The deposit is composed of:
+
+- A quantity of `CDEPO` tokens, which is a fungible ERC20 token across all deposits and terms.
+- A `CDPOS` ERC721 token, which represents the non-fungible position of the bidder. This includes terms such as the expiry date, conversion price and size of the convertible deposit.
+
+Using the `CDFacility` policy, convertible deposit holders are able to:
+
+- Convert their deposit into OHM at any time, at the conversion price of the deposit terms.
+- Reclaim the deposited reserve tokens after expiry, with a discount.
+
 ## Scope
 
 ### In-Scope Contracts
@@ -74,6 +109,40 @@ You can review previous audits here:
 ## Architecture
 
 ### Overview
+
+The diagrams below illustrate the architecture of the components.
+
+#### Activation and Deactivation
+
+```mermaid
+flowchart TD
+  cd_admin((cd_admin)) -- initialize --> CDAuctioneer
+  emergency_shutdown((emergency_shutdown)) -- activate/deactivate --> CDAuctioneer
+  emergency_shutdown((emergency_shutdown)) -- activate/deactivate --> CDFacility
+
+  subgraph Policies
+    CDAuctioneer
+    CDFacility
+    EmissionManager
+    Heart
+  end
+```
+
+#### Auction Tuning
+
+```mermaid
+flowchart TD
+    subgraph Policies
+        EmissionManager
+        CDAuctioneer
+    end
+```
+
+#### Deposit Creation
+
+#### Deposit Conversion
+
+#### Deposit Reclaim
 
 ### CDEPO (Module)
 
