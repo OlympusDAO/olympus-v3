@@ -322,16 +322,16 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             string.concat('"name": "', name, '",'),
             string.concat('"symbol": "', symbol, '",'),
             '"attributes": [',
-            string.concat('{"trait_type": "Position ID", "value": "', Strings.toString(id_), '"},'),
+            string.concat('{"trait_type": "Position ID", "value": ', Strings.toString(id_), "},"),
             string.concat(
                 '{"trait_type": "Convertible Deposit Token", "value": "',
                 Strings.toHexString(position.convertibleDepositToken),
                 '"},'
             ),
             string.concat(
-                '{"trait_type": "Expiry", "display_type": "date", "value": "',
+                '{"trait_type": "Expiry", "display_type": "date", "value": ',
                 Strings.toString(position.expiry),
-                '"},'
+                "},"
             ),
             string.concat(
                 '{"trait_type": "Remaining Deposit", "value": "',

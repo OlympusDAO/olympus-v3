@@ -89,11 +89,11 @@ contract TokenURICDPOSTest is CDPOSTest {
         assertEq(tokenUriSymbol, "OCDP", "symbol");
 
         // Position ID
-        string memory tokenUriPositionId = vm.parseJsonString(
+        uint256 tokenUriPositionId = vm.parseJsonUint(
             decodedTokenURI,
             '.attributes[?(@.trait_type=="Position ID")].value'
         );
-        assertEq(tokenUriPositionId, vm.toString(positionId), "positionId");
+        assertEq(tokenUriPositionId, positionId, "positionId");
 
         // Convertible Deposit Token
         string memory tokenUriConvertibleDepositToken = vm.parseJsonString(
@@ -107,11 +107,11 @@ contract TokenURICDPOSTest is CDPOSTest {
         );
 
         // Expiry
-        string memory tokenUriExpiry = vm.parseJsonString(
+        uint256 tokenUriExpiry = vm.parseJsonUint(
             decodedTokenURI,
             '.attributes[?(@.trait_type=="Expiry")].value'
         );
-        assertEq(tokenUriExpiry, vm.toString(SAMPLE_EXPIRY_DATE), "expiry");
+        assertEq(tokenUriExpiry, SAMPLE_EXPIRY_DATE, "expiry");
 
         // Remaining Deposit
         string memory tokenUriRemainingDeposit = vm.parseJsonString(
@@ -288,10 +288,10 @@ contract TokenURICDPOSTest is CDPOSTest {
         string memory decodedTokenURI = string(Base64.decode(base64EncodedTokenURI));
 
         // Assert JSON structure
-        string memory tokenUriPositionId = vm.parseJsonString(
+        uint256 tokenUriPositionId = vm.parseJsonUint(
             decodedTokenURI,
             '.attributes[?(@.trait_type=="Position ID")].value'
         );
-        assertEq(tokenUriPositionId, "1", "positionId");
+        assertEq(tokenUriPositionId, 1, "positionId");
     }
 }
