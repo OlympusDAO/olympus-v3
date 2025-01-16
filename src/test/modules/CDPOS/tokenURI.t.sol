@@ -143,7 +143,11 @@ contract TokenURICDPOSTest is CDPOSTest {
         assertEq(substring(decodedImage, 0, 4), "<svg", "image starts with SVG");
 
         // Check that the image ends with the SVG element
-        assertEq(substring(decodedImage, bytes(decodedImage).length - 6, bytes(decodedImage).length), "</svg>", "image ends with SVG");
+        assertEq(
+            substring(decodedImage, bytes(decodedImage).length - 6, bytes(decodedImage).length),
+            "</svg>",
+            "image ends with SVG"
+        );
     }
 
     function test_remainingDepositHasDecimals()
