@@ -349,14 +349,14 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                     depositDecimals,
                     displayDecimals
                 ),
-                '"},'
+                '"}'
             ),
-            "]",
+            "],",
             string.concat(
                 '"image": "',
                 "data:image/svg+xml;base64,",
                 Base64.encode(bytes(_render(id_, position))),
-                '"}'
+                '"'
             ),
             "}"
         );
