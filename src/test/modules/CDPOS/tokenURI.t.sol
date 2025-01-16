@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {CDPOSTest} from "./CDPOSTest.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {Base64} from "base64-1.1.0/Base64.sol";
+import {Base64} from "base64-1.1.0/base64.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 function substring(
