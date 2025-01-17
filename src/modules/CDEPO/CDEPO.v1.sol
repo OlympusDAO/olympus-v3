@@ -140,6 +140,15 @@ abstract contract CDEPOv1 is Module, ERC20 {
         uint256 amount_
     ) external virtual returns (uint256 tokensOut);
 
+    /// @notice Preview the amount of underlying asset that would be redeemed for a given amount of convertible deposit tokens
+    /// @dev    The implementing function should perform the following:
+    ///         - Computes the amount of underlying asset that would be returned for the given amount of convertible deposit tokens
+    ///         - Returns the computed amount
+    ///
+    /// @param  amount_   The amount of convertible deposit tokens to burn
+    /// @return tokensOut The amount of underlying asset that would be redeemed
+    function previewRedeem(uint256 amount_) external view virtual returns (uint256 tokensOut);
+
     // ========== YIELD MANAGER ========== //
 
     /// @notice Claim the yield accrued on the reserve token

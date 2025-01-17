@@ -219,6 +219,20 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return amount_;
     }
 
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function reverts if:
+    ///             - The amount is zero
+    ///
+    ///             This function returns the same amount of underlying asset that would be redeemed, as the redeem function does not apply a discount.
+    function previewRedeem(
+        uint256 amount_
+    ) external view virtual override returns (uint256 tokensOut) {
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        tokensOut = amount_;
+        return tokensOut;
+    }
+
     // ========== YIELD MANAGER ========== //
 
     /// @inheritdoc CDEPOv1

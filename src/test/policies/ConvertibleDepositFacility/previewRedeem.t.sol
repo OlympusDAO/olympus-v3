@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
 contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
@@ -262,9 +263,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(EXPIRY);
 
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_InvalidArgs.selector, "amount")
-        );
+        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
 
         // Call function
         facility.previewRedeem(recipient, positionIds_, amounts_);

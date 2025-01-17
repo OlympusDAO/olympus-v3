@@ -298,11 +298,19 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
+        uint256 totalDeposit;
+
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
             uint256 amount = amounts_[i];
-            redeemed += _previewRedeem(account_, positionId, amount);
+            totalDeposit += amount;
+
+            // Validate
+            _previewRedeem(account_, positionId, amount);
         }
+
+        // Preview redeeming the deposits in bulk
+        redeemed = CDEPO.previewRedeem(totalDeposit);
 
         // If the redeemed amount is 0, revert
         if (redeemed == 0) revert CDF_InvalidArgs("amount");
@@ -328,15 +336,19 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
         uint256 unconverted;
+        uint256 totalDeposit;
 
         // Iterate over all positions
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
             uint256 depositAmount = amounts_[i];
+            totalDeposit += depositAmount;
 
-            uint256 redeemedAmount = _previewRedeem(msg.sender, positionId, depositAmount);
-            redeemed += redeemedAmount;
-            unconverted += (redeemedAmount * SCALE) / CDPOS.getPosition(positionId).conversionPrice;
+            // Validate
+            _previewRedeem(msg.sender, positionId, depositAmount);
+
+            // Unconverted must be calculated for each position, as the conversion price can differ
+            unconverted += (depositAmount * SCALE) / CDPOS.getPosition(positionId).conversionPrice;
 
             // Update the position
             CDPOS.update(
@@ -347,11 +359,11 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
         // Redeem the CD deposits in bulk
         // This will revert if the redeemed amount is 0
-        uint256 tokensOut = CDEPO.redeemFor(msg.sender, redeemed);
+        redeemed = CDEPO.redeemFor(msg.sender, totalDeposit);
 
         // Transfer the tokens to the caller
         ERC20 cdepoAsset = CDEPO.asset();
-        cdepoAsset.transfer(msg.sender, tokensOut);
+        cdepoAsset.transfer(msg.sender, redeemed);
 
         // Wrap any remaining tokens and transfer to the TRSRY
         uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
@@ -462,6 +474,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
             // Validate
             _previewReclaim(msg.sender, positionId, depositAmount);
+
+            // Unconverted must be calculated for each position, as the conversion price can differ
             unconverted += (depositAmount * SCALE) / CDPOS.getPosition(positionId).conversionPrice;
 
             // Update the position
