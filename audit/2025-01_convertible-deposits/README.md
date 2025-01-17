@@ -38,8 +38,9 @@ A successful bidder will receive a convertible deposit that can be converted int
 
 Using the `CDFacility` policy, convertible deposit holders are able to:
 
-- Convert their deposit into OHM at any time, at the conversion price of the deposit terms.
-- Reclaim the deposited reserve tokens after expiry, with a discount.
+- Convert their deposit into OHM before expiry, at the conversion price of the deposit terms.
+- Redeem the deposited reserve tokens after expiry.
+- Reclaim the deposited reserve tokens before expiry, with a discount.
 
 ## Scope
 
@@ -114,35 +115,101 @@ The diagrams below illustrate the architecture of the components.
 
 #### Activation and Deactivation
 
+Callers with the appropriate permissions can activate and deactivate the functionality of the CDAuctioneer and CDFacility contracts.
+
 ```mermaid
 flowchart TD
   cd_admin((cd_admin)) -- initialize --> CDAuctioneer
+  emergency_restart((emergency_restart)) -- restart --> EmissionManager
   emergency_shutdown((emergency_shutdown)) -- activate/deactivate --> CDAuctioneer
   emergency_shutdown((emergency_shutdown)) -- activate/deactivate --> CDFacility
+  emergency_shutdown((emergency_shutdown)) -- deactivate --> EmissionManager
+  emissions_admin((emissions_admin)) -- initialize --> EmissionManager
 
   subgraph Policies
     CDAuctioneer
     CDFacility
     EmissionManager
-    Heart
   end
 ```
 
 #### Auction Tuning
 
+As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameters on CDAuctioneer accordingly.
+
 ```mermaid
-flowchart TD
-    subgraph Policies
-        EmissionManager
-        CDAuctioneer
-    end
+sequenceDiagram
+    participant caller
+    participant Heart
+    participant EmissionManager
+    participant CDAuctioneer
+
+    caller->>Heart: beat
+    Heart->>EmissionManager: execute
+    EmissionManager->>CDAuctioneer: setAuctionParameters
 ```
 
 #### Deposit Creation
 
+A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CDEPO tokens and a CDPOS position.
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant CDAuctioneer
+    participant CDFacility
+    participant CDPOS
+    participant CDEPO
+    participant MINTR
+    participant ReserveToken as Reserve (ERC20)
+    participant VaultToken as Vault (ERC4626)
+
+    caller->>CDAuctioneer: bid(depositAmount)
+    CDAuctioneer->>CDAuctioneer: determine conversion price
+    CDAuctioneer->>CDFacility: create(caller, depositAmount, conversionPrice, expiry, wrapNft)
+    CDFacility->>CDEPO: mintFor(caller, depositAmount)
+    CDEPO->>ReserveToken: transferFrom(caller, depositAmount)
+    caller-->>CDEPO: reserve tokens
+    CDEPO->>VaultToken: deposit(depositAmount, caller)
+    VaultToken-->>CDEPO: vault tokens
+    CDEPO-->>caller: CDEPO tokens
+    CDFacility->>CDPOS: create(caller, CDEPO, depositAmount, conversionPrice, expiry, wrapNft)
+    CDPOS-->>caller: CDPOS ERC721 token
+    CDFacility->>MINTR: increaseMintApproval(CDFacility, convertedAmount)
+```
+
 #### Deposit Conversion
 
+Prior to the expiry of the convertible deposit, a deposit owner can convert their deposit into OHM at the conversion price of the deposit terms.
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant CDFacility
+    participant CDPOS
+    participant CDEPO
+    participant TRSRY
+    participant MINTR
+    participant ReserveToken
+    participant VaultToken
+    participant OHM
+
+    caller->>CDFacility: convert(positionIds, amounts)
+    loop For each position
+        CDFacility->>CDPOS: update(positionId, remainingAmount)
+    end
+    CDFacility->>CDEPO: redeemFor(caller, amount)
+    CDEPO->>ReserveToken: transfer(CDFacility, amount)
+    CDFacility->>VaultToken: deposit(amount, TRSRY)
+    VaultToken-->>TRSRY: vault tokens
+    CDFacility->>MINTR: mintOhm(caller, convertedAmount)
+    MINTR->>OHM: mint(caller, convertedAmount)
+    OHM-->>caller: OHM tokens
+```
+
 #### Deposit Reclaim
+
+After
 
 ### CDEPO (Module)
 
