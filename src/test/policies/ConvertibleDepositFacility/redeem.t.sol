@@ -6,8 +6,8 @@ import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleD
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
-contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
-    event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount);
+contract RedeemCDFTest is ConvertibleDepositFacilityTest {
+    event RedeemedDeposit(address indexed user, uint256 redeemedAmount);
 
     // given the contract is inactive
     //  [X] it reverts
@@ -23,20 +23,20 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the caller has not approved CDEPO to spend the total amount of CD tokens
     //  [X] it reverts
-    // when the reclaim amount is 0
+    // when the redeem amount is 0
     //  [X] it reverts
     // [X] it updates the remaining deposit of each position
     // [X] it transfers the redeemed reserve tokens to the owner
     // [X] it decreases the OHM mint approval by the amount of OHM that would have been converted
-    // [X] it returns the reclaimed amount
-    // [X] it emits a ReclaimedDeposit event
+    // [X] it returns the redeemed amount
+    // [X] it emits a RedeemedDeposit event
 
     function test_contractInactive_reverts() public {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
 
         // Call function
-        facility.reclaim(new uint256[](0), new uint256[](0));
+        facility.redeem(new uint256[](0), new uint256[](0));
     }
 
     function test_arrayLengthMismatch_reverts() public givenLocallyActive {
@@ -53,7 +53,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_anyPositionHasDifferentOwner_reverts(
@@ -93,7 +93,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_allPositionsHaveDifferentOwner_reverts()
@@ -125,7 +125,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipientTwo);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_anyPositionIsNotValid_reverts(
@@ -168,7 +168,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_anyPositionHasNotExpired_reverts(
@@ -210,7 +210,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_anyAmountIsGreaterThanRemainingDeposit_reverts(
@@ -256,7 +256,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_amountIsZero_reverts()
@@ -280,7 +280,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_spendingIsNotApproved_reverts()
@@ -308,7 +308,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.redeem(positionIds_, amounts_);
     }
 
     function test_success()
@@ -341,14 +341,14 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(recipient, RESERVE_TOKEN_AMOUNT);
+        emit RedeemedDeposit(recipient, RESERVE_TOKEN_AMOUNT);
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(positionIds_, amounts_);
+        uint256 redeemed = facility.redeem(positionIds_, amounts_);
 
-        // Assertion that the reclaimed amount is the sum of the amounts
-        assertEq(reclaimed, RESERVE_TOKEN_AMOUNT, "reclaimed");
+        // Assertion that the redeemed amount is the sum of the amounts
+        assertEq(redeemed, RESERVE_TOKEN_AMOUNT, "redeemed");
 
         // Assert convertible deposit tokens are transferred from the recipient
         assertEq(
@@ -445,10 +445,10 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(positionIds_, amounts_);
+        uint256 redeemed = facility.redeem(positionIds_, amounts_);
 
-        // Assert reclaimed amount
-        assertEq(reclaimed, amountOne + amountTwo, "reclaimed");
+        // Assert redeemed amount
+        assertEq(redeemed, amountOne + amountTwo, "redeemed");
 
         // Assert convertible deposit tokens are transferred from the recipient
         assertEq(

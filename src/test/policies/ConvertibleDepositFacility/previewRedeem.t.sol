@@ -5,7 +5,7 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
-contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
+contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
     //  [X] it reverts
     // when the length of the positionIds_ array does not match the length of the amounts_ array
@@ -18,9 +18,9 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when any position has an amount greater than the remaining deposit
     //  [X] it reverts
-    // when the reclaim amount is 0
+    // when the redeem amount is 0
     //  [X] it reverts
-    // [X] it returns the total amount of deposit token that would be reclaimed
+    // [X] it returns the total amount of deposit token that would be redeemed
     // [X] it returns the address that will spend the convertible deposit tokens
 
     function test_contractInactive_reverts() public {
@@ -28,7 +28,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
 
         // Call function
-        facility.previewReclaim(recipient, new uint256[](0), new uint256[](0));
+        facility.previewRedeem(recipient, new uint256[](0), new uint256[](0));
     }
 
     function test_arrayLengthMismatch_reverts() public givenLocallyActive {
@@ -44,7 +44,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(recipient, positionIds_, amounts_);
+        facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
     function test_anyPositionHasDifferentOwner_reverts(
@@ -83,7 +83,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(recipient, positionIds_, amounts_);
+        facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
     function test_allPositionsHaveDifferentOwner_reverts()
@@ -114,7 +114,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(recipientTwo, positionIds_, amounts_);
+        facility.previewRedeem(recipientTwo, positionIds_, amounts_);
     }
 
     function test_anyPositionIsNotValid_reverts(
@@ -156,7 +156,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
 
         // Call function
-        facility.previewReclaim(recipient, positionIds_, amounts_);
+        facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
     function test_anyPositionHasNotExpired_reverts(
@@ -197,7 +197,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(recipient, positionIds_, amounts_);
+        facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
     function test_anyAmountIsGreaterThanRemainingDeposit_reverts(
@@ -242,7 +242,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(recipient, positionIds_, amounts_);
+        facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
     function test_amountIsZero_reverts()
@@ -267,7 +267,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(recipient, positionIds_, amounts_);
+        facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
     function test_success(
@@ -301,14 +301,14 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(EXPIRY);
 
         // Call function
-        (uint256 reclaimed, address spender) = facility.previewReclaim(
+        (uint256 redeemed, address spender) = facility.previewRedeem(
             recipient,
             positionIds_,
             amounts_
         );
 
-        // Assertion that the reclaimed amount is the sum of the amounts
-        assertEq(reclaimed, amountOne + amountTwo + amountThree, "reclaimed");
+        // Assertion that the redeemed amount is the sum of the amounts
+        assertEq(redeemed, amountOne + amountTwo + amountThree, "redeemed");
 
         // Assertion that the spender is the convertible depository
         assertEq(spender, address(convertibleDepository), "spender");
