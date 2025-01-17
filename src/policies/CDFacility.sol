@@ -86,7 +86,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
         permissions[3] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
-        permissions[4] = Permissions(cdepoKeycode, CDEPO.sweepYield.selector);
+        permissions[4] = Permissions(cdepoKeycode, CDEPO.reclaimFor.selector);
         permissions[5] = Permissions(cdposKeycode, CDPOS.create.selector);
         permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
     }
@@ -368,6 +368,23 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         emit RedeemedDeposit(msg.sender, redeemed);
 
         return redeemed;
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function previewReclaim(
+        address account_,
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external view returns (uint256 reclaimed, address cdTokenSpender) {
+        // TODO: Implement this
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function reclaim(
+        uint256[] memory positionIds_,
+        uint256[] memory amounts_
+    ) external returns (uint256 reclaimed) {
+        // TODO: Implement this
     }
 
     // ========== VIEW FUNCTIONS ========== //
