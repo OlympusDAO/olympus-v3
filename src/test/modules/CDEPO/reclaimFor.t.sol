@@ -21,7 +21,7 @@ contract ReclaimForCDEPOTest is CDEPOTest {
     // when the account address has a sufficient balance of convertible deposit tokens
     //  [X] it burns the corresponding amount of convertible deposit tokens from the account address
     //  [X] it withdraws the underlying asset from the vault
-    //  [X] it transfers the underlying asset to the account address after applying the reclaim rate
+    //  [X] it transfers the underlying asset to the caller after applying the reclaim rate
     //  [X] it marks the forfeited amount of the underlying asset as yield
     //  [X] it updates the total deposits
 
@@ -96,7 +96,7 @@ contract ReclaimForCDEPOTest is CDEPOTest {
         CDEPO.reclaimFor(recipientTwo, 10e18);
 
         // Assert balances
-        _assertReserveTokenBalance(0, expectedReserveTokenAmount);
+        _assertReserveTokenBalance(expectedReserveTokenAmount, 0);
         _assertCDEPOBalance(0, 0);
         _assertVaultBalance(0, 0, forfeitedAmount);
 
@@ -146,7 +146,7 @@ contract ReclaimForCDEPOTest is CDEPOTest {
         CDEPO.reclaimFor(recipientTwo, amount);
 
         // Assert balances
-        _assertReserveTokenBalance(0, expectedReserveTokenAmount);
+        _assertReserveTokenBalance(expectedReserveTokenAmount, 0);
         _assertCDEPOBalance(0, 10e18 - amount);
         _assertVaultBalance(0, 10e18 - amount, forfeitedAmount);
 

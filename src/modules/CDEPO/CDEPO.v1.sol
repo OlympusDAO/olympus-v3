@@ -80,7 +80,8 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///         - Marks the forfeited amount of the underlying asset as yield
     ///
     /// @param  amount_   The amount of convertible deposit tokens to burn
-    function reclaim(uint256 amount_) external virtual;
+    /// @return tokensOut The amount of underlying asset that was reclaimed
+    function reclaim(uint256 amount_) external virtual returns (uint256 tokensOut);
 
     /// @notice Burn tokens from `account_` and reclaim the underlying asset
     ///         This function behaves the same as `reclaim`, but allows the caller to
@@ -96,7 +97,11 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///
     /// @param  account_    The address to burn the convertible deposit tokens from and transfer the underlying asset to
     /// @param  amount_     The amount of convertible deposit tokens to burn
-    function reclaimFor(address account_, uint256 amount_) external virtual;
+    /// @return tokensOut   The amount of underlying asset that was reclaimed
+    function reclaimFor(
+        address account_,
+        uint256 amount_
+    ) external virtual returns (uint256 tokensOut);
 
     /// @notice Preview the amount of underlying asset that would be reclaimed for a given amount of convertible deposit tokens
     /// @dev    The implementing function should perform the following:

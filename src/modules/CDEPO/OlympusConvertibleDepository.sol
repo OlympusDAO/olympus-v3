@@ -27,7 +27,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     constructor(
         address kernel_,
-        address erc4626Vault_
+        address erc4626Vault_,
+        uint16 reclaimRate_
     )
         Module(Kernel(kernel_))
         ERC20(
@@ -39,6 +40,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Store the vault and asset
         vault = ERC4626(erc4626Vault_);
         asset = ERC20(vault.asset());
+
+        // Set the reclaim rate
+        _setReclaimRate(reclaimRate_);
     }
 
     // ========== MODULE FUNCTIONS ========== //
@@ -103,8 +107,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
     ///             - Calls `reclaimFor` with the caller as the address to reclaim the tokens to
-    function reclaim(uint256 amount_) external virtual override {
-        reclaimFor(msg.sender, amount_);
+    function reclaim(uint256 amount_) external virtual override returns (uint256 tokensOut) {
+        return reclaimFor(msg.sender, amount_);
     }
 
     /// @inheritdoc CDEPOv1
@@ -112,13 +116,16 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
     ///             - Burns the CD tokens from the `account_` address
     ///             - Calculates the quantity of underlying asset to withdraw and return
-    ///             - Returns the underlying asset to `account_`
+    ///             - Returns the underlying asset to the caller
     ///
     ///             This function reverts if:
     ///             - The amount is zero
     ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
     ///             - The quantity of vault shares for the amount is zero
-    function reclaimFor(address account_, uint256 amount_) public virtual override {
+    function reclaimFor(
+        address account_,
+        uint256 amount_
+    ) public virtual override returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
@@ -142,8 +149,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // It will revert if the caller does not have enough CD tokens
         _burn(account_, amount_);
 
-        // Return the underlying asset to `account_`
-        vault.withdraw(discountedAssetsOut, account_, address(this));
+        // Return the underlying asset to the caller
+        vault.withdraw(discountedAssetsOut, msg.sender, address(this));
+
+        return discountedAssetsOut;
     }
 
     /// @inheritdoc CDEPOv1
@@ -157,6 +166,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
         assetsOut = FullMath.mulDiv(amount_, reclaimRate, ONE_HUNDRED_PERCENT);
+
+        return assetsOut;
     }
 
     /// @inheritdoc CDEPOv1
@@ -263,11 +274,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== ADMIN ========== //
 
-    /// @inheritdoc CDEPOv1
-    /// @dev        This function reverts if:
-    ///             - The caller is not permissioned
-    ///             - The new reclaim rate is not within bounds
-    function setReclaimRate(uint16 newReclaimRate_) external virtual override permissioned {
+    function _setReclaimRate(uint16 newReclaimRate_) internal {
         // Validate that the reclaim rate is within bounds
         if (newReclaimRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("Greater than 100%");
 
@@ -276,5 +283,13 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
         // Emit the event
         emit ReclaimRateUpdated(newReclaimRate_);
+    }
+
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function reverts if:
+    ///             - The caller is not permissioned
+    ///             - The new reclaim rate is not within bounds
+    function setReclaimRate(uint16 newReclaimRate_) external virtual override permissioned {
+        _setReclaimRate(newReclaimRate_);
     }
 }

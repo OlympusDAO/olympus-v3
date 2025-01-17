@@ -203,7 +203,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionNotExpired.selector,
+                IConvertibleDepositFacility.CDF_PositionExpired.selector,
                 positionIndex
             )
         );
@@ -336,8 +336,8 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         positionIds_[1] = 1;
         amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
 
-        uint256 expectedReclaimedAmount = ((amounts_[0] + amounts_[1]) * CDEPO.reclaimRate()) /
-            100e2;
+        uint256 expectedReclaimedAmount = ((amounts_[0] + amounts_[1]) *
+            convertibleDepository.reclaimRate()) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
         // Warp to before the expiry
@@ -426,9 +426,9 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        // Both 2+ so that the converted amount is not 0
-        uint256 amountOne = bound(amountOne_, 2, 5e18);
-        uint256 amountTwo = bound(amountTwo_, 2, 5e18);
+        // Both 3+ so that the converted amount is not 0
+        uint256 amountOne = bound(amountOne_, 3, 5e18);
+        uint256 amountTwo = bound(amountTwo_, 3, 5e18);
 
         uint256[] memory positionIds_ = new uint256[](2);
         uint256[] memory amounts_ = new uint256[](2);
@@ -445,7 +445,8 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             CONVERSION_PRICE;
 
         // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimedAmount = ((amountOne + amountTwo) * CDEPO.reclaimRate()) / 100e2;
+        uint256 expectedReclaimedAmount = ((amountOne + amountTwo) *
+            convertibleDepository.reclaimRate()) / 100e2;
         uint256 expectedForfeitedAmount = amountOne + amountTwo - expectedReclaimedAmount;
 
         // Warp to before the expiry
@@ -504,7 +505,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
         assertEq(
             reserveToken.balanceOf(recipient),
-            amountOne + amountTwo,
+            expectedReclaimedAmount,
             "reserveToken.balanceOf(recipient)"
         );
 

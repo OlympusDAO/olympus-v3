@@ -38,6 +38,7 @@ contract ConvertibleDepositFacilityTest is Test {
     uint256 public constant CONVERSION_PRICE = 2e18;
     uint48 public constant EXPIRY = INITIAL_BLOCK + 1 days;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
+    uint16 public constant RECLAIM_RATE = 90e2;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -51,7 +52,11 @@ contract ConvertibleDepositFacilityTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(address(kernel), address(vault));
+        convertibleDepository = new OlympusConvertibleDepository(
+            address(kernel),
+            address(vault),
+            RECLAIM_RATE
+        );
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
         facility = new CDFacility(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);

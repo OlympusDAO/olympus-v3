@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
 contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
@@ -191,7 +192,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionNotExpired.selector,
+                IConvertibleDepositFacility.CDF_PositionExpired.selector,
                 positionIndex
             )
         );
@@ -262,9 +263,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(EXPIRY - 1);
 
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_InvalidArgs.selector, "amount")
-        );
+        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
 
         // Call function
         facility.previewReclaim(recipient, positionIds_, amounts_);
@@ -283,9 +282,10 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
     {
-        uint256 amountOne = bound(amountOne_, 0, 3e18);
-        uint256 amountTwo = bound(amountTwo_, 0, 3e18);
-        uint256 amountThree = bound(amountThree_, 0, 3e18);
+        // Both 3+ so that the converted amount is not 0
+        uint256 amountOne = bound(amountOne_, 3, 3e18);
+        uint256 amountTwo = bound(amountTwo_, 3, 3e18);
+        uint256 amountThree = bound(amountThree_, 3, 3e18);
 
         uint256[] memory positionIds_ = new uint256[](3);
         uint256[] memory amounts_ = new uint256[](3);

@@ -49,6 +49,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant TARGET = 20e9;
     uint48 public constant TIME_TO_EXPIRY = 1 days;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
+    uint16 public constant RECLAIM_RATE = 90e2;
 
     // Events
     event Activated();
@@ -70,7 +71,11 @@ contract ConvertibleDepositAuctioneerTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(address(kernel), address(vault));
+        convertibleDepository = new OlympusConvertibleDepository(
+            address(kernel),
+            address(vault),
+            RECLAIM_RATE
+        );
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
         facility = new CDFacility(address(kernel));
         auctioneer = new CDAuctioneer(address(kernel), address(facility));

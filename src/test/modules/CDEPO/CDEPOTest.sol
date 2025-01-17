@@ -34,7 +34,7 @@ abstract contract CDEPOTest is Test {
         reserveToken.mint(address(vault), INITIAL_VAULT_BALANCE);
 
         kernel = new Kernel();
-        CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault));
+        CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault), reclaimRate);
 
         // Generate fixtures
         godmode = CDEPO.generateGodmodeFixture(type(OlympusConvertibleDepository).name);
@@ -42,10 +42,6 @@ abstract contract CDEPOTest is Test {
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(CDEPO));
         kernel.executeAction(Actions.ActivatePolicy, godmode);
-
-        // Set reclaim rate
-        vm.prank(godmode);
-        CDEPO.setReclaimRate(reclaimRate);
     }
 
     // ========== ASSERTIONS ========== //
