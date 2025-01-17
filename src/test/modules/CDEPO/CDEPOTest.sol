@@ -63,7 +63,7 @@ abstract contract CDEPOTest is Test {
 
         assertEq(
             reserveToken.totalSupply(),
-            reserveToken.balanceOf(address(CDEPO.vault())) + recipientAmount_ + recipientTwoAmount_,
+            reserveToken.balanceOf(address(CDEPO.VAULT())) + recipientAmount_ + recipientTwoAmount_,
             "reserve token balance: total supply"
         );
     }

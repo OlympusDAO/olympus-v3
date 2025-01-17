@@ -15,10 +15,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== STATE VARIABLES ========== //
 
     /// @inheritdoc CDEPOv1
-    ERC4626 public immutable override vault;
+    ERC4626 public immutable override VAULT;
 
     /// @inheritdoc CDEPOv1
-    ERC20 public immutable override asset;
+    ERC20 public immutable override ASSET;
 
     /// @inheritdoc CDEPOv1
     uint16 public override reclaimRate;
@@ -38,8 +38,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         )
     {
         // Store the vault and asset
-        vault = ERC4626(erc4626Vault_);
-        asset = ERC20(vault.asset());
+        VAULT = ERC4626(erc4626Vault_);
+        ASSET = ERC20(VAULT.asset());
 
         // Set the reclaim rate
         _setReclaimRate(reclaimRate_);
@@ -82,11 +82,11 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Transfer the underlying asset to the contract
-        asset.safeTransferFrom(account_, address(this), amount_);
+        ASSET.safeTransferFrom(account_, address(this), amount_);
 
         // Deposit the underlying asset into the vault and update the total shares
-        asset.safeApprove(address(vault), amount_);
-        totalShares += vault.deposit(amount_, address(this));
+        ASSET.safeApprove(address(VAULT), amount_);
+        totalShares += VAULT.deposit(amount_, address(this));
 
         // Mint the CD tokens to the `account_` address
         _mint(account_, amount_);
@@ -132,7 +132,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Calculate the quantity of underlying asset to withdraw and return
         // This will create a difference between the quantity of underlying assets and the vault shares, which will be swept as yield
         uint256 discountedAssetsOut = previewReclaim(amount_);
-        uint256 sharesOut = vault.previewWithdraw(discountedAssetsOut);
+        uint256 sharesOut = VAULT.previewWithdraw(discountedAssetsOut);
         totalShares -= sharesOut;
 
         // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
@@ -150,7 +150,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         _burn(account_, amount_);
 
         // Return the underlying asset to the caller
-        vault.withdraw(discountedAssetsOut, msg.sender, address(this));
+        VAULT.withdraw(discountedAssetsOut, msg.sender, address(this));
 
         return discountedAssetsOut;
     }
@@ -197,7 +197,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Calculate the quantity of shares to transfer
-        uint256 sharesOut = vault.previewWithdraw(amount_);
+        uint256 sharesOut = VAULT.previewWithdraw(amount_);
         totalShares -= sharesOut;
 
         // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
@@ -214,7 +214,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         _burn(account_, amount_);
 
         // Return the underlying asset to the caller
-        vault.withdraw(amount_, msg.sender, address(this));
+        VAULT.withdraw(amount_, msg.sender, address(this));
 
         return amount_;
     }
@@ -261,7 +261,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         totalShares -= yieldSReserve;
 
         // Transfer the yield to the recipient
-        vault.safeTransfer(recipient_, yieldSReserve);
+        VAULT.safeTransfer(recipient_, yieldSReserve);
 
         // Emit the event
         emit YieldSwept(recipient_, yieldReserve, yieldSReserve);
@@ -278,10 +278,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
         // The yield is the difference between the quantity of underlying assets in the vault and the quantity CD tokens issued
-        yieldReserve = vault.previewRedeem(totalShares) - totalSupply;
+        yieldReserve = VAULT.previewRedeem(totalShares) - totalSupply;
 
         // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed
-        yieldSReserve = vault.previewWithdraw(yieldReserve);
+        yieldSReserve = VAULT.previewWithdraw(yieldReserve);
 
         return (yieldReserve, yieldSReserve);
     }

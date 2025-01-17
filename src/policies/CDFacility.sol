@@ -240,8 +240,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         uint256 tokensOut = CDEPO.redeemFor(msg.sender, cdTokenIn);
 
         // Wrap the tokens and transfer to the TRSRY
-        ERC4626 vault = CDEPO.vault();
-        CDEPO.asset().approve(address(vault), tokensOut);
+        ERC4626 vault = CDEPO.VAULT();
+        CDEPO.ASSET().approve(address(vault), tokensOut);
         vault.deposit(tokensOut, address(TRSRY));
 
         // Mint OHM to the owner/caller
@@ -362,13 +362,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         redeemed = CDEPO.redeemFor(msg.sender, totalDeposit);
 
         // Transfer the tokens to the caller
-        ERC20 cdepoAsset = CDEPO.asset();
+        ERC20 cdepoAsset = CDEPO.ASSET();
         cdepoAsset.transfer(msg.sender, redeemed);
 
         // Wrap any remaining tokens and transfer to the TRSRY
         uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
         if (remainingTokens > 0) {
-            ERC4626 vault = CDEPO.vault();
+            ERC4626 vault = CDEPO.VAULT();
             cdepoAsset.approve(address(vault), remainingTokens);
             vault.deposit(remainingTokens, address(TRSRY));
         }
@@ -490,13 +490,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         reclaimed = CDEPO.reclaimFor(msg.sender, totalDeposit);
 
         // Transfer the tokens to the caller
-        ERC20 cdepoAsset = CDEPO.asset();
+        ERC20 cdepoAsset = CDEPO.ASSET();
         cdepoAsset.transfer(msg.sender, reclaimed);
 
         // Wrap any remaining tokens and transfer to the TRSRY
         uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
         if (remainingTokens > 0) {
-            ERC4626 vault = CDEPO.vault();
+            ERC4626 vault = CDEPO.VAULT();
             cdepoAsset.approve(address(vault), remainingTokens);
             vault.deposit(remainingTokens, address(TRSRY));
         }
@@ -513,7 +513,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     // ========== VIEW FUNCTIONS ========== //
 
     function depositToken() external view returns (address) {
-        return address(CDEPO.asset());
+        return address(CDEPO.ASSET());
     }
 
     function convertibleDepositToken() external view returns (address) {

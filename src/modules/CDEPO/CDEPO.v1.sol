@@ -190,10 +190,10 @@ abstract contract CDEPOv1 is Module, ERC20 {
     // ========== STATE VARIABLES ========== //
 
     /// @notice The ERC4626 vault that holds the underlying asset
-    function vault() external view virtual returns (ERC4626);
+    function VAULT() external view virtual returns (ERC4626);
 
     /// @notice The underlying ERC20 asset
-    function asset() external view virtual returns (ERC20);
+    function ASSET() external view virtual returns (ERC20);
 
     /// @notice The reclaim rate of the convertible deposit token
     /// @dev    A reclaim rate of 99e2 (99%) means that for every 100 convertible deposit tokens burned, 99 underlying asset tokens are returned

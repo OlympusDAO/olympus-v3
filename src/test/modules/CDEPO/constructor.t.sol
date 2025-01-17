@@ -40,8 +40,8 @@ contract ConstructorCDEPOTest is CDEPOTest {
         assertEq(CDEPO.name(), "cdRST", "name");
         assertEq(CDEPO.symbol(), "cdRST", "symbol");
         assertEq(CDEPO.decimals(), 18, "decimals");
-        assertEq(address(CDEPO.asset()), address(reserveToken), "asset");
-        assertEq(address(CDEPO.vault()), address(vault), "vault");
+        assertEq(address(CDEPO.ASSET()), address(reserveToken), "asset");
+        assertEq(address(CDEPO.VAULT()), address(vault), "vault");
         assertEq(CDEPO.reclaimRate(), reclaimRate, "reclaimRate");
     }
 }
