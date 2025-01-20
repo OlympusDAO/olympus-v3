@@ -1,26 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+// External libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+// Internal libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+// Interfaces
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
-import {IStaking} from "interfaces/IStaking.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 
+// Modules
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
-import "src/Kernel.sol";
+// Kernel
+import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
 /// @title  Olympus Heart
 /// @notice Olympus Heart (Policy) Contract
