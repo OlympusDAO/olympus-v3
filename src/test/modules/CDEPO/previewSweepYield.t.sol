@@ -5,6 +5,8 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 
 contract PreviewSweepYieldCDEPOTest is CDEPOTest {
     // when there are no deposits
+    //  when the vault has assets
+    //   [X] it returns zero
     //  [X] it returns zero
     // when there are deposits
     //  when there have been reclaimed deposits
@@ -12,6 +14,35 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
     //  [X] it returns the difference between the total deposits and the total assets in the vault
 
     function test_noDeposits() public {
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+
+        // Assert values
+        assertEq(yieldReserve, 0, "yieldReserve");
+        assertEq(yieldSReserve, 0, "yieldSReserve");
+    }
+
+    function test_noDeposits_withAssets_donated() public {
+        // Donate assets into the vault
+        reserveToken.mint(address(vault), 10e18);
+
+        // Call function
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+
+        // Assert values
+        assertEq(yieldReserve, 0, "yieldReserve");
+        assertEq(yieldSReserve, 0, "yieldSReserve");
+    }
+
+    function test_noDeposits_withAssets()
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(vault), 10e18)
+    {
+        // Deposit into the vault
+        vm.prank(recipient);
+        vault.deposit(10e18, address(recipient));
+
+        // Call function
         (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
 
         // Assert values
