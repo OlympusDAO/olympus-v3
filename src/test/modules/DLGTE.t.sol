@@ -71,7 +71,7 @@ contract DLGTETestBase is Test {
         uint256 expectedNumDelegateAddresses,
         uint256 expectedMaxAllowedDelegateAddresses,
         uint256 expectedPolicyAcctBalance
-    ) internal {
+    ) internal view {
         (
             uint256 totalGOhm,
             uint256 delegatedGOhm,
@@ -98,7 +98,7 @@ contract DLGTETestBase is Test {
         );
     }
 
-    function verifyDelegationsZero(address account) internal {
+    function verifyDelegationsZero(address account) internal view {
         DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
             account,
             0,
@@ -112,7 +112,7 @@ contract DLGTETestBase is Test {
         address expectedDelegate,
         address expectedEscrow,
         uint256 expectedTotalAmount
-    ) internal {
+    ) internal view {
         DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
             account,
             0,
@@ -132,7 +132,7 @@ contract DLGTETestBase is Test {
         address expectedDelegate2,
         address expectedEscrow2,
         uint256 expectedTotalAmount2
-    ) internal {
+    ) internal view {
         DLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
             account,
             0,
@@ -205,7 +205,7 @@ contract DLGTETestBase is Test {
 contract DLGTETestAdmin is DLGTETestBase {
     event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
 
-    function test_constructor() public {
+    function test_constructor() public view {
         assertEq(address(dlgte.kernel()), address(kernel));
         assertEq(address(dlgte.gOHM()), address(gohm));
         assertEq(dlgte.DEFAULT_MAX_DELEGATE_ADDRESSES(), 10);
@@ -215,7 +215,7 @@ contract DLGTETestAdmin is DLGTETestBase {
         assertEq(minor, 0);
     }
 
-    function test_maxDelegateAddresses_default() public {
+    function test_maxDelegateAddresses_default() public view {
         assertEq(dlgte.maxDelegateAddresses(ALICE), 10);
     }
 

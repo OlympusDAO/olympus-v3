@@ -38,8 +38,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), borrowAmount);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), borrowAmount);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
         }
 
         // Immediate checks
@@ -51,8 +51,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -69,8 +69,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.88e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.8786e18,
                     currentLtv: 0.5e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -107,8 +107,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -125,8 +125,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.870623460936445935e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.869230443465535816e18,
                     currentLtv: 0.5e18 + 0.0025062604151399100e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -158,8 +158,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -176,8 +176,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.870623460936445935e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.869230443465535816e18,
                     currentLtv: 0.5e18 + 0.0025062604151399100e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -218,8 +218,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         assertEq(gohm.balanceOf(BOB), 0);
         assertEq(gohm.balanceOf(address(cooler)), 0);
         assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-        assertEq(dai.balanceOf(ALICE), 0);
-        assertEq(dai.balanceOf(BOB), borrowAmount);
+        assertEq(usds.balanceOf(ALICE), 0);
+        assertEq(usds.balanceOf(BOB), borrowAmount);
 
         checkAccountState(
             ALICE,
@@ -236,8 +236,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 collateral: collateralAmount,
                 currentDebt: borrowAmount,
                 maxOriginationDebtAmount: 9_300e18,
-                liquidationDebtAmount: 9_400e18,
-                healthFactor: 1.88e18,
+                liquidationDebtAmount: 9_393e18,
+                healthFactor: 1.8786e18,
                 currentLtv: 0.5e18,
                 totalDelegated: 0,
                 numDelegateAddresses: 0,
@@ -282,8 +282,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount * 2);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount * 2);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -300,8 +300,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.88e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.8786e18,
                     currentLtv: 0.5e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -338,8 +338,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount * 2);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount * 2);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -356,8 +356,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.870623460936445935e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.869230443465535816e18,
                     currentLtv: 0.5e18 + 0.0025062604151399100e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -389,8 +389,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount * 2);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount * 2);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -407,8 +407,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.870623460936445935e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.869230443465535816e18,
                     currentLtv: 0.5e18 + 0.0025062604151399100e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -459,8 +459,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount * 2);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount * 2);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -477,8 +477,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + interestDelta,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.879987123287746057e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.878587132876787097e18,
                     currentLtv: 0.500003424680971066e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -514,8 +514,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount * 2);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount * 2);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -532,8 +532,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.870610648447061918e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.869217640517367297e18,
                     currentLtv: 0.502509702262395680e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -566,8 +566,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount * 2);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount * 2);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -584,8 +584,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.870610648447061918e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.869217640517367297e18,
                     currentLtv: 0.502509702262395680e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -658,8 +658,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), borrowedAmount);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), borrowedAmount);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
         }
 
         // Immediate checks
@@ -671,8 +671,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowedAmount);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowedAmount);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -689,8 +689,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: borrowedAmount,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.010752688172043010e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.01e18,
                     currentLtv: DEFAULT_OLTV,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,

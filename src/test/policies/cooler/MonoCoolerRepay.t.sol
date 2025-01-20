@@ -57,16 +57,16 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         borrow(ALICE, borrowAmount, ALICE);
 
         vm.startPrank(ALICE);
-        assertEq(dai.balanceOf(ALICE), repayAmount);
-        dai.approve(address(cooler), repayAmount);
+        assertEq(usds.balanceOf(ALICE), repayAmount);
+        usds.approve(address(cooler), repayAmount);
         vm.expectEmit(address(cooler));
         emit Repay(ALICE, ALICE, repayAmount);
         cooler.repay(repayAmount, ALICE);
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), 0);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 0);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
         }
 
         // Immediate checks
@@ -78,8 +78,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), 0);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), 0);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -96,7 +96,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 0,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
+                    liquidationDebtAmount: 9_393e18,
                     healthFactor: type(uint256).max,
                     currentLtv: 0,
                     totalDelegated: 0,
@@ -128,15 +128,15 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         borrow(ALICE, borrowAmount, ALICE);
 
         vm.startPrank(ALICE);
-        dai.approve(address(cooler), borrowAmount);
+        usds.approve(address(cooler), borrowAmount);
         vm.expectEmit(address(cooler));
         emit Repay(ALICE, ALICE, borrowAmount);
         cooler.repay(repayAmount, ALICE);
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), 0);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 0);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
         }
 
         // Immediate checks
@@ -148,8 +148,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), 0);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), 0);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -166,7 +166,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 0,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
+                    liquidationDebtAmount: 9_393e18,
                     healthFactor: type(uint256).max,
                     currentLtv: 0,
                     totalDelegated: 0,
@@ -196,19 +196,19 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 repayAmount = 1_000e18;
         addCollateral(ALICE, collateralAmount);
         borrow(ALICE, borrowAmount, ALICE);
-        deal(address(dai), BOB, repayAmount);
+        deal(address(usds), BOB, repayAmount);
 
         vm.startPrank(BOB);
-        dai.approve(address(cooler), repayAmount);
+        usds.approve(address(cooler), repayAmount);
         vm.expectEmit(address(cooler));
         emit Repay(BOB, ALICE, repayAmount);
         cooler.repay(repayAmount, ALICE);
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), 4_000e18);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
-            assertEq(sdai.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT - 4_000e18);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 4_000e18);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT - 4_000e18);
         }
 
         // Immediate checks
@@ -220,8 +220,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), 5_000e18);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), 5_000e18);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -238,8 +238,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 4_000e18,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 2.35e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 2.34825e18,
                     currentLtv: 0.4e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -275,8 +275,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -293,8 +293,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 4_000e18 + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 2.338279326170557419e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 2.336538054331919770e18,
                     currentLtv: 0.402005008332111928e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -326,8 +326,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), borrowAmount);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), borrowAmount);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -344,8 +344,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 4_000e18 + expectedInterest,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 2.338279326170557419e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 2.336538054331919770e18,
                     currentLtv: 0.402005008332111928e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -378,7 +378,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         vm.warp(START_TIMESTAMP + 1 days);
 
         vm.startPrank(ALICE);
-        dai.approve(address(cooler), repayAmount);
+        usds.approve(address(cooler), repayAmount);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMonoCooler.MinDebtNotMet.selector,
@@ -399,15 +399,15 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         vm.warp(START_TIMESTAMP + 1 days);
 
         vm.startPrank(ALICE);
-        dai.approve(address(cooler), repayAmount);
+        usds.approve(address(cooler), repayAmount);
         vm.expectEmit(address(cooler));
         emit Repay(ALICE, ALICE, repayAmount);
         cooler.repay(repayAmount, ALICE);
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), 999.999999999999999877e18);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 999.999999999999999877e18);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
         }
 
         // Immediate checks
@@ -419,8 +419,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), 999.999999999999999877e18);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), 999.999999999999999877e18);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -437,8 +437,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 1_000.068493619421304877e18,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 9.399356204073352918e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 9.392356683495851485e18,
                     currentLtv: 0.100006849361942131e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -482,15 +482,15 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         );
 
         vm.startPrank(ALICE);
-        dai.approve(address(cooler), repayAmount);
+        usds.approve(address(cooler), repayAmount);
         vm.expectEmit(address(cooler));
         emit Repay(ALICE, ALICE, repayAmount);
         cooler.repay(repayAmount, ALICE);
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(dai, address(cooler)), 8_300e18);
-            assertEq(TRSRY.withdrawApproval(address(cooler), dai), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 8_300e18);
+            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
         }
 
         // Immediate checks
@@ -502,8 +502,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
-            assertEq(dai.balanceOf(ALICE), 8_300e18);
-            assertEq(dai.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(ALICE), 8_300e18);
+            assertEq(usds.balanceOf(BOB), 0);
 
             checkAccountState(
                 ALICE,
@@ -520,8 +520,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     collateral: collateralAmount,
                     currentDebt: 8_401.190384477093159900e18,
                     maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_400e18,
-                    healthFactor: 1.118889058551560814e18,
+                    liquidationDebtAmount: 9_393e18,
+                    healthFactor: 1.118055843295192630e18,
                     currentLtv: 0.840119038447709316e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
@@ -556,7 +556,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         cooler.setBorrowPaused(true);
 
         vm.startPrank(ALICE);
-        dai.approve(address(cooler), repayAmount);
+        usds.approve(address(cooler), repayAmount);
         vm.expectEmit(address(cooler));
         emit Repay(ALICE, ALICE, repayAmount);
         cooler.repay(repayAmount, ALICE);
