@@ -66,6 +66,7 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
         - [CDAuctioneer.sol](../../src/policies/CDAuctioneer.sol)
         - [CDFacility.sol](../../src/policies/CDFacility.sol)
         - [EmissionManager.sol](../../src/policies/EmissionManager.sol)
+        - [Heart.sol](../../src/policies/Heart.sol)
 
 The following pull requests can be referred to for the in-scope contracts:
 
