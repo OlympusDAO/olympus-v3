@@ -10,20 +10,28 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {Module, Policy} from "src/Kernel.sol";
 
-contract BadOracle {
-    function currentLtvs() external pure returns (uint96 originationLtv, uint96 liquidationLtv) {
-        originationLtv = 123e18;
-        liquidationLtv = originationLtv - 1;
+contract MockLtvOracle {
+    uint96 private immutable originationLtv;
+    uint96 private immutable liquidationLtv;
+
+    constructor(uint96 originationLtv_, uint96 liquidationLtv_) {
+        originationLtv = originationLtv_;
+        liquidationLtv = liquidationLtv_;
     }
 
+    function currentLtvs() external view returns (uint96, uint96) {
+        return (
+            originationLtv,
+            liquidationLtv
+        );
+    }
 }
 
 contract MonoCoolerAdminTest is MonoCoolerBaseTest {
-    event LiquidationLtvSet(uint256 ltv);
-    event MaxOriginationLtvSet(uint256 ltv);
-    event LiquidationsPausedSet(bool isPaused);
     event BorrowPausedSet(bool isPaused);
+    event LiquidationsPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
+    event LtvOracleSet(address indexed oracle);
 
     event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
 
@@ -59,7 +67,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_construction_failLtv() public {
-        address badOracle = address(new BadOracle());
+        address badOracle = address(new MockLtvOracle(123e18, 123e18-1));
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler = new MonoCooler(
             address(ohm),
@@ -186,71 +194,47 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         }
     }
 
-    // @todo
-    // function test_setLtvOracle_failDecreaseLLTV() public {
-    //     vm.startPrank(OVERSEER);
+    function test_setLtvOracle_fail_newOLTV_gt_newLLTV() public {
+        address badOracle = address(new MockLtvOracle(123e18, 123e18-1));
+        vm.startPrank(OVERSEER);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setLtvOracle(address(badOracle));
+    }
 
-    //     uint96 newLiquidationLtv = DEFAULT_LLTV - 1;
-    //     uint96 newMaxOriginationLtv = DEFAULT_OLTV;
-    //     vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv);
-    // }
+    function test_setLtvOracle_fail_newOLTV_lt_oldOLTV() public {
+        address badOracle = address(new MockLtvOracle(
+            ltvOracle.currentOriginationLtv()-1,
+            ltvOracle.currentLiquidationLtv ()
+        ));
+        vm.startPrank(OVERSEER);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setLtvOracle(address(badOracle));
+    }
 
-    // function test_setLtvOracle_increaseLLTV() public {
-    //     vm.startPrank(OVERSEER);
+    function test_setLtvOracle_fail_newLLTV_lt_oldLLTV() public {
+        address badOracle = address(new MockLtvOracle(
+            ltvOracle.currentOriginationLtv(),
+            ltvOracle.currentLiquidationLtv()-1 
+        ));
+        vm.startPrank(OVERSEER);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setLtvOracle(address(badOracle));
+    }
 
-    //     uint96 newLiquidationLtv = DEFAULT_LLTV + 1;
-    //     uint96 newMaxOriginationLtv = DEFAULT_OLTV;
-
-    //     vm.expectEmit(address(cooler));
-    //     emit LiquidationLtvSet(newLiquidationLtv);
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv);
-    //     assertEq(cooler.liquidationLtv(), newLiquidationLtv);
-    //     assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
-    // }
-
-    // function test_setLtvOracle_noChange() public {
-    //     vm.startPrank(OVERSEER);
-
-    //     uint96 newLiquidationLtv = DEFAULT_LLTV;
-    //     uint96 newMaxOriginationLtv = DEFAULT_OLTV;
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv);
-    //     assertEq(cooler.liquidationLtv(), newLiquidationLtv);
-    //     assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
-    // }
-
-    // function test_setLtvOracle_failHighOLTV() public {
-    //     vm.startPrank(OVERSEER);
-
-    //     uint96 newLiquidationLtv = DEFAULT_LLTV;
-    //     uint96 newMaxOriginationLtv = DEFAULT_LLTV;
-    //     vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv);
-
-    //     vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv + 1);
-    // }
-
-    // function test_setLtvOracle_setOLTV() public {
-    //     vm.startPrank(OVERSEER);
-
-    //     uint96 newLiquidationLtv = DEFAULT_LLTV;
-    //     uint96 newMaxOriginationLtv = DEFAULT_LLTV - 1;
-    //     vm.expectEmit(address(cooler));
-    //     emit MaxOriginationLtvSet(newMaxOriginationLtv);
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv);
-    //     assertEq(cooler.liquidationLtv(), newLiquidationLtv);
-    //     assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
-    // }
-
-    // function test_setLtvOracle_failDecreaseOLTV() public {
-    //     vm.startPrank(OVERSEER);
-
-    //     uint96 newLiquidationLtv = DEFAULT_LLTV;
-    //     uint96 newMaxOriginationLtv = DEFAULT_OLTV - 1;
-    //     vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-    //     cooler.setLtvOracle(newLiquidationLtv, newMaxOriginationLtv);
-    // }
+    function test_setLtvOracle_success() public {
+        address newOracle = address(new MockLtvOracle(
+            ltvOracle.currentOriginationLtv()+5,
+            ltvOracle.currentLiquidationLtv()+5 
+        ));
+        vm.startPrank(OVERSEER);
+        vm.expectEmit();
+        emit LtvOracleSet(address(newOracle));
+        cooler.setLtvOracle(address(newOracle));
+        assertEq(address(cooler.ltvOracle()), newOracle);
+        (uint96 oltv, uint96 lltv) = cooler.loanToValues();
+        assertEq(oltv, DEFAULT_OLTV+5);
+        assertEq(lltv, DEFAULT_LLTV+5);
+    }
 
     function test_setLiquidationsPaused() public {
         vm.startPrank(OVERSEER);

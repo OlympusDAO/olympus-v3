@@ -20,11 +20,8 @@ interface IMonoCooler {
     error ExceededPreviousLtv(uint256 oldLtv, uint256 newLtv);
     error InvalidCollateralDelta();
 
-    event LiquidationLtvSet(uint256 ltv);
-    event MaxOriginationLtvSet(uint256 ltv);
     event BorrowPausedSet(bool isPaused);
     event LiquidationsPausedSet(bool isPaused);
-    event MinDebtRequiredSet(uint128 amount);
     event InterestRateSet(uint16 interestRateBps);
     event LtvOracleSet(address indexed oracle);
 
@@ -46,6 +43,7 @@ interface IMonoCooler {
     struct AccountState {
         /// @notice The amount of gOHM collateral the account has posted
         uint128 collateral;
+
         /**
          * @notice A checkpoint of user debt, updated after a borrow/repay/liquidation
          * @dev Debt as of now =  (
@@ -55,6 +53,7 @@ interface IMonoCooler {
          * )
          */
         uint128 debtCheckpoint;
+
         /// @notice The account's last interest accumulator checkpoint
         uint256 interestAccumulatorRay;
     }
@@ -63,12 +62,16 @@ interface IMonoCooler {
     struct LiquidationStatus {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint128 collateral;
+
         /// @notice The up to date amount of debt [in debtToken terms]
         uint128 currentDebt;
+
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
+
         /// @notice Has this account exceeded the liquidation LTV
         bool exceededLiquidationLtv;
+
         /// @notice Has this account exceeded the max origination LTV
         bool exceededMaxOriginationLtv;
     }
@@ -78,23 +81,31 @@ interface IMonoCooler {
     struct AccountPosition {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint256 collateral;
+
         /// @notice The up to date amount of debt [in debtToken terms]
         uint256 currentDebt;
+
         /// @notice The maximum amount of debtToken's this account can borrow given the
         /// collateral posted, up to `maxOriginationLtv`
         uint256 maxOriginationDebtAmount;
+
         /// @notice The maximum amount of debtToken's this account can accrue before being
         /// eligable to be liquidated, up to `liquidationLtv`
         uint256 liquidationDebtAmount;
+
         /// @notice The health factor of this accounts position.
         /// Anything less than 1 can be liquidated, relative to `liquidationLtv`
         uint256 healthFactor;
+
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
+
         /// @notice The total collateral delegated for this user across all delegates
         uint256 totalDelegated;
+
         /// @notice The current number of addresses this account has delegated to
         uint256 numDelegateAddresses;
+        
         /// @notice The max number of delegates this account is allowed to delegate to
         uint256 maxDelegateAddresses;
     }
