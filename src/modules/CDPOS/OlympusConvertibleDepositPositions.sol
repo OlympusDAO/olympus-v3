@@ -257,52 +257,53 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     }
 
     // solhint-disable quotes
-    function _render(
-        uint256 positionId_,
-        Position memory position_
-    ) internal view returns (string memory) {
+    function _render(uint256, Position memory position_) internal view returns (string memory) {
         // Get the decimals of the deposit token
-        uint8 depositDecimals = ERC20(position_.convertibleDepositToken).decimals();
+        uint8 depositDecimals;
+        string memory cdSymbol;
+        {
+            ERC20 cdToken = ERC20(position_.convertibleDepositToken);
+            depositDecimals = cdToken.decimals();
+            cdSymbol = cdToken.symbol();
+        }
+
+        // Calculate the OHM output
+        uint256 convertibleOhm = _previewConvert(
+            position_.remainingDeposit,
+            position_.conversionPrice
+        );
 
         return
             string.concat(
-                '<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">',
-                '<rect width="100" height="100" fill="#ffffff" />',
+                '<svg width="500" height="600" viewBox="0 0 500 600" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g id="Frame 3"><rect width="500" height="600" rx="18" fill="#141722" /><g clip-path="url(#clip0_3333_184)"><rect x="120" y="94" width="260" height="261" rx="130" fill="#708B96" /><path d="M238.238 259.118C223.505 255.314 211.625 239.859 211.625 222.264C211.625 202.054 229.209 184.46 250.119 184.46C272.455 184.935 288.376 202.292 288.376 222.264C288.376 239.859 277.683 253.649 262 259.118V282.181H305.246V265.062H275.544V268.391C295.029 262.209 305.484 242.474 305.484 222.264C305.484 192.306 281.247 167.341 250.119 167.341C219.942 167.341 194.516 192.306 194.516 222.264C194.516 242.474 204.734 261.258 223.505 268.628L223.981 265.062H194.516V282.181H238.238V259.118Z" fill="#EEE9E2" /></g>',
                 string.concat(
-                    '<text x="50" y="40" font-size="50" text-anchor="middle" fill="#768299">',
-                    unicode"Ω",
-                    "</text>"
-                ),
-                '<text x="50" y="50" font-size="7" text-anchor="middle" fill="#768299">Convertible Deposit</text>',
-                string.concat(
-                    '<text x="5" y="65" font-size="7" text-anchor="left" fill="#768299">ID: ',
-                    Strings.toString(positionId_),
-                    "</text>"
+                    '<text class="heading" x="32" y="444.504">',
+                    cdSymbol,
+                    "-OHM Convertible Deposit</text>"
                 ),
                 string.concat(
-                    '<text x="5" y="75" font-size="7" text-anchor="left" fill="#768299">Expiry: ',
-                    _getTimeString(position_.expiry),
-                    "</text>"
-                ),
-                string.concat(
-                    '<text x="5" y="85" font-size="7" text-anchor="left" fill="#768299">Remaining: ',
-                    DecimalString.toDecimalString(
-                        position_.remainingDeposit,
-                        depositDecimals,
-                        displayDecimals
-                    ),
-                    "</text>"
-                ),
-                string.concat(
-                    '<text x="5" y="95" font-size="7" text-anchor="left" fill="#768299">Conversion: ',
+                    '<g id="info-box"><rect x="33" y="456" width="434" height="90" rx="9" fill="#2C2E37" /><text class="standard-text"><tspan x="42" y="482.16">Conversion Price</tspan><tspan x="457" y="482.003" text-anchor="end">',
                     DecimalString.toDecimalString(
                         position_.conversionPrice,
                         depositDecimals,
                         displayDecimals
                     ),
-                    "</text>"
+                    " ",
+                    cdSymbol,
+                    "/OHM</tspan>"
                 ),
-                "</svg>"
+                string.concat(
+                    '<tspan x="42" y="506.16">Convertible To</tspan><tspan x="457" y="506.003" text-anchor="end">',
+                    DecimalString.toDecimalString(convertibleOhm, 9, 2),
+                    " OHM</tspan>"
+                ),
+                string.concat(
+                    '<tspan x="42" y="530.16">Position Expiration</tspan><tspan x="457" y="530.003" text-anchor="end">',
+                    _getTimeString(position_.expiry),
+                    "</tspan></text></g>"
+                ),
+                '        <g id="logo"><path d="M54.292 46.5102C52.9142 46.5102 52.2072 45.3229 52.2072 43.7639C52.2072 42.2049 52.9142 41.0056 54.292 41.0056C55.6819 41.0056 56.3647 42.2049 56.3647 43.7639C56.3647 45.3229 55.6819 46.5102 54.292 46.5102ZM50.0505 43.7639C50.0505 46.3303 51.692 48.2371 54.2801 48.2371C56.88 48.2371 58.5214 46.3303 58.5214 43.7639C58.5214 41.1975 56.88 39.2907 54.2801 39.2907C51.692 39.2907 50.0505 41.1975 50.0505 43.7639ZM59.2402 48.0332H61.2171V39.4585H59.2402V48.0332ZM63.0383 48.5369H62.3673V50.0601H63.6374C64.8714 50.0601 65.4585 49.5564 65.9498 48.1172L68.0705 41.8931H66.1175L65.3147 44.5075C65.123 45.1071 64.9553 45.9226 64.9553 45.9226H64.9313C64.9313 45.9226 64.7397 45.1071 64.548 44.5075L63.7212 41.8931H61.6604L63.4696 46.6181C63.7212 47.2658 63.8411 47.6255 63.8411 47.8893C63.8411 48.3091 63.6134 48.5369 63.0383 48.5369ZM68.5017 41.8931V48.0332H70.4547V44.5915C70.4547 43.8599 70.8141 43.3442 71.4251 43.3442C72.0122 43.3442 72.2877 43.728 72.2877 44.3876V48.0332H74.2407V44.5915C74.2407 43.8599 74.5882 43.3442 75.2113 43.3442C75.7983 43.3442 76.0739 43.728 76.0739 44.3876V48.0332H78.0269V44.0398C78.0269 42.6606 77.3319 41.7131 75.9421 41.7131C75.1512 41.7131 74.4923 42.049 74.0131 42.7926H73.9891C73.6776 42.133 73.0666 41.7131 72.2638 41.7131C71.3772 41.7131 70.7902 42.133 70.4067 42.7685H70.3707V41.8931H68.5017ZM78.9134 41.8931V50.0601H80.8664V47.3977H80.8902C81.2737 47.9134 81.8368 48.2251 82.6276 48.2251C84.2331 48.2251 85.2994 46.954 85.2994 44.9632C85.2994 43.1163 84.3049 41.7131 82.6755 41.7131C81.8368 41.7131 81.2377 42.085 80.8184 42.6367H80.7824V41.8931H78.9134ZM80.8063 45.0352C80.8063 44.0398 81.2377 43.2843 82.0884 43.2843C82.9271 43.2843 83.3225 43.9799 83.3225 45.0352C83.3225 46.0784 82.8671 46.7141 82.1244 46.7141C81.2857 46.7141 80.8063 46.0305 80.8063 45.0352ZM88.0671 48.2132C88.9177 48.2132 89.457 47.8774 89.9001 47.2777H89.9361V48.0332H91.8053V41.8931H89.8524V45.3229C89.8524 46.0545 89.4448 46.5582 88.774 46.5582C88.151 46.5582 87.8515 46.1865 87.8515 45.5148V41.8931H85.9104V45.9226C85.9104 47.2898 86.6533 48.2132 88.0671 48.2132ZM95.3517 48.2251C96.9572 48.2251 98.1432 47.5296 98.1432 46.1865C98.1432 44.6154 96.8733 44.3396 95.795 44.1597C95.0162 44.0157 94.3212 43.9558 94.3212 43.524C94.3212 43.1404 94.6927 42.9604 95.1719 42.9604C95.7111 42.9604 96.0825 43.1284 96.1544 43.6801H97.9517C97.8558 42.4687 96.9212 41.7131 95.1839 41.7131C93.7343 41.7131 92.5361 42.3848 92.5361 43.6801C92.5361 45.1191 93.6742 45.4069 94.7407 45.5869C95.5554 45.7306 96.2982 45.7907 96.2982 46.3424C96.2982 46.7382 95.9267 46.954 95.3398 46.954C94.6927 46.954 94.2854 46.6542 94.2134 46.0426H92.3683C92.4281 47.3977 93.5545 48.2251 95.3517 48.2251Z" fill="#EEE9E2" /><path d="M38.2714 47.349C36.5249 46.8978 35.1166 45.0653 35.1166 42.9788C35.1166 40.5823 37.201 38.496 39.6798 38.496C42.3275 38.5523 44.2148 40.6105 44.2148 42.9788C44.2148 45.0653 42.9472 46.7006 41.0882 47.349V50.0839H46.2148V48.0539H42.6937V48.4485C45.0036 47.7155 46.2429 45.3753 46.2429 42.9788C46.2429 39.4265 43.3698 36.466 39.6798 36.466C36.1025 36.466 33.0884 39.4265 33.0884 42.9788C33.0884 45.3753 34.2997 47.6027 36.5249 48.4767L36.5813 48.0539H33.0884V50.0839H38.2714V47.349Z" fill="#EEE9E2" /></g></g>',
+                '<defs><style type="text/css">.heading{fill:#F8CC82;font-family:"Helvetica Neue",Helvetica,-apple-system,BlinkMacSystemFont,Ubuntu,Jost,"DM Sans",sans-serif;font-size:24px;font-weight:500;letter-spacing:0em;white-space:pre;}.standard-text{fill:#EEE9E2;font-family:"Helvetica Neue",Helvetica,-apple-system,BlinkMacSystemFont,Ubuntu,Jost,"DM Sans",sans-serif;font-size:15px;font-weight:500;letter-spacing:0em;white-space:pre;}</style><pattern id="pattern0_3333_184" patternContentUnits="objectBoundingBox" width="1" height="1"><use xlink:href="#image0_3333_184" transform="matrix(0.00160343 0 0 0.00277778 -0.0155036 0)" /></pattern><radialGradient id="paint0_radial_3333_184" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(249.5 224.5) rotate(90) scale(177.5 307.5)"><stop offset="0.52" stop-opacity="0" /><stop offset="1" stop-color="#0003B2" /></radialGradient><clipPath id="clip0_3333_184"><rect x="33" y="63" width="434" height="323" rx="9" fill="white" /></clipPath></defs></svg>'
             );
     }
 
