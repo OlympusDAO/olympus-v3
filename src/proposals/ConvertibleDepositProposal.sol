@@ -28,7 +28,58 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     }
 
     function description() public pure override returns (string memory) {
-        return "";
+        return
+            string.concat(
+                "# Activation of Convertible Deposit Facility\n",
+                "\n",
+                "This proposal activates contracts related to enabling the Convertible Deposit system.\n",
+                "\n",
+                "## Summary\n",
+                "\n",
+                "The Convertible Deposit system provides a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`CDEPO`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.\n",
+                "\n",
+                "## Affected Contracts\n",
+                "\n",
+                "- Heart policy (v1.7)\n",
+                "- EmissionManager policy (v1.2)\n",
+                "- CDFacility policy (v1.0)\n",
+                "- CDAuctioneer policy (v1.0)\n",
+                "\n",
+                "## Resources\n",
+                "\n",
+                "- [View the audit report](TODO)\n", // TODO: Add audit report
+                "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n",
+                "\n",
+                "## Pre-requisites\n",
+                "\n",
+                "- Old Heart policy has been deactivated in the kernel\n",
+                "- Old EmissionManager policy has been deactivated in the kernel\n",
+                "- Heart policy has been activated in the kernel\n",
+                "- EmissionManager policy has been activated in the kernel\n",
+                "- ConvertibleDepositFacility policy has been activated in the kernel\n",
+                "- ConvertibleDepositAuctioneer policy has been activated in the kernel\n",
+                "- CDEPO module has been installed in the kernel\n",
+                "- CDPOS module has been installed in the kernel\n",
+                "\n",
+                "## Proposal Steps\n",
+                "\n",
+                "1. Revoke the `heart` role from the old Heart policy\n",
+                "2. Grant the `cd_admin` role to the Timelock\n",
+                "3. Grant the `cd_admin` role to the DAO MS\n",
+                "4. Grant the `emissions_admin` role to the Timelock\n",
+                "5. Grant the `emissions_admin` role to the DAO MS\n",
+                "6. Grant the `heart` role to the new Heart policy\n",
+                "7. Grant the `cd_emissionmanager` role to the new EmissionManager\n",
+                "8. Grant the `cd_auctioneer` role to the CDAuctioneer\n",
+                "9. Activate the ConvertibleDepositFacility contract functionality\n",
+                "\n",
+                "## Subsequent Steps\n",
+                "\n",
+                "The functionality of the EmissionManager and CDAuctioneer policies will be initialized by the DAO MS, since the inputs are time-sensitive.\n",
+                "\n",
+                "1. Initialize the new EmissionManager policy\n",
+                "2. Initialize the CDAuctioneer policy\n"
+            );
     }
 
     // No deploy actions needed
@@ -60,6 +111,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         // - EmissionManager policy has been activated in the kernel
         // - ConvertibleDepositFacility policy has been activated in the kernel
         // - ConvertibleDepositAuctioneer policy has been activated in the kernel
+        // - CDEPO module has been installed in the kernel
+        // - CDPOS module has been installed in the kernel
 
         // Revoke the "heart" role from the old Heart policy
         _pushAction(
