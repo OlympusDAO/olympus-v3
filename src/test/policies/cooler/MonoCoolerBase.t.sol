@@ -2,8 +2,9 @@
 pragma solidity ^0.8.15;
 
 import {Test, Vm} from "forge-std/Test.sol";
-import {MonoCooler} from "policies/MonoCooler.sol";
+import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {MockStaking} from "test/mocks/MockStaking.sol";
@@ -20,8 +21,8 @@ import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.s
 abstract contract MonoCoolerBaseTest is Test {
     MockOhm internal ohm;
     MockGohm internal gohm;
-    MockERC20 internal dai;
-    MockERC4626 internal sdai;
+    MockERC20 internal usds;
+    MockERC4626 internal susds;
 
     Kernel public kernel;
     MockStaking internal staking;
@@ -31,6 +32,7 @@ abstract contract MonoCoolerBaseTest is Test {
     OlympusGovDelegation internal DLGTE;
     RolesAdmin internal rolesAdmin;
 
+    CoolerLtvOracle internal ltvOracle;
     MonoCooler public cooler;
     DelegateEscrowFactory public escrowFactory;
 
@@ -39,8 +41,14 @@ abstract contract MonoCoolerBaseTest is Test {
     address internal immutable BOB = makeAddr("bob");
     address internal immutable OTHERS = makeAddr("others");
 
-    uint96 internal constant DEFAULT_LLTV = 0.94e18;
-    uint96 internal constant DEFAULT_OLTV = 0.93e18;
+    uint96 internal constant DEFAULT_OLTV = 2_961.64e18; // [USDS/gOHM] == ~11 [USDS/OHM]
+    uint96 internal constant DEFAULT_OLTV_MAX_DELTA = 100e18; // 100 USDS
+    uint32 internal constant DEFAULT_OLTV_MIN_TARGET_TIME_DELTA = 1 weeks;
+    uint96 internal constant DEFAULT_OLTV_MAX_RATE_OF_CHANGE = uint96(0.1e18) / 1 days; // 0.1 USDS / day
+    uint16 internal constant DEFAULT_LLTV_MAX_PREMIUM_BPS = 333;
+    uint16 internal constant DEFAULT_LLTV_PREMIUM_BPS = 100; // LLTV is 1% above OLTV
+    uint96 internal constant DEFAULT_LLTV = DEFAULT_OLTV * (10_000 + DEFAULT_LLTV_PREMIUM_BPS) / 10_000;
+
     uint16 internal constant DEFAULT_INTEREST_RATE_BPS = 50; // 0.5%
     uint256 internal constant DEFAULT_MIN_DEBT_REQUIRED = 1_000e18;
     uint256 internal constant INITIAL_TRSRY_MINT = 200_000_000e18;
@@ -53,8 +61,8 @@ abstract contract MonoCoolerBaseTest is Test {
 
         ohm = new MockOhm("OHM", "OHM", 9);
         gohm = new MockGohm("gOHM", "gOHM", 18);
-        dai = new MockERC20("dai", "DAI", 18);
-        sdai = new MockERC4626(dai, "sDai", "sDAI");
+        usds = new MockERC20("usds", "USDS", 18);
+        susds = new MockERC4626(usds, "sUSDS", "sUSDS");
 
         kernel = new Kernel(); // this contract will be the executor
         escrowFactory = new DelegateEscrowFactory(address(gohm));
@@ -64,14 +72,25 @@ abstract contract MonoCoolerBaseTest is Test {
         ROLES = new OlympusRoles(kernel);
         DLGTE = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
 
+        ltvOracle = new CoolerLtvOracle(
+            address(kernel),
+            address(gohm),
+            address(usds),
+            DEFAULT_OLTV, 
+            DEFAULT_OLTV_MAX_DELTA, 
+            DEFAULT_OLTV_MIN_TARGET_TIME_DELTA, 
+            DEFAULT_OLTV_MAX_RATE_OF_CHANGE,
+            DEFAULT_LLTV_MAX_PREMIUM_BPS,
+            DEFAULT_LLTV_PREMIUM_BPS
+        );
+
         cooler = new MonoCooler(
             address(ohm),
             address(gohm),
             address(staking),
-            address(sdai),
+            address(susds),
             address(kernel),
-            DEFAULT_LLTV,
-            DEFAULT_OLTV,
+            address(ltvOracle),
             DEFAULT_INTEREST_RATE_BPS,
             DEFAULT_MIN_DEBT_REQUIRED
         );
@@ -90,18 +109,18 @@ abstract contract MonoCoolerBaseTest is Test {
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
 
         // Setup Treasury
-        dai.mint(address(TRSRY), INITIAL_TRSRY_MINT);
+        usds.mint(address(TRSRY), INITIAL_TRSRY_MINT);
         // Deposit all reserves into the DSR
         vm.startPrank(address(TRSRY));
-        dai.approve(address(sdai), INITIAL_TRSRY_MINT);
-        sdai.deposit(INITIAL_TRSRY_MINT, address(TRSRY));
+        usds.approve(address(susds), INITIAL_TRSRY_MINT);
+        susds.deposit(INITIAL_TRSRY_MINT, address(TRSRY));
         vm.stopPrank();
 
-        // Fund others so that TRSRY is not the only account with sDAI shares
-        dai.mint(OTHERS, INITIAL_TRSRY_MINT * 33);
+        // Fund others so that TRSRY is not the only account with sUSDS shares
+        usds.mint(OTHERS, INITIAL_TRSRY_MINT * 33);
         vm.startPrank(OTHERS);
-        dai.approve(address(sdai), INITIAL_TRSRY_MINT * 33);
-        sdai.deposit(INITIAL_TRSRY_MINT * 33, OTHERS);
+        usds.approve(address(susds), INITIAL_TRSRY_MINT * 33);
+        susds.deposit(INITIAL_TRSRY_MINT * 33, OTHERS);
         vm.stopPrank();
     }
 

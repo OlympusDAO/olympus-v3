@@ -16,9 +16,9 @@ contract MonoCoolerAccessTest is MonoCoolerBaseTest {
         vm.stopPrank();
     }
 
-    function test_access_setLoanToValue() public {
+    function test_access_setLtvOracle() public {
         expectOnlyOverseer();
-        cooler.setLoanToValue(0, 0);
+        cooler.setLtvOracle(address(0));
     }
 
     function test_access_setLiquidationsPaused() public {

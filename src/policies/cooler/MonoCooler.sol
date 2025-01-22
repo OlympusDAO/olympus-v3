@@ -15,8 +15,11 @@ import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
+
+// @todo add helper to get max debt given collateral?
 
 /*
 @todo considerations:
@@ -43,26 +46,22 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //                                         IMMUTABLES                                         //
     //============================================================================================//
 
-    /// @notice The collateral token supplied by users/accounts, eg gOHM
+    /// @inheritdoc IMonoCooler
     ERC20 public immutable override collateralToken;
 
-    /// @notice The debt token which can be borrowed, eg DAI or USDS
+    /// @inheritdoc IMonoCooler
     ERC20 public immutable override debtToken;
 
-    /// @notice Unwrapped gOHM
-    ERC20 public immutable ohm;
+    /// @inheritdoc IMonoCooler
+    ERC20 public immutable override ohm;
 
-    // Necessary to unstake (and burn) OHM from liquidations
-    IStaking public immutable staking;
+    /// @inheritdoc IMonoCooler
+    IStaking public immutable override staking;
 
-    /// @notice The ERC2626 reserve asset which is pulled from treasury, eg sDAI
-    /// @dev The asset of this vault must be `debtToken`
-    ERC4626 public immutable debtSavingsVault;
+    /// @inheritdoc IMonoCooler
+    ERC4626 public immutable override debtSavingsVault;
 
-    /**
-     * @notice The minimum debt a user needs to maintain
-     * @dev It costs gas to liquidate users, so we don't want dust amounts.
-     */
+    /// @inheritdoc IMonoCooler
     uint256 public immutable override minDebtRequired;
 
     //============================================================================================//
@@ -75,40 +74,31 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     //-- begin slot 6
 
-    /// @notice The total amount of collateral posted across all accounts.
+    /// @inheritdoc IMonoCooler
     uint128 public override totalCollateral;
 
-    /// @notice The total amount of debt which has been borrowed across all users
-    /// as of the latest checkpoint
+    /// @inheritdoc IMonoCooler
     uint128 public override totalDebt;
 
     //--- begin slot 7
-    /// @notice Liquidations may be paused in order for users to recover/repay debt after
-    /// emergency actions or interest rate changes
+    /// @inheritdoc IMonoCooler
     bool public override liquidationsPaused;
 
-    /// @notice Borrows may be paused for emergency actions or deprecating the facility
+    /// @inheritdoc IMonoCooler
     bool public override borrowsPaused;
 
-    /// @notice The flat interest rate, defined in basis points.
-    /// @dev Interest (approximately) continuously compounds at this rate.
+    /// @inheritdoc IMonoCooler
     uint16 public override interestRateBps;
 
-    /// @notice The Loan To Value point at which an account can be liquidated
-    /// @dev Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-    uint96 public override liquidationLtv;
-
-    /// @notice The maximum Loan To Value an account is allowed when borrowing or withdrawing collateral
-    /// @dev Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-    uint96 public override maxOriginationLtv;
-
-    /// @notice The last time the global debt accumulator was updated
+    /// @inheritdoc IMonoCooler
     uint32 public override interestAccumulatorUpdatedAt;
+
+    /// @inheritdoc IMonoCooler
+    ICoolerLtvOracle public override ltvOracle;
 
     //--- begin slot 8
 
-    /// @notice The accumulator index used to track the compounding of debt, starting at 1e27 at genesis
-    /// @dev To RAY (1e27) precision
+    /// @inheritdoc IMonoCooler
     uint256 public override interestAccumulatorRay;
 
     //-- begin slot 9
@@ -124,8 +114,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /// @notice Extra precision scalar
     uint256 private constant RAY = 1e27;
 
-    uint96 private constant ONE_YEAR = 365 days;
-
     //============================================================================================//
     //                                      INITIALIZATION                                        //
     //============================================================================================//
@@ -136,28 +124,27 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address staking_,
         address debtSavingsVault_,
         address kernel_,
-        uint96 liquidationLtv_,
-        uint96 maxOriginationLtv_,
+        address ltvOracle_,
         uint16 interestRateBps_,
         uint256 minDebtRequired_
     ) Policy(Kernel(kernel_)) {
-        ohm = ERC20(ohm_);
         collateralToken = ERC20(gohm_);
-        staking = IStaking(staking_);
         debtSavingsVault = ERC4626(debtSavingsVault_);
         debtToken = ERC20(debtSavingsVault.asset());
-        minDebtRequired = minDebtRequired_;
 
-        // This contract only handles 18dp
+        // Only handle 18dp collateral and debt tokens
         if (collateralToken.decimals() != 18) revert InvalidParam();
         if (debtToken.decimals() != 18) revert InvalidParam();
 
-        if (maxOriginationLtv_ >= liquidationLtv_) revert InvalidParam();
-        liquidationLtv = liquidationLtv_;
-        maxOriginationLtv = maxOriginationLtv_;
+        ohm = ERC20(ohm_);
+        staking = IStaking(staking_);
+        minDebtRequired = minDebtRequired_;
+
+        ltvOracle = ICoolerLtvOracle(ltvOracle_);
+        (uint96 newOLTV, uint96 newLLTV) = ltvOracle.currentLtvs();
+        if (newOLTV > newLLTV) revert InvalidParam();
 
         interestRateBps = interestRateBps_;
-
         interestAccumulatorUpdatedAt = uint32(block.timestamp);
         interestAccumulatorRay = RAY;
     }
@@ -170,10 +157,10 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         dependencies[2] = toKeycode("TRSRY");
         dependencies[3] = toKeycode("DLGTE");
 
-        MINTR = MINTRv1(getModuleAddress(toKeycode("MINTR")));
-        ROLES = ROLESv1(getModuleAddress(toKeycode("ROLES")));
-        TRSRY = TRSRYv1(getModuleAddress(toKeycode("TRSRY")));
-        DLGTE = DLGTEv1(getModuleAddress(toKeycode("DLGTE")));
+        MINTR = MINTRv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
+        DLGTE = DLGTEv1(getModuleAddress(dependencies[3]));
 
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
@@ -516,28 +503,15 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setLoanToValue(
-        uint96 newLiquidationLtv,
-        uint96 newMaxOriginationLtv
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
-        // Origination LTV must be less than the liquidation LTV
-        if (newMaxOriginationLtv >= newLiquidationLtv) revert InvalidParam();
+    function setLtvOracle(address newOracle) external override onlyRole(COOLER_OVERSEER_ROLE) {
+        (uint96 newOLTV, uint96 newLLTV) = ICoolerLtvOracle(newOracle).currentLtvs();
+        if (newOLTV > newLLTV) revert InvalidParam();
 
-        uint256 currentLtv = liquidationLtv;
-        if (newLiquidationLtv != currentLtv) {
-            // Not allowed to decrease the liquidation LTV
-            if (newLiquidationLtv < currentLtv) revert InvalidParam();
-            emit LiquidationLtvSet(newLiquidationLtv);
-            liquidationLtv = newLiquidationLtv;
-        }
+        (uint96 existingOLTV, uint96 existingLLTV) = ICoolerLtvOracle(ltvOracle).currentLtvs();
+        if (newOLTV < existingOLTV || newLLTV < existingLLTV) revert InvalidParam();
 
-        currentLtv = maxOriginationLtv;
-        if (newMaxOriginationLtv != currentLtv) {
-            // Not allowed to decrease the origination LTV
-            if (newMaxOriginationLtv < currentLtv) revert InvalidParam();
-            emit MaxOriginationLtvSet(newMaxOriginationLtv);
-            maxOriginationLtv = newMaxOriginationLtv;
-        }
+        emit LtvOracleSet(newOracle);
+        ltvOracle = ICoolerLtvOracle(newOracle);
     }
 
     /// @inheritdoc IMonoCooler
@@ -586,6 +560,11 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
+    function loanToValues() external view override returns (uint96 maxOriginationLtv, uint96 liquidationLtv) {
+        return ltvOracle.currentLtvs();
+    }
+
+    /// @inheritdoc IMonoCooler
     function debtDeltaForMaxOriginationLtv(
         address account,
         int128 collateralDelta
@@ -596,7 +575,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         int128 newCollateral = collateralDelta + int128(aStateCache.collateral);
         if (newCollateral < 0) revert InvalidCollateralDelta();
 
-        uint128 maxDebt = _maxDebt(uint128(newCollateral));
+        uint128 maxDebt = _maxDebt(uint128(newCollateral), gStateCache.maxOriginationLtv);
         uint128 currentDebt = _currentAccountDebt(
             aStateCache.debtCheckpoint, 
             aStateCache.interestAccumulatorRay, 
@@ -617,16 +596,16 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         position.collateral = aStateCache.collateral;
         position.currentDebt = status.currentDebt;
         position.currentLtv = status.currentLtv;
-        position.maxOriginationDebtAmount = _maxDebt(aStateCache.collateral);
+        position.maxOriginationDebtAmount = _maxDebt(aStateCache.collateral, gStateCache.maxOriginationLtv);
 
         // liquidationLtv [USDS/gOHM] * collateral [gOHM]
         // Round down to get the conservative max debt allowed
-        position.liquidationDebtAmount = uint256(liquidationLtv).mulWadDown(position.collateral);
+        position.liquidationDebtAmount = uint256(gStateCache.liquidationLtv).mulWadDown(position.collateral);
 
         // healthFactor = liquidationLtv [USDS/gOHM] * collateral [gOHM] / debt [USDS]
         position.healthFactor = position.currentDebt == 0
             ? type(uint256).max
-            : uint256(liquidationLtv).mulDivDown(position.collateral, position.currentDebt);
+            : uint256(gStateCache.liquidationLtv).mulDivDown(position.collateral, position.currentDebt);
 
         (
             ,
@@ -701,12 +680,23 @@ It means the liquidation won't happen until that accrued interest pays for gas++
          * Decreases on repays or liquidations.
          */
         uint128 totalDebt;
+
         /**
          * @notice Internal tracking of the accumulated interest as an index starting from 1.0e27
          * When this accumulator is compunded by the interest rate, the total debt can be calculated as
          * `updatedTotalDebt = prevTotalDebt * latestInterestAccumulator / prevInterestAccumulator
          */
         uint256 interestAccumulatorRay;
+
+        /**
+         * @notice The current Liquidation LTV, served from the `ltvOracle`
+         */
+        uint96 liquidationLtv;
+
+        /**
+         * @notice The current Max Origination LTV, served from the `ltvOracle`
+         */
+        uint96 maxOriginationLtv;
     }
 
     /**
@@ -740,9 +730,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         // Copies from storage
         gStateCache.interestAccumulatorRay = interestAccumulatorRay;
         gStateCache.totalDebt = totalDebt;
-
-        // Convert annual IR [basis points] into WAD per second, assuming 365 days in a year
-        uint96 interestRatePerSec = (uint96(interestRateBps) * 1e14) / ONE_YEAR;
+        (gStateCache.maxOriginationLtv, gStateCache.liquidationLtv) = ltvOracle.currentLtvs();
 
         // Only compound if we're on a new block
         uint32 timeElapsed;
@@ -756,7 +744,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
             // Compound the accumulator
             uint256 newInterestAccumulatorRay = gStateCache
                 .interestAccumulatorRay
-                .continuouslyCompounded(timeElapsed, interestRatePerSec);
+                .continuouslyCompounded(timeElapsed, uint96(interestRateBps) * 1e14);
 
             // Calculate the latest totalDebt from this
             gStateCache.totalDebt = newInterestAccumulatorRay
@@ -827,14 +815,14 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         );
 
         if (collateralAmount == type(uint128).max) {
-            uint128 minRequiredCollateral = _minCollateral(currentDebt);
+            uint128 minRequiredCollateral = _minCollateral(currentDebt, gStateCache.maxOriginationLtv);
             if (aStateCache.collateral > minRequiredCollateral) {
                 collateralWithdrawn = aStateCache.collateral - minRequiredCollateral;
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
                     _calculateCurrentLtv(currentDebt, aStateCache.collateral),
-                    maxOriginationLtv
+                    gStateCache.maxOriginationLtv
                 );
             }
             aStateCache.collateral = minRequiredCollateral;
@@ -853,7 +841,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
         if (currentDebt > 0) {
             uint256 newLtv = _calculateCurrentLtv(currentDebt, aStateCache.collateral);
-            _validateOriginationLtv(newLtv);
+            _validateOriginationLtv(newLtv, gStateCache.maxOriginationLtv);
         }
 
         // Finally transfer the collateral to the recipient
@@ -888,14 +876,14 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         // Apply the new borrow. If type(uint128).max was specified
         // then borrow up to the maxOriginationLtv
         if (borrowAmount == type(uint128).max) {
-            uint128 accountTotalDebt = _maxDebt(aStateCache.collateral);
+            uint128 accountTotalDebt = _maxDebt(aStateCache.collateral, gStateCache.maxOriginationLtv);
             if (accountTotalDebt > currentDebt) {
                 amountBorrowed = accountTotalDebt - currentDebt;
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
                     _calculateCurrentLtv(currentDebt, aStateCache.collateral),
-                    maxOriginationLtv
+                    gStateCache.maxOriginationLtv
                 );
             }
             aStateCache.debtCheckpoint = accountTotalDebt;
@@ -917,7 +905,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
 
         // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
         newLtv = _calculateCurrentLtv(aStateCache.debtCheckpoint, aStateCache.collateral);
-        _validateOriginationLtv(newLtv);
+        _validateOriginationLtv(newLtv, gStateCache.maxOriginationLtv);
 
         // Finally, borrow the funds from the Treasury and send the tokens to the recipient.
         _fundFromTreasury(amountBorrowed, recipient);
@@ -1025,17 +1013,17 @@ It means the liquidation won't happen until that accrued interest pays for gas++
      * @dev Calculate the maximum amount which can be borrowed up to the maxOriginationLtv, given
      * a collateral amount
      */
-    function _maxDebt(uint128 collateral) private view returns (uint128) {
+    function _maxDebt(uint128 collateral, uint256 maxOriginationLtv) private pure returns (uint128) {
         // debt [USDS] = maxOriginationLtv [USDS/gOHM] * collateral [gOHM]
         // Round down to get the conservative max debt allowed
-        return uint256(maxOriginationLtv).mulWadDown(collateral).encodeUInt128();
+        return maxOriginationLtv.mulWadDown(collateral).encodeUInt128();
     }
 
     /**
      * @dev Calculate the maximum collateral amount which can be withdrawn up to the maxOriginationLtv, given
      * a current debt amount
      */
-    function _minCollateral(uint128 debt) private view returns (uint128) {
+    function _minCollateral(uint128 debt, uint256 maxOriginationLtv) private pure returns (uint128) {
         // collateral [gOHM] = debt [USDS] / maxOriginationLtv [USDS/gOHM]
         // Round up to get the conservative min collateral allowed
         return uint256(debt).divWadUp(maxOriginationLtv).encodeUInt128();
@@ -1044,7 +1032,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     /**
      * @dev Ensure the LTV isn't higher than the maxOriginationLtv
      */
-    function _validateOriginationLtv(uint256 ltv) private view {
+    function _validateOriginationLtv(uint256 ltv, uint256 maxOriginationLtv) private pure {
         if (ltv > maxOriginationLtv) {
             revert ExceededMaxOriginationLtv(ltv, maxOriginationLtv);
         }
@@ -1070,7 +1058,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     function _computeLiquidity(
         AccountState memory aStateCache,
         GlobalStateCache memory gStateCache
-    ) private view returns (LiquidationStatus memory status) {
+    ) private pure returns (LiquidationStatus memory status) {
         status.collateral = aStateCache.collateral;
 
         // Round the debt up
@@ -1082,10 +1070,11 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         );
         status.currentLtv = _calculateCurrentLtv(status.currentDebt, status.collateral);
 
-        status.exceededLiquidationLtv = status.collateral > 0 && status.currentLtv > liquidationLtv;
+        status.exceededLiquidationLtv = status.collateral > 0 &&
+            status.currentLtv > gStateCache.liquidationLtv;
         status.exceededMaxOriginationLtv =
             status.collateral > 0 &&
-            status.currentLtv > maxOriginationLtv;
+            status.currentLtv > gStateCache.maxOriginationLtv;
     }
 
     //============================================================================================//
@@ -1121,3 +1110,6 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         return debt.encodeUInt128();
     }
 }
+
+
+// Add function to get max borrow given an amount of collateral

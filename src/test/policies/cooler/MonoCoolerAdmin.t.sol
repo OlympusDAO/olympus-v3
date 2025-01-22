@@ -5,17 +5,33 @@ import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 import {Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
-import {MonoCooler} from "policies/MonoCooler.sol";
+import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {Module, Policy} from "src/Kernel.sol";
 
+contract MockLtvOracle {
+    uint96 private immutable originationLtv;
+    uint96 private immutable liquidationLtv;
+
+    constructor(uint96 originationLtv_, uint96 liquidationLtv_) {
+        originationLtv = originationLtv_;
+        liquidationLtv = liquidationLtv_;
+    }
+
+    function currentLtvs() external view returns (uint96, uint96) {
+        return (
+            originationLtv,
+            liquidationLtv
+        );
+    }
+}
+
 contract MonoCoolerAdminTest is MonoCoolerBaseTest {
-    event LiquidationLtvSet(uint256 ltv);
-    event MaxOriginationLtvSet(uint256 ltv);
-    event LiquidationsPausedSet(bool isPaused);
     event BorrowPausedSet(bool isPaused);
+    event LiquidationsPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
+    event LtvOracleSet(address indexed oracle);
 
     event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
 
@@ -26,42 +42,40 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             address(ohm),
             address(gohm),
             address(staking),
-            address(sdai),
+            address(susds),
             address(kernel),
-            DEFAULT_LLTV,
-            DEFAULT_OLTV,
+            address(ltvOracle),
             DEFAULT_INTEREST_RATE_BPS,
             DEFAULT_MIN_DEBT_REQUIRED
         );
     }
 
     function test_construction_failDecimalsDebt() public {
-        dai = new MockERC20("dai", "DAI", 6);
-        sdai = new MockERC4626(dai, "sDai", "sDAI");
+        usds = new MockERC20("usds", "USDS", 6);
+        susds = new MockERC4626(usds, "sUSDS", "sUSDS");
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler = new MonoCooler(
             address(ohm),
             address(gohm),
             address(staking),
-            address(sdai),
+            address(susds),
             address(kernel),
-            DEFAULT_LLTV,
-            DEFAULT_OLTV,
+            address(ltvOracle),
             DEFAULT_INTEREST_RATE_BPS,
             DEFAULT_MIN_DEBT_REQUIRED
         );
     }
 
     function test_construction_failLtv() public {
+        address badOracle = address(new MockLtvOracle(123e18, 123e18-1));
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler = new MonoCooler(
             address(ohm),
             address(gohm),
             address(staking),
-            address(sdai),
+            address(susds),
             address(kernel),
-            DEFAULT_LLTV,
-            DEFAULT_LLTV,
+            badOracle,
             DEFAULT_INTEREST_RATE_BPS,
             DEFAULT_MIN_DEBT_REQUIRED
         );
@@ -69,10 +83,10 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
 
     function test_construction_success() public view {
         assertEq(address(cooler.collateralToken()), address(gohm));
-        assertEq(address(cooler.debtToken()), address(dai));
+        assertEq(address(cooler.debtToken()), address(usds));
         assertEq(address(cooler.ohm()), address(ohm));
         assertEq(address(cooler.staking()), address(staking));
-        assertEq(address(cooler.debtSavingsVault()), address(sdai));
+        assertEq(address(cooler.debtSavingsVault()), address(susds));
         assertEq(cooler.minDebtRequired(), DEFAULT_MIN_DEBT_REQUIRED);
         assertEq(address(cooler.MINTR()), address(MINTR));
         assertEq(address(cooler.TRSRY()), address(TRSRY));
@@ -82,8 +96,10 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.liquidationsPaused(), false);
         assertEq(cooler.borrowsPaused(), false);
         assertEq(cooler.interestRateBps(), DEFAULT_INTEREST_RATE_BPS);
-        assertEq(cooler.liquidationLtv(), DEFAULT_LLTV);
-        assertEq(cooler.maxOriginationLtv(), DEFAULT_OLTV);
+        assertEq(address(cooler.ltvOracle()), address(ltvOracle));
+        (uint96 maxOriginationLtv, uint96 liquidationLtv) = cooler.loanToValues();
+        assertEq(maxOriginationLtv, DEFAULT_OLTV);
+        assertEq(liquidationLtv, DEFAULT_LLTV);
         assertEq(cooler.interestAccumulatorUpdatedAt(), uint32(vm.getBlockTimestamp()));
         assertEq(cooler.interestAccumulatorRay(), 1e27);
 
@@ -178,69 +194,46 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         }
     }
 
-    function test_setLoanToValue_failDecreaseLLTV() public {
+    function test_setLtvOracle_fail_newOLTV_gt_newLLTV() public {
+        address badOracle = address(new MockLtvOracle(123e18, 123e18-1));
         vm.startPrank(OVERSEER);
-
-        uint96 newLiquidationLtv = DEFAULT_LLTV - 1;
-        uint96 newMaxOriginationLtv = DEFAULT_OLTV;
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
+        cooler.setLtvOracle(address(badOracle));
     }
 
-    function test_setLoanToValue_increaseLLTV() public {
+    function test_setLtvOracle_fail_newOLTV_lt_oldOLTV() public {
+        address badOracle = address(new MockLtvOracle(
+            ltvOracle.currentOriginationLtv()-1,
+            ltvOracle.currentLiquidationLtv ()
+        ));
         vm.startPrank(OVERSEER);
-
-        uint96 newLiquidationLtv = DEFAULT_LLTV + 1;
-        uint96 newMaxOriginationLtv = DEFAULT_OLTV;
-
-        vm.expectEmit(address(cooler));
-        emit LiquidationLtvSet(newLiquidationLtv);
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
-        assertEq(cooler.liquidationLtv(), newLiquidationLtv);
-        assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
-    }
-
-    function test_setLoanToValue_noChange() public {
-        vm.startPrank(OVERSEER);
-
-        uint96 newLiquidationLtv = DEFAULT_LLTV;
-        uint96 newMaxOriginationLtv = DEFAULT_OLTV;
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
-        assertEq(cooler.liquidationLtv(), newLiquidationLtv);
-        assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
-    }
-
-    function test_setLoanToValue_failHighOLTV() public {
-        vm.startPrank(OVERSEER);
-
-        uint96 newLiquidationLtv = DEFAULT_LLTV;
-        uint96 newMaxOriginationLtv = DEFAULT_LLTV;
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
-
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv + 1);
+        cooler.setLtvOracle(address(badOracle));
     }
 
-    function test_setLoanToValue_setOLTV() public {
+    function test_setLtvOracle_fail_newLLTV_lt_oldLLTV() public {
+        address badOracle = address(new MockLtvOracle(
+            ltvOracle.currentOriginationLtv(),
+            ltvOracle.currentLiquidationLtv()-1 
+        ));
         vm.startPrank(OVERSEER);
-
-        uint96 newLiquidationLtv = DEFAULT_LLTV;
-        uint96 newMaxOriginationLtv = DEFAULT_LLTV - 1;
-        vm.expectEmit(address(cooler));
-        emit MaxOriginationLtvSet(newMaxOriginationLtv);
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
-        assertEq(cooler.liquidationLtv(), newLiquidationLtv);
-        assertEq(cooler.maxOriginationLtv(), newMaxOriginationLtv);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setLtvOracle(address(badOracle));
     }
 
-    function test_setLoanToValue_failDecreaseOLTV() public {
+    function test_setLtvOracle_success() public {
+        address newOracle = address(new MockLtvOracle(
+            ltvOracle.currentOriginationLtv()+5,
+            ltvOracle.currentLiquidationLtv()+5 
+        ));
         vm.startPrank(OVERSEER);
-
-        uint96 newLiquidationLtv = DEFAULT_LLTV;
-        uint96 newMaxOriginationLtv = DEFAULT_OLTV - 1;
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-        cooler.setLoanToValue(newLiquidationLtv, newMaxOriginationLtv);
+        vm.expectEmit();
+        emit LtvOracleSet(address(newOracle));
+        cooler.setLtvOracle(address(newOracle));
+        assertEq(address(cooler.ltvOracle()), newOracle);
+        (uint96 oltv, uint96 lltv) = cooler.loanToValues();
+        assertEq(oltv, DEFAULT_OLTV+5);
+        assertEq(lltv, DEFAULT_LLTV+5);
     }
 
     function test_setLiquidationsPaused() public {
@@ -278,7 +271,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
 
         vm.warp(START_TIMESTAMP + 30 days);
         assertEq(cooler.interestAccumulatorRay(), 1e27); // not checkpoint yet
-        checkGlobalState(0, 1.00041104335690626e27); // 1 month of accrual
+        checkGlobalState(0, 1.000411043359288828e27); // 1 month of accrual
 
         assertEq(cooler.interestRateBps(), 50);
         vm.expectEmit(address(cooler));
@@ -287,9 +280,9 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.interestRateBps(), 100);
 
         // Now has a checkpoint
-        assertEq(cooler.interestAccumulatorRay(), 1.00041104335690626e27);
+        assertEq(cooler.interestAccumulatorRay(), 1.000411043359288828e27);
         assertEq(cooler.interestAccumulatorUpdatedAt(), uint32(vm.getBlockTimestamp()));
-        checkGlobalState(0, 1.00041104335690626e27); // 1 month of accrual
+        checkGlobalState(0, 1.000411043359288828e27); // 1 month of accrual
     }
 
     function test_setMaxDelegateAddresses() public {
@@ -305,8 +298,8 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 9.3e18,
-                liquidationDebtAmount: 9.4e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,
@@ -326,8 +319,8 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 9.3e18,
-                liquidationDebtAmount: 9.4e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,

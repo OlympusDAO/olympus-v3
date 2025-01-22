@@ -2,7 +2,10 @@
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
+import {IStaking} from "interfaces/IStaking.sol";
 
 interface IMonoCooler {
     error ExceededMaxOriginationLtv(uint256 newLtv, uint256 maxOriginationLtv);
@@ -17,12 +20,10 @@ interface IMonoCooler {
     error ExceededPreviousLtv(uint256 oldLtv, uint256 newLtv);
     error InvalidCollateralDelta();
 
-    event LiquidationLtvSet(uint256 ltv);
-    event MaxOriginationLtvSet(uint256 ltv);
     event BorrowPausedSet(bool isPaused);
     event LiquidationsPausedSet(bool isPaused);
-    event MinDebtRequiredSet(uint128 amount);
     event InterestRateSet(uint16 interestRateBps);
+    event LtvOracleSet(address indexed oracle);
 
     event CollateralAdded(
         address indexed fundedBy,
@@ -42,6 +43,7 @@ interface IMonoCooler {
     struct AccountState {
         /// @notice The amount of gOHM collateral the account has posted
         uint128 collateral;
+
         /**
          * @notice A checkpoint of user debt, updated after a borrow/repay/liquidation
          * @dev Debt as of now =  (
@@ -51,6 +53,7 @@ interface IMonoCooler {
          * )
          */
         uint128 debtCheckpoint;
+
         /// @notice The account's last interest accumulator checkpoint
         uint256 interestAccumulatorRay;
     }
@@ -59,12 +62,16 @@ interface IMonoCooler {
     struct LiquidationStatus {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint128 collateral;
+
         /// @notice The up to date amount of debt [in debtToken terms]
         uint128 currentDebt;
+
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
+
         /// @notice Has this account exceeded the liquidation LTV
         bool exceededLiquidationLtv;
+
         /// @notice Has this account exceeded the max origination LTV
         bool exceededMaxOriginationLtv;
     }
@@ -74,23 +81,31 @@ interface IMonoCooler {
     struct AccountPosition {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint256 collateral;
+
         /// @notice The up to date amount of debt [in debtToken terms]
         uint256 currentDebt;
+
         /// @notice The maximum amount of debtToken's this account can borrow given the
         /// collateral posted, up to `maxOriginationLtv`
         uint256 maxOriginationDebtAmount;
+
         /// @notice The maximum amount of debtToken's this account can accrue before being
         /// eligable to be liquidated, up to `liquidationLtv`
         uint256 liquidationDebtAmount;
+
         /// @notice The health factor of this accounts position.
         /// Anything less than 1 can be liquidated, relative to `liquidationLtv`
         uint256 healthFactor;
+
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint256 currentLtv;
+
         /// @notice The total collateral delegated for this user across all delegates
         uint256 totalDelegated;
+
         /// @notice The current number of addresses this account has delegated to
         uint256 numDelegateAddresses;
+        
         /// @notice The max number of delegates this account is allowed to delegate to
         uint256 maxDelegateAddresses;
     }
@@ -101,10 +116,18 @@ interface IMonoCooler {
     /// @notice The debt token which can be borrowed, eg DAI or USDS
     function debtToken() external view returns (ERC20);
 
-    /**
-     * @notice The minimum debt a user needs to maintain
-     * @dev It costs gas to liquidate users, so we don't want dust amounts.
-     */
+    /// @notice Unwrapped gOHM
+    function ohm() external view returns (ERC20);
+
+    /// @notice staking contract to unstake (and burn) OHM from liquidations
+    function staking() external view returns (IStaking);
+
+    /// @notice The ERC2626 reserve asset which is pulled from treasury, eg sDAI
+    /// @dev The asset of this vault must be `debtToken`
+    function debtSavingsVault() external view returns (ERC4626);
+
+    /// @notice The minimum debt a user needs to maintain
+    /// @dev It costs gas to liquidate users, so we don't want dust amounts.
     function minDebtRequired() external view returns (uint256);
 
     /// @notice The total amount of collateral posted across all accounts.
@@ -125,13 +148,11 @@ interface IMonoCooler {
     /// @dev Interest (approximately) continuously compounds at this rate.
     function interestRateBps() external view returns (uint16);
 
-    /// @notice The Loan To Value point at which an account can be liquidated
-    /// @dev Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-    function liquidationLtv() external view returns (uint96);
+    /// @notice The oracle serving both the Max Origination LTV and the Liquidation LTV
+    function ltvOracle() external view returns (ICoolerLtvOracle);
 
-    /// @notice The maximum Loan To Value an account is allowed when borrowing or withdrawing collateral
-    /// @dev Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-    function maxOriginationLtv() external view returns (uint96);
+    /// @notice The current Max Origination LTV and Liquidation LTV from the `ltvOracle()`
+    function loanToValues() external view returns (uint96 maxOriginationLtv, uint96 liquidationLtv);
 
     /// @notice The last time the global debt accumulator was updated
     function interestAccumulatorUpdatedAt() external view returns (uint32);
@@ -335,45 +356,24 @@ interface IMonoCooler {
     //                                           ADMIN                                            //
     //============================================================================================//
 
-    /**
-     * @notice Set the Loan To Value's for both the `liquidationLtv` and `maxOriginationLtv`
-     * @param newLiquidationLtv The Loan To Value point at which an account can be liquidated
-     *    - Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-     *    - MUST NOT decrease compared to the existing `liquidationLtv`
-     * @param newMaxOriginationLtv The maximum Loan To Value an account is allowed to have when
-     *      borrowing or withdrawing collateral
-     *    - Defined in terms of [debtToken/collateralToken] -- eg [USDS/gOHM]
-     *    - MUST be less than the `newLiquidationLtv`
-     *    - MUST NOT decrease compared to the existing `maxOriginationLtv`
-     */
-    function setLoanToValue(uint96 newLiquidationLtv, uint96 newMaxOriginationLtv) external;
+    /// @notice Set the oracle which serves the max Origination LTV and the Liquidation LTV
+    function setLtvOracle(address newOracle) external;
 
-    /**
-     * @notice Liquidation may be paused in order for users to recover/repay debt after emergency
-     * actions
-     */
+    /// @notice Liquidation may be paused in order for users to recover/repay debt after emergency actions
     function setLiquidationsPaused(bool isPaused) external;
 
-    /**
-     * @notice Pause any new borrows of `debtToken`
-     */
+    /// @notice Pause any new borrows of `debtToken`
     function setBorrowPaused(bool isPaused) external;
 
-    /**
-     * @notice Update the interest rate, specified in basis points.
-     */
+    /// @notice Update the interest rate, specified in basis points.
     function setInterestRateBps(uint16 newInterestRateBps) external;
 
-    /**
-     * @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES
-     * number of delegates.
-     */
+    /// @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES
+    /// number of delegates.
     function setMaxDelegateAddresses(address account, uint32 maxDelegateAddresses) external;
 
-    /**
-     * @notice Update and checkpoint the total debt up until now
-     * @dev May be useful in case there are no new user actions for some time.
-     */
+    /// @notice Update and checkpoint the total debt up until now
+    /// @dev May be useful in case there are no new user actions for some time.
     function checkpointDebt() external returns (uint128 totalDebt, uint256 interestAccumulatorRay);
 
     //============================================================================================//
@@ -420,24 +420,16 @@ interface IMonoCooler {
         uint256 maxItems
     ) external view returns (DLGTEv1.AccountDelegation[] memory delegations);
 
-    /**
-     * @notice A view of the last checkpoint of account data (not as of this block)
-     */
+    /// @notice A view of the last checkpoint of account data (not as of this block)
     function accountState(address account) external view returns (AccountState memory);
 
-    /**
-     * @notice An account's current collateral
-     */
+    /// @notice An account's current collateral
     function accountCollateral(address account) external view returns (uint128 collateral);
 
-    /**
-     * @notice An account's current debt as of this block
-     */
+    /// @notice An account's current debt as of this block
     function accountDebt(address account) external view returns (uint128 debt);
 
-    /**
-     * @notice A view of the derived/internal cache data.
-     */
+    /// @notice A view of the derived/internal cache data.
     function globalState()
         external
         view
