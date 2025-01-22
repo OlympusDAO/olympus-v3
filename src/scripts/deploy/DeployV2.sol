@@ -46,6 +46,8 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
+import {OlympusConvertibleDepositPositions} from "modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 
 // Bophades Policies
 import {Operator} from "policies/Operator.sol";
@@ -98,6 +100,8 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
+    OlympusConvertibleDepository public CDEPO;
+    OlympusConvertibleDepositPositions public CDPOS;
 
     /// Policies
     Operator public operator;
@@ -212,7 +216,10 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
-        // TODO CDEPO, CDPOS
+        selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
+        selectorMap["OlympusConvertibleDepositPositions"] = this
+            ._deployConvertibleDepositPositions
+            .selector;
         // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
@@ -395,7 +402,7 @@ contract OlympusDeploy is Script {
         }
     }
 
-    function envAddress(string memory key_) internal returns (address) {
+    function envAddress(string memory key_) internal view returns (address) {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
@@ -1267,6 +1274,43 @@ contract OlympusDeploy is Script {
         console2.log("EmissionManager deployed at:", address(emissionManager));
 
         return address(emissionManager);
+    }
+
+    // ========== CONVERTIBLE DEPOSIT ========== //
+
+    function _deployConvertibleDepository(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepository
+
+        // Constructor arguments
+        uint16 reclaimRate = 90e2; // TODO finalise
+
+        // Log dependencies
+        console2.log("ConvertibleDepository parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   vault", address(sReserve));
+        console2.log("   reclaimRate", reclaimRate);
+
+        // Deploy ConvertibleDepository
+        vm.broadcast();
+        CDEPO = new OlympusConvertibleDepository(address(kernel), address(sReserve), reclaimRate);
+        console2.log("ConvertibleDepository deployed at:", address(CDEPO));
+
+        return address(CDEPO);
+    }
+
+    function _deployConvertibleDepositPositions(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositPositions
+
+        // Log dependencies
+        console2.log("ConvertibleDepositPositions parameters:");
+        console2.log("   kernel", address(kernel));
+
+        // Deploy ConvertibleDepositPositions
+        vm.broadcast();
+        CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
+        console2.log("ConvertibleDepositPositions deployed at:", address(CDPOS));
+
+        return address(CDPOS);
     }
 
     function _deployConvertibleDepositAuctioneer(bytes calldata) public returns (address) {
