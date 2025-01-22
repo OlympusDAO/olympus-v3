@@ -19,7 +19,7 @@ import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
 
-// add helper to get max debt given collateral?
+// @todo add helper to get max debt given collateral?
 
 /*
 @todo considerations:
@@ -113,8 +113,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     /// @notice Extra precision scalar
     uint256 private constant RAY = 1e27;
-
-    uint96 private constant ONE_YEAR = 365 days;
 
     //============================================================================================//
     //                                      INITIALIZATION                                        //
@@ -734,9 +732,6 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         gStateCache.totalDebt = totalDebt;
         (gStateCache.maxOriginationLtv, gStateCache.liquidationLtv) = ltvOracle.currentLtvs();
 
-        // Convert annual IR [basis points] into WAD per second, assuming 365 days in a year
-        uint96 interestRatePerSec = (uint96(interestRateBps) * 1e14) / ONE_YEAR;
-
         // Only compound if we're on a new block
         uint32 timeElapsed;
         unchecked {
@@ -749,7 +744,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
             // Compound the accumulator
             uint256 newInterestAccumulatorRay = gStateCache
                 .interestAccumulatorRay
-                .continuouslyCompounded(timeElapsed, interestRatePerSec);
+                .continuouslyCompounded(timeElapsed, uint96(interestRateBps) * 1e14);
 
             // Calculate the latest totalDebt from this
             gStateCache.totalDebt = newInterestAccumulatorRay

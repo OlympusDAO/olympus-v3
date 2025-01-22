@@ -27,8 +27,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
     }
 
     function test_borrow_success_newBorrow_sameRecipient() public {
-        uint128 collateralAmount = 10_000e18;
-        uint128 borrowAmount = 5_000e18;
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = 15_000e18;
         addCollateral(ALICE, collateralAmount);
 
         vm.startPrank(ALICE);
@@ -68,10 +68,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.8786e18,
-                    currentLtv: 0.5e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.994170933333333333e18,
+                    currentLtv: 1_500e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -83,7 +83,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount,
-                    currentLtv: 0.5e18,
+                    currentLtv: 1_500e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
@@ -96,8 +96,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         uint256 prevTimestamp = vm.getBlockTimestamp();
         assertEq(prevTimestamp, START_TIMESTAMP);
 
-        // Continous interest for 1yr == 5,000 * (exp(0.005) - 1)
-        uint128 expectedInterest = 25.0626041513991e18;
+        // Continous interest for 1yr == 15k * (exp(0.005) - 1)
+        uint128 expectedInterest = 75.187812891015945e18;
         skip(365 days);
         {
             assertEq(cooler.totalCollateral(), collateralAmount);
@@ -124,10 +124,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount + expectedInterest,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.869230443465535816e18,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.984224964309985202e18,
+                    currentLtv: 1_500e18 + 7.5187812891015945e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -139,13 +139,13 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount + expectedInterest,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    currentLtv: 1_500e18 + 7.5187812891015945e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount + expectedInterest, 1.00501252083027982e27);
+            checkGlobalState(borrowAmount + expectedInterest, 1.005012520859401063e27);
         }
 
         // Manually checkpoint and check again
@@ -154,7 +154,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(cooler.totalCollateral(), collateralAmount);
             assertEq(cooler.totalDebt(), borrowAmount + expectedInterest);
             assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
-            assertEq(cooler.interestAccumulatorRay(), 1.00501252083027982e27);
+            assertEq(cooler.interestAccumulatorRay(), 1.005012520859401063e27);
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
@@ -175,10 +175,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount + expectedInterest,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.869230443465535816e18,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.984224964309985202e18,
+                    currentLtv: 1_500e18 + 7.5187812891015945e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -190,19 +190,19 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount + expectedInterest,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    currentLtv: 1_500e18 + 7.5187812891015945e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount + expectedInterest, 1.00501252083027982e27);
+            checkGlobalState(borrowAmount + expectedInterest, 1.005012520859401063e27);
         }
     }
 
     function test_borrow_success_newBorrow_diffRecipient() public {
-        uint128 collateralAmount = 10_000e18;
-        uint128 borrowAmount = 5_000e18;
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = 15_000e18;
         addCollateral(ALICE, collateralAmount);
 
         vm.startPrank(ALICE);
@@ -235,10 +235,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: borrowAmount,
-                maxOriginationDebtAmount: 9_300e18,
-                liquidationDebtAmount: 9_393e18,
-                healthFactor: 1.8786e18,
-                currentLtv: 0.5e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
+                healthFactor: 1.994170933333333333e18,
+                currentLtv: 1_500e18,
                 totalDelegated: 0,
                 numDelegateAddresses: 0,
                 maxDelegateAddresses: 10
@@ -250,7 +250,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             IMonoCooler.LiquidationStatus({
                 collateral: collateralAmount,
                 currentDebt: borrowAmount,
-                currentLtv: 0.5e18,
+                currentLtv: 1_500e18,
                 exceededLiquidationLtv: false,
                 exceededMaxOriginationLtv: false
             })
@@ -261,8 +261,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
     // Same result as test_borrow_success_newBorrow_sameRecipient
     function test_borrow_twice_immediately() public {
-        uint128 collateralAmount = 10_000e18;
-        uint128 borrowAmount = 2_500e18;
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = 10_000e18;
         addCollateral(ALICE, collateralAmount);
 
         vm.startPrank(ALICE);
@@ -299,10 +299,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.8786e18,
-                    currentLtv: 0.5e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.4956282e18,
+                    currentLtv: 2_000e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -314,7 +314,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2,
-                    currentLtv: 0.5e18,
+                    currentLtv: 2_000e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
@@ -326,9 +326,9 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         // Checks 365 days later
         uint256 prevTimestamp = vm.getBlockTimestamp();
 
-        // Continous interest for 1yr == 5,000 * (exp(0.005) - 1)
-        // ACTUAL via excel:       25.0626042970048
-        uint128 expectedInterest = 25.0626041513991e18;
+        // Continous interest for 1yr == 20,000 * (exp(0.005) - 1)
+        // ACTUAL via excel:       100.250417188019
+        uint128 expectedInterest = 100.25041718802126e18;
         skip(365 days);
         {
             assertEq(cooler.totalCollateral(), collateralAmount);
@@ -355,10 +355,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.869230443465535816e18,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.488168723232488902e18,
+                    currentLtv: 2_000e18 + 10.025041718802126e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -370,13 +370,13 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    currentLtv: 2_000e18 + 10.025041718802126e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.00501252083027982e27);
+            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.005012520859401063e27);
         }
 
         // Manually checkpoint and check again
@@ -385,7 +385,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(cooler.totalCollateral(), collateralAmount);
             assertEq(cooler.totalDebt(), borrowAmount * 2 + expectedInterest);
             assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
-            assertEq(cooler.interestAccumulatorRay(), 1.00501252083027982e27);
+            assertEq(cooler.interestAccumulatorRay(), 1.005012520859401063e27);
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
@@ -406,10 +406,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.869230443465535816e18,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.488168723232488902e18,
+                    currentLtv: 2_000e18 + 10.025041718802126e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -421,20 +421,20 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    currentLtv: 0.5e18 + 0.0025062604151399100e18,
+                    currentLtv: 2_000e18 + 10.025041718802126e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.00501252083027982e27);
+            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.005012520859401063e27);
         }
     }
 
     // Same result as test_borrow_success_newBorrow_sameRecipient
     function test_borrow_twice_1dayLater() public {
-        uint128 collateralAmount = 10_000e18;
-        uint128 borrowAmount = 2_500e18;
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = 10_000e18;
         addCollateral(ALICE, collateralAmount);
 
         vm.startPrank(ALICE);
@@ -448,14 +448,15 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         emit Borrow(ALICE, ALICE, borrowAmount);
         cooler.borrow(borrowAmount, ALICE);
 
-        uint128 interestDelta = 0.034246809710652500e18;
+        // 10k * e^(0.05/365)
+        uint128 interestDelta = 0.13698723963648e18;
 
         // Immediate checks
         {
             assertEq(cooler.totalCollateral(), collateralAmount);
             assertEq(cooler.totalDebt(), borrowAmount * 2 + interestDelta);
             assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
-            assertEq(cooler.interestAccumulatorRay(), 1.000013698723884261e27);
+            assertEq(cooler.interestAccumulatorRay(), 1.000013698723963648e27);
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
@@ -467,7 +468,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountState({
                     collateral: collateralAmount,
                     debtCheckpoint: borrowAmount * 2 + interestDelta,
-                    interestAccumulatorRay: 1.000013698723884261e27
+                    interestAccumulatorRay: 1.000013698723963648e27
                 })
             );
 
@@ -476,10 +477,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + interestDelta,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.878587132876787097e18,
-                    currentLtv: 0.500003424680971066e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.495617955971233037e18,
+                    currentLtv: 2_000e18 + interestDelta/10,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -491,26 +492,26 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + interestDelta,
-                    currentLtv: 0.500003424680971066e18,
+                    currentLtv: 2_000e18 + interestDelta/10,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount * 2 + interestDelta, 1.000013698723884261e27);
+            checkGlobalState(borrowAmount * 2 + interestDelta, 1.000013698723963648e27);
         }
 
         // Checks 365 days later
         uint256 prevTimestamp = vm.getBlockTimestamp();
 
-        // Continous interest for 1yr == 5,000 * (exp(0.005) - 1)
-        uint128 expectedInterest = 25.097022623956797775e18;
+        // Continous interest for 1yr == 20,000.14 * e^(0.005)
+        uint128 expectedInterest = 100.388091079053889629e18;
         skip(365 days);
         {
             assertEq(cooler.totalCollateral(), collateralAmount);
             assertEq(cooler.totalDebt(), borrowAmount * 2 + interestDelta);
             assertEq(cooler.interestAccumulatorUpdatedAt(), prevTimestamp);
-            assertEq(cooler.interestAccumulatorRay(), 1.000013698723884261e27);
+            assertEq(cooler.interestAccumulatorRay(), 1.000013698723963648e27);
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
@@ -522,7 +523,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountState({
                     collateral: collateralAmount,
                     debtCheckpoint: borrowAmount * 2 + interestDelta,
-                    interestAccumulatorRay: 1.000013698723884261e27
+                    interestAccumulatorRay: 1.000013698723963648e27
                 })
             );
 
@@ -531,10 +532,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.869217640517367297e18,
-                    currentLtv: 0.502509702262395680e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.488158530296028565e18,
+                    currentLtv: 2_000e18 + 10.038809107905388963e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -546,13 +547,13 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    currentLtv: 0.502509702262395680e18,
+                    currentLtv: 2_000e18 + 10.038809107905388963e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.005026288219302899109948573e27);
+            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.005026288248504325962809062e27);
         }
 
         // Manually checkpoint and check again
@@ -562,7 +563,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             assertEq(cooler.totalCollateral(), collateralAmount);
             assertEq(cooler.totalDebt(), borrowAmount * 2 + expectedInterest);
             assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
-            assertEq(cooler.interestAccumulatorRay(), 1.005026288219302899109948573e27);
+            assertEq(cooler.interestAccumulatorRay(), 1.005026288248504325962809062e27);
             assertEq(gohm.balanceOf(ALICE), 0);
             assertEq(gohm.balanceOf(address(cooler)), 0);
             assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount);
@@ -574,7 +575,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountState({
                     collateral: collateralAmount,
                     debtCheckpoint: borrowAmount * 2 + interestDelta,
-                    interestAccumulatorRay: 1.000013698723884261e27
+                    interestAccumulatorRay: 1.000013698723963648e27
                 })
             );
 
@@ -583,10 +584,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
-                    healthFactor: 1.869217640517367297e18,
-                    currentLtv: 0.502509702262395680e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.488158530296028565e18,
+                    currentLtv: 2_000e18 + 10.038809107905388963e18,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -598,18 +599,18 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + expectedInterest,
-                    currentLtv: 0.502509702262395680e18,
+                    currentLtv: 2_000e18 + 10.038809107905388963e18,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false
                 })
             );
 
-            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.005026288219302899109948573e27);
+            checkGlobalState(borrowAmount * 2 + expectedInterest, 1.005026288248504325962809062e27);
         }
     }
 
     function test_borrow_notEnoughDebt_single() public {
-        uint128 collateralAmount = 10_000e18;
+        uint128 collateralAmount = 10e18;
         uint128 borrowAmount = 1_000e18 - 1;
         addCollateral(ALICE, collateralAmount);
 
@@ -621,25 +622,25 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
     }
 
     function test_borrow_fail_originationLtv() public {
-        uint128 collateralAmount = 10_000e18;
-        uint128 borrowAmount = 9_300e18 + 1;
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = 29_616.4e18 + 1;
         addCollateral(ALICE, collateralAmount);
 
         vm.startPrank(ALICE);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMonoCooler.ExceededMaxOriginationLtv.selector,
-                0.93e18 + 1,
-                0.93e18
+                2_961.64e18 + 1,
+                2_961.64e18
             )
         );
         cooler.borrow(borrowAmount, ALICE);
     }
 
     function test_borrow_success_maxBorrow() public {
-        uint128 collateralAmount = 10_000e18;
+        uint128 collateralAmount = 10e18;
         uint128 borrowAmount = type(uint128).max;
-        int128 expectedMaxBorrow = 9_300e18;
+        int128 expectedMaxBorrow = 29_616.4e18;
         uint128 borrowedAmount = uint128(expectedMaxBorrow);
 
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 0);
@@ -688,8 +689,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.AccountPosition({
                     collateral: collateralAmount,
                     currentDebt: borrowedAmount,
-                    maxOriginationDebtAmount: 9_300e18,
-                    liquidationDebtAmount: 9_393e18,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
                     healthFactor: 1.01e18,
                     currentLtv: DEFAULT_OLTV,
                     totalDelegated: 0,
@@ -714,7 +715,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
     }
 
     function test_borrow_fail_maxBorrow_overOriginationLtv() public {
-        uint128 collateralAmount = 10_000e18;
+        uint128 collateralAmount = 10e18;
         uint128 borrowAmount = type(uint128).max;
         addCollateral(ALICE, collateralAmount);
 
@@ -740,7 +741,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMonoCooler.ExceededMaxOriginationLtv.selector,
-                0.930012739813212363e18,
+                2_961.680570688839698463e18,
                 DEFAULT_OLTV
             )
         );

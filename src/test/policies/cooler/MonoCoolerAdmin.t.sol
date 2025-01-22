@@ -271,7 +271,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
 
         vm.warp(START_TIMESTAMP + 30 days);
         assertEq(cooler.interestAccumulatorRay(), 1e27); // not checkpoint yet
-        checkGlobalState(0, 1.00041104335690626e27); // 1 month of accrual
+        checkGlobalState(0, 1.000411043359288828e27); // 1 month of accrual
 
         assertEq(cooler.interestRateBps(), 50);
         vm.expectEmit(address(cooler));
@@ -280,9 +280,9 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.interestRateBps(), 100);
 
         // Now has a checkpoint
-        assertEq(cooler.interestAccumulatorRay(), 1.00041104335690626e27);
+        assertEq(cooler.interestAccumulatorRay(), 1.000411043359288828e27);
         assertEq(cooler.interestAccumulatorUpdatedAt(), uint32(vm.getBlockTimestamp()));
-        checkGlobalState(0, 1.00041104335690626e27); // 1 month of accrual
+        checkGlobalState(0, 1.000411043359288828e27); // 1 month of accrual
     }
 
     function test_setMaxDelegateAddresses() public {
@@ -298,8 +298,8 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 9.3e18,
-                liquidationDebtAmount: 9.393e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,
@@ -319,8 +319,8 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 9.3e18,
-                liquidationDebtAmount: 9.393e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,

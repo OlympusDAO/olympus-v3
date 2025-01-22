@@ -41,8 +41,7 @@ abstract contract MonoCoolerBaseTest is Test {
     address internal immutable BOB = makeAddr("bob");
     address internal immutable OTHERS = makeAddr("others");
 
-    // @todo update this to be 'real'
-    uint96 internal constant DEFAULT_OLTV = 0.93e18; /*2_961.64e18;*/ // [USDS/gOHM] == ~11 [USDS/OHM]
+    uint96 internal constant DEFAULT_OLTV = 2_961.64e18; // [USDS/gOHM] == ~11 [USDS/OHM]
     uint96 internal constant DEFAULT_OLTV_MAX_DELTA = 100e18; // 100 USDS
     uint32 internal constant DEFAULT_OLTV_MIN_TARGET_TIME_DELTA = 1 weeks;
     uint96 internal constant DEFAULT_OLTV_MAX_RATE_OF_CHANGE = uint96(0.1e18) / 1 days; // 0.1 USDS / day

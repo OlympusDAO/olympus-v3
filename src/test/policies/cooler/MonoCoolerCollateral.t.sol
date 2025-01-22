@@ -40,7 +40,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_addCollateral_simple() public {
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
@@ -64,15 +64,15 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         );
 
         expectNoDelegations(ALICE);
-        expectAccountDelegationSummary(ALICE, 50e18, 0, 0, 10);
+        expectAccountDelegationSummary(ALICE, 5e18, 0, 0, 10);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18,
-                liquidationDebtAmount: 46.965e18,
+                maxOriginationDebtAmount: 14_808.2e18,
+                liquidationDebtAmount: 14_956.282e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: 0,
@@ -94,7 +94,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_addCollateral_onBehalfOfNoDelegations() public {
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
@@ -118,7 +118,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         );
 
         expectNoDelegations(BOB);
-        expectAccountDelegationSummary(BOB, 50e18, 0, 0, 10);
+        expectAccountDelegationSummary(BOB, 5e18, 0, 0, 10);
         expectNoDelegations(ALICE);
         expectAccountDelegationSummary(ALICE, 0, 0, 0, 10);
 
@@ -127,8 +127,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18,
-                liquidationDebtAmount: 46.965e18,
+                maxOriginationDebtAmount: 14_808.2e18,
+                liquidationDebtAmount: 14_956.282e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: 0,
@@ -153,7 +153,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         // Mint extra gOHM into cooler
         gohm.mint(address(cooler), 100e18);
 
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
@@ -169,7 +169,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_addCollateral_withDelegations() public {
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
@@ -199,15 +199,15 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         expectOneDelegation(ALICE, BOB, collateralAmount / 2);
         expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
-        expectAccountDelegationSummary(ALICE, 50e18, 25e18, 1, 10);
+        expectAccountDelegationSummary(ALICE, 5e18, 2.5e18, 1, 10);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18,
-                liquidationDebtAmount: 46.965e18,
+                maxOriginationDebtAmount: 14_808.2e18,
+                liquidationDebtAmount: 14_956.282e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,
@@ -229,7 +229,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_addCollateral_thenApplyDelegations_sameUser() public {
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
@@ -265,15 +265,15 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         expectOneDelegation(ALICE, BOB, collateralAmount / 2);
         expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
-        expectAccountDelegationSummary(ALICE, 50e18, 25e18, 1, 10);
+        expectAccountDelegationSummary(ALICE, 5e18, 2.5e18, 1, 10);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18,
-                liquidationDebtAmount: 46.965e18,
+                maxOriginationDebtAmount: 14_808.2e18,
+                liquidationDebtAmount: 14_956.282e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,
@@ -295,7 +295,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_addCollateral_thenApplyDelegations_onBehalfOf() public {
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
@@ -307,7 +307,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         // Need to prank BOB
         {
             vm.expectRevert(
-                abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 0, 25e18)
+                abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 0, 2.5e18)
             );
             cooler.applyDelegations(delegationRequest(BOB, collateralAmount / 2));
         }
@@ -344,7 +344,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         );
 
         expectOneDelegation(BOB, BOB, collateralAmount / 2);
-        expectAccountDelegationSummary(BOB, 50e18, 25e18, 1, 10);
+        expectAccountDelegationSummary(BOB, 5e18, 2.5e18, 1, 10);
         expectAccountDelegationSummary(ALICE, 0, 0, 0, 10);
 
         checkAccountPosition(
@@ -352,8 +352,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18,
-                liquidationDebtAmount: 46.965e18,
+                maxOriginationDebtAmount: 14_808.2e18,
+                liquidationDebtAmount: 14_956.282e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: collateralAmount / 2,
@@ -377,43 +377,43 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     // Full branch analysis for applying delegations to be done in a separate suite.
     function test_addCollateral_complexDelegations() public {
         // Adds and removes delegations
-        uint128 collateralAmount = 50e18;
+        uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
 
-        // undelegated -> BOB: 10
-        // undelegated -> OTHERS: 30
-        // OTHERS -> BOB: 15
-        // OTHERS -> undelegated: 5
+        // undelegated -> BOB: 1
+        // undelegated -> OTHERS: 3
+        // OTHERS -> BOB: 1.5
+        // OTHERS -> undelegated: 0.5
         DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](5);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({delegate: BOB, amount: 10e18});
-        delegationRequests[1] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: 30e18});
-        delegationRequests[2] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: -15e18});
-        delegationRequests[3] = DLGTEv1.DelegationRequest({delegate: BOB, amount: 15e18});
-        delegationRequests[4] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: -5e18});
+        delegationRequests[0] = DLGTEv1.DelegationRequest({delegate: BOB, amount: 1e18});
+        delegationRequests[1] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: 3e18});
+        delegationRequests[2] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: -1.5e18});
+        delegationRequests[3] = DLGTEv1.DelegationRequest({delegate: BOB, amount: 1.5e18});
+        delegationRequests[4] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: -0.5e18});
 
         address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
         vm.expectEmit(address(escrowFactory));
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, BOB, 10e18);
+        emit DelegationApplied(ALICE, BOB, 1e18);
 
         address othersEscrow = 0x6F67DD53F065131901fC8B45f183aD4977F75161;
         vm.expectEmit(address(escrowFactory));
         emit DelegateEscrowCreated(address(DLGTE), OTHERS, othersEscrow);
 
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, OTHERS, 30e18);
+        emit DelegationApplied(ALICE, OTHERS, 3e18);
 
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, OTHERS, -15e18);
+        emit DelegationApplied(ALICE, OTHERS, -1.5e18);
 
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, BOB, 15e18);
+        emit DelegationApplied(ALICE, BOB, 1.5e18);
 
         vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, OTHERS, -5e18);
+        emit DelegationApplied(ALICE, OTHERS, -0.5e18);
 
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, ALICE, collateralAmount);
@@ -422,8 +422,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         assertEq(gohm.balanceOf(ALICE), 0);
         assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount - 10e18 - 30e18 + 5e18);
-        assertEq(gohm.balanceOf(othersEscrow), 10e18);
+        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount - 1e18 - 3e18 + 0.5e18);
+        assertEq(gohm.balanceOf(othersEscrow), 1e18);
 
         checkAccountState(
             ALICE,
@@ -434,8 +434,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             })
         );
 
-        expectTwoDelegations(ALICE, BOB, 25e18, OTHERS, 10e18);
-        expectAccountDelegationSummary(ALICE, 50e18, 35e18, 2, 10);
+        expectTwoDelegations(ALICE, BOB, 2.5e18, OTHERS, 1e18);
+        expectAccountDelegationSummary(ALICE, 5e18, 3.5e18, 2, 10);
         expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
         expectAccountDelegationSummary(OTHERS, 0, 0, 0, 10);
 
@@ -444,11 +444,11 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: collateralAmount,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18,
-                liquidationDebtAmount: 46.965e18,
+                maxOriginationDebtAmount: 14_808.2e18,
+                liquidationDebtAmount: 14_956.282e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
-                totalDelegated: 35e18,
+                totalDelegated: 3.5e18,
                 numDelegateAddresses: 2,
                 maxDelegateAddresses: 10
             })
@@ -500,7 +500,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_failNotEnoughCollateral() public {
-        addCollateral(ALICE, 100e18);
+        addCollateral(ALICE, 10e18);
         vm.startPrank(ALICE);
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
@@ -509,37 +509,37 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_successSameRecipient() public {
-        addCollateral(ALICE, 100e18);
+        addCollateral(ALICE, 10e18);
         vm.startPrank(ALICE);
 
         vm.expectEmit(address(cooler));
-        emit CollateralWithdrawn(ALICE, ALICE, 25e18);
-        assertEq(cooler.withdrawCollateral(25e18, ALICE, new DLGTEv1.DelegationRequest[](0)), 25e18);
+        emit CollateralWithdrawn(ALICE, ALICE, 2.5e18);
+        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, new DLGTEv1.DelegationRequest[](0)), 2.5e18);
 
-        assertEq(cooler.totalCollateral(), 75e18);
-        assertEq(gohm.balanceOf(ALICE), 25e18);
+        assertEq(cooler.totalCollateral(), 7.5e18);
+        assertEq(gohm.balanceOf(ALICE), 2.5e18);
         assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(gohm.balanceOf(address(DLGTE)), 75e18);
+        assertEq(gohm.balanceOf(address(DLGTE)), 7.5e18);
 
         checkAccountState(
             ALICE,
             IMonoCooler.AccountState({
-                collateral: 75e18,
+                collateral: 7.5e18,
                 debtCheckpoint: 0,
                 interestAccumulatorRay: 0
             })
         );
 
         expectNoDelegations(ALICE);
-        expectAccountDelegationSummary(ALICE, 75e18, 0, 0, 10);
+        expectAccountDelegationSummary(ALICE, 7.5e18, 0, 0, 10);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
-                collateral: 75e18,
+                collateral: 7.5e18,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 69.75e18,
-                liquidationDebtAmount: 70.4475e18,
+                maxOriginationDebtAmount: 22_212.3e18,
+                liquidationDebtAmount: 22_434.423e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: 0,
@@ -551,7 +551,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         checkLiquidityStatus(
             ALICE,
             IMonoCooler.LiquidationStatus({
-                collateral: 75e18,
+                collateral: 7.5e18,
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
@@ -561,39 +561,39 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_successDifferentRecipient() public {
-        addCollateral(ALICE, 100e18);
+        addCollateral(ALICE, 10e18);
         vm.startPrank(ALICE);
 
         vm.expectEmit(address(cooler));
-        emit CollateralWithdrawn(ALICE, BOB, 25e18);
-        assertEq(cooler.withdrawCollateral(25e18, BOB, new DLGTEv1.DelegationRequest[](0)), 25e18);
+        emit CollateralWithdrawn(ALICE, BOB, 2.5e18);
+        assertEq(cooler.withdrawCollateral(2.5e18, BOB, new DLGTEv1.DelegationRequest[](0)), 2.5e18);
 
-        assertEq(cooler.totalCollateral(), 75e18);
+        assertEq(cooler.totalCollateral(), 7.5e18);
         assertEq(gohm.balanceOf(ALICE), 0);
-        assertEq(gohm.balanceOf(BOB), 25e18);
+        assertEq(gohm.balanceOf(BOB), 2.5e18);
         assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(gohm.balanceOf(address(DLGTE)), 75e18);
+        assertEq(gohm.balanceOf(address(DLGTE)), 7.5e18);
 
         checkAccountState(
             ALICE,
             IMonoCooler.AccountState({
-                collateral: 75e18,
+                collateral: 7.5e18,
                 debtCheckpoint: 0,
                 interestAccumulatorRay: 0
             })
         );
 
         expectNoDelegations(ALICE);
-        expectAccountDelegationSummary(ALICE, 75e18, 0, 0, 10);
+        expectAccountDelegationSummary(ALICE, 7.5e18, 0, 0, 10);
         expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
-                collateral: 75e18,
+                collateral: 7.5e18,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 69.75e18,
-                liquidationDebtAmount: 70.4475e18,
+                maxOriginationDebtAmount: 22_212.3e18,
+                liquidationDebtAmount: 22_434.423e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: 0,
@@ -605,7 +605,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         checkLiquidityStatus(
             ALICE,
             IMonoCooler.LiquidationStatus({
-                collateral: 75e18,
+                collateral: 7.5e18,
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
@@ -662,8 +662,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
             IMonoCooler.AccountPosition({
                 collateral: 50e18 - 1,
                 currentDebt: 0,
-                maxOriginationDebtAmount: 46.5e18 - 1,
-                liquidationDebtAmount: 46.965e18 - 1,
+                maxOriginationDebtAmount: 148_081.999999999999997038e18,
+                liquidationDebtAmount: 149_562.819999999999997008e18,
                 healthFactor: type(uint256).max,
                 currentLtv: 0,
                 totalDelegated: 50e18 - 1,
@@ -685,19 +685,19 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_fail_originationLtv() public {
-        addCollateral(ALICE, 10_000e18);
+        addCollateral(ALICE, 10e18);
 
         // Borrow up to the max
-        borrow(ALICE, 9_300e18, ALICE);
+        borrow(ALICE, 29_616.4e18, ALICE);
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
-                collateral: 10_000e18,
-                currentDebt: 9_300e18,
-                maxOriginationDebtAmount: 9_300e18,
-                liquidationDebtAmount: 9_393e18,
+                collateral: 10e18,
+                currentDebt: 29_616.4e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
                 healthFactor: 1.01e18,
-                currentLtv: 0.93e18,
+                currentLtv: 2_961.64e18,
                 totalDelegated: 0,
                 numDelegateAddresses: 0,
                 maxDelegateAddresses: 10
@@ -708,26 +708,26 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMonoCooler.ExceededMaxOriginationLtv.selector,
-                0.93e18 + 1,
-                0.93e18
+                2_961.64e18 + 297,
+                2_961.64e18
             )
         );
         cooler.withdrawCollateral(1, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_success_maxOriginationLtv() public {
-        addCollateral(ALICE, 10_000e18);
-        borrow(ALICE, 5_000e18, ALICE);
+        addCollateral(ALICE, 10e18);
+        borrow(ALICE, 15_000e18, ALICE);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
-                collateral: 10_000e18,
-                currentDebt: 5_000e18,
-                maxOriginationDebtAmount: 9_300e18,
-                liquidationDebtAmount: 9_393e18,
-                healthFactor: 1.8786e18,
-                currentLtv: 0.5e18,
+                collateral: 10e18,
+                currentDebt: 15_000e18,
+                maxOriginationDebtAmount: 29_616.4e18,
+                liquidationDebtAmount: 29_912.564e18,
+                healthFactor: 1.994170933333333333e18,
+                currentLtv: 1_500e18,
                 totalDelegated: 0,
                 numDelegateAddresses: 0,
                 maxDelegateAddresses: 10
@@ -735,20 +735,20 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         );
 
         vm.startPrank(ALICE);
-        assertEq(cooler.withdrawCollateral(type(uint128).max, ALICE, noDelegationRequest()), 4_623.655913978494623655e18);
+        assertEq(cooler.withdrawCollateral(type(uint128).max, ALICE, noDelegationRequest()), 4.935238584027768398e18);
 
-        assertEq(cooler.totalCollateral(), 10_000e18 - 4_623.655913978494623655e18);
-        assertEq(gohm.balanceOf(ALICE), 4_623.655913978494623655e18);
+        assertEq(cooler.totalCollateral(), 10e18 - 4.935238584027768398e18);
+        assertEq(gohm.balanceOf(ALICE), 4.935238584027768398e18);
 
         checkAccountPosition(
             ALICE,
             IMonoCooler.AccountPosition({
-                collateral: 5_376.344086021505376345e18,
-                currentDebt: 5_000e18,
-                maxOriginationDebtAmount: 5_000e18,
-                liquidationDebtAmount: 5_050e18,
+                collateral: 5.064761415972231602e18,
+                currentDebt: 15_000e18,
+                maxOriginationDebtAmount: 15_000e18 + 1747,
+                liquidationDebtAmount: 15_150e18 + 1764,
                 healthFactor: 1.01e18,
-                currentLtv: 0.93e18,
+                currentLtv: 2_961.639999999999999656e18,
                 totalDelegated: 0,
                 numDelegateAddresses: 0,
                 maxDelegateAddresses: 10
@@ -757,9 +757,9 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         checkLiquidityStatus(
             ALICE,
             IMonoCooler.LiquidationStatus({
-                collateral: 5_376.344086021505376345e18,
-                currentDebt: 5_000e18,
-                currentLtv: 0.93e18,
+                collateral: 5.064761415972231602e18,
+                currentDebt: 15_000e18,
+                currentLtv: 2_961.639999999999999656e18,
                 exceededLiquidationLtv: false,
                 exceededMaxOriginationLtv: false
             })
@@ -767,16 +767,16 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
     }
 
     function test_withdrawCollateral_fail_max() public {
-        addCollateral(ALICE, 10_000e18);
+        addCollateral(ALICE, 10e18);
         borrow(ALICE, type(uint128).max, ALICE);
 
         skip(1 days);
         checkLiquidityStatus(
             ALICE,
             IMonoCooler.LiquidationStatus({
-                collateral: 10_000e18,
-                currentDebt: 9_300.127398132123627300e18,
-                currentLtv: 0.930012739813212363e18,
+                collateral: 10e18,
+                currentDebt: 29_616.805706888396984628e18,
+                currentLtv: 2_961.680570688839698463e18,
                 exceededLiquidationLtv: false,
                 exceededMaxOriginationLtv: true
             })
@@ -786,8 +786,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMonoCooler.ExceededMaxOriginationLtv.selector,
-                0.930012739813212363e18,
-                0.93e18
+                2_961.680570688839698463e18,
+                2_961.64e18
             )
         );
         cooler.withdrawCollateral(type(uint128).max, ALICE, noDelegationRequest());
@@ -796,37 +796,37 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
 contract MonoCoolerCollateralViewTest is MonoCoolerBaseTest {
     function test_debtDeltaForMaxOriginationLtv() public {
-        uint128 collateralAmount = 10_000e18;
+        uint128 collateralAmount = 10e18;
 
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 0);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, int128(collateralAmount)), 9_300e18);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 9_000e18), 8_370e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, int128(collateralAmount)), 29_616.4e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 9e18), 26_654.760e18);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidCollateralDelta.selector));
         cooler.debtDeltaForMaxOriginationLtv(ALICE, -1);
 
         addCollateral(ALICE, collateralAmount);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 9_300e18);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), 8_370e18);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 10_230e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 29_616.4e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1e18), 26_654.760e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1e18), 32_578.04e18);
 
         // Borrow reduces available debt
         vm.startPrank(ALICE);
         cooler.borrow(1_000e18, ALICE);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 8_300e18);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), 7_370e18);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 9_230e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 28_616.4e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1e18), 25_654.76e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1e18), 31_578.04e18);
 
         // Borrow max
         cooler.borrow(type(uint128).max, ALICE);
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), 0); // Already at max
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), -930e18); // If removing collateral, need to reduce borrow
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 930e18); // If removing collateral, can borrow more
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1e18), -2_961.64e18); // If removing collateral, need to reduce borrow
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1e18), 2_961.64e18); // If removing collateral, can borrow more
 
         skip(30 days);
         IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
-        assertEq(position.currentDebt, 9_300e18 + 3.822703219228218000e18);
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), -3.822703219228218000e18); // Above max - would need to reduce some
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1_000e18), -933.822703219228218e18); // If removing collateral, need to reduce borrow
-        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1_000e18), 926.177296780771782000e18); // If removing collateral, can borrow more
+        assertEq(position.currentDebt, 29_616.4e18 + 12.173624546041645580e18);
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), -12.173624546041645580e18); // Above max - would need to reduce some
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1e18), -2_961.64e18 - 12.173624546041645580e18); // If removing collateral, need to reduce borrow
+        assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1e18), 2_961.64e18 - 12.173624546041645580e18); // If removing collateral, can borrow more
     }
 }
