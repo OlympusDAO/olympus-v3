@@ -130,7 +130,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     bytes32 private constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
 
     /// @dev The EIP-712 typeHash for Authorization.
-    bytes32 constant AUTHORIZATION_TYPEHASH =
+    bytes32 private constant AUTHORIZATION_TYPEHASH =
         keccak256("Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)");
 
     //============================================================================================//
@@ -251,9 +251,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         authorizations[authorization.account][authorization.authorized] = authorization.authorizationDeadline;
     }
 
-    /// @dev Returns whether the sender is authorized to manage `onBehalf`'s positions.
-    function _isSenderAuthorized(address onBehalf) internal view returns (bool) {
-        return msg.sender == onBehalf || block.timestamp < authorizations[onBehalf][msg.sender];
+    /// @inheritdoc IMonoCooler
+    function isSenderAuthorized(address sender, address onBehalfOf) public view returns (bool) {
+        return sender == onBehalfOf || block.timestamp < authorizations[onBehalfOf][sender];
     }
 
     //============================================================================================//
@@ -283,7 +283,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (delegationRequests.length > 0) {
             // While adding collateral on another user's behalf is ok,
             // delegating on behalf of someone else is not allowed unless authorized
-            if (!_isSenderAuthorized(onBehalfOf)) revert UnathorizedOnBehalfOf();
+            if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
             DLGTE.applyDelegations(onBehalfOf, delegationRequests);
         }
 
@@ -301,7 +301,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     ) external override returns (uint128 collateralWithdrawn) {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
-        if (!_isSenderAuthorized(onBehalfOf)) revert UnathorizedOnBehalfOf();
+        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
 
         // No need to sync global debt state when withdrawing collateral
         GlobalStateCache memory gStateCache = _globalStateRO();
@@ -368,7 +368,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (borrowsPaused) revert Paused();
         if (borrowAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
-        if (!_isSenderAuthorized(onBehalfOf)) revert UnathorizedOnBehalfOf();
+        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
 
         // Sync global debt state when borrowing
         GlobalStateCache memory gStateCache = _globalStateRW();
@@ -462,7 +462,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         aState.interestAccumulatorRay = gStateCache.interestAccumulatorRay;
         _reduceTotalDebt(gStateCache, amountRepaid);
 
-        // NB: Liquidity doesn't need to be checked after a repay, as that only improves the health.
+        // NB: No need to check if the position is healthy after a repayment as this
+        // only decreases the LTV.
         emit Repay(msg.sender, onBehalfOf, amountRepaid);
         _repayTreasury(amountRepaid, msg.sender);
     }
@@ -476,7 +477,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         DLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
     ) external override returns (uint256 /*totalDelegated*/, uint256 /*totalUndelegated*/) {
-        return DLGTE.applyDelegations(msg.sender, delegationRequests);
+        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        return DLGTE.applyDelegations(onBehalfOf, delegationRequests);
     }
 
     /// @inheritdoc IMonoCooler
@@ -682,8 +684,8 @@ It means the liquidation won't happen until that accrued interest pays for gas++
             : uint256(gStateCache.liquidationLtv).mulDivDown(position.collateral, position.currentDebt);
 
         (
-            ,
-            /*totalGOhm*/ position.totalDelegated,
+            /*totalGOhm*/ ,
+            position.totalDelegated,
             position.numDelegateAddresses,
             position.maxDelegateAddresses
         ) = DLGTE.accountDelegationSummary(account);
@@ -856,7 +858,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
             amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
         });
 
-        // Pull in the debToken from the user and deposit into the savings vault,
+        // Pull in the debtToken from the user and deposit into the savings vault,
         // with TRSRY as the receiver
         debtToken.safeTransferFrom(from, address(this), debtTokenAmount);
         debtToken.safeApprove(address(debtSavingsVault), debtTokenAmount);

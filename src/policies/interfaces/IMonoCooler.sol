@@ -212,6 +212,7 @@ interface IMonoCooler {
     /// @notice Sets the authorization for `authorized` to manage `msg.sender`'s positions until `authorizationDeadline`
     /// @param authorized The authorized address.
     /// @param authorizationDeadline The unix timestamp that they the authorization is valid until.
+    /// @dev Authorization can be revoked by setting the `authorizationDeadline` into the past
     function setAuthorization(address authorized, uint96 authorizationDeadline) external;
 
     /// @notice Sets the authorization for `authorization.authorized` to manage `authorization.authorizer`'s positions
@@ -221,7 +222,11 @@ interface IMonoCooler {
     /// @dev The nonce is passed as argument to be able to revert with a different error message.
     /// @param authorization The `Authorization` struct.
     /// @param signature The signature.
+    /// @dev Authorization can be revoked by calling `setAuthorization()` and setting the `authorizationDeadline` into the past
     function setAuthorizationWithSig(Authorization calldata authorization, Signature calldata signature) external;
+
+    /// @dev Returns whether the `sender` is authorized to manage `onBehalf`'s positions.
+    function isSenderAuthorized(address sender, address onBehalf) external view returns (bool);
 
     //============================================================================================//
     //                                        COLLATERAL                                          //

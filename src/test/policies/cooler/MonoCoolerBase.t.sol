@@ -138,34 +138,42 @@ abstract contract MonoCoolerBaseTest is Test {
     }
 
     function addCollateral(address account, uint128 collateralAmount) internal {
-        addCollateral(account, collateralAmount, new DLGTEv1.DelegationRequest[](0));
+        addCollateral(account, account, collateralAmount, new DLGTEv1.DelegationRequest[](0));
     }
 
     function addCollateral(
-        address account,
+        address caller,
+        address onBehalfOf,
         uint128 collateralAmount,
         DLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
-        gohm.mint(account, collateralAmount);
-        vm.startPrank(account);
+        gohm.mint(caller, collateralAmount);
+        vm.startPrank(caller);
         gohm.approve(address(cooler), collateralAmount);
-        cooler.addCollateral(collateralAmount, account, delegationRequests);
+        cooler.addCollateral(collateralAmount, onBehalfOf, delegationRequests);
         vm.stopPrank();
     }
 
     function withdrawCollateral(
-        address account,
+        address caller,
+        address onBehalfOf,
+        address recipient,
         uint128 collateralAmount,
         DLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
-        vm.startPrank(account);
-        cooler.withdrawCollateral(collateralAmount, account, delegationRequests);
+        vm.startPrank(caller);
+        cooler.withdrawCollateral(collateralAmount, onBehalfOf, recipient, delegationRequests);
         vm.stopPrank();
     }
 
-    function borrow(address account, uint128 amount, address recipient) internal {
-        vm.startPrank(account);
-        cooler.borrow(amount, recipient);
+    function borrow(
+        address caller,
+        address onBehalfOf,
+        uint128 amount,
+        address recipient
+    ) internal {
+        vm.startPrank(caller);
+        cooler.borrow(amount, onBehalfOf, recipient);
         vm.stopPrank();
     }
 
