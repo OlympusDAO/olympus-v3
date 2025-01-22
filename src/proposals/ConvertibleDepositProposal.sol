@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.15;
 
 // OCG Proposal Simulator
@@ -9,8 +10,10 @@ import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravo
 import {ProposalScript} from "src/proposals/ProposalScript.sol";
 
 // Contracts
-import {Kernel} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/roles/ROLESv1.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {CDFacility} from "src/policies/CDFacility.sol";
 
 /// @notice Activates the Convertible Deposit contracts
 contract ConvertibleDepositProposal is GovernorBravoProposal {
@@ -40,45 +43,102 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     function _build(Addresses addresses) internal override {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
         address timelock = addresses.getAddress("olympus-timelock");
+        address daoMS = addresses.getAddress("olympus-multisig-dao");
 
         address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
-        address heartNew = addresses.getAddress("olympus-policy-heart-1_7");
-        address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
-        address emissionManagerNew = addresses.getAddress("olympus-policy-emissionmanager-1_2");
+        address heart = addresses.getAddress("olympus-policy-heart-1_7");
+        address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
         address cdAuctioneer = addresses.getAddress(
             "olympus-policy-convertible-deposit-auctioneer"
         );
         address cdFacility = addresses.getAddress("olympus-policy-convertible-deposit-facility");
 
+        // Pre-requisites
+        // - Old Heart policy has been deactivated in the kernel
+        // - Old EmissionManager policy has been deactivated in the kernel
+        // - Heart policy has been activated in the kernel
+        // - EmissionManager policy has been activated in the kernel
+        // - ConvertibleDepositFacility policy has been activated in the kernel
+        // - ConvertibleDepositAuctioneer policy has been activated in the kernel
+
         // Revoke the "heart" role from the old Heart policy
-
-        // Disable the old Heart policy
-
-        // Disable the old EmissionManager policy
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("heart"), heartOld),
+            "Revoke heart role from old Heart policy"
+        );
 
         // Grant the "cd_admin" role to the Timelock
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("cd_admin"), timelock),
+            "Grant cd_admin to Timelock"
+        );
+
+        // Grant the "cd_admin" role to the DAO MS
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("cd_admin"), daoMS),
+            "Grant cd_admin to DAO MS"
+        );
 
         // Grant the "emissions_admin" role to the Timelock
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("emissions_admin"),
+                timelock
+            ),
+            "Grant emissions_admin to Timelock"
+        );
 
         // Grant the "emissions_admin" role to the DAO MS
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("emissions_admin"),
+                daoMS
+            ),
+            "Grant emissions_admin to DAO MS"
+        );
 
         // Grant the "heart" role to the Heart policy
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart),
+            "Grant heart role to new Heart policy"
+        );
 
         // Grant the "cd_emissionmanager" role to the EmissionManager to call CDAuctioneer
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("cd_emissionmanager"),
+                emissionManager
+            ),
+            "Grant cd_emissionmanager role to EmissionManager"
+        );
 
         // Grant the "cd_auctioneer" role to the CDAuctioneer policy to call CDFacility
-
-        // Activate the ConvertibleDepositFacility policy
-
-        // Activate the ConvertibleDepositAuctioneer policy
-
-        // Activate the EmissionManager policy
-
-        // Activate the Heart policy
+        _pushAction(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("cd_auctioneer"),
+                cdAuctioneer
+            ),
+            "Grant cd_auctioneer role to CDAuctioneer"
+        );
 
         // Activate the ConvertibleDepositFacility contract functionality
-
-        // TODO can we initialize the CDAuctioneer and EmissionManager policies here?
+        _pushAction(
+            cdFacility,
+            abi.encodeWithSelector(CDFacility.activate.selector),
+            "Activate ConvertibleDepositFacility"
+        );
 
         // Next steps:
         // - DAO MS needs to initialize the new EmissionManager policy
@@ -116,14 +176,11 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         // Validate cleanup
         // Validate that the old Heart policy is disabled
-        require(
-            heartOld.isActive() == false,
-            "Old Heart policy is still active"
-        );
+        require(Policy(heartOld).isActive() == false, "Old Heart policy is still active");
 
         // Validate that the old EmissionManager policy is disabled
         require(
-            emissionManagerOld.isActive() == false,
+            Policy(emissionManagerOld).isActive() == false,
             "Old EmissionManager policy is still active"
         );
 
@@ -176,32 +233,20 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         );
 
         // Validate that the new Heart policy is active
-        require(
-            heart.isActive() == true,
-            "Heart policy is not active"
-        );
+        require(Policy(heart).isActive() == true, "Heart policy is not active");
 
         // Validate that the new EmissionManager policy is active
-        require(
-            emissionManager.isActive() == true,
-            "EmissionManager policy is not active"
-        );
+        require(Policy(emissionManager).isActive() == true, "EmissionManager policy is not active");
 
         // Validate that the new ConvertibleDepositAuctioneer policy is active
-        require(
-            cdAuctioneer.isActive() == true,
-            "CDAuctioneer policy is not active"
-        );
+        require(Policy(cdAuctioneer).isActive() == true, "CDAuctioneer policy is not active");
 
         // Validate that the new ConvertibleDepositFacility policy is active
-        require(
-            cdFacility.isActive() == true,
-            "CDFacility policy is not active"
-        );
+        require(Policy(cdFacility).isActive() == true, "CDFacility policy is not active");
 
         // Validate that the new ConvertibleDepositFacility policy is locally active
         require(
-            cdFacility.locallyActive() == true,
+            CDFacility(cdFacility).locallyActive() == true,
             "CDFacility policy is not locally active"
         );
     }
