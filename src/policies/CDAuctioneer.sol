@@ -33,7 +33,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     // ========== STATE VARIABLES ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
-    bytes32 public constant ROLE_HEART = "heart";
+    bytes32 public constant ROLE_HEART = "cd_emissionmanager";
 
     /// @notice The role that can perform administrative actions, such as changing parameters
     bytes32 public constant ROLE_ADMIN = "cd_admin";

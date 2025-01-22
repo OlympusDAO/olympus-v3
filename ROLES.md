@@ -11,6 +11,7 @@ This document describes the roles that are used in the Olympus protocol.
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_admin | CDAuctioneer | Allows updating the parameters |
+| cd_emissionmanager | CDAuctioneer | Calls the setAuctionParameters() function |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
@@ -23,7 +24,6 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | EmissionManager | Deactivates the EmissionManager |
 | emissions_admin | EmissionManager | Set configuration parameters |
-| heart | CDAuctioneer | Calls the setAuctionParameters() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |

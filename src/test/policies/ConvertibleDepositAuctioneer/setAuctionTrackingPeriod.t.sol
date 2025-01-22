@@ -174,7 +174,7 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
     function test_previousAuctionResults() public givenInitialized givenRecipientHasBid(1e18) {
         // Warp to the next day and trigger storage of the previous day's results
         vm.warp(block.timestamp + 1 days);
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function

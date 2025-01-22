@@ -80,7 +80,7 @@ contract EmissionManagerTest is Test {
     //   [X] when not locally active
     //     [X] it returns without doing anything
     //   [X] when locally active
-    //     [X] given the caller does not have the "heart" role
+    //     [X] given the caller does not have the "cd_emissionmanager" role
     //       [X] it reverts
     //     [X] it increments the beat counter modulo 3
     //     [X] when beatCounter is incremented and != 0

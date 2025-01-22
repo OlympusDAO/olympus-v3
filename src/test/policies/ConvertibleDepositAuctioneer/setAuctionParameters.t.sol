@@ -5,7 +5,7 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
-    // when the caller does not have the "heart" role
+    // when the caller does not have the "cd_emissionmanager" role
     //  [X] it reverts
     // given the contract is not initialized
     //  [X] it sets the parameters
@@ -57,12 +57,12 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     //  [X] it increments the auction results index
     //  [X] the AuctionResult event is emitted
 
-    function test_callerDoesNotHaveHeartRole_reverts(address caller_) public {
-        // Ensure caller is not heart
-        vm.assume(caller_ != heart);
+    function test_callerDoesNotHaveEmissionManagerRole_reverts(address caller_) public {
+        // Ensure caller is not emissionManager
+        vm.assume(caller_ != emissionManager);
 
         // Expect revert
-        _expectRoleRevert("heart");
+        _expectRoleRevert("cd_emissionmanager");
 
         // Call function
         vm.prank(caller_);
@@ -75,7 +75,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 newMinPrice = 14e18;
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
@@ -103,7 +103,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         );
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
     }
 
@@ -117,7 +117,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         );
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(21e9, 0, 16e18);
     }
 
@@ -131,7 +131,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         );
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(21e9, 11e9, 0);
     }
 
@@ -161,7 +161,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         emit AuctionParametersUpdated(newTarget, newTickSize, newMinPrice);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
@@ -209,7 +209,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         emit AuctionParametersUpdated(newTarget, newTickSize, newMinPrice);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Assert state
@@ -248,7 +248,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 newTickSize = bound(newTickSize_, 1, TICK_SIZE);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, newTickSize, MIN_PRICE);
 
         // Assert state
@@ -270,7 +270,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 newTickSize = bound(newTickSize_, TICK_SIZE, 2 * TICK_SIZE);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, newTickSize, MIN_PRICE);
 
         // Assert state
@@ -292,7 +292,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 newMinPrice = bound(newMinPrice_, MIN_PRICE + 1, 2 * MIN_PRICE);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
 
         // Assert state
@@ -314,7 +314,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 newMinPrice = bound(newMinPrice_, 1, MIN_PRICE);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, newMinPrice);
 
         // Assert state
@@ -340,7 +340,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(INITIAL_BLOCK + 1 hours);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Assert day state
@@ -379,7 +379,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Set parameters
         uint256 dayTwoTarget = TARGET + 1;
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
 
         // Bid
@@ -493,7 +493,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Call function
         uint256 dayEightTarget = TARGET + 7;
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(dayEightTarget, TICK_SIZE, MIN_PRICE);
 
         // Bid
@@ -583,7 +583,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         emit AuctionResult(dayEightConvertible, dayEightTarget, 0);
 
         // Call function
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(dayNineTarget, TICK_SIZE, MIN_PRICE);
 
         // Bid

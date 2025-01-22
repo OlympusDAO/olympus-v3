@@ -34,7 +34,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     MockERC4626 public vault;
 
     address public recipient = address(0x1);
-    address public heart = address(0x3);
+    address public emissionManager = address(0x3);
     address public admin = address(0x4);
     address public emergency = address(0x5);
 
@@ -92,7 +92,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
-        rolesAdmin.grantRole(bytes32("heart"), heart);
+        rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
         rolesAdmin.grantRole(bytes32("cd_admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
@@ -253,7 +253,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     }
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
-        vm.prank(heart);
+        vm.prank(emissionManager);
         auctioneer.setAuctionParameters(target_, tickSize_, minPrice_);
     }
 
