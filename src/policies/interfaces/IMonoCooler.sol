@@ -19,25 +19,39 @@ interface IMonoCooler {
     error InvalidDelegationRequests();
     error ExceededPreviousLtv(uint256 oldLtv, uint256 newLtv);
     error InvalidCollateralDelta();
+    error ExpiredSignature(uint256 deadline);
+    error InvalidNonce(uint256 deadline);
+    error InvalidSigner(address signer, address owner);
+    error UnathorizedOnBehalfOf();
 
     event BorrowPausedSet(bool isPaused);
     event LiquidationsPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
     event LtvOracleSet(address indexed oracle);
-
     event CollateralAdded(
-        address indexed fundedBy,
+        address indexed caller,
         address indexed onBehalfOf,
         uint128 collateralAmount
     );
     event CollateralWithdrawn(
-        address indexed account,
+        address indexed caller,
+        address indexed onBehalfOf,
         address indexed recipient,
         uint128 collateralAmount
     );
-    event Borrow(address indexed account, address indexed recipient, uint128 amount);
-    event Repay(address indexed fundedBy, address indexed onBehalfOf, uint128 repayAmount);
+    event Borrow(
+        address indexed caller,
+        address indexed onBehalfOf, 
+        address indexed recipient, 
+        uint128 amount
+    );
+    event Repay(
+        address indexed caller,
+        address indexed onBehalfOf,
+        uint128 repayAmount
+    );
     event Liquidated(address indexed account, uint128 collateralSeized, uint128 debtWiped);
+    event AuthorizationSet(address indexed caller, address indexed account, address indexed authorized, uint96 authorizationDeadline);
 
     /// @notice The record of an individual account's collateral and debt data
     struct AccountState {
@@ -56,6 +70,29 @@ interface IMonoCooler {
 
         /// @notice The account's last interest accumulator checkpoint
         uint256 interestAccumulatorRay;
+    }
+
+    struct Authorization {
+        /// @notice The address of the account granting authorization
+        address account;
+
+        /// @notice The address of who is authorized to act on the the accounts behalf
+        address authorized;
+
+        /// @notice The unix timestamp that the access is automatically revoked
+        uint96 authorizationDeadline;
+
+        /// @notice For replay protection
+        uint256 nonce;
+
+        /// @notice A unix timestamp for when the signature is valid until
+        uint256 signatureDeadline;
+    }
+
+    struct Signature {
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
     }
 
     /// @notice The status for whether an account can be liquidated or not
@@ -105,7 +142,7 @@ interface IMonoCooler {
 
         /// @notice The current number of addresses this account has delegated to
         uint256 numDelegateAddresses;
-        
+
         /// @notice The max number of delegates this account is allowed to delegate to
         uint256 maxDelegateAddresses;
     }
@@ -161,6 +198,31 @@ interface IMonoCooler {
     /// @dev To RAY (1e27) precision
     function interestAccumulatorRay() external view returns (uint256);
 
+    /// @notice Whether `authorized` is authorized to act on `authorizer`'s behalf for all user actions
+    /// up until the `authorizationDeadline` unix timestamp.
+    /// @dev Anyone is authorized to modify their own positions, regardless of this variable.
+    function authorizations(address authorizer, address authorized) external view returns (uint96 authorizationDeadline);
+    
+    /// @notice The `authorizer`'s current nonce. Used to prevent replay attacks with EIP-712 signatures.
+    function authorizationNonces(address authorizer) external view returns (uint256);
+
+    /// @dev Returns the domain separator used in the encoding of the signature for `setAuthorizationWithSig()`, as defined by {EIP712}.
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    /// @notice Sets the authorization for `authorized` to manage `msg.sender`'s positions until `authorizationDeadline`
+    /// @param authorized The authorized address.
+    /// @param authorizationDeadline The unix timestamp that they the authorization is valid until.
+    function setAuthorization(address authorized, uint96 authorizationDeadline) external;
+
+    /// @notice Sets the authorization for `authorization.authorized` to manage `authorization.authorizer`'s positions
+    /// until `authorization.authorizationDeadline`.
+    /// @dev Warning: Reverts if the signature has already been submitted.
+    /// @dev The signature is malleable, but it has no impact on the security here.
+    /// @dev The nonce is passed as argument to be able to revert with a different error message.
+    /// @param authorization The `Authorization` struct.
+    /// @param signature The signature.
+    function setAuthorizationWithSig(Authorization calldata authorization, Signature calldata signature) external;
+
     //============================================================================================//
     //                                        COLLATERAL                                          //
     //============================================================================================//
@@ -169,14 +231,15 @@ interface IMonoCooler {
      * @notice Deposit gOHM as collateral
      * @param collateralAmount The amount to deposit
      *    - MUST be greater than zero
-     * @param onBehalfOf An account can add collateral on behalf of themselves or another address.
+     * @param onBehalfOf A caller can add collateral on behalf of themselves or another address.
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply after adding collateral.
      *    - MAY be empty, meaning no delegations are applied.
      *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
      *    - MUST NOT apply delegations that results in more collateral being undelegated than
      *      the account has collateral for.
-     *    - MUST be empty if `onBehalfOf` does not equal msg.sender - ie calling on behalf of another address.
+     *    - If `onBehalfOf` does not equal the caller, the caller must be authorized via 
+     *      `setAuthorization()` or `setAuthorizationWithSig()`
      */
     function addCollateral(
         uint128 collateralAmount,
@@ -192,6 +255,8 @@ interface IMonoCooler {
      * @param collateralAmount The amount of collateral to remove
      *    - MUST be greater than zero
      *    - If set to type(uint128).max then withdraw the max amount up to maxOriginationLtv
+     * @param onBehalfOf A caller can withdraw collateral on behalf of themselves or another address if
+     *      authorized via `setAuthorization()` or `setAuthorizationWithSig()`
      * @param recipient Send the gOHM collateral to a specified recipient address.
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply before removing collateral.
@@ -202,9 +267,27 @@ interface IMonoCooler {
      */
     function withdrawCollateral(
         uint128 collateralAmount,
+        address onBehalfOf,
         address recipient,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (uint128 collateralWithdrawn);
+
+    /**
+     * @notice Apply a set of delegation requests on behalf of a given user.
+     * @param delegationRequests The set of delegations to apply.
+     *    - MAY be empty, meaning no delegations are applied.
+     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
+     *    - MUST NOT apply delegations that results in more collateral being undelegated than
+     *      the account has collateral for.
+     *    - It applies across total gOHM balances for a given account across all calling policies
+     *      So this may (un)delegate the account's gOHM set by another policy
+     * @param onBehalfOf A caller can apply delegations on behalf of themselves or another address if
+     *      authorized via `setAuthorization()` or `setAuthorizationWithSig()`
+     */
+    function applyDelegations(
+        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        address onBehalfOf
+    ) external returns (uint256 totalDelegated, uint256 totalUndelegated);
 
     //============================================================================================//
     //                                       BORROW/REPAY                                         //
@@ -218,12 +301,15 @@ interface IMonoCooler {
      * @param borrowAmount The amount of `debtToken` to borrow
      *    - MUST be greater than zero
      *    - If set to type(uint128).max then borrow the max amount up to maxOriginationLtv
+     * @param onBehalfOf A caller can borrow on behalf of themselves or another address if
+     *      authorized via `setAuthorization()` or `setAuthorizationWithSig()`
      * @param recipient Send the borrowed token to a specified recipient address.
      *    - MUST NOT be address(0)
      * @return amountBorrowed The amount actually borrowed.
      */
     function borrow(
         uint128 borrowAmount,
+        address onBehalfOf,
         address recipient
     ) external returns (uint128 amountBorrowed);
 
@@ -236,101 +322,17 @@ interface IMonoCooler {
      *    - MUST be greater than zero
      *    - MAY be greater than the latest debt as of this block. In which case it will be capped
      *      to that latest debt
-     * @param onBehalfOf Another address can repay the debt on behalf of someone else
+     * @param onBehalfOf A caller can repay the debt on behalf of themselves or another address
      * @return amountRepaid The amount actually repaid.
      */
-    function repay(uint128 repayAmount, address onBehalfOf) external returns (uint128 amountRepaid);
+    function repay(
+        uint128 repayAmount, 
+        address onBehalfOf
+    ) external returns (uint128 amountRepaid);
 
     //============================================================================================//
-    //                                         COMPOSITE                                          //
+    //                                       LIQUIDATIONS                                         //
     //============================================================================================//
-
-    /**
-     * @notice Caller adds collateral and borrows in the same transaction
-     *    - The same functionality as individually calling addCollateral() and then borrow()
-     *    - Cannot call 'on behalf of' another address.
-     * @param collateralAmount The amount to deposit
-     *    - MUST be greater than zero
-     * @param borrowAmount The amount of `debtToken` to borrow
-     *    - MUST be greater than zero
-     *    - If set to type(uint128).max then borrow the max amount up to maxOriginationLtv
-     * @param recipient Send the borrowed token to a specified recipient address.
-     *    - MUST NOT be address(0)
-     * @param delegationRequests The set of delegations to apply after adding collateral.
-     *    - MAY be empty, meaning no delegations are applied.
-     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
-     *    - MUST NOT apply delegations that results in more collateral being undelegated than
-     *      the account has collateral for.
-     * @return amountBorrowed The amount actually borrowed.
-     */
-    function addCollateralAndBorrow(
-        uint128 collateralAmount,
-        uint128 borrowAmount,
-        address recipient,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint128 amountBorrowed);
-
-    /**
-     * @notice Caller adds collateral and borrows on behalf of another account, in the same transaction
-     *    - The new LTV of `onBehalfOf` must be less than or equal to the existing LTV
-     *    - The same functionality as individually calling addCollateral() and then borrow()
-     *      on behalf of another account.
-     * @param onBehalfOf An account can add collateral on behalf of themselves or another address.
-     *    - MUST NOT be address(0)
-     *    - This account also receives the borrowed funds
-     * @param collateralAmount The amount to deposit
-     *    - MUST be greater than zero
-     * @param borrowAmount The amount of `debtToken` to borrow
-     *    - MUST be greater than zero
-     *    - LTV for `onBehalfOf` MUST NOT exceed their LTV prior to calling this function, or it is
-     *      a new position
-     *    - If set to type(uint128).max then borrow the max amount up to the EXISTING LTV of that account
-     * @return amountBorrowed The amount actually borrowed.
-     */
-    function addCollateralAndBorrowOnBehalfOf(
-        address onBehalfOf,
-        uint128 collateralAmount,
-        uint128 borrowAmount
-    ) external returns (uint128 amountBorrowed);
-
-    /**
-     * @notice Caller repays a portion, or all of the debt and then withdraws collateral, in the same transaction
-     *    - The same functionality as individually calling repay() and then removeCollateral()
-     *    - MUST NOT be called for an account which has no debt
-     *    - If the entire debt isn't paid off, then the total debt for this account
-     *      MUST be greater than or equal to the `minDebtRequired` after the borrow is applied
-     * @param repayAmount The amount to repay.
-     *    - MUST be greater than zero
-     *    - MAY be greater than the latest debt as of this block. In which case it will be capped
-     *      to that latest debt
-     * @param collateralAmount The amount of collateral to remove
-     *    - MUST be greater than zero
-     *    - If set to type(uint128).max then withdraw the max amount up to maxOriginationLtv
-     * @param recipient Send the gOHM collateral to a specified recipient address.
-     *    - MUST NOT be address(0)
-     * @param delegationRequests The set of delegations to apply before removing collateral.
-     *    - MAY be empty, meaning no delegations are applied.
-     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
-     *    - MUST NOT apply delegations that results in more collateral being undelegated than
-     *      the account has collateral for.
-     * @return amountRepaid The amount actually repaid.
-     */
-    function repayAndWithdrawCollateral(
-        uint128 repayAmount,
-        uint128 collateralAmount,
-        address recipient,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint128 amountRepaid, uint128 withdrawCollateral);
-
-    /**
-     * @notice Apply a set of delegation requests on behalf of a given user.
-     *  - Each delegation request either delegates or undelegates to an address
-     *  - It applies across total gOHM balances for a given account across all calling policies
-     *    So this may (un)delegate the account's gOHM set by another policy
-     */
-    function applyDelegations(
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint256 totalDelegated, uint256 totalUndelegated);
 
     /**
      * @notice Liquidate one or more accounts which have exceeded the `liquidationLtv`
