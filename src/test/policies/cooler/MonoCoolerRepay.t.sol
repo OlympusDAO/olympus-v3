@@ -5,7 +5,11 @@ import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 
 contract MonoCoolerRepayTest is MonoCoolerBaseTest {
-    event Repay(address indexed fundedBy, address indexed onBehalfOf, uint128 repayAmount);
+    event Repay(
+        address indexed caller,
+        address indexed onBehalfOf,
+        uint128 repayAmount
+    );
 
     function test_repay_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
@@ -28,7 +32,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = 14_000e18 + 1;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.startPrank(ALICE);
         vm.expectRevert(
@@ -42,7 +46,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = borrowAmount;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.startPrank(ALICE);
         vm.expectRevert("TRANSFER_FROM_FAILED");
@@ -54,7 +58,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = borrowAmount;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.startPrank(ALICE);
         assertEq(usds.balanceOf(ALICE), repayAmount);
@@ -125,7 +129,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = borrowAmount + 1e18;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.startPrank(ALICE);
         usds.approve(address(cooler), borrowAmount);
@@ -195,7 +199,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = 11_000e18;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
         deal(address(usds), BOB, repayAmount);
 
         vm.startPrank(BOB);
@@ -373,7 +377,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = 14_000e18 + 1.5e18;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.warp(START_TIMESTAMP + 1 days);
 
@@ -394,7 +398,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = 14_000e18 + 123;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.warp(START_TIMESTAMP + 1 days);
 
@@ -466,7 +470,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 29_616.4e18;
         uint128 repayAmount = 1_000e18;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         // Only becomes unhealthy a litle under 2 years later (!)
         uint128 expectedInterest = 296.420449180681035496e18;
@@ -581,7 +585,7 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
         uint128 borrowAmount = 15_000e18;
         uint128 repayAmount = 1_000e18;
         addCollateral(ALICE, collateralAmount);
-        borrow(ALICE, borrowAmount, ALICE);
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         vm.startPrank(OVERSEER);
         cooler.setLiquidationsPaused(true);

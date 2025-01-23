@@ -137,6 +137,15 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
                 exceededMaxOriginationLtv: false
             })
         );
+
+        assertEq(
+            cooler.DOMAIN_SEPARATOR(), 
+            keccak256(abi.encode(
+                keccak256("EIP712Domain(uint256 chainId,address verifyingContract)"), 
+                block.chainid, 
+                address(cooler)
+            ))
+        );
     }
 
     function test_configureDependencies_success() public {
@@ -289,7 +298,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         uint128 collateralAmount = 10e18;
 
         // Add collateral with a delegation (50% of collateral)
-        addCollateral(ALICE, collateralAmount, delegationRequest(BOB, collateralAmount / 2));
+        addCollateral(ALICE, ALICE, collateralAmount, delegationRequest(BOB, collateralAmount / 2));
 
         expectOneDelegation(ALICE, BOB, collateralAmount / 2);
 

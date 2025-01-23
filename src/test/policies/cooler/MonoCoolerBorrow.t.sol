@@ -5,7 +5,12 @@ import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 
 contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
-    event Borrow(address indexed account, address indexed recipient, uint128 amount);
+    event Borrow(
+        address indexed caller,
+        address indexed onBehalfOf, 
+        address indexed recipient, 
+        uint128 amount
+    );
 
     function test_borrow_failPaused() public {
         vm.startPrank(OVERSEER);
@@ -13,17 +18,17 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         vm.startPrank(ALICE);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
-        cooler.borrow(1_000e18, ALICE);
+        cooler.borrow(1_000e18, ALICE, ALICE);
     }
 
     function test_borrow_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
-        cooler.borrow(0, ALICE);
+        cooler.borrow(0, ALICE, ALICE);
     }
 
     function test_borrow_failBadRecipient() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidAddress.selector));
-        cooler.borrow(100, address(0));
+        cooler.borrow(100, ALICE, address(0));
     }
 
     function test_borrow_success_newBorrow_sameRecipient() public {
@@ -33,8 +38,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowAmount);
-        cooler.borrow(borrowAmount, ALICE);
+        emit Borrow(ALICE, ALICE, ALICE, borrowAmount);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
 
         // Treasury Checks
         {
@@ -207,8 +212,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, BOB, borrowAmount);
-        cooler.borrow(borrowAmount, BOB);
+        emit Borrow(ALICE, ALICE, BOB, borrowAmount);
+        cooler.borrow(borrowAmount, ALICE, BOB);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(cooler.totalDebt(), borrowAmount);
@@ -267,11 +272,11 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowAmount);
-        cooler.borrow(borrowAmount, ALICE);
+        emit Borrow(ALICE, ALICE, ALICE, borrowAmount);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowAmount);
-        cooler.borrow(borrowAmount, ALICE);
+        emit Borrow(ALICE, ALICE, ALICE, borrowAmount);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
 
         // Immediate checks
         {
@@ -439,14 +444,14 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowAmount);
-        cooler.borrow(borrowAmount, ALICE);
+        emit Borrow(ALICE, ALICE, ALICE, borrowAmount);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
 
         skip(1 days);
 
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowAmount);
-        cooler.borrow(borrowAmount, ALICE);
+        emit Borrow(ALICE, ALICE, ALICE, borrowAmount);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
 
         // 10k * e^(0.05/365)
         uint128 interestDelta = 0.13698723963648e18;
@@ -618,7 +623,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.MinDebtNotMet.selector, 1_000e18, 1_000e18 - 1)
         );
-        cooler.borrow(borrowAmount, ALICE);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
     }
 
     function test_borrow_fail_originationLtv() public {
@@ -634,7 +639,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 2_961.64e18
             )
         );
-        cooler.borrow(borrowAmount, ALICE);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
     }
 
     function test_borrow_success_maxBorrow() public {
@@ -653,8 +658,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit Borrow(ALICE, ALICE, borrowedAmount);
-        uint128 borrowed = cooler.borrow(borrowAmount, ALICE);
+        emit Borrow(ALICE, ALICE, ALICE, borrowedAmount);
+        uint128 borrowed = cooler.borrow(borrowAmount, ALICE, ALICE);
         assertEq(borrowed, borrowedAmount);
 
         // Treasury Checks
@@ -720,7 +725,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         addCollateral(ALICE, collateralAmount);
 
         vm.startPrank(ALICE);
-        cooler.borrow(borrowAmount, ALICE);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
 
         // Second time fails - already at origination LTV
         IMonoCooler.AccountPosition memory position = cooler.accountPosition(ALICE);
@@ -732,7 +737,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 DEFAULT_OLTV
             )
         );
-        cooler.borrow(borrowAmount, ALICE);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
 
         // Same moving forward in time.
         skip(1 days);
@@ -745,6 +750,118 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 DEFAULT_OLTV
             )
         );
-        cooler.borrow(borrowAmount, ALICE);
+        cooler.borrow(borrowAmount, ALICE, ALICE);
     }
+
+    function test_borrow_onBehalfOf_fail_noAuthorization() public {
+        vm.startPrank(BOB);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        cooler.borrow(100, ALICE, ALICE);
+    }
+
+    function test_borrow_onBehalfOf_withAuthorization() public {
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = type(uint128).max;
+        int128 expectedMaxBorrow = 29_616.4e18;
+        uint128 borrowedAmount = uint128(expectedMaxBorrow);
+
+        addCollateral(ALICE, collateralAmount);
+
+        // Alice gives approval for BOB to addCollateral and delegate
+        vm.prank(ALICE);
+        cooler.setAuthorization(BOB, uint96(block.timestamp + 1 days));
+
+        vm.startPrank(BOB);
+        vm.expectEmit(address(cooler));
+        emit Borrow(BOB, ALICE, BOB, borrowedAmount);
+        uint128 borrowed = cooler.borrow(borrowAmount, ALICE, BOB);
+        assertEq(borrowed, borrowedAmount);
+
+        assertEq(cooler.totalCollateral(), collateralAmount);
+        assertEq(cooler.totalDebt(), borrowedAmount);
+        checkGlobalState(borrowedAmount, 1e27);
+
+        // ALICE
+        {
+            assertEq(gohm.balanceOf(ALICE), 0);
+            assertEq(usds.balanceOf(ALICE), 0);
+
+            checkAccountState(
+                ALICE,
+                IMonoCooler.AccountState({
+                    collateral: collateralAmount,
+                    debtCheckpoint: borrowedAmount,
+                    interestAccumulatorRay: 1e27
+                })
+            );
+
+            checkAccountPosition(
+                ALICE,
+                IMonoCooler.AccountPosition({
+                    collateral: collateralAmount,
+                    currentDebt: borrowedAmount,
+                    maxOriginationDebtAmount: 29_616.4e18,
+                    liquidationDebtAmount: 29_912.564e18,
+                    healthFactor: 1.01e18,
+                    currentLtv: DEFAULT_OLTV,
+                    totalDelegated: 0,
+                    numDelegateAddresses: 0,
+                    maxDelegateAddresses: 10
+                })
+            );
+
+            checkLiquidityStatus(
+                ALICE,
+                IMonoCooler.LiquidationStatus({
+                    collateral: collateralAmount,
+                    currentDebt: borrowedAmount,
+                    currentLtv: DEFAULT_OLTV,
+                    exceededLiquidationLtv: false,
+                    exceededMaxOriginationLtv: false
+                })
+            );
+        }
+
+        // BOB
+        {
+            assertEq(gohm.balanceOf(BOB), 0);
+            assertEq(usds.balanceOf(BOB), borrowedAmount);
+
+            checkAccountState(
+                BOB,
+                IMonoCooler.AccountState({
+                    collateral: 0,
+                    debtCheckpoint: 0,
+                    interestAccumulatorRay: 0
+                })
+            );
+
+            checkAccountPosition(
+                BOB,
+                IMonoCooler.AccountPosition({
+                    collateral: 0,
+                    currentDebt: 0,
+                    maxOriginationDebtAmount: 0,
+                    liquidationDebtAmount: 0,
+                    healthFactor: type(uint256).max,
+                    currentLtv: type(uint256).max,
+                    totalDelegated: 0,
+                    numDelegateAddresses: 0,
+                    maxDelegateAddresses: 10
+                })
+            );
+
+            checkLiquidityStatus(
+                BOB,
+                IMonoCooler.LiquidationStatus({
+                    collateral: 0,
+                    currentDebt: 0,
+                    currentLtv: type(uint256).max,
+                    exceededLiquidationLtv: false,
+                    exceededMaxOriginationLtv: false
+                })
+            );
+        }
+    }
+
 }
