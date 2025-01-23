@@ -5,6 +5,7 @@ import {Test, Vm} from "forge-std/Test.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
+import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {MockStaking} from "test/mocks/MockStaking.sol";
@@ -33,6 +34,7 @@ abstract contract MonoCoolerBaseTest is Test {
     RolesAdmin internal rolesAdmin;
 
     CoolerLtvOracle internal ltvOracle;
+    CoolerTreasuryBorrower internal treasuryBorrower;
     MonoCooler public cooler;
     DelegateEscrowFactory public escrowFactory;
 
@@ -88,12 +90,14 @@ abstract contract MonoCoolerBaseTest is Test {
             address(ohm),
             address(gohm),
             address(staking),
-            address(susds),
             address(kernel),
             address(ltvOracle),
             DEFAULT_INTEREST_RATE_BPS,
             DEFAULT_MIN_DEBT_REQUIRED
         );
+
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(cooler), address(susds));
+        cooler.setTreasuryBorrower(address(treasuryBorrower));
 
         rolesAdmin = new RolesAdmin(kernel);
 
@@ -103,6 +107,8 @@ abstract contract MonoCoolerBaseTest is Test {
         kernel.executeAction(Actions.InstallModule, address(DLGTE));
 
         kernel.executeAction(Actions.ActivatePolicy, address(cooler));
+        kernel.executeAction(Actions.ActivatePolicy, address(ltvOracle));
+        kernel.executeAction(Actions.ActivatePolicy, address(treasuryBorrower));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         /// Configure access control

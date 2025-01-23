@@ -43,8 +43,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), borrowAmount);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowAmount);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 
         // Immediate checks
@@ -664,8 +664,9 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), borrowedAmount);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmount);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 
         // Immediate checks

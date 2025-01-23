@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-// Origination LTV drips
 /**
  * @title Cooler LTV Oracle
  * @notice It is a custom oracle (not dependant on external markets/AMMs/dependencies) to give the

@@ -2,11 +2,12 @@
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
-import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
+import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
+// @todo title info
 interface IMonoCooler {
     error ExceededMaxOriginationLtv(uint256 newLtv, uint256 maxOriginationLtv);
     error ExceededCollateralBalance();
@@ -28,6 +29,7 @@ interface IMonoCooler {
     event LiquidationsPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
     event LtvOracleSet(address indexed oracle);
+    event TreasuryBorrowerSet(address indexed treasuryBorrower);
     event CollateralAdded(
         address indexed caller,
         address indexed onBehalfOf,
@@ -159,10 +161,6 @@ interface IMonoCooler {
     /// @notice staking contract to unstake (and burn) OHM from liquidations
     function staking() external view returns (IStaking);
 
-    /// @notice The ERC2626 reserve asset which is pulled from treasury, eg sDAI
-    /// @dev The asset of this vault must be `debtToken`
-    function debtSavingsVault() external view returns (ERC4626);
-
     /// @notice The minimum debt a user needs to maintain
     /// @dev It costs gas to liquidate users, so we don't want dust amounts.
     function minDebtRequired() external view returns (uint256);
@@ -187,6 +185,9 @@ interface IMonoCooler {
 
     /// @notice The oracle serving both the Max Origination LTV and the Liquidation LTV
     function ltvOracle() external view returns (ICoolerLtvOracle);
+
+    /// @notice The policy which borrows/repays from Treasury on behalf of Cooler
+    function treasuryBorrower() external view returns (ICoolerTreasuryBorrower);
 
     /// @notice The current Max Origination LTV and Liquidation LTV from the `ltvOracle()`
     function loanToValues() external view returns (uint96 maxOriginationLtv, uint96 liquidationLtv);
@@ -366,6 +367,9 @@ interface IMonoCooler {
     /// @notice Set the oracle which serves the max Origination LTV and the Liquidation LTV
     function setLtvOracle(address newOracle) external;
 
+    /// @notice Set the policy which borrows/repays from Treasury on behalf of Cooler
+    function setTreasuryBorrower(address newTreasuryBorrower) external;
+    
     /// @notice Liquidation may be paused in order for users to recover/repay debt after emergency actions
     function setLiquidationsPaused(bool isPaused) external;
 

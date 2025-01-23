@@ -69,8 +69,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 0);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 0);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 
         // Immediate checks
@@ -139,8 +139,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 0);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 0);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 
         // Immediate checks
@@ -210,8 +210,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 4_000e18);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 4_000e18);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
             assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT - 4_000e18);
         }
 
@@ -410,8 +410,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), 999.999999999999999877e18);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 999.999999999999999877e18);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 
         // Immediate checks
@@ -525,8 +525,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(cooler)), borrowAmount - repayAmount);
-            assertEq(TRSRY.withdrawApproval(address(cooler), usds), 0);
+            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowAmount - repayAmount);
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 
         // Immediate checks

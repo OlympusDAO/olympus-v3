@@ -6,9 +6,11 @@ import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 import {Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {Module, Policy} from "src/Kernel.sol";
+import {Module, Policy, Actions} from "src/Kernel.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
+import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
+import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 
 contract MockLtvOracle {
     uint96 private immutable originationLtv;
@@ -32,6 +34,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     event LiquidationsPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
     event LtvOracleSet(address indexed oracle);
+    event TreasuryBorrowerSet(address indexed newTreasuryBorrower);
 
     event MaxDelegateAddressesSet(address indexed account, uint256 maxDelegateAddresses);
 
@@ -42,23 +45,6 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             address(ohm),
             address(gohm),
             address(staking),
-            address(susds),
-            address(kernel),
-            address(ltvOracle),
-            DEFAULT_INTEREST_RATE_BPS,
-            DEFAULT_MIN_DEBT_REQUIRED
-        );
-    }
-
-    function test_construction_failDecimalsDebt() public {
-        usds = new MockERC20("usds", "USDS", 6);
-        susds = new MockERC4626(usds, "sUSDS", "sUSDS");
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-        cooler = new MonoCooler(
-            address(ohm),
-            address(gohm),
-            address(staking),
-            address(susds),
             address(kernel),
             address(ltvOracle),
             DEFAULT_INTEREST_RATE_BPS,
@@ -73,7 +59,6 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             address(ohm),
             address(gohm),
             address(staking),
-            address(susds),
             address(kernel),
             badOracle,
             DEFAULT_INTEREST_RATE_BPS,
@@ -81,21 +66,23 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         );
     }
 
+    // @todo new test for bad treasury borrower
+
     function test_construction_success() public view {
         assertEq(address(cooler.collateralToken()), address(gohm));
         assertEq(address(cooler.debtToken()), address(usds));
         assertEq(address(cooler.ohm()), address(ohm));
         assertEq(address(cooler.staking()), address(staking));
-        assertEq(address(cooler.debtSavingsVault()), address(susds));
         assertEq(cooler.minDebtRequired(), DEFAULT_MIN_DEBT_REQUIRED);
         assertEq(address(cooler.MINTR()), address(MINTR));
-        assertEq(address(cooler.TRSRY()), address(TRSRY));
+        assertEq(address(cooler.DLGTE()), address(DLGTE));
 
         assertEq(cooler.totalCollateral(), 0);
         assertEq(cooler.totalDebt(), 0);
         assertEq(cooler.liquidationsPaused(), false);
         assertEq(cooler.borrowsPaused(), false);
         assertEq(cooler.interestRateBps(), DEFAULT_INTEREST_RATE_BPS);
+        assertEq(address(cooler.treasuryBorrower()), address(treasuryBorrower));
         assertEq(address(cooler.ltvOracle()), address(ltvOracle));
         (uint96 maxOriginationLtv, uint96 liquidationLtv) = cooler.loanToValues();
         assertEq(maxOriginationLtv, DEFAULT_OLTV);
@@ -149,11 +136,10 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_configureDependencies_success() public {
-        Keycode[] memory expectedDeps = new Keycode[](4);
-        expectedDeps[0] = toKeycode("MINTR");
-        expectedDeps[1] = toKeycode("ROLES");
-        expectedDeps[2] = toKeycode("TRSRY");
-        expectedDeps[3] = toKeycode("DLGTE");
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("DLGTE");
+        expectedDeps[1] = toKeycode("MINTR");
+        expectedDeps[2] = toKeycode("ROLES");
 
         Keycode[] memory deps = cooler.configureDependencies();
         // Check: configured dependencies storage
@@ -161,10 +147,12 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
-        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
+
+        assertEq(ohm.allowance(address(cooler), address(MINTR)), type(uint256).max);
+        assertEq(gohm.allowance(address(cooler), address(DLGTE)), type(uint256).max);
     }
 
-    function test_configureDependencies_fail() public {
+    function test_configureDependencies_failVersions() public {
         vm.mockCall(
             address(MINTR),
             abi.encodeWithSelector(Module.VERSION.selector),
@@ -174,25 +162,36 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 Policy.Policy_WrongModuleVersion.selector,
-                abi.encode([1, 1, 1, 1])
+                abi.encode([1, 1, 1])
             )
         );
         cooler.configureDependencies();
     }
 
+    function test_changingDependencies() public {
+        assertEq(ohm.allowance(address(cooler), address(MINTR)), type(uint256).max);
+        assertEq(gohm.allowance(address(cooler), address(DLGTE)), type(uint256).max);
+
+        OlympusMinter newMINTR = new OlympusMinter(kernel, address(ohm));
+        OlympusGovDelegation newDLGTE = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
+        kernel.executeAction(Actions.UpgradeModule, address(newMINTR));
+        kernel.executeAction(Actions.UpgradeModule, address(newDLGTE));
+        
+        assertEq(ohm.allowance(address(cooler), address(MINTR)), 0);
+        assertEq(gohm.allowance(address(cooler), address(DLGTE)), 0);
+        assertEq(ohm.allowance(address(cooler), address(newMINTR)), type(uint256).max);
+        assertEq(gohm.allowance(address(cooler), address(newDLGTE)), type(uint256).max);
+    }
+
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](8);
+        Permissions[] memory expectedPerms = new Permissions[](5);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPerms[4] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
-        expectedPerms[5] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
-        expectedPerms[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
-        expectedPerms[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        expectedPerms[1] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
+        expectedPerms[2] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
+        expectedPerms[3] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        expectedPerms[4] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
 
         Permissions[] memory perms = cooler.requestPermissions();
         // Check: permission storage
@@ -236,13 +235,43 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             ltvOracle.currentLiquidationLtv()+5 
         ));
         vm.startPrank(OVERSEER);
-        vm.expectEmit();
+        vm.expectEmit(address(cooler));
         emit LtvOracleSet(address(newOracle));
         cooler.setLtvOracle(address(newOracle));
         assertEq(address(cooler.ltvOracle()), newOracle);
         (uint96 oltv, uint96 lltv) = cooler.loanToValues();
         assertEq(oltv, DEFAULT_OLTV+5);
         assertEq(lltv, DEFAULT_LLTV+5);
+    }
+
+    function test_setTreasuryBorrower_failNotCooler() public {
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), OTHERS, address(susds));
+        vm.startPrank(OVERSEER);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setTreasuryBorrower(address(treasuryBorrower));
+    }
+
+    function test_setTreasuryBorrower_failDecimals() public {
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(cooler), address(susds));
+        vm.mockCall(
+            address(treasuryBorrower),
+            abi.encodeWithSelector(ICoolerTreasuryBorrower.DECIMALS.selector),
+            abi.encode(6)
+        );
+
+        vm.startPrank(OVERSEER);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setTreasuryBorrower(address(treasuryBorrower));
+    }
+
+    function test_setTreasuryBorrower_success() public {
+        CoolerTreasuryBorrower newTreasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(cooler), address(susds));
+        vm.startPrank(OVERSEER);
+
+        vm.expectEmit(address(cooler));
+        emit TreasuryBorrowerSet(address(newTreasuryBorrower));
+        cooler.setTreasuryBorrower(address(newTreasuryBorrower));
+        assertEq(address(cooler.treasuryBorrower()), address(newTreasuryBorrower));
     }
 
     function test_setLiquidationsPaused() public {
