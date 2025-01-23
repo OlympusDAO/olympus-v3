@@ -38,6 +38,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
     bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
 
+    bytes32 public constant ROLE_ADMIN = "cd_admin";
+
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
 
     // ========== ERRORS ========== //
@@ -81,14 +83,15 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](7);
+        permissions = new Permissions[](8);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
         permissions[3] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
         permissions[4] = Permissions(cdepoKeycode, CDEPO.reclaimFor.selector);
-        permissions[5] = Permissions(cdposKeycode, CDPOS.create.selector);
-        permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
+        permissions[5] = Permissions(cdepoKeycode, CDEPO.setReclaimRate.selector);
+        permissions[6] = Permissions(cdposKeycode, CDPOS.create.selector);
+        permissions[7] = Permissions(cdposKeycode, CDPOS.update.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -556,6 +559,17 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
 
         // Emit event
         emit Deactivated();
+    }
+
+    /// @notice Set the reclaim rate for CDEPO
+    /// @dev    This function will revert if:
+    ///         - The caller is not permissioned
+    ///         - CDEPO reverts
+    ///
+    /// @param  reclaimRate_  The new reclaim rate to set
+    function setReclaimRate(uint16 reclaimRate_) external onlyRole(ROLE_ADMIN) {
+        // CDEPO will handle validation
+        CDEPO.setReclaimRate(reclaimRate_);
     }
 
     // ========== MODIFIERS ========== //

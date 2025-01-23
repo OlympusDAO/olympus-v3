@@ -11,6 +11,7 @@ This document describes the roles that are used in the Olympus protocol.
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_admin | CDAuctioneer | Allows updating the parameters |
+| cd_admin | CDFacility | Allows updating the reclaim rate |
 | cd_emissionmanager | CDAuctioneer | Calls the setAuctionParameters() function |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |

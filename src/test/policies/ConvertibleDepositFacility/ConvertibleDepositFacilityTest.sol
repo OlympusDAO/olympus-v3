@@ -15,6 +15,7 @@ import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConve
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
+// solhint-disable max-states-count
 contract ConvertibleDepositFacilityTest is Test {
     Kernel public kernel;
     CDFacility public facility;
@@ -33,6 +34,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public auctioneer = address(0x2);
     address public recipientTwo = address(0x3);
     address public emergency = address(0x4);
+    address public admin = address(0xEEEEEE);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -73,6 +75,7 @@ contract ConvertibleDepositFacilityTest is Test {
         // Grant roles
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
         rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
+        rolesAdmin.grantRole(bytes32("cd_admin"), admin);
     }
 
     // ========== MODIFIERS ========== //
