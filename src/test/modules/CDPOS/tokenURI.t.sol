@@ -6,6 +6,8 @@ import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {Base64} from "base64-1.1.0/base64.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 function substring(
     string memory str,
     uint256 startIndex,
@@ -138,6 +140,8 @@ contract TokenURICDPOSTest is CDPOSTest {
 
         // Decode the return value from Base64
         string memory decodedImage = string(Base64.decode(base64EncodedImage));
+
+        console2.log("decodedImage", decodedImage);
 
         // Check that the image starts with the SVG element
         assertEq(substring(decodedImage, 0, 4), "<svg", "image starts with SVG");
