@@ -63,6 +63,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it reverts
     // when the bid amount converted is 0
     //  [X] it reverts
+    // given the deposit asset has 6 decimals
+    //  [X] the conversion price is correct
     // when the bid is the first bid
     //  [X] it sets the day's deposit balance
     //  [X] it sets the day's converted balance
@@ -246,6 +248,55 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             ohmOut,
             positionId
+        );
+    }
+
+    function test_reserveTokenHasSmallerDecimals()
+        public
+        givenReserveTokenHasDecimals(6)
+        givenInitializedWithParameters(TARGET, TICK_SIZE, 15e6)
+        givenAddressHasReserveToken(recipient, 3e6)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 3e6)
+    {
+        // Expected converted amount
+        // 3e6 * 1e9 / 15e6 = 2e8
+        uint256 bidAmount = 3e6;
+        uint256 expectedConvertedAmount = 2e8;
+
+        // Check preview
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            0,
+            0,
+            0,
+            ohmOut,
+            positionId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertAuctionParameters(TARGET, TICK_SIZE, 15e6);
+
+        // Assert the tick
+        _assertPreviousTick(
+            TICK_SIZE - expectedConvertedAmount,
+            15e6,
+            TICK_SIZE,
+            uint48(block.timestamp)
         );
     }
 

@@ -15,6 +15,9 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the recipient has not approved CDEPO to spend the reserve tokens
     //  [X] it reverts
+    // given the deposit asset has 6 decimals
+    //  [X] the amount of CD tokens minted is correct
+    //  [X] the mint approval is increased by the correct amount of OHM
     // when multiple positions are created
     //  [X] it succeeds
     // [X] it mints the CD tokens to account_
@@ -56,6 +59,51 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         _createPosition(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, EXPIRY, false);
+    }
+
+    function test_reserveTokenHasSmallerDecimals()
+        public
+        givenReserveTokenHasDecimals(6)
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 10e6)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 10e6)
+    {
+        uint256 conversionPrice = 2e6;
+
+        // Calculate the expected OHM amount
+        uint256 expectedOhmAmount = (10e6 * 1e6) / conversionPrice;
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit CreatedDeposit(recipient, 0, 10e6);
+
+        // Call function
+        uint256 positionId = _createPosition(recipient, 10e6, conversionPrice, EXPIRY, false);
+
+        // Assert that the position ID is 0
+        assertEq(positionId, 0, "positionId");
+
+        // Assert that the reserve token was transferred from the recipient
+        assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
+
+        // Assert that the CDEPO token was minted to the recipient
+        assertEq(
+            convertibleDepository.balanceOf(recipient),
+            10e6,
+            "convertibleDepository.balanceOf(recipient)"
+        );
+
+        // Assert that the recipient has a CDPOS position
+        uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
+        assertEq(positionIds.length, 1, "positionIds.length");
+        assertEq(positionIds[0], 0, "positionIds[0]");
+
+        // Assert that the mint approval was increased
+        assertEq(
+            minter.mintApproval(address(facility)),
+            expectedOhmAmount,
+            "minter.mintApproval(address(facility))"
+        );
     }
 
     function test_success()

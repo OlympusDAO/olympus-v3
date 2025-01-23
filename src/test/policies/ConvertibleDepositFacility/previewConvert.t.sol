@@ -22,6 +22,9 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the account is not the owner of all of the positions
     //  [X] it reverts
+    // given the deposit asset has 6 decimals
+    //  [X] it returns the correct amount of CD tokens that would be converted
+    //  [X] it returns the correct amount of OHM that would be minted
     // [X] it returns the total CD token amount that would be converted
     // [X] it returns the amount of OHM that would be minted
     // [X] it returns the address that will spend the convertible deposit tokens
@@ -281,6 +284,64 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         facility.previewConvert(recipient, positionIds_, amounts_);
+    }
+
+    function test_reserveTokenHasSmallerDecimals(
+        uint256 amountOne_,
+        uint256 amountTwo_,
+        uint256 amountThree_
+    )
+        public
+        givenReserveTokenHasDecimals(6)
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e6)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e6)
+    {
+        uint256 amountOne = bound(amountOne_, 0, 3e6);
+        uint256 amountTwo = bound(amountTwo_, 0, 3e6);
+        uint256 amountThree = bound(amountThree_, 0, 3e6);
+
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        positionIds_[0] = 0;
+        amounts_[0] = amountOne;
+        positionIds_[1] = 1;
+        amounts_[1] = amountTwo;
+        positionIds_[2] = 2;
+        amounts_[2] = amountThree;
+
+        // Create positions
+        uint256 conversionPrice = 2e6;
+        _createPosition(recipient, 3e6, conversionPrice, EXPIRY, false);
+        _createPosition(recipient, 3e6, conversionPrice, EXPIRY, false);
+        _createPosition(recipient, 3e6, conversionPrice, EXPIRY, false);
+
+        // Call function
+        (uint256 totalDeposits, uint256 converted, address spender) = facility.previewConvert(
+            recipient,
+            positionIds_,
+            amounts_
+        );
+
+        // Assertion that the total deposits are the sum of the amounts
+        assertEq(totalDeposits, amountOne + amountTwo + amountThree, "totalDeposits");
+
+        // Assertion that the converted amount is the sum of the amounts converted at the conversion price
+        // Each amount is converted separately to avoid rounding errors
+        assertEq(
+            converted,
+            (amountOne * 1e6) /
+                conversionPrice +
+                (amountTwo * 1e6) /
+                conversionPrice +
+                (amountThree * 1e6) /
+                conversionPrice,
+            "converted"
+        );
+
+        // Assertion that the spender is the convertible depository
+        assertEq(spender, address(convertibleDepository), "spender");
     }
 
     function test_success(

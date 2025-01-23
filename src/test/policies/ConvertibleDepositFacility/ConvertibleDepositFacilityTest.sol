@@ -133,6 +133,22 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenReserveTokenHasDecimals(uint8 decimals_) {
+        reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
+        vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+
+        // Re-instantiate the CDEPO module
+        convertibleDepository = new OlympusConvertibleDepository(
+            address(kernel),
+            address(vault),
+            RECLAIM_RATE
+        );
+
+        // Upgrade the module
+        kernel.executeAction(Actions.UpgradeModule, address(convertibleDepository));
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _expectRoleRevert(bytes32 role_) internal {

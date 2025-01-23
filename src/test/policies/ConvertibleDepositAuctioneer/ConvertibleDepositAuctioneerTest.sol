@@ -270,6 +270,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 
+    modifier givenInitializedWithParameters(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_
+    ) {
+        vm.prank(admin);
+        auctioneer.initialize(
+            target_,
+            tickSize_,
+            minPrice_,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            AUCTION_TRACKING_PERIOD
+        );
+        _;
+    }
+
     modifier givenAuctionParametersStandard() {
         _setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
         _;
@@ -302,6 +319,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     modifier givenRecipientHasBid(uint256 deposit_) {
         _mintAndBid(recipient, deposit_);
+        _;
+    }
+
+    modifier givenReserveTokenHasDecimals(uint8 decimals_) {
+        // Create the tokens
+        reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
+        vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+
+        // Re-instantiate the module
+        convertibleDepository = new OlympusConvertibleDepository(
+            address(kernel),
+            address(vault),
+            RECLAIM_RATE
+        );
+
+        // Upgrade the module
+        kernel.executeAction(Actions.UpgradeModule, address(convertibleDepository));
         _;
     }
 }

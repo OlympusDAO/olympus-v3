@@ -26,6 +26,9 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the converted amount is 0
     //  [X] it reverts
+    // given the deposit asset has 6 decimals
+    //  [X] the amount of CD tokens converted is correct
+    //  [X] the amount of OHM minted is correct
     // [X] it mints the converted amount of OHM to the account_
     // [X] it updates the remaining deposit of each position
     // [X] it transfers the redeemed vault shares to the TRSRY
@@ -309,6 +312,101 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         // Call function
         vm.prank(recipient);
         facility.convert(positionIds_, amounts_);
+    }
+
+    function test_reserveTokenHasSmallerDecimals()
+        public
+        givenReserveTokenHasDecimals(6)
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 10e6)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 10e6)
+        givenConvertibleDepositTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            10e6
+        )
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 5e6;
+        positionIds_[1] = 1;
+        amounts_[1] = 5e6;
+
+        uint256 conversionPrice = 2e6;
+
+        uint256 expectedConvertedAmount = (10e6 * 1e6) / conversionPrice;
+        uint256 expectedVaultShares = vault.previewDeposit(10e6);
+
+        // Create positions
+        _createPosition(recipient, 10e6 / 2, conversionPrice, EXPIRY, false);
+        _createPosition(recipient, 10e6 / 2, conversionPrice, EXPIRY, false);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit ConvertedDeposit(recipient, 10e6, expectedConvertedAmount);
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 totalDeposit, uint256 convertedAmount) = facility.convert(positionIds_, amounts_);
+
+        // Assert total deposit
+        assertEq(totalDeposit, 10e6, "totalDeposit");
+
+        // Assert converted amount
+        assertEq(convertedAmount, expectedConvertedAmount, "convertedAmount");
+
+        // Assert convertible deposit tokens are transferred from the recipient
+        assertEq(
+            convertibleDepository.balanceOf(recipient),
+            0,
+            "convertibleDepository.balanceOf(recipient)"
+        );
+
+        // Assert OHM minted to the recipient
+        assertEq(ohm.balanceOf(recipient), expectedConvertedAmount, "ohm.balanceOf(recipient)");
+
+        // No dangling mint approval
+        assertEq(
+            minter.mintApproval(address(facility)),
+            0,
+            "minter.mintApproval(address(facility))"
+        );
+
+        // Assert remaining deposit
+        assertEq(
+            convertibleDepositPositions.getPosition(0).remainingDeposit,
+            0,
+            "convertibleDepositPositions.getPosition(0).remainingDeposit"
+        );
+        assertEq(
+            convertibleDepositPositions.getPosition(1).remainingDeposit,
+            0,
+            "convertibleDepositPositions.getPosition(1).remainingDeposit"
+        );
+
+        // Deposit token is not transferred to the TRSRY
+        assertEq(
+            reserveToken.balanceOf(address(treasury)),
+            0,
+            "reserveToken.balanceOf(address(treasury))"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(facility)),
+            0,
+            "reserveToken.balanceOf(address(facility))"
+        );
+        assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
+
+        // Vault shares are transferred to the TRSRY
+        assertEq(
+            vault.balanceOf(address(treasury)),
+            expectedVaultShares,
+            "vault.balanceOf(address(treasury))"
+        );
+        assertEq(vault.balanceOf(address(facility)), 0, "vault.balanceOf(address(facility))");
+        assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
     }
 
     function test_success()
