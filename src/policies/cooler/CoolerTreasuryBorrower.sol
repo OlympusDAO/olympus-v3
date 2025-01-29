@@ -82,20 +82,20 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function borrow(uint256 amountInWei, address recipient) external override onlyRole(COOLER_ROLE) {
-        if (amountInWei == 0) revert ExpectedNonZero();
+    function borrow(uint256 amountInWad, address recipient) external override onlyRole(COOLER_ROLE) {
+        if (amountInWad == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
 
         uint256 outstandingDebt = TRSRY.reserveDebt(_usds, address(this));
         TRSRY.setDebt({
             debtor_: address(this),
             token_: _usds,
-            amount_: outstandingDebt + amountInWei
+            amount_: outstandingDebt + amountInWad
         });
 
         // Since TRSRY holds sUSDS, a conversion must be done before funding.
         // Withdraw that sUSDS amount locally and then redeem to USDS sending to the recipient
-        uint256 susdsAmount = susds.previewWithdraw(amountInWei);
+        uint256 susdsAmount = susds.previewWithdraw(amountInWad);
         TRSRY.increaseWithdrawApproval(address(this), susds, susdsAmount);
         TRSRY.withdrawReserves(address(this), susds, susdsAmount);
         susds.redeem(susdsAmount, recipient, address(this));
@@ -135,9 +135,9 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function convertToDebtTokenAmount(
-        uint256 amountInWei
+        uint256 amountInWad
     ) external override view returns (ERC20 dToken, uint256 dTokenAmount) {
         dToken = _usds;
-        dTokenAmount = amountInWei;
+        dTokenAmount = amountInWad;
     }
 }

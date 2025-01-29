@@ -25,7 +25,7 @@ import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
  * borrow a stablecoin debt token up to a certain LTV
  *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the 
  *    `CoolerTreasuryBorrower`
- *  - The collateral and debt amounts tracked on this contract are always reported in wei, 
+ *  - The collateral and debt amounts tracked on this contract are always reported in wad, 
  *    ie 18 decimal places
  *  - gOHM collateral can be delegated to accounts for voting, via the DLGTE module
  *  - Positions can be liquidated if the LTV breaches the 'liquidation LTV' as determined by the
@@ -460,7 +460,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         // only decreases the LTV.
         emit Repay(msg.sender, onBehalfOf, amountRepaid);
 
-        // Convert the `amountRepaid` (in wei) into the actual debt token precision
+        // Convert the `amountRepaid` (in wad) into the actual debt token precision
         // and pull from the caller and into the Treasury Borrower for repayment to Treasury
         (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(amountRepaid);
         dToken.safeTransferFrom(msg.sender, address(treasuryBorrower), dTokenAmount);

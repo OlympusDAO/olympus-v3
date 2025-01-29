@@ -13,7 +13,7 @@ import {IStaking} from "interfaces/IStaking.sol";
  * borrow a stablecoin debt token up to a certain LTV
  *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the 
  *    `CoolerTreasuryBorrower`
- *  - The collateral and debt amounts tracked on this contract are always reported in wei, 
+ *  - The collateral and debt amounts tracked on this contract are always reported in wad, 
  *    ie 18 decimal places
  *  - gOHM collateral can be delegated to accounts for voting, via the DLGTE module
  *  - Positions can be liquidated if the LTV breaches the 'liquidation LTV' as determined by the
@@ -328,7 +328,7 @@ interface IMonoCooler {
      *    - Account LTV MUST be less than or equal to `maxOriginationLtv` after the borrow is applied
      *    - Total debt for this account MUST be greater than or equal to the `minDebtRequired`
      *      after the borrow is applied
-     * @param borrowAmountInWei The amount of `debtToken` to borrow, to 18 decimals regardless of the debt token
+     * @param borrowAmountInWad The amount of `debtToken` to borrow, to 18 decimals regardless of the debt token
      *    - MUST be greater than zero
      *    - If set to type(uint128).max then borrow the max amount up to maxOriginationLtv
      * @param onBehalfOf A caller can borrow on behalf of themselves or another address if
@@ -338,7 +338,7 @@ interface IMonoCooler {
      * @return amountBorrowed The amount actually borrowed.
      */
     function borrow(
-        uint128 borrowAmountInWei,
+        uint128 borrowAmountInWad,
         address onBehalfOf,
         address recipient
     ) external returns (uint128 amountBorrowed);
@@ -348,7 +348,7 @@ interface IMonoCooler {
      *    - MUST NOT be called for an account which has no debt
      *    - If the entire debt isn't paid off, then the total debt for this account
      *      MUST be greater than or equal to the `minDebtRequired` after the borrow is applied
-     * @param repayAmountInWei The amount to repay, to 18 decimals regardless of the debt token
+     * @param repayAmountInWad The amount to repay, to 18 decimals regardless of the debt token
      *    - MUST be greater than zero
      *    - MAY be greater than the latest debt as of this block. In which case it will be capped
      *      to that latest debt
@@ -356,7 +356,7 @@ interface IMonoCooler {
      * @return amountRepaid The amount actually repaid.
      */
     function repay(
-        uint128 repayAmountInWei, 
+        uint128 repayAmountInWad, 
         address onBehalfOf
     ) external returns (uint128 amountRepaid);
 
@@ -409,7 +409,7 @@ interface IMonoCooler {
 
     /// @notice Update and checkpoint the total debt up until now
     /// @dev May be useful in case there are no new user actions for some time.
-    function checkpointDebt() external returns (uint128 totalDebtInWei, uint256 interestAccumulatorRay);
+    function checkpointDebt() external returns (uint128 totalDebtInWad, uint256 interestAccumulatorRay);
 
     //============================================================================================//
     //                                      AUX FUNCTIONS                                         //
@@ -419,14 +419,14 @@ interface IMonoCooler {
      * @notice Calculate the difference in debt required in order to be at or just under
      * the maxOriginationLTV if `collateralDelta` was added/removed
      * from the current position.
-     * A positive `debtDeltaInWei` means the account can borrow that amount after adding that `collateralDelta` collateral
-     * A negative `debtDeltaInWei` means it needs to repay that amount in order to withdraw that `collateralDelta` collateral
-     * @dev debtDeltaInWei is always to 18 decimal places
+     * A positive `debtDeltaInWad` means the account can borrow that amount after adding that `collateralDelta` collateral
+     * A negative `debtDeltaInWad` means it needs to repay that amount in order to withdraw that `collateralDelta` collateral
+     * @dev debtDeltaInWad is always to 18 decimal places
      */
     function debtDeltaForMaxOriginationLtv(
         address account,
         int128 collateralDelta
-    ) external view returns (int128 debtDeltaInWei);
+    ) external view returns (int128 debtDeltaInWad);
 
     /**
      * @notice An view of an accounts current and up to date position as of this block

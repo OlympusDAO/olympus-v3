@@ -20,10 +20,10 @@ interface ICoolerTreasuryBorrower {
     error ExpectedNonZero();
 
     /// @notice Cooler borrows `amount` of `debtToken` from treasury, sent to `recipient`
-    /// @param amountInWei The amount to borrow. Always 18 decimal places
+    /// @param amountInWad The amount to borrow. Always 18 decimal places
     ///               regardless of the `debtToken.decimals()`
     /// @dev If the debtToken is 6dp (eg USDC) then this contract needs to handle the conversion internally
-    function borrow(uint256 amountInWei, address recipient) external;
+    function borrow(uint256 amountInWad, address recipient) external;
 
     /// @notice Repay any `debtToken` in this contract back to treasury.
     /// @dev Cooler is expected to transfer the amount to this contract prior to calling
@@ -38,10 +38,10 @@ interface ICoolerTreasuryBorrower {
     /// @notice The token (USD based stablecoin) which Cooler users borrow and repay
     function debtToken() external view returns (ERC20);
 
-    /// @notice Convert a debt amount in wei (18dp) into the decimals of the `debtToken`
-    function convertToDebtTokenAmount(uint256 amountInWei) external view returns (ERC20 dToken, uint256 dTokenAmount);
+    /// @notice Convert a debt amount in wad (18dp) into the decimals of the `debtToken`
+    function convertToDebtTokenAmount(uint256 amountInWad) external view returns (ERC20 dToken, uint256 dTokenAmount);
 
-    /// @notice The decimal precision of the `amountInWei` used in borrow and repay functions.
+    /// @notice The decimal precision of the `amountInWad` used in borrow and repay functions.
     /// @dev A constant of 18
     function DECIMALS() external view returns (uint8);
 }
