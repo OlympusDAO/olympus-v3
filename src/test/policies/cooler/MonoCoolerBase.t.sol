@@ -388,6 +388,11 @@ abstract contract MonoCoolerBaseTest is Test {
             expectedLiquidationStatus.exceededMaxOriginationLtv,
             "LiquidationStatus::exceededMaxOriginationLtv"
         );
+        assertEq(
+            status[0].currentIncentive,
+            expectedLiquidationStatus.currentIncentive,
+            "LiquidationStatus::currentIncentive"
+        );
     }
 
     function noDelegationRequest() internal pure returns (DLGTEv1.DelegationRequest[] memory) {

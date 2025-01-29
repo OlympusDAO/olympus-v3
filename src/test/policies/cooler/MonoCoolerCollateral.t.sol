@@ -79,7 +79,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -135,7 +136,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -214,7 +216,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -290,7 +293,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                     currentDebt: 0,
                     currentLtv: 0,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
         }
@@ -316,7 +320,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                     maxOriginationDebtAmount: 0,
                     liquidationDebtAmount: 0,
                     healthFactor: type(uint256).max,
-                    currentLtv: type(uint256).max,
+                    currentLtv: type(uint128).max,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -328,9 +332,10 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: 0,
                     currentDebt: 0,
-                    currentLtv: type(uint256).max,
+                    currentLtv: type(uint128).max,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
         }
@@ -398,7 +403,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -485,7 +491,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -560,7 +567,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -652,7 +660,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -749,7 +758,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -803,7 +813,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -873,7 +884,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -955,7 +967,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 15_000e18,
                 currentLtv: 2_961.639999999999999656e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -972,7 +985,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 29_616.805706888396984628e18,
                 currentLtv: 2_961.680570688839698463e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: true
+                exceededMaxOriginationLtv: true,
+                currentIncentive: 0
             })
         );
 

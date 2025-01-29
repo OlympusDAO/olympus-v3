@@ -118,13 +118,17 @@ interface IMonoCooler {
         uint128 currentDebt;
 
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
-        uint256 currentLtv;
+        uint128 currentLtv;
 
         /// @notice Has this account exceeded the liquidation LTV
         bool exceededLiquidationLtv;
 
         /// @notice Has this account exceeded the max origination LTV
         bool exceededMaxOriginationLtv;
+
+        /// @notice A liquidator will receive this amount [in gOHM collateral terms] if 
+        /// this account is liquidated as of this block
+        uint128 currentIncentive;
     }
 
     /// @notice An account's collateral and debt position details

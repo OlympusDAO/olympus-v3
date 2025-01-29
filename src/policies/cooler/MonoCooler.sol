@@ -340,7 +340,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
         if (currentDebt > 0) {
-            uint256 newLtv = _calculateCurrentLtv(currentDebt, _accountCollateral);
+            uint128 newLtv = _calculateCurrentLtv(currentDebt, _accountCollateral);
             _validateOriginationLtv(newLtv, gStateCache.maxOriginationLtv);
         }
 
@@ -407,7 +407,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Calculate the new LTV and verify it's less than or equal to the maxOriginationLtv
         {
-            uint256 newLtv = _calculateCurrentLtv(_accountDebtCheckpoint, _accountCollateral);
+            uint128 newLtv = _calculateCurrentLtv(_accountDebtCheckpoint, _accountCollateral);
             _validateOriginationLtv(newLtv, gStateCache.maxOriginationLtv);
         }
 
@@ -521,6 +521,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     ) external override returns (uint128 totalCollateralClaimed, uint128 totalDebtWiped) {
         if (liquidationsPaused) revert Paused();
 
+        uint256 totalLiquidationIncentive;
         LiquidationStatus memory status;
         GlobalStateCache memory gState = _globalStateRW();
         address account;
@@ -549,6 +550,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
 
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;
+                totalLiquidationIncentive += status.currentIncentive;
 
                 // Clear the account data
                 delete allAccountState[account];
@@ -558,10 +560,12 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         // burn the gOHM collateral and update the total state.
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
-            collateralToken.safeApprove(address(staking), totalCollateralClaimed);
+            uint256 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
+            collateralToken.safeApprove(address(staking), gOhmToBurn);
+
             MINTR.burnOhm(
                 address(this),
-                staking.unstake(address(this), totalCollateralClaimed, false, false)
+                staking.unstake(address(this), gOhmToBurn, false, false)
             );
 
             totalCollateral -= totalCollateralClaimed;
@@ -570,6 +574,11 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         // Remove debt from the totals
         if (totalDebtWiped > 0) {
             _reduceTotalDebt(gState, totalDebtWiped);
+        }
+
+        // The liquidator receives the total incentives across all accounts
+        if (totalLiquidationIncentive > 0) {
+            collateralToken.safeTransfer(msg.sender, totalLiquidationIncentive);
         }
     }
 
@@ -888,7 +897,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     /**
      * @dev Ensure the LTV isn't higher than the maxOriginationLtv
      */
-    function _validateOriginationLtv(uint256 ltv, uint256 maxOriginationLtv) private pure {
+    function _validateOriginationLtv(uint128 ltv, uint256 maxOriginationLtv) private pure {
         if (ltv > maxOriginationLtv) {
             revert ExceededMaxOriginationLtv(ltv, maxOriginationLtv);
         }
@@ -900,11 +909,11 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     function _calculateCurrentLtv(
         uint128 currentDebt,
         uint128 collateral
-    ) private pure returns (uint256) {
+    ) private pure returns (uint128) {
         return
             collateral == 0
-                ? type(uint256).max // Represent 'undefined' as max uint256
-                : uint256(currentDebt).divWadUp(collateral);
+                ? type(uint128).max // Represent 'undefined' as max uint128
+                : uint256(currentDebt).divWadUp(collateral).encodeUInt128();
     }
 
     /**
@@ -931,6 +940,14 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         status.exceededMaxOriginationLtv =
             status.collateral > 0 &&
             status.currentLtv > gStateCache.maxOriginationLtv;
+
+        if (status.exceededLiquidationLtv) {
+            // The incentive is calaculated as the excess debt above the LLTV, in collateral terms
+            // excessDebt [gOHM] = currentDebt [USDS] / LLTV [USDS/gOHM] - collateral [gOHM]
+            status.currentIncentive = (
+                uint256(status.currentDebt).divWadUp(gStateCache.liquidationLtv) - status.collateral
+            ).encodeUInt128();
+        }
     }
 
     //============================================================================================//
