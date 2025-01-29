@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {Test, Vm} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
+import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {MockStaking} from "test/mocks/MockStaking.sol";
@@ -33,13 +34,16 @@ abstract contract MonoCoolerBaseTest is Test {
     RolesAdmin internal rolesAdmin;
 
     CoolerLtvOracle internal ltvOracle;
+    CoolerTreasuryBorrower internal treasuryBorrower;
     MonoCooler public cooler;
     DelegateEscrowFactory public escrowFactory;
 
+    address internal immutable EXECUTOR = makeAddr("executor");
     address internal immutable OVERSEER = makeAddr("overseer");
     address internal immutable ALICE = makeAddr("alice");
     address internal immutable BOB = makeAddr("bob");
     address internal immutable OTHERS = makeAddr("others");
+    address internal immutable TB_ADMIN = makeAddr("tb_admin");
 
     uint96 internal constant DEFAULT_OLTV = 2_961.64e18; // [USDS/gOHM] == ~11 [USDS/OHM]
     uint96 internal constant DEFAULT_OLTV_MAX_DELTA = 100e18; // 100 USDS
@@ -54,7 +58,7 @@ abstract contract MonoCoolerBaseTest is Test {
     uint256 internal constant INITIAL_TRSRY_MINT = 200_000_000e18;
     uint256 internal constant START_TIMESTAMP = 1_000_000;
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.warp(START_TIMESTAMP);
 
         staking = new MockStaking();
@@ -88,12 +92,14 @@ abstract contract MonoCoolerBaseTest is Test {
             address(ohm),
             address(gohm),
             address(staking),
-            address(susds),
             address(kernel),
             address(ltvOracle),
             DEFAULT_INTEREST_RATE_BPS,
             DEFAULT_MIN_DEBT_REQUIRED
         );
+
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(susds));
+        cooler.setTreasuryBorrower(address(treasuryBorrower));
 
         rolesAdmin = new RolesAdmin(kernel);
 
@@ -103,10 +109,16 @@ abstract contract MonoCoolerBaseTest is Test {
         kernel.executeAction(Actions.InstallModule, address(DLGTE));
 
         kernel.executeAction(Actions.ActivatePolicy, address(cooler));
+        kernel.executeAction(Actions.ActivatePolicy, address(ltvOracle));
+        kernel.executeAction(Actions.ActivatePolicy, address(treasuryBorrower));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-
+        
         /// Configure access control
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
+        rolesAdmin.grantRole("treasuryborrower_cooler", address(cooler));
+        rolesAdmin.grantRole("treasuryborrower_admin", TB_ADMIN);
+
+        kernel.executeAction(Actions.ChangeExecutor, EXECUTOR);
 
         // Setup Treasury
         usds.mint(address(TRSRY), INITIAL_TRSRY_MINT);

@@ -2,11 +2,24 @@
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
-import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
+import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
+/**
+ * @title Mono Cooler
+ * @notice A borrow/lend market where users can deposit their gOHM as collateral and then
+ * borrow a stablecoin debt token up to a certain LTV
+ *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the 
+ *    `CoolerTreasuryBorrower`
+ *  - The collateral and debt amounts tracked on this contract are always reported in wei, 
+ *    ie 18 decimal places
+ *  - gOHM collateral can be delegated to accounts for voting, via the DLGTE module
+ *  - Positions can be liquidated if the LTV breaches the 'liquidation LTV' as determined by the
+ *    `LTV Oracle`
+ *  - Users may set an authorization for one other address to act on its behalf.
+ */
 interface IMonoCooler {
     error ExceededMaxOriginationLtv(uint256 newLtv, uint256 maxOriginationLtv);
     error ExceededCollateralBalance();
@@ -28,6 +41,7 @@ interface IMonoCooler {
     event LiquidationsPausedSet(bool isPaused);
     event InterestRateSet(uint16 interestRateBps);
     event LtvOracleSet(address indexed oracle);
+    event TreasuryBorrowerSet(address indexed treasuryBorrower);
     event CollateralAdded(
         address indexed caller,
         address indexed onBehalfOf,
@@ -117,27 +131,34 @@ interface IMonoCooler {
     /// Provided for UX
     struct AccountPosition {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
+        /// @dev To 18 decimal places
         uint256 collateral;
 
-        /// @notice The up to date amount of debt [in debtToken terms]
+        /// @notice The up to date amount of debt
+        /// @dev To 18 decimal places
         uint256 currentDebt;
 
         /// @notice The maximum amount of debtToken's this account can borrow given the
         /// collateral posted, up to `maxOriginationLtv`
+        /// @dev To 18 decimal places
         uint256 maxOriginationDebtAmount;
 
         /// @notice The maximum amount of debtToken's this account can accrue before being
         /// eligable to be liquidated, up to `liquidationLtv`
+        /// @dev To 18 decimal places
         uint256 liquidationDebtAmount;
 
         /// @notice The health factor of this accounts position.
         /// Anything less than 1 can be liquidated, relative to `liquidationLtv`
+        /// @dev To 18 decimal places
         uint256 healthFactor;
 
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
+        /// @dev To 18 decimal places
         uint256 currentLtv;
 
         /// @notice The total collateral delegated for this user across all delegates
+        /// @dev To 18 decimal places
         uint256 totalDelegated;
 
         /// @notice The current number of addresses this account has delegated to
@@ -159,19 +180,18 @@ interface IMonoCooler {
     /// @notice staking contract to unstake (and burn) OHM from liquidations
     function staking() external view returns (IStaking);
 
-    /// @notice The ERC2626 reserve asset which is pulled from treasury, eg sDAI
-    /// @dev The asset of this vault must be `debtToken`
-    function debtSavingsVault() external view returns (ERC4626);
-
     /// @notice The minimum debt a user needs to maintain
     /// @dev It costs gas to liquidate users, so we don't want dust amounts.
+    /// To 18 decimal places
     function minDebtRequired() external view returns (uint256);
 
     /// @notice The total amount of collateral posted across all accounts.
+    /// @dev To 18 decimal places
     function totalCollateral() external view returns (uint128);
 
     /// @notice The total amount of debt which has been borrowed across all users
     /// as of the latest checkpoint
+    /// @dev To 18 decimal places
     function totalDebt() external view returns (uint128);
 
     /// @notice Liquidations may be paused in order for users to recover/repay debt after
@@ -183,12 +203,17 @@ interface IMonoCooler {
 
     /// @notice The flat interest rate, defined in basis points.
     /// @dev Interest (approximately) continuously compounds at this rate.
+    /// @dev To 18 decimal places
     function interestRateBps() external view returns (uint16);
 
     /// @notice The oracle serving both the Max Origination LTV and the Liquidation LTV
     function ltvOracle() external view returns (ICoolerLtvOracle);
 
+    /// @notice The policy which borrows/repays from Treasury on behalf of Cooler
+    function treasuryBorrower() external view returns (ICoolerTreasuryBorrower);
+
     /// @notice The current Max Origination LTV and Liquidation LTV from the `ltvOracle()`
+    /// @dev Both to 18 decimal places
     function loanToValues() external view returns (uint96 maxOriginationLtv, uint96 liquidationLtv);
 
     /// @notice The last time the global debt accumulator was updated
@@ -234,7 +259,7 @@ interface IMonoCooler {
 
     /**
      * @notice Deposit gOHM as collateral
-     * @param collateralAmount The amount to deposit
+     * @param collateralAmount The amount to deposit to 18 decimal places
      *    - MUST be greater than zero
      * @param onBehalfOf A caller can add collateral on behalf of themselves or another address.
      *    - MUST NOT be address(0)
@@ -257,7 +282,7 @@ interface IMonoCooler {
      *    - Account LTV MUST be less than or equal to `maxOriginationLtv` after the withdraw is applied
      *    - At least `collateralAmount` collateral MUST be undelegated for this account.
      *      Use the `delegationRequests` to rescind enough as part of this request.
-     * @param collateralAmount The amount of collateral to remove
+     * @param collateralAmount The amount of collateral to remove to 18 decimal places
      *    - MUST be greater than zero
      *    - If set to type(uint128).max then withdraw the max amount up to maxOriginationLtv
      * @param onBehalfOf A caller can withdraw collateral on behalf of themselves or another address if
@@ -303,7 +328,7 @@ interface IMonoCooler {
      *    - Account LTV MUST be less than or equal to `maxOriginationLtv` after the borrow is applied
      *    - Total debt for this account MUST be greater than or equal to the `minDebtRequired`
      *      after the borrow is applied
-     * @param borrowAmount The amount of `debtToken` to borrow
+     * @param borrowAmountInWei The amount of `debtToken` to borrow, to 18 decimals regardless of the debt token
      *    - MUST be greater than zero
      *    - If set to type(uint128).max then borrow the max amount up to maxOriginationLtv
      * @param onBehalfOf A caller can borrow on behalf of themselves or another address if
@@ -313,7 +338,7 @@ interface IMonoCooler {
      * @return amountBorrowed The amount actually borrowed.
      */
     function borrow(
-        uint128 borrowAmount,
+        uint128 borrowAmountInWei,
         address onBehalfOf,
         address recipient
     ) external returns (uint128 amountBorrowed);
@@ -323,7 +348,7 @@ interface IMonoCooler {
      *    - MUST NOT be called for an account which has no debt
      *    - If the entire debt isn't paid off, then the total debt for this account
      *      MUST be greater than or equal to the `minDebtRequired` after the borrow is applied
-     * @param repayAmount The amount to repay.
+     * @param repayAmountInWei The amount to repay, to 18 decimals regardless of the debt token
      *    - MUST be greater than zero
      *    - MAY be greater than the latest debt as of this block. In which case it will be capped
      *      to that latest debt
@@ -331,7 +356,7 @@ interface IMonoCooler {
      * @return amountRepaid The amount actually repaid.
      */
     function repay(
-        uint128 repayAmount, 
+        uint128 repayAmountInWei, 
         address onBehalfOf
     ) external returns (uint128 amountRepaid);
 
@@ -366,6 +391,9 @@ interface IMonoCooler {
     /// @notice Set the oracle which serves the max Origination LTV and the Liquidation LTV
     function setLtvOracle(address newOracle) external;
 
+    /// @notice Set the policy which borrows/repays from Treasury on behalf of Cooler
+    function setTreasuryBorrower(address newTreasuryBorrower) external;
+    
     /// @notice Liquidation may be paused in order for users to recover/repay debt after emergency actions
     function setLiquidationsPaused(bool isPaused) external;
 
@@ -381,7 +409,7 @@ interface IMonoCooler {
 
     /// @notice Update and checkpoint the total debt up until now
     /// @dev May be useful in case there are no new user actions for some time.
-    function checkpointDebt() external returns (uint128 totalDebt, uint256 interestAccumulatorRay);
+    function checkpointDebt() external returns (uint128 totalDebtInWei, uint256 interestAccumulatorRay);
 
     //============================================================================================//
     //                                      AUX FUNCTIONS                                         //
@@ -391,13 +419,14 @@ interface IMonoCooler {
      * @notice Calculate the difference in debt required in order to be at or just under
      * the maxOriginationLTV if `collateralDelta` was added/removed
      * from the current position.
-     * A positive `debtDelta` means the account can borrow that amount after adding that `collateralDelta` collateral
-     * A negative `debtDelta` means it needs to repay that amount in order to withdraw that `collateralDelta` collateral
+     * A positive `debtDeltaInWei` means the account can borrow that amount after adding that `collateralDelta` collateral
+     * A negative `debtDeltaInWei` means it needs to repay that amount in order to withdraw that `collateralDelta` collateral
+     * @dev debtDeltaInWei is always to 18 decimal places
      */
     function debtDeltaForMaxOriginationLtv(
         address account,
         int128 collateralDelta
-    ) external view returns (int128 debtDelta);
+    ) external view returns (int128 debtDeltaInWei);
 
     /**
      * @notice An view of an accounts current and up to date position as of this block
@@ -431,9 +460,11 @@ interface IMonoCooler {
     function accountState(address account) external view returns (AccountState memory);
 
     /// @notice An account's current collateral
+    /// @dev to 18 decimal places
     function accountCollateral(address account) external view returns (uint128 collateral);
 
     /// @notice An account's current debt as of this block
+    //  @notice to 18 decimal places regardless of the debt token
     function accountDebt(address account) external view returns (uint128 debt);
 
     /// @notice A view of the derived/internal cache data.

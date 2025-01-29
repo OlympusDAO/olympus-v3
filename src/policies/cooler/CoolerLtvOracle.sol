@@ -3,11 +3,20 @@ pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
+/**
+ * @title Cooler LTV Oracle
+ * @notice It is a custom oracle (not dependant on external markets/AMMs/dependencies) to give the
+ * serve both the Origination LTV and Liquidation LTV
+ *  - They are both quoted in [debtToken / collateralToken] units
+ *  - It is a fixed 18dp price
+ *  - Origination LTV updates on a per second basis according to a policy set rate of change (and is up only or flat)
+ *  - Liquidation LTV is a policy set percentage above the Origination LTV
+ */
 contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     using FixedPointMathLib for uint256;
     using SafeCast for uint256;

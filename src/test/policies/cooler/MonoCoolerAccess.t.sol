@@ -21,6 +21,11 @@ contract MonoCoolerAccessTest is MonoCoolerBaseTest {
         cooler.setLtvOracle(address(0));
     }
 
+    function test_access_setTreasuryBorrower() public {
+        expectOnlyOverseer();
+        cooler.setTreasuryBorrower(address(0));
+    }
+
     function test_access_setLiquidationsPaused() public {
         expectOnlyOverseer();
         cooler.setLiquidationsPaused(true);

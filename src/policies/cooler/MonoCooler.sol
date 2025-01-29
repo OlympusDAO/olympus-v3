@@ -2,7 +2,6 @@
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ECDSA} from "openzeppelin/utils/cryptography/ECDSA.sol";
@@ -10,38 +9,34 @@ import {ECDSA} from "openzeppelin/utils/cryptography/ECDSA.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
-import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
+import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
 
-// @todo add helper to get max debt given collateral?
-
-/*
-@todo considerations:
-
-- Olympus modules/policies/permissions need reviewing closely as i'm not too familiar with best practice, just blindly pasta'd
-- Interest accrual is based on a global 'accumulator', and then each account has their own accumulator which is checkpoint whenever they do an action.
-  Used in Temple Line of Credit, and was based on other mono-contract money markets.
-- Uses a 'memory' cache to pre-load this info so we're not reading from 'storage' variables all the time (gas saving)
-- Did a little gas golfing to pack storage variables - slight tradeoff for readability (eg safely encode uint256 => uint128). But worth it imo.
-- Funding of DAI/USDS debt is done 'just in time'. Will need an opinion on whether this is OK or if too gassy and we need to have a debt buffer or use 
-  the same Clearinghouse max weekly funding model.
-
-- Discussed adding a circuit breaker (like Temple's TLC) - sounds like we should?
+/**
+ * @title Mono Cooler
+ * @notice A borrow/lend market where users can deposit their gOHM as collateral and then
+ * borrow a stablecoin debt token up to a certain LTV
+ *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the 
+ *    `CoolerTreasuryBorrower`
+ *  - The collateral and debt amounts tracked on this contract are always reported in wei, 
+ *    ie 18 decimal places
+ *  - gOHM collateral can be delegated to accounts for voting, via the DLGTE module
+ *  - Positions can be liquidated if the LTV breaches the 'liquidation LTV' as determined by the
+ *    `LTV Oracle`
+ *  - Users may set an authorization for one other address to act on its behalf.
  */
-
 contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     using FixedPointMathLib for uint256;
     using SafeCast for uint256;
     using CompoundedInterest for uint256;
     using SafeTransferLib for ERC20;
-    using SafeTransferLib for ERC4626;
 
     //============================================================================================//
     //                                         IMMUTABLES                                         //
@@ -51,16 +46,10 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     ERC20 public immutable override collateralToken;
 
     /// @inheritdoc IMonoCooler
-    ERC20 public immutable override debtToken;
-
-    /// @inheritdoc IMonoCooler
     ERC20 public immutable override ohm;
 
     /// @inheritdoc IMonoCooler
     IStaking public immutable override staking;
-
-    /// @inheritdoc IMonoCooler
-    ERC4626 public immutable override debtSavingsVault;
 
     /// @inheritdoc IMonoCooler
     uint256 public immutable override minDebtRequired;
@@ -73,7 +62,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     MINTRv1 public MINTR; // Olympus V3 Minter Module
-    TRSRYv1 public TRSRY; // Olympus V3 Treasury Module
     DLGTEv1 public DLGTE; // Olympus V3 Delegation Module
 
     //============================================================================================//
@@ -102,6 +90,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     ICoolerLtvOracle public override ltvOracle;
 
     /// @inheritdoc IMonoCooler
+    ICoolerTreasuryBorrower public override treasuryBorrower;
+
+    /// @inheritdoc IMonoCooler
     uint256 public override interestAccumulatorRay;
 
     /// @dev A per account store, tracking collateral/debt as of their latest checkpoint.
@@ -124,14 +115,17 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     bytes32 public constant COOLER_OVERSEER_ROLE = bytes32("cooler_overseer");
 
     /// @notice Extra precision scalar
-    uint256 private constant RAY = 1e27;
+    uint256 private constant _RAY = 1e27;
 
     /// @dev The EIP-712 typeHash for EIP712Domain.
-    bytes32 private constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
+    bytes32 private constant _DOMAIN_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
 
     /// @dev The EIP-712 typeHash for Authorization.
-    bytes32 private constant AUTHORIZATION_TYPEHASH =
+    bytes32 private constant _AUTHORIZATION_TYPEHASH =
         keccak256("Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)");
+
+    /// @dev expected decimals for the `collateralToken` and `treasuryBorrower`
+    uint8 private constant _EXPECTED_DECIMALS = 18;
 
     //============================================================================================//
     //                                      INITIALIZATION                                        //
@@ -141,19 +135,15 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address ohm_,
         address gohm_,
         address staking_,
-        address debtSavingsVault_,
         address kernel_,
         address ltvOracle_,
         uint16 interestRateBps_,
         uint256 minDebtRequired_
     ) Policy(Kernel(kernel_)) {
         collateralToken = ERC20(gohm_);
-        debtSavingsVault = ERC4626(debtSavingsVault_);
-        debtToken = ERC20(debtSavingsVault.asset());
 
-        // Only handle 18dp collateral and debt tokens
-        if (collateralToken.decimals() != 18) revert InvalidParam();
-        if (debtToken.decimals() != 18) revert InvalidParam();
+        // Only handle 18dp collateral
+        if (collateralToken.decimals() != _EXPECTED_DECIMALS) revert InvalidParam();
 
         ohm = ERC20(ohm_);
         staking = IStaking(staking_);
@@ -165,61 +155,65 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         interestRateBps = interestRateBps_;
         interestAccumulatorUpdatedAt = uint32(block.timestamp);
-        interestAccumulatorRay = RAY;
+        interestAccumulatorRay = _RAY;
 
-        DOMAIN_SEPARATOR = keccak256(abi.encode(DOMAIN_TYPEHASH, block.chainid, address(this)));
+        DOMAIN_SEPARATOR = keccak256(abi.encode(_DOMAIN_TYPEHASH, block.chainid, address(this)));
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
-        dependencies[0] = toKeycode("MINTR");
-        dependencies[1] = toKeycode("ROLES");
-        dependencies[2] = toKeycode("TRSRY");
-        dependencies[3] = toKeycode("DLGTE");
+        dependencies = new Keycode[](3);
+        dependencies[0] = toKeycode("DLGTE");
+        dependencies[1] = toKeycode("MINTR");
+        dependencies[2] = toKeycode("ROLES");
 
-        MINTR = MINTRv1(getModuleAddress(dependencies[0]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
-        DLGTE = DLGTEv1(getModuleAddress(dependencies[3]));
+        DLGTEv1 newDLGTE = DLGTEv1(getModuleAddress(dependencies[0]));
+        MINTRv1 newMINTR = MINTRv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
-        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 DLGTE_MAJOR, ) = newDLGTE.VERSION();
+        (uint8 MINTR_MAJOR, ) = newMINTR.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        (uint8 DLGTE_MAJOR, ) = DLGTE.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1, 1]);
+        bytes memory expected = abi.encode([1, 1, 1]);
         if (
+            DLGTE_MAJOR != 1 ||
             MINTR_MAJOR != 1 ||
-            ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1 ||
-            DLGTE_MAJOR != 1
+            ROLES_MAJOR != 1
         ) revert Policy_WrongModuleVersion(expected);
 
-        // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
-        ohm.approve(address(MINTR), type(uint256).max);
+        // If MINTR has changed, then update approval to burn OHM from the old
+        address oldAddress = address(MINTR);
+        if (address(newMINTR) != oldAddress) {
+            if (oldAddress != address(0)) ohm.approve(oldAddress, 0);
 
-        // Approve DLGTE to pull gOHM for delegation
-        collateralToken.approve(address(DLGTE), type(uint256).max);
+            ohm.approve(address(newMINTR), type(uint256).max);
+            MINTR = newMINTR;
+        }
+
+        // If DLGTE has changed, then update approval to pull gOHM for delegation
+        oldAddress = address(DLGTE);
+        if (address(newDLGTE) != oldAddress) {
+            if (oldAddress != address(0)) collateralToken.approve(address(oldAddress), 0);
+
+            collateralToken.approve(address(newDLGTE), type(uint256).max);
+            DLGTE = newDLGTE;
+        }
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
 
-        requests = new Permissions[](8);
+        requests = new Permissions[](5);
         requests[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[4] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
-        requests[5] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
-        requests[6] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
-        requests[7] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        requests[1] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
+        requests[2] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
+        requests[3] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
+        requests[4] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
     }
 
     //============================================================================================//
@@ -238,7 +232,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (block.timestamp > authorization.signatureDeadline) revert ExpiredSignature(authorization.signatureDeadline);
         if (authorization.nonce != authorizationNonces[authorization.account]++) revert InvalidNonce(authorization.nonce);
 
-        bytes32 structHash = keccak256(abi.encode(AUTHORIZATION_TYPEHASH, authorization));
+        bytes32 structHash = keccak256(abi.encode(_AUTHORIZATION_TYPEHASH, authorization));
         address signer = ECDSA.recover(
             ECDSA.toTypedDataHash(DOMAIN_SEPARATOR, structHash),
             signature.v,
@@ -419,7 +413,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Finally, borrow the funds from the Treasury and send the tokens to the recipient.
         emit Borrow(msg.sender, onBehalfOf, recipient, amountBorrowed);
-        _fundFromTreasury(amountBorrowed, recipient);
+        treasuryBorrower.borrow(amountBorrowed, recipient);
     }
 
     /// @inheritdoc IMonoCooler
@@ -465,7 +459,12 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         // NB: No need to check if the position is healthy after a repayment as this
         // only decreases the LTV.
         emit Repay(msg.sender, onBehalfOf, amountRepaid);
-        _repayTreasury(amountRepaid, msg.sender);
+
+        // Convert the `amountRepaid` (in wei) into the actual debt token precision
+        // and pull from the caller and into the Treasury Borrower for repayment to Treasury
+        (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(amountRepaid);
+        dToken.safeTransferFrom(msg.sender, address(treasuryBorrower), dTokenAmount);
+        treasuryBorrower.repay();
     }
 
     //============================================================================================//
@@ -591,6 +590,19 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     }
 
     /// @inheritdoc IMonoCooler
+    function setTreasuryBorrower(address newTreasuryBorrower) external override {
+        // Permisionless if `treasuryBorrower` is uninitialized
+        if (
+            address(treasuryBorrower) != address(0) && 
+            !ROLES.hasRole(msg.sender, COOLER_OVERSEER_ROLE)
+        ) revert ROLESv1.ROLES_RequireRole(COOLER_OVERSEER_ROLE);
+
+        emit TreasuryBorrowerSet(newTreasuryBorrower);
+        treasuryBorrower = ICoolerTreasuryBorrower(newTreasuryBorrower);
+        if (treasuryBorrower.DECIMALS() != _EXPECTED_DECIMALS) revert InvalidParam();
+    }
+
+    /// @inheritdoc IMonoCooler
     function setLiquidationsPaused(bool isPaused) external override onlyRole(COOLER_OVERSEER_ROLE) {
         liquidationsPaused = isPaused;
         emit LiquidationsPausedSet(isPaused);
@@ -634,6 +646,11 @@ It means the liquidation won't happen until that accrued interest pays for gas++
     //============================================================================================//
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
+
+    /// @inheritdoc IMonoCooler
+    function debtToken() external view override returns (ERC20) {
+        return treasuryBorrower.debtToken();
+    }
 
     /// @inheritdoc IMonoCooler
     function loanToValues() external view override returns (uint96 maxOriginationLtv, uint96 liquidationLtv) {
@@ -830,41 +847,6 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         }
     }
 
-    //============================================================================================//
-    //                                     INTERNAL FUNDING                                       //
-    //============================================================================================//
-
-    function _fundFromTreasury(uint256 debtTokenAmount, address recipient) private {
-        uint256 outstandingDebt = TRSRY.reserveDebt(debtToken, address(this));
-        TRSRY.setDebt({
-            debtor_: address(this),
-            token_: debtToken,
-            amount_: outstandingDebt + debtTokenAmount
-        });
-
-        // Since TRSRY holds sUSDS, a conversion must be done before funding.
-        // Withdraw that sUSDS amount locally and then redeem to USDS sending to the recipient
-        uint256 debtSavingsVaultAmount = debtSavingsVault.previewWithdraw(debtTokenAmount);
-        TRSRY.increaseWithdrawApproval(address(this), debtSavingsVault, debtSavingsVaultAmount);
-        TRSRY.withdrawReserves(address(this), debtSavingsVault, debtSavingsVaultAmount);
-        debtSavingsVault.redeem(debtSavingsVaultAmount, recipient, address(this));
-    }
-
-    function _repayTreasury(uint256 debtTokenAmount, address from) private {
-        uint256 outstandingDebt = TRSRY.reserveDebt(debtToken, address(this));
-        TRSRY.setDebt({
-            debtor_: address(this),
-            token_: debtToken,
-            amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
-        });
-
-        // Pull in the debtToken from the user and deposit into the savings vault,
-        // with TRSRY as the receiver
-        debtToken.safeTransferFrom(from, address(this), debtTokenAmount);
-        debtToken.safeApprove(address(debtSavingsVault), debtTokenAmount);
-        debtSavingsVault.deposit(debtTokenAmount, address(TRSRY));
-    }
-
     /**
      * @dev Reduce the total debt in storage by a repayment amount.
      * NB: The sum of all users debt may be slightly more than the recorded total debt
@@ -984,6 +966,3 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         return debt.encodeUInt128();
     }
 }
-
-
-// Add function to get max borrow given an amount of collateral

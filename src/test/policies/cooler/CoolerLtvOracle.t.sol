@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
-import {ICoolerLtvOracle} from "policies/interfaces/ICoolerLtvOracle.sol";
+import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 
 import {RolesAdmin, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
