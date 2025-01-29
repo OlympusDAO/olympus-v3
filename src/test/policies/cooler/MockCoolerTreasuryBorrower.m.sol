@@ -3,24 +3,15 @@ pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
-/**
- * @title Cooler Treasury Borrower - USDS borrows, sUSDS at rest
- * @notice Policy which can borrow from Treasury on behalf of Cooler
- *  - Cooler will always represent the debt amount in 18 decimal places.
- *  - This logic is split out into a separate policy (rather than using `TreasuryCustodian`):
- *      1/ So the Cooler debt token can be updated if required in future to another stablecoin without a redeploy of Cooler.
- *      2/ In this case, debt is denominated in USDS but stored 'at rest' in Treasury into sUSDS for extra yield.
- *  - Upon an upgreade, if the actual debt token is changed (with a new deployment of this contract) to a non 18dp asset
- *    eg USDC, then borrow() and repay() will need to do the conversion.
- *  - This implementation borrows USDS from Treasury but deposits into sUSDS to benefit from savings yield.
- */
-contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsumer {
+// Handles unit conversion - eg if the debt token is 6dp (USDC)
+// No staking token (eg sUSDS) at rest.
+contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsumer {
     using SafeTransferLib for ERC20;
 
     /// @inheritdoc ICoolerTreasuryBorrower
@@ -29,26 +20,22 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     /// @notice Olympus V3 Treasury Module
     TRSRYv1 public TRSRY;
 
-    /// @notice sUSDS is used within TRSRY to generate yield on idle USDS
-    ERC4626 public immutable susds;
+    ERC20 public immutable override debtToken;
 
-    /// @dev The SKY USDS token
-    ERC20 private immutable _usds;
+    uint256 private immutable _conversionScalar;
 
     bytes32 public constant COOLER_ROLE = bytes32("treasuryborrower_cooler");
     bytes32 public constant ADMIN_ROLE = bytes32("treasuryborrower_admin");
 
     constructor(
         address kernel_,
-        address susds_
+        address debtToken_
     ) Policy(Kernel(kernel_)) {
-        susds = ERC4626(susds_);
-        _usds = ERC20(susds.asset());
+        debtToken = ERC20(debtToken_);
 
-        // This particular implemenation can only handle an 18dp debtToken
-        // If (for example) USDC were to be used then logic should be added
-        // within borrow() and repay() to do the conversions.
-        if (_usds.decimals() != DECIMALS) revert InvalidParam();
+        uint8 tokenDecimals = debtToken.decimals();
+        if (tokenDecimals > DECIMALS) revert InvalidParam();
+        _conversionScalar = 10 ** (DECIMALS - tokenDecimals);
     }
 
     /// @inheritdoc Policy
@@ -86,58 +73,55 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
         if (amountInWei == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
 
-        uint256 outstandingDebt = TRSRY.reserveDebt(_usds, address(this));
+        // Convert into the debtToken scale rounding UP
+        uint256 debtTokenAmount = _convertToDebtTokenAmount(amountInWei);
+
+        uint256 outstandingDebt = TRSRY.reserveDebt(debtToken, address(this));
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: _usds,
-            amount_: outstandingDebt + amountInWei
+            token_: debtToken,
+            amount_: outstandingDebt + debtTokenAmount
         });
 
-        // Since TRSRY holds sUSDS, a conversion must be done before funding.
-        // Withdraw that sUSDS amount locally and then redeem to USDS sending to the recipient
-        uint256 susdsAmount = susds.previewWithdraw(amountInWei);
-        TRSRY.increaseWithdrawApproval(address(this), susds, susdsAmount);
-        TRSRY.withdrawReserves(address(this), susds, susdsAmount);
-        susds.redeem(susdsAmount, recipient, address(this));
+        TRSRY.increaseWithdrawApproval(address(this), debtToken, debtTokenAmount);
+        TRSRY.withdrawReserves(recipient, debtToken, debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function repay() external override onlyRole(COOLER_ROLE) {
-        uint256 debtTokenAmount = _usds.balanceOf(address(this));
+        uint256 debtTokenAmount = debtToken.balanceOf(address(this));
         if (debtTokenAmount == 0) revert ExpectedNonZero();
 
         // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
         // and any future repayments are just deposited. There are no 'credits' for overpaying
-        uint256 outstandingDebt = TRSRY.reserveDebt(_usds, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(debtToken, address(this));
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: _usds,
+            token_: debtToken,
             amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
         });
 
-        _usds.safeApprove(address(susds), debtTokenAmount);
-        susds.deposit(debtTokenAmount, address(TRSRY));
+        debtToken.safeTransfer(address(TRSRY), debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function setDebt(uint256 debtTokenAmount) external override onlyRole(ADMIN_ROLE) {
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: _usds,
+            token_: debtToken,
             amount_: debtTokenAmount
         });
-    }
-
-    /// @inheritdoc ICoolerTreasuryBorrower
-    function debtToken() external override view returns (ERC20) {
-        return _usds;
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function convertToDebtTokenAmount(
         uint256 amountInWei
     ) external override view returns (ERC20 dToken, uint256 dTokenAmount) {
-        dToken = _usds;
-        dTokenAmount = amountInWei;
+        dToken = debtToken;
+        dTokenAmount = _convertToDebtTokenAmount(amountInWei);
+    }
+
+    function _convertToDebtTokenAmount(uint256 amountInWei) private view returns (uint256) {
+        return FixedPointMathLib.mulDivUp(amountInWei, 1, _conversionScalar);
     }
 }

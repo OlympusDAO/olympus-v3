@@ -6,9 +6,12 @@ import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 
 import {Permissions, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {ROLESv1, OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /* solhint-disable func-name-mixedcase, contract-name-camelcase, not-rely-on-time */
 contract CoolerTreasuryBorrowerTestBase is Test {
@@ -17,9 +20,13 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     CoolerTreasuryBorrower internal treasuryBorrower;
 
     Kernel internal kernel;
+    OlympusRoles internal ROLES;
     OlympusTreasury internal TRSRY;
+    RolesAdmin internal rolesAdmin;
 
-    address internal immutable COOLER = makeAddr("cooler");
+    address internal immutable EXECUTOR = makeAddr("executor");
+    address internal immutable TB_ADMIN = makeAddr("tb_admin");
+    address internal immutable TB_COOLER = makeAddr("tb_cooler");
     address internal immutable OTHERS = makeAddr("others");
     address internal immutable RECEIVER = makeAddr("receiver");
 
@@ -30,16 +37,24 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
         
         kernel = new Kernel();
+        ROLES = new OlympusRoles(kernel);
         TRSRY = new OlympusTreasury(kernel);
 
         treasuryBorrower = new CoolerTreasuryBorrower(
             address(kernel),
-            COOLER,
             address(susds)
         );
 
+        rolesAdmin = new RolesAdmin(kernel);
+
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryBorrower));
+
+        rolesAdmin.grantRole("treasuryborrower_cooler", TB_COOLER);
+        rolesAdmin.grantRole("treasuryborrower_admin", TB_ADMIN);
+        kernel.executeAction(Actions.ChangeExecutor, EXECUTOR);
 
         // Setup Treasury
         usds.mint(address(TRSRY), INITIAL_TRSRY_MINT);
@@ -66,7 +81,6 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.InvalidParam.selector));
         treasuryBorrower = new CoolerTreasuryBorrower(
             address(kernel),
-            COOLER,
             address(susds)
         );
     }
@@ -74,18 +88,25 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     function test_construction_success() public view {
         assertEq(address(treasuryBorrower.susds()), address(susds));
         assertEq(address(treasuryBorrower.debtToken()), address(usds));
+        (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(1e18);
+        assertEq(address(dToken), address(usds));
+        assertEq(dTokenAmount, 1e18);
+        assertEq(address(treasuryBorrower.ROLES()), address(ROLES));
         assertEq(address(treasuryBorrower.TRSRY()), address(TRSRY));
-        assertEq(address(treasuryBorrower.cooler()), COOLER);
+        assertEq(treasuryBorrower.COOLER_ROLE(), bytes32("treasuryborrower_cooler"));
+        assertEq(treasuryBorrower.ADMIN_ROLE(), bytes32("treasuryborrower_admin"));
     }
 
     function test_configureDependencies_success() public {
-        Keycode[] memory expectedDeps = new Keycode[](1);
-        expectedDeps[0] = toKeycode("TRSRY");
+        Keycode[] memory expectedDeps = new Keycode[](2);
+        expectedDeps[0] = toKeycode("ROLES");
+        expectedDeps[1] = toKeycode("TRSRY");
 
         Keycode[] memory deps = treasuryBorrower.configureDependencies();
         // Check: configured dependencies storage
         assertEq(deps.length, expectedDeps.length);
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
     function test_configureDependencies_fail() public {
@@ -98,7 +119,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 Policy.Policy_WrongModuleVersion.selector,
-                abi.encode([1])
+                abi.encode([1, 1])
             )
         );
         treasuryBorrower.configureDependencies();
@@ -122,30 +143,51 @@ contract CoolerTreasuryBorrowerTestBase is Test {
 
     function test_access_borrow() public {
         vm.startPrank(OTHERS);
-        vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.OnlyCooler.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                treasuryBorrower.COOLER_ROLE()
+            )
+        );
         treasuryBorrower.borrow(123, OTHERS);
     }
 
     function test_access_repay() public {
         vm.startPrank(OTHERS);
-        vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.OnlyCooler.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                treasuryBorrower.COOLER_ROLE()
+            )
+        );
+        treasuryBorrower.repay();
+    }
+
+    function test_access_setDebt() public {
+        vm.startPrank(OTHERS);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                treasuryBorrower.COOLER_ROLE()
+            )
+        );
         treasuryBorrower.repay();
     }
 
     function test_borrow_failZeroAmount() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
         vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.ExpectedNonZero.selector));
         treasuryBorrower.borrow(0, RECEIVER);
     }
 
     function test_borrow_failZeroReceiver() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
         vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.InvalidAddress.selector));
         treasuryBorrower.borrow(123, address(0));
     }
 
     function test_borrow_once() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
 
         uint256 borrowedAmount = 110e18;
         uint256 susdsBefore = susds.balanceOf(address(TRSRY));
@@ -161,7 +203,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     }
 
     function test_borrow_twice() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
 
         uint256 borrowedAmount = 110e18;
 
@@ -183,13 +225,13 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     }
 
     function test_repay_failZeroAmount() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
         vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.ExpectedNonZero.selector));
         treasuryBorrower.repay();
     }
 
     function test_repay_noDebt() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
         uint256 susdsBefore = susds.balanceOf(address(TRSRY));
         
         usds.mint(address(treasuryBorrower), 110e18);
@@ -204,7 +246,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     }
 
     function test_repay_overRepay() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
         uint256 susdsBefore = susds.balanceOf(address(TRSRY));
 
         uint256 borrowedAmount = 110e18;
@@ -223,7 +265,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     }
 
     function test_repay_underRepay() public {
-        vm.startPrank(COOLER);
+        vm.startPrank(TB_COOLER);
         uint256 susdsBefore = susds.balanceOf(address(TRSRY));
 
         uint256 borrowedAmount = 110e18;
@@ -238,5 +280,11 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         uint256 susdsAfter = susds.balanceOf(address(TRSRY));
 
         assertEq(susdsBefore-susdsAfter, 54.545454545454545455e18);
+    }
+
+    function test_setDebt() public {
+        vm.startPrank(TB_ADMIN);
+        treasuryBorrower.setDebt(333.33e18);
+        assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 333.33e18);
     }
 }

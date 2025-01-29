@@ -19,21 +19,19 @@ import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasur
 import {SafeCast} from "libraries/SafeCast.sol";
 import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
 
-/*
-@todo considerations:
-
-- Olympus modules/policies/permissions need reviewing closely as i'm not too familiar with best practice, just blindly pasta'd
-- Interest accrual is based on a global 'accumulator', and then each account has their own accumulator which is checkpoint whenever they do an action.
-  Used in Temple Line of Credit, and was based on other mono-contract money markets.
-- Uses a 'memory' cache to pre-load this info so we're not reading from 'storage' variables all the time (gas saving)
-- Did a little gas golfing to pack storage variables - slight tradeoff for readability (eg safely encode uint256 => uint128). But worth it imo.
-- Funding of DAI/USDS debt is done 'just in time'. Will need an opinion on whether this is OK or if too gassy and we need to have a debt buffer or use 
-  the same Clearinghouse max weekly funding model.
-
-- Discussed adding a circuit breaker (like Temple's TLC) - sounds like we should?
+/**
+ * @title Mono Cooler
+ * @notice A borrow/lend market where users can deposit their gOHM as collateral and then
+ * borrow a stablecoin debt token up to a certain LTV
+ *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the 
+ *    `CoolerTreasuryBorrower`
+ *  - The collateral and debt amounts tracked on this contract are always reported in wei, 
+ *    ie 18 decimal places
+ *  - gOHM collateral can be delegated to accounts for voting, via the DLGTE module
+ *  - Positions can be liquidated if the LTV breaches the 'liquidation LTV' as determined by the
+ *    `LTV Oracle`
+ *  - Users may set an authorization for one other address to act on its behalf.
  */
-
-// @todo title info
 contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     using FixedPointMathLib for uint256;
     using SafeCast for uint256;
@@ -461,7 +459,11 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         // NB: No need to check if the position is healthy after a repayment as this
         // only decreases the LTV.
         emit Repay(msg.sender, onBehalfOf, amountRepaid);
-        treasuryBorrower.debtToken().safeTransferFrom(msg.sender, address(treasuryBorrower), amountRepaid);
+
+        // Convert the `amountRepaid` (in wei) into the actual debt token precision
+        // and pull from the caller and into the Treasury Borrower for repayment to Treasury
+        (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(amountRepaid);
+        dToken.safeTransferFrom(msg.sender, address(treasuryBorrower), dTokenAmount);
         treasuryBorrower.repay();
     }
 
@@ -597,8 +599,6 @@ It means the liquidation won't happen until that accrued interest pays for gas++
 
         emit TreasuryBorrowerSet(newTreasuryBorrower);
         treasuryBorrower = ICoolerTreasuryBorrower(newTreasuryBorrower);
-        
-        if (treasuryBorrower.cooler() != address(this)) revert InvalidParam();
         if (treasuryBorrower.DECIMALS() != _EXPECTED_DECIMALS) revert InvalidParam();
     }
 

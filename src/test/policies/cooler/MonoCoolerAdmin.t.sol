@@ -172,6 +172,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(ohm.allowance(address(cooler), address(MINTR)), type(uint256).max);
         assertEq(gohm.allowance(address(cooler), address(DLGTE)), type(uint256).max);
 
+        vm.startPrank(EXECUTOR);
         OlympusMinter newMINTR = new OlympusMinter(kernel, address(ohm));
         OlympusGovDelegation newDLGTE = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
         kernel.executeAction(Actions.UpgradeModule, address(newMINTR));
@@ -244,15 +245,8 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(lltv, DEFAULT_LLTV+5);
     }
 
-    function test_setTreasuryBorrower_failNotCooler() public {
-        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), OTHERS, address(susds));
-        vm.startPrank(OVERSEER);
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
-        cooler.setTreasuryBorrower(address(treasuryBorrower));
-    }
-
     function test_setTreasuryBorrower_failDecimals() public {
-        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(cooler), address(susds));
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(susds));
         vm.mockCall(
             address(treasuryBorrower),
             abi.encodeWithSelector(ICoolerTreasuryBorrower.DECIMALS.selector),
@@ -265,7 +259,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_setTreasuryBorrower_success() public {
-        CoolerTreasuryBorrower newTreasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(cooler), address(susds));
+        CoolerTreasuryBorrower newTreasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(susds));
         vm.startPrank(OVERSEER);
 
         vm.expectEmit(address(cooler));
