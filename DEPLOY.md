@@ -12,9 +12,7 @@ To deploy, follow these steps in a checked-out copy of the repository:
 1. Ensure that `hardhat.config.ts` contains the required chain and RPC configuration
 1. Configure the `.env` file
 1. Run the deploy script: `yarn hardhat deploy --network <network> --tags OlympusERC20Token`
-
-- This will deploy both the OlympusAuthority and the OlympusERC20Token contracts
-
+    - This will deploy both the OlympusAuthority and the OlympusERC20Token contracts
 1. Verify the contracts by running `yarn hardhat etherscan-verify --network <network>`
 1. Store the addresses of the OlympusAuthority and the OlympusERC20Token contracts in the `src/scripts/env.json` file for the new chain
 
