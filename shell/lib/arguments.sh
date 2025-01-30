@@ -2,9 +2,7 @@
 
 # Library for parsing and validating arguments
 
-# Get the directory of the script
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $SCRIPT_DIR/error.sh
+source $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/error.sh
 
 # @description Loads named arguments
 # @param {string} $@ The named arguments

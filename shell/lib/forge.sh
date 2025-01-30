@@ -2,9 +2,7 @@
 
 # Library for forge script commands
 
-# Get the directory of the script
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $SCRIPT_DIR/error.sh
+source $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/error.sh
 
 # @description Sets the broadcast flag based on the value of the variable
 # @param {boolean} $1 The variable holding the boolean value
