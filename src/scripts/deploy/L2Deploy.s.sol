@@ -15,7 +15,7 @@ import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
-contract BridgeDeploy is Script {
+contract L2Deploy is Script {
     Kernel public kernel;
 
     // Modules
