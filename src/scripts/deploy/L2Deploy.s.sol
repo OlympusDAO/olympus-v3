@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.15;
 
-import {Script, console2} from "forge-std/Script.sol";
+import {console2} from "forge-std/console2.sol";
+import {WithEnvironment} from "../WithEnvironment.s.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -9,122 +11,308 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 
-import {OlympusMinter, MINTRv1} from "src/modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {Emergency} from "src/policies/Emergency.sol";
+import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
-contract L2Deploy is Script {
-    Kernel public kernel;
+contract L2Deploy is WithEnvironment {
+    function _getLzEndpoint() internal view returns (address) {
+        return _envAddress("external.layerzero.endpoint");
+    }
 
-    // Modules
-    OlympusMinter public MINTR;
-    OlympusRoles public ROLES;
+    function _getDaoMultisig() internal view returns (address) {
+        return _envAddress("olympus.multisig.dao");
+    }
 
-    // Policies
-    CrossChainBridge public bridge;
-    RolesAdmin public rolesAdmin;
+    function _getEmergencyMultisig() internal view returns (address) {
+        return _envAddress("olympus.multisig.emergency");
+    }
 
-    // Construction variables
-    OlympusAuthority public auth;
-    OlympusERC20Token public ohm;
+    /// @notice Returns the LayerZero endpoint ID for a given chain
+    /// @dev    Endpoint IDs are defined here: https://docs.layerzero.network/v1/developers/evm/technical-reference/deployed-contracts
+    function _getRemoteEndpointId(string calldata chain_) internal pure returns (uint16) {
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("arbitrum"))) {
+            return 110;
+        }
 
-    // Deploy ohm, authority, kernel, MINTR, ROLES, rolesadmin to new testnet.
-    // Assumes that the caller is the executor
-    function deploy(address lzEndpoint_, address multisig_) external {
+        if (
+            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("arbitrum-sepolia"))
+        ) {
+            return 10231;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("base"))) {
+            return 184;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("base-sepolia"))) {
+            return 10245;
+        }
+
+        if (
+            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("berachain-bartio"))
+        ) {
+            return 10291;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("mainnet"))) {
+            return 101;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("sepolia"))) {
+            return 10161;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("optimism"))) {
+            return 111;
+        }
+
+        if (
+            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("optimism-sepolia"))
+        ) {
+            return 10232;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("polygon"))) {
+            return 109;
+        }
+
+        // solhint-disable-next-line custom-errors
+        revert(string.concat("Unsupported chain: ", chain_));
+    }
+
+    /// @notice Deploys a new Bophades installation to a new chain
+    /// @dev    Deploys the following contracts:
+    ///         - OlympusAuthority
+    ///         - OlympusERC20Token (OHM)
+    ///         - Kernel
+    ///         - OlympusMinter
+    ///         - OlympusRoles
+    ///         - OlympusTreasury
+    ///         - RolesAdmin
+    ///         - CrossChainBridge
+    ///         - Emergency
+    ///         - TreasuryCustodian
+    function deploy(string calldata chain_) external {
+        _loadEnv(chain_);
+
+        console2.log("");
+        console2.log("Deploying to", chain_);
+        console2.log("Initial Kernel executor:", msg.sender);
+
         vm.startBroadcast();
 
         // Keep deployer as vault in order to transfer minter role after OHM
         // token is deployed
-        auth = new OlympusAuthority(msg.sender, multisig_, multisig_, msg.sender);
-        ohm = new OlympusERC20Token(address(auth));
+        OlympusAuthority auth = new OlympusAuthority(
+            msg.sender, // governor/owner, will be set to daoMultisig later
+            _getDaoMultisig(), // guardian
+            _getDaoMultisig(), // policy
+            msg.sender // vault, will be set to MINTR later
+        );
+        OlympusERC20Token ohm = new OlympusERC20Token(address(auth));
         console2.log("OlympusAuthority deployed at:", address(auth));
         console2.log("OlympusERC20Token deployed at:", address(ohm));
 
         // Set addresses for dependencies
-        kernel = new Kernel();
+        Kernel kernel = new Kernel();
         console2.log("Kernel deployed at:", address(kernel));
 
-        MINTR = new OlympusMinter(kernel, address(ohm));
+        OlympusMinter MINTR = new OlympusMinter(kernel, address(ohm));
         console2.log("MINTR deployed at:", address(MINTR));
 
-        ROLES = new OlympusRoles(kernel);
+        OlympusRoles ROLES = new OlympusRoles(kernel);
         console2.log("ROLES deployed at:", address(ROLES));
 
-        bridge = new CrossChainBridge(kernel, lzEndpoint_);
+        OlympusTreasury TRSRY = new OlympusTreasury(kernel);
+        console2.log("Treasury deployed at:", address(TRSRY));
+
+        CrossChainBridge bridge = new CrossChainBridge(kernel, _getLzEndpoint());
         console2.log("Bridge deployed at:", address(bridge));
 
-        rolesAdmin = new RolesAdmin(kernel);
+        RolesAdmin rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
+        Emergency emergency = new Emergency(kernel);
+        console2.log("Emergency deployed at:", address(emergency));
+
+        TreasuryCustodian treasuryCustodian = new TreasuryCustodian(kernel);
+        console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
+
+        console2.log("Deployments complete");
+        console2.log("Please update the src/scripts/env.json file with the new addresses");
+
         // Execute actions on Kernel
+
+        console2.log("");
+        console2.log("Installing modules/policies in Kernel");
 
         // Install Modules
         kernel.executeAction(Actions.InstallModule, address(MINTR));
         kernel.executeAction(Actions.InstallModule, address(ROLES));
+        kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
-        // Approve policies
+        // Activate Policies
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(bridge));
+        kernel.executeAction(Actions.ActivatePolicy, address(emergency));
+        kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
 
-        // Multisig still needs to claim the admin role
-        rolesAdmin.grantRole("bridge_admin", msg.sender);
-        rolesAdmin.pushNewAdmin(multisig_);
+        console2.log("Kernel actions complete");
 
         // Grant roles
-        auth.pushVault(address(MINTR), true);
-        auth.pushGovernor(multisig_, true);
+
+        console2.log("");
+        console2.log("Granting roles");
+
+        // Assign emergency roles
+        {
+            console2.log("Granting emergency roles to emergency multisig", _getEmergencyMultisig());
+            rolesAdmin.grantRole("emergency_shutdown", _getEmergencyMultisig());
+            rolesAdmin.grantRole("emergency_restart", _getEmergencyMultisig());
+        }
+
+        // TreasuryCustodian
+        {
+            console2.log("Granting custodian role to DAO multisig", _getDaoMultisig());
+            rolesAdmin.grantRole("custodian", _getDaoMultisig());
+        }
+
+        // CrossChainBridge
+        // The role is required for setup. It will be transferred to the multisig later
+        {
+            console2.log("Granting bridge admin role to deployer", msg.sender);
+            rolesAdmin.grantRole("bridge_admin", msg.sender);
+        }
+
+        // OlympusAuthority
+        {
+            console2.log("Granting OlympusAuthority vault role to MINTR", address(MINTR));
+            auth.pushVault(address(MINTR), true);
+            console2.log(
+                "Granting OlympusAuthority governor role to DAO multisig",
+                _getDaoMultisig()
+            );
+            auth.pushGovernor(_getDaoMultisig(), true);
+        }
+
+        console2.log("Roles granted");
 
         vm.stopBroadcast();
     }
 
-    // To allow calling this separately. Assumes sender is executor
-    // (ie cant be used where we're using Multisig)
-    function installBridge(address kernel_, address rolesAdmin_, address bridge_) public {
+    /// @notice Deploys a new CrossChainBridge
+    function deployBridge(string calldata chain_) public {
+        _loadEnv(chain_);
+
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address lzEndpoint = _envAddressNotZero("external.layerzero.endpoint");
+
+        console2.log("Deploying bridge to", chain_);
+        console2.log("Kernel:", kernel);
+        console2.log("LZ Endpoint:", lzEndpoint);
+
         vm.startBroadcast();
-        //deployBridge(kernel_, lzEndpoint_);
-        Kernel(kernel_).executeAction(Actions.ActivatePolicy, address(bridge_));
-        RolesAdmin(rolesAdmin_).grantRole("bridge_admin", msg.sender);
+        CrossChainBridge bridge = new CrossChainBridge(Kernel(kernel), lzEndpoint);
         vm.stopBroadcast();
-    }
-
-    function deployBridge(address kernel_, address lzEndpoint_) public {
-        vm.broadcast();
-        bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_);
         console2.log("Bridge deployed at:", address(bridge));
     }
 
-    // Caller must have "bridge_admin" role
-    function setupBridge(
-        address localBridge_,
-        address remoteBridge_,
-        uint16 remoteLzChainId_
-    ) public {
-        // Begin bridge setup
-        bytes memory path1 = abi.encodePacked(remoteBridge_, localBridge_);
+    /// @notice Installs a deployed CrossChainbridge in the Kernel and grants the "bridge_admin" role to the caller.
+    /// @dev    The caller must be the kernel executor
+    function installBridge(string calldata chain_) public {
+        _loadEnv(chain_);
 
-        vm.broadcast();
-        CrossChainBridge(localBridge_).setTrustedRemote(remoteLzChainId_, path1);
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+        address crossChainBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
+
+        console2.log("Installing bridge in Kernel");
+        console2.log("Kernel:", kernel);
+        console2.log("RolesAdmin:", rolesAdmin);
+        console2.log("CrossChainBridge:", crossChainBridge);
+
+        vm.startBroadcast();
+        Kernel(kernel).executeAction(Actions.ActivatePolicy, address(crossChainBridge));
+        RolesAdmin(rolesAdmin).grantRole("bridge_admin", msg.sender);
+        vm.stopBroadcast();
+
+        console2.log("Bridge installed in Kernel");
     }
 
+    /// @notice Configures a CrossChainBridge to trust messages from another bridge
+    /// @dev    The caller must have the "bridge_admin" role
+    ///
+    ///         This should be run on the CrossChainBridge that will receive messages from the remote bridge
+    function setupBridge(string calldata localChain_, string calldata remoteChain_) public {
+        _loadEnv(localChain_);
+
+        address localBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
+        address remoteBridge = address(0); // TODO get address of remote bridge
+        uint16 remoteLzChainId = _getRemoteEndpointId(remoteChain_);
+
+        console2.log("Setting up bridge on chain", localChain_);
+        console2.log("Remote chain:", remoteChain_);
+        console2.log("Local bridge:", localBridge);
+        console2.log("Remote bridge:", remoteBridge);
+        console2.log("Remote LZ chain ID:", remoteLzChainId);
+
+        vm.startBroadcast();
+        CrossChainBridge(localBridge).setTrustedRemoteAddress(
+            remoteLzChainId,
+            abi.encodePacked(remoteBridge)
+        );
+        vm.stopBroadcast();
+
+        console2.log("Bridge setup complete");
+    }
+
+    /// @notice Grants the "bridge_admin" role to an address
+    /// @dev    The caller must be the role admin
+    ///         This is unlikely to be needed, as deploy/installBridge will grant the role to the deployer and handOffToMultisig will grant it to the multisig
     function grantBridgeAdminRole(address rolesAdmin_, address to_) public {
-        vm.broadcast();
+        vm.startBroadcast();
         RolesAdmin(rolesAdmin_).grantRole("bridge_admin", to_);
+        vm.stopBroadcast();
     }
 
-    // Change executor, bridge_admin and RolesAdmin admin to multisig
-    function handoffToMultisig(address multisig_, address kernel_, address rolesAdmin_) public {
+    /// @notice Completes the handoff of the installation from the deployer to the multisig
+    /// @dev    The caller must be the deployer
+    function handoffToMultisig(string calldata chain_) public {
+        _loadEnv(chain_);
+
+        address daoMultisig = _getDaoMultisig();
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+
+        console2.log("Starting handoff to DAO multisig", daoMultisig);
+
         vm.startBroadcast();
 
         // Remove bridge_admin role from deployer
-        RolesAdmin(rolesAdmin_).revokeRole("bridge_admin", msg.sender);
+        console2.log("Removing bridge_admin role from deployer", msg.sender);
+        RolesAdmin(rolesAdmin).revokeRole("bridge_admin", msg.sender);
 
         // Give roles to multisig and pull admin
-        RolesAdmin(rolesAdmin_).grantRole("bridge_admin", multisig_);
-        RolesAdmin(rolesAdmin_).pullNewAdmin();
-        Kernel(kernel_).executeAction(Actions.ChangeExecutor, multisig_);
+        console2.log("Granting bridge_admin role to DAO multisig", daoMultisig);
+        RolesAdmin(rolesAdmin).grantRole("bridge_admin", daoMultisig);
 
+        // Propose DAO multisig as new admin
+        console2.log("Proposing DAO multisig as new admin", daoMultisig);
+        RolesAdmin(rolesAdmin).pushNewAdmin(daoMultisig);
+
+        console2.log("Changing executor to multisig", daoMultisig);
+        Kernel(kernel).executeAction(Actions.ChangeExecutor, daoMultisig);
         vm.stopBroadcast();
+
+        console2.log("Handoff complete");
+        console2.log(
+            "DAO multisig will need to call RolesAdmin.pullNewAdmin() to complete the handoff"
+        );
     }
 }
