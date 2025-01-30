@@ -253,7 +253,10 @@ contract L2Deploy is WithEnvironment {
         _loadEnv(localChain_);
 
         address localBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
-        address remoteBridge = address(0); // TODO get address of remote bridge
+        address remoteBridge = _envAddressNotZero(
+            remoteChain_,
+            "olympus.policies.CrossChainBridge"
+        );
         uint16 remoteLzChainId = _getRemoteEndpointId(remoteChain_);
 
         console2.log("Setting up bridge on chain", localChain_);

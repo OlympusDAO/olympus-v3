@@ -20,40 +20,59 @@ abstract contract WithEnvironment is Script {
     }
 
     /// @notice Get address from environment file
-    /// @dev    First checks in the current chain's environment file, then in axis-core's environment file
     ///
+    /// @param  chain_  The chain to look up in the environment file
     /// @param  key_    The key to look up in the environment file
     /// @return address The address from the environment file, or the zero address
-    function _envAddress(string memory key_) internal view returns (address) {
-        console2.log("    Checking in env.json");
-        string memory fullKey = string.concat(".current.", chain, ".", key_);
+    function _envAddress(string memory chain_, string memory key_) internal view returns (address) {
+        console2.log("    Checking in env.json for", key_, "on", chain_);
+        string memory fullKey = string.concat(".current.", chain_, ".", key_);
         address addr;
         bool keyExists = vm.keyExists(env, fullKey);
 
         if (keyExists) {
             addr = env.readAddress(fullKey);
-            console2.log("    %s: %s (from env.json)", key_, addr);
+            console2.log("      %s: %s (from env.json)", key_, addr);
         } else {
-            console2.log("    %s: *** NOT FOUND ***", key_);
+            console2.log("      %s: *** NOT FOUND ***", key_);
         }
 
         return addr;
     }
 
-    /// @notice Get a non-zero address from environment file
-    /// @dev    First checks in the current chain's environment file, then in axis-core's environment file
-    ///
-    ///         Reverts if the key is not found
+    /// @notice Get address from environment file for the current chain
     ///
     /// @param  key_    The key to look up in the environment file
     /// @return address The address from the environment file
-    function _envAddressNotZero(string memory key_) internal view returns (address) {
-        address addr = _envAddress(key_);
+    function _envAddress(string memory key_) internal view returns (address) {
+        return _envAddress(chain, key_);
+    }
+
+    /// @notice Get a non-zero address from environment file
+    /// @dev    Reverts if the key is not found or the address is zero
+    ///
+    /// @param  chain_  The chain to look up in the environment file
+    /// @param  key_    The key to look up in the environment file
+    /// @return address The address from the environment file
+    function _envAddressNotZero(
+        string memory chain_,
+        string memory key_
+    ) internal view returns (address) {
+        address addr = _envAddress(chain_, key_);
         require(
             addr != address(0),
             string.concat("WithEnvironment: key '", key_, "' has zero address")
         );
 
         return addr;
+    }
+
+    /// @notice Get a non-zero address from environment file for the current chain
+    /// @dev    Reverts if the key is not found or the address is zero
+    ///
+    /// @param  key_    The key to look up in the environment file
+    /// @return address The address from the environment file
+    function _envAddressNotZero(string memory key_) internal view returns (address) {
+        return _envAddressNotZero(chain, key_);
     }
 }
