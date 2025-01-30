@@ -6,8 +6,9 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPT_DIR/error.sh
 
-# Function to load named arguments
-# Pass "$@" as an argument to the function to get all of the named arguments
+# @description Loads named arguments
+# @param {string} $@ The named arguments
+# @sideEffects Sets the named arguments as global variables
 load_named_args() {
     echo ""
     echo "Loading named arguments"
@@ -24,7 +25,9 @@ load_named_args() {
     done
 }
 
-# Function to load from a .env file
+# @description Loads environment variables from a .env file
+# @param {string} $1 The .env file name (optional)
+# @sideEffects Sets the environment variables as global variables
 load_env() {
     # Get the name of the .env file or use the default
     ENV_FILE=${env:-".env"}
@@ -37,9 +40,9 @@ load_env() {
     set +a # Disable automatic export
 }
 
-# Validate whether a file exists
-# Argument 1: The file path
-# Argument 2: The error message to display if the file does not exist
+# @description Validates whether a file exists
+# @param {string} $1 The file path
+# @param {string} $2 The error message to display if the file does not exist
 validate_file() {
     # Check if the file exists
     if [ ! -f "$1" ]; then
@@ -48,9 +51,9 @@ validate_file() {
     fi
 }
 
-# Validate whether a text variable is set
-# Argument 1: The variable name
-# Argument 2: The error message to display if the variable is not set
+# @description Validates whether a text variable is set
+# @param {string} $1 The variable name
+# @param {string} $2 The error message to display if the variable is not set
 validate_text() {
     if [ -z "$1" ]; then
         display_error "$2"
@@ -58,9 +61,9 @@ validate_text() {
     fi
 }
 
-# Validate whether a boolean variable is set
-# Argument 1: The variable name
-# Argument 2: The error message to display if the variable is not set
+# @description Validates whether a boolean variable is set
+# @param {string} $1 The variable name
+# @param {boolean} $2 The error message to display if the variable is not set
 validate_boolean() {
     if [ -z "$1" ]; then
         display_error "$2"

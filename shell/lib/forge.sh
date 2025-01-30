@@ -6,9 +6,9 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPT_DIR/error.sh
 
-# Function to set the broadcast flag based on the value of the variable
-# The BROADCAST_FLAG variable will be set
-# Argument 1: The variable name holding the boolean value
+# @description Sets the broadcast flag based on the value of the variable
+# @param {boolean} $1 The variable holding the boolean value
+# @sideEffects Sets the BROADCAST_FLAG global variable
 set_broadcast_flag() {
     # If the variable is true (case insensitive)
     local lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -21,11 +21,11 @@ set_broadcast_flag() {
     fi
 }
 
-# Function to set the verify flag based on the value of the variable
-# The VERIFY_FLAG variable will be set
-# Argument 1: The verification boolean
-# Argument 2: The Etherscan API key
-# Argument 3: The verifier URL (optional)
+# @description Sets the verify flag based on the value of the variable
+# @param {boolean} $1 The verification boolean
+# @param {string} $2 The Etherscan API key
+# @param {string} $3 The verifier URL (optional)
+# @sideEffects Sets the VERIFY_FLAG global variable
 set_verify_flag() {
     # If the variable is true (case insensitive)
     local lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -56,9 +56,9 @@ set_verify_flag() {
     fi
 }
 
-# Function to set the resume flag based on the value of the variable
-# The RESUME_FLAG variable will be set
-# Argument 1: The resume boolean
+# @description Sets the resume flag based on the value of the variable
+# @param {boolean} $1 The resume boolean
+# @sideEffects Sets the RESUME_FLAG global variable
 set_resume_flag() {
     local lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
     if [ "$lowercase" = "true" ]; then
