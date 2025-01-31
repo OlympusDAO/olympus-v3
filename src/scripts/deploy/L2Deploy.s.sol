@@ -4,8 +4,6 @@ pragma solidity 0.8.15;
 import {console2} from "forge-std/console2.sol";
 import {WithEnvironment} from "../WithEnvironment.s.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
