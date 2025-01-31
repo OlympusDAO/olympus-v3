@@ -16,7 +16,7 @@ set -e
 
 # Load named arguments
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-source $SCRIPT_DIR/lib/arguments.sh
+source $SCRIPT_DIR/../lib/arguments.sh
 load_named_args "$@"
 
 # Load environment variables
@@ -45,7 +45,7 @@ echo "  Chain: $CHAIN"
 echo "  Using RPC at URL: $RPC_URL"
 
 # Validate and set forge script flags
-source $SCRIPT_DIR/lib/forge.sh
+source $SCRIPT_DIR/../lib/forge.sh
 set_broadcast_flag $BROADCAST
 set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
 set_resume_flag $RESUME
@@ -62,17 +62,3 @@ forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
 
 echo ""
 echo "Deployment complete"
-
-# Step 1.2: Install into kernel
-# forge script ./src/scripts/BridgeDeploy.s.sol:BridgeDeploy --sig "installBridge(address,address,address)()" $ARB_GOERLI_KERNEL "0xeac3eC0CC130f4826715187805d1B50e861F2DaC" $ARB_GOERLI_BRIDGE --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvvvv \
-# --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY #\ # uncomment to broadcast to the network
-
-# Step 2: Setup paths to other bridges. Repeat n times.
-# forge script ./src/scripts/BridgeDeploy.s.sol:BridgeDeploy --sig "setupBridge(address,address,uint16)()" $ARB_BRIDGE $MAINNET_BRIDGE $MAINNET_LZ_CHAIN_ID --rpc-url $ARB_RPC_URL --private-key $PRIVATE_KEY --slow -vvvvv \
-#--broadcast
-
-# for goerli
-# forge script ./src/scripts/BridgeDeploy.s.sol:BridgeDeploy --sig "setupBridge(address,address, uint16)()" $GOERLI_BRIDGE $ARB_GOERLI_BRIDGE $ARB_GOERLI_LZ_ID --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvvvv \
-#--broadcast
-
-# Step 3: If new chain, pass executor and roles to MS

@@ -14,7 +14,7 @@ set -e
 
 # Load named arguments
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-source $SCRIPT_DIR/lib/arguments.sh
+source $SCRIPT_DIR/../lib/arguments.sh
 load_named_args "$@"
 
 # Load environment variables
@@ -42,7 +42,7 @@ echo "  Chain: $CHAIN"
 echo "  Using RPC at URL: $RPC_URL"
 
 # Validate and set forge script flags
-source $SCRIPT_DIR/lib/forge.sh
+source $SCRIPT_DIR/../lib/forge.sh
 set_broadcast_flag $BROADCAST
 set_resume_flag $RESUME
 

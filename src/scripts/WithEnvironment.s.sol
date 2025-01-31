@@ -59,6 +59,7 @@ abstract contract WithEnvironment is Script {
         string memory key_
     ) internal view returns (address) {
         address addr = _envAddress(chain_, key_);
+        // solhint-disable-next-line custom-errors
         require(
             addr != address(0),
             string.concat("WithEnvironment: key '", key_, "' has zero address")

@@ -20,15 +20,15 @@ import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 /// @notice Script to deploy the Bridge to a separate testnet
 contract L2Deploy is WithEnvironment {
     function _getLzEndpoint() internal view returns (address) {
-        return _envAddress("external.layerzero.endpoint");
+        return _envAddressNotZero("external.layerzero.endpoint");
     }
 
     function _getDaoMultisig() internal view returns (address) {
-        return _envAddress("olympus.multisig.dao");
+        return _envAddressNotZero("olympus.multisig.dao");
     }
 
     function _getEmergencyMultisig() internal view returns (address) {
-        return _envAddress("olympus.multisig.emergency");
+        return _envAddressNotZero("olympus.multisig.emergency");
     }
 
     /// @notice Returns the LayerZero endpoint ID for a given chain
