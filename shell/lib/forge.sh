@@ -42,14 +42,14 @@ set_verify_flag() {
         exit 1
     fi
 
-    # Append the flag for the Etherscan API key
-    VERIFY_FLAG="$VERIFY_FLAG --etherscan-api-key $2"
-
     # Append the flag for the verifier URL if provided
     if [ -n "$3" ]; then
-        VERIFY_FLAG="$VERIFY_FLAG --verifier-url $3"
+        # Append the API key and verifier URL
+        VERIFY_FLAG="$VERIFY_FLAG --verifier custom --verifier-api-key $2 --verifier-url $3"
         echo "  Verifier URL: $3"
     else
+        # Append the API key
+        VERIFY_FLAG="$VERIFY_FLAG --etherscan-api-key $2"
         echo "  Verifier URL: standard"
     fi
 }
