@@ -20,8 +20,8 @@ load_named_args "$@"
 load_env
 
 # Set sane defaults
-BROADCAST=${BROADCAST:-false}
-RESUME=${RESUME:-false}
+BROADCAST=${broadcast:-false}
+RESUME=${resume:-false}
 
 # Validate named arguments
 echo ""
