@@ -51,6 +51,7 @@ source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
 set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
 set_resume_flag $RESUME
+set_account_address $account
 
 # Deploy using script
 echo ""
@@ -58,6 +59,7 @@ echo "Running forge script"
 forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
     --sig "deploy(string,string)()" $CHAIN $sequence \
     --rpc-url $RPC_URL --account $account --slow -vvv \
+    --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG \
     $VERIFY_FLAG \
     $RESUME_FLAG

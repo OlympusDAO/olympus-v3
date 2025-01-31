@@ -142,6 +142,7 @@ contract L2Deploy is WithEnvironment {
         TreasuryCustodian treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
+        console2.log("");
         console2.log("Deployments complete");
         console2.log("Please update the src/scripts/env.json file with the new addresses");
 

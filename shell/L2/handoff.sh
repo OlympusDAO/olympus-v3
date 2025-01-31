@@ -45,6 +45,7 @@ echo "  Using RPC at URL: $RPC_URL"
 source $SCRIPT_DIR/../lib/forge.sh
 set_broadcast_flag $BROADCAST
 set_resume_flag $RESUME
+set_account_address $account
 
 # Deploy using script
 echo ""
@@ -52,6 +53,7 @@ echo "Running forge script"
 forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
     --sig "handoffToMultisig(string)()" $CHAIN \
     --rpc-url $RPC_URL --account $account --slow -vvv \
+    --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG \
     $RESUME_FLAG
 

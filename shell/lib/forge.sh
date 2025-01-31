@@ -67,3 +67,13 @@ set_resume_flag() {
         echo "  Resume: disabled"
     fi
 }
+
+# @description Gets the wallet address from cast wallet
+# @param {string} $1 The cast wallet account
+# @sideEffects Sets the ACCOUNT_ADDRESS global variable
+set_account_address() {
+    echo ""
+    echo "  Getting wallet address for account: $1"
+    ACCOUNT_ADDRESS=$(cast wallet address --account $1)
+    echo "  Wallet address: $ACCOUNT_ADDRESS"
+}
