@@ -49,7 +49,7 @@ echo "  Using RPC at URL: $RPC_URL"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_verify_flag $VERIFY
+set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
 set_resume_flag $RESUME
 
 # Deploy using script
