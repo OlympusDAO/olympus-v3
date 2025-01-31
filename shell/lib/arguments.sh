@@ -59,6 +59,54 @@ validate_text() {
     fi
 }
 
+# @description Validates whether a bytes32 variable is set
+# @param {string} $1 The variable name
+# @param {string} $2 The error message to display if the variable is not set
+validate_bytes32() {
+    if [ -z "$1" ]; then
+        display_error "$2"
+        exit 1
+    fi
+
+    # Check if the input is 66 characters long (0x + 64 hex chars)
+    if [[ ! "$1" =~ ^0x[a-fA-F0-9]{64}$ ]]; then
+        display_error "$2"
+        exit 1
+    fi
+}
+
+# @description Validates whether a number variable is set
+# @param {string} $1 The variable name
+# @param {string} $2 The error message to display if the variable is not set
+validate_number() {
+    if [ -z "$1" ]; then
+        display_error "$2"
+        exit 1
+    fi
+
+    # Check if the input is a valid number
+    if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+        display_error "$2"
+        exit 1
+    fi
+}
+
+# @description Validates whether an address variable is set
+# @param {string} $1 The variable name
+# @param {string} $2 The error message to display if the variable is not set
+validate_address() {
+    if [ -z "$1" ]; then
+        display_error "$2"
+        exit 1
+    fi
+
+    # Check if the input is 42 characters long (0x + 40 hex chars)
+    if [[ ! "$1" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+        display_error "$2"
+        exit 1
+    fi
+}
+
 # @description Validates whether a boolean variable is set
 # @param {string} $1 The variable name
 # @param {boolean} $2 The error message to display if the variable is not set
