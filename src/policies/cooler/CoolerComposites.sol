@@ -3,14 +3,14 @@ pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
-import {MonoCooler} from "./MonoCooler.sol";
+import {IMonoCooler} from "../interfaces/IMonoCooler.sol";
 
 contract CoolerComposites {
-    MonoCooler public immutable COOLER;
+    IMonoCooler public immutable COOLER;
     ERC20 public immutable GOHM;
     ERC20 public immutable USDS;
 
-    constructor(MonoCooler _cooler, ERC20 _gohm, ERC20 _usds) {
+    constructor(IMonoCooler _cooler, ERC20 _gohm, ERC20 _usds) {
         COOLER = _cooler;
 
         GOHM = _gohm;
@@ -28,8 +28,8 @@ contract CoolerComposites {
     /// @param borrowAmount         amount of USDS to borrow
     /// @param delegationRequests   resulting collateral delegation
     function addCollateralAndBorrow(
-        MonoCooler.Authorization memory authorization, 
-        MonoCooler.Signature calldata signature, 
+        IMonoCooler.Authorization memory authorization, 
+        IMonoCooler.Signature calldata signature, 
         uint128 collateralAmount, 
         uint128 borrowAmount, 
         DLGTEv1.DelegationRequest[] calldata delegationRequests
@@ -51,8 +51,8 @@ contract CoolerComposites {
     /// @param collateralAmount     amount of gOHM collateral to withdraw
     /// @param delegationRequests   resulting collateral delegation
     function repayAndRemoveCollateral(
-        MonoCooler.Authorization memory authorization, 
-        MonoCooler.Signature calldata signature, 
+        IMonoCooler.Authorization memory authorization, 
+        IMonoCooler.Signature calldata signature, 
         uint128 repayAmount, 
         uint128 collateralAmount, 
         DLGTEv1.DelegationRequest[] calldata delegationRequests
@@ -60,7 +60,7 @@ contract CoolerComposites {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
         }
-        
+
         USDS.transferFrom(msg.sender, address(this), repayAmount);
         COOLER.repay(repayAmount, msg.sender);
         COOLER.withdrawCollateral(collateralAmount, msg.sender, msg.sender, delegationRequests);
