@@ -34,7 +34,10 @@ contract CoolerComposites {
         uint128 borrowAmount, 
         DLGTEv1.DelegationRequest[] calldata delegationRequests
      ) external {
-        COOLER.setAuthorizationWithSig(authorization, signature);
+        if (authorization.account != address(0)) {
+            COOLER.setAuthorizationWithSig(authorization, signature);
+        }
+
         GOHM.transferFrom(msg.sender, address(this), collateralAmount);
         COOLER.addCollateral(collateralAmount, msg.sender, delegationRequests);
         COOLER.borrow(borrowAmount, msg.sender, msg.sender);
@@ -54,7 +57,10 @@ contract CoolerComposites {
         uint128 collateralAmount, 
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external {
-        COOLER.setAuthorizationWithSig(authorization, signature);
+        if (authorization.account != address(0)) {
+            COOLER.setAuthorizationWithSig(authorization, signature);
+        }
+        
         USDS.transferFrom(msg.sender, address(this), repayAmount);
         COOLER.repay(repayAmount, msg.sender);
         COOLER.withdrawCollateral(collateralAmount, msg.sender, msg.sender, delegationRequests);
