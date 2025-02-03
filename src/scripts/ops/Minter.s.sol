@@ -12,9 +12,11 @@ contract MinterScript is WithEnvironment {
 
         console2.log("Adding Minter category", category_);
 
+        vm.startBroadcast();
         Minter(_envAddressNotZero("olympus.policies.minter")).addCategory(
             bytes32(bytes(category_))
         );
+        vm.stopBroadcast();
 
         console2.log("Category added");
     }
@@ -24,9 +26,11 @@ contract MinterScript is WithEnvironment {
 
         console2.log("Removing Minter category", category_);
 
+        vm.startBroadcast();
         Minter(_envAddressNotZero("olympus.policies.minter")).removeCategory(
             bytes32(bytes(category_))
         );
+        vm.stopBroadcast();
 
         console2.log("Category removed");
     }
@@ -41,11 +45,13 @@ contract MinterScript is WithEnvironment {
 
         console2.log("Minting ", amount_, " to ", to_);
 
+        vm.startBroadcast();
         Minter(_envAddressNotZero("olympus.policies.minter")).mint(
             to_,
             amount_,
             bytes32(bytes(category_))
         );
+        vm.stopBroadcast();
 
         console2.log("Minted");
     }

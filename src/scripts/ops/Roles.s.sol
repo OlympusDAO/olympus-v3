@@ -32,10 +32,12 @@ contract RolesScript is WithEnvironment {
 
         console2.log("Granting role", role_, "to", to_);
 
+        vm.startBroadcast();
         RolesAdmin(_envAddressNotZero("olympus.policies.RolesAdmin")).grantRole(
             bytes32(bytes(role_)),
             to_
         );
+        vm.stopBroadcast();
 
         console2.log("Role granted");
     }
@@ -45,10 +47,12 @@ contract RolesScript is WithEnvironment {
 
         console2.log("Revoking role", role_, "from", to_);
 
+        vm.startBroadcast();
         RolesAdmin(_envAddressNotZero("olympus.policies.RolesAdmin")).revokeRole(
             bytes32(bytes(role_)),
             to_
         );
+        vm.stopBroadcast();
 
         console2.log("Role revoked");
     }
