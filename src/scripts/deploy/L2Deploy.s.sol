@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {WithEnvironment} from "../WithEnvironment.s.sol";
+import {LayerZeroConstants} from "../LayerZeroConstants.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 
@@ -30,59 +31,6 @@ contract L2Deploy is WithEnvironment {
 
     function _getEmergencyMultisig() internal view returns (address) {
         return _envAddressNotZero("olympus.multisig.emergency");
-    }
-
-    /// @notice Returns the LayerZero endpoint ID for a given chain
-    /// @dev    Endpoint IDs are defined here: https://docs.layerzero.network/v1/developers/evm/technical-reference/deployed-contracts
-    function _getRemoteEndpointId(string calldata chain_) internal pure returns (uint16) {
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("arbitrum"))) {
-            return 110;
-        }
-
-        if (
-            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("arbitrum-sepolia"))
-        ) {
-            return 10231;
-        }
-
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("base"))) {
-            return 184;
-        }
-
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("base-sepolia"))) {
-            return 10245;
-        }
-
-        if (
-            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("berachain-bartio"))
-        ) {
-            return 10291;
-        }
-
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("mainnet"))) {
-            return 101;
-        }
-
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("sepolia"))) {
-            return 10161;
-        }
-
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("optimism"))) {
-            return 111;
-        }
-
-        if (
-            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("optimism-sepolia"))
-        ) {
-            return 10232;
-        }
-
-        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("polygon"))) {
-            return 109;
-        }
-
-        // solhint-disable-next-line custom-errors
-        revert(string.concat("Unsupported chain: ", chain_));
     }
 
     function _endsWith(string memory str, string memory suffix) internal pure returns (bool) {
@@ -296,7 +244,7 @@ contract L2Deploy is WithEnvironment {
             remoteChain_,
             "olympus.policies.CrossChainBridge"
         );
-        uint16 remoteLzChainId = _getRemoteEndpointId(remoteChain_);
+        uint16 remoteLzChainId = LayerZeroConstants.getRemoteEndpointId(remoteChain_);
 
         console2.log("Setting up bridge on chain", localChain_);
         console2.log("Remote chain:", remoteChain_);
