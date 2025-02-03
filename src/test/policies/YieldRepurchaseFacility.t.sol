@@ -326,6 +326,45 @@ contract YieldRepurchaseFacilityTest is Test {
         assertEq(yieldRepo.epoch(), 0);
     }
 
+    function test_endEpoch_firstCall_currentGreaterThanWall() public {
+        // Change the current price to be greater than the wall
+        PRICE.setLastPrice(15 * 1e18);
+
+        // Mint yield to the sReserve
+        _mintYield();
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Cache the TRSRY sDAI balance
+        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
+
+        vm.prank(heart);
+        yieldRepo.endEpoch();
+
+        // Check that the initial yield was withdrawn from the TRSRY
+        assertEq(
+            sReserve.balanceOf(address(TRSRY)),
+            trsryBalance - sReserve.previewWithdraw(initialYield),
+            "TRSRY wrapped reserve balance"
+        );
+
+        // Check that the yieldRepo contract has the correct reserve balance
+        assertEq(
+            reserve.balanceOf(address(yieldRepo)),
+            initialYield / 7,
+            "yieldRepo reserve balance"
+        );
+        assertEq(
+            sReserve.balanceOf(address(yieldRepo)),
+            sReserve.previewDeposit(initialYield - initialYield / 7),
+            "yieldRepo wrapped reserve balance"
+        );
+
+        // Check that a bond market was created
+        assertEq(aggregator.marketCounter(), nextBondMarketId + 1, "marketCount");
+    }
+
     function test_endEpoch_isShutdown() public {
         // Shutdown the yieldRepo contract
         vm.prank(guardian);
@@ -444,16 +483,21 @@ contract YieldRepurchaseFacilityTest is Test {
         yieldRepo.endEpoch();
 
         // Check that a new bond market was created
-        assertEq(aggregator.marketCounter(), nextBondMarketId + 1);
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "bond market id should be incremented"
+        );
 
         // Check that the yieldRepo contract burned the OHM
-        assertEq(ohm.balanceOf(address(yieldRepo)), 0);
+        assertEq(ohm.balanceOf(address(yieldRepo)), 0, "OHM should be burned");
 
         // Check that the treasury balance has changed by the amount of backing withdrawn for the burnt OHM
         uint256 reserveFromBurnedOhm = 100e9 * yieldRepo.backingPerToken();
         assertEq(
             sReserve.balanceOf(address(TRSRY)),
-            trsryBalance - sReserve.previewWithdraw(reserveFromBurnedOhm)
+            trsryBalance - sReserve.previewWithdraw(reserveFromBurnedOhm),
+            "treasury balance should decrease by the amount of backing withdrawn for the burnt OHM"
         );
 
         // Check that the balance of the yieldRepo contract has changed correctly
@@ -462,10 +506,15 @@ contract YieldRepurchaseFacilityTest is Test {
             reserveFromBurnedOhm) / 6;
 
         // Check that the yieldRepo contract reserve balances have changed correctly
-        assertEq(reserve.balanceOf(address(yieldRepo)), expectedBidAmount);
+        assertEq(
+            reserve.balanceOf(address(yieldRepo)),
+            expectedBidAmount,
+            "reserve balance should increase by the  bid amount"
+        );
         assertGe(
             sReserve.balanceOf(address(yieldRepo)),
-            yieldRepoWrappedReserveBalance - sReserve.previewWithdraw(expectedBidAmount)
+            yieldRepoWrappedReserveBalance - sReserve.previewWithdraw(expectedBidAmount),
+            "wrapped reserve balance should decrease by the bid amount"
         );
 
         // Confirm that the bond market has the correct configuration
@@ -486,19 +535,17 @@ contract YieldRepurchaseFacilityTest is Test {
                 uint256 scale
             ) = auctioneer.markets(nextBondMarketId);
 
-            assertEq(capacity, expectedBidAmount);
-            assertEq(maxPayout, capacity / 6);
+            assertEq(capacity, expectedBidAmount, "capacity should be the bid amount");
+            assertEq(maxPayout, capacity / 6, "max payout should be 1/6th of the capacity");
 
-            assertEq(scale, 10 ** uint8(36 + 18 - 9 + 0));
+            assertEq(scale, 10 ** uint8(36 + 18 - 9 + 0), "scale");
             assertEq(
                 marketPrice,
-                ((uint256(1e36) / ((10e18 * 97) / 100)) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
+                ((uint256(1e36) / ((10e18 * 97) / 100)) * 10 ** uint8(36 + 1)) /
+                    10 ** uint8(18 + 1),
+                "marketPrice"
             );
-            assertEq(
-                minPrice,
-                (((uint256(1e36) / ((10e18 * 120e16) / 1e18))) * 10 ** uint8(36 + 1)) /
-                    10 ** uint8(18 + 1)
-            );
+            assertEq(minPrice, 0, "minPrice");
         }
     }
 
