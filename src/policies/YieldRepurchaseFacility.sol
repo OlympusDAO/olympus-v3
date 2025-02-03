@@ -16,7 +16,6 @@ import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 interface BurnableERC20 {
@@ -53,7 +52,6 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     // Modules
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
-    RANGEv2 public RANGE;
     CHREGv1 public CHREG;
 
     // External contracts
@@ -118,15 +116,13 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
-        dependencies[2] = toKeycode("RANGE");
-        dependencies[3] = toKeycode("CHREG");
-        dependencies[4] = toKeycode("ROLES");
+        dependencies[2] = toKeycode("CHREG");
+        dependencies[3] = toKeycode("ROLES");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
-        RANGE = RANGEv2(getModuleAddress(dependencies[2]));
-        CHREG = CHREGv1(getModuleAddress(dependencies[3]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[4]));
+        CHREG = CHREGv1(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
 
         _oracleDecimals = PRICE.decimals();
     }
@@ -228,12 +224,9 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     function _createMarket(uint256 bidAmount) internal {
         // Calculate inverse prices from the oracle feed
         // The start price is the current market price, which is also the last price since this is called on a heartbeat
-        // The min price is the upper cushion price, since we don't want to buy above this level
-        uint256 minPrice = 10 ** (_oracleDecimals * 2) / RANGE.price(true, true); // upper wall = (true, true) => high = true, wall = true
+        // The min price is the inverse of the maximum price of OHM in USDS
+        uint256 minPrice = 0; // Min price of zero means max price of infinity -- no cap
         uint256 initialPrice = 10 ** (_oracleDecimals * 2) / ((PRICE.getLastPrice() * 97) / 100); // 3% below current stated price in case oracle is stale
-
-        // If the min price is greater than or equal to the initial price, we don't want to create a market
-        if (minPrice >= initialPrice) return;
 
         // Calculate scaleAdjustment for bond market
         // Price decimals are returned from the perspective of the quote token
@@ -262,7 +255,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
                     capacityInQuote: false,
                     capacity: bidAmount,
                     formattedInitialPrice: initialPrice.mulDiv(bondScale, oracleScale),
-                    formattedMinimumPrice: minPrice.mulDiv(bondScale, oracleScale),
+                    formattedMinimumPrice: minPrice,
                     debtBuffer: 100_000, // 100%
                     vesting: uint48(0), // Instant swaps
                     conclusion: uint48(block.timestamp + 1 days), // 1 day from now

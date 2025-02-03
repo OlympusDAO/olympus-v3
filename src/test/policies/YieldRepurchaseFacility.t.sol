@@ -23,14 +23,12 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
-import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 
 // solhint-disable-next-line max-states-count
@@ -57,7 +55,6 @@ contract YieldRepurchaseFacilityTest is Test {
 
     Kernel internal kernel;
     MockPrice internal PRICE;
-    OlympusRange internal RANGE;
     OlympusTreasury internal TRSRY;
     OlympusMinter internal MINTR;
     OlympusRoles internal ROLES;
@@ -67,8 +64,6 @@ contract YieldRepurchaseFacilityTest is Test {
     MockClearinghouse internal clearinghouse;
     YieldRepurchaseFacility internal yieldRepo;
     RolesAdmin internal rolesAdmin;
-    BondCallback internal callback; // only used by operator, not by yieldRepo
-    Operator internal operator;
 
     uint256 initialReserves = 105_000_000e18;
     uint256 initialConversionRate = 1_05e16;
@@ -112,14 +107,6 @@ contract YieldRepurchaseFacilityTest is Test {
 
             /// Deploy modules (some mocks)
             PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            RANGE = new OlympusRange(
-                kernel,
-                ERC20(ohm),
-                ERC20(reserve),
-                uint256(100),
-                [uint256(1500), uint256(2000)],
-                [uint256(1500), uint256(2000)]
-            );
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
             ROLES = new OlympusRoles(kernel);
@@ -143,25 +130,6 @@ contract YieldRepurchaseFacilityTest is Test {
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
-            /// Deploy operator
-            operator = new Operator(
-                kernel,
-                IBondSDA(address(auctioneer)),
-                callback,
-                [address(ohm), address(reserve), address(sReserve), address(oldReserve)],
-                [
-                    uint32(2000), // cushionFactor
-                    uint32(5 days), // duration
-                    uint32(100_000), // debtBuffer
-                    uint32(1 hours), // depositInterval
-                    uint32(1000), // reserveFactor
-                    uint32(1 hours), // regenWait
-                    uint32(5), // regenThreshold
-                    uint32(7) // regenObserve
-                    // uint32(8 hours) // observationFrequency
-                ]
-            );
-
             /// Deploy protocol loop
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
@@ -180,7 +148,6 @@ contract YieldRepurchaseFacilityTest is Test {
 
             /// Install modules
             kernel.executeAction(Actions.InstallModule, address(PRICE));
-            kernel.executeAction(Actions.InstallModule, address(RANGE));
             kernel.executeAction(Actions.InstallModule, address(TRSRY));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
@@ -189,7 +156,6 @@ contract YieldRepurchaseFacilityTest is Test {
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
-            kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
@@ -198,9 +164,6 @@ contract YieldRepurchaseFacilityTest is Test {
             /// YieldRepurchaseFacility ROLES
             rolesAdmin.grantRole("heart", address(heart));
             rolesAdmin.grantRole("loop_daddy", guardian);
-
-            /// Operator ROLES
-            rolesAdmin.grantRole("operator_admin", address(guardian));
         }
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
@@ -230,10 +193,6 @@ contract YieldRepurchaseFacilityTest is Test {
         // Approve the bond teller for the tokens to swap
         vm.prank(alice);
         ohm.approve(address(teller), testOhm * 20);
-
-        // Initialise the operator so that the range prices are set
-        vm.prank(guardian);
-        operator.initialize();
 
         // Set principal receivables for the clearinghouse
         clearinghouse.setPrincipalReceivables(uint256(100_000_000e18));
@@ -365,48 +324,11 @@ contract YieldRepurchaseFacilityTest is Test {
                 marketPrice,
                 ((uint256(1e36) / ((10e18 * 97) / 100)) * 10 ** uint8(36 + 1)) / 10 ** uint8(18 + 1)
             );
-            assertEq(
-                minPrice,
-                (((uint256(1e36) / ((10e18 * 120e16) / 1e18))) * 10 ** uint8(36 + 1)) /
-                    10 ** uint8(18 + 1)
-            );
+            assertEq(minPrice, 0);
         }
 
         // Check that the epoch has been incremented
         assertEq(yieldRepo.epoch(), 0);
-    }
-
-    function test_endEpoch_firstCall_currentGreaterThanWall() public {
-        // Change the current price to be greater than the wall
-        PRICE.setLastPrice(15 * 1e18);
-
-        // Mint yield to the sReserve
-        _mintYield();
-
-        // Get the ID of the next bond market from the aggregator
-        uint256 nextBondMarketId = aggregator.marketCounter();
-
-        // Cache the TRSRY sDAI balance
-        uint256 trsryBalance = sReserve.balanceOf(address(TRSRY));
-
-        vm.prank(heart);
-        yieldRepo.endEpoch();
-
-        // Check that the initial yield was withdrawn from the TRSRY
-        assertEq(
-            sReserve.balanceOf(address(TRSRY)),
-            trsryBalance - sReserve.previewWithdraw(initialYield)
-        );
-
-        // Check that the yieldRepo contract has the correct reserve balance
-        assertEq(reserve.balanceOf(address(yieldRepo)), initialYield / 7);
-        assertEq(
-            sReserve.balanceOf(address(yieldRepo)),
-            sReserve.previewDeposit(initialYield - initialYield / 7)
-        );
-
-        // Check that a bond market was not created
-        assertEq(aggregator.marketCounter(), nextBondMarketId);
     }
 
     function test_endEpoch_isShutdown() public {
