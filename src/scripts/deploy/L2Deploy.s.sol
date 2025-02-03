@@ -85,6 +85,33 @@ contract L2Deploy is WithEnvironment {
         revert(string.concat("Unsupported chain: ", chain_));
     }
 
+    function _endsWith(string memory str, string memory suffix) internal pure returns (bool) {
+        bytes memory strBytes = bytes(str);
+        bytes memory suffixBytes = bytes(suffix);
+
+        if (strBytes.length < suffixBytes.length) return false;
+
+        for (uint i = 0; i < suffixBytes.length; i++) {
+            if (strBytes[strBytes.length - suffixBytes.length + i] != suffixBytes[i]) return false;
+        }
+
+        return true;
+    }
+
+    function isTestnet(string calldata chain_) internal pure returns (bool) {
+        // If the chain ends with sepolia, it is a testnet
+        if (_endsWith(chain_, "sepolia")) {
+            return true;
+        }
+
+        // If the chain ends with bartio, it is a testnet
+        if (_endsWith(chain_, "bartio")) {
+            return true;
+        }
+
+        return false;
+    }
+
     /// @notice Deploys a new Bophades installation to a new chain
     /// @dev    Deploys the following contracts:
     ///         - OlympusAuthority
@@ -97,12 +124,15 @@ contract L2Deploy is WithEnvironment {
     ///         - CrossChainBridge
     ///         - Emergency
     ///         - TreasuryCustodian
-    ///         - Minter
+    ///         - Minter (testnet only)
     function deploy(string calldata chain_) external {
         _loadEnv(chain_);
 
+        bool isTestnet_ = isTestnet(chain_);
+
         console2.log("");
         console2.log("Deploying to", chain_);
+        console2.log("Is testnet:", isTestnet_);
         console2.log("Initial Kernel executor:", msg.sender);
 
         vm.startBroadcast();
@@ -144,8 +174,11 @@ contract L2Deploy is WithEnvironment {
         TreasuryCustodian treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
-        Minter minter = new Minter(kernel);
-        console2.log("Minter deployed at:", address(minter));
+        Minter minter;
+        if (isTestnet_) {
+            minter = new Minter(kernel);
+            console2.log("Minter deployed at:", address(minter));
+        }
 
         console2.log("");
         console2.log("Deployments complete");
@@ -166,7 +199,9 @@ contract L2Deploy is WithEnvironment {
         kernel.executeAction(Actions.ActivatePolicy, address(bridge));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
-        kernel.executeAction(Actions.ActivatePolicy, address(minter));
+        if (isTestnet_) {
+            kernel.executeAction(Actions.ActivatePolicy, address(minter));
+        }
         console2.log("Kernel actions complete");
 
         // Grant roles
