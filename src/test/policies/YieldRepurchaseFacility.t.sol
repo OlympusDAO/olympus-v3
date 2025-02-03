@@ -29,7 +29,6 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
-import {BondCallback} from "policies/BondCallback.sol";
 
 // solhint-disable-next-line max-states-count
 contract YieldRepurchaseFacilityTest is Test {
@@ -127,9 +126,6 @@ contract YieldRepurchaseFacilityTest is Test {
         }
 
         {
-            /// Deploy bond callback
-            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
-
             /// Deploy protocol loop
             yieldRepo = new YieldRepurchaseFacility(
                 kernel,
@@ -155,7 +151,6 @@ contract YieldRepurchaseFacilityTest is Test {
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
-            kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
