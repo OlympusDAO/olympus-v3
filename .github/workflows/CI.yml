@@ -56,7 +56,7 @@ jobs:
               run: pnpm run test:coverage
 
             - name: Add Artifacts
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: lcov.info
                   path: lcov.info
