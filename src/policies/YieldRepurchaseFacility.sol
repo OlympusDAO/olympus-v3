@@ -113,7 +113,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](5);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
         dependencies[2] = toKeycode("CHREG");
