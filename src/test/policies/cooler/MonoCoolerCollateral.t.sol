@@ -22,12 +22,12 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
     function test_addCollateral_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
-        cooler.addCollateral(0, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(0, ALICE, noDelegationRequest());
     }
 
     function test_addCollateral_failZeroOnBehalfOf() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidAddress.selector));
-        cooler.addCollateral(100, address(0), new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(100, address(0), noDelegationRequest());
     }
 
     function test_addCollateral_simple() public {
@@ -38,7 +38,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, ALICE, collateralAmount);
-        cooler.addCollateral(collateralAmount, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(collateralAmount, ALICE, noDelegationRequest());
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -93,7 +93,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, BOB, collateralAmount);
-        cooler.addCollateral(collateralAmount, BOB, new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(collateralAmount, BOB, noDelegationRequest());
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -677,12 +677,12 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
     function test_withdrawCollateral_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
-        cooler.withdrawCollateral(0, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(0, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_failZeroRecipient() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidAddress.selector));
-        cooler.withdrawCollateral(100, ALICE, address(0), new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100, ALICE, address(0), noDelegationRequest());
     }
 
     function test_withdrawCollateral_failNoCollateral_noGohm() public {
@@ -690,7 +690,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
         );
-        cooler.withdrawCollateral(100, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_failNoCollateral_withGohm() public {
@@ -699,7 +699,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
         );
-        cooler.withdrawCollateral(100, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_failNotEnoughCollateral() public {
@@ -708,7 +708,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
         );
-        cooler.withdrawCollateral(100e18 + 1, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100e18 + 1, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_successSameRecipient() public {
@@ -717,7 +717,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralWithdrawn(ALICE, ALICE, ALICE, 2.5e18);
-        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0)), 2.5e18);
+        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, ALICE, noDelegationRequest()), 2.5e18);
 
         assertEq(cooler.totalCollateral(), 7.5e18);
         assertEq(gohm.balanceOf(ALICE), 2.5e18);
@@ -770,7 +770,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralWithdrawn(ALICE, ALICE, BOB, 2.5e18);
-        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, BOB, new DLGTEv1.DelegationRequest[](0)), 2.5e18);
+        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, BOB, noDelegationRequest()), 2.5e18);
 
         assertEq(cooler.totalCollateral(), 7.5e18);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -830,7 +830,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 50e18 + 1
             )
         );
-        cooler.withdrawCollateral(50e18 + 1, ALICE, BOB, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(50e18 + 1, ALICE, BOB, noDelegationRequest());
     }
 
     function test_withdrawCollateral_success_withDelegations() public {

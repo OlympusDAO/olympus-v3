@@ -64,7 +64,7 @@ interface IMonoCooler {
         address indexed onBehalfOf,
         uint128 repayAmount
     );
-    event Liquidated(address indexed account, uint128 collateralSeized, uint128 debtWiped);
+    event Liquidated(address indexed caller, address indexed account, uint128 collateralSeized, uint128 debtWiped, uint128 incentives);
     event AuthorizationSet(address indexed caller, address indexed account, address indexed authorized, uint96 authorizationDeadline);
 
     /// @notice The record of an individual account's collateral and debt data
@@ -376,7 +376,11 @@ interface IMonoCooler {
     function batchLiquidate(
         address[] calldata accounts,
         DLGTEv1.DelegationRequest[][] calldata delegationRequests
-    ) external returns (uint128 totalCollateralClaimed, uint128 totalDebtWiped);
+    ) external returns (
+        uint128 totalCollateralClaimed,
+        uint128 totalDebtWiped,
+        uint128 totalLiquidationIncentive
+    );
 
     /**
      * @notice If an account becomes unhealthy and has many delegations such that liquidation can't be

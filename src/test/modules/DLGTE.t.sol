@@ -10,6 +10,7 @@ import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 import {Module, Kernel, Actions, Keycode} from "src/Kernel.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
+import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 
 contract DLGTETestBase is Test {
     using ModuleTestFixtureGenerator for OlympusGovDelegation;
@@ -33,6 +34,13 @@ contract DLGTETestBase is Test {
         address indexed caller,
         address indexed delegate,
         address indexed escrow
+    );
+
+    event Delegate(
+        address indexed escrow,
+        address indexed caller,
+        address indexed onBehalfOf,
+        int256 delegationAmountDelta
     );
 
     event DelegationApplied(address indexed account, address indexed delegate, int256 amount);
@@ -417,6 +425,8 @@ contract DLGTETestApplyDelegationsOne is DLGTETestBase {
         address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
         vm.expectEmit(address(escrowFactory));
         emit DelegateEscrowCreated(address(dlgte), BOB, expectedEscrow);
+        vm.expectEmit(address(escrowFactory));
+        emit Delegate(expectedEscrow, address(dlgte), ALICE, 100e18);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, 100e18);
         verifyApplyDelegations(ALICE, delegationRequest(BOB, 100e18), 100e18, 0);
@@ -525,6 +535,8 @@ contract DLGTETestDelegationsFromOneDelegate is DLGTETestBase {
         seedDelegate();
 
         address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
+        vm.expectEmit(address(escrowFactory));
+        emit Delegate(expectedEscrow, address(dlgte), ALICE, -25e18);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -25e18);
         verifyApplyDelegations(ALICE, unDelegationRequest(BOB, 25e18), 0, 25e18);
@@ -539,6 +551,8 @@ contract DLGTETestDelegationsFromOneDelegate is DLGTETestBase {
         seedDelegate();
 
         address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
+        vm.expectEmit(address(escrowFactory));
+        emit Delegate(expectedEscrow, address(dlgte), ALICE, -100e18);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -100e18);
         verifyApplyDelegations(ALICE, unDelegationRequest(BOB, 100e18), 0, 100e18);

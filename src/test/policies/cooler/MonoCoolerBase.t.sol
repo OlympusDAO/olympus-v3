@@ -61,10 +61,10 @@ abstract contract MonoCoolerBaseTest is Test {
     function setUp() public virtual {
         vm.warp(START_TIMESTAMP);
 
-        staking = new MockStaking();
-
         ohm = new MockOhm("OHM", "OHM", 9);
         gohm = new MockGohm("gOHM", "gOHM", 18);
+        staking = new MockStaking(address(ohm), address(gohm));
+
         usds = new MockERC20("usds", "USDS", 18);
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
 
@@ -134,6 +134,9 @@ abstract contract MonoCoolerBaseTest is Test {
         usds.approve(address(susds), INITIAL_TRSRY_MINT * 33);
         susds.deposit(INITIAL_TRSRY_MINT * 33, OTHERS);
         vm.stopPrank();
+
+        // Mint some OHM into staking for gOHM liquidations
+        ohm.mint(address(staking), 100_000_000e9);
     }
 
     function checkGlobalState(
@@ -150,7 +153,7 @@ abstract contract MonoCoolerBaseTest is Test {
     }
 
     function addCollateral(address account, uint128 collateralAmount) internal {
-        addCollateral(account, account, collateralAmount, new DLGTEv1.DelegationRequest[](0));
+        addCollateral(account, account, collateralAmount, noDelegationRequest());
     }
 
     function addCollateral(
@@ -186,6 +189,17 @@ abstract contract MonoCoolerBaseTest is Test {
     ) internal {
         vm.startPrank(caller);
         cooler.borrow(amount, onBehalfOf, recipient);
+        vm.stopPrank();
+    }
+
+    function repay(
+        address caller,
+        address onBehalfOf,
+        uint128 amount
+    ) internal {
+        vm.startPrank(caller);
+        usds.approve(address(cooler), amount);
+        cooler.repay(amount, onBehalfOf);
         vm.stopPrank();
     }
 
@@ -393,6 +407,23 @@ abstract contract MonoCoolerBaseTest is Test {
             expectedLiquidationStatus.currentIncentive,
             "LiquidationStatus::currentIncentive"
         );
+    }
+
+    function checkBatchLiquidate(
+        address[] memory accounts,
+        DLGTEv1.DelegationRequest[][] memory requests,
+        uint128 expectedCollateralClaimed,
+        uint128 expectedDebtWiped,
+        uint128 expectedIncentives
+    ) internal {
+        (
+            uint128 totalCollateralClaimed,
+            uint128 totalDaiDebtWiped,
+            uint128 totalIncentives
+        ) = cooler.batchLiquidate(accounts, requests);
+        assertEq(totalCollateralClaimed, expectedCollateralClaimed, "batchLiquidate::collateralClaimed");
+        assertEq(totalDaiDebtWiped, expectedDebtWiped, "batchLiquidate::debtWiped");
+        assertEq(totalIncentives, expectedIncentives, "batchLiquidate::totalLiquidationIncentive");
     }
 
     function noDelegationRequest() internal pure returns (DLGTEv1.DelegationRequest[] memory) {

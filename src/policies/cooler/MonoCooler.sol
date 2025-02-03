@@ -503,25 +503,21 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //                                       LIQUIDATIONS                                         //
     //============================================================================================//
 
-    // @todo incentivise liquidations
-    /*
-Frontier:
-> I wasn't sure how we want to incentivise liquidations. Heart based model with increasing reward doesn't work here imo since we can't easily know the start time of when it first became unhealthy.
-
-Anon:
-> First thought that comes to mind is have interest keep accruing but give the keeper the delta above liq point? kind of an already there gda mechanism
-
-It means the liquidation won't happen until that accrued interest pays for gas++, but probably not a problem if it's a few hours/days after the fact. It’s a softer liquidation mechanism but that’s more in the nature of expiry time to debt threshold, ie you could top up or repay before liquidation bot actually liquidates
-*/
-
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
         address[] calldata accounts,
         DLGTEv1.DelegationRequest[][] calldata delegationRequests
-    ) external override returns (uint128 totalCollateralClaimed, uint128 totalDebtWiped) {
+    ) external override returns (
+        uint128 totalCollateralClaimed,
+        uint128 totalDebtWiped,
+        uint128 totalLiquidationIncentive
+    ) {
         if (liquidationsPaused) revert Paused();
 
-        uint256 totalLiquidationIncentive;
+        // Delegation requests can be left empty, otherwise it needs to be the same length as the
+        // `accounts`.
+        if (delegationRequests.length > 0 && delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
+
         LiquidationStatus memory status;
         GlobalStateCache memory gState = _globalStateRW();
         address account;
@@ -532,17 +528,21 @@ It means the liquidation won't happen until that accrued interest pays for gas++
 
             // Skip if this account is still under the maxLTV
             if (status.exceededLiquidationLtv) {
-                emit Liquidated(account, status.collateral, status.currentDebt);
+                emit Liquidated(msg.sender, account, status.collateral, status.currentDebt, status.currentIncentive);
 
-                // Apply any undelegation requests
-                DLGTEv1.DelegationRequest[] calldata dreqs = delegationRequests[i];
-                if (dreqs.length > 1) {
-                    // Note: More collateral may be undelegated than required for the liquidation here.
-                    // But this is assumed ok - the liquidated user will need to re-apply the delegations again.
-                    (uint256 appliedDelegations, ) = DLGTE.applyDelegations(account, dreqs);
+                // Apply any undelegation requests.
+                // Can be left empty, otherwise needs to be the same length as the
+                // `accounts`.
+                if (delegationRequests.length > 0) {
+                    DLGTEv1.DelegationRequest[] calldata dreqs = delegationRequests[i];
+                    if (dreqs.length > 0) {
+                        // Note: More collateral may be undelegated than required for the liquidation here.
+                        // But this is assumed ok - the liquidated user will need to re-apply the delegations again.
+                        (uint256 appliedDelegations, ) = DLGTE.applyDelegations(account, dreqs);
 
-                    // For liquidations, only allow undelegation requests
-                    if (appliedDelegations > 0) revert InvalidDelegationRequests();
+                        // Only allow undelegation requests
+                        if (appliedDelegations > 0) revert InvalidDelegationRequests();
+                    }
                 }
 
                 // Withdraw the undelegated gOHM
@@ -560,7 +560,7 @@ It means the liquidation won't happen until that accrued interest pays for gas++
         // burn the gOHM collateral and update the total state.
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
-            uint256 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
+            uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
             collateralToken.safeApprove(address(staking), gOhmToBurn);
 
             MINTR.burnOhm(

@@ -12,11 +12,7 @@ import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 contract DelegateEscrowFactory {
     using ClonesWithImmutableArgs for address;
 
-    // --- ERRORS ----------------------------------------------------
-
     error NotFromFactory();
-
-    // --- EVENTS ----------------------------------------------------
 
     /// @notice A caller has created a new escrow for a delegate
     event DelegateEscrowCreated(
@@ -36,8 +32,6 @@ contract DelegateEscrowFactory {
         int256 delegationAmountDelta
     );
 
-    // -- STATE VARIABLES --------------------------------------------
-
     /// @notice Reference implementation (deployed on creation to clone from).
     DelegateEscrow public immutable escrowImplementation;
 
@@ -47,13 +41,9 @@ contract DelegateEscrowFactory {
     /// @notice Mapping to query escrows for a given delegate.
     mapping(address => DelegateEscrow) public escrowFor;
 
-    // --- INITIALIZATION --------------------------------------------
-
     constructor(address gohm_) {
         escrowImplementation = new DelegateEscrow(gohm_);
     }
-
-    // --- DEPLOY NEW COOLERS ----------------------------------------
 
     /// @notice creates a new escrow contract for a delegate.
     function create(address delegate) external returns (DelegateEscrow escrow) {
@@ -76,14 +66,6 @@ contract DelegateEscrowFactory {
         }
     }
 
-    // --- EMIT EVENTS -----------------------------------------------
-
-    /// @notice Ensure that the called is a Cooler.
-    modifier onlyFromFactory() {
-        if (!created[msg.sender]) revert NotFromFactory();
-        _;
-    }
-
     /// @notice Emit a global event when a new loan request is created.
     function logDelegate(
         address caller,
@@ -91,5 +73,11 @@ contract DelegateEscrowFactory {
         int256 delegationAmountDelta
     ) external onlyFromFactory {
         emit Delegate(msg.sender, caller, onBehalfOf, delegationAmountDelta);
+    }
+
+    /// @notice Ensure that the called is a Cooler.
+    modifier onlyFromFactory() {
+        if (!created[msg.sender]) revert NotFromFactory();
+        _;
     }
 }
