@@ -52,7 +52,7 @@ echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/Minter.s.sol:MinterScript \
     --sig "addCategory(string,string)()" $CHAIN $category \
-    --rpc-url $RPC_URL --account $account --slosw -vvv \
+    --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG
 

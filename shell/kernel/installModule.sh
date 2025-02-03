@@ -52,7 +52,7 @@ echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/Kernel.s.sol:KernelScript \
     --sig "installModule(string,address)()" $CHAIN $module \
-    --rpc-url $RPC_URL --account $account --slosw -vvv \
+    --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG
 

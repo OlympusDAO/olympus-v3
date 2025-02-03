@@ -52,7 +52,7 @@ echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/Kernel.s.sol:KernelScript \
     --sig "activatePolicy(string,address)()" $CHAIN $policy \
-    --rpc-url $RPC_URL --account $account --slosw -vvv \
+    --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG
 
