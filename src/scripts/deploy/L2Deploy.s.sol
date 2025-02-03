@@ -16,6 +16,7 @@ import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {Emergency} from "src/policies/Emergency.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
+import {Minter} from "src/policies/Minter.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
 contract L2Deploy is WithEnvironment {
@@ -96,6 +97,7 @@ contract L2Deploy is WithEnvironment {
     ///         - CrossChainBridge
     ///         - Emergency
     ///         - TreasuryCustodian
+    ///         - Minter
     function deploy(string calldata chain_) external {
         _loadEnv(chain_);
 
@@ -142,6 +144,9 @@ contract L2Deploy is WithEnvironment {
         TreasuryCustodian treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
+        Minter minter = new Minter(kernel);
+        console2.log("Minter deployed at:", address(minter));
+
         console2.log("");
         console2.log("Deployments complete");
         console2.log("Please update the src/scripts/env.json file with the new addresses");
@@ -161,7 +166,7 @@ contract L2Deploy is WithEnvironment {
         kernel.executeAction(Actions.ActivatePolicy, address(bridge));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
-
+        kernel.executeAction(Actions.ActivatePolicy, address(minter));
         console2.log("Kernel actions complete");
 
         // Grant roles
