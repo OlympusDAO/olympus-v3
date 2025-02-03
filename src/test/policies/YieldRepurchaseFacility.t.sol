@@ -362,6 +362,7 @@ contract YieldRepurchaseFacilityTest is Test {
         );
 
         // Check that a bond market was created
+        // This is because the current price is greater than the wall, and the wall no longer prevents a new bond market from being created
         assertEq(aggregator.marketCounter(), nextBondMarketId + 1, "marketCount");
     }
 
