@@ -10,6 +10,11 @@
         "name": "olympus-governor"
     },
     {
+        "addr": "0xdE3F82D378c3b4E3F3f848b8DF501914b3317E96",
+        "chainId": 1,
+        "name": "olympus-governor-delegate-v2"
+    },
+    {
         "addr": "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39",
         "chainId": 1,
         "name": "olympus-timelock"
