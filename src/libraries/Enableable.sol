@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.15;
+
+import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
+
+abstract contract Enableable is RolesConsumer {
+    // ===== STATE VARIABLES ===== //
+
+    bool public isEnabled;
+    bytes32 public constant ROLE = "emergency_shutdown";
+
+    // ===== ERRORS ===== //
+
+    error NotDisabled();
+    error NotEnabled();
+
+    // ===== EVENTS ===== //
+
+    event Disabled();
+    event Enabled();
+
+    // ===== MODIFIERS ===== //
+
+    modifier whenEnabled() {
+        if (!isEnabled) revert NotEnabled();
+        _;
+    }
+
+    modifier whenDisabled() {
+        if (isEnabled) revert NotDisabled();
+        _;
+    }
+
+    // ===== ENABLEABLE FUNCTIONS ===== //
+
+    /// @notice Enable the contract
+    /// @dev    This function performs the following steps:
+    ///         1. Validates that the caller has `ROLE` ("emergency_shutdown")
+    ///         2. Validates that the contract is disabled
+    ///         3. Calls the implementation-specific `_enable()` function
+    ///         4. Changes the state of the contract to enabled
+    ///         5. Emits the `Enabled` event
+    ///
+    /// @param  enableData_ The data to pass to the implementation-specific `_enable()` function
+    function enable(bytes calldata enableData_) public onlyRole(ROLE) whenDisabled {
+        // Call the implementation-specific enable function
+        _enable(enableData_);
+
+        // Change the state
+        isEnabled = true;
+
+        // Emit the enabled event
+        emit Enabled();
+    }
+
+    /// @notice Implementation-specific enable function
+    /// @dev    This function is called by the `enable()` function
+    ///
+    ///         The implementing contract should override this function and perform the following:
+    ///         1. Validate any parameters (if needed) or revert
+    ///         2. Validate state (if needed) or revert
+    ///         3. Perform any necessary actions, apart from modifying the `isEnabled` state variable
+    ///
+    /// @param  enableData_ Custom data that can be used by the implementation. The format of this data is
+    ///         left to the discretion of the implementation.
+    function _enable(bytes calldata enableData_) internal virtual;
+
+    /// @notice Disable the contract
+    /// @dev    This function performs the following steps:
+    ///         1. Validates that the caller has `ROLE` ("emergency_shutdown")
+    ///         2. Validates that the contract is enabled
+    ///         3. Calls the implementation-specific `_disable()` function
+    ///         4. Changes the state of the contract to disabled
+    ///         5. Emits the `Disabled` event
+    ///
+    /// @param  disableData_ The data to pass to the implementation-specific `_disable()` function
+    function disable(bytes calldata disableData_) public onlyRole(ROLE) whenEnabled {
+        // Call the implementation-specific disable function
+        _disable(disableData_);
+
+        // Change the state
+        isEnabled = false;
+
+        // Emit the disabled event
+        emit Disabled();
+    }
+
+    /// @notice Implementation-specific disable function
+    /// @dev    This function is called by the `disable()` function.
+    ///
+    ///         The implementing contract should override this function and perform the following:
+    ///         1. Validate any parameters (if needed) or revert
+    ///         2. Validate state (if needed) or revert
+    ///         3. Perform any necessary actions, apart from modifying the `isEnabled` state variable
+    ///
+    /// @param  disableData_ Custom data that can be used by the implementation. The format of this data is
+    ///         left to the discretion of the implementation.
+    function _disable(bytes calldata disableData_) internal virtual;
+}
