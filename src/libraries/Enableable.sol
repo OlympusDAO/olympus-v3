@@ -3,6 +3,11 @@ pragma solidity 0.8.15;
 
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 
+/// @title  Enableable
+/// @notice This contract is designed to be inherited by contracts that need to be enabled or disabled. It replaces the inconsistent usage of `active` and `locallyActive` state variables across the codebase.
+/// @dev    A contract that inherits from this contract should use the `whenEnabled` and `whenDisabled` modifiers to gate access to certain functions.
+///
+///         If custom logic and/or parameters are needed for the enable/disable functions, the inheriting contract can override the `_enable()` and `_disable()` functions. For example, `enable()` could be called with initialisation data that is decoded, validated and assigned in `_enable()`.
 abstract contract Enableable is RolesConsumer {
     // ===== STATE VARIABLES ===== //
 
