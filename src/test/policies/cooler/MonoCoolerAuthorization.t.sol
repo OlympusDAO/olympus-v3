@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 
 contract MonoCoolerAuthorization is MonoCoolerBaseTest {
     event AuthorizationSet(address indexed caller, address indexed account, address indexed authorized, uint96 authorizationDeadline);

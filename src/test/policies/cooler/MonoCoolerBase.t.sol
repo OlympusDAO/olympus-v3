@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
-import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 
@@ -53,7 +53,7 @@ abstract contract MonoCoolerBaseTest is Test {
     uint16 internal constant DEFAULT_LLTV_PREMIUM_BPS = 100; // LLTV is 1% above OLTV
     uint96 internal constant DEFAULT_LLTV = DEFAULT_OLTV * (10_000 + DEFAULT_LLTV_PREMIUM_BPS) / 10_000;
 
-    uint16 internal constant DEFAULT_INTEREST_RATE_BPS = 50; // 0.5%
+    uint96 internal constant DEFAULT_INTEREST_RATE_BPS = 0.005e18; // 0.5%
     uint256 internal constant DEFAULT_MIN_DEBT_REQUIRED = 1_000e18;
     uint256 internal constant INITIAL_TRSRY_MINT = 200_000_000e18;
     uint256 internal constant START_TIMESTAMP = 1_000_000;

@@ -13,7 +13,7 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
-import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
@@ -75,25 +75,25 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     uint128 public override totalDebt;
 
     /// @inheritdoc IMonoCooler
+    uint256 public override interestAccumulatorRay;
+
+    /// @inheritdoc IMonoCooler
+    uint96 public override interestRateWad;
+
+    /// @inheritdoc IMonoCooler
+    ICoolerLtvOracle public override ltvOracle;
+
+    /// @inheritdoc IMonoCooler
     bool public override liquidationsPaused;
 
     /// @inheritdoc IMonoCooler
     bool public override borrowsPaused;
 
     /// @inheritdoc IMonoCooler
-    uint16 public override interestRateBps;
-
-    /// @inheritdoc IMonoCooler
     uint32 public override interestAccumulatorUpdatedAt;
 
     /// @inheritdoc IMonoCooler
-    ICoolerLtvOracle public override ltvOracle;
-
-    /// @inheritdoc IMonoCooler
     ICoolerTreasuryBorrower public override treasuryBorrower;
-
-    /// @inheritdoc IMonoCooler
-    uint256 public override interestAccumulatorRay;
 
     /// @dev A per account store, tracking collateral/debt as of their latest checkpoint.
     mapping(address /* account */ => AccountState) private allAccountState;
@@ -137,7 +137,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address staking_,
         address kernel_,
         address ltvOracle_,
-        uint16 interestRateBps_,
+        uint96 interestRateWad_,
         uint256 minDebtRequired_
     ) Policy(Kernel(kernel_)) {
         collateralToken = ERC20(gohm_);
@@ -153,7 +153,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         (uint96 newOLTV, uint96 newLLTV) = ltvOracle.currentLtvs();
         if (newOLTV > newLLTV) revert InvalidParam();
 
-        interestRateBps = interestRateBps_;
+        interestRateWad = interestRateWad_;
         interestAccumulatorUpdatedAt = uint32(block.timestamp);
         interestAccumulatorRay = _RAY;
 
@@ -606,14 +606,14 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IMonoCooler
-    function setInterestRateBps(
-        uint16 newInterestRateBps
+    function setInterestRateWad(
+        uint96 newInterestRate
     ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         // Force an update of state on the old rate first.
         _globalStateRW();
 
-        emit InterestRateSet(newInterestRateBps);
-        interestRateBps = newInterestRateBps;
+        emit InterestRateSet(newInterestRate);
+        interestRateWad = newInterestRate;
     }
 
     /// @inheritdoc IMonoCooler
@@ -828,7 +828,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             // Compound the accumulator
             uint256 newInterestAccumulatorRay = gStateCache
                 .interestAccumulatorRay
-                .continuouslyCompounded(timeElapsed, uint96(interestRateBps) * 1e14);
+                .continuouslyCompounded(timeElapsed, interestRateWad);
 
             // Calculate the latest totalDebt from this
             gStateCache.totalDebt = newInterestAccumulatorRay

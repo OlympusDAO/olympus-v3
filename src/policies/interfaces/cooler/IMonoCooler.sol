@@ -39,7 +39,7 @@ interface IMonoCooler {
 
     event BorrowPausedSet(bool isPaused);
     event LiquidationsPausedSet(bool isPaused);
-    event InterestRateSet(uint16 interestRateBps);
+    event InterestRateSet(uint96 interestRateWad);
     event LtvOracleSet(address indexed oracle);
     event TreasuryBorrowerSet(address indexed treasuryBorrower);
     event CollateralAdded(
@@ -205,10 +205,10 @@ interface IMonoCooler {
     /// @notice Borrows may be paused for emergency actions or deprecating the facility
     function borrowsPaused() external view returns (bool);
 
-    /// @notice The flat interest rate, defined in basis points.
+    /// @notice The flat interest rate (APR).
     /// @dev Interest (approximately) continuously compounds at this rate.
     /// @dev To 18 decimal places
-    function interestRateBps() external view returns (uint16);
+    function interestRateWad() external view returns (uint96);
 
     /// @notice The oracle serving both the Max Origination LTV and the Liquidation LTV
     function ltvOracle() external view returns (ICoolerLtvOracle);
@@ -412,8 +412,9 @@ interface IMonoCooler {
     /// @notice Pause any new borrows of `debtToken`
     function setBorrowPaused(bool isPaused) external;
 
-    /// @notice Update the interest rate, specified in basis points.
-    function setInterestRateBps(uint16 newInterestRateBps) external;
+    /// @notice Update the interest rate (APR), specified in Wad (18 decimals)
+    /// @dev Interest (approximately) continuously compounds at this rate.
+    function setInterestRateWad(uint96 newInterestRateWad) external;
 
     /// @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES
     /// number of delegates.

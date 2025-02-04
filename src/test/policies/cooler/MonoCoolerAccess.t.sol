@@ -36,9 +36,9 @@ contract MonoCoolerAccessTest is MonoCoolerBaseTest {
         cooler.setBorrowPaused(true);
     }
 
-    function test_access_setInterestRateBps() public {
+    function test_access_setInterestRateWad() public {
         expectOnlyOverseer();
-        cooler.setInterestRateBps(123);
+        cooler.setInterestRateWad(123);
     }
 
     function test_access_setMaxDelegateAddresses() public {

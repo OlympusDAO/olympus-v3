@@ -5,7 +5,6 @@ import {Kernel, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
 /**
@@ -18,7 +17,6 @@ import {SafeCast} from "libraries/SafeCast.sol";
  *  - Liquidation LTV is a policy set percentage above the Origination LTV
  */
 contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
-    using FixedPointMathLib for uint256;
     using SafeCast for uint256;
 
     /// @inheritdoc ICoolerLtvOracle

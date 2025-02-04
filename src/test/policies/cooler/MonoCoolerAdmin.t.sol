@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
-import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
@@ -32,7 +32,7 @@ contract MockLtvOracle {
 contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     event BorrowPausedSet(bool isPaused);
     event LiquidationsPausedSet(bool isPaused);
-    event InterestRateSet(uint16 interestRateBps);
+    event InterestRateSet(uint96 interestRateWad);
     event LtvOracleSet(address indexed oracle);
     event TreasuryBorrowerSet(address indexed newTreasuryBorrower);
 
@@ -81,7 +81,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.totalDebt(), 0);
         assertEq(cooler.liquidationsPaused(), false);
         assertEq(cooler.borrowsPaused(), false);
-        assertEq(cooler.interestRateBps(), DEFAULT_INTEREST_RATE_BPS);
+        assertEq(cooler.interestRateWad(), DEFAULT_INTEREST_RATE_BPS);
         assertEq(address(cooler.treasuryBorrower()), address(treasuryBorrower));
         assertEq(address(cooler.ltvOracle()), address(ltvOracle));
         (uint96 maxOriginationLtv, uint96 liquidationLtv) = cooler.loanToValues();
@@ -299,18 +299,18 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.borrowsPaused(), false);
     }
 
-    function test_setInterestRateBps() public {
+    function test_setInterestRateWad() public {
         vm.startPrank(OVERSEER);
 
         vm.warp(START_TIMESTAMP + 30 days);
         assertEq(cooler.interestAccumulatorRay(), 1e27); // not checkpoint yet
         checkGlobalState(0, 1.000411043359288828e27); // 1 month of accrual
 
-        assertEq(cooler.interestRateBps(), 50);
+        assertEq(cooler.interestRateWad(), 0.005e18);
         vm.expectEmit(address(cooler));
-        emit InterestRateSet(100);
-        cooler.setInterestRateBps(100);
-        assertEq(cooler.interestRateBps(), 100);
+        emit InterestRateSet(0.01e18);
+        cooler.setInterestRateWad(0.01e18);
+        assertEq(cooler.interestRateWad(), 0.01e18);
 
         // Now has a checkpoint
         assertEq(cooler.interestAccumulatorRay(), 1.000411043359288828e27);

@@ -26,9 +26,15 @@ fs_permissions = [
 ]
 solc_version = "0.8.15"
 optimizer = true
-optimizer_runs = 10
+optimizer_runs = 10000
 chain_id = 1
 verbosity = 3
+
+# Operator is too large - it needs to only use 10 optimizer runs
+additional_compiler_profiles = [ { name = "ten-runs", optimizer_runs = 10 } ]
+compilation_restrictions = [
+    { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
+]
 
 [fuzz]
 runs = 256

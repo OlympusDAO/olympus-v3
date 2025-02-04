@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
-import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {

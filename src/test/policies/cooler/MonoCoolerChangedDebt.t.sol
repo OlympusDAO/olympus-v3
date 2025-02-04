@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
-import {IMonoCooler} from "policies/interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockCoolerTreasuryBorrower} from "./MockCoolerTreasuryBorrower.m.sol";
 import {Actions} from "src/Kernel.sol";
