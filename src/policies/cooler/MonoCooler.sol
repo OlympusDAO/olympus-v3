@@ -475,9 +475,13 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
-    ) external override returns (uint256 /*totalDelegated*/, uint256 /*totalUndelegated*/) {
+    ) external override returns (
+        uint256 totalDelegated,
+        uint256 totalUndelegated,
+        uint256 undelegatedBalance
+    ) {
         if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
-        return DLGTE.applyDelegations(onBehalfOf, delegationRequests);
+        (totalDelegated, totalUndelegated, undelegatedBalance) = DLGTE.applyDelegations(onBehalfOf, delegationRequests);
     }
 
     /// @inheritdoc IMonoCooler
@@ -489,14 +493,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         GlobalStateCache memory gState = _globalStateRW();
         LiquidationStatus memory status = _computeLiquidity(allAccountState[account], gState);
         if (!status.exceededLiquidationLtv) revert CannotLiquidate();
-
-        // Note: More collateral may be undelegated than required for the liquidation here.
-        // But this is assumed ok - the liquidated user will need to re-apply the delegations again.
-        uint256 totalDelegated;
-        (totalDelegated, totalUndelegated) = DLGTE.applyDelegations(account, delegationRequests);
-
-        // Only allowed to undelegate.
-        if (totalDelegated > 0) revert InvalidDelegationRequests();
+        totalUndelegated = _undelegateForLiquidation(account, delegationRequests, status.collateral);
     }
 
     //============================================================================================//
@@ -513,10 +510,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint128 totalLiquidationIncentive
     ) {
         if (liquidationsPaused) revert Paused();
-
-        // Delegation requests can be left empty, otherwise it needs to be the same length as the
-        // `accounts`.
-        if (delegationRequests.length > 0 && delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
+        if (delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
 
         LiquidationStatus memory status;
         GlobalStateCache memory gState = _globalStateRW();
@@ -531,20 +525,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
                 emit Liquidated(msg.sender, account, status.collateral, status.currentDebt, status.currentIncentive);
 
                 // Apply any undelegation requests.
-                // Can be left empty, otherwise needs to be the same length as the
-                // `accounts`.
-                if (delegationRequests.length > 0) {
-                    DLGTEv1.DelegationRequest[] calldata dreqs = delegationRequests[i];
-                    if (dreqs.length > 0) {
-                        // Note: More collateral may be undelegated than required for the liquidation here.
-                        // But this is assumed ok - the liquidated user will need to re-apply the delegations again.
-                        (uint256 appliedDelegations, ) = DLGTE.applyDelegations(account, dreqs);
-
-                        // Only allow undelegation requests
-                        if (appliedDelegations > 0) revert InvalidDelegationRequests();
-                    }
-                }
-
+                _undelegateForLiquidation(account, delegationRequests[i], status.collateral);
+  
                 // Withdraw the undelegated gOHM
                 DLGTE.withdrawUndelegatedGohm(account, status.collateral);
 
@@ -947,6 +929,24 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             status.currentIncentive = (
                 uint256(status.currentDebt).divWadUp(gStateCache.liquidationLtv) - status.collateral
             ).encodeUInt128();
+        }
+    }
+
+    function _undelegateForLiquidation(
+        address account,
+        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        uint256 acctCollateral
+    ) private returns (uint256 totalUndelegated) {
+        if (delegationRequests.length > 0) {
+            uint256 totalDelegated;
+            uint256 undelegatedBalance;
+            (totalDelegated, totalUndelegated, undelegatedBalance) = DLGTE.applyDelegations(account, delegationRequests);
+
+            // Only allowed to undelegate.
+            if (totalDelegated > 0) revert InvalidDelegationRequests();
+
+            // Cannot undelegate more collateral than required in order to fullfill a liquidation.
+            if (undelegatedBalance > acctCollateral) revert InvalidDelegationRequests();
         }
     }
 

@@ -321,7 +321,11 @@ interface IMonoCooler {
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
-    ) external returns (uint256 totalDelegated, uint256 totalUndelegated);
+    ) external returns (
+        uint256 totalDelegated,
+        uint256 totalUndelegated,
+        uint256 undelegatedBalance
+    );
 
     //============================================================================================//
     //                                       BORROW/REPAY                                         //

@@ -162,10 +162,20 @@ abstract contract MonoCoolerBaseTest is Test {
         uint128 collateralAmount,
         DLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
+        addCollateral(cooler, caller, onBehalfOf, collateralAmount, delegationRequests);
+    }
+
+    function addCollateral(
+        IMonoCooler theCooler,
+        address caller,
+        address onBehalfOf,
+        uint128 collateralAmount,
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) internal {
         gohm.mint(caller, collateralAmount);
         vm.startPrank(caller);
-        gohm.approve(address(cooler), collateralAmount);
-        cooler.addCollateral(collateralAmount, onBehalfOf, delegationRequests);
+        gohm.approve(address(theCooler), collateralAmount);
+        theCooler.addCollateral(collateralAmount, onBehalfOf, delegationRequests);
         vm.stopPrank();
     }
 
@@ -187,8 +197,18 @@ abstract contract MonoCoolerBaseTest is Test {
         uint128 amount,
         address recipient
     ) internal {
+        borrow(cooler, caller, onBehalfOf, amount, recipient);
+    }
+
+    function borrow(
+        IMonoCooler theCooler,
+        address caller,
+        address onBehalfOf,
+        uint128 amount,
+        address recipient
+    ) internal {
         vm.startPrank(caller);
-        cooler.borrow(amount, onBehalfOf, recipient);
+        theCooler.borrow(amount, onBehalfOf, recipient);
         vm.stopPrank();
     }
 
@@ -217,7 +237,16 @@ abstract contract MonoCoolerBaseTest is Test {
         address expectedDelegate,
         uint256 expectedDelegationAmount
     ) internal view {
-        DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
+        expectOneDelegation(cooler, account, expectedDelegate, expectedDelegationAmount);
+    }
+
+    function expectOneDelegation(
+        IMonoCooler theCooler,
+        address account,
+        address expectedDelegate,
+        uint256 expectedDelegationAmount
+    ) internal view {
+        DLGTEv1.AccountDelegation[] memory delegations = theCooler.accountDelegationsList(
             account,
             0,
             100
@@ -326,7 +355,15 @@ abstract contract MonoCoolerBaseTest is Test {
         address account,
         IMonoCooler.AccountPosition memory expectedPosition
     ) internal view {
-        IMonoCooler.AccountPosition memory position = cooler.accountPosition(account);
+        checkAccountPosition(cooler, account, expectedPosition);
+    }
+
+    function checkAccountPosition(
+        IMonoCooler theCooler,
+        address account,
+        IMonoCooler.AccountPosition memory expectedPosition
+    ) internal view {
+        IMonoCooler.AccountPosition memory position = theCooler.accountPosition(account);
         assertEq(position.collateral, expectedPosition.collateral, "AccountPosition::collateral");
         assertEq(
             position.currentDebt,
@@ -365,8 +402,8 @@ abstract contract MonoCoolerBaseTest is Test {
             "AccountPosition::maxDelegateAddresses"
         );
         
-        assertEq(cooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
-        assertEq(cooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
+        assertEq(theCooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
+        assertEq(theCooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
     }
 
     function checkLiquidityStatus(

@@ -356,12 +356,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(ALICE, BOB, int256(uint256(collateralAmount / 2)));
-        (uint256 totalDelegated, uint256 totalUndelegated) = cooler.applyDelegations(
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
             delegationRequest(BOB, collateralAmount / 2),
             ALICE
         );
         assertEq(totalDelegated, collateralAmount / 2);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount+totalUndelegated-totalDelegated);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -439,12 +440,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(BOB, BOB, int256(uint256(collateralAmount / 2)));
-        (uint256 totalDelegated, uint256 totalUndelegated) = cooler.applyDelegations(
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
             delegationRequest(BOB, collateralAmount / 2),
             BOB
         );
         assertEq(totalDelegated, collateralAmount / 2);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount+totalUndelegated-totalDelegated);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -515,12 +517,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(BOB, BOB, int256(uint256(collateralAmount / 2)));
-        (uint256 totalDelegated, uint256 totalUndelegated) = cooler.applyDelegations(
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
             delegationRequest(BOB, collateralAmount / 2),
             BOB
         );
         assertEq(totalDelegated, collateralAmount / 2);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount+totalUndelegated-totalDelegated);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -1077,5 +1080,72 @@ contract MonoCoolerCollateralViewTest is MonoCoolerBaseTest {
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), -12.173624546041645580e18); // Above max - would need to reduce some
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1e18), -2_961.64e18 - 12.173624546041645580e18); // If removing collateral, need to reduce borrow
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1e18), 2_961.64e18 - 12.173624546041645580e18); // If removing collateral, can borrow more
+    }
+}
+
+contract MonoCoolerCollateralApplyDelegationsTest is MonoCoolerBaseTest {
+
+    function test_applyDelegations_fail_zeroDelegate() public {
+        addCollateral(ALICE, 10e18);
+        vm.startPrank(ALICE);
+        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidDelegationRequests.selector));
+        cooler.applyDelegations(new DLGTEv1.DelegationRequest[](0), ALICE);
+    }
+
+    function test_applyDelegations_fail_notAuthorized() public {
+        addCollateral(ALICE, 10e18);
+        
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        cooler.applyDelegations(
+            delegationRequest(BOB, 10e18),
+            ALICE
+        );
+    }
+
+    function test_applyDelegations_success_self() public {
+        addCollateral(ALICE, 10e18);
+        
+        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](3);
+        delegationRequests[0] = DLGTEv1.DelegationRequest(BOB, 10e18);
+        delegationRequests[1] = DLGTEv1.DelegationRequest(BOB, -int256(2e18));
+        delegationRequests[2] = DLGTEv1.DelegationRequest(OTHERS, 1e18);
+
+        vm.startPrank(ALICE);
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
+            delegationRequests,
+            ALICE
+        );
+        assertEq(totalDelegated, 11e18);
+        assertEq(totalUndelegated, 2e18);
+        assertEq(undelegatedBalance, 10e18+totalUndelegated-totalDelegated);
+
+        expectTwoDelegations(ALICE, BOB, 8e18, OTHERS, 1e18);
+        expectAccountDelegationSummary(ALICE, 10e18, 9e18, 2, 10);
+    }
+
+    function test_applyDelegations_success_onBehalfOf() public {
+        address operator = makeAddr("operator");
+
+        addCollateral(ALICE, 10e18);
+
+        vm.startPrank(ALICE);
+        cooler.setAuthorization(operator, type(uint32).max);
+        
+        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](3);
+        delegationRequests[0] = DLGTEv1.DelegationRequest(BOB, 10e18);
+        delegationRequests[1] = DLGTEv1.DelegationRequest(BOB, -int256(2e18));
+        delegationRequests[2] = DLGTEv1.DelegationRequest(OTHERS, 1e18);
+
+        vm.startPrank(operator);
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
+            delegationRequests,
+            ALICE
+        );
+        assertEq(totalDelegated, 11e18);
+        assertEq(totalUndelegated, 2e18);
+        assertEq(undelegatedBalance, 10e18+totalUndelegated-totalDelegated);
+
+        expectTwoDelegations(ALICE, BOB, 8e18, OTHERS, 1e18);
+        expectAccountDelegationSummary(ALICE, 10e18, 9e18, 2, 10);
     }
 }

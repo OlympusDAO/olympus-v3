@@ -10,7 +10,6 @@ import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 import {Module, Kernel, Actions, Keycode} from "src/Kernel.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
-import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 
 contract DLGTETestBase is Test {
     using ModuleTestFixtureGenerator for OlympusGovDelegation;
