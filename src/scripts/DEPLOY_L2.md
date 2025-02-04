@@ -21,19 +21,43 @@ This will deploy the contracts, install them into the kernel, and set up the ini
 
 ## Bridge Setup
 
-The new chain installation will have a CrossChainBridge contract deployed. For each chain that it needs to interact with, the `setupBridge.sh` script should be run. However, this needs to be performed on both chains.
+The new chain installation will have a CrossChainBridge contract deployed. For each chain that it needs to interact with, the `setupBridge.sh` script should be run to trust messages from the remote chain. However, this needs to be performed on both chains.
 
-An example with Ethereum Mainnet and Optimism is shown below:
+An example with Base and Optimism is shown below:
 
-1. Setup the bridge on Optimism to trust messages from the Ethereum Mainnet CrossChainBridge. This should be run using the deployer account.
+1. Setup the bridge on Optimism to trust messages from the Base CrossChainBridge. This should be run using the deployer account.
 
     ```bash
-    ./shell/L2/setupBridge.sh --account MyAccount --localChain optimism --remoteChain mainnet --env .env.optimism
+    ./shell/L2/setupBridge.sh --account MyAccount --localChain optimism --remoteChain base --env .env.optimism
     ```
 
-2. Setup the bridge on Ethereum Mainnet to trust messages from the Optimism CrossChainBridge. This should be run using an address with the `bridge_admin` role on Ethereum Mainnet. This is currently the DAO MS and OCG Timelock.
+2. Setup the bridge on Base to trust messages from the Optimism CrossChainBridge. This should be run using an address with the `bridge_admin` role on Base (likely the deployer account).
 
-The `setupBridge.sh` script is not able to submit SAFE batches at the current time, so a batch will need to be submitted manually. The `CrossChainBridge.setTrustedRemoteAddress()` function will need to be called for each remote chain.
+    ```bash
+    ./shell/L2/setupBridge.sh --account MyAccount --localChain base --remoteChain optimism --env .env.base
+    ```
+
+In a situation where the "bridge_admin" role has been assigned to a multisig, the `setupBridge.sh` script will not be able to submit SAFE batches at the current time. The `CrossChainBridge.setTrustedRemoteAddress()` function will need to be called for each remote chain.
+
+## Bridge Testing
+
+Once the bridges have been set up, actions can be performed to test the bridge.
+
+1. Obtain some OHM on the source chain
+    - If the source chain is a testnet, the `./shell/mint/mint.sh` script can be used to mint OHM.
+2. Send the OHM to the destination chain
+
+    ```bash
+    ./shell/bridge.sh --fromChain base --toChain optimism --to <recipient-address> --amount <amount> --account <account> --broadcast true --env .env.base
+    ```
+
+3. Send the OHM back to the source chain
+
+    ```bash
+    ./shell/bridge.sh --fromChain optimism --toChain base --to <recipient-address> --amount <amount> --account <account> --broadcast true --env .env.optimism
+    ```
+
+While the transactions are in flight, the transaction hash that is output can be inserted into LayerZero Scan to view the progress of the bridging transaction.
 
 ## Handoff
 
