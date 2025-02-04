@@ -61,14 +61,14 @@ abstract contract Enableable is RolesConsumer {
     /// @notice Implementation-specific enable function
     /// @dev    This function is called by the `enable()` function
     ///
-    ///         The implementing contract should override this function and perform the following:
+    ///         The implementing contract can override this function and perform the following:
     ///         1. Validate any parameters (if needed) or revert
     ///         2. Validate state (if needed) or revert
     ///         3. Perform any necessary actions, apart from modifying the `isEnabled` state variable
     ///
     /// @param  enableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
-    function _enable(bytes calldata enableData_) internal virtual;
+    function _enable(bytes calldata enableData_) internal virtual {}
 
     /// @notice Disable the contract
     /// @dev    This function performs the following steps:
@@ -93,12 +93,12 @@ abstract contract Enableable is RolesConsumer {
     /// @notice Implementation-specific disable function
     /// @dev    This function is called by the `disable()` function.
     ///
-    ///         The implementing contract should override this function and perform the following:
+    ///         The implementing contract can override this function and perform the following:
     ///         1. Validate any parameters (if needed) or revert
     ///         2. Validate state (if needed) or revert
     ///         3. Perform any necessary actions, apart from modifying the `isEnabled` state variable
     ///
     /// @param  disableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
-    function _disable(bytes calldata disableData_) internal virtual;
+    function _disable(bytes calldata disableData_) internal virtual {}
 }
