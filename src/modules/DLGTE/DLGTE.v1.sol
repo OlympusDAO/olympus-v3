@@ -7,7 +7,7 @@ import {Module} from "src/Kernel.sol";
 /**
  * @title  Olympus Governance Delegation
  * @notice Olympus Governance Delegation (Module) Contract
- * @dev    The Olympus Governance Delegation Module enables policies to delegate gOHM on behalf of users.
+ * @dev    The Olympus Governance Delegation Module enables policies to delegate gOHM on behalf of accounts.
  *         If the gOHM is undelegated, this module acts as an escrow for the gOHM.
  *         When the gOHM is delegated, new individual escrows are created for those delegates, and that
  *         portion of gOHM is transferred to that escrow.
@@ -53,7 +53,7 @@ abstract contract DLGTEv1 is Module {
 
     // ========= STATE ========= //
 
-    /// @notice The gOhm token supplied by users/accounts, eg gOHM
+    /// @notice The gOhm token supplied by accounts, eg gOHM
     ERC20 public immutable gOHM;
 
     /// @dev The default maximum number of addresses an account can delegate to
@@ -72,7 +72,7 @@ abstract contract DLGTEv1 is Module {
     function setMaxDelegateAddresses(address account, uint32 maxDelegateAddresses) external virtual;
 
     /**
-     * @notice gOHM is pulled from the calling policy, which is not used for governance delegation
+     * @notice gOHM is pulled from the calling policy - this will not be used for governance delegation
      * @dev Balances are tracked per policy such that policyA cannot interfere with policyB's gOHM
      */
     function depositUndelegatedGohm(address onBehalfOf, uint256 amount) external virtual;
@@ -86,7 +86,7 @@ abstract contract DLGTEv1 is Module {
     function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount) external virtual;
 
     /**
-     * @notice Apply a set of delegation requests on behalf of a given user.
+     * @notice Apply a set of delegation requests on behalf of a given account.
      *  - Each delegation request either delegates or undelegates to an address
      *  - It applies across total gOHM balances for a given account across all calling policies
      *    So policyA may (un)delegate the account's gOHM set by policyA, B and C
@@ -94,7 +94,11 @@ abstract contract DLGTEv1 is Module {
     function applyDelegations(
         address onBehalfOf,
         DelegationRequest[] calldata delegationRequests
-    ) external virtual returns (uint256 totalDelegated, uint256 totalUndelegated);
+    ) external virtual returns (
+        uint256 totalDelegated,
+        uint256 totalUndelegated,
+        uint256 undelegatedBalance
+    );
 
     /**
      * @notice Report the total delegated and undelegated gOHM balance for an account
@@ -106,10 +110,10 @@ abstract contract DLGTEv1 is Module {
     ) external view virtual returns (uint256 gOhmBalance);
 
     /**
-     * @notice Paginated view of an account's delegations for a given policy
+     * @notice Paginated view of an account's delegations
      * @dev This can be called sequentially, increasing the `startIndex` each time by the number of items
      * returned in the previous call, until number of items returned is less than `maxItems`
-     * The `totalAmount` delegated within the return struct is across all policies for that user delegate
+     * The `totalAmount` delegated within the return struct is across all policies for that account delegate
      */
     function accountDelegationsList(
         address account,
@@ -134,7 +138,7 @@ abstract contract DLGTEv1 is Module {
         );
 
     /**
-     * @notice The maximum number of delegates an account can have within a given policy
+     * @notice The maximum number of delegates an account can have accross all policies
      */
     function maxDelegateAddresses(address account) external view virtual returns (uint32 result);
 }

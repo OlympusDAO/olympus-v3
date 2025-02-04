@@ -168,14 +168,18 @@ contract OlympusGovDelegation is DLGTEv1 {
         external
         override
         permissioned
-        returns (uint256 appliedDelegationAmounts, uint256 appliedUndelegationAmounts)
+        returns (
+            uint256 appliedDelegationAmounts, 
+            uint256 appliedUndelegationAmounts,
+            uint256 undelegatedBalance
+        )
     {
         if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
         if (delegationRequests.length == 0) revert DLGTE_InvalidDelegationRequests();
 
         AccountState storage aState = _accountState[onBehalfOf];
         uint256 totalAccountGOhm = aState.totalGOhm;
-        uint256 undelegatedBalance = totalAccountGOhm - aState.delegatedGOhm;
+        undelegatedBalance = totalAccountGOhm - aState.delegatedGOhm;
 
         (
             appliedDelegationAmounts,

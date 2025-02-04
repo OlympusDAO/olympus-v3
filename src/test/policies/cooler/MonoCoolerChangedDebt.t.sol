@@ -150,7 +150,8 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
                 currentDebt: expectedTotalDebt,
                 currentLtv: 1_205.012520859401063e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
 
@@ -311,7 +312,8 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
                 currentDebt: expectedTotalDebt,
                 currentLtv: 1_205.012520859401063e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
 

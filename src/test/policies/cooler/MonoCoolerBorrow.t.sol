@@ -90,7 +90,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount,
                     currentLtv: 1_500e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -146,7 +147,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount + expectedInterest,
                     currentLtv: 1_500e18 + 7.5187812891015945e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -197,7 +199,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount + expectedInterest,
                     currentLtv: 1_500e18 + 7.5187812891015945e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -257,7 +260,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 currentDebt: borrowAmount,
                 currentLtv: 1_500e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
 
@@ -321,7 +325,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount * 2,
                     currentLtv: 2_000e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -377,7 +382,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     currentLtv: 2_000e18 + 10.025041718802126e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -428,7 +434,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     currentLtv: 2_000e18 + 10.025041718802126e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -499,7 +506,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount * 2 + interestDelta,
                     currentLtv: 2_000e18 + interestDelta/10,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -554,7 +562,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     currentLtv: 2_000e18 + 10.038809107905388963e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -606,7 +615,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount * 2 + expectedInterest,
                     currentLtv: 2_000e18 + 10.038809107905388963e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -712,7 +722,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowedAmount,
                     currentLtv: DEFAULT_OLTV,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -818,7 +829,8 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     currentDebt: borrowedAmount,
                     currentLtv: DEFAULT_OLTV,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
         }
@@ -845,7 +857,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     maxOriginationDebtAmount: 0,
                     liquidationDebtAmount: 0,
                     healthFactor: type(uint256).max,
-                    currentLtv: type(uint256).max,
+                    currentLtv: type(uint128).max,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -857,9 +869,10 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: 0,
                     currentDebt: 0,
-                    currentLtv: type(uint256).max,
+                    currentLtv: type(uint128).max,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
         }

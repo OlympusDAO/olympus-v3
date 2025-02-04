@@ -22,12 +22,12 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
     function test_addCollateral_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
-        cooler.addCollateral(0, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(0, ALICE, noDelegationRequest());
     }
 
     function test_addCollateral_failZeroOnBehalfOf() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidAddress.selector));
-        cooler.addCollateral(100, address(0), new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(100, address(0), noDelegationRequest());
     }
 
     function test_addCollateral_simple() public {
@@ -38,7 +38,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, ALICE, collateralAmount);
-        cooler.addCollateral(collateralAmount, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(collateralAmount, ALICE, noDelegationRequest());
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -79,7 +79,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -92,7 +93,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralAdded(ALICE, BOB, collateralAmount);
-        cooler.addCollateral(collateralAmount, BOB, new DLGTEv1.DelegationRequest[](0));
+        cooler.addCollateral(collateralAmount, BOB, noDelegationRequest());
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -135,7 +136,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -214,7 +216,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -290,7 +293,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                     currentDebt: 0,
                     currentLtv: 0,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
         }
@@ -316,7 +320,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                     maxOriginationDebtAmount: 0,
                     liquidationDebtAmount: 0,
                     healthFactor: type(uint256).max,
-                    currentLtv: type(uint256).max,
+                    currentLtv: type(uint128).max,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -328,9 +332,10 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: 0,
                     currentDebt: 0,
-                    currentLtv: type(uint256).max,
+                    currentLtv: type(uint128).max,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
         }
@@ -351,12 +356,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(ALICE, BOB, int256(uint256(collateralAmount / 2)));
-        (uint256 totalDelegated, uint256 totalUndelegated) = cooler.applyDelegations(
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
             delegationRequest(BOB, collateralAmount / 2),
             ALICE
         );
         assertEq(totalDelegated, collateralAmount / 2);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount+totalUndelegated-totalDelegated);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -398,7 +404,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -433,12 +440,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(BOB, BOB, int256(uint256(collateralAmount / 2)));
-        (uint256 totalDelegated, uint256 totalUndelegated) = cooler.applyDelegations(
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
             delegationRequest(BOB, collateralAmount / 2),
             BOB
         );
         assertEq(totalDelegated, collateralAmount / 2);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount+totalUndelegated-totalDelegated);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -485,7 +493,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -508,12 +517,13 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
         vm.expectEmit(address(DLGTE));
         emit DelegationApplied(BOB, BOB, int256(uint256(collateralAmount / 2)));
-        (uint256 totalDelegated, uint256 totalUndelegated) = cooler.applyDelegations(
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
             delegationRequest(BOB, collateralAmount / 2),
             BOB
         );
         assertEq(totalDelegated, collateralAmount / 2);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount+totalUndelegated-totalDelegated);
 
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -560,7 +570,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -652,7 +663,8 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -668,12 +680,12 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
     function test_withdrawCollateral_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
-        cooler.withdrawCollateral(0, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(0, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_failZeroRecipient() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidAddress.selector));
-        cooler.withdrawCollateral(100, ALICE, address(0), new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100, ALICE, address(0), noDelegationRequest());
     }
 
     function test_withdrawCollateral_failNoCollateral_noGohm() public {
@@ -681,7 +693,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
         );
-        cooler.withdrawCollateral(100, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_failNoCollateral_withGohm() public {
@@ -690,7 +702,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
         );
-        cooler.withdrawCollateral(100, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_failNotEnoughCollateral() public {
@@ -699,7 +711,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IMonoCooler.ExceededCollateralBalance.selector)
         );
-        cooler.withdrawCollateral(100e18 + 1, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(100e18 + 1, ALICE, ALICE, noDelegationRequest());
     }
 
     function test_withdrawCollateral_successSameRecipient() public {
@@ -708,7 +720,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralWithdrawn(ALICE, ALICE, ALICE, 2.5e18);
-        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, ALICE, new DLGTEv1.DelegationRequest[](0)), 2.5e18);
+        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, ALICE, noDelegationRequest()), 2.5e18);
 
         assertEq(cooler.totalCollateral(), 7.5e18);
         assertEq(gohm.balanceOf(ALICE), 2.5e18);
@@ -749,7 +761,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -760,7 +773,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
         vm.expectEmit(address(cooler));
         emit CollateralWithdrawn(ALICE, ALICE, BOB, 2.5e18);
-        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, BOB, new DLGTEv1.DelegationRequest[](0)), 2.5e18);
+        assertEq(cooler.withdrawCollateral(2.5e18, ALICE, BOB, noDelegationRequest()), 2.5e18);
 
         assertEq(cooler.totalCollateral(), 7.5e18);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -803,7 +816,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -819,7 +833,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 50e18 + 1
             )
         );
-        cooler.withdrawCollateral(50e18 + 1, ALICE, BOB, new DLGTEv1.DelegationRequest[](0));
+        cooler.withdrawCollateral(50e18 + 1, ALICE, BOB, noDelegationRequest());
     }
 
     function test_withdrawCollateral_success_withDelegations() public {
@@ -873,7 +887,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 0,
                 currentLtv: 0,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -955,7 +970,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 15_000e18,
                 currentLtv: 2_961.639999999999999656e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
     }
@@ -972,7 +988,8 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
                 currentDebt: 29_616.805706888396984628e18,
                 currentLtv: 2_961.680570688839698463e18,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: true
+                exceededMaxOriginationLtv: true,
+                currentIncentive: 0
             })
         );
 
@@ -1063,5 +1080,72 @@ contract MonoCoolerCollateralViewTest is MonoCoolerBaseTest {
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0), -12.173624546041645580e18); // Above max - would need to reduce some
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, -1e18), -2_961.64e18 - 12.173624546041645580e18); // If removing collateral, need to reduce borrow
         assertEq(cooler.debtDeltaForMaxOriginationLtv(ALICE, 1e18), 2_961.64e18 - 12.173624546041645580e18); // If removing collateral, can borrow more
+    }
+}
+
+contract MonoCoolerCollateralApplyDelegationsTest is MonoCoolerBaseTest {
+
+    function test_applyDelegations_fail_zeroDelegate() public {
+        addCollateral(ALICE, 10e18);
+        vm.startPrank(ALICE);
+        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidDelegationRequests.selector));
+        cooler.applyDelegations(new DLGTEv1.DelegationRequest[](0), ALICE);
+    }
+
+    function test_applyDelegations_fail_notAuthorized() public {
+        addCollateral(ALICE, 10e18);
+        
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        cooler.applyDelegations(
+            delegationRequest(BOB, 10e18),
+            ALICE
+        );
+    }
+
+    function test_applyDelegations_success_self() public {
+        addCollateral(ALICE, 10e18);
+        
+        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](3);
+        delegationRequests[0] = DLGTEv1.DelegationRequest(BOB, 10e18);
+        delegationRequests[1] = DLGTEv1.DelegationRequest(BOB, -int256(2e18));
+        delegationRequests[2] = DLGTEv1.DelegationRequest(OTHERS, 1e18);
+
+        vm.startPrank(ALICE);
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
+            delegationRequests,
+            ALICE
+        );
+        assertEq(totalDelegated, 11e18);
+        assertEq(totalUndelegated, 2e18);
+        assertEq(undelegatedBalance, 10e18+totalUndelegated-totalDelegated);
+
+        expectTwoDelegations(ALICE, BOB, 8e18, OTHERS, 1e18);
+        expectAccountDelegationSummary(ALICE, 10e18, 9e18, 2, 10);
+    }
+
+    function test_applyDelegations_success_onBehalfOf() public {
+        address operator = makeAddr("operator");
+
+        addCollateral(ALICE, 10e18);
+
+        vm.startPrank(ALICE);
+        cooler.setAuthorization(operator, type(uint32).max);
+        
+        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](3);
+        delegationRequests[0] = DLGTEv1.DelegationRequest(BOB, 10e18);
+        delegationRequests[1] = DLGTEv1.DelegationRequest(BOB, -int256(2e18));
+        delegationRequests[2] = DLGTEv1.DelegationRequest(OTHERS, 1e18);
+
+        vm.startPrank(operator);
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyDelegations(
+            delegationRequests,
+            ALICE
+        );
+        assertEq(totalDelegated, 11e18);
+        assertEq(totalUndelegated, 2e18);
+        assertEq(undelegatedBalance, 10e18+totalUndelegated-totalDelegated);
+
+        expectTwoDelegations(ALICE, BOB, 8e18, OTHERS, 1e18);
+        expectAccountDelegationSummary(ALICE, 10e18, 9e18, 2, 10);
     }
 }

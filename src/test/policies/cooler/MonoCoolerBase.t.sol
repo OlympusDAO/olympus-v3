@@ -61,10 +61,10 @@ abstract contract MonoCoolerBaseTest is Test {
     function setUp() public virtual {
         vm.warp(START_TIMESTAMP);
 
-        staking = new MockStaking();
-
         ohm = new MockOhm("OHM", "OHM", 9);
         gohm = new MockGohm("gOHM", "gOHM", 18);
+        staking = new MockStaking(address(ohm), address(gohm));
+
         usds = new MockERC20("usds", "USDS", 18);
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
 
@@ -134,6 +134,9 @@ abstract contract MonoCoolerBaseTest is Test {
         usds.approve(address(susds), INITIAL_TRSRY_MINT * 33);
         susds.deposit(INITIAL_TRSRY_MINT * 33, OTHERS);
         vm.stopPrank();
+
+        // Mint some OHM into staking for gOHM liquidations
+        ohm.mint(address(staking), 100_000_000e9);
     }
 
     function checkGlobalState(
@@ -150,7 +153,7 @@ abstract contract MonoCoolerBaseTest is Test {
     }
 
     function addCollateral(address account, uint128 collateralAmount) internal {
-        addCollateral(account, account, collateralAmount, new DLGTEv1.DelegationRequest[](0));
+        addCollateral(account, account, collateralAmount, noDelegationRequest());
     }
 
     function addCollateral(
@@ -159,10 +162,20 @@ abstract contract MonoCoolerBaseTest is Test {
         uint128 collateralAmount,
         DLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
+        addCollateral(cooler, caller, onBehalfOf, collateralAmount, delegationRequests);
+    }
+
+    function addCollateral(
+        IMonoCooler theCooler,
+        address caller,
+        address onBehalfOf,
+        uint128 collateralAmount,
+        DLGTEv1.DelegationRequest[] memory delegationRequests
+    ) internal {
         gohm.mint(caller, collateralAmount);
         vm.startPrank(caller);
-        gohm.approve(address(cooler), collateralAmount);
-        cooler.addCollateral(collateralAmount, onBehalfOf, delegationRequests);
+        gohm.approve(address(theCooler), collateralAmount);
+        theCooler.addCollateral(collateralAmount, onBehalfOf, delegationRequests);
         vm.stopPrank();
     }
 
@@ -184,8 +197,29 @@ abstract contract MonoCoolerBaseTest is Test {
         uint128 amount,
         address recipient
     ) internal {
+        borrow(cooler, caller, onBehalfOf, amount, recipient);
+    }
+
+    function borrow(
+        IMonoCooler theCooler,
+        address caller,
+        address onBehalfOf,
+        uint128 amount,
+        address recipient
+    ) internal {
         vm.startPrank(caller);
-        cooler.borrow(amount, onBehalfOf, recipient);
+        theCooler.borrow(amount, onBehalfOf, recipient);
+        vm.stopPrank();
+    }
+
+    function repay(
+        address caller,
+        address onBehalfOf,
+        uint128 amount
+    ) internal {
+        vm.startPrank(caller);
+        usds.approve(address(cooler), amount);
+        cooler.repay(amount, onBehalfOf);
         vm.stopPrank();
     }
 
@@ -203,7 +237,16 @@ abstract contract MonoCoolerBaseTest is Test {
         address expectedDelegate,
         uint256 expectedDelegationAmount
     ) internal view {
-        DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
+        expectOneDelegation(cooler, account, expectedDelegate, expectedDelegationAmount);
+    }
+
+    function expectOneDelegation(
+        IMonoCooler theCooler,
+        address account,
+        address expectedDelegate,
+        uint256 expectedDelegationAmount
+    ) internal view {
+        DLGTEv1.AccountDelegation[] memory delegations = theCooler.accountDelegationsList(
             account,
             0,
             100
@@ -312,7 +355,15 @@ abstract contract MonoCoolerBaseTest is Test {
         address account,
         IMonoCooler.AccountPosition memory expectedPosition
     ) internal view {
-        IMonoCooler.AccountPosition memory position = cooler.accountPosition(account);
+        checkAccountPosition(cooler, account, expectedPosition);
+    }
+
+    function checkAccountPosition(
+        IMonoCooler theCooler,
+        address account,
+        IMonoCooler.AccountPosition memory expectedPosition
+    ) internal view {
+        IMonoCooler.AccountPosition memory position = theCooler.accountPosition(account);
         assertEq(position.collateral, expectedPosition.collateral, "AccountPosition::collateral");
         assertEq(
             position.currentDebt,
@@ -351,8 +402,8 @@ abstract contract MonoCoolerBaseTest is Test {
             "AccountPosition::maxDelegateAddresses"
         );
         
-        assertEq(cooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
-        assertEq(cooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
+        assertEq(theCooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
+        assertEq(theCooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
     }
 
     function checkLiquidityStatus(
@@ -388,6 +439,28 @@ abstract contract MonoCoolerBaseTest is Test {
             expectedLiquidationStatus.exceededMaxOriginationLtv,
             "LiquidationStatus::exceededMaxOriginationLtv"
         );
+        assertEq(
+            status[0].currentIncentive,
+            expectedLiquidationStatus.currentIncentive,
+            "LiquidationStatus::currentIncentive"
+        );
+    }
+
+    function checkBatchLiquidate(
+        address[] memory accounts,
+        DLGTEv1.DelegationRequest[][] memory requests,
+        uint128 expectedCollateralClaimed,
+        uint128 expectedDebtWiped,
+        uint128 expectedIncentives
+    ) internal {
+        (
+            uint128 totalCollateralClaimed,
+            uint128 totalDaiDebtWiped,
+            uint128 totalIncentives
+        ) = cooler.batchLiquidate(accounts, requests);
+        assertEq(totalCollateralClaimed, expectedCollateralClaimed, "batchLiquidate::collateralClaimed");
+        assertEq(totalDaiDebtWiped, expectedDebtWiped, "batchLiquidate::debtWiped");
+        assertEq(totalIncentives, expectedIncentives, "batchLiquidate::totalLiquidationIncentive");
     }
 
     function noDelegationRequest() internal pure returns (DLGTEv1.DelegationRequest[] memory) {

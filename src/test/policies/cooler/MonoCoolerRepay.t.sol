@@ -116,7 +116,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: 0,
                     currentLtv: 0,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -186,7 +187,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: 0,
                     currentLtv: 0,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -258,7 +260,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: 4_000e18,
                     currentLtv: 400e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -313,7 +316,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: 4_000e18 + expectedInterest,
                     currentLtv: 402.005008343760425200e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -364,7 +368,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: 4_000e18 + expectedInterest,
                     currentLtv: 402.005008343760425200e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -457,7 +462,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: 1_000.205480859454719877e18,
                     currentLtv: 100.020548085945471988e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 
@@ -512,7 +518,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount + expectedInterest,
                     currentLtv: 2_991.282044918068103550e18,
                     exceededLiquidationLtv: true,
-                    exceededMaxOriginationLtv: true
+                    exceededMaxOriginationLtv: true,
+                    currentIncentive: 0.000085732931714258e18
                 })
             );
         }
@@ -572,7 +579,8 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
                     currentDebt: borrowAmount + expectedInterest - repayAmount,
                     currentLtv: 2_891.282044918068103550e18,
                     exceededLiquidationLtv: false,
-                    exceededMaxOriginationLtv: false
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
                 })
             );
 

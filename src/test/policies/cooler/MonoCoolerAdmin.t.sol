@@ -107,7 +107,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
                 maxOriginationDebtAmount: 0,
                 liquidationDebtAmount: 0,
                 healthFactor: type(uint256).max,
-                currentLtv: type(uint256).max,
+                currentLtv: type(uint128).max,
                 totalDelegated: 0,
                 numDelegateAddresses: 0,
                 maxDelegateAddresses: 10
@@ -119,9 +119,10 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
             IMonoCooler.LiquidationStatus({
                 collateral: 0,
                 currentDebt: 0,
-                currentLtv: type(uint256).max,
+                currentLtv: type(uint128).max,
                 exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false
+                exceededMaxOriginationLtv: false,
+                currentIncentive: 0
             })
         );
 
