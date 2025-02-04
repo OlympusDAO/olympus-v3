@@ -77,3 +77,13 @@ set_account_address() {
     ACCOUNT_ADDRESS=$(cast wallet address --account $1)
     echo "  Wallet address: $ACCOUNT_ADDRESS"
 }
+
+# @description Gets the wallet address from cast wallet for a Ledger
+# @param {string} $1 The mnemonic index
+# @sideEffects Sets the ACCOUNT_ADDRESS global variable
+set_account_address_ledger() {
+    echo ""
+    echo "  Getting wallet address from Ledger with mnemonic index: $1"
+    ACCOUNT_ADDRESS=$(cast wallet address --ledger --mnemonic-index $1)
+    echo "  Wallet address: $ACCOUNT_ADDRESS"
+}
