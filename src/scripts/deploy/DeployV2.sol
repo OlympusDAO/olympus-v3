@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.15;
 
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+// Forge
 import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+
+// Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
+
+// Chainlink
+import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
 // Bond Protocol
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -21,14 +27,17 @@ import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiq
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
 
 // Cooler Loans
-import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
 // Governance
 import {Timelock} from "src/external/governance/Timelock.sol";
 import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 
-import "src/Kernel.sol";
+// Bophades
+import {Actions, fromKeycode, Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
+
+// Bophades Modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -37,7 +46,10 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
+import {OlympusConvertibleDepositPositions} from "modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 
+// Bophades Policies
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -65,18 +77,14 @@ import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol
 import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
-
-import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "src/test/mocks/BalancerMocks.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Faucet} from "src/test/mocks/Faucet.sol";
+import {CDAuctioneer} from "policies/CDAuctioneer.sol";
+import {CDFacility} from "policies/CDFacility.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
-
-import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
+// solhint-disable max-states-count
+// solhint-disable custom-errors
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;
@@ -92,6 +100,8 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
+    OlympusConvertibleDepository public CDEPO;
+    OlympusConvertibleDepositPositions public CDPOS;
 
     /// Policies
     Operator public operator;
@@ -116,6 +126,8 @@ contract OlympusDeploy is Script {
     YieldRepurchaseFacility public yieldRepo;
     ReserveMigrator public reserveMigrator;
     EmissionManager public emissionManager;
+    CDAuctioneer public cdAuctioneer;
+    CDFacility public cdFacility;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -204,6 +216,10 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
+        selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
+        selectorMap["OlympusConvertibleDepositPositions"] = this
+            ._deployConvertibleDepositPositions
+            .selector;
         // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
@@ -231,6 +247,10 @@ contract OlympusDeploy is Script {
         selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
+        selectorMap["ConvertibleDepositAuctioneer"] = this
+            ._deployConvertibleDepositAuctioneer
+            .selector;
+        selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -327,6 +347,8 @@ contract OlympusDeploy is Script {
         loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
+        cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
+        cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -380,7 +402,7 @@ contract OlympusDeploy is Script {
         }
     }
 
-    function envAddress(string memory key_) internal returns (address) {
+    function envAddress(string memory key_) internal view returns (address) {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
@@ -482,7 +504,7 @@ contract OlympusDeploy is Script {
         return address(RANGE);
     }
 
-    function _deployTreasury(bytes memory args) public returns (address) {
+    function _deployTreasury(bytes memory) public returns (address) {
         // No additional arguments for Treasury module
 
         // Deploy Treasury module
@@ -493,7 +515,7 @@ contract OlympusDeploy is Script {
         return address(TRSRY);
     }
 
-    function _deployMinter(bytes memory args) public returns (address) {
+    function _deployMinter(bytes memory) public returns (address) {
         // Only args are contracts in the environment
 
         // Deploy Minter module
@@ -504,7 +526,7 @@ contract OlympusDeploy is Script {
         return address(MINTR);
     }
 
-    function _deployRoles(bytes memory args) public returns (address) {
+    function _deployRoles(bytes memory) public returns (address) {
         // No additional arguments for Roles module
 
         // Deploy Roles module
@@ -515,7 +537,7 @@ contract OlympusDeploy is Script {
         return address(ROLES);
     }
 
-    function _deployBoostedLiquidityRegistry(bytes memory args) public returns (address) {
+    function _deployBoostedLiquidityRegistry(bytes memory) public returns (address) {
         // No additional arguments for OlympusBoostedLiquidityRegistry module
 
         // Deploy OlympusBoostedLiquidityRegistry module
@@ -586,7 +608,7 @@ contract OlympusDeploy is Script {
         return address(operator);
     }
 
-    function _deployBondCallback(bytes memory args) public returns (address) {
+    function _deployBondCallback(bytes memory) public returns (address) {
         // No additional arguments for BondCallback policy
 
         // Deploy BondCallback policy
@@ -629,7 +651,7 @@ contract OlympusDeploy is Script {
         return address(heart);
     }
 
-    function _deployPriceConfig(bytes memory args) public returns (address) {
+    function _deployPriceConfig(bytes memory) public returns (address) {
         // No additional arguments for PriceConfig policy
 
         // Deploy PriceConfig policy
@@ -640,7 +662,7 @@ contract OlympusDeploy is Script {
         return address(priceConfig);
     }
 
-    function _deployRolesAdmin(bytes memory args) public returns (address) {
+    function _deployRolesAdmin(bytes memory) public returns (address) {
         // No additional arguments for RolesAdmin policy
 
         // Deploy RolesAdmin policy
@@ -651,7 +673,7 @@ contract OlympusDeploy is Script {
         return address(rolesAdmin);
     }
 
-    function _deployTreasuryCustodian(bytes memory args) public returns (address) {
+    function _deployTreasuryCustodian(bytes memory) public returns (address) {
         // No additional arguments for TreasuryCustodian policy
 
         // Deploy TreasuryCustodian policy
@@ -674,7 +696,7 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployZeroDistributor(bytes memory args) public returns (address) {
+    function _deployZeroDistributor(bytes memory) public returns (address) {
         // Deploy ZeroDistributor policy
         vm.broadcast();
         zeroDistributor = new ZeroDistributor(staking);
@@ -683,7 +705,7 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployEmergency(bytes memory args) public returns (address) {
+    function _deployEmergency(bytes memory) public returns (address) {
         // No additional arguments for Emergency policy
 
         // Deploy Emergency policy
@@ -694,7 +716,7 @@ contract OlympusDeploy is Script {
         return address(emergency);
     }
 
-    function _deployBondManager(bytes memory args) public returns (address) {
+    function _deployBondManager(bytes memory) public returns (address) {
         // Deploy BondManager policy
         vm.broadcast();
         bondManager = new BondManager(
@@ -709,7 +731,7 @@ contract OlympusDeploy is Script {
         return address(bondManager);
     }
 
-    function _deployBurner(bytes memory args) public returns (address) {
+    function _deployBurner(bytes memory) public returns (address) {
         // No additional arguments for Burner policy
 
         // Deploy Burner policy
@@ -720,7 +742,7 @@ contract OlympusDeploy is Script {
         return address(burner);
     }
 
-    function _deployBLVaultLido(bytes memory args) public returns (address) {
+    function _deployBLVaultLido(bytes memory) public returns (address) {
         // No additional arguments for BLVaultLido policy
 
         // Deploy BLVaultLido policy
@@ -732,7 +754,7 @@ contract OlympusDeploy is Script {
     }
 
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
-    function _deployBLVaultManagerLido(bytes memory args) public returns (address) {
+    function _deployBLVaultManagerLido(bytes memory) public returns (address) {
         console2.log("ohm", address(ohm));
         console2.log("wsteth", address(wsteth));
         console2.log("aura", address(aura));
@@ -812,7 +834,7 @@ contract OlympusDeploy is Script {
         return address(lidoVaultManager);
     }
 
-    function _deployBLVaultLusd(bytes memory args) public returns (address) {
+    function _deployBLVaultLusd(bytes memory) public returns (address) {
         // No additional arguments for BLVaultLusd policy
 
         // Deploy BLVaultLusd policy
@@ -946,7 +968,7 @@ contract OlympusDeploy is Script {
         return address(legacyBurner);
     }
 
-    function _deployReplacementAuthority(bytes memory args) public returns (address) {
+    function _deployReplacementAuthority(bytes memory) public returns (address) {
         // No additional arguments for ReplacementAuthority policy
 
         console2.log("legacyBurner", address(legacyBurner));
@@ -995,7 +1017,7 @@ contract OlympusDeploy is Script {
         return address(poly);
     }
 
-    function _deployClaimTransfer(bytes memory args) public returns (address) {
+    function _deployClaimTransfer(bytes memory) public returns (address) {
         // Doesn't need extra args
 
         console2.log("poly", address(poly));
@@ -1022,7 +1044,7 @@ contract OlympusDeploy is Script {
         return address(claimTransfer);
     }
 
-    function _deployClearinghouse(bytes memory args) public returns (address) {
+    function _deployClearinghouse(bytes memory) public returns (address) {
         if (address(coolerFactory) == address(0)) {
             // Deploy a new Cooler Factory implementation
             vm.broadcast();
@@ -1122,7 +1144,7 @@ contract OlympusDeploy is Script {
         return address(timelock);
     }
 
-    function _deployGovernorBravoDelegate(bytes calldata args) public returns (address) {
+    function _deployGovernorBravoDelegate(bytes calldata) public returns (address) {
         // No additional arguments for Governor Bravo Delegate
 
         // Deploy Governor Bravo Delegate
@@ -1232,7 +1254,8 @@ contract OlympusDeploy is Script {
         console2.log("   gohm", address(gohm));
         console2.log("   reserve", address(reserve));
         console2.log("   sReserve", address(sReserve));
-        console2.log("   auctioneer", address(bondAuctioneer));
+        console2.log("   bondAuctioneer", address(bondAuctioneer));
+        console2.log("   cdAuctioneer", address(cdAuctioneer));
         console2.log("   teller", address(bondFixedTermTeller));
 
         // Deploy EmissionManager
@@ -1244,12 +1267,81 @@ contract OlympusDeploy is Script {
             address(reserve),
             address(sReserve),
             address(bondAuctioneer),
+            address(cdAuctioneer),
             address(bondFixedTermTeller)
         );
 
         console2.log("EmissionManager deployed at:", address(emissionManager));
 
         return address(emissionManager);
+    }
+
+    // ========== CONVERTIBLE DEPOSIT ========== //
+
+    function _deployConvertibleDepository(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepository
+
+        // Constructor arguments
+        uint16 reclaimRate = 90e2; // TODO finalise
+
+        // Log dependencies
+        console2.log("ConvertibleDepository parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   vault", address(sReserve));
+        console2.log("   reclaimRate", reclaimRate);
+
+        // Deploy ConvertibleDepository
+        vm.broadcast();
+        CDEPO = new OlympusConvertibleDepository(address(kernel), address(sReserve), reclaimRate);
+        console2.log("ConvertibleDepository deployed at:", address(CDEPO));
+
+        return address(CDEPO);
+    }
+
+    function _deployConvertibleDepositPositions(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositPositions
+
+        // Log dependencies
+        console2.log("ConvertibleDepositPositions parameters:");
+        console2.log("   kernel", address(kernel));
+
+        // Deploy ConvertibleDepositPositions
+        vm.broadcast();
+        CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
+        console2.log("ConvertibleDepositPositions deployed at:", address(CDPOS));
+
+        return address(CDPOS);
+    }
+
+    function _deployConvertibleDepositAuctioneer(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositAuctioneer
+
+        // Log dependencies
+        console2.log("ConvertibleDepositAuctioneer parameters:");
+        console2.log("   kernel", address(kernel));
+        console2.log("   cdFacility", address(cdFacility));
+
+        // Deploy ConvertibleDepositAuctioneer
+        vm.broadcast();
+        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility));
+        console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
+
+        return address(cdAuctioneer);
+    }
+
+    function _deployConvertibleDepositFacility(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositFacility
+
+        // Log dependencies
+        console2.log("ConvertibleDepositFacility parameters:");
+        console2.log("   kernel", address(kernel));
+
+        // Deploy ConvertibleDepositFacility
+        vm.broadcast();
+        cdFacility = new CDFacility(address(kernel));
+        console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
+
+        return address(cdFacility);
     }
 
     // ========== VERIFICATION ========== //
@@ -1426,6 +1518,7 @@ contract OlympusDeploy is Script {
 
         // Iterate through the contracts that were deployed and write their addresses to the file
         uint256 len = deployments.length;
+        // solhint-disable quotes
         for (uint256 i; i < len; ++i) {
             vm.writeLine(
                 file,
@@ -1438,6 +1531,7 @@ contract OlympusDeploy is Script {
                 )
             );
         }
+        // solhint-enable quotes
         vm.writeLine(file, "}");
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -19,10 +19,7 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
-
-interface BurnableERC20 {
-    function burn(uint256 amount) external;
-}
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 interface Clearinghouse {
     function principalReceivables() external view returns (uint256);
@@ -46,15 +43,17 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     CHREGv1 public CHREG;
 
     // Tokens
-    // solhint-disable const-name-snakecase
+    // solhint-disable immutable-vars-naming
     ERC20 public immutable ohm;
     IgOHM public immutable gohm;
     ERC20 public immutable reserve;
     ERC4626 public immutable sReserve;
+    // solhint-enable immutable-vars-naming
 
     // External contracts
-    IBondSDA public auctioneer;
+    IBondSDA public bondAuctioneer;
     address public teller;
+    IConvertibleDepositAuctioneer public cdAuctioneer;
 
     // Manager variables
     uint256 public baseEmissionRate;
@@ -64,11 +63,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     uint8 public beatCounter;
     bool public locallyActive;
     uint256 public activeMarketId;
+    uint256 public tickSizeScalar;
+    uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
+    // solhint-disable immutable-vars-naming
     uint8 internal immutable _ohmDecimals;
     uint8 internal immutable _gohmDecimals;
     uint8 internal immutable _reserveDecimals;
+    // solhint-enable immutable-vars-naming
 
     /// @notice timestamp of last shutdown
     uint48 public shutdownTimestamp;
@@ -85,21 +88,25 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         address gohm_,
         address reserve_,
         address sReserve_,
-        address auctioneer_,
+        address bondAuctioneer_,
+        address cdAuctioneer_,
         address teller_
     ) Policy(kernel_) {
         // Set immutable variables
-        if (ohm_ == address(0)) revert("OHM address cannot be 0");
-        if (gohm_ == address(0)) revert("gOHM address cannot be 0");
-        if (reserve_ == address(0)) revert("DAI address cannot be 0");
-        if (sReserve_ == address(0)) revert("sDAI address cannot be 0");
-        if (auctioneer_ == address(0)) revert("Auctioneer address cannot be 0");
+        if (ohm_ == address(0)) revert InvalidParam("OHM address cannot be 0");
+        if (gohm_ == address(0)) revert InvalidParam("gOHM address cannot be 0");
+        if (reserve_ == address(0)) revert InvalidParam("DAI address cannot be 0");
+        if (sReserve_ == address(0)) revert InvalidParam("sDAI address cannot be 0");
+        if (bondAuctioneer_ == address(0))
+            revert InvalidParam("Bond Auctioneer address cannot be 0");
+        if (cdAuctioneer_ == address(0)) revert InvalidParam("CD Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
         reserve = ERC20(reserve_);
         sReserve = ERC4626(sReserve_);
-        auctioneer = IBondSDA(auctioneer_);
+        bondAuctioneer = IBondSDA(bondAuctioneer_);
+        cdAuctioneer = IConvertibleDepositAuctioneer(cdAuctioneer_);
         teller = teller_;
 
         _ohmDecimals = ohm.decimals();
@@ -110,6 +117,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         reserve.approve(address(sReserve), type(uint256).max);
     }
 
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("TRSRY");
@@ -125,8 +133,11 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
+
+        return dependencies;
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -138,6 +149,15 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         permissions = new Permissions[](2);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+
+        return permissions;
+    }
+
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 2;
+
+        return (major, minor);
     }
 
     // ========== HEARTBEAT ========== //
@@ -155,27 +175,52 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             else baseEmissionRate -= rateChange.changeBy;
         }
 
-        // It then calculates the amount to sell for the coming day
-        (, , uint256 sell) = getNextSale();
+        // Cache if the day is complete
+        bool isDayComplete = cdAuctioneer.isDayComplete();
 
-        // And then opens a market if applicable
-        if (sell != 0) {
-            MINTR.increaseMintApproval(address(this), sell);
-            _createMarket(sell);
+        // It then calculates the amount to sell for the coming day
+        (, , uint256 emission) = getNextEmission();
+
+        // Update the parameters for the convertible deposit auction
+        cdAuctioneer.setAuctionParameters(
+            emission,
+            getSizeFor(emission),
+            getMinPriceFor(PRICE.getCurrentPrice())
+        );
+
+        // If the tracking period is complete, determine if there was under-selling of OHM
+        if (isDayComplete && cdAuctioneer.getAuctionResultsNextIndex() == 0) {
+            int256[] memory auctionResults = cdAuctioneer.getAuctionResults();
+            int256 difference;
+            for (uint256 i = 0; i < auctionResults.length; i++) {
+                difference += auctionResults[i];
+            }
+
+            // If there was under-selling, create a market to sell the remaining OHM
+            if (difference < 0) {
+                uint256 remainder = uint256(-difference);
+                MINTR.increaseMintApproval(address(this), remainder);
+                _createMarket(remainder);
+            }
         }
     }
 
     // ========== INITIALIZE ========== //
 
     /// @notice allow governance to initialize the emission manager
+    ///
     /// @param baseEmissionsRate_ percent of OHM supply to issue per day at the minimum premium, in OHM scale, i.e. 1e9 = 100%
     /// @param minimumPremium_ minimum premium at which to issue OHM, a percentage where 1e18 is 100%
     /// @param backing_ backing price of OHM in reserve token, in reserve scale
+    /// @param tickSizeScalar_ scalar for tick size
+    /// @param minPriceScalar_ scalar for min price
     /// @param restartTimeframe_ time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     function initialize(
         uint256 baseEmissionsRate_,
         uint256 minimumPremium_,
         uint256 backing_,
+        uint256 tickSizeScalar_,
+        uint256 minPriceScalar_,
         uint48 restartTimeframe_
     ) external onlyRole("emissions_admin") {
         // Cannot initialize if currently active
@@ -192,12 +237,18 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         if (minimumPremium_ == 0) revert InvalidParam("minimumPremium");
         if (backing_ == 0) revert InvalidParam("backing");
         if (restartTimeframe_ == 0) revert InvalidParam("restartTimeframe");
+        if (tickSizeScalar_ == 0 || tickSizeScalar_ > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Tick Size Scalar");
+        if (minPriceScalar_ == 0 || minPriceScalar_ > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Min Price Scalar");
 
         // Assign
         baseEmissionRate = baseEmissionsRate_;
         minimumPremium = minimumPremium_;
         backing = backing_;
         restartTimeframe = restartTimeframe_;
+        tickSizeScalar = tickSizeScalar_;
+        minPriceScalar = minPriceScalar_;
 
         // Activate
         locallyActive = true;
@@ -206,6 +257,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         emit MinimumPremiumChanged(minimumPremium_);
         emit BackingChanged(backing_);
         emit RestartTimeframeChanged(restartTimeframe_);
+        emit TickSizeScalarChanged(tickSizeScalar_);
+        emit MinPriceScalarChanged(minPriceScalar_);
     }
 
     // ========== BOND CALLBACK ========== //
@@ -258,7 +311,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             );
 
         // Create new bond market to buy the reserve with OHM
-        activeMarketId = auctioneer.createMarket(
+        activeMarketId = bondAuctioneer.createMarket(
             abi.encode(
                 IBondSDA.MarketParams({
                     payoutToken: ohm,
@@ -323,8 +376,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         shutdownTimestamp = uint48(block.timestamp);
 
         // Shutdown the bond market, if it is active
-        if (auctioneer.isLive(activeMarketId)) {
-            auctioneer.closeMarket(activeMarketId);
+        if (bondAuctioneer.isLive(activeMarketId)) {
+            bondAuctioneer.closeMarket(activeMarketId);
         }
 
         emit Deactivated();
@@ -417,20 +470,49 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     }
 
     /// @notice allow governance to set the bond contracts used by the emission manager
-    /// @param auctioneer_ address of the bond auctioneer contract
+    /// @param bondAuctioneer_ address of the bond auctioneer contract
     /// @param teller_ address of the bond teller contract
     function setBondContracts(
-        address auctioneer_,
+        address bondAuctioneer_,
         address teller_
     ) external onlyRole("emissions_admin") {
         // Bond contracts cannot be set to the zero address
-        if (auctioneer_ == address(0)) revert InvalidParam("auctioneer");
+        if (bondAuctioneer_ == address(0)) revert InvalidParam("bondAuctioneer");
         if (teller_ == address(0)) revert InvalidParam("teller");
 
-        auctioneer = IBondSDA(auctioneer_);
+        bondAuctioneer = IBondSDA(bondAuctioneer_);
         teller = teller_;
 
-        emit BondContractsSet(auctioneer_, teller_);
+        emit BondContractsSet(bondAuctioneer_, teller_);
+    }
+
+    /// @notice allow governance to set the CD contract used by the emission manager
+    /// @param cdAuctioneer_ address of the cd auctioneer contract
+    function setCDAuctionContract(address cdAuctioneer_) external onlyRole("emissions_admin") {
+        // Auction contract cannot be set to the zero address
+        if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
+
+        cdAuctioneer = IConvertibleDepositAuctioneer(cdAuctioneer_);
+    }
+
+    /// @notice allow governance to set the CD tick size scalar
+    /// @param newScalar as a percentage in 18 decimals
+    function setTickSizeScalar(uint256 newScalar) external onlyRole("emissions_admin") {
+        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Tick Size Scalar");
+        tickSizeScalar = newScalar;
+
+        emit TickSizeScalarChanged(newScalar);
+    }
+
+    /// @notice allow governance to set the CD minimum price scalar
+    /// @param newScalar as a percentage in 18 decimals
+    function setMinPriceScalar(uint256 newScalar) external onlyRole("emissions_admin") {
+        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
+            revert InvalidParam("Min Price Scalar");
+        minPriceScalar = newScalar;
+
+        emit MinPriceScalarChanged(newScalar);
     }
 
     // =========- VIEW FUNCTIONS ========== //
@@ -460,7 +542,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     }
 
     /// @notice return the next sale amount, premium, emission rate, and emissions based on the current premium
-    function getNextSale()
+    function getNextEmission()
         public
         view
         returns (uint256 premium, uint256 emissionRate, uint256 emission)
@@ -475,5 +557,19 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
                 (ONE_HUNDRED_PERCENT + minimumPremium); // in OHM scale
             emission = (getSupply() * emissionRate) / 10 ** _ohmDecimals; // OHM Scale * OHM Scale / OHM Scale = OHM Scale
         }
+    }
+
+    /// @notice get CD auction tick size for a given target
+    /// @param  target size of day's CD auction
+    /// @return size of tick
+    function getSizeFor(uint256 target) public view returns (uint256) {
+        return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+    }
+
+    /// @notice get CD auction minimum price for given current price
+    /// @param  price of OHM on market according to PRICE module
+    /// @return minPrice for CD auction
+    function getMinPriceFor(uint256 price) public view returns (uint256) {
+        return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
     }
 }

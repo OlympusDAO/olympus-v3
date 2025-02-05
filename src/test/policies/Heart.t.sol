@@ -3,12 +3,13 @@ pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {console2} from "forge-std/console2.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
@@ -17,9 +18,12 @@ import {MockYieldRepo} from "src/test/mocks/MockYieldRepo.sol";
 import {MockReserveMigrator} from "src/test/mocks/MockReserveMigrator.sol";
 import {MockEmissionManager} from "src/test/mocks/MockEmissionManager.sol";
 
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockOperator} from "src/test/mocks/MockOperator.sol";
+
 import {FullMath} from "libraries/FullMath.sol";
 
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
 import {OlympusHeart, IHeart} from "policies/Heart.sol";
 
@@ -29,34 +33,7 @@ import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 
-/**
- * @notice Mock Operator to test Heart
- */
-contract MockOperator is Policy {
-    bool public result;
-    address public ohm;
-    error Operator_CustomError();
-
-    constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
-        result = true;
-        ohm = ohm_;
-    }
-
-    // =========  FRAMEWORK CONFIFURATION ========= //
-    function configureDependencies() external override returns (Keycode[] memory dependencies) {}
-
-    function requestPermissions() external view override returns (Permissions[] memory requests) {}
-
-    // =========  HEART FUNCTIONS ========= //
-    function operate() external view {
-        if (!result) revert Operator_CustomError();
-    }
-
-    function setResult(bool result_) external {
-        result = result_;
-    }
-}
-
+// solhint-disable max-states-count
 contract HeartTest is Test {
     using FullMath for uint256;
 
@@ -66,11 +43,15 @@ contract HeartTest is Test {
     address internal policy;
 
     MockERC20 internal ohm;
+    MockERC20 internal reserveToken;
+    MockERC4626 internal vault;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
     OlympusRoles internal ROLES;
     OlympusMinter internal MINTR;
+    OlympusConvertibleDepository internal CDEPO;
+    OlympusTreasury internal TRSRY;
 
     MockOperator internal operator;
     OlympusHeart internal heart;
@@ -105,6 +86,8 @@ contract HeartTest is Test {
         {
             // Deploy token mocks
             ohm = new MockERC20("Olympus", "OHM", 9);
+            reserveToken = new MockERC20("USDS", "USDS", 18);
+            vault = new MockERC4626(reserveToken, "sUSDS", "sUSDS");
         }
         {
             // Deploy kernel
@@ -114,6 +97,8 @@ contract HeartTest is Test {
             PRICE = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             ROLES = new OlympusRoles(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
+            CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault), 90e2);
+            TRSRY = new OlympusTreasury(kernel);
 
             // Configure mocks
             PRICE.setMovingAverage(100 * 1e18);
@@ -162,6 +147,8 @@ contract HeartTest is Test {
             kernel.executeAction(Actions.InstallModule, address(PRICE));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(CDEPO));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -181,10 +168,12 @@ contract HeartTest is Test {
     // ======== SETUP DEPENDENCIES ======= //
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](3);
+        Keycode[] memory expectedDeps = new Keycode[](5);
         expectedDeps[0] = toKeycode("PRICE");
         expectedDeps[1] = toKeycode("ROLES");
         expectedDeps[2] = toKeycode("MINTR");
+        expectedDeps[3] = toKeycode("CDEPO");
+        expectedDeps[4] = toKeycode("TRSRY");
 
         Keycode[] memory deps = heart.configureDependencies();
         // Check: configured dependencies storage
@@ -192,6 +181,8 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
+        assertEq(fromKeycode(deps[4]), fromKeycode(expectedDeps[4]));
     }
 
     function testRevert_configureDependencies_invalidFrequency() public {
@@ -221,11 +212,13 @@ contract HeartTest is Test {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](3);
+        Permissions[] memory expectedPerms = new Permissions[](4);
 
         expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
         expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+        expectedPerms[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepYield.selector);
+
         Permissions[] memory perms = heart.requestPermissions();
         // Check: permission storage
         assertEq(perms.length, expectedPerms.length);
@@ -244,6 +237,7 @@ contract HeartTest is Test {
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if PRICE or operator revert
     //     [X] reward auction functions correctly based on time since beat available
+    //     [X] sweep yield from CDEPO into TRSRY
     // [X] Mints rewardToken correctly
 
     function testCorrectness_beat() public {

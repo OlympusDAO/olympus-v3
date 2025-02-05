@@ -91,6 +91,7 @@ abstract contract ProposalScript is ScriptSuite {
         // print the signatures list of empty strings
         console2.log("Signatures:");
         string memory s_str = "[";
+        // solhint-disable quotes
         for (uint256 i = 0; i < len; i++) {
             if (i == len - 1) {
                 s_str = string.concat(s_str, '""', "]");
@@ -98,6 +99,7 @@ abstract contract ProposalScript is ScriptSuite {
                 s_str = string.concat(s_str, '""', ", ");
             }
         }
+        // solhint-enable quotes
 
         // print the description
         console2.log("Description:");
@@ -169,6 +171,7 @@ abstract contract ProposalScript is ScriptSuite {
 
             // If the response contains "error", exit
             if (status >= 400 || vm.keyExists(responseString, ".error")) {
+                // solhint-disable-next-line custom-errors
                 revert("Error executing proposal action");
             }
         }
