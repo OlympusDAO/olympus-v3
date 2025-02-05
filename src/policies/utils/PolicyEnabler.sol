@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
+import {EMERGENCY_ROLE} from "./RoleDefinitions.sol";
 
 /// @title  PolicyEnabler
 /// @notice This contract is designed to be inherited by contracts that need to be enabled or disabled. It replaces the inconsistent usage of `active` and `locallyActive` state variables across the codebase.
@@ -11,8 +12,8 @@ import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 abstract contract PolicyEnabler is RolesConsumer {
     // ===== STATE VARIABLES ===== //
 
+    /// @notice Whether the policy functionality is enabled
     bool public isEnabled;
-    bytes32 public constant ROLE = "emergency_shutdown";
 
     // ===== ERRORS ===== //
 
@@ -47,7 +48,7 @@ abstract contract PolicyEnabler is RolesConsumer {
     ///         5. Emits the `Enabled` event
     ///
     /// @param  enableData_ The data to pass to the implementation-specific `_enable()` function
-    function enable(bytes calldata enableData_) public onlyRole(ROLE) whenDisabled {
+    function enable(bytes calldata enableData_) public onlyRole(EMERGENCY_ROLE) whenDisabled {
         // Call the implementation-specific enable function
         _enable(enableData_);
 
@@ -79,7 +80,7 @@ abstract contract PolicyEnabler is RolesConsumer {
     ///         5. Emits the `Disabled` event
     ///
     /// @param  disableData_ The data to pass to the implementation-specific `_disable()` function
-    function disable(bytes calldata disableData_) public onlyRole(ROLE) whenEnabled {
+    function disable(bytes calldata disableData_) public onlyRole(EMERGENCY_ROLE) whenEnabled {
         // Call the implementation-specific disable function
         _disable(disableData_);
 
