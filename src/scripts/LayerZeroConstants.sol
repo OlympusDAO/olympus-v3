@@ -23,6 +23,10 @@ library LayerZeroConstants {
             return 10245;
         }
 
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("berachain"))) {
+            return 362;
+        }
+
         if (
             keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("berachain-bartio"))
         ) {
