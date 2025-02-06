@@ -45,7 +45,7 @@ An example with Base and Optimism is shown below:
     ./shell/L2/setupBridge.sh --account MyAccount --localChain base --remoteChain optimism --env .env.base
     ```
 
-In a situation where the "bridge_admin" role has been assigned to a multisig, the `setupBridge.sh` script will not be able to submit SAFE batches at the current time. The `CrossChainBridge.setTrustedRemoteAddress()` function will need to be called for each remote chain.
+In a situation where the "bridge_admin" role has been assigned to a multisig, the `setupBridge.sh` script will not be able to submit SAFE batches at the current time. The `CrossChainBridge.setTrustedRemoteAddress()` function will need to be called for each remote chain. An example of this is in [TrustBerachainBridge.s.sol](ops/batches/TrustBerachainBridge.sol).
 
 ## Bridge Testing
 
@@ -76,3 +76,11 @@ The last step in the deployment is to transfer the ownership of the installation
 ```
 
 This should be run using the deployer account.
+
+## Verification
+
+The `verify.sh` script can be used to verify the deployment.
+
+```bash
+./shell/L2/verify.sh --env .env.optimism
+```
