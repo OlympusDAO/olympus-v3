@@ -352,7 +352,7 @@ contract L2Deploy is WithEnvironment {
         );
     }
 
-    function verify(string calldata chain_) public {
+    function verifyBerachain(string calldata chain_) public {
         _loadEnv(chain_);
 
         OlympusERC20Token ohm = OlympusERC20Token(_envAddressNotZero("olympus.legacy.OHM"));
@@ -441,13 +441,25 @@ contract L2Deploy is WithEnvironment {
                 ),
                 "Berachain CrossChainBridge should trust messages from the mainnet CrossChainBridge"
             );
-            require(
-                _bytesEqual(
-                    mainnetBridge.getTrustedRemoteAddress(362),
-                    abi.encodePacked(address(berachainBridge))
-                ),
-                "Mainnet CrossChainBridge should trust messages from the Berachain CrossChainBridge"
-            );
         }
+    }
+
+    function verifyMainnet(string calldata chain_) public {
+        _loadEnv(chain_);
+
+        CrossChainBridge mainnetBridge = CrossChainBridge(
+            _envAddressNotZero("mainnet", "olympus.policies.CrossChainBridge")
+        );
+        CrossChainBridge berachainBridge = CrossChainBridge(
+            _envAddressNotZero("berachain", "olympus.policies.CrossChainBridge")
+        );
+
+        require(
+            _bytesEqual(
+                mainnetBridge.getTrustedRemoteAddress(362),
+                abi.encodePacked(address(berachainBridge))
+            ),
+            "Mainnet CrossChainBridge should trust messages from the Berachain CrossChainBridge"
+        );
     }
 }
