@@ -60,6 +60,26 @@ contract L2Deploy is WithEnvironment {
         return false;
     }
 
+    /// @notice Compare two bytes arrays for equality
+    /// @param a_ First bytes array
+    /// @param b_ Second bytes array
+    /// @return bool True if the arrays are equal, false otherwise
+    function _bytesEqual(bytes memory a_, bytes memory b_) internal pure returns (bool) {
+        // Check lengths first
+        if (a_.length != b_.length) {
+            return false;
+        }
+
+        // Compare each byte
+        for (uint256 i = 0; i < a_.length; i++) {
+            if (a_[i] != b_[i]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     function grantRoles(string calldata chain_) external {
         _loadEnv(chain_);
         vm.startBroadcast();
@@ -330,5 +350,104 @@ contract L2Deploy is WithEnvironment {
         console2.log(
             "DAO multisig will need to call RolesAdmin.pullNewAdmin() to complete the handoff"
         );
+    }
+
+    function verify(string calldata chain_) public {
+        _loadEnv(chain_);
+
+        OlympusERC20Token ohm = OlympusERC20Token(_envAddressNotZero("olympus.legacy.OHM"));
+        OlympusAuthority olympusAuthority = OlympusAuthority(
+            _envAddressNotZero("olympus.legacy.OlympusAuthority")
+        );
+        Kernel kernel = Kernel(_envAddressNotZero("olympus.Kernel"));
+        OlympusMinter MINTR = OlympusMinter(_envAddressNotZero("olympus.modules.OlympusMinter"));
+        OlympusRoles ROLES = OlympusRoles(_envAddressNotZero("olympus.modules.OlympusRoles"));
+        RolesAdmin rolesAdmin = RolesAdmin(_envAddressNotZero("olympus.policies.RolesAdmin"));
+        CrossChainBridge berachainBridge = CrossChainBridge(
+            _envAddressNotZero("olympus.policies.CrossChainBridge")
+        );
+        CrossChainBridge mainnetBridge = CrossChainBridge(
+            _envAddressNotZero("mainnet", "olympus.policies.CrossChainBridge")
+        );
+
+        console2.log("Verifying ownership of contracts");
+
+        {
+            console2.log("Verifying OHM and OlympusAuthority");
+            require(
+                address(ohm.authority()) == address(olympusAuthority),
+                "OHM authority should be the OlympusAuthority"
+            );
+            require(
+                olympusAuthority.governor() == _getDaoMultisig(),
+                "OlympusAuthority governor should be the DAO multisig"
+            );
+            require(
+                olympusAuthority.guardian() == _getDaoMultisig(),
+                "OlympusAuthority guardian should be the DAO multisig"
+            );
+            require(
+                olympusAuthority.policy() == _getDaoMultisig(),
+                "OlympusAuthority policy should be the DAO multisig"
+            );
+            require(
+                olympusAuthority.vault() == address(MINTR),
+                "OlympusAuthority vault should be MINTR"
+            );
+        }
+
+        {
+            console2.log("Verifying Kernel");
+            require(
+                kernel.executor() == _getDaoMultisig(),
+                "Kernel executor should be the DAO multisig"
+            );
+        }
+
+        {
+            console2.log("Verifying roles");
+            require(
+                rolesAdmin.admin() == _getDaoMultisig(),
+                "RolesAdmin admin should be the DAO multisig"
+            );
+            require(
+                ROLES.hasRole(_getEmergencyMultisig(), "emergency_shutdown") == true,
+                "emergency_shutdown role should be granted to the emergency multisig"
+            );
+            require(
+                ROLES.hasRole(_getEmergencyMultisig(), "emergency_restart") == true,
+                "emergency_restart role should be granted to the emergency multisig"
+            );
+            require(
+                ROLES.hasRole(_getDaoMultisig(), "custodian") == true,
+                "custodian role should be granted to the DAO multisig"
+            );
+            require(
+                ROLES.hasRole(_getDaoMultisig(), "bridge_admin") == true,
+                "bridge_admin role should be granted to the DAO multisig"
+            );
+            require(
+                ROLES.hasRole(0x1A5309F208f161a393E8b5A253de8Ab894A67188, "bridge_admin") == false,
+                "bridge_admin role should not be granted to the Olympus deployer (0x1A5309F208f161a393E8b5A253de8Ab894A67188)"
+            );
+        }
+
+        {
+            console2.log("Verifying CrossChainBridge");
+            require(
+                _bytesEqual(
+                    berachainBridge.getTrustedRemoteAddress(101),
+                    abi.encodePacked(address(mainnetBridge))
+                ),
+                "Berachain CrossChainBridge should trust messages from the mainnet CrossChainBridge"
+            );
+            require(
+                _bytesEqual(
+                    mainnetBridge.getTrustedRemoteAddress(362),
+                    abi.encodePacked(address(berachainBridge))
+                ),
+                "Mainnet CrossChainBridge should trust messages from the Berachain CrossChainBridge"
+            );
+        }
     }
 }
