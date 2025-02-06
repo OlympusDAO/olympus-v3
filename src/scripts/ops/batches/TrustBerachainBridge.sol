@@ -45,6 +45,8 @@ contract TrustBerachainBridge is OlyBatch {
         console2.log("Setting up mainnet bridge to trust berachain bridge");
         console2.log("Mainnet bridge:", mainnetBridge);
         console2.log("Berachain bridge:", berachainBridge);
+        console2.log("Berachain bridge packed:");
+        console2.logBytes(abi.encodePacked(berachainBridge));
         console2.log("Berachain LZ chain ID:", berachainLzChainId);
 
         // 1. Set the Berachain Bridge as trusted
