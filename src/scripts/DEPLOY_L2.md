@@ -17,7 +17,15 @@ A Bophades installation can be deployed by following these steps:
     - Set `--broadcast` to `false` to run in simulation mode (recommended)
 4. Store the addresses of the contracts in the `src/scripts/env.json` file for the new chain
 
-This will deploy the contracts, install them into the kernel, and set up the initial roles and ownership.
+This will deploy the contracts and install them into the kernel.
+
+## Grant Roles
+
+The `grantRoles.sh` script can be used to grant the roles and ownership to facilitate initial setup.
+
+```bash
+./shell/L2/grantRoles.sh --account <account> --env <env-file> --broadcast true
+```
 
 ## Bridge Setup
 

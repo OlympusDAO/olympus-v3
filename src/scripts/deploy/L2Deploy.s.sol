@@ -60,6 +60,55 @@ contract L2Deploy is WithEnvironment {
         return false;
     }
 
+    function grantRoles(string calldata chain_) external {
+        _loadEnv(chain_);
+        vm.startBroadcast();
+
+        RolesAdmin rolesAdmin = RolesAdmin(_envAddressNotZero("olympus.policies.RolesAdmin"));
+        OlympusMinter MINTR = OlympusMinter(_envAddressNotZero("olympus.modules.OlympusMinter"));
+        OlympusAuthority auth = OlympusAuthority(
+            _envAddressNotZero("olympus.legacy.OlympusAuthority")
+        );
+
+        console2.log("");
+        console2.log("Granting roles");
+
+        // Assign emergency roles
+        {
+            console2.log("Granting emergency roles to emergency multisig", _getEmergencyMultisig());
+            rolesAdmin.grantRole("emergency_shutdown", _getEmergencyMultisig());
+            rolesAdmin.grantRole("emergency_restart", _getEmergencyMultisig());
+        }
+
+        // TreasuryCustodian
+        {
+            console2.log("Granting custodian role to DAO multisig", _getDaoMultisig());
+            rolesAdmin.grantRole("custodian", _getDaoMultisig());
+        }
+
+        // CrossChainBridge
+        // The role is required for setup. It will be transferred to the multisig later
+        {
+            console2.log("Granting bridge admin role to deployer", msg.sender);
+            rolesAdmin.grantRole("bridge_admin", msg.sender);
+        }
+
+        // OlympusAuthority
+        {
+            console2.log("Granting OlympusAuthority vault role to MINTR", address(MINTR));
+            auth.pushVault(address(MINTR), true);
+            console2.log(
+                "Granting OlympusAuthority governor role to DAO multisig",
+                _getDaoMultisig()
+            );
+            auth.pushGovernor(_getDaoMultisig(), true);
+        }
+
+        console2.log("Roles granted");
+
+        vm.stopBroadcast();
+    }
+
     /// @notice Deploys a new Bophades installation to a new chain
     /// @dev    Deploys the following contracts:
     ///         - OlympusAuthority
@@ -151,45 +200,6 @@ contract L2Deploy is WithEnvironment {
             kernel.executeAction(Actions.ActivatePolicy, address(minter));
         }
         console2.log("Kernel actions complete");
-
-        // Grant roles
-
-        console2.log("");
-        console2.log("Granting roles");
-
-        // Assign emergency roles
-        {
-            console2.log("Granting emergency roles to emergency multisig", _getEmergencyMultisig());
-            rolesAdmin.grantRole("emergency_shutdown", _getEmergencyMultisig());
-            rolesAdmin.grantRole("emergency_restart", _getEmergencyMultisig());
-        }
-
-        // TreasuryCustodian
-        {
-            console2.log("Granting custodian role to DAO multisig", _getDaoMultisig());
-            rolesAdmin.grantRole("custodian", _getDaoMultisig());
-        }
-
-        // CrossChainBridge
-        // The role is required for setup. It will be transferred to the multisig later
-        {
-            console2.log("Granting bridge admin role to deployer", msg.sender);
-            rolesAdmin.grantRole("bridge_admin", msg.sender);
-        }
-
-        // OlympusAuthority
-        {
-            console2.log("Granting OlympusAuthority vault role to MINTR", address(MINTR));
-            auth.pushVault(address(MINTR), true);
-            console2.log(
-                "Granting OlympusAuthority governor role to DAO multisig",
-                _getDaoMultisig()
-            );
-            auth.pushGovernor(_getDaoMultisig(), true);
-        }
-
-        console2.log("Roles granted");
-
         vm.stopBroadcast();
     }
 
