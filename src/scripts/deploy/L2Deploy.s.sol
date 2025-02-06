@@ -98,13 +98,6 @@ contract L2Deploy is WithEnvironment {
             console2.log("Granting OlympusAuthority vault role to MINTR", address(MINTR));
             auth.pushVault(address(MINTR), true);
 
-            // OlympusAuthority governor
-            console2.log(
-                "Granting OlympusAuthority governor role to DAO multisig",
-                _getDaoMultisig()
-            );
-            auth.pushGovernor(_getDaoMultisig(), true);
-
             // OlympusAuthority guardian
             console2.log(
                 "Granting OlympusAuthority guardian role to DAO multisig",
@@ -118,6 +111,13 @@ contract L2Deploy is WithEnvironment {
                 _getDaoMultisig()
             );
             auth.pushPolicy(_getDaoMultisig(), true);
+
+            // OlympusAuthority governor
+            console2.log(
+                "Granting OlympusAuthority governor role to DAO multisig",
+                _getDaoMultisig()
+            );
+            auth.pushGovernor(_getDaoMultisig(), true);
         }
 
         console2.log("Roles granted");
