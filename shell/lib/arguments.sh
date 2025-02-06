@@ -27,14 +27,19 @@ load_named_args() {
 # @param {string} $1 The .env file name (optional)
 # @sideEffects Sets the environment variables as global variables
 load_env() {
+    # If the env variable is not set, do nothing
+    if [ -z "$env" ]; then
+        echo "No environment variable set. Skipping environment variable loading."
+        return
+    fi
+
     # Get the name of the .env file or use the default
-    ENV_FILE=${env:-".env"}
     echo ""
-    echo "Sourcing environment variables from $ENV_FILE"
+    echo "Sourcing environment variables from $env"
 
     # Load environment file
     set -a # Automatically export all variables
-    source $ENV_FILE
+    source $env
     set +a # Disable automatic export
 }
 
