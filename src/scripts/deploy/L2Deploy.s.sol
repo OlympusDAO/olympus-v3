@@ -39,7 +39,7 @@ contract L2Deploy is WithEnvironment {
 
         if (strBytes.length < suffixBytes.length) return false;
 
-        for (uint i = 0; i < suffixBytes.length; i++) {
+        for (uint256 i = 0; i < suffixBytes.length; i++) {
             if (strBytes[strBytes.length - suffixBytes.length + i] != suffixBytes[i]) return false;
         }
 
