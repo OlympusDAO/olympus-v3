@@ -6,7 +6,7 @@ import {ADMIN_ROLE, EMERGENCY_ROLE} from "./RoleDefinitions.sol";
 
 /// @title  PolicyEnabler
 /// @notice This contract is designed to be inherited by contracts that need to be enabled or disabled. It replaces the inconsistent usage of `active` and `locallyActive` state variables across the codebase.
-/// @dev    A contract that inherits from this contract should use the `whenEnabled` and `whenDisabled` modifiers to gate access to certain functions.
+/// @dev    A contract that inherits from this contract should use the `onlyEnabled` and `onlyDisabled` modifiers to gate access to certain functions.
 ///
 ///         Inheriting contracts must do the following:
 ///         - In `configureDependencies()`, assign the module address to the `ROLES` state variable, e.g. `ROLES = ROLESv1(getModuleAddress(toKeycode("ROLES")));`
@@ -33,18 +33,21 @@ abstract contract PolicyEnabler is RolesConsumer {
 
     // ===== MODIFIERS ===== //
 
+    /// @notice Modifier that reverts if the caller does not have the emergency or admin role
     modifier onlyEmergencyOrAdminRole() {
         if (!ROLES.hasRole(msg.sender, EMERGENCY_ROLE) && !ROLES.hasRole(msg.sender, ADMIN_ROLE))
             revert NotAuthorised();
         _;
     }
 
-    modifier whenEnabled() {
+    /// @notice Modifier that reverts if the policy is not enabled
+    modifier onlyEnabled() {
         if (!isEnabled) revert NotEnabled();
         _;
     }
 
-    modifier whenDisabled() {
+    /// @notice Modifier that reverts if the policy is enabled
+    modifier onlyDisabled() {
         if (isEnabled) revert NotDisabled();
         _;
     }
@@ -60,7 +63,7 @@ abstract contract PolicyEnabler is RolesConsumer {
     ///         5. Emits the `Enabled` event
     ///
     /// @param  enableData_ The data to pass to the implementation-specific `_enable()` function
-    function enable(bytes calldata enableData_) public onlyEmergencyOrAdminRole whenDisabled {
+    function enable(bytes calldata enableData_) public onlyEmergencyOrAdminRole onlyDisabled {
         // Call the implementation-specific enable function
         _enable(enableData_);
 
@@ -92,7 +95,7 @@ abstract contract PolicyEnabler is RolesConsumer {
     ///         5. Emits the `Disabled` event
     ///
     /// @param  disableData_ The data to pass to the implementation-specific `_disable()` function
-    function disable(bytes calldata disableData_) public onlyEmergencyOrAdminRole whenEnabled {
+    function disable(bytes calldata disableData_) public onlyEmergencyOrAdminRole onlyEnabled {
         // Call the implementation-specific disable function
         _disable(disableData_);
 
