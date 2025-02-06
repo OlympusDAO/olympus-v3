@@ -8,10 +8,10 @@ import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 /// @notice This is a sample batch script that fixes a misconfiguration of the EmissionManager policy with the BondFixedTermAuctioneer.
 /// @dev    It should be run with `DAO_MS` set to the `bondOwner` address.
 contract EmissionManagerCallbackAuthStatus is OlyBatch {
-    address kernel;
-    address constant bondOwner = 0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969;
-    address bondFixedTermAuctioneer;
-    address emissionManager;
+    address public kernel;
+    address public constant bondOwner = 0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969;
+    address public bondFixedTermAuctioneer;
+    address public emissionManager;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
