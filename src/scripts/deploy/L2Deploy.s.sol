@@ -93,15 +93,31 @@ contract L2Deploy is WithEnvironment {
             rolesAdmin.grantRole("bridge_admin", msg.sender);
         }
 
-        // OlympusAuthority
         {
+            // OlympusAuthority vault
             console2.log("Granting OlympusAuthority vault role to MINTR", address(MINTR));
             auth.pushVault(address(MINTR), true);
+
+            // OlympusAuthority governor
             console2.log(
                 "Granting OlympusAuthority governor role to DAO multisig",
                 _getDaoMultisig()
             );
             auth.pushGovernor(_getDaoMultisig(), true);
+
+            // OlympusAuthority guardian
+            console2.log(
+                "Granting OlympusAuthority guardian role to DAO multisig",
+                _getDaoMultisig()
+            );
+            auth.pushGuardian(_getDaoMultisig(), true);
+
+            // OlympusAuthority policy
+            console2.log(
+                "Granting OlympusAuthority policy role to DAO multisig",
+                _getDaoMultisig()
+            );
+            auth.pushPolicy(_getDaoMultisig(), true);
         }
 
         console2.log("Roles granted");
@@ -137,10 +153,10 @@ contract L2Deploy is WithEnvironment {
         // Keep deployer as vault in order to transfer minter role after OHM
         // token is deployed
         OlympusAuthority auth = new OlympusAuthority(
-            msg.sender, // governor/owner, will be set to daoMultisig later
-            _getDaoMultisig(), // guardian
-            _getDaoMultisig(), // policy
-            msg.sender // vault, will be set to MINTR later
+            msg.sender, // governor/owner, will be set to daoMultisig in grantRoles()
+            msg.sender, // guardian, will be set to daoMultisig in grantRoles()
+            msg.sender, // policy, will be set to daoMultisig in grantRoles()
+            msg.sender // vault, will be set to MINTR in grantRoles()
         );
         OlympusERC20Token ohm = new OlympusERC20Token(address(auth));
         console2.log("OlympusAuthority deployed at:", address(auth));
