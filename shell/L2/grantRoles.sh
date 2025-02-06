@@ -3,7 +3,7 @@
 # Grants roles.
 #
 # Usage:
-# ./grantRoles.sh --account <cast wallet> --broadcast <false> --verify <false> --resume <false> --env <env-file>
+# ./grantRoles.sh --account <cast wallet> --broadcast <false> --env <env-file>
 #
 # Environment variables:
 # RPC_URL
@@ -22,8 +22,6 @@ load_env
 
 # Set sane defaults
 BROADCAST=${broadcast:-false}
-VERIFY=${verify:-false}
-RESUME=${resume:-false}
 
 # Validate named arguments
 echo ""
