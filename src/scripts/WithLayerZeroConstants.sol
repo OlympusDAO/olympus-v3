@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.15;
 
-library LayerZeroConstants {
+abstract contract WithLayerZeroConstants {
     /// @notice Returns the LayerZero endpoint ID for a given chain
     /// @dev    Endpoint IDs are defined here: https://docs.layerzero.network/v1/developers/evm/technical-reference/deployed-contracts
-    function getRemoteEndpointId(string calldata chain_) public pure returns (uint16) {
+    function _getRemoteEndpointId(string memory chain_) internal pure returns (uint16) {
         if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("arbitrum"))) {
             return 110;
         }

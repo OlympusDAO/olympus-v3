@@ -5,14 +5,14 @@ import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
-import {LayerZeroConstants} from "src/scripts/LayerZeroConstants.sol";
+import {WithLayerZeroConstants} from "src/scripts/WithLayerZeroConstants.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 
 /// @notice     Sets the Berachain Bridge as trusted
-contract TrustBerachainBridge is OlyBatch {
+contract TrustBerachainBridge is OlyBatch, WithLayerZeroConstants {
     using stdJson for string;
 
     address kernel;
@@ -40,7 +40,7 @@ contract TrustBerachainBridge is OlyBatch {
         require(mainnetBridge != address(0), "Mainnet bridge address is not set");
         require(berachainBridge != address(0), "Berachain bridge address is not set");
 
-        uint16 berachainLzChainId = LayerZeroConstants.getRemoteEndpointId("berachain");
+        uint16 berachainLzChainId = _getRemoteEndpointId("berachain");
 
         console2.log("Setting up mainnet bridge to trust berachain bridge");
         console2.log("Mainnet bridge:", mainnetBridge);

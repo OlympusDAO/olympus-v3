@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {WithEnvironment} from "../WithEnvironment.s.sol";
-import {LayerZeroConstants} from "../LayerZeroConstants.sol";
+import {WithLayerZeroConstants} from "../WithLayerZeroConstants.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 
@@ -20,7 +20,7 @@ import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import {Minter} from "src/policies/Minter.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
-contract L2Deploy is WithEnvironment {
+contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     function _getLzEndpoint() internal view returns (address) {
         return _envAddressNotZero("external.layerzero.endpoint");
     }
@@ -290,7 +290,7 @@ contract L2Deploy is WithEnvironment {
             remoteChain_,
             "olympus.policies.CrossChainBridge"
         );
-        uint16 remoteLzChainId = LayerZeroConstants.getRemoteEndpointId(remoteChain_);
+        uint16 remoteLzChainId = _getRemoteEndpointId(remoteChain_);
 
         console2.log("Setting up bridge on chain", localChain_);
         console2.log("Remote chain:", remoteChain_);

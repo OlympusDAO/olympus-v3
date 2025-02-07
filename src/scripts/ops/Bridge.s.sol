@@ -3,12 +3,12 @@ pragma solidity 0.8.15;
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {console2} from "forge-std/console2.sol";
-import {LayerZeroConstants} from "src/scripts/LayerZeroConstants.sol";
+import {WithLayerZeroConstants} from "src/scripts/WithLayerZeroConstants.sol";
 
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 
-contract BridgeScript is WithEnvironment {
+contract BridgeScript is WithEnvironment, WithLayerZeroConstants {
     function bridge(
         string calldata fromChain_,
         string calldata toChain_,
@@ -30,7 +30,7 @@ contract BridgeScript is WithEnvironment {
         vm.stopBroadcast();
 
         // Look up the destination chain id
-        uint16 dstChainId_ = LayerZeroConstants.getRemoteEndpointId(toChain_);
+        uint16 dstChainId_ = _getRemoteEndpointId(toChain_);
 
         // Estimate the send fee
         (uint256 nativeFee, ) = CrossChainBridge(bridgeAddress).estimateSendFee(
