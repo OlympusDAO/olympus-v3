@@ -9,7 +9,7 @@ interface IDelegate {
 }
 
 contract MockGohm is MockERC20, IDelegate {
-    uint256 public constant index = 10000;
+    uint256 public constant index = 10000 * 1e9;
 
     mapping(address => address) public override delegates;
 
