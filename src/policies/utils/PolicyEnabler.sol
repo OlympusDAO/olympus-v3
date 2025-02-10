@@ -35,8 +35,7 @@ abstract contract PolicyEnabler is RolesConsumer {
 
     /// @notice Modifier that reverts if the caller does not have the emergency or admin role
     modifier onlyEmergencyOrAdminRole() {
-        if (!ROLES.hasRole(msg.sender, EMERGENCY_ROLE) && !ROLES.hasRole(msg.sender, ADMIN_ROLE))
-            revert NotAuthorised();
+        if (!isEmergency(msg.sender) && !isAdmin(msg.sender)) revert NotAuthorised();
         _;
     }
 
@@ -117,4 +116,22 @@ abstract contract PolicyEnabler is RolesConsumer {
     /// @param  disableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
     function _disable(bytes calldata disableData_) internal virtual {}
+
+    // ===== ROLE CHECKS ===== //
+
+    /// @notice Check if an account has the admin role
+    ///
+    /// @param  account_ The account to check
+    /// @return true if the account has the admin role, false otherwise
+    function isAdmin(address account_) public view returns (bool) {
+        return ROLES.hasRole(account_, ADMIN_ROLE);
+    }
+
+    /// @notice Check if an account has the emergency role
+    ///
+    /// @param  account_ The account to check
+    /// @return true if the account has the emergency role, false otherwise
+    function isEmergency(address account_) public view returns (bool) {
+        return ROLES.hasRole(account_, EMERGENCY_ROLE);
+    }
 }
