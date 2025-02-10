@@ -371,7 +371,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address onBehalfOf,
         address recipient
     ) external override returns (uint128 amountBorrowed) {
-        if (borrowsPaused) revert Paused();
+        if (borrowsPaused || !isEnabled) revert Paused();
         if (borrowAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
         if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
@@ -506,7 +506,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address account,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint256 totalUndelegated) {
-        if (liquidationsPaused) revert Paused();
+        if (liquidationsPaused || !isEnabled) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
         LiquidationStatus memory status = _computeLiquidity(allAccountState[account], gState);
         if (!status.exceededLiquidationLtv) revert CannotLiquidate();
@@ -534,7 +534,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
             uint128 totalLiquidationIncentive
         )
     {
-        if (liquidationsPaused) revert Paused();
+        if (liquidationsPaused || !isEnabled) revert Paused();
         if (delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
 
         LiquidationStatus memory status;
@@ -620,13 +620,13 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     }
 
     /// @inheritdoc IMonoCooler
-    function setLiquidationsPaused(bool isPaused) external override onlyRole(ADMIN_ROLE) {
+    function setLiquidationsPaused(bool isPaused) external override onlyEmergencyOrAdminRole {
         liquidationsPaused = isPaused;
         emit LiquidationsPausedSet(isPaused);
     }
 
     /// @inheritdoc IMonoCooler
-    function setBorrowPaused(bool isPaused) external override onlyRole(ADMIN_ROLE) {
+    function setBorrowPaused(bool isPaused) external override onlyEmergencyOrAdminRole {
         emit BorrowPausedSet(isPaused);
         borrowsPaused = isPaused;
     }

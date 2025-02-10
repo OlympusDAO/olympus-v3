@@ -8,15 +8,18 @@ This document describes the roles that are used in the Olympus protocol.
 |------|----------|-------------|
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
+| admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
-| cooler_overseer | MonoCooler | Allows setting parameters on the MonoCooler |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
+| emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
+| emergency | CoolerTreasuryBorrower | Allows enable/disable on the CoolerTreasuryBorrower |
+| emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_restart | EmissionManager | Reactivates the EmissionManager |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |

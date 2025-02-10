@@ -401,9 +401,11 @@ interface IMonoCooler {
     function setTreasuryBorrower(address newTreasuryBorrower) external;
 
     /// @notice Liquidation may be paused in order for users to recover/repay debt after emergency actions
+    /// @dev Can only be called by emergency or admin roles
     function setLiquidationsPaused(bool isPaused) external;
 
     /// @notice Pause any new borrows of `debtToken`
+    /// @dev Can only be called by emergency or admin roles
     function setBorrowPaused(bool isPaused) external;
 
     /// @notice Update the interest rate (APR), specified in Wad (18 decimals)

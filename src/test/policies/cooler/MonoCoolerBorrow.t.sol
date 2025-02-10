@@ -21,6 +21,16 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         cooler.borrow(1_000e18, ALICE, ALICE);
     }
 
+    function test_borrow_failNotEnabled() public {
+        vm.startPrank(OVERSEER);
+        cooler.disable(abi.encode(""));
+        vm.stopPrank();
+
+        vm.startPrank(ALICE);
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
+        cooler.borrow(1_000e18, ALICE, ALICE);
+    }
+
     function test_borrow_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
         cooler.borrow(0, ALICE, ALICE);
