@@ -11,36 +11,6 @@ import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
-/*
-@todo considerations - up for discussion:
-
-1/ It is NOT possible for policy A (some other non-Cooler policy) to withdraw and use the gOHM which was deposited by policy B (eg cooler)
-      Since this could be dangerous if policy A utilises that gOHM - as that could be collateral that needs to be used in a liquidation event.
-
-   It IS however possible for policy A to *(un)delegate* the gOHM on behalf of a user across policies.
-   Eg - If policy A deposited and then delegated Alice's gOHM to Bob. 
-      - And then there's a cooler liquidation on Alice. 
-      - Cooler is allowed to undelegate the total gOHM for Alice across both policies.
-      - However cooler is NOT allowed to withdraw the gOHM deposited by policy B
-
-2/ Because deposit/withdraw is split by policy, but applyDelegations is across all policies - the functions are split in this way too:
-    depositUndelegatedGohm(onBehalfOf, amount)
-    withdrawUndelegatedGohm(onBehalfOf, amount)
-    applyDelegations(onBehalfOf, delegationRequests)
-
-3/ The lowest number of delegates an account can be set to is 1 (if zero, it will be reset to the default of 10)
-
-4/ I didn't add (more) state to get the set of all delegates. Can rely on subgraph to get that imo.
-  BUT do we need onchain state for these?
-    a/ Total delegated + undelegated gOHM across all policies and accounts (ie grand total)?
-    b/ Total delegated + undelegated gOHM per policy?
-
-  Tradeoff for user tx gas cost vs utility.
-
-5/ There's also no current way to get the list of delegates/accounts for a given policy (on-chain), so would again be relying on subgraph.
-  Is this ok or do you think we need anything specific here (at the cost of more gas)?
-*/
-
 /**
  * @title  Olympus Governance Delegation
  * @notice Olympus Governance Delegation (Module) Contract

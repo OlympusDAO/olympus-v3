@@ -7,19 +7,6 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Clone} from "clones/Clone.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
 
-/*
-@todo considerations - up for discussion:
-
-- This was made intentionally permisionless. 
-- The accounting for who provided the delegation is partitioned by the contract which calls delegate(), such that only they can resindDelegation()
-- Which means this same delegate escrow address could be used by other things within the ecosystem.
-- The delegate can't control the gohm or change their delegation to another address. But perhaps that should be allowed?
-- Any donations (gOHM or any other token) aren't recoverable. 
-- If an incorrect delegate account is chosen, the user (via cooler v2) can rescindDelegation to pull that gOHM back.
-- If cooler v2 winds down, it will have to rescindDelegation() for each user first (to pull back gOHM).
-
-*/
-
 /**
  * @title Delegate Escrow Account
  * @notice An escrow to hold gOHM and delegate that amount to exactly one account.
