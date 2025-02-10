@@ -21,13 +21,25 @@ library Quabi {
     }
 
     function getPath(string memory contractName) internal returns (string memory path) {
+        // Check if the standard path exists
         string[] memory inputs = new string[](3);
         inputs[0] = "sh";
         inputs[1] = "-c";
         inputs[2] = string(bytes.concat("./src/test/lib/quabi/path.sh ", bytes(contractName), ".json", ""));
         bytes memory res = vm.ffi(inputs);
 
+        if (res.length > 0) {
+            path = abi.decode(res, (string));
+            return path;
+        }
+
+
+        // Use the "default" path
+        inputs[2] = string(bytes.concat("./src/test/lib/quabi/path.sh ", bytes(contractName), ".default.json", ""));
+        res = vm.ffi(inputs);
+
         path = abi.decode(res, (string));
+        return path;
     }
 
     function getSelectors(string memory query, string memory path) internal returns (bytes4[] memory) {
