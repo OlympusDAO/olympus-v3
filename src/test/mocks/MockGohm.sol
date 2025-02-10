@@ -4,12 +4,14 @@ pragma solidity ^0.8.0;
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 interface IDelegate {
-    function delegate(address) external returns (bool);
+    function delegate(address) external;
+    function delegates(address) external view returns (address);
 }
 
 contract MockGohm is MockERC20, IDelegate {
-    uint256 public constant index = 10000 * 1e9;
-    address public delegatee;
+    uint256 public constant index = 10000;
+
+    mapping(address => address) public override delegates;
 
     constructor(
         string memory name_,
@@ -17,9 +19,8 @@ contract MockGohm is MockERC20, IDelegate {
         uint8 decimals_
     ) MockERC20(name_, symbol_, decimals_) {}
 
-    function delegate(address delegatee_) public returns (bool) {
-        delegatee = delegatee_;
-        return true;
+    function delegate(address delegatee_) public {
+        delegates[msg.sender] = delegatee_;
     }
 
     function balanceFrom(uint256 amount_) public view returns (uint256) {
