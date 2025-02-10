@@ -12,6 +12,8 @@ This document describes the roles that are used in the Olympus protocol.
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
+| cooler_overseer | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
+| cooler_overseer | MonoCooler | Allows setting parameters on the MonoCooler |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
