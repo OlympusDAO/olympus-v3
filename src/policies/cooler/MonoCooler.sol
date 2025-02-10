@@ -10,7 +10,9 @@ import {IStaking} from "interfaces/IStaking.sol";
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
@@ -32,7 +34,7 @@ import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
  *    `LTV Oracle`
  *  - Users may set an authorization for one other address to act on its behalf.
  */
-contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
+contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     using FixedPointMathLib for uint256;
     using SafeCast for uint256;
     using CompoundedInterest for uint256;
@@ -109,8 +111,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
     //                                         CONSTANTS                                          //
     //============================================================================================//
-
-    bytes32 public constant COOLER_OVERSEER_ROLE = bytes32("cooler_overseer");
 
     /// @notice Extra precision scalar
     uint256 private constant _RAY = 1e27;
@@ -597,7 +597,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setLtvOracle(address newOracle) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setLtvOracle(address newOracle) external override onlyRole(ADMIN_ROLE) {
         (uint96 newOLTV, uint96 newLLTV) = ICoolerLtvOracle(newOracle).currentLtvs();
         if (newOLTV > newLLTV) revert InvalidParam();
 
@@ -611,10 +611,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /// @inheritdoc IMonoCooler
     function setTreasuryBorrower(address newTreasuryBorrower) external override {
         // Permisionless if `treasuryBorrower` is uninitialized
-        if (
-            address(treasuryBorrower) != address(0) &&
-            !ROLES.hasRole(msg.sender, COOLER_OVERSEER_ROLE)
-        ) revert ROLESv1.ROLES_RequireRole(COOLER_OVERSEER_ROLE);
+        if (address(treasuryBorrower) != address(0) && !isAdmin(msg.sender))
+            revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
 
         emit TreasuryBorrowerSet(newTreasuryBorrower);
         treasuryBorrower = ICoolerTreasuryBorrower(newTreasuryBorrower);
@@ -622,21 +620,19 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IMonoCooler
-    function setLiquidationsPaused(bool isPaused) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setLiquidationsPaused(bool isPaused) external override onlyRole(ADMIN_ROLE) {
         liquidationsPaused = isPaused;
         emit LiquidationsPausedSet(isPaused);
     }
 
     /// @inheritdoc IMonoCooler
-    function setBorrowPaused(bool isPaused) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setBorrowPaused(bool isPaused) external override onlyRole(ADMIN_ROLE) {
         emit BorrowPausedSet(isPaused);
         borrowsPaused = isPaused;
     }
 
     /// @inheritdoc IMonoCooler
-    function setInterestRateWad(
-        uint96 newInterestRate
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setInterestRateWad(uint96 newInterestRate) external override onlyRole(ADMIN_ROLE) {
         // Force an update of state on the old rate first.
         _globalStateRW();
 
@@ -648,7 +644,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     function setMaxDelegateAddresses(
         address account,
         uint32 maxDelegateAddresses
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    ) external override onlyRole(ADMIN_ROLE) {
         DLGTE.setMaxDelegateAddresses(account, maxDelegateAddresses);
     }
 

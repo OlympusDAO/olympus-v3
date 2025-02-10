@@ -115,7 +115,7 @@ abstract contract MonoCoolerBaseTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         /// Configure access control
-        rolesAdmin.grantRole("cooler_overseer", OVERSEER);
+        rolesAdmin.grantRole("admin", OVERSEER);
         rolesAdmin.grantRole("treasuryborrower_cooler", address(cooler));
         rolesAdmin.grantRole("admin", TB_ADMIN);
 
@@ -142,6 +142,16 @@ abstract contract MonoCoolerBaseTest is Test {
         // Enable the CoolerTreasuryBorrower
         vm.startPrank(TB_ADMIN);
         treasuryBorrower.enable(abi.encode(""));
+        vm.stopPrank();
+
+        // Enable the CoolerLtvOracle
+        vm.startPrank(OVERSEER);
+        ltvOracle.enable(abi.encode(""));
+        vm.stopPrank();
+
+        // Enable the MonoCooler
+        vm.startPrank(OVERSEER);
+        cooler.enable(abi.encode(""));
         vm.stopPrank();
     }
 

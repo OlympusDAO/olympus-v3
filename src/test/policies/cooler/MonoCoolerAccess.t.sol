@@ -8,9 +8,7 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 contract MonoCoolerAccessTest is MonoCoolerBaseTest {
     function expectOnlyOverseer() internal {
         vm.startPrank(OTHERS);
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.stopPrank();
     }
 
