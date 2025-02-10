@@ -6,6 +6,8 @@ import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 
 import {RolesAdmin, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
@@ -46,7 +48,7 @@ contract CoolerLtvOracleTestBase is Test {
     event MaxLiquidationLtvPremiumBpsSet(uint96 maxPremiumBps);
     event LiquidationLtvPremiumBpsSet(uint96 premiumBps);
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.warp(START_TIMESTAMP);
         gohm = new MockGohm("gOHM", "gOHM", 18);
         usds = new MockERC20("USDS", "USDS", 18);
@@ -71,7 +73,12 @@ contract CoolerLtvOracleTestBase is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(oracle));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
-        rolesAdmin.grantRole("cooler_overseer", OVERSEER);
+        rolesAdmin.grantRole("admin", OVERSEER);
+
+        // Enanle the policy
+        vm.startPrank(OVERSEER);
+        oracle.enable(abi.encode(""));
+        vm.stopPrank();
     }
 
     function checkOltvData(
@@ -178,7 +185,6 @@ contract CoolerLtvOracleTestAdmin is CoolerLtvOracleTestBase {
 
         assertEq(oracle.DECIMALS(), 18);
         assertEq(oracle.BASIS_POINTS_DIVISOR(), 10_000);
-        assertEq(oracle.COOLER_OVERSEER_ROLE(), bytes32("cooler_overseer"));
 
         assertEq(oracle.currentOriginationLtv(), defaultOLTV);
         assertEq(oracle.currentLiquidationLtv(), defaultLLTV);
@@ -284,15 +290,62 @@ contract CoolerLtvOracleTestAdmin is CoolerLtvOracleTestBase {
     }
 }
 
+contract CoolerLtvOracleTestNotEnabled is CoolerLtvOracleTestBase {
+    function setUp() public override {
+        super.setUp();
+
+        vm.startPrank(OVERSEER);
+        oracle.disable(abi.encode(""));
+        vm.stopPrank();
+    }
+
+    function test_access_setMaxOriginationLtvDelta() public {
+        vm.prank(OVERSEER);
+        oracle.setMaxOriginationLtvDelta(0.15e18);
+
+        assertEq(oracle.maxOriginationLtvDelta(), 0.15e18);
+    }
+
+    function test_access_setMinOriginationLtvTargetTimeDelta() public {
+        vm.prank(OVERSEER);
+        oracle.setMinOriginationLtvTargetTimeDelta(uint32(vm.getBlockTimestamp() + 1));
+
+        assertEq(oracle.minOriginationLtvTargetTimeDelta(), uint32(vm.getBlockTimestamp() + 1));
+    }
+
+    function test_access_setMaxOriginationLtvRateOfChange() public {
+        vm.prank(OVERSEER);
+        oracle.setMaxOriginationLtvRateOfChange(0.01e18, 1 days);
+
+        assertEq(oracle.maxOriginationLtvRateOfChange(), 0.01e18 / uint96(1 days));
+    }
+
+    function test_access_setOriginationLtvAt() public {
+        vm.prank(OVERSEER);
+        oracle.setOriginationLtvAt(defaultOLTV, uint32(vm.getBlockTimestamp()) + 365 days);
+
+        assertEq(oracle.currentOriginationLtv(), defaultOLTV);
+    }
+
+    function test_access_setMaxLiquidationLtvPremiumBps() public {
+        vm.prank(OVERSEER);
+        oracle.setMaxLiquidationLtvPremiumBps(123);
+
+        assertEq(oracle.maxLiquidationLtvPremiumBps(), 123);
+    }
+
+    function test_access_setLiquidationLtvPremiumBps() public {
+        vm.prank(OVERSEER);
+        oracle.setLiquidationLtvPremiumBps(123);
+
+        assertEq(oracle.liquidationLtvPremiumBps(), 123);
+    }
+}
+
 contract CoolerLtvOracleTestAccess is CoolerLtvOracleTestBase {
     function expectOnlyOverseer() internal {
         vm.startPrank(OTHERS);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ROLESv1.ROLES_RequireRole.selector,
-                oracle.COOLER_OVERSEER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
     }
 
     function test_access_setMaxOriginationLtvDelta() public {
