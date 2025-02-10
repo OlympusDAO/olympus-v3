@@ -259,6 +259,10 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         return sender == onBehalfOf || block.timestamp < authorizations[onBehalfOf][sender];
     }
 
+    function _requireSenderAuthorized(address sender, address onBehalfOf) internal view {
+        if (!isSenderAuthorized(sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+    }
+
     //============================================================================================//
     //                                       COLLATERAL                                           //
     //============================================================================================//
@@ -286,7 +290,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         if (delegationRequests.length > 0) {
             // While adding collateral on another user's behalf is ok,
             // delegating on behalf of someone else is not allowed unless authorized
-            if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+            _requireSenderAuthorized(msg.sender, onBehalfOf);
             DLGTE.applyDelegations(onBehalfOf, delegationRequests);
         }
 
@@ -304,7 +308,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     ) external override returns (uint128 collateralWithdrawn) {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
-        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        _requireSenderAuthorized(msg.sender, onBehalfOf);
 
         // No need to sync global debt state when withdrawing collateral
         GlobalStateCache memory gStateCache = _globalStateRO();
@@ -374,7 +378,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         if (borrowsPaused || !isEnabled) revert Paused();
         if (borrowAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
-        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        _requireSenderAuthorized(msg.sender, onBehalfOf);
 
         // Sync global debt state when borrowing
         GlobalStateCache memory gStateCache = _globalStateRW();
@@ -494,7 +498,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         override
         returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance)
     {
-        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        _requireSenderAuthorized(msg.sender, onBehalfOf);
         (totalDelegated, totalUndelegated, undelegatedBalance) = DLGTE.applyDelegations(
             onBehalfOf,
             delegationRequests
