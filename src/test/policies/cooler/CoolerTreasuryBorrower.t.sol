@@ -4,6 +4,8 @@ pragma solidity ^0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {Permissions, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -50,7 +52,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryBorrower));
 
         rolesAdmin.grantRole("treasuryborrower_cooler", TB_COOLER);
-        rolesAdmin.grantRole("treasuryborrower_admin", TB_ADMIN);
+        rolesAdmin.grantRole("admin", TB_ADMIN);
         kernel.executeAction(Actions.ChangeExecutor, EXECUTOR);
 
         // Setup Treasury
@@ -70,6 +72,18 @@ contract CoolerTreasuryBorrowerTestBase is Test {
 
         // And update so sUSDS share price is 10% higher
         usds.mint(address(susds), usds.balanceOf(address(susds)) / 10);
+
+        // Enable the policy
+        vm.startPrank(TB_ADMIN);
+        treasuryBorrower.enable(abi.encode(""));
+        vm.stopPrank();
+    }
+
+    modifier givenDisabled() {
+        vm.startPrank(TB_ADMIN);
+        treasuryBorrower.disable(abi.encode(""));
+        vm.stopPrank();
+        _;
     }
 
     function test_construction_failDecimalsDebt() public {
@@ -88,7 +102,6 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         assertEq(address(treasuryBorrower.ROLES()), address(ROLES));
         assertEq(address(treasuryBorrower.TRSRY()), address(TRSRY));
         assertEq(treasuryBorrower.COOLER_ROLE(), bytes32("treasuryborrower_cooler"));
-        assertEq(treasuryBorrower.ADMIN_ROLE(), bytes32("treasuryborrower_admin"));
     }
 
     function test_configureDependencies_success() public {
@@ -163,6 +176,27 @@ contract CoolerTreasuryBorrowerTestBase is Test {
             )
         );
         treasuryBorrower.repay();
+    }
+
+    function test_disabled_borrow() public givenDisabled {
+        vm.startPrank(TB_COOLER);
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        treasuryBorrower.borrow(123, RECEIVER);
+        vm.stopPrank();
+    }
+
+    function test_disabled_repay() public givenDisabled {
+        vm.startPrank(TB_COOLER);
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        treasuryBorrower.repay();
+        vm.stopPrank();
+    }
+
+    function test_disabled_setDebt() public givenDisabled {
+        vm.startPrank(TB_ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        treasuryBorrower.setDebt(123);
+        vm.stopPrank();
     }
 
     function test_borrow_failZeroAmount() public {

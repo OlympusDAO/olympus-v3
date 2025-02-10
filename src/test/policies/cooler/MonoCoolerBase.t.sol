@@ -117,7 +117,7 @@ abstract contract MonoCoolerBaseTest is Test {
         /// Configure access control
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
         rolesAdmin.grantRole("treasuryborrower_cooler", address(cooler));
-        rolesAdmin.grantRole("treasuryborrower_admin", TB_ADMIN);
+        rolesAdmin.grantRole("admin", TB_ADMIN);
 
         kernel.executeAction(Actions.ChangeExecutor, EXECUTOR);
 
@@ -138,6 +138,11 @@ abstract contract MonoCoolerBaseTest is Test {
 
         // Mint some OHM into staking for gOHM liquidations
         ohm.mint(address(staking), 100_000_000e9);
+
+        // Enable the CoolerTreasuryBorrower
+        vm.startPrank(TB_ADMIN);
+        treasuryBorrower.enable(abi.encode(""));
+        vm.stopPrank();
     }
 
     function checkGlobalState(

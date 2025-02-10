@@ -31,6 +31,11 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
         kernel.executeAction(Actions.DeactivatePolicy, address(treasuryBorrower));
         kernel.executeAction(Actions.ActivatePolicy, address(mockTreasuryBorrower));
 
+        // Enable the mock TB
+        vm.startPrank(TB_ADMIN);
+        mockTreasuryBorrower.enable(abi.encode(""));
+        vm.stopPrank();
+
         // 3. Set the outstanding debt on the new treasuryBorrower
         // It's up to the admin to do the correct decimals conversions.
         vm.startPrank(TB_ADMIN);
@@ -199,6 +204,11 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.DeactivatePolicy, address(treasuryBorrower));
         kernel.executeAction(Actions.ActivatePolicy, address(mockTreasuryBorrower));
+
+        // Enable the mock TB
+        vm.startPrank(TB_ADMIN);
+        mockTreasuryBorrower.enable(abi.encode(""));
+        vm.stopPrank();
 
         // 3. Set the outstanding debt on the new treasuryBorrower
         // It's up to the admin to do the correct decimals conversions.
