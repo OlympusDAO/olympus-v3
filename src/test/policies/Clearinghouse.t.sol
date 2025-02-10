@@ -100,13 +100,13 @@ contract ClearinghouseTest is Test {
         others = users[1];
         overseer = users[2];
 
+        MockStaking staking = new MockStaking();
+        factory = new CoolerFactory();
+
         ohm = new MockOhm("olympus", "OHM", 9);
         gohm = new MockERC20("olympus", "gOHM", 18);
         dai = new MockERC20("dai", "DAI", 18);
         sdai = new MockERC4626(dai, "sDai", "sDAI");
-
-        MockStaking staking = new MockStaking(address(ohm), address(gohm));
-        factory = new CoolerFactory();
 
         kernel = new Kernel(); // this contract will be the executor
 

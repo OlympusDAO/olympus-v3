@@ -8,7 +8,7 @@ import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 
 import {MockOhm} from "test/mocks/MockOhm.sol";
-import {MockStaking} from "test/mocks/MockStaking.sol";
+import {MockStakingReal} from "test/mocks/MockStakingReal.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
@@ -26,7 +26,7 @@ abstract contract MonoCoolerBaseTest is Test {
     MockERC4626 internal susds;
 
     Kernel public kernel;
-    MockStaking internal staking;
+    MockStakingReal internal staking;
     OlympusRoles internal ROLES;
     OlympusMinter internal MINTR;
     OlympusTreasury internal TRSRY;
@@ -63,7 +63,7 @@ abstract contract MonoCoolerBaseTest is Test {
 
         ohm = new MockOhm("OHM", "OHM", 9);
         gohm = new MockGohm("gOHM", "gOHM", 18);
-        staking = new MockStaking(address(ohm), address(gohm));
+        staking = new MockStakingReal(address(ohm), address(gohm));
 
         usds = new MockERC20("usds", "USDS", 18);
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
@@ -80,9 +80,9 @@ abstract contract MonoCoolerBaseTest is Test {
             address(kernel),
             address(gohm),
             address(usds),
-            DEFAULT_OLTV, 
-            DEFAULT_OLTV_MAX_DELTA, 
-            DEFAULT_OLTV_MIN_TARGET_TIME_DELTA, 
+            DEFAULT_OLTV,
+            DEFAULT_OLTV_MAX_DELTA,
+            DEFAULT_OLTV_MIN_TARGET_TIME_DELTA,
             DEFAULT_OLTV_MAX_RATE_OF_CHANGE,
             DEFAULT_LLTV_MAX_PREMIUM_BPS,
             DEFAULT_LLTV_PREMIUM_BPS
@@ -112,7 +112,7 @@ abstract contract MonoCoolerBaseTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(ltvOracle));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryBorrower));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        
+
         /// Configure access control
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
         rolesAdmin.grantRole("treasuryborrower_cooler", address(cooler));
@@ -401,7 +401,7 @@ abstract contract MonoCoolerBaseTest is Test {
             expectedPosition.maxDelegateAddresses,
             "AccountPosition::maxDelegateAddresses"
         );
-        
+
         assertEq(theCooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
         assertEq(theCooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
     }
