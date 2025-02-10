@@ -32,6 +32,7 @@ This document describes the roles that are used in the Olympus protocol.
 | operator_reporter | Operator | Report bond purchases |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
+| treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 
 ## Role Allocations
 
