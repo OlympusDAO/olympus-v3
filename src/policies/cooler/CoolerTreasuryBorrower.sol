@@ -16,7 +16,7 @@ import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasur
  *  - This logic is split out into a separate policy (rather than using `TreasuryCustodian`):
  *      1/ So the Cooler debt token can be updated if required in future to another stablecoin without a redeploy of Cooler.
  *      2/ In this case, debt is denominated in USDS but stored 'at rest' in Treasury into sUSDS for extra yield.
- *  - Upon an upgreade, if the actual debt token is changed (with a new deployment of this contract) to a non 18dp asset
+ *  - Upon an upgrade, if the actual debt token is changed (with a new deployment of this contract) to a non 18dp asset
  *    eg USDC, then borrow() and repay() will need to do the conversion.
  *  - This implementation borrows USDS from Treasury but deposits into sUSDS to benefit from savings yield.
  */
