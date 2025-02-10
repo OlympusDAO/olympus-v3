@@ -11,10 +11,7 @@ contract MockStakingReal {
     IERC20 public immutable OHM;
     IgOHM public immutable gOHM;
 
-    constructor(
-        address ohm_,
-        address gohm_
-    ) {
+    constructor(address ohm_, address gohm_) {
         OHM = IERC20(ohm_);
         gOHM = IgOHM(gohm_);
     }
@@ -33,7 +30,7 @@ contract MockStakingReal {
         bool _trigger,
         bool _rebasing
     ) external returns (uint256 amount_) {
-        require(!_trigger && !_rebasing, "MockStaking can't handle trigger or rebasing") ;
+        require(!_trigger && !_rebasing, "MockStaking can't handle trigger or rebasing");
 
         amount_ = _amount;
         gOHM.burn(msg.sender, _amount); // amount was given in gOHM terms

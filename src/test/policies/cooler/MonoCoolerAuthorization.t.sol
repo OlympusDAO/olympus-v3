@@ -6,11 +6,19 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 
 contract MonoCoolerAuthorization is MonoCoolerBaseTest {
-    event AuthorizationSet(address indexed caller, address indexed account, address indexed authorized, uint96 authorizationDeadline);
+    event AuthorizationSet(
+        address indexed caller,
+        address indexed account,
+        address indexed authorized,
+        uint96 authorizationDeadline
+    );
 
-    bytes32 private constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
+    bytes32 private constant DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
     bytes32 private constant AUTHORIZATION_TYPEHASH =
-        keccak256("Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)");
+        keccak256(
+            "Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)"
+        );
 
     function buildDomainSeparator() internal view returns (bytes32) {
         return keccak256(abi.encode(DOMAIN_TYPEHASH, block.chainid, address(cooler)));
@@ -22,10 +30,11 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
         address authorized,
         uint96 authorizationDeadline,
         uint256 signatureDeadline
-    ) internal view returns (
-        IMonoCooler.Authorization memory auth,
-        IMonoCooler.Signature memory sig
-    ) {
+    )
+        internal
+        view
+        returns (IMonoCooler.Authorization memory auth, IMonoCooler.Signature memory sig)
+    {
         bytes32 domainSeparator = buildDomainSeparator();
         auth = IMonoCooler.Authorization({
             account: account,
@@ -58,8 +67,8 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
         assertEq(cooler.isSenderAuthorized(BOB, ALICE), false);
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit AuthorizationSet(ALICE, ALICE, BOB, uint96(block.timestamp+1));
-        cooler.setAuthorization(BOB, uint96(block.timestamp+1));
+        emit AuthorizationSet(ALICE, ALICE, BOB, uint96(block.timestamp + 1));
+        cooler.setAuthorization(BOB, uint96(block.timestamp + 1));
         assertEq(cooler.isSenderAuthorized(BOB, ALICE), true);
 
         // Rugged 1sec later
@@ -69,18 +78,26 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
 
     function test_setAuthorizationWithSig() public {
         (address accountOwner, uint256 accountOwnerPk) = makeAddrAndKey("ACCOUNT_OWNER");
-        uint96 authorizationDeadline = uint96(block.timestamp+1);
+        uint96 authorizationDeadline = uint96(block.timestamp + 1);
 
         // Starts as not authorized
         assertEq(cooler.isSenderAuthorized(BOB, accountOwner), false);
 
         // Check for expired deadlines
-        uint256 signatureDeadline = block.timestamp-1;
+        uint256 signatureDeadline = block.timestamp - 1;
         IMonoCooler.Authorization memory auth;
         IMonoCooler.Signature memory sig;
         {
-            (auth, sig) = signedAuth(accountOwner, accountOwnerPk, BOB, authorizationDeadline, signatureDeadline);
-            vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpiredSignature.selector, signatureDeadline));
+            (auth, sig) = signedAuth(
+                accountOwner,
+                accountOwnerPk,
+                BOB,
+                authorizationDeadline,
+                signatureDeadline
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(IMonoCooler.ExpiredSignature.selector, signatureDeadline)
+            );
             cooler.setAuthorizationWithSig(auth, sig);
         }
 
@@ -88,7 +105,13 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
         // ALICE actually calls using the signature pre-signed by `accountOwner`
         {
             signatureDeadline = block.timestamp + 3600;
-            (auth, sig) = signedAuth(accountOwner, accountOwnerPk, BOB, authorizationDeadline, signatureDeadline);
+            (auth, sig) = signedAuth(
+                accountOwner,
+                accountOwnerPk,
+                BOB,
+                authorizationDeadline,
+                signatureDeadline
+            );
 
             vm.startPrank(ALICE);
             vm.expectEmit(address(cooler));
@@ -111,7 +134,13 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
 
         // Success again to show nonce increment works
         {
-            (auth, sig) = signedAuth(accountOwner, accountOwnerPk, BOB, authorizationDeadline+10, signatureDeadline);
+            (auth, sig) = signedAuth(
+                accountOwner,
+                accountOwnerPk,
+                BOB,
+                authorizationDeadline + 10,
+                signatureDeadline
+            );
             cooler.setAuthorizationWithSig(auth, sig);
             assertEq(cooler.isSenderAuthorized(BOB, accountOwner), true);
             assertEq(cooler.isSenderAuthorized(ALICE, accountOwner), false);
@@ -120,10 +149,22 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
 
         // Fails with an incorrect signature
         {
-            (auth, sig) = signedAuth(accountOwner, accountOwnerPk, BOB, authorizationDeadline+10, signatureDeadline);
+            (auth, sig) = signedAuth(
+                accountOwner,
+                accountOwnerPk,
+                BOB,
+                authorizationDeadline + 10,
+                signatureDeadline
+            );
             auth.account = ALICE;
             auth.nonce = 0;
-            vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidSigner.selector, 0xD36ED23d73671445c86Ef402F5F5035Ba1B2D4f3, ALICE));
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IMonoCooler.InvalidSigner.selector,
+                    0xD36ED23d73671445c86Ef402F5F5035Ba1B2D4f3,
+                    ALICE
+                )
+            );
             cooler.setAuthorizationWithSig(auth, sig);
         }
     }

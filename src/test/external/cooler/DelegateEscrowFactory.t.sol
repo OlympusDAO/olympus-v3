@@ -9,7 +9,6 @@ import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 import {IVotes} from "openzeppelin/governance/utils/IVotes.sol";
 
 contract DelegateEscrowFactoryTestBase is Test {
-
     address public immutable ALICE = makeAddr("ALICE");
     address public immutable BOB = makeAddr("BOB");
     address public immutable CHARLIE = makeAddr("CHARLIE");
@@ -92,7 +91,11 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
     address internal immutable CALLER1 = makeAddr("CALLER1");
     address internal immutable CALLER2 = makeAddr("CALLER2");
 
-    function delegate(address caller, uint256 amount, address onBehalfOf) internal returns (uint256) {
+    function delegate(
+        address caller,
+        uint256 amount,
+        address onBehalfOf
+    ) internal returns (uint256) {
         vm.startPrank(caller);
         deal(address(gohm), caller, amount);
         gohm.approve(address(aliceEscrow), amount);
@@ -102,13 +105,17 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
         return aliceEscrow.delegate(onBehalfOf, amount);
     }
 
-    function rescind(address caller, address onBehalfOf, uint256 amount) internal returns (uint256 remaining) {
+    function rescind(
+        address caller,
+        address onBehalfOf,
+        uint256 amount
+    ) internal returns (uint256 remaining) {
         vm.startPrank(caller);
         uint256 balBefore = gohm.balanceOf(caller);
         vm.expectEmit(address(escrowFactory));
         emit Delegate(address(aliceEscrow), caller, onBehalfOf, -int256(amount));
         remaining = aliceEscrow.rescindDelegation(onBehalfOf, amount);
-        assertEq(gohm.balanceOf(caller)-balBefore, amount);
+        assertEq(gohm.balanceOf(caller) - balBefore, amount);
         return remaining;
     }
 
@@ -150,7 +157,7 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
 
         vm.startPrank(CALLER1);
         vm.expectRevert(abi.encodeWithSelector(DelegateEscrow.ExceededDelegationBalance.selector));
-        aliceEscrow.rescindDelegation(ALICE, 43e18+1);
+        aliceEscrow.rescindDelegation(ALICE, 43e18 + 1);
 
         assertEq(rescind(CALLER1, ALICE, 5e18), 38e18);
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 38e18);

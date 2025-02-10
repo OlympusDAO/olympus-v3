@@ -193,13 +193,15 @@ contract DLGTETestBase is Test {
         uint256 expectedTotalUndelegated,
         uint256 expectedUndelegatedBalance
     ) internal {
-        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = dlgte.applyDelegations(
-            onBehalfOf,
-            delegationRequests
-        );
+        (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = dlgte
+            .applyDelegations(onBehalfOf, delegationRequests);
         assertEq(totalDelegated, expectedTotalDelegated, "applyDelegations::totalDelegated");
         assertEq(totalUndelegated, expectedTotalUndelegated, "applyDelegations::totalUndelegated");
-        assertEq(undelegatedBalance, expectedUndelegatedBalance, "applyDelegations::undelegatedBalance");
+        assertEq(
+            undelegatedBalance,
+            expectedUndelegatedBalance,
+            "applyDelegations::undelegatedBalance"
+        );
     }
 
     function seedDelegate() internal {
@@ -604,7 +606,13 @@ contract DLGTETestDelegationsTransferDelegate is DLGTETestBase {
         emit DelegateEscrowCreated(address(dlgte), CHARLIE, expectedCharlieEscrow);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, CHARLIE, 25e18);
-        verifyApplyDelegations(ALICE, transferDelegationRequest(BOB, CHARLIE, 25e18), 25e18, 25e18, 0);
+        verifyApplyDelegations(
+            ALICE,
+            transferDelegationRequest(BOB, CHARLIE, 25e18),
+            25e18,
+            25e18,
+            0
+        );
         assertEq(gohm.balanceOf(address(dlgte)), 0);
         assertEq(gohm.balanceOf(address(policy)), 0);
         assertEq(gohm.balanceOf(expectedBobEscrow), 75e18);

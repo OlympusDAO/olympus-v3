@@ -29,7 +29,7 @@ interface ICoolerTreasuryBorrower {
     /// @dev Cooler is expected to transfer the amount to this contract prior to calling
     function repay() external;
 
-    /// @notice In the case of a Cooler debt token change (eg USDS => USDC), the 
+    /// @notice In the case of a Cooler debt token change (eg USDS => USDC), the
     /// debt may be manually net settled from the old debt token (in the old cooler treasury borrower)
     /// to the new debt token (in the new cooler treasury borrower)
     /// @param debtTokenAmount The amount of debt to set in Treasury, in the debtToken.decimals() precision
@@ -39,7 +39,9 @@ interface ICoolerTreasuryBorrower {
     function debtToken() external view returns (ERC20);
 
     /// @notice Convert a debt amount in wad (18dp) into the decimals of the `debtToken`
-    function convertToDebtTokenAmount(uint256 amountInWad) external view returns (ERC20 dToken, uint256 dTokenAmount);
+    function convertToDebtTokenAmount(
+        uint256 amountInWad
+    ) external view returns (ERC20 dToken, uint256 dTokenAmount);
 
     /// @notice The decimal precision of the `amountInWad` used in borrow and repay functions.
     /// @dev A constant of 18

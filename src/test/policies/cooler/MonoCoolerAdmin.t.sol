@@ -22,10 +22,7 @@ contract MockLtvOracle {
     }
 
     function currentLtvs() external view returns (uint96, uint96) {
-        return (
-            originationLtv,
-            liquidationLtv
-        );
+        return (originationLtv, liquidationLtv);
     }
 }
 
@@ -53,7 +50,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_construction_failLtv() public {
-        address badOracle = address(new MockLtvOracle(123e18, 123e18-1));
+        address badOracle = address(new MockLtvOracle(123e18, 123e18 - 1));
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler = new MonoCooler(
             address(ohm),
@@ -127,12 +124,14 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         );
 
         assertEq(
-            cooler.DOMAIN_SEPARATOR(), 
-            keccak256(abi.encode(
-                keccak256("EIP712Domain(uint256 chainId,address verifyingContract)"), 
-                block.chainid, 
-                address(cooler)
-            ))
+            cooler.DOMAIN_SEPARATOR(),
+            keccak256(
+                abi.encode(
+                    keccak256("EIP712Domain(uint256 chainId,address verifyingContract)"),
+                    block.chainid,
+                    address(cooler)
+                )
+            )
         );
     }
 
@@ -161,10 +160,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                Policy.Policy_WrongModuleVersion.selector,
-                abi.encode([1, 1, 1])
-            )
+            abi.encodeWithSelector(Policy.Policy_WrongModuleVersion.selector, abi.encode([1, 1, 1]))
         );
         cooler.configureDependencies();
     }
@@ -175,10 +171,14 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
 
         vm.startPrank(EXECUTOR);
         OlympusMinter newMINTR = new OlympusMinter(kernel, address(ohm));
-        OlympusGovDelegation newDLGTE = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
+        OlympusGovDelegation newDLGTE = new OlympusGovDelegation(
+            kernel,
+            address(gohm),
+            escrowFactory
+        );
         kernel.executeAction(Actions.UpgradeModule, address(newMINTR));
         kernel.executeAction(Actions.UpgradeModule, address(newDLGTE));
-        
+
         assertEq(ohm.allowance(address(cooler), address(MINTR)), 0);
         assertEq(gohm.allowance(address(cooler), address(DLGTE)), 0);
         assertEq(ohm.allowance(address(cooler), address(newMINTR)), type(uint256).max);
@@ -205,45 +205,51 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_setLtvOracle_fail_newOLTV_gt_newLLTV() public {
-        address badOracle = address(new MockLtvOracle(123e18, 123e18-1));
+        address badOracle = address(new MockLtvOracle(123e18, 123e18 - 1));
         vm.startPrank(OVERSEER);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler.setLtvOracle(address(badOracle));
     }
 
     function test_setLtvOracle_fail_newOLTV_lt_oldOLTV() public {
-        address badOracle = address(new MockLtvOracle(
-            ltvOracle.currentOriginationLtv()-1,
-            ltvOracle.currentLiquidationLtv ()
-        ));
+        address badOracle = address(
+            new MockLtvOracle(
+                ltvOracle.currentOriginationLtv() - 1,
+                ltvOracle.currentLiquidationLtv()
+            )
+        );
         vm.startPrank(OVERSEER);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler.setLtvOracle(address(badOracle));
     }
 
     function test_setLtvOracle_fail_newLLTV_lt_oldLLTV() public {
-        address badOracle = address(new MockLtvOracle(
-            ltvOracle.currentOriginationLtv(),
-            ltvOracle.currentLiquidationLtv()-1 
-        ));
+        address badOracle = address(
+            new MockLtvOracle(
+                ltvOracle.currentOriginationLtv(),
+                ltvOracle.currentLiquidationLtv() - 1
+            )
+        );
         vm.startPrank(OVERSEER);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler.setLtvOracle(address(badOracle));
     }
 
     function test_setLtvOracle_success() public {
-        address newOracle = address(new MockLtvOracle(
-            ltvOracle.currentOriginationLtv()+5,
-            ltvOracle.currentLiquidationLtv()+5 
-        ));
+        address newOracle = address(
+            new MockLtvOracle(
+                ltvOracle.currentOriginationLtv() + 5,
+                ltvOracle.currentLiquidationLtv() + 5
+            )
+        );
         vm.startPrank(OVERSEER);
         vm.expectEmit(address(cooler));
         emit LtvOracleSet(address(newOracle));
         cooler.setLtvOracle(address(newOracle));
         assertEq(address(cooler.ltvOracle()), newOracle);
         (uint96 oltv, uint96 lltv) = cooler.loanToValues();
-        assertEq(oltv, DEFAULT_OLTV+5);
-        assertEq(lltv, DEFAULT_LLTV+5);
+        assertEq(oltv, DEFAULT_OLTV + 5);
+        assertEq(lltv, DEFAULT_LLTV + 5);
     }
 
     function test_setTreasuryBorrower_failDecimals() public {
@@ -260,7 +266,10 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_setTreasuryBorrower_success() public {
-        CoolerTreasuryBorrower newTreasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(susds));
+        CoolerTreasuryBorrower newTreasuryBorrower = new CoolerTreasuryBorrower(
+            address(kernel),
+            address(susds)
+        );
         vm.startPrank(OVERSEER);
 
         vm.expectEmit(address(cooler));

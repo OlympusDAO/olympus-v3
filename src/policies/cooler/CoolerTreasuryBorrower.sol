@@ -38,10 +38,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     bytes32 public constant COOLER_ROLE = bytes32("treasuryborrower_cooler");
     bytes32 public constant ADMIN_ROLE = bytes32("treasuryborrower_admin");
 
-    constructor(
-        address kernel_,
-        address susds_
-    ) Policy(Kernel(kernel_)) {
+    constructor(address kernel_, address susds_) Policy(Kernel(kernel_)) {
         susds = ERC4626(susds_);
         _usds = ERC20(susds.asset());
 
@@ -66,10 +63,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
-        if (
-            ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1
-        ) revert Policy_WrongModuleVersion(expected);
+        if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -82,7 +76,10 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function borrow(uint256 amountInWad, address recipient) external override onlyRole(COOLER_ROLE) {
+    function borrow(
+        uint256 amountInWad,
+        address recipient
+    ) external override onlyRole(COOLER_ROLE) {
         if (amountInWad == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
 
@@ -121,22 +118,18 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function setDebt(uint256 debtTokenAmount) external override onlyRole(ADMIN_ROLE) {
-        TRSRY.setDebt({
-            debtor_: address(this),
-            token_: _usds,
-            amount_: debtTokenAmount
-        });
+        TRSRY.setDebt({debtor_: address(this), token_: _usds, amount_: debtTokenAmount});
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function debtToken() external override view returns (ERC20) {
+    function debtToken() external view override returns (ERC20) {
         return _usds;
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function convertToDebtTokenAmount(
         uint256 amountInWad
-    ) external override view returns (ERC20 dToken, uint256 dTokenAmount) {
+    ) external view override returns (ERC20 dToken, uint256 dTokenAmount) {
         dToken = _usds;
         dTokenAmount = amountInWad;
     }

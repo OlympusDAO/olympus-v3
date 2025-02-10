@@ -5,6 +5,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 interface IDelegate {
     function delegate(address) external;
+
     function delegates(address) external view returns (address);
 }
 

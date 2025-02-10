@@ -94,11 +94,10 @@ abstract contract DLGTEv1 is Module {
     function applyDelegations(
         address onBehalfOf,
         DelegationRequest[] calldata delegationRequests
-    ) external virtual returns (
-        uint256 totalDelegated,
-        uint256 totalUndelegated,
-        uint256 undelegatedBalance
-    );
+    )
+        external
+        virtual
+        returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance);
 
     /**
      * @notice Report the total delegated and undelegated gOHM balance for an account

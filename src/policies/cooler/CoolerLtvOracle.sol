@@ -28,20 +28,16 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     struct OriginationLtvData {
         /// @notice The Origination LTV at the time `setOriginationLtvAt()` was last called
         uint96 startingValue;
-
         /// @notice The time at which Origination LTV was last updated via `setOriginationLtvAt()`
         uint32 startTime;
-
         /// @notice The target Origination LTV at the `targetTime`
         uint96 targetValue;
-
         /// @notice The date which the `targetValue` will be reached.
         uint32 targetTime;
-
         /// @notice The rate at which the `startingValue` will change over time from `startTime` until `targetTime`.
         uint96 slope;
     }
-    
+
     /// @inheritdoc ICoolerLtvOracle
     OriginationLtvData public override originationLtvData;
 
@@ -120,19 +116,26 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxOriginationLtvDelta(uint96 maxDelta) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setMaxOriginationLtvDelta(
+        uint96 maxDelta
+    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         emit MaxOriginationLtvDeltaSet(maxDelta);
         maxOriginationLtvDelta = maxDelta;
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMinOriginationLtvTargetTimeDelta(uint32 minTargetTimeDelta) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setMinOriginationLtvTargetTimeDelta(
+        uint32 minTargetTimeDelta
+    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         emit MinOriginationLtvTargetTimeDeltaSet(minTargetTimeDelta);
         minOriginationLtvTargetTimeDelta = minTargetTimeDelta;
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxOriginationLtvRateOfChange(uint96 originationLtvDelta, uint32 timeDelta) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setMaxOriginationLtvRateOfChange(
+        uint96 originationLtvDelta,
+        uint32 timeDelta
+    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         // Calculate the rate of change, rounding down.
         uint96 maxRateOfChange = originationLtvDelta / timeDelta;
         emit MaxOriginationLtvRateOfChangeSet(maxRateOfChange);
@@ -140,22 +143,35 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setOriginationLtvAt(uint96 targetValue, uint32 targetTime) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setOriginationLtvAt(
+        uint96 targetValue,
+        uint32 targetTime
+    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         uint96 _currentOriginationLtv = currentOriginationLtv();
         uint32 _now = uint32(block.timestamp);
-        
+
         // Cannot decrease the OLTV
         if (targetValue < _currentOriginationLtv) revert CannotDecreaseLtv();
         uint96 _originationLtvDelta = targetValue - _currentOriginationLtv;
 
         // targetTime must be at or after (now + minOriginationLtvTargetTimeDelta)
-        if (targetTime < _now + minOriginationLtvTargetTimeDelta) revert BreachedMinDateDelta(targetTime, _now, minOriginationLtvTargetTimeDelta);
+        if (targetTime < _now + minOriginationLtvTargetTimeDelta)
+            revert BreachedMinDateDelta(targetTime, _now, minOriginationLtvTargetTimeDelta);
         uint32 _timeDelta = targetTime - _now;
 
         // Check that the delta is within tolerance
-        if (_originationLtvDelta > maxOriginationLtvDelta) revert BreachedMaxOriginationLtvDelta(_currentOriginationLtv, targetValue, maxOriginationLtvDelta);
+        if (_originationLtvDelta > maxOriginationLtvDelta)
+            revert BreachedMaxOriginationLtvDelta(
+                _currentOriginationLtv,
+                targetValue,
+                maxOriginationLtvDelta
+            );
         uint96 _rateOfChange = _originationLtvDelta / _timeDelta;
-        if (_rateOfChange > maxOriginationLtvRateOfChange) revert BreachedMaxOriginationLtvRateOfChange(_rateOfChange, maxOriginationLtvRateOfChange);
+        if (_rateOfChange > maxOriginationLtvRateOfChange)
+            revert BreachedMaxOriginationLtvRateOfChange(
+                _rateOfChange,
+                maxOriginationLtvRateOfChange
+            );
 
         originationLtvData = OriginationLtvData({
             startingValue: _currentOriginationLtv,
@@ -169,14 +185,18 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxLiquidationLtvPremiumBps(uint16 maxPremiumBps) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setMaxLiquidationLtvPremiumBps(
+        uint16 maxPremiumBps
+    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         if (maxPremiumBps > BASIS_POINTS_DIVISOR) revert InvalidParam();
         emit MaxLiquidationLtvPremiumBpsSet(maxPremiumBps);
         maxLiquidationLtvPremiumBps = maxPremiumBps;
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setLiquidationLtvPremiumBps(uint16 premiumBps) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setLiquidationLtvPremiumBps(
+        uint16 premiumBps
+    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
         // Cannot set LLTV higher than the max
         if (premiumBps > maxLiquidationLtvPremiumBps) revert InvalidParam();
 
@@ -191,22 +211,27 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc ICoolerLtvOracle
-    function currentLtvs() public override view returns (uint96 originationLtv, uint96 liquidationLtv) {
+    function currentLtvs()
+        public
+        view
+        override
+        returns (uint96 originationLtv, uint96 liquidationLtv)
+    {
         originationLtv = currentOriginationLtv();
         liquidationLtv = _currentLiquidationLtv(originationLtv);
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function currentLiquidationLtv() external override view returns (uint96) {
+    function currentLiquidationLtv() external view override returns (uint96) {
         return _currentLiquidationLtv(currentOriginationLtv());
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function currentOriginationLtv() public override view returns (uint96) {
+    function currentOriginationLtv() public view override returns (uint96) {
         uint32 _now = uint32(block.timestamp);
         if (_now >= originationLtvData.targetTime) {
             // Target date reached, no calculation required just return the target Origination LTV
-            return originationLtvData.targetValue;  
+            return originationLtvData.targetValue;
         } else {
             unchecked {
                 uint96 delta = originationLtvData.slope * (_now - originationLtvData.startTime);
@@ -223,7 +248,6 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     //============================================================================================//
 
     function _currentLiquidationLtv(uint96 oltv) private view returns (uint96) {
-        return oltv * (BASIS_POINTS_DIVISOR + liquidationLtvPremiumBps) / BASIS_POINTS_DIVISOR;
+        return (oltv * (BASIS_POINTS_DIVISOR + liquidationLtvPremiumBps)) / BASIS_POINTS_DIVISOR;
     }
-
 }

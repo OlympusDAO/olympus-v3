@@ -139,7 +139,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         override
         permissioned
         returns (
-            uint256 appliedDelegationAmounts, 
+            uint256 appliedDelegationAmounts,
             uint256 appliedUndelegationAmounts,
             uint256 undelegatedBalance
         )

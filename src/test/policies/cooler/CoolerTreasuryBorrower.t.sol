@@ -35,15 +35,12 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     function setUp() public {
         usds = new MockERC20("usds", "USDS", 18);
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
-        
+
         kernel = new Kernel();
         ROLES = new OlympusRoles(kernel);
         TRSRY = new OlympusTreasury(kernel);
 
-        treasuryBorrower = new CoolerTreasuryBorrower(
-            address(kernel),
-            address(susds)
-        );
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(susds));
 
         rolesAdmin = new RolesAdmin(kernel);
 
@@ -72,17 +69,14 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         vm.stopPrank();
 
         // And update so sUSDS share price is 10% higher
-        usds.mint(address(susds), usds.balanceOf(address(susds))/10);
+        usds.mint(address(susds), usds.balanceOf(address(susds)) / 10);
     }
 
     function test_construction_failDecimalsDebt() public {
         usds = new MockERC20("usds", "USDS", 6);
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
         vm.expectRevert(abi.encodeWithSelector(ICoolerTreasuryBorrower.InvalidParam.selector));
-        treasuryBorrower = new CoolerTreasuryBorrower(
-            address(kernel),
-            address(susds)
-        );
+        treasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(susds));
     }
 
     function test_construction_success() public view {
@@ -117,10 +111,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                Policy.Policy_WrongModuleVersion.selector,
-                abi.encode([1, 1])
-            )
+            abi.encodeWithSelector(Policy.Policy_WrongModuleVersion.selector, abi.encode([1, 1]))
         );
         treasuryBorrower.configureDependencies();
     }
@@ -199,7 +190,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
 
         // Treasury has 100 less sUSDS (share price = 1.1)
-        assertEq(susdsBefore-susdsAfter, 100e18);
+        assertEq(susdsBefore - susdsAfter, 100e18);
     }
 
     function test_borrow_twice() public {
@@ -211,17 +202,17 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         treasuryBorrower.borrow(borrowedAmount, RECEIVER);
 
         // Send another 10% higher
-        usds.mint(address(susds), usds.balanceOf(address(susds))/10);
+        usds.mint(address(susds), usds.balanceOf(address(susds)) / 10);
         treasuryBorrower.borrow(borrowedAmount, RECEIVER);
 
         uint256 susdsAfter = susds.balanceOf(address(TRSRY));
 
-        assertEq(usds.balanceOf(RECEIVER), borrowedAmount*2);
-        assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmount*2);
+        assertEq(usds.balanceOf(RECEIVER), borrowedAmount * 2);
+        assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmount * 2);
         assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
 
         // Treasury has 100+90.9 less sUSDS
-        assertEq(susdsBefore-susdsAfter, 190.909090909090909091e18);
+        assertEq(susdsBefore - susdsAfter, 190.909090909090909091e18);
     }
 
     function test_repay_failZeroAmount() public {
@@ -233,7 +224,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     function test_repay_noDebt() public {
         vm.startPrank(TB_COOLER);
         uint256 susdsBefore = susds.balanceOf(address(TRSRY));
-        
+
         usds.mint(address(treasuryBorrower), 110e18);
         treasuryBorrower.repay();
 
@@ -242,7 +233,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         uint256 susdsAfter = susds.balanceOf(address(TRSRY));
 
         // Treasury has 100 more sUSDS
-        assertEq(susdsAfter-susdsBefore, 100e18);
+        assertEq(susdsAfter - susdsBefore, 100e18);
     }
 
     function test_repay_overRepay() public {
@@ -261,7 +252,7 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         uint256 susdsAfter = susds.balanceOf(address(TRSRY));
 
         // Treasury has 100 more sUSDS
-        assertEq(susdsAfter-susdsBefore, 100e18);
+        assertEq(susdsAfter - susdsBefore, 100e18);
     }
 
     function test_repay_underRepay() public {
@@ -275,11 +266,11 @@ contract CoolerTreasuryBorrowerTestBase is Test {
         treasuryBorrower.repay();
 
         assertEq(usds.balanceOf(RECEIVER), borrowedAmount);
-        assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmount-repayAmount);
+        assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmount - repayAmount);
         assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         uint256 susdsAfter = susds.balanceOf(address(TRSRY));
 
-        assertEq(susdsBefore-susdsAfter, 54.545454545454545455e18);
+        assertEq(susdsBefore - susdsAfter, 54.545454545454545455e18);
     }
 
     function test_setDebt() public {

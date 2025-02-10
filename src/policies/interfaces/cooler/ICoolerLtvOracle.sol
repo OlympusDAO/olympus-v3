@@ -11,14 +11,22 @@ pragma solidity ^0.8.15;
  *  - Liquidation LTV is a policy set percentage above the Origination LTV
  */
 interface ICoolerLtvOracle {
-    event OriginationLtvSetAt(uint96 oldOriginationLtv, uint96 newOriginationLtvTarget, uint256 targetTime);
+    event OriginationLtvSetAt(
+        uint96 oldOriginationLtv,
+        uint96 newOriginationLtvTarget,
+        uint256 targetTime
+    );
     event MaxOriginationLtvDeltaSet(uint256 maxDelta);
     event MinOriginationLtvTargetTimeDeltaSet(uint32 maxTargetTimeDelta);
     event MaxOriginationLtvRateOfChangeSet(uint96 maxRateOfChange);
     event MaxLiquidationLtvPremiumBpsSet(uint96 maxPremiumBps);
     event LiquidationLtvPremiumBpsSet(uint96 premiumBps);
 
-    error BreachedMaxOriginationLtvDelta(uint96 oldOriginationLtv, uint96 newOriginationLtv, uint256 maxDelta);
+    error BreachedMaxOriginationLtvDelta(
+        uint96 oldOriginationLtv,
+        uint96 newOriginationLtv,
+        uint256 maxDelta
+    );
     error BreachedMinDateDelta(uint32 targetTime, uint32 currentDate, uint32 maxTargetTimeDelta);
     error BreachedMaxOriginationLtvRateOfChange(uint96 targetRateOfChange, uint96 maxRateOfChange);
     error CannotDecreaseLtv();
@@ -41,29 +49,32 @@ interface ICoolerLtvOracle {
 
     /// @notice The maximum allowed Origination LTV change on any single `setOriginationLtvAt()`, in absolute terms
     /// between the Origination LTV as of now and the targetOriginationLtv
-    /// @dev 18 decimal places, 0.20e18 == $0.20. 
+    /// @dev 18 decimal places, 0.20e18 == $0.20.
     /// Used as a bound to avoid unintended/fat fingering when updating Origination LTV
     function maxOriginationLtvDelta() external view returns (uint96);
 
-    /// @notice The minimum time delta required for Origination LTV to reach it's target value when 
+    /// @notice The minimum time delta required for Origination LTV to reach it's target value when
     /// `setOriginationLtvAt()` is called.
     /// @dev In seconds.
     /// Used as a bound to avoid unintended/fat fingering when updating Origination LTV
     function minOriginationLtvTargetTimeDelta() external view returns (uint32);
 
-    /// @notice The maximum (positive) rate of change of Origination LTV allowed, when 
+    /// @notice The maximum (positive) rate of change of Origination LTV allowed, when
     /// `setOriginationLtvAt()` is called.
     /// @dev Units: [Origination LTV / second]
     function maxOriginationLtvRateOfChange() external view returns (uint96);
 
     /// @notice The current Origination LTV state data
-    function originationLtvData() external view returns (
-        uint96 startingValue,
-        uint32 startTime,
-        uint96 targetValue,
-        uint32 targetTime,
-        uint96 slope
-    );
+    function originationLtvData()
+        external
+        view
+        returns (
+            uint96 startingValue,
+            uint32 startTime,
+            uint96 targetValue,
+            uint32 targetTime,
+            uint96 slope
+        );
 
     /// @notice The maximum Liquidation LTV premium (in basis points) which is allowed to be set when calling
     /// `setLiquidationLtvPremiumBps()`
@@ -84,15 +95,18 @@ interface ICoolerLtvOracle {
     /// @dev 18 decimal places, 0.20e18 == $0.20
     function setMaxOriginationLtvDelta(uint96 maxDelta) external;
 
-    /// @notice Set the minimum time delta required for Origination LTV to reach it's target value when 
+    /// @notice Set the minimum time delta required for Origination LTV to reach it's target value when
     /// `setOriginationLtvAt()` is called.
     /// @dev In seconds.
     function setMinOriginationLtvTargetTimeDelta(uint32 maxTargetTimeDelta) external;
 
-    /// @notice Set the maximum (positive) rate of change of Origination LTV allowed, when 
+    /// @notice Set the maximum (positive) rate of change of Origination LTV allowed, when
     /// `setOriginationLtvAt()` is called.
     /// @dev Units: [Origination LTV / second]
-    function setMaxOriginationLtvRateOfChange(uint96 originationLtvDelta, uint32 timeDelta) external;
+    function setMaxOriginationLtvRateOfChange(
+        uint96 originationLtvDelta,
+        uint32 timeDelta
+    ) external;
 
     /// @notice Set the target Origination LTV which will incrementally increase from it's current value to `targetOriginationLtv`
     /// between now and `targetTime`.

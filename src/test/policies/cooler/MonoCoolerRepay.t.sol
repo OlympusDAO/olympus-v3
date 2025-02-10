@@ -5,11 +5,7 @@ import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 
 contract MonoCoolerRepayTest is MonoCoolerBaseTest {
-    event Repay(
-        address indexed caller,
-        address indexed onBehalfOf,
-        uint128 repayAmount
-    );
+    event Repay(address indexed caller, address indexed onBehalfOf, uint128 repayAmount);
 
     function test_repay_failZeroAmount() public {
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.ExpectedNonZero.selector));
@@ -532,7 +528,10 @@ contract MonoCoolerRepayTest is MonoCoolerBaseTest {
 
         // Treasury Checks
         {
-            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowAmount - repayAmount);
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                borrowAmount - repayAmount
+            );
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
 

@@ -19,6 +19,9 @@ library CompoundedInterest {
         uint256 elapsedSecs,
         uint96 interestRatePerYear
     ) internal pure returns (uint256 result) {
-        return principal.mulWadDown(uint256(wadExp(int256(interestRatePerYear * elapsedSecs / ONE_YEAR))));
+        return
+            principal.mulWadDown(
+                uint256(wadExp(int256((interestRatePerYear * elapsedSecs) / ONE_YEAR)))
+            );
     }
 }

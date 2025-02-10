@@ -51,7 +51,8 @@ abstract contract MonoCoolerBaseTest is Test {
     uint96 internal constant DEFAULT_OLTV_MAX_RATE_OF_CHANGE = uint96(0.1e18) / 1 days; // 0.1 USDS / day
     uint16 internal constant DEFAULT_LLTV_MAX_PREMIUM_BPS = 333;
     uint16 internal constant DEFAULT_LLTV_PREMIUM_BPS = 100; // LLTV is 1% above OLTV
-    uint96 internal constant DEFAULT_LLTV = DEFAULT_OLTV * (10_000 + DEFAULT_LLTV_PREMIUM_BPS) / 10_000;
+    uint96 internal constant DEFAULT_LLTV =
+        (DEFAULT_OLTV * (10_000 + DEFAULT_LLTV_PREMIUM_BPS)) / 10_000;
 
     uint96 internal constant DEFAULT_INTEREST_RATE_BPS = 0.005e18; // 0.5%
     uint256 internal constant DEFAULT_MIN_DEBT_REQUIRED = 1_000e18;
@@ -212,11 +213,7 @@ abstract contract MonoCoolerBaseTest is Test {
         vm.stopPrank();
     }
 
-    function repay(
-        address caller,
-        address onBehalfOf,
-        uint128 amount
-    ) internal {
+    function repay(address caller, address onBehalfOf, uint128 amount) internal {
         vm.startPrank(caller);
         usds.approve(address(cooler), amount);
         cooler.repay(amount, onBehalfOf);
@@ -403,7 +400,11 @@ abstract contract MonoCoolerBaseTest is Test {
         );
 
         assertEq(theCooler.accountDebt(account), expectedPosition.currentDebt, "accountDebt()");
-        assertEq(theCooler.accountCollateral(account), expectedPosition.collateral, "accountCollateral()");
+        assertEq(
+            theCooler.accountCollateral(account),
+            expectedPosition.collateral,
+            "accountCollateral()"
+        );
     }
 
     function checkLiquidityStatus(
@@ -458,7 +459,11 @@ abstract contract MonoCoolerBaseTest is Test {
             uint128 totalDaiDebtWiped,
             uint128 totalIncentives
         ) = cooler.batchLiquidate(accounts, requests);
-        assertEq(totalCollateralClaimed, expectedCollateralClaimed, "batchLiquidate::collateralClaimed");
+        assertEq(
+            totalCollateralClaimed,
+            expectedCollateralClaimed,
+            "batchLiquidate::collateralClaimed"
+        );
         assertEq(totalDaiDebtWiped, expectedDebtWiped, "batchLiquidate::debtWiped");
         assertEq(totalIncentives, expectedIncentives, "batchLiquidate::totalLiquidationIncentive");
     }

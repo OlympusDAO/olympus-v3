@@ -11,9 +11,9 @@ import {IStaking} from "interfaces/IStaking.sol";
  * @title Mono Cooler
  * @notice A borrow/lend market where users can deposit their gOHM as collateral and then
  * borrow a stablecoin debt token up to a certain LTV
- *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the 
+ *  - The debt token may change over time - eg DAI to USDS (or USDC), determined by the
  *    `CoolerTreasuryBorrower`
- *  - The collateral and debt amounts tracked on this contract are always reported in wad, 
+ *  - The collateral and debt amounts tracked on this contract are always reported in wad,
  *    ie 18 decimal places
  *  - gOHM collateral can be delegated to accounts for voting, via the DLGTE module
  *  - Positions can be liquidated if the LTV breaches the 'liquidation LTV' as determined by the
@@ -55,23 +55,29 @@ interface IMonoCooler {
     );
     event Borrow(
         address indexed caller,
-        address indexed onBehalfOf, 
-        address indexed recipient, 
+        address indexed onBehalfOf,
+        address indexed recipient,
         uint128 amount
     );
-    event Repay(
+    event Repay(address indexed caller, address indexed onBehalfOf, uint128 repayAmount);
+    event Liquidated(
         address indexed caller,
-        address indexed onBehalfOf,
-        uint128 repayAmount
+        address indexed account,
+        uint128 collateralSeized,
+        uint128 debtWiped,
+        uint128 incentives
     );
-    event Liquidated(address indexed caller, address indexed account, uint128 collateralSeized, uint128 debtWiped, uint128 incentives);
-    event AuthorizationSet(address indexed caller, address indexed account, address indexed authorized, uint96 authorizationDeadline);
+    event AuthorizationSet(
+        address indexed caller,
+        address indexed account,
+        address indexed authorized,
+        uint96 authorizationDeadline
+    );
 
     /// @notice The record of an individual account's collateral and debt data
     struct AccountState {
         /// @notice The amount of gOHM collateral the account has posted
         uint128 collateral;
-
         /**
          * @notice A checkpoint of user debt, updated after a borrow/repay/liquidation
          * @dev Debt as of now =  (
@@ -81,7 +87,6 @@ interface IMonoCooler {
          * )
          */
         uint128 debtCheckpoint;
-
         /// @notice The account's last interest accumulator checkpoint
         uint256 interestAccumulatorRay;
     }
@@ -89,16 +94,12 @@ interface IMonoCooler {
     struct Authorization {
         /// @notice The address of the account granting authorization
         address account;
-
         /// @notice The address of who is authorized to act on the the accounts behalf
         address authorized;
-
         /// @notice The unix timestamp that the access is automatically revoked
         uint96 authorizationDeadline;
-
         /// @notice For replay protection
         uint256 nonce;
-
         /// @notice A unix timestamp for when the signature is valid until
         uint256 signatureDeadline;
     }
@@ -113,20 +114,15 @@ interface IMonoCooler {
     struct LiquidationStatus {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         uint128 collateral;
-
         /// @notice The up to date amount of debt [in debtToken terms]
         uint128 currentDebt;
-
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         uint128 currentLtv;
-
         /// @notice Has this account exceeded the liquidation LTV
         bool exceededLiquidationLtv;
-
         /// @notice Has this account exceeded the max origination LTV
         bool exceededMaxOriginationLtv;
-
-        /// @notice A liquidator will receive this amount [in gOHM collateral terms] if 
+        /// @notice A liquidator will receive this amount [in gOHM collateral terms] if
         /// this account is liquidated as of this block
         uint128 currentIncentive;
     }
@@ -137,37 +133,29 @@ interface IMonoCooler {
         /// @notice The amount [in gOHM collateral terms] of collateral which has been provided by the user
         /// @dev To 18 decimal places
         uint256 collateral;
-
         /// @notice The up to date amount of debt
         /// @dev To 18 decimal places
         uint256 currentDebt;
-
         /// @notice The maximum amount of debtToken's this account can borrow given the
         /// collateral posted, up to `maxOriginationLtv`
         /// @dev To 18 decimal places
         uint256 maxOriginationDebtAmount;
-
         /// @notice The maximum amount of debtToken's this account can accrue before being
         /// eligable to be liquidated, up to `liquidationLtv`
         /// @dev To 18 decimal places
         uint256 liquidationDebtAmount;
-
         /// @notice The health factor of this accounts position.
         /// Anything less than 1 can be liquidated, relative to `liquidationLtv`
         /// @dev To 18 decimal places
         uint256 healthFactor;
-
         /// @notice The current LTV of this account [in debtTokens per gOHM collateral terms]
         /// @dev To 18 decimal places
         uint256 currentLtv;
-
         /// @notice The total collateral delegated for this user across all delegates
         /// @dev To 18 decimal places
         uint256 totalDelegated;
-
         /// @notice The current number of addresses this account has delegated to
         uint256 numDelegateAddresses;
-
         /// @notice The max number of delegates this account is allowed to delegate to
         uint256 maxDelegateAddresses;
     }
@@ -230,8 +218,11 @@ interface IMonoCooler {
     /// @notice Whether `authorized` is authorized to act on `authorizer`'s behalf for all user actions
     /// up until the `authorizationDeadline` unix timestamp.
     /// @dev Anyone is authorized to modify their own positions, regardless of this variable.
-    function authorizations(address authorizer, address authorized) external view returns (uint96 authorizationDeadline);
-    
+    function authorizations(
+        address authorizer,
+        address authorized
+    ) external view returns (uint96 authorizationDeadline);
+
     /// @notice The `authorizer`'s current nonce. Used to prevent replay attacks with EIP-712 signatures.
     function authorizationNonces(address authorizer) external view returns (uint256);
 
@@ -252,7 +243,10 @@ interface IMonoCooler {
     /// @param authorization The `Authorization` struct.
     /// @param signature The signature.
     /// @dev Authorization can be revoked by calling `setAuthorization()` and setting the `authorizationDeadline` into the past
-    function setAuthorizationWithSig(Authorization calldata authorization, Signature calldata signature) external;
+    function setAuthorizationWithSig(
+        Authorization calldata authorization,
+        Signature calldata signature
+    ) external;
 
     /// @dev Returns whether the `sender` is authorized to manage `onBehalf`'s positions.
     function isSenderAuthorized(address sender, address onBehalf) external view returns (bool);
@@ -272,7 +266,7 @@ interface IMonoCooler {
      *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
      *    - MUST NOT apply delegations that results in more collateral being undelegated than
      *      the account has collateral for.
-     *    - If `onBehalfOf` does not equal the caller, the caller must be authorized via 
+     *    - If `onBehalfOf` does not equal the caller, the caller must be authorized via
      *      `setAuthorization()` or `setAuthorizationWithSig()`
      */
     function addCollateral(
@@ -321,11 +315,9 @@ interface IMonoCooler {
     function applyDelegations(
         DLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
-    ) external returns (
-        uint256 totalDelegated,
-        uint256 totalUndelegated,
-        uint256 undelegatedBalance
-    );
+    )
+        external
+        returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance);
 
     //============================================================================================//
     //                                       BORROW/REPAY                                         //
@@ -364,7 +356,7 @@ interface IMonoCooler {
      * @return amountRepaid The amount actually repaid.
      */
     function repay(
-        uint128 repayAmountInWad, 
+        uint128 repayAmountInWad,
         address onBehalfOf
     ) external returns (uint128 amountRepaid);
 
@@ -380,11 +372,13 @@ interface IMonoCooler {
     function batchLiquidate(
         address[] calldata accounts,
         DLGTEv1.DelegationRequest[][] calldata delegationRequests
-    ) external returns (
-        uint128 totalCollateralClaimed,
-        uint128 totalDebtWiped,
-        uint128 totalLiquidationIncentive
-    );
+    )
+        external
+        returns (
+            uint128 totalCollateralClaimed,
+            uint128 totalDebtWiped,
+            uint128 totalLiquidationIncentive
+        );
 
     /**
      * @notice If an account becomes unhealthy and has many delegations such that liquidation can't be
@@ -405,7 +399,7 @@ interface IMonoCooler {
 
     /// @notice Set the policy which borrows/repays from Treasury on behalf of Cooler
     function setTreasuryBorrower(address newTreasuryBorrower) external;
-    
+
     /// @notice Liquidation may be paused in order for users to recover/repay debt after emergency actions
     function setLiquidationsPaused(bool isPaused) external;
 
@@ -422,7 +416,9 @@ interface IMonoCooler {
 
     /// @notice Update and checkpoint the total debt up until now
     /// @dev May be useful in case there are no new user actions for some time.
-    function checkpointDebt() external returns (uint128 totalDebtInWad, uint256 interestAccumulatorRay);
+    function checkpointDebt()
+        external
+        returns (uint128 totalDebtInWad, uint256 interestAccumulatorRay);
 
     //============================================================================================//
     //                                      AUX FUNCTIONS                                         //

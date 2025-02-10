@@ -9,7 +9,6 @@ import {Actions} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
-
     MockERC20 internal dai;
     MockCoolerTreasuryBorrower internal mockTreasuryBorrower;
 
@@ -26,7 +25,7 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
         uint256 outstandingDebt = TRSRY.reserveDebt(usds, address(treasuryBorrower));
         vm.startPrank(TB_ADMIN);
         treasuryBorrower.setDebt(0);
-        
+
         // 2. Deactivate the old TB, activate the new TB
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.DeactivatePolicy, address(treasuryBorrower));
@@ -73,8 +72,14 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
         // Check Treasury
         {
             assertEq(usds.balanceOf(address(TRSRY)), 0);
-            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT-(borrowedAmountUsds-repayAmountUsds));
-            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmountUsds-repayAmountUsds);
+            assertEq(
+                susds.balanceOf(address(TRSRY)),
+                INITIAL_TRSRY_MINT - (borrowedAmountUsds - repayAmountUsds)
+            );
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                borrowedAmountUsds - repayAmountUsds
+            );
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
 
             assertEq(dai.balanceOf(address(TRSRY)), 0);
@@ -90,7 +95,10 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
         dai.approve(address(cooler), repayAmountDai);
         cooler.repay(repayAmountDai, ALICE);
 
-        assertEq(TRSRY.reserveDebt(dai, address(mockTreasuryBorrower)), inheritedDebt-repayAmountDai);
+        assertEq(
+            TRSRY.reserveDebt(dai, address(mockTreasuryBorrower)),
+            inheritedDebt - repayAmountDai
+        );
 
         // Borrow DAI
         cooler.borrow(borrowedAmountDai, ALICE, ALICE);
@@ -99,24 +107,33 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
         {
             // No change here...
             assertEq(usds.balanceOf(address(TRSRY)), 0);
-            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT-inheritedDebt);
+            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT - inheritedDebt);
             assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 0);
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
 
-            assertEq(dai.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT_DAI-(borrowedAmountDai-repayAmountDai));
-            assertEq(TRSRY.reserveDebt(dai, address(mockTreasuryBorrower)), inheritedDebt-repayAmountDai+borrowedAmountDai);
+            assertEq(
+                dai.balanceOf(address(TRSRY)),
+                INITIAL_TRSRY_MINT_DAI - (borrowedAmountDai - repayAmountDai)
+            );
+            assertEq(
+                TRSRY.reserveDebt(dai, address(mockTreasuryBorrower)),
+                inheritedDebt - repayAmountDai + borrowedAmountDai
+            );
             assertEq(TRSRY.withdrawApproval(address(mockTreasuryBorrower), dai), 0);
         }
 
         uint128 expectedInterest = 50.125208594010630000e18;
-        uint128 expectedTotalDebt = inheritedDebt-repayAmountDai+borrowedAmountDai + expectedInterest;
+        uint128 expectedTotalDebt = inheritedDebt -
+            repayAmountDai +
+            borrowedAmountDai +
+            expectedInterest;
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(cooler.totalDebt(), expectedTotalDebt);
         assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
         assertEq(cooler.interestAccumulatorRay(), 1.005012520859401063e27);
         assertEq(gohm.balanceOf(ALICE), 0);
         assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(usds.balanceOf(ALICE), borrowedAmountUsds-repayAmountUsds);
+        assertEq(usds.balanceOf(ALICE), borrowedAmountUsds - repayAmountUsds);
         assertEq(dai.balanceOf(ALICE), borrowedAmountDai); // started off with already having 1k DAI
 
         checkAccountState(
@@ -160,7 +177,6 @@ contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
 }
 
 contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
-
     MockERC20 internal usdc;
     MockCoolerTreasuryBorrower internal mockTreasuryBorrower;
 
@@ -178,7 +194,7 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
         uint256 outstandingDebt = TRSRY.reserveDebt(usds, address(treasuryBorrower));
         vm.startPrank(TB_ADMIN);
         treasuryBorrower.setDebt(0);
-        
+
         // 2. Deactivate the old TB, activate the new TB
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.DeactivatePolicy, address(treasuryBorrower));
@@ -198,7 +214,10 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
 
         assertEq(address(cooler.debtToken()), address(usdc));
         assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 0);
-        assertEq(TRSRY.reserveDebt(usdc, address(mockTreasuryBorrower)), outstandingDebt/USDC_TO_18DP_SCALAR);
+        assertEq(
+            TRSRY.reserveDebt(usdc, address(mockTreasuryBorrower)),
+            outstandingDebt / USDC_TO_18DP_SCALAR
+        );
 
         vm.stopPrank();
         return uint128(outstandingDebt);
@@ -235,8 +254,14 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
         // Check Treasury
         {
             assertEq(usds.balanceOf(address(TRSRY)), 0);
-            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT-(borrowedAmountUsds-repayAmountUsds));
-            assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), borrowedAmountUsds-repayAmountUsds);
+            assertEq(
+                susds.balanceOf(address(TRSRY)),
+                INITIAL_TRSRY_MINT - (borrowedAmountUsds - repayAmountUsds)
+            );
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                borrowedAmountUsds - repayAmountUsds
+            );
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
 
             assertEq(usdc.balanceOf(address(TRSRY)), 0);
@@ -245,40 +270,54 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
         }
 
         uint128 inheritedDebt = changeDebtToken();
-        
+
         // Repay USDC
         vm.startPrank(ALICE);
         usdc.mint(ALICE, repayAmountUsdc);
         usdc.approve(address(cooler), repayAmountUsdc);
-        cooler.repay(repayAmountUsdc*USDC_TO_18DP_SCALAR, ALICE);
+        cooler.repay(repayAmountUsdc * USDC_TO_18DP_SCALAR, ALICE);
 
-        assertEq(TRSRY.reserveDebt(usdc, address(mockTreasuryBorrower)), (inheritedDebt/USDC_TO_18DP_SCALAR) - repayAmountUsdc);
+        assertEq(
+            TRSRY.reserveDebt(usdc, address(mockTreasuryBorrower)),
+            (inheritedDebt / USDC_TO_18DP_SCALAR) - repayAmountUsdc
+        );
 
         // Borrow USDC
-        cooler.borrow(borrowedAmountUsdc*USDC_TO_18DP_SCALAR, ALICE, ALICE);
+        cooler.borrow(borrowedAmountUsdc * USDC_TO_18DP_SCALAR, ALICE, ALICE);
 
         // Check Treasury
         {
             // No change here...
             assertEq(usds.balanceOf(address(TRSRY)), 0);
-            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT-inheritedDebt);
+            assertEq(susds.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT - inheritedDebt);
             assertEq(TRSRY.reserveDebt(usds, address(treasuryBorrower)), 0);
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
 
-            assertEq(usdc.balanceOf(address(TRSRY)), INITIAL_TRSRY_MINT_USDC-(borrowedAmountUsdc-repayAmountUsdc));
-            assertEq(TRSRY.reserveDebt(usdc, address(mockTreasuryBorrower)), inheritedDebt/USDC_TO_18DP_SCALAR-repayAmountUsdc+borrowedAmountUsdc);
+            assertEq(
+                usdc.balanceOf(address(TRSRY)),
+                INITIAL_TRSRY_MINT_USDC - (borrowedAmountUsdc - repayAmountUsdc)
+            );
+            assertEq(
+                TRSRY.reserveDebt(usdc, address(mockTreasuryBorrower)),
+                inheritedDebt / USDC_TO_18DP_SCALAR - repayAmountUsdc + borrowedAmountUsdc
+            );
             assertEq(TRSRY.withdrawApproval(address(mockTreasuryBorrower), usdc), 0);
         }
 
         uint128 expectedInterest = 50.125208594010630000e18;
-        uint128 expectedTotalDebt = inheritedDebt-repayAmountUsdc*USDC_TO_18DP_SCALAR+borrowedAmountUsdc*USDC_TO_18DP_SCALAR + expectedInterest;
+        uint128 expectedTotalDebt = inheritedDebt -
+            repayAmountUsdc *
+            USDC_TO_18DP_SCALAR +
+            borrowedAmountUsdc *
+            USDC_TO_18DP_SCALAR +
+            expectedInterest;
         assertEq(cooler.totalCollateral(), collateralAmount);
         assertEq(cooler.totalDebt(), expectedTotalDebt);
         assertEq(cooler.interestAccumulatorUpdatedAt(), vm.getBlockTimestamp());
         assertEq(cooler.interestAccumulatorRay(), 1.005012520859401063e27);
         assertEq(gohm.balanceOf(ALICE), 0);
         assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(usds.balanceOf(ALICE), borrowedAmountUsds-repayAmountUsds);
+        assertEq(usds.balanceOf(ALICE), borrowedAmountUsds - repayAmountUsds);
         assertEq(usdc.balanceOf(ALICE), borrowedAmountUsdc); // started off with already having 1k USDC
 
         checkAccountState(

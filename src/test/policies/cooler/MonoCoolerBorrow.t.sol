@@ -7,8 +7,8 @@ import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
     event Borrow(
         address indexed caller,
-        address indexed onBehalfOf, 
-        address indexed recipient, 
+        address indexed onBehalfOf,
+        address indexed recipient,
         uint128 amount
     );
 
@@ -492,7 +492,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                     maxOriginationDebtAmount: 29_616.4e18,
                     liquidationDebtAmount: 29_912.564e18,
                     healthFactor: 1.495617955971233037e18,
-                    currentLtv: 2_000e18 + interestDelta/10,
+                    currentLtv: 2_000e18 + interestDelta / 10,
                     totalDelegated: 0,
                     numDelegateAddresses: 0,
                     maxDelegateAddresses: 10
@@ -504,7 +504,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
                 IMonoCooler.LiquidationStatus({
                     collateral: collateralAmount,
                     currentDebt: borrowAmount * 2 + interestDelta,
-                    currentLtv: 2_000e18 + interestDelta/10,
+                    currentLtv: 2_000e18 + interestDelta / 10,
                     exceededLiquidationLtv: false,
                     exceededMaxOriginationLtv: false,
                     currentIncentive: 0
@@ -877,5 +877,4 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
             );
         }
     }
-
 }
