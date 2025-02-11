@@ -276,8 +276,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address onBehalfOf,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override {
-        if (collateralAmount == 0) revert ExpectedNonZero();
-        if (onBehalfOf == address(0)) revert InvalidAddress();
+        _requireAmountNonZero(collateralAmount);
+        _requireAddressNonZero(onBehalfOf);
 
         // Add collateral on behalf of another account
         AccountState storage aState = allAccountState[onBehalfOf];
@@ -309,8 +309,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address recipient,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint128 collateralWithdrawn) {
-        if (collateralAmount == 0) revert ExpectedNonZero();
-        if (recipient == address(0)) revert InvalidAddress();
+        _requireAmountNonZero(collateralAmount);
+        _requireAddressNonZero(recipient);
         _requireSenderAuthorized(msg.sender, onBehalfOf);
 
         // No need to sync global debt state when withdrawing collateral
@@ -379,8 +379,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address recipient
     ) external override returns (uint128 amountBorrowed) {
         if (borrowsPaused || !isEnabled) revert Paused();
-        if (borrowAmount == 0) revert ExpectedNonZero();
-        if (recipient == address(0)) revert InvalidAddress();
+        _requireAmountNonZero(borrowAmount);
+        _requireAddressNonZero(recipient);
         _requireSenderAuthorized(msg.sender, onBehalfOf);
 
         // Sync global debt state when borrowing
@@ -440,8 +440,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         uint128 repayAmount,
         address onBehalfOf
     ) external override returns (uint128 amountRepaid) {
-        if (repayAmount == 0) revert ExpectedNonZero();
-        if (onBehalfOf == address(0)) revert InvalidAddress();
+        _requireAmountNonZero(repayAmount);
+        _requireAddressNonZero(onBehalfOf);
 
         // Sync global debt state when repaying
         GlobalStateCache memory gStateCache = _globalStateRW();
@@ -1057,5 +1057,13 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
                 accountInterestAccumulatorRay_
             );
         return debt.encodeUInt128();
+    }
+
+    function _requireAmountNonZero(uint256 amount_) internal view {
+        if (amount_ == 0) revert ExpectedNonZero();
+    }
+
+    function _requireAddressNonZero(address addr_) internal view {
+        if (addr_ == address(0)) revert InvalidAddress();
     }
 }
