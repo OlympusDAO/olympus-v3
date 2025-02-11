@@ -31,9 +31,13 @@ chain_id = 1
 verbosity = 3
 
 # Operator is too large - it needs to only use 10 optimizer runs
-additional_compiler_profiles = [ { name = "ten-runs", optimizer_runs = 10 } ]
+additional_compiler_profiles = [
+    { name = "ten-runs", optimizer_runs = 10 },
+    { name = "five-thousand-runs", optimizer_runs = 5000 },
+]
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
+    { paths = "src/policies/cooler/MonoCooler.sol", optimizer_runs = 5000 },
 ]
 
 [fuzz]
