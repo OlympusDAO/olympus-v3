@@ -6,6 +6,19 @@ import {PolicyEnablerTest} from "./PolicyEnablerTest.sol";
 
 contract PolicyEnablerOnlyEnabledTest is PolicyEnablerTest {
     // given the policy is disabled
-    //  [ ] it reverts
-    // [ ] it does not revert
+    //  [X] it reverts
+    // [X] it does not revert
+
+    function test_policyDisabled_reverts() public {
+        // Expect revert
+        vm.expectRevert(PolicyEnabler.NotEnabled.selector);
+
+        // Call function
+        policyEnabler.requiresEnabled();
+    }
+
+    function test_policyEnabled() public givenEnabled {
+        // Call function
+        assertEq(policyEnabler.requiresEnabled(), true, "Policy should be enabled");
+    }
 }
