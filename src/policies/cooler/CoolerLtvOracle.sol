@@ -7,6 +7,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
 /**
@@ -21,11 +22,11 @@ import {SafeCast} from "libraries/SafeCast.sol";
 contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     using SafeCast for uint256;
 
-    /// @inheritdoc ICoolerLtvOracle
-    address public immutable override debtToken;
+    /// @dev The debt token
+    ERC20 private immutable _DEBT_TOKEN;
 
-    /// @inheritdoc ICoolerLtvOracle
-    address public immutable override collateralToken;
+    /// @dev The collateral token
+    ERC20 private immutable _COLLATERAL_TOKEN;
 
     struct OriginationLtvData {
         /// @notice The Origination LTV at the time `setOriginationLtvAt()` was last called
@@ -74,12 +75,12 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
         uint16 maxLiquidationLtvPremiumBps_,
         uint16 liquidationLtvPremiumBps_
     ) Policy(Kernel(kernel_)) {
-        collateralToken = collateralToken_;
-        debtToken = debtToken_;
+        _COLLATERAL_TOKEN = ERC20(collateralToken_);
+        _DEBT_TOKEN = ERC20(debtToken_);
 
         // Only handle 18dp collateral and debt tokens
-        if (ERC20(collateralToken).decimals() != 18) revert InvalidParam();
-        if (ERC20(debtToken).decimals() != 18) revert InvalidParam();
+        if (_COLLATERAL_TOKEN.decimals() != 18) revert InvalidParam();
+        if (_DEBT_TOKEN.decimals() != 18) revert InvalidParam();
 
         originationLtvData = OriginationLtvData({
             startingValue: initialOriginationLtv_,
@@ -207,6 +208,15 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     //============================================================================================//
 
     /// @inheritdoc ICoolerLtvOracle
+    function collateralToken() external view override returns (IERC20) {
+        return IERC20(address(_COLLATERAL_TOKEN));
+    }
+
+    /// @inheritdoc ICoolerLtvOracle
+    function debtToken() external view override returns (IERC20) {
+        return IERC20(address(_DEBT_TOKEN));
+    }
+
     function currentLtvs()
         public
         view

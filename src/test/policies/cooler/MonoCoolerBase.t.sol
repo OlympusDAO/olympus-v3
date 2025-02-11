@@ -16,8 +16,9 @@ import {RolesAdmin, Kernel, Actions} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusGovDelegation, DLGTEv1} from "modules/DLGTE/OlympusGovDelegation.sol";
+import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 
 abstract contract MonoCoolerBaseTest is Test {
     MockOhm internal ohm;
@@ -176,7 +177,7 @@ abstract contract MonoCoolerBaseTest is Test {
         address caller,
         address onBehalfOf,
         uint128 collateralAmount,
-        DLGTEv1.DelegationRequest[] memory delegationRequests
+        IDLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
         addCollateral(cooler, caller, onBehalfOf, collateralAmount, delegationRequests);
     }
@@ -186,7 +187,7 @@ abstract contract MonoCoolerBaseTest is Test {
         address caller,
         address onBehalfOf,
         uint128 collateralAmount,
-        DLGTEv1.DelegationRequest[] memory delegationRequests
+        IDLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
         gohm.mint(caller, collateralAmount);
         vm.startPrank(caller);
@@ -200,7 +201,7 @@ abstract contract MonoCoolerBaseTest is Test {
         address onBehalfOf,
         address recipient,
         uint128 collateralAmount,
-        DLGTEv1.DelegationRequest[] memory delegationRequests
+        IDLGTEv1.DelegationRequest[] memory delegationRequests
     ) internal {
         vm.startPrank(caller);
         cooler.withdrawCollateral(collateralAmount, onBehalfOf, recipient, delegationRequests);
@@ -236,7 +237,7 @@ abstract contract MonoCoolerBaseTest is Test {
     }
 
     function expectNoDelegations(address account) internal view {
-        DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
+        IDLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
             account,
             0,
             100
@@ -258,7 +259,7 @@ abstract contract MonoCoolerBaseTest is Test {
         address expectedDelegate,
         uint256 expectedDelegationAmount
     ) internal view {
-        DLGTEv1.AccountDelegation[] memory delegations = theCooler.accountDelegationsList(
+        IDLGTEv1.AccountDelegation[] memory delegations = theCooler.accountDelegationsList(
             account,
             0,
             100
@@ -284,7 +285,7 @@ abstract contract MonoCoolerBaseTest is Test {
         address expectedDelegate2,
         uint256 expectedDelegationAmount2
     ) internal view {
-        DLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
+        IDLGTEv1.AccountDelegation[] memory delegations = cooler.accountDelegationsList(
             account,
             0,
             100
@@ -464,7 +465,7 @@ abstract contract MonoCoolerBaseTest is Test {
 
     function checkBatchLiquidate(
         address[] memory accounts,
-        DLGTEv1.DelegationRequest[][] memory requests,
+        IDLGTEv1.DelegationRequest[][] memory requests,
         uint128 expectedCollateralClaimed,
         uint128 expectedDebtWiped,
         uint128 expectedIncentives
@@ -483,24 +484,24 @@ abstract contract MonoCoolerBaseTest is Test {
         assertEq(totalIncentives, expectedIncentives, "batchLiquidate::totalLiquidationIncentive");
     }
 
-    function noDelegationRequest() internal pure returns (DLGTEv1.DelegationRequest[] memory) {
-        return new DLGTEv1.DelegationRequest[](0);
+    function noDelegationRequest() internal pure returns (IDLGTEv1.DelegationRequest[] memory) {
+        return new IDLGTEv1.DelegationRequest[](0);
     }
 
     function delegationRequest(
         address to,
         uint256 amount
-    ) internal pure returns (DLGTEv1.DelegationRequest[] memory delegationRequests) {
-        delegationRequests = new DLGTEv1.DelegationRequest[](1);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({delegate: to, amount: int256(amount)});
+    ) internal pure returns (IDLGTEv1.DelegationRequest[] memory delegationRequests) {
+        delegationRequests = new IDLGTEv1.DelegationRequest[](1);
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: to, amount: int256(amount)});
     }
 
     function unDelegationRequest(
         address from,
         uint256 amount
-    ) internal pure returns (DLGTEv1.DelegationRequest[] memory delegationRequests) {
-        delegationRequests = new DLGTEv1.DelegationRequest[](1);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({
+    ) internal pure returns (IDLGTEv1.DelegationRequest[] memory delegationRequests) {
+        delegationRequests = new IDLGTEv1.DelegationRequest[](1);
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({
             delegate: from,
             amount: int256(amount) * -1
         });
@@ -510,12 +511,12 @@ abstract contract MonoCoolerBaseTest is Test {
         address from,
         address to,
         uint256 amount
-    ) internal pure returns (DLGTEv1.DelegationRequest[] memory delegationRequests) {
-        delegationRequests = new DLGTEv1.DelegationRequest[](2);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({
+    ) internal pure returns (IDLGTEv1.DelegationRequest[] memory delegationRequests) {
+        delegationRequests = new IDLGTEv1.DelegationRequest[](2);
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({
             delegate: from,
             amount: int256(amount) * -1
         });
-        delegationRequests[0] = DLGTEv1.DelegationRequest({delegate: to, amount: int256(amount)});
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: to, amount: int256(amount)});
     }
 }

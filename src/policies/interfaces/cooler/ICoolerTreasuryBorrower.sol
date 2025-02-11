@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IERC20} from "../../../interfaces/IERC20.sol";
 
 /**
  * @title Cooler Treasury Borrower
@@ -36,12 +36,12 @@ interface ICoolerTreasuryBorrower {
     function setDebt(uint256 debtTokenAmount) external;
 
     /// @notice The token (USD based stablecoin) which Cooler users borrow and repay
-    function debtToken() external view returns (ERC20);
+    function debtToken() external view returns (IERC20);
 
     /// @notice Convert a debt amount in wad (18dp) into the decimals of the `debtToken`
     function convertToDebtTokenAmount(
         uint256 amountInWad
-    ) external view returns (ERC20 dToken, uint256 dTokenAmount);
+    ) external view returns (IERC20 dToken, uint256 dTokenAmount);
 
     /// @notice The decimal precision of the `amountInWad` used in borrow and repay functions.
     /// @dev A constant of 18

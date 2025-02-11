@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -13,6 +14,8 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
+
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
@@ -44,17 +47,17 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     //                                         IMMUTABLES                                         //
     //============================================================================================//
 
-    /// @inheritdoc IMonoCooler
-    ERC20 public immutable override collateralToken;
+    /// @dev The collateral token, eg gOHM
+    ERC20 private immutable _COLLATERAL_TOKEN;
 
-    /// @inheritdoc IMonoCooler
-    ERC20 public immutable override ohm;
+    /// @dev The OHM token
+    ERC20 private immutable _OHM;
 
-    /// @inheritdoc IMonoCooler
-    IStaking public immutable override staking;
+    /// @dev The OHM staking contract
+    IStaking private immutable _STAKING;
 
-    /// @inheritdoc IMonoCooler
-    uint256 public immutable override minDebtRequired;
+    /// @dev The minimum debt a user needs to maintain
+    uint256 private immutable _MIN_DEBT_REQUIRED;
 
     /// @inheritdoc IMonoCooler
     bytes32 public immutable override DOMAIN_SEPARATOR;
@@ -125,7 +128,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
             "Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)"
         );
 
-    /// @dev expected decimals for the `collateralToken` and `treasuryBorrower`
+    /// @dev expected decimals for the `_COLLATERAL_TOKEN` and `treasuryBorrower`
     uint8 private constant _EXPECTED_DECIMALS = 18;
 
     //============================================================================================//
@@ -141,14 +144,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         uint96 interestRateWad_,
         uint256 minDebtRequired_
     ) Policy(Kernel(kernel_)) {
-        collateralToken = ERC20(gohm_);
+        _COLLATERAL_TOKEN = ERC20(gohm_);
 
         // Only handle 18dp collateral
-        if (collateralToken.decimals() != _EXPECTED_DECIMALS) revert InvalidParam();
+        if (_COLLATERAL_TOKEN.decimals() != _EXPECTED_DECIMALS) revert InvalidParam();
 
-        ohm = ERC20(ohm_);
-        staking = IStaking(staking_);
-        minDebtRequired = minDebtRequired_;
+        _OHM = ERC20(ohm_);
+        _STAKING = IStaking(staking_);
+        _MIN_DEBT_REQUIRED = minDebtRequired_;
 
         ltvOracle = ICoolerLtvOracle(ltvOracle_);
         (uint96 newOLTV, uint96 newLLTV) = ltvOracle.currentLtvs();
@@ -185,18 +188,18 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         // If MINTR has changed, then update approval to burn OHM from the old
         address oldAddress = address(MINTR);
         if (address(newMINTR) != oldAddress) {
-            if (oldAddress != address(0)) ohm.approve(oldAddress, 0);
+            if (oldAddress != address(0)) _OHM.approve(oldAddress, 0);
 
-            ohm.approve(address(newMINTR), type(uint256).max);
+            _OHM.approve(address(newMINTR), type(uint256).max);
             MINTR = newMINTR;
         }
 
         // If DLGTE has changed, then update approval to pull gOHM for delegation
         oldAddress = address(DLGTE);
         if (address(newDLGTE) != oldAddress) {
-            if (oldAddress != address(0)) collateralToken.approve(address(oldAddress), 0);
+            if (oldAddress != address(0)) _COLLATERAL_TOKEN.approve(address(oldAddress), 0);
 
-            collateralToken.approve(address(newDLGTE), type(uint256).max);
+            _COLLATERAL_TOKEN.approve(address(newDLGTE), type(uint256).max);
             DLGTE = newDLGTE;
         }
     }
@@ -271,14 +274,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     function addCollateral(
         uint128 collateralAmount,
         address onBehalfOf,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (onBehalfOf == address(0)) revert InvalidAddress();
 
         // Add collateral on behalf of another account
         AccountState storage aState = allAccountState[onBehalfOf];
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
+        _COLLATERAL_TOKEN.safeTransferFrom(msg.sender, address(this), collateralAmount);
 
         aState.collateral += collateralAmount;
         totalCollateral += collateralAmount;
@@ -304,7 +307,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         uint128 collateralAmount,
         address onBehalfOf,
         address recipient,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint128 collateralWithdrawn) {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
@@ -362,7 +365,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
 
         // Finally transfer the collateral to the recipient
         emit CollateralWithdrawn(msg.sender, onBehalfOf, recipient, collateralWithdrawn);
-        collateralToken.safeTransfer(recipient, collateralWithdrawn);
+        _COLLATERAL_TOKEN.safeTransfer(recipient, collateralWithdrawn);
     }
 
     //============================================================================================//
@@ -413,8 +416,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
             _accountDebtCheckpoint = currentDebt + amountBorrowed;
         }
 
-        if (_accountDebtCheckpoint < minDebtRequired)
-            revert MinDebtNotMet(minDebtRequired, _accountDebtCheckpoint);
+        if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED)
+            revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
 
         // Update the state
         aState.debtCheckpoint = _accountDebtCheckpoint;
@@ -461,8 +464,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
 
             // Ensure the minimum debt amounts are still maintained
             aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
-            if (_accountDebtCheckpoint < minDebtRequired) {
-                revert MinDebtNotMet(minDebtRequired, _accountDebtCheckpoint);
+            if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED) {
+                revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
             }
         } else {
             amountRepaid = latestDebt;
@@ -478,10 +481,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
 
         // Convert the `amountRepaid` (in wad) into the actual debt token precision
         // and pull from the caller and into the Treasury Borrower for repayment to Treasury
-        (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(
+        (IERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(
             amountRepaid
         );
-        dToken.safeTransferFrom(msg.sender, address(treasuryBorrower), dTokenAmount);
+        ERC20(address(dToken)).safeTransferFrom(
+            msg.sender,
+            address(treasuryBorrower),
+            dTokenAmount
+        );
         treasuryBorrower.repay();
     }
 
@@ -491,7 +498,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
 
     /// @inheritdoc IMonoCooler
     function applyDelegations(
-        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
     )
         external
@@ -508,7 +515,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     /// @inheritdoc IMonoCooler
     function applyUnhealthyDelegations(
         address account,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint256 totalUndelegated) {
         if (liquidationsPaused || !isEnabled) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
@@ -528,7 +535,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
         address[] calldata accounts,
-        DLGTEv1.DelegationRequest[][] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
     )
         external
         override
@@ -578,9 +585,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
-            collateralToken.safeApprove(address(staking), gOhmToBurn);
+            _COLLATERAL_TOKEN.safeApprove(address(_STAKING), gOhmToBurn);
 
-            MINTR.burnOhm(address(this), staking.unstake(address(this), gOhmToBurn, false, false));
+            MINTR.burnOhm(address(this), _STAKING.unstake(address(this), gOhmToBurn, false, false));
 
             totalCollateral -= totalCollateralClaimed;
         }
@@ -592,7 +599,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
 
         // The liquidator receives the total incentives across all accounts
         if (totalLiquidationIncentive > 0) {
-            collateralToken.safeTransfer(msg.sender, totalLiquidationIncentive);
+            _COLLATERAL_TOKEN.safeTransfer(msg.sender, totalLiquidationIncentive);
         }
     }
 
@@ -667,8 +674,28 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function debtToken() external view override returns (ERC20) {
+    function collateralToken() external view override returns (IERC20) {
+        return IERC20(address(_COLLATERAL_TOKEN));
+    }
+
+    /// @inheritdoc IMonoCooler
+    function ohm() external view override returns (IERC20) {
+        return IERC20(address(_OHM));
+    }
+
+    /// @inheritdoc IMonoCooler
+    function debtToken() external view override returns (IERC20) {
         return treasuryBorrower.debtToken();
+    }
+
+    /// @inheritdoc IMonoCooler
+    function staking() external view override returns (IStaking) {
+        return _STAKING;
+    }
+
+    /// @inheritdoc IMonoCooler
+    function minDebtRequired() external view override returns (uint256) {
+        return _MIN_DEBT_REQUIRED;
     }
 
     /// @inheritdoc IMonoCooler
@@ -757,7 +784,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address account,
         uint256 startIndex,
         uint256 maxItems
-    ) external view override returns (DLGTEv1.AccountDelegation[] memory delegations) {
+    ) external view override returns (IDLGTEv1.AccountDelegation[] memory delegations) {
         return DLGTE.accountDelegationsList(account, startIndex, maxItems);
     }
 
@@ -980,7 +1007,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
 
     function _undelegateForLiquidation(
         address account,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
         uint256 acctCollateral
     ) private returns (uint256 totalUndelegated) {
         if (delegationRequests.length > 0) {

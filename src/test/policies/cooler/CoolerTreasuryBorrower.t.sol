@@ -13,7 +13,7 @@ import {ROLESv1, OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 /* solhint-disable func-name-mixedcase, contract-name-camelcase, not-rely-on-time */
 contract CoolerTreasuryBorrowerTestBase is Test {
@@ -94,9 +94,9 @@ contract CoolerTreasuryBorrowerTestBase is Test {
     }
 
     function test_construction_success() public view {
-        assertEq(address(treasuryBorrower.susds()), address(susds));
+        assertEq(address(treasuryBorrower.SUSDS()), address(susds));
         assertEq(address(treasuryBorrower.debtToken()), address(usds));
-        (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(1e18);
+        (IERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(1e18);
         assertEq(address(dToken), address(usds));
         assertEq(dTokenAmount, 1e18);
         assertEq(address(treasuryBorrower.ROLES()), address(ROLES));
