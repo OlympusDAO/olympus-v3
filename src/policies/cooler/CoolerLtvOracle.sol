@@ -117,7 +117,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxOriginationLtvDelta(uint96 maxDelta) external override onlyRole(ADMIN_ROLE) {
+    function setMaxOriginationLtvDelta(uint96 maxDelta) external override onlyAdminRole {
         emit MaxOriginationLtvDeltaSet(maxDelta);
         maxOriginationLtvDelta = maxDelta;
     }
@@ -125,7 +125,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     /// @inheritdoc ICoolerLtvOracle
     function setMinOriginationLtvTargetTimeDelta(
         uint32 minTargetTimeDelta
-    ) external override onlyRole(ADMIN_ROLE) {
+    ) external override onlyAdminRole {
         emit MinOriginationLtvTargetTimeDeltaSet(minTargetTimeDelta);
         minOriginationLtvTargetTimeDelta = minTargetTimeDelta;
     }
@@ -134,7 +134,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     function setMaxOriginationLtvRateOfChange(
         uint96 originationLtvDelta,
         uint32 timeDelta
-    ) external override onlyRole(ADMIN_ROLE) {
+    ) external override onlyAdminRole {
         // Calculate the rate of change, rounding down.
         uint96 maxRateOfChange = originationLtvDelta / timeDelta;
         emit MaxOriginationLtvRateOfChangeSet(maxRateOfChange);
@@ -145,7 +145,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     function setOriginationLtvAt(
         uint96 targetValue,
         uint32 targetTime
-    ) external override onlyRole(ADMIN_ROLE) {
+    ) external override onlyAdminRole {
         uint96 _currentOriginationLtv = currentOriginationLtv();
         uint32 _now = uint32(block.timestamp);
 
@@ -184,16 +184,14 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxLiquidationLtvPremiumBps(
-        uint16 maxPremiumBps
-    ) external override onlyRole(ADMIN_ROLE) {
+    function setMaxLiquidationLtvPremiumBps(uint16 maxPremiumBps) external override onlyAdminRole {
         if (maxPremiumBps > BASIS_POINTS_DIVISOR) revert InvalidParam();
         emit MaxLiquidationLtvPremiumBpsSet(maxPremiumBps);
         maxLiquidationLtvPremiumBps = maxPremiumBps;
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setLiquidationLtvPremiumBps(uint16 premiumBps) external override onlyRole(ADMIN_ROLE) {
+    function setLiquidationLtvPremiumBps(uint16 premiumBps) external override onlyAdminRole {
         // Cannot set LLTV higher than the max
         if (premiumBps > maxLiquidationLtvPremiumBps) revert InvalidParam();
 

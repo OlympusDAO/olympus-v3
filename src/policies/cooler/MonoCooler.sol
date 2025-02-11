@@ -608,7 +608,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setLtvOracle(address newOracle) external override onlyRole(ADMIN_ROLE) {
+    function setLtvOracle(address newOracle) external override onlyAdminRole {
         (uint96 newOLTV, uint96 newLLTV) = ICoolerLtvOracle(newOracle).currentLtvs();
         if (newOLTV > newLLTV) revert InvalidParam();
 
@@ -643,7 +643,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     }
 
     /// @inheritdoc IMonoCooler
-    function setInterestRateWad(uint96 newInterestRate) external override onlyRole(ADMIN_ROLE) {
+    function setInterestRateWad(uint96 newInterestRate) external override onlyAdminRole {
         // Force an update of state on the old rate first.
         _globalStateRW();
 
@@ -655,7 +655,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     function setMaxDelegateAddresses(
         address account,
         uint32 maxDelegateAddresses
-    ) external override onlyRole(ADMIN_ROLE) {
+    ) external override onlyAdminRole {
         DLGTE.setMaxDelegateAddresses(account, maxDelegateAddresses);
     }
 

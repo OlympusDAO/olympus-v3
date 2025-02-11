@@ -104,7 +104,7 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function setDebt(uint256 debtTokenAmount) external override onlyEnabled onlyRole(ADMIN_ROLE) {
+    function setDebt(uint256 debtTokenAmount) external override onlyEnabled onlyAdminRole {
         TRSRY.setDebt({debtor_: address(this), token_: _debtToken, amount_: debtTokenAmount});
     }
 
