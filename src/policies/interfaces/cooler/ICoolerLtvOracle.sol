@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+
 /**
  * @title Cooler LTV Oracle
  * @notice It is a custom oracle (not dependant on external markets/AMMs/dependencies) to give the
@@ -33,10 +35,10 @@ interface ICoolerLtvOracle {
     error InvalidParam();
 
     /// @notice The collateral asset of the LTV [debtToken / collateralToken]
-    function collateralToken() external view returns (address);
+    function collateralToken() external view returns (IERC20);
 
     /// @notice The debt asset of the LTV [debtToken / collateralToken]
-    function debtToken() external view returns (address);
+    function debtToken() external view returns (IERC20);
 
     /// @notice The current Origination LTV and Liquidation LTV
     function currentLtvs() external view returns (uint96 originationLtv, uint96 liquidationLtv);

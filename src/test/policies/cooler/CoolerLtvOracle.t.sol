@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
@@ -160,8 +161,8 @@ contract CoolerLtvOracleTestAdmin is CoolerLtvOracleTestBase {
     }
 
     function test_construction_success() public view {
-        assertEq(oracle.debtToken(), address(usds));
-        assertEq(oracle.collateralToken(), address(gohm));
+        assertEq(address(oracle.debtToken()), address(usds));
+        assertEq(address(oracle.collateralToken()), address(gohm));
 
         checkOltvData(
             defaultOLTV,
