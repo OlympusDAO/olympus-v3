@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
@@ -161,13 +161,13 @@ interface IMonoCooler {
     }
 
     /// @notice The collateral token supplied by users/accounts, eg gOHM
-    function collateralToken() external view returns (ERC20);
+    function collateralToken() external view returns (IERC20);
 
     /// @notice The debt token which can be borrowed, eg DAI or USDS
-    function debtToken() external view returns (ERC20);
+    function debtToken() external view returns (IERC20);
 
     /// @notice Unwrapped gOHM
-    function ohm() external view returns (ERC20);
+    function ohm() external view returns (IERC20);
 
     /// @notice staking contract to unstake (and burn) OHM from liquidations
     function staking() external view returns (IStaking);

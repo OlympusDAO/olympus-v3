@@ -4,6 +4,7 @@ pragma solidity ^0.8.15;
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
@@ -122,15 +123,15 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function debtToken() external view override returns (ERC20) {
-        return _usds;
+    function debtToken() external view override returns (IERC20) {
+        return IERC20(address(_usds));
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function convertToDebtTokenAmount(
         uint256 amountInWad
-    ) external view override returns (ERC20 dToken, uint256 dTokenAmount) {
-        dToken = _usds;
+    ) external view override returns (IERC20 dToken, uint256 dTokenAmount) {
+        dToken = IERC20(address(_usds));
         dTokenAmount = amountInWad;
     }
 }

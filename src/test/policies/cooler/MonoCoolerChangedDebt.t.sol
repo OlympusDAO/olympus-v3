@@ -7,6 +7,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockCoolerTreasuryBorrower} from "./MockCoolerTreasuryBorrower.m.sol";
 import {Actions} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {
     MockERC20 internal dai;
@@ -231,7 +232,7 @@ contract MonoCoolerChangeDebtToken6dpTest is MonoCoolerBaseTest {
         uint128 repayAmountUsdc = 1_000e6;
 
         {
-            (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(1e18);
+            (IERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(1e18);
             assertEq(address(dToken), address(usds));
             assertEq(dTokenAmount, 1e18);
 

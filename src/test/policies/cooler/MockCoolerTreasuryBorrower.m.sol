@@ -5,6 +5,7 @@ import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
@@ -20,7 +21,7 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesCon
     /// @notice Olympus V3 Treasury Module
     TRSRYv1 public TRSRY;
 
-    ERC20 public immutable override debtToken;
+    ERC20 public immutable _debtToken;
 
     uint256 private immutable _conversionScalar;
 
@@ -28,9 +29,9 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesCon
     bytes32 public constant ADMIN_ROLE = bytes32("treasuryborrower_admin");
 
     constructor(address kernel_, address debtToken_) Policy(Kernel(kernel_)) {
-        debtToken = ERC20(debtToken_);
+        _debtToken = ERC20(debtToken_);
 
-        uint8 tokenDecimals = debtToken.decimals();
+        uint8 tokenDecimals = _debtToken.decimals();
         if (tokenDecimals > DECIMALS) revert InvalidParam();
         _conversionScalar = 10 ** (DECIMALS - tokenDecimals);
     }
@@ -73,44 +74,49 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesCon
         // Convert into the debtToken scale rounding UP
         uint256 debtTokenAmount = _convertToDebtTokenAmount(amountInWei);
 
-        uint256 outstandingDebt = TRSRY.reserveDebt(debtToken, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(_debtToken, address(this));
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: debtToken,
+            token_: _debtToken,
             amount_: outstandingDebt + debtTokenAmount
         });
 
-        TRSRY.increaseWithdrawApproval(address(this), debtToken, debtTokenAmount);
-        TRSRY.withdrawReserves(recipient, debtToken, debtTokenAmount);
+        TRSRY.increaseWithdrawApproval(address(this), _debtToken, debtTokenAmount);
+        TRSRY.withdrawReserves(recipient, _debtToken, debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function repay() external override onlyRole(COOLER_ROLE) {
-        uint256 debtTokenAmount = debtToken.balanceOf(address(this));
+        uint256 debtTokenAmount = _debtToken.balanceOf(address(this));
         if (debtTokenAmount == 0) revert ExpectedNonZero();
 
         // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
         // and any future repayments are just deposited. There are no 'credits' for overpaying
-        uint256 outstandingDebt = TRSRY.reserveDebt(debtToken, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(_debtToken, address(this));
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: debtToken,
+            token_: _debtToken,
             amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
         });
 
-        debtToken.safeTransfer(address(TRSRY), debtTokenAmount);
+        _debtToken.safeTransfer(address(TRSRY), debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function setDebt(uint256 debtTokenAmount) external override onlyRole(ADMIN_ROLE) {
-        TRSRY.setDebt({debtor_: address(this), token_: debtToken, amount_: debtTokenAmount});
+        TRSRY.setDebt({debtor_: address(this), token_: _debtToken, amount_: debtTokenAmount});
+    }
+
+    /// @inheritdoc ICoolerTreasuryBorrower
+    function debtToken() external view override returns (IERC20) {
+        return IERC20(address(_debtToken));
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function convertToDebtTokenAmount(
         uint256 amountInWei
-    ) external view override returns (ERC20 dToken, uint256 dTokenAmount) {
-        dToken = debtToken;
+    ) external view override returns (IERC20 dToken, uint256 dTokenAmount) {
+        dToken = IERC20(address(_debtToken));
         dTokenAmount = _convertToDebtTokenAmount(amountInWei);
     }
 

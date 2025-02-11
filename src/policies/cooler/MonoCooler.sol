@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -43,10 +44,10 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    ERC20 public immutable override collateralToken;
+    IERC20 public immutable override collateralToken;
 
     /// @inheritdoc IMonoCooler
-    ERC20 public immutable override ohm;
+    IERC20 public immutable override ohm;
 
     /// @inheritdoc IMonoCooler
     IStaking public immutable override staking;
@@ -141,12 +142,12 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint96 interestRateWad_,
         uint256 minDebtRequired_
     ) Policy(Kernel(kernel_)) {
-        collateralToken = ERC20(gohm_);
+        collateralToken = IERC20(gohm_);
 
         // Only handle 18dp collateral
         if (collateralToken.decimals() != _EXPECTED_DECIMALS) revert InvalidParam();
 
-        ohm = ERC20(ohm_);
+        ohm = IERC20(ohm_);
         staking = IStaking(staking_);
         minDebtRequired = minDebtRequired_;
 
@@ -274,7 +275,11 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Add collateral on behalf of another account
         AccountState storage aState = allAccountState[onBehalfOf];
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
+        ERC20(address(collateralToken)).safeTransferFrom(
+            msg.sender,
+            address(this),
+            collateralAmount
+        );
 
         aState.collateral += collateralAmount;
         totalCollateral += collateralAmount;
@@ -358,7 +363,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Finally transfer the collateral to the recipient
         emit CollateralWithdrawn(msg.sender, onBehalfOf, recipient, collateralWithdrawn);
-        collateralToken.safeTransfer(recipient, collateralWithdrawn);
+        ERC20(address(collateralToken)).safeTransfer(recipient, collateralWithdrawn);
     }
 
     //============================================================================================//
@@ -474,10 +479,14 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Convert the `amountRepaid` (in wad) into the actual debt token precision
         // and pull from the caller and into the Treasury Borrower for repayment to Treasury
-        (ERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(
+        (IERC20 dToken, uint256 dTokenAmount) = treasuryBorrower.convertToDebtTokenAmount(
             amountRepaid
         );
-        dToken.safeTransferFrom(msg.sender, address(treasuryBorrower), dTokenAmount);
+        ERC20(address(dToken)).safeTransferFrom(
+            msg.sender,
+            address(treasuryBorrower),
+            dTokenAmount
+        );
         treasuryBorrower.repay();
     }
 
@@ -574,7 +583,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
-            collateralToken.safeApprove(address(staking), gOhmToBurn);
+            ERC20(address(collateralToken)).safeApprove(address(staking), gOhmToBurn);
 
             MINTR.burnOhm(address(this), staking.unstake(address(this), gOhmToBurn, false, false));
 
@@ -588,7 +597,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // The liquidator receives the total incentives across all accounts
         if (totalLiquidationIncentive > 0) {
-            collateralToken.safeTransfer(msg.sender, totalLiquidationIncentive);
+            ERC20(address(collateralToken)).safeTransfer(msg.sender, totalLiquidationIncentive);
         }
     }
 
@@ -667,7 +676,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function debtToken() external view override returns (ERC20) {
+    function debtToken() external view override returns (IERC20) {
         return treasuryBorrower.debtToken();
     }
 
