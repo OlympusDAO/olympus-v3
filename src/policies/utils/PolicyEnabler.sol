@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.15;
 
-import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
-import {ADMIN_ROLE, EMERGENCY_ROLE} from "./RoleDefinitions.sol";
+import {PolicyAdmin} from "./PolicyAdmin.sol";
 
 /// @title  PolicyEnabler
 /// @notice This contract is designed to be inherited by contracts that need to be enabled or disabled. It replaces the inconsistent usage of `active` and `locallyActive` state variables across the codebase.
@@ -14,7 +13,7 @@ import {ADMIN_ROLE, EMERGENCY_ROLE} from "./RoleDefinitions.sol";
 ///         The following are optional:
 ///         - Override the `_enable()` and `_disable()` functions if custom logic and/or parameters are needed for the enable/disable functions.
 ///           - For example, `enable()` could be called with initialisation data that is decoded, validated and assigned in `_enable()`.
-abstract contract PolicyEnabler is RolesConsumer {
+abstract contract PolicyEnabler is PolicyAdmin {
     // ===== STATE VARIABLES ===== //
 
     /// @notice Whether the policy functionality is enabled
@@ -22,7 +21,6 @@ abstract contract PolicyEnabler is RolesConsumer {
 
     // ===== ERRORS ===== //
 
-    error NotAuthorised();
     error NotDisabled();
     error NotEnabled();
 
@@ -32,12 +30,6 @@ abstract contract PolicyEnabler is RolesConsumer {
     event Enabled();
 
     // ===== MODIFIERS ===== //
-
-    /// @notice Modifier that reverts if the caller does not have the emergency or admin role
-    modifier onlyEmergencyOrAdminRole() {
-        if (!isEmergency(msg.sender) && !isAdmin(msg.sender)) revert NotAuthorised();
-        _;
-    }
 
     /// @notice Modifier that reverts if the policy is not enabled
     modifier onlyEnabled() {
@@ -116,22 +108,4 @@ abstract contract PolicyEnabler is RolesConsumer {
     /// @param  disableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
     function _disable(bytes calldata disableData_) internal virtual {}
-
-    // ===== ROLE CHECKS ===== //
-
-    /// @notice Check if an account has the admin role
-    ///
-    /// @param  account_ The account to check
-    /// @return true if the account has the admin role, false otherwise
-    function isAdmin(address account_) public view returns (bool) {
-        return ROLES.hasRole(account_, ADMIN_ROLE);
-    }
-
-    /// @notice Check if an account has the emergency role
-    ///
-    /// @param  account_ The account to check
-    /// @return true if the account has the emergency role, false otherwise
-    function isEmergency(address account_) public view returns (bool) {
-        return ROLES.hasRole(account_, EMERGENCY_ROLE);
-    }
 }

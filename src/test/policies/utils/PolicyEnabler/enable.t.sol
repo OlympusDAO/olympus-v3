@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {PolicyEnablerTest} from "./PolicyEnablerTest.sol";
 
 contract PolicyEnablerEnableTest is PolicyEnablerTest {
@@ -28,7 +29,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
         vm.assume(caller_ != EMERGENCY && caller_ != ADMIN);
 
         // Expect revert
-        vm.expectRevert(PolicyEnabler.NotAuthorised.selector);
+        vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
 
         // Call function
         vm.prank(caller_);
