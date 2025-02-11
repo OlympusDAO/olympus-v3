@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
-import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 
 contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
     event CollateralAdded(
@@ -153,7 +153,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector,
+                IDLGTEv1.DLGTE_ExceededUndelegatedBalance.selector,
                 collateralAmount,
                 collateralAmount + 1
             )
@@ -228,7 +228,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         gohm.approve(address(cooler), 100);
 
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
-        cooler.addCollateral(100, BOB, new DLGTEv1.DelegationRequest[](1));
+        cooler.addCollateral(100, BOB, new IDLGTEv1.DelegationRequest[](1));
     }
 
     function test_addCollateral_withDelegations_onBehalfOf_withAuthorization() public {
@@ -419,7 +419,11 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         // Need to prank BOB
         {
             vm.expectRevert(
-                abi.encodeWithSelector(DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 0, 2.5e18)
+                abi.encodeWithSelector(
+                    IDLGTEv1.DLGTE_ExceededUndelegatedBalance.selector,
+                    0,
+                    2.5e18
+                )
             );
             cooler.applyDelegations(delegationRequest(BOB, collateralAmount / 2), ALICE);
         }
@@ -580,12 +584,14 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         // undelegated -> OTHERS: 3
         // OTHERS -> BOB: 1.5
         // OTHERS -> undelegated: 0.5
-        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](5);
-        delegationRequests[0] = DLGTEv1.DelegationRequest({delegate: BOB, amount: 1e18});
-        delegationRequests[1] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: 3e18});
-        delegationRequests[2] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: -1.5e18});
-        delegationRequests[3] = DLGTEv1.DelegationRequest({delegate: BOB, amount: 1.5e18});
-        delegationRequests[4] = DLGTEv1.DelegationRequest({delegate: OTHERS, amount: -0.5e18});
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            5
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 1e18});
+        delegationRequests[1] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: 3e18});
+        delegationRequests[2] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: -1.5e18});
+        delegationRequests[3] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 1.5e18});
+        delegationRequests[4] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: -0.5e18});
 
         address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
         vm.expectEmit(address(escrowFactory));
@@ -814,7 +820,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         vm.expectRevert(
             abi.encodeWithSelector(
-                DLGTEv1.DLGTE_ExceededUndelegatedBalance.selector,
+                IDLGTEv1.DLGTE_ExceededUndelegatedBalance.selector,
                 50e18,
                 50e18 + 1
             )
@@ -1084,8 +1090,8 @@ contract MonoCoolerCollateralApplyDelegationsTest is MonoCoolerBaseTest {
     function test_applyDelegations_fail_zeroDelegate() public {
         addCollateral(ALICE, 10e18);
         vm.startPrank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(DLGTEv1.DLGTE_InvalidDelegationRequests.selector));
-        cooler.applyDelegations(new DLGTEv1.DelegationRequest[](0), ALICE);
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidDelegationRequests.selector));
+        cooler.applyDelegations(new IDLGTEv1.DelegationRequest[](0), ALICE);
     }
 
     function test_applyDelegations_fail_notAuthorized() public {
@@ -1098,10 +1104,12 @@ contract MonoCoolerCollateralApplyDelegationsTest is MonoCoolerBaseTest {
     function test_applyDelegations_success_self() public {
         addCollateral(ALICE, 10e18);
 
-        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](3);
-        delegationRequests[0] = DLGTEv1.DelegationRequest(BOB, 10e18);
-        delegationRequests[1] = DLGTEv1.DelegationRequest(BOB, -int256(2e18));
-        delegationRequests[2] = DLGTEv1.DelegationRequest(OTHERS, 1e18);
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            3
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, 10e18);
+        delegationRequests[1] = IDLGTEv1.DelegationRequest(BOB, -int256(2e18));
+        delegationRequests[2] = IDLGTEv1.DelegationRequest(OTHERS, 1e18);
 
         vm.startPrank(ALICE);
         (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler
@@ -1122,10 +1130,12 @@ contract MonoCoolerCollateralApplyDelegationsTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         cooler.setAuthorization(operator, type(uint32).max);
 
-        DLGTEv1.DelegationRequest[] memory delegationRequests = new DLGTEv1.DelegationRequest[](3);
-        delegationRequests[0] = DLGTEv1.DelegationRequest(BOB, 10e18);
-        delegationRequests[1] = DLGTEv1.DelegationRequest(BOB, -int256(2e18));
-        delegationRequests[2] = DLGTEv1.DelegationRequest(OTHERS, 1e18);
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            3
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, 10e18);
+        delegationRequests[1] = IDLGTEv1.DelegationRequest(BOB, -int256(2e18));
+        delegationRequests[2] = IDLGTEv1.DelegationRequest(OTHERS, 1e18);
 
         vm.startPrank(operator);
         (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance) = cooler

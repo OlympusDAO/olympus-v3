@@ -12,6 +12,7 @@ import {IStaking} from "interfaces/IStaking.sol";
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
@@ -268,7 +269,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     function addCollateral(
         uint128 collateralAmount,
         address onBehalfOf,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (onBehalfOf == address(0)) revert InvalidAddress();
@@ -301,7 +302,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint128 collateralAmount,
         address onBehalfOf,
         address recipient,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint128 collateralWithdrawn) {
         if (collateralAmount == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
@@ -492,7 +493,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     /// @inheritdoc IMonoCooler
     function applyDelegations(
-        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
     )
         external
@@ -509,7 +510,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /// @inheritdoc IMonoCooler
     function applyUnhealthyDelegations(
         address account,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint256 totalUndelegated) {
         if (liquidationsPaused) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
@@ -529,7 +530,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
         address[] calldata accounts,
-        DLGTEv1.DelegationRequest[][] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
     )
         external
         override
@@ -782,7 +783,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address account,
         uint256 startIndex,
         uint256 maxItems
-    ) external view override returns (DLGTEv1.AccountDelegation[] memory delegations) {
+    ) external view override returns (IDLGTEv1.AccountDelegation[] memory delegations) {
         return DLGTE.accountDelegationsList(account, startIndex, maxItems);
     }
 
@@ -1005,7 +1006,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
     function _undelegateForLiquidation(
         address account,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
         uint256 acctCollateral
     ) private returns (uint256 totalUndelegated) {
         if (delegationRequests.length > 0) {

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {IStaking} from "interfaces/IStaking.sol";
@@ -272,7 +272,7 @@ interface IMonoCooler {
     function addCollateral(
         uint128 collateralAmount,
         address onBehalfOf,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external;
 
     /**
@@ -297,7 +297,7 @@ interface IMonoCooler {
         uint128 collateralAmount,
         address onBehalfOf,
         address recipient,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (uint128 collateralWithdrawn);
 
     /**
@@ -313,7 +313,7 @@ interface IMonoCooler {
      *      authorized via `setAuthorization()` or `setAuthorizationWithSig()`
      */
     function applyDelegations(
-        DLGTEv1.DelegationRequest[] calldata delegationRequests,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
         address onBehalfOf
     )
         external
@@ -371,7 +371,7 @@ interface IMonoCooler {
      */
     function batchLiquidate(
         address[] calldata accounts,
-        DLGTEv1.DelegationRequest[][] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
     )
         external
         returns (
@@ -387,7 +387,7 @@ interface IMonoCooler {
      */
     function applyUnhealthyDelegations(
         address account,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external returns (uint256 totalUndelegated);
 
     //============================================================================================//
@@ -463,7 +463,7 @@ interface IMonoCooler {
         address account,
         uint256 startIndex,
         uint256 maxItems
-    ) external view returns (DLGTEv1.AccountDelegation[] memory delegations);
+    ) external view returns (IDLGTEv1.AccountDelegation[] memory delegations);
 
     /// @notice A view of the last checkpoint of account data (not as of this block)
     function accountState(address account) external view returns (AccountState memory);

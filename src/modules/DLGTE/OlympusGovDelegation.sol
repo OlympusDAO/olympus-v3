@@ -6,6 +6,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
@@ -133,7 +134,7 @@ contract OlympusGovDelegation is DLGTEv1 {
     /// @inheritdoc DLGTEv1
     function applyDelegations(
         address onBehalfOf,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     )
         external
         override
@@ -187,7 +188,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         address account,
         uint256 startIndex,
         uint256 maxItems
-    ) external view override returns (DLGTEv1.AccountDelegation[] memory delegations) {
+    ) external view override returns (IDLGTEv1.AccountDelegation[] memory delegations) {
         AccountState storage aState = _accountState[account];
         EnumerableSet.AddressSet storage acctDelegateAddresses = aState.delegateAddresses;
 
@@ -257,7 +258,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         address onBehalfOf,
         AccountState storage aState,
         uint256 undelegatedBalance,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     )
         private
         returns (
@@ -308,7 +309,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         uint256 undelegatedBalance,
         uint32 maxDelegates,
         EnumerableSet.AddressSet storage acctDelegateAddresses,
-        DLGTEv1.DelegationRequest calldata delegationRequest
+        IDLGTEv1.DelegationRequest calldata delegationRequest
     ) private returns (uint256 delegatedAmount, uint256 undelegatedAmount) {
         if (delegationRequest.delegate == address(0)) revert DLGTE_InvalidAddress();
 
