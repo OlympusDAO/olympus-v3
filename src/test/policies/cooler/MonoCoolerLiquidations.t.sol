@@ -73,11 +73,6 @@ contract MonoCoolerComputeLiquidityBaseTest is MonoCoolerBaseTest {
         vm.prank(EXECUTOR);
         kernel.executeAction(Actions.ActivatePolicy, address(newCooler));
 
-        // Enable the new cooler
-        vm.startPrank(OVERSEER);
-        newCooler.enable(abi.encode(""));
-        vm.stopPrank();
-
         // Alice supplies collateral into both coolers and delegates to BOB
         addCollateral(
             cooler,
@@ -367,15 +362,6 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         cooler.applyUnhealthyDelegations(ALICE, noDelegationRequest());
     }
 
-    function test_applyUnhealthyDelegations_fail_notEnabled() external {
-        vm.startPrank(OVERSEER);
-        cooler.disable(abi.encode(""));
-        vm.stopPrank();
-
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
-        cooler.applyUnhealthyDelegations(ALICE, noDelegationRequest());
-    }
-
     function test_applyUnhealthyDelegations_fail_cannotLiquidate() external {
         addCollateral(ALICE, 10e18);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.CannotLiquidate.selector));
@@ -582,15 +568,6 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
     function test_batchLiquidate_fail_paused() external {
         vm.prank(OVERSEER);
         cooler.setLiquidationsPaused(true);
-
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
-        cooler.batchLiquidate(oneAddress(ALICE), oneDelegationRequest(noDelegationRequest()));
-    }
-
-    function test_batchLiquidate_fail_notEnabled() external {
-        vm.startPrank(OVERSEER);
-        cooler.disable(abi.encode(""));
-        vm.stopPrank();
 
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
         cooler.batchLiquidate(oneAddress(ALICE), oneDelegationRequest(noDelegationRequest()));

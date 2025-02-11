@@ -12,7 +12,7 @@ import {IStaking} from "interfaces/IStaking.sol";
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 
@@ -37,7 +37,7 @@ import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
  *    `LTV Oracle`
  *  - Users may set an authorization for one other address to act on its behalf.
  */
-contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
+contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     using FixedPointMathLib for uint256;
     using SafeCast for uint256;
     using CompoundedInterest for uint256;
@@ -378,7 +378,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address onBehalfOf,
         address recipient
     ) external override returns (uint128 amountBorrowed) {
-        if (borrowsPaused || !isEnabled) revert Paused();
+        if (borrowsPaused) revert Paused();
         _requireAmountNonZero(borrowAmount);
         _requireAddressNonZero(recipient);
         _requireSenderAuthorized(msg.sender, onBehalfOf);
@@ -517,7 +517,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
         address account,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint256 totalUndelegated) {
-        if (liquidationsPaused || !isEnabled) revert Paused();
+        if (liquidationsPaused) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
         LiquidationStatus memory status = _computeLiquidity(allAccountState[account], gState);
         if (!status.exceededLiquidationLtv) revert CannotLiquidate();
@@ -545,7 +545,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
             uint128 totalLiquidationIncentive
         )
     {
-        if (liquidationsPaused || !isEnabled) revert Paused();
+        if (liquidationsPaused) revert Paused();
         if (delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
 
         LiquidationStatus memory status;
@@ -622,7 +622,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyEnabler {
     /// @inheritdoc IMonoCooler
     function setTreasuryBorrower(address newTreasuryBorrower) external override {
         // Permisionless if `treasuryBorrower` is uninitialized
-        if (address(treasuryBorrower) != address(0) && !isAdmin(msg.sender))
+        if (address(treasuryBorrower) != address(0) && !_isAdmin(msg.sender))
             revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
 
         emit TreasuryBorrowerSet(newTreasuryBorrower);

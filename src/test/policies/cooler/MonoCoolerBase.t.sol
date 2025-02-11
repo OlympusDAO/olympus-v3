@@ -149,11 +149,6 @@ abstract contract MonoCoolerBaseTest is Test {
         vm.startPrank(OVERSEER);
         ltvOracle.enable(abi.encode(""));
         vm.stopPrank();
-
-        // Enable the MonoCooler
-        vm.startPrank(OVERSEER);
-        cooler.enable(abi.encode(""));
-        vm.stopPrank();
     }
 
     function checkGlobalState(
