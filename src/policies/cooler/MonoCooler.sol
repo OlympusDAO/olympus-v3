@@ -43,17 +43,17 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //                                         IMMUTABLES                                         //
     //============================================================================================//
 
-    /// @inheritdoc IMonoCooler
-    IERC20 public immutable override collateralToken;
+    /// @dev The collateral token, eg gOHM
+    ERC20 private immutable _COLLATERAL_TOKEN;
 
-    /// @inheritdoc IMonoCooler
-    IERC20 public immutable override ohm;
+    /// @dev The OHM token
+    ERC20 private immutable _OHM;
 
-    /// @inheritdoc IMonoCooler
-    IStaking public immutable override staking;
+    /// @dev The OHM staking contract
+    IStaking private immutable _STAKING;
 
-    /// @inheritdoc IMonoCooler
-    uint256 public immutable override minDebtRequired;
+    /// @dev The minimum debt a user needs to maintain
+    uint256 private immutable _MIN_DEBT_REQUIRED;
 
     /// @inheritdoc IMonoCooler
     bytes32 public immutable override DOMAIN_SEPARATOR;
@@ -126,7 +126,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             "Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)"
         );
 
-    /// @dev expected decimals for the `collateralToken` and `treasuryBorrower`
+    /// @dev expected decimals for the `_COLLATERAL_TOKEN` and `treasuryBorrower`
     uint8 private constant _EXPECTED_DECIMALS = 18;
 
     //============================================================================================//
@@ -142,14 +142,14 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint96 interestRateWad_,
         uint256 minDebtRequired_
     ) Policy(Kernel(kernel_)) {
-        collateralToken = IERC20(gohm_);
+        _COLLATERAL_TOKEN = ERC20(gohm_);
 
         // Only handle 18dp collateral
-        if (collateralToken.decimals() != _EXPECTED_DECIMALS) revert InvalidParam();
+        if (_COLLATERAL_TOKEN.decimals() != _EXPECTED_DECIMALS) revert InvalidParam();
 
-        ohm = IERC20(ohm_);
-        staking = IStaking(staking_);
-        minDebtRequired = minDebtRequired_;
+        _OHM = ERC20(ohm_);
+        _STAKING = IStaking(staking_);
+        _MIN_DEBT_REQUIRED = minDebtRequired_;
 
         ltvOracle = ICoolerLtvOracle(ltvOracle_);
         (uint96 newOLTV, uint96 newLLTV) = ltvOracle.currentLtvs();
@@ -186,18 +186,18 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         // If MINTR has changed, then update approval to burn OHM from the old
         address oldAddress = address(MINTR);
         if (address(newMINTR) != oldAddress) {
-            if (oldAddress != address(0)) ohm.approve(oldAddress, 0);
+            if (oldAddress != address(0)) _OHM.approve(oldAddress, 0);
 
-            ohm.approve(address(newMINTR), type(uint256).max);
+            _OHM.approve(address(newMINTR), type(uint256).max);
             MINTR = newMINTR;
         }
 
         // If DLGTE has changed, then update approval to pull gOHM for delegation
         oldAddress = address(DLGTE);
         if (address(newDLGTE) != oldAddress) {
-            if (oldAddress != address(0)) collateralToken.approve(address(oldAddress), 0);
+            if (oldAddress != address(0)) _COLLATERAL_TOKEN.approve(address(oldAddress), 0);
 
-            collateralToken.approve(address(newDLGTE), type(uint256).max);
+            _COLLATERAL_TOKEN.approve(address(newDLGTE), type(uint256).max);
             DLGTE = newDLGTE;
         }
     }
@@ -275,11 +275,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Add collateral on behalf of another account
         AccountState storage aState = allAccountState[onBehalfOf];
-        ERC20(address(collateralToken)).safeTransferFrom(
-            msg.sender,
-            address(this),
-            collateralAmount
-        );
+        _COLLATERAL_TOKEN.safeTransferFrom(msg.sender, address(this), collateralAmount);
 
         aState.collateral += collateralAmount;
         totalCollateral += collateralAmount;
@@ -363,7 +359,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // Finally transfer the collateral to the recipient
         emit CollateralWithdrawn(msg.sender, onBehalfOf, recipient, collateralWithdrawn);
-        ERC20(address(collateralToken)).safeTransfer(recipient, collateralWithdrawn);
+        _COLLATERAL_TOKEN.safeTransfer(recipient, collateralWithdrawn);
     }
 
     //============================================================================================//
@@ -414,8 +410,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
             _accountDebtCheckpoint = currentDebt + amountBorrowed;
         }
 
-        if (_accountDebtCheckpoint < minDebtRequired)
-            revert MinDebtNotMet(minDebtRequired, _accountDebtCheckpoint);
+        if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED)
+            revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
 
         // Update the state
         aState.debtCheckpoint = _accountDebtCheckpoint;
@@ -462,8 +458,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
             // Ensure the minimum debt amounts are still maintained
             aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
-            if (_accountDebtCheckpoint < minDebtRequired) {
-                revert MinDebtNotMet(minDebtRequired, _accountDebtCheckpoint);
+            if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED) {
+                revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
             }
         } else {
             amountRepaid = latestDebt;
@@ -583,9 +579,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
-            ERC20(address(collateralToken)).safeApprove(address(staking), gOhmToBurn);
+            _COLLATERAL_TOKEN.safeApprove(address(_STAKING), gOhmToBurn);
 
-            MINTR.burnOhm(address(this), staking.unstake(address(this), gOhmToBurn, false, false));
+            MINTR.burnOhm(address(this), _STAKING.unstake(address(this), gOhmToBurn, false, false));
 
             totalCollateral -= totalCollateralClaimed;
         }
@@ -597,7 +593,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
 
         // The liquidator receives the total incentives across all accounts
         if (totalLiquidationIncentive > 0) {
-            ERC20(address(collateralToken)).safeTransfer(msg.sender, totalLiquidationIncentive);
+            _COLLATERAL_TOKEN.safeTransfer(msg.sender, totalLiquidationIncentive);
         }
     }
 
@@ -676,8 +672,28 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
+    function collateralToken() external view override returns (IERC20) {
+        return IERC20(address(_COLLATERAL_TOKEN));
+    }
+
+    /// @inheritdoc IMonoCooler
+    function ohm() external view override returns (IERC20) {
+        return IERC20(address(_OHM));
+    }
+
+    /// @inheritdoc IMonoCooler
     function debtToken() external view override returns (IERC20) {
         return treasuryBorrower.debtToken();
+    }
+
+    /// @inheritdoc IMonoCooler
+    function staking() external view override returns (IStaking) {
+        return _STAKING;
+    }
+
+    /// @inheritdoc IMonoCooler
+    function minDebtRequired() external view override returns (uint256) {
+        return _MIN_DEBT_REQUIRED;
     }
 
     /// @inheritdoc IMonoCooler
