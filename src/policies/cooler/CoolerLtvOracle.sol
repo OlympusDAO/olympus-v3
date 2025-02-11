@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import {Kernel, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";

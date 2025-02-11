@@ -3,7 +3,6 @@ pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -119,7 +118,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function setDebt(uint256 debtTokenAmount) external override onlyEnabled onlyRole(ADMIN_ROLE) {
+    function setDebt(uint256 debtTokenAmount) external override onlyEnabled onlyAdminRole {
         TRSRY.setDebt({debtor_: address(this), token_: _USDS, amount_: debtTokenAmount});
     }
 
