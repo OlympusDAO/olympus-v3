@@ -3,16 +3,20 @@ pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 contract MonoCoolerAccessTest is MonoCoolerBaseTest {
     function expectOnlyOverseer() internal {
         vm.startPrank(OTHERS);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ROLESv1.ROLES_RequireRole.selector,
-                cooler.COOLER_OVERSEER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.stopPrank();
+    }
+
+    function expectOnlyEmergencyOrAdmin() internal {
+        vm.startPrank(OTHERS);
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
         vm.stopPrank();
     }
 
@@ -27,12 +31,12 @@ contract MonoCoolerAccessTest is MonoCoolerBaseTest {
     }
 
     function test_access_setLiquidationsPaused() public {
-        expectOnlyOverseer();
+        expectOnlyEmergencyOrAdmin();
         cooler.setLiquidationsPaused(true);
     }
 
     function test_access_setBorrowPaused() public {
-        expectOnlyOverseer();
+        expectOnlyEmergencyOrAdmin();
         cooler.setBorrowPaused(true);
     }
 

@@ -2,7 +2,8 @@
 pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode} from "src/Kernel.sol";
-import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -17,7 +18,7 @@ import {SafeCast} from "libraries/SafeCast.sol";
  *  - Origination LTV updates on a per second basis according to a policy set rate of change (and is up only or flat)
  *  - Liquidation LTV is a policy set percentage above the Origination LTV
  */
-contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
+contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     using SafeCast for uint256;
 
     /// @dev The debt token
@@ -61,8 +62,6 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     uint8 public constant override DECIMALS = 18;
 
     uint96 public constant BASIS_POINTS_DIVISOR = 10_000;
-
-    bytes32 public constant COOLER_OVERSEER_ROLE = bytes32("cooler_overseer");
 
     constructor(
         address kernel_,
@@ -117,9 +116,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxOriginationLtvDelta(
-        uint96 maxDelta
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setMaxOriginationLtvDelta(uint96 maxDelta) external override onlyAdminRole {
         emit MaxOriginationLtvDeltaSet(maxDelta);
         maxOriginationLtvDelta = maxDelta;
     }
@@ -127,7 +124,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     /// @inheritdoc ICoolerLtvOracle
     function setMinOriginationLtvTargetTimeDelta(
         uint32 minTargetTimeDelta
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    ) external override onlyAdminRole {
         emit MinOriginationLtvTargetTimeDeltaSet(minTargetTimeDelta);
         minOriginationLtvTargetTimeDelta = minTargetTimeDelta;
     }
@@ -136,7 +133,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     function setMaxOriginationLtvRateOfChange(
         uint96 originationLtvDelta,
         uint32 timeDelta
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    ) external override onlyAdminRole {
         // Calculate the rate of change, rounding down.
         uint96 maxRateOfChange = originationLtvDelta / timeDelta;
         emit MaxOriginationLtvRateOfChangeSet(maxRateOfChange);
@@ -147,7 +144,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     function setOriginationLtvAt(
         uint96 targetValue,
         uint32 targetTime
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    ) external override onlyAdminRole {
         uint96 _currentOriginationLtv = currentOriginationLtv();
         uint32 _now = uint32(block.timestamp);
 
@@ -186,18 +183,14 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, RolesConsumer {
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setMaxLiquidationLtvPremiumBps(
-        uint16 maxPremiumBps
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setMaxLiquidationLtvPremiumBps(uint16 maxPremiumBps) external override onlyAdminRole {
         if (maxPremiumBps > BASIS_POINTS_DIVISOR) revert InvalidParam();
         emit MaxLiquidationLtvPremiumBpsSet(maxPremiumBps);
         maxLiquidationLtvPremiumBps = maxPremiumBps;
     }
 
     /// @inheritdoc ICoolerLtvOracle
-    function setLiquidationLtvPremiumBps(
-        uint16 premiumBps
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setLiquidationLtvPremiumBps(uint16 premiumBps) external override onlyAdminRole {
         // Cannot set LLTV higher than the max
         if (premiumBps > maxLiquidationLtvPremiumBps) revert InvalidParam();
 

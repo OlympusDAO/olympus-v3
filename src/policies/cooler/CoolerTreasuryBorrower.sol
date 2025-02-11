@@ -2,7 +2,8 @@
 pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
-import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -21,7 +22,7 @@ import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasur
  *    eg USDC, then borrow() and repay() will need to do the conversion.
  *  - This implementation borrows USDS from Treasury but deposits into sUSDS to benefit from savings yield.
  */
-contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsumer {
+contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnabler {
     using SafeTransferLib for ERC20;
 
     /// @inheritdoc ICoolerTreasuryBorrower
@@ -37,7 +38,6 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     ERC20 private immutable _USDS;
 
     bytes32 public constant COOLER_ROLE = bytes32("treasuryborrower_cooler");
-    bytes32 public constant ADMIN_ROLE = bytes32("treasuryborrower_admin");
 
     constructor(address kernel_, address susds_) Policy(Kernel(kernel_)) {
         SUSDS = ERC4626(susds_);
@@ -80,7 +80,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     function borrow(
         uint256 amountInWad,
         address recipient
-    ) external override onlyRole(COOLER_ROLE) {
+    ) external override onlyEnabled onlyRole(COOLER_ROLE) {
         if (amountInWad == 0) revert ExpectedNonZero();
         if (recipient == address(0)) revert InvalidAddress();
 
@@ -100,7 +100,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function repay() external override onlyRole(COOLER_ROLE) {
+    function repay() external override onlyEnabled onlyRole(COOLER_ROLE) {
         uint256 debtTokenAmount = _USDS.balanceOf(address(this));
         if (debtTokenAmount == 0) revert ExpectedNonZero();
 
@@ -118,7 +118,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, RolesConsume
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function setDebt(uint256 debtTokenAmount) external override onlyRole(ADMIN_ROLE) {
+    function setDebt(uint256 debtTokenAmount) external override onlyEnabled onlyAdminRole {
         TRSRY.setDebt({debtor_: address(this), token_: _USDS, amount_: debtTokenAmount});
     }
 

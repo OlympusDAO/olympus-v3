@@ -11,8 +11,11 @@ import {IStaking} from "interfaces/IStaking.sol";
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
+
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
 
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
@@ -34,7 +37,7 @@ import {CompoundedInterest} from "libraries/CompoundedInterest.sol";
  *    `LTV Oracle`
  *  - Users may set an authorization for one other address to act on its behalf.
  */
-contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
+contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     using FixedPointMathLib for uint256;
     using SafeCast for uint256;
     using CompoundedInterest for uint256;
@@ -111,8 +114,6 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
     //                                         CONSTANTS                                          //
     //============================================================================================//
-
-    bytes32 public constant COOLER_OVERSEER_ROLE = bytes32("cooler_overseer");
 
     /// @notice Extra precision scalar
     uint256 private constant _RAY = 1e27;
@@ -261,6 +262,10 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         return sender == onBehalfOf || block.timestamp < authorizations[onBehalfOf][sender];
     }
 
+    function _requireSenderAuthorized(address sender, address onBehalfOf) internal view {
+        if (!isSenderAuthorized(sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+    }
+
     //============================================================================================//
     //                                       COLLATERAL                                           //
     //============================================================================================//
@@ -271,8 +276,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address onBehalfOf,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override {
-        if (collateralAmount == 0) revert ExpectedNonZero();
-        if (onBehalfOf == address(0)) revert InvalidAddress();
+        _requireAmountNonZero(collateralAmount);
+        _requireAddressNonZero(onBehalfOf);
 
         // Add collateral on behalf of another account
         AccountState storage aState = allAccountState[onBehalfOf];
@@ -288,7 +293,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         if (delegationRequests.length > 0) {
             // While adding collateral on another user's behalf is ok,
             // delegating on behalf of someone else is not allowed unless authorized
-            if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+            _requireSenderAuthorized(msg.sender, onBehalfOf);
             DLGTE.applyDelegations(onBehalfOf, delegationRequests);
         }
 
@@ -304,9 +309,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address recipient,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external override returns (uint128 collateralWithdrawn) {
-        if (collateralAmount == 0) revert ExpectedNonZero();
-        if (recipient == address(0)) revert InvalidAddress();
-        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        _requireAmountNonZero(collateralAmount);
+        _requireAddressNonZero(recipient);
+        _requireSenderAuthorized(msg.sender, onBehalfOf);
 
         // No need to sync global debt state when withdrawing collateral
         GlobalStateCache memory gStateCache = _globalStateRO();
@@ -374,9 +379,9 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         address recipient
     ) external override returns (uint128 amountBorrowed) {
         if (borrowsPaused) revert Paused();
-        if (borrowAmount == 0) revert ExpectedNonZero();
-        if (recipient == address(0)) revert InvalidAddress();
-        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        _requireAmountNonZero(borrowAmount);
+        _requireAddressNonZero(recipient);
+        _requireSenderAuthorized(msg.sender, onBehalfOf);
 
         // Sync global debt state when borrowing
         GlobalStateCache memory gStateCache = _globalStateRW();
@@ -435,8 +440,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         uint128 repayAmount,
         address onBehalfOf
     ) external override returns (uint128 amountRepaid) {
-        if (repayAmount == 0) revert ExpectedNonZero();
-        if (onBehalfOf == address(0)) revert InvalidAddress();
+        _requireAmountNonZero(repayAmount);
+        _requireAddressNonZero(onBehalfOf);
 
         // Sync global debt state when repaying
         GlobalStateCache memory gStateCache = _globalStateRW();
@@ -500,7 +505,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
         override
         returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance)
     {
-        if (!isSenderAuthorized(msg.sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        _requireSenderAuthorized(msg.sender, onBehalfOf);
         (totalDelegated, totalUndelegated, undelegatedBalance) = DLGTE.applyDelegations(
             onBehalfOf,
             delegationRequests
@@ -603,7 +608,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setLtvOracle(address newOracle) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setLtvOracle(address newOracle) external override onlyAdminRole {
         (uint96 newOLTV, uint96 newLLTV) = ICoolerLtvOracle(newOracle).currentLtvs();
         if (newOLTV > newLLTV) revert InvalidParam();
 
@@ -617,10 +622,8 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     /// @inheritdoc IMonoCooler
     function setTreasuryBorrower(address newTreasuryBorrower) external override {
         // Permisionless if `treasuryBorrower` is uninitialized
-        if (
-            address(treasuryBorrower) != address(0) &&
-            !ROLES.hasRole(msg.sender, COOLER_OVERSEER_ROLE)
-        ) revert ROLESv1.ROLES_RequireRole(COOLER_OVERSEER_ROLE);
+        if (address(treasuryBorrower) != address(0) && !_isAdmin(msg.sender))
+            revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
 
         emit TreasuryBorrowerSet(newTreasuryBorrower);
         treasuryBorrower = ICoolerTreasuryBorrower(newTreasuryBorrower);
@@ -628,21 +631,19 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IMonoCooler
-    function setLiquidationsPaused(bool isPaused) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setLiquidationsPaused(bool isPaused) external override onlyEmergencyOrAdminRole {
         liquidationsPaused = isPaused;
         emit LiquidationsPausedSet(isPaused);
     }
 
     /// @inheritdoc IMonoCooler
-    function setBorrowPaused(bool isPaused) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setBorrowPaused(bool isPaused) external override onlyEmergencyOrAdminRole {
         emit BorrowPausedSet(isPaused);
         borrowsPaused = isPaused;
     }
 
     /// @inheritdoc IMonoCooler
-    function setInterestRateWad(
-        uint96 newInterestRate
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    function setInterestRateWad(uint96 newInterestRate) external override onlyAdminRole {
         // Force an update of state on the old rate first.
         _globalStateRW();
 
@@ -654,7 +655,7 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
     function setMaxDelegateAddresses(
         address account,
         uint32 maxDelegateAddresses
-    ) external override onlyRole(COOLER_OVERSEER_ROLE) {
+    ) external override onlyAdminRole {
         DLGTE.setMaxDelegateAddresses(account, maxDelegateAddresses);
     }
 
@@ -1056,5 +1057,13 @@ contract MonoCooler is IMonoCooler, Policy, RolesConsumer {
                 accountInterestAccumulatorRay_
             );
         return debt.encodeUInt128();
+    }
+
+    function _requireAmountNonZero(uint256 amount_) internal view {
+        if (amount_ == 0) revert ExpectedNonZero();
+    }
+
+    function _requireAddressNonZero(address addr_) internal view {
+        if (addr_ == address(0)) revert InvalidAddress();
     }
 }
