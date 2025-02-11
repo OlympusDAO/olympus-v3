@@ -11,4 +11,4 @@ lcov --output-file lcov.info --ignore-errors inconsistent,inconsistent,mismatch,
 
 # Generate the code coverage report
 echo "Generating code coverage report"
-genhtml --output-directory coverage lcov.info
+genhtml --output-directory coverage --ignore-errors unmapped lcov.info

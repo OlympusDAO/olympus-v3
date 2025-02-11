@@ -1526,7 +1526,7 @@ LF:2
 LH:2
 end_of_record
 TN:
-SF:src/policies/MonoCooler.sol
+SF:src/policies/cooler/MonoCooler.sol
 FN:1000,1003,MonoCooler._minCollateral
 FN:1009,1011,MonoCooler._validateOriginationLtv
 FN:1018,1023,MonoCooler._calculateCurrentLtv
