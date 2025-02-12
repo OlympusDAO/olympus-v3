@@ -1,0 +1,16 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusTreasury",
+            "args": {}
+        },
+        {
+            "name": "TreasuryCustodian",
+            "args": {}
+        },
+        {
+            "name": "Emergency",
+            "args": {}
+        }
+    ]
+}

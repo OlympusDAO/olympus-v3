@@ -19,6 +19,11 @@ import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 
+// NOTE:
+// Any new version of the EmissionManager policy needs to be authorised
+// to create bonds with callbacks on the BondFixedTermAuctioneer.
+// This is performed by a different MS (0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969) calling `setCallbackAuthStatus` on the BondFixedTermAuctioneer.
+
 /// @notice Initializes the EmissionManager policy
 contract EmissionManagerProposal is GovernorBravoProposal {
     Kernel internal _kernel;

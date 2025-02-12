@@ -4,6 +4,8 @@
         "gruntfuggly.todo-tree",
         "ryanluker.vscode-coverage-gutters",
         "github.vscode-github-actions",
-        "d-koppenhagen.file-tree-to-text-generator"
+        "d-koppenhagen.file-tree-to-text-generator",
+        "mads-hartmann.bash-ide-vscode",
+        "tamasfe.even-better-toml"
     ]
 }
