@@ -8,6 +8,8 @@ import {IERC20} from "../../interfaces/IERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
+/// @title  Cooler Composites
+/// @notice The CoolerComposites contract enables users to combine multiple operations into a single call
 contract CoolerComposites is ICoolerComposites {
     using SafeTransferLib for ERC20;
 
