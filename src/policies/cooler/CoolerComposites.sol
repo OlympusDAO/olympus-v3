@@ -28,12 +28,12 @@ contract CoolerComposites {
     /// @param borrowAmount         amount of USDS to borrow
     /// @param delegationRequests   resulting collateral delegation
     function addCollateralAndBorrow(
-        IMonoCooler.Authorization memory authorization, 
-        IMonoCooler.Signature calldata signature, 
-        uint128 collateralAmount, 
-        uint128 borrowAmount, 
+        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Signature calldata signature,
+        uint128 collateralAmount,
+        uint128 borrowAmount,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
-     ) external {
+    ) external {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
         }
@@ -51,10 +51,10 @@ contract CoolerComposites {
     /// @param collateralAmount     amount of gOHM collateral to withdraw
     /// @param delegationRequests   resulting collateral delegation
     function repayAndRemoveCollateral(
-        IMonoCooler.Authorization memory authorization, 
-        IMonoCooler.Signature calldata signature, 
-        uint128 repayAmount, 
-        uint128 collateralAmount, 
+        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Signature calldata signature,
+        uint128 repayAmount,
+        uint128 collateralAmount,
         DLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external {
         if (authorization.account != address(0)) {
