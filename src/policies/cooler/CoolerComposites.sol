@@ -27,72 +27,38 @@ contract CoolerComposites is ICoolerComposites {
 
     // ===== Composite Functions ===== //
 
-    function _addCollateralAndBorrow(
+    /// @inheritdoc ICoolerComposites
+    function addCollateralAndBorrow(
+        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Signature calldata signature,
         uint128 collateralAmount,
         uint128 borrowAmount,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) internal {
+    ) external {
+        if (authorization.account != address(0)) {
+            COOLER.setAuthorizationWithSig(authorization, signature);
+        }
+
         _COLLATERAL_TOKEN.safeTransferFrom(msg.sender, address(this), collateralAmount);
         COOLER.addCollateral(collateralAmount, msg.sender, delegationRequests);
         COOLER.borrow(borrowAmount, msg.sender, msg.sender);
     }
 
     /// @inheritdoc ICoolerComposites
-    function addCollateralAndBorrow(
-        uint128 collateralAmount,
-        uint128 borrowAmount,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external {
-        _addCollateralAndBorrow(collateralAmount, borrowAmount, delegationRequests);
-    }
-
-    /// @inheritdoc ICoolerComposites
-    function addCollateralAndBorrow(
+    function repayAndRemoveCollateral(
         IMonoCooler.Authorization memory authorization,
         IMonoCooler.Signature calldata signature,
+        uint128 repayAmount,
         uint128 collateralAmount,
-        uint128 borrowAmount,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
         }
 
-        _addCollateralAndBorrow(collateralAmount, borrowAmount, delegationRequests);
-    }
-
-    function _repayAndRemoveCollateral(
-        uint128 repayAmount,
-        uint128 collateralAmount,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) internal {
         _DEBT_TOKEN.safeTransferFrom(msg.sender, address(this), repayAmount);
         COOLER.repay(repayAmount, msg.sender);
         COOLER.withdrawCollateral(collateralAmount, msg.sender, msg.sender, delegationRequests);
-    }
-
-    /// @inheritdoc ICoolerComposites
-    function repayAndRemoveCollateral(
-        uint128 repayAmount,
-        uint128 collateralAmount,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external {
-        _repayAndRemoveCollateral(repayAmount, collateralAmount, delegationRequests);
-    }
-
-    /// @inheritdoc ICoolerComposites
-    function repayAndRemoveCollateral(
-        IMonoCooler.Authorization memory authorization,
-        IMonoCooler.Signature calldata signature,
-        uint128 repayAmount,
-        uint128 collateralAmount,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external {
-        if (authorization.account != address(0)) {
-            COOLER.setAuthorizationWithSig(authorization, signature);
-        }
-
-        _repayAndRemoveCollateral(repayAmount, collateralAmount, delegationRequests);
     }
 
     // ===== View Functions ===== //
