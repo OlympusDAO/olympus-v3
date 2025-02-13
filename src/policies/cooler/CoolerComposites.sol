@@ -2,7 +2,7 @@
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
+import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 import {IMonoCooler} from "../interfaces/cooler/IMonoCooler.sol";
 
 contract CoolerComposites {
@@ -32,7 +32,7 @@ contract CoolerComposites {
         IMonoCooler.Signature calldata signature,
         uint128 collateralAmount,
         uint128 borrowAmount,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
@@ -55,7 +55,7 @@ contract CoolerComposites {
         IMonoCooler.Signature calldata signature,
         uint128 repayAmount,
         uint128 collateralAmount,
-        DLGTEv1.DelegationRequest[] calldata delegationRequests
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
