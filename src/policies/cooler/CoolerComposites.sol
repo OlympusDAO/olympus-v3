@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {DLGTEv1} from "modules/DLGTE/DLGTE.v1.sol";
-import {IMonoCooler} from "../interfaces/IMonoCooler.sol";
+import {IMonoCooler} from "../interfaces/cooler/IMonoCooler.sol";
 
 contract CoolerComposites {
     IMonoCooler public immutable COOLER;
