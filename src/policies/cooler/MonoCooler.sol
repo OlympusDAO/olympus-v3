@@ -95,7 +95,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     bool public override borrowsPaused;
 
     /// @inheritdoc IMonoCooler
-    uint32 public override interestAccumulatorUpdatedAt;
+    uint40 public override interestAccumulatorUpdatedAt;
 
     /// @inheritdoc IMonoCooler
     ICoolerTreasuryBorrower public override treasuryBorrower;
@@ -158,7 +158,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (newOLTV > newLLTV) revert InvalidParam();
 
         interestRateWad = interestRateWad_;
-        interestAccumulatorUpdatedAt = uint32(block.timestamp);
+        interestAccumulatorUpdatedAt = uint40(block.timestamp);
         interestAccumulatorRay = _RAY;
 
         DOMAIN_SEPARATOR = keccak256(abi.encode(_DOMAIN_TYPEHASH, block.chainid, address(this)));
@@ -857,7 +857,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (_initGlobalStateCache(gStateCache)) {
             // If the cache is dirty (increase in time) then write the
             // updated state
-            interestAccumulatorUpdatedAt = uint32(block.timestamp);
+            interestAccumulatorUpdatedAt = uint40(block.timestamp);
             totalDebt = gStateCache.totalDebt;
             interestAccumulatorRay = gStateCache.interestAccumulatorRay;
         }
@@ -883,9 +883,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         (gStateCache.maxOriginationLtv, gStateCache.liquidationLtv) = ltvOracle.currentLtvs();
 
         // Only compound if we're on a new block
-        uint32 timeElapsed;
+        uint40 timeElapsed;
         unchecked {
-            timeElapsed = uint32(block.timestamp) - interestAccumulatorUpdatedAt;
+            timeElapsed = uint40(block.timestamp) - interestAccumulatorUpdatedAt;
         }
 
         if (timeElapsed > 0) {
@@ -1059,11 +1059,11 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         return debt.encodeUInt128();
     }
 
-    function _requireAmountNonZero(uint256 amount_) internal view {
+    function _requireAmountNonZero(uint256 amount_) internal pure {
         if (amount_ == 0) revert ExpectedNonZero();
     }
 
-    function _requireAddressNonZero(address addr_) internal view {
+    function _requireAddressNonZero(address addr_) internal pure {
         if (addr_ == address(0)) revert InvalidAddress();
     }
 }

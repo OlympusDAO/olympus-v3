@@ -209,7 +209,7 @@ interface IMonoCooler {
     function loanToValues() external view returns (uint96 maxOriginationLtv, uint96 liquidationLtv);
 
     /// @notice The last time the global debt accumulator was updated
-    function interestAccumulatorUpdatedAt() external view returns (uint32);
+    function interestAccumulatorUpdatedAt() external view returns (uint40);
 
     /// @notice The accumulator index used to track the compounding of debt, starting at 1e27 at genesis
     /// @dev To RAY (1e27) precision
