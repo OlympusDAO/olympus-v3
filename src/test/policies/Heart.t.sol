@@ -307,7 +307,7 @@ contract HeartTest is Test {
         heart.beat();
     }
 
-    function testFail_beatFailsIfPriceReverts() public {
+    function test_beatFailsIfPrice_reverts() public {
         // Get the beat frequency of the heart and wait that amount of time
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
@@ -315,17 +315,23 @@ contract HeartTest is Test {
         // Set the PRICE mock to return false
         PRICE.setResult(false);
 
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(MockPrice.Price_CustomError.selector));
+
         // Try to beat the heart and expect revert
         heart.beat();
     }
 
-    function testFail_beatFailsIfOperateReverts() public {
+    function test_beatFailsIfOperate_reverts() public {
         // Get the beat frequency of the heart and wait that amount of time
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
         // Set the PRICE mock to return false
         operator.setResult(false);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(MockOperator.Operator_CustomError.selector));
 
         // Try to beat the heart and expect revert
         heart.beat();
