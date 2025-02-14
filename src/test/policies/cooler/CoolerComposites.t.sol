@@ -13,6 +13,8 @@ abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
 
     uint48 internal constant START_BLOCK = 1000000;
 
+    address internal constant DELEGATE_RECIPIENT = address(0xDDDD);
+
     address internal accountOwner;
     uint256 internal accountOwnerPk;
 
@@ -156,6 +158,21 @@ abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
             "authorization deadline"
         );
     }
+
+    modifier givenDelegationRequestCleared() {
+        // Iterate over the array and remove each item
+        while (delegationRequests.length > 0) {
+            delegationRequests.pop();
+        }
+        _;
+    }
+
+    modifier givenDelegationRequest(int256 amount_) {
+        delegationRequests.push(
+            IDLGTEv1.DelegationRequest({delegate: DELEGATE_RECIPIENT, amount: amount_})
+        );
+        _;
+    }
 }
 
 contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
@@ -174,8 +191,8 @@ contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
     //  given the caller does not have enough collateral
     //   [X] it reverts
     //  given delegation requests are provided
-    //   [ ] it adds collateral and borrows
-    //   [ ] it executes the delegation requests
+    //   [X] it adds collateral and borrows
+    //   [X] it executes the delegation requests
     //  [X] it adds collateral and borrows
 
     function test_givenNoAuthorization_givenNoSignature_reverts()
@@ -270,6 +287,21 @@ contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
         // Assert authorization via the contract call
         _assertAuthorization(0, uint96(START_BLOCK + 1));
     }
+
+    function test_givenAuthorization_givenDelegationRequests()
+        public
+        givenAccountHasCollateralToken(2e18)
+        givenAccountHasApprovedCollateralToken(2e18)
+        givenAuthorization
+        givenDelegationRequest(2e18)
+    {
+        // Call function
+        vm.prank(accountOwner);
+        composites.addCollateralAndBorrow(authorization, signature, 2e18, 1e21, delegationRequests);
+
+        // Assert delegation requests
+        expectOneDelegation(cooler, accountOwner, DELEGATE_RECIPIENT, 2e18);
+    }
 }
 
 contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
@@ -288,8 +320,8 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
     //  given the caller does not have enough debt token
     //   [X] it reverts
     //  given delegation requests are provided
-    //   [ ] it adds collateral and borrows
-    //   [ ] it executes the delegation requests
+    //   [X] it adds collateral and borrows
+    //   [X] it executes the delegation requests
     //  [X] it repays and removes collateral
 
     function test_givenNoAuthorization_givenNoSignature_reverts()
@@ -440,5 +472,30 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
 
         // Assert authorization via the contract call
         _assertAuthorization(0, uint96(START_BLOCK + 1));
+    }
+
+    function test_givenAuthorization_givenDelegationRequests()
+        public
+        givenAccountHasCollateralToken(2e18)
+        givenAccountHasApprovedCollateralToken(2e18)
+        givenAuthorization
+        givenDelegationRequest(2e18)
+        givenAccountHasBorrowed(2e18, 1e21)
+        givenAccountHasApprovedDebtToken(1e21)
+        givenDelegationRequestCleared
+        givenDelegationRequest(-2e18)
+    {
+        // Call function
+        vm.prank(accountOwner);
+        composites.repayAndRemoveCollateral(
+            authorization,
+            signature,
+            1e21,
+            2e18,
+            delegationRequests
+        );
+
+        // Assert delegation requests
+        expectNoDelegations(accountOwner);
     }
 }
