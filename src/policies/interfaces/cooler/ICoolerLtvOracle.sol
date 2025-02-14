@@ -29,7 +29,7 @@ interface ICoolerLtvOracle {
         uint96 newOriginationLtv,
         uint256 maxDelta
     );
-    error BreachedMinDateDelta(uint32 targetTime, uint32 currentDate, uint32 maxTargetTimeDelta);
+    error BreachedMinDateDelta(uint40 targetTime, uint40 currentDate, uint32 maxTargetTimeDelta);
     error BreachedMaxOriginationLtvRateOfChange(uint96 targetRateOfChange, uint96 maxRateOfChange);
     error CannotDecreaseLtv();
     error InvalidParam();
@@ -72,9 +72,9 @@ interface ICoolerLtvOracle {
         view
         returns (
             uint96 startingValue,
-            uint32 startTime,
+            uint40 startTime,
             uint96 targetValue,
-            uint32 targetTime,
+            uint40 targetTime,
             uint96 slope
         );
 
@@ -100,7 +100,7 @@ interface ICoolerLtvOracle {
     /// @notice Set the minimum time delta required for Origination LTV to reach it's target value when
     /// `setOriginationLtvAt()` is called.
     /// @dev In seconds.
-    function setMinOriginationLtvTargetTimeDelta(uint32 maxTargetTimeDelta) external;
+    function setMinOriginationLtvTargetTimeDelta(uint32 minTargetTimeDelta) external;
 
     /// @notice Set the maximum (positive) rate of change of Origination LTV allowed, when
     /// `setOriginationLtvAt()` is called.
@@ -113,7 +113,7 @@ interface ICoolerLtvOracle {
     /// @notice Set the target Origination LTV which will incrementally increase from it's current value to `targetOriginationLtv`
     /// between now and `targetTime`.
     /// @dev targetTime is unixtime, targetOriginationLtv is 18 decimal places, 1.05e18 == $1.05
-    function setOriginationLtvAt(uint96 targetOriginationLtv, uint32 targetTime) external;
+    function setOriginationLtvAt(uint96 targetOriginationLtv, uint40 targetTime) external;
 
     /// @notice The decimal precision of both the Origination LTV and Liquidation LTV
     function DECIMALS() external view returns (uint8);
