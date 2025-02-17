@@ -263,7 +263,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     }
 
     function _requireSenderAuthorized(address sender, address onBehalfOf) internal view {
-        if (!isSenderAuthorized(sender, onBehalfOf)) revert UnathorizedOnBehalfOf();
+        if (!isSenderAuthorized(sender, onBehalfOf)) revert UnauthorizedOnBehalfOf();
     }
 
     //============================================================================================//
