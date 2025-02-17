@@ -351,6 +351,42 @@ contract MonoCoolerComputeLiquidityTest is MonoCoolerComputeLiquidityBaseTest {
             })
         );
     }
+
+    function test_computeLiquidity_overLLTV_cappedToCollateral() external {
+        vm.prank(OVERSEER);
+        cooler.setInterestRateWad(0.1e18); // 10% APR
+
+        uint128 collateralAmount = 10e18;
+        addCollateral(ALICE, collateralAmount);
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
+
+        skip(7 * 365 days);
+        checkLiquidityStatus(
+            ALICE,
+            IMonoCooler.LiquidationStatus({
+                collateral: collateralAmount,
+                currentDebt: 59_640.105685528620836545e18,
+                currentLtv: 5_964.010568552862083655e18,
+                exceededLiquidationLtv: true,
+                exceededMaxOriginationLtv: true,
+                currentIncentive: 9.938145618519569515e18 // gOHM
+            })
+        );
+
+        skip(1 * 365 days);
+        checkLiquidityStatus(
+            ALICE,
+            IMonoCooler.LiquidationStatus({
+                collateral: collateralAmount,
+                currentDebt: 65_912.510354604317547106e18,
+                currentLtv: 6_591.251035460431754711e18,
+                exceededLiquidationLtv: true,
+                exceededMaxOriginationLtv: true,
+                currentIncentive: collateralAmount // capped to gOHM collateral
+            })
+        );
+    }
 }
 
 contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTest {
@@ -781,6 +817,30 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // caller gets the incentive
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives);
+    }
+
+    function test_batchLiquidate_cappedIncentive() external {
+        vm.prank(OVERSEER);
+        cooler.setInterestRateWad(0.1e18); // 10% APR
+
+        uint128 collateralAmount = 10e18;
+        addCollateral(ALICE, collateralAmount);
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
+
+        skip(8 * 365 days);
+        uint128 expectedDebt = 65_912.510354604317547106e18;
+
+        vm.startPrank(OTHERS);
+        vm.expectEmit(address(cooler));
+        emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, collateralAmount);
+        checkBatchLiquidate(
+            oneAddress(ALICE),
+            oneDelegationRequest(noDelegationRequest()),
+            collateralAmount,
+            expectedDebt,
+            collateralAmount
+        );
     }
 
     function test_batchLiquidate_twoAccounts_oneLiquidate() external {
