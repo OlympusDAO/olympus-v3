@@ -513,6 +513,7 @@ contract pOLYTest is Test {
     ) public {
         vm.assume(migratedUser1_ != alice && migratedUser1_ != bob);
         vm.assume(migratedUser2_ != alice && migratedUser2_ != bob);
+        vm.assume(migratedUser1_ != migratedUser2_);
 
         previousGenesis.setTerms(migratedUser1_, 10_000, 100e9, 1e18, 100_000e9);
         previousGenesis.setTerms(migratedUser2_, 5_000, 5e9, 5e17, 50_000e9);
