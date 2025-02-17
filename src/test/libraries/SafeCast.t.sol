@@ -10,6 +10,7 @@ contract SafeCastTest is Test {
         assertEq(SafeCast.encodeUInt128(uint256(0)), uint128(0));
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function test_encodeUInt128_failure() public {
         uint256 x = uint256(type(uint128).max) + 1;
         vm.expectRevert(abi.encodeWithSelector(SafeCast.Overflow.selector, x));
@@ -21,6 +22,7 @@ contract SafeCastTest is Test {
         assertEq(SafeCast.encodeUInt112(uint256(0)), uint112(0));
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function test_encodeUInt112_failure() public {
         uint256 x = uint256(type(uint128).max) + 1;
         vm.expectRevert(abi.encodeWithSelector(SafeCast.Overflow.selector, x));
