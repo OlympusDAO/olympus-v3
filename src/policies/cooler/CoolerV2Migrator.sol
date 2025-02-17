@@ -11,7 +11,8 @@ import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.
 import {IDaiUsdsMigrator} from "src/interfaces/maker-dao/IDaiUsdsMigrator.sol";
 
 // Bophades
-import {Kernel, Keycode, Permissions, Policy, toKeycdeo} from "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -49,7 +50,15 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
     /// @notice Thrown when the new owner address provided does not match the authorization
     error Params_InvalidNewOwner();
 
+    /// @notice Thrown when the Cooler is duplicated
+    error Params_DuplicateCooler();
+
     // ========= DATA STRUCTURES ========= //
+
+    struct CoolerData {
+        address cooler;
+        uint256 numLoans;
+    }
 
     /// @notice Data structure used for flashloan parameters
     struct FlashLoanData {
@@ -181,11 +190,15 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
         address newOwner,
         IMonoCooler.Authorization memory authorization,
         IMonoCooler.Signature calldata signature
-    ) external onlyPolicyActive onlyEnabled nonReentrant {
+    ) external onlyEnabled nonReentrant {
         // Validate that the number of clearinghouses and coolers are the same
         if (clearinghouses.length != coolers.length) revert Params_InvalidArrays();
 
         // Validate that the Clearinghouses and Coolers are protocol-owned
+        // Also calculate the principal and interest for each cooler
+        CoolerData[] memory coolerData = new CoolerData[](clearinghouses.length);
+        uint256 totalPrincipal;
+        uint256 totalInterest;
         for (uint256 i; i < clearinghouses.length; i++) {
             // Check that the Clearinghouse is owned by the protocol
             if (!_isValidClearinghouse(clearinghouses[i])) revert Params_InvalidClearinghouse();
@@ -196,7 +209,19 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
             // Check that the Cooler is owned by the caller
             if (Cooler(coolers[i]).owner() != msg.sender) revert Only_CoolerOwner();
 
-            // TODO determine flashloan amount and params
+            // Check that the Cooler is not already in the array
+            for (uint256 j; j < coolerData.length; j++) {
+                if (coolerData[j].cooler == coolers[i]) revert Params_DuplicateCooler();
+            }
+
+            // Determine the total principal and interest for the cooler
+            (uint256 coolerPrincipal, uint256 coolerInterest, uint256 numLoans) = _getDebtForCooler(Cooler(coolers[i]));
+            coolerData[i] = CoolerData({
+                cooler: coolers[i],
+                numLoans: numLoans
+            });
+            totalPrincipal += coolerPrincipal;
+            totalInterest += coolerInterest;
         }
 
         // Validate that authorization has been provided by the new owner
@@ -322,6 +347,35 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
     }
 
     // ========= HELPER FUNCTIONS ========= //
+
+    function _getDebtForCooler(Cooler cooler_) internal view returns (uint256 coolerPrincipal, uint256 coolerInterest, uint256 numLoans) {
+        uint256 i;
+
+        // The Cooler contract does not expose the number of loans, so we iterate until the call reverts
+        while (true) {
+            try cooler_.loans(i) returns (
+                Cooler.Request memory,
+                uint256 principal,
+                uint256 interestDue,
+                uint256 ,
+                uint256,
+                address,
+                address,
+                bool
+            ) {
+                // Interest is paid down first, so if the principal is 0, the loan has been paid off
+                if (principal > 0) {
+                    coolerPrincipal += principal;
+                    coolerInterest += interestDue;
+                }
+                i++;
+            } catch {
+                break;
+            }
+        }
+
+        return (coolerPrincipal, coolerInterest, i);
+    }
 
     /// @notice Check if a given cooler was created by the CoolerFactory for a Clearinghouse
     /// @dev    This function assumes that the authenticity of the Clearinghouse is already verified
