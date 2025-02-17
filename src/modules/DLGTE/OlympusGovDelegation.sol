@@ -211,7 +211,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         AccountDelegation memory delegateInfo;
         for (uint256 i; i < numDelegations; ++i) {
             delegateInfo = delegations[i];
-            delegateInfo.delegate = acctDelegateAddresses.at(i+startIndex);
+            delegateInfo.delegate = acctDelegateAddresses.at(i + startIndex);
             escrow = delegateEscrowFactory.escrowFor(delegateInfo.delegate);
             delegateInfo.escrow = address(escrow);
             // Note the amount here is the amount for this account over *all* policies

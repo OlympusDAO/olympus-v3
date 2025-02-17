@@ -588,7 +588,10 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
             if (gOhmToBurn > 0) {
                 _COLLATERAL_TOKEN.safeApprove(address(_STAKING), gOhmToBurn);
-                MINTR.burnOhm(address(this), _STAKING.unstake(address(this), gOhmToBurn, false, false));
+                MINTR.burnOhm(
+                    address(this),
+                    _STAKING.unstake(address(this), gOhmToBurn, false, false)
+                );
             }
 
             totalCollateral -= totalCollateralClaimed;
@@ -1001,11 +1004,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (status.exceededLiquidationLtv) {
             // The incentive is calaculated as the excess debt above the LLTV, in collateral terms
             // excessDebt [gOHM] = currentDebt [USDS] / LLTV [USDS/gOHM] - collateral [gOHM]
-            uint256 debtInCollateralTerms = uint256(status.currentDebt).divWadUp(gStateCache.liquidationLtv);
+            uint256 debtInCollateralTerms = uint256(status.currentDebt).divWadUp(
+                gStateCache.liquidationLtv
+            );
             status.currentIncentive = debtInCollateralTerms.encodeUInt128() - status.collateral;
 
             // Cap the incentive to the current collateral only (liquidator cannot claim more than the user collateral)
-            if (status.currentIncentive > status.collateral) status.currentIncentive = status.collateral;
+            if (status.currentIncentive > status.collateral)
+                status.currentIncentive = status.collateral;
         }
     }
 
