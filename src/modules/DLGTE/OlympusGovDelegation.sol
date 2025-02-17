@@ -202,18 +202,18 @@ contract OlympusGovDelegation is DLGTEv1 {
 
         // end index is the max of the requested items or the length
         uint256 requestedEndIndex = startIndex + maxItems - 1;
-        uint256 maxPossibleEndIndex = length - startIndex - 1;
+        uint256 maxPossibleEndIndex = length - 1;
         if (maxPossibleEndIndex < requestedEndIndex) requestedEndIndex = maxPossibleEndIndex;
 
-        delegations = new AccountDelegation[](requestedEndIndex - startIndex + 1);
+        uint256 numDelegations = requestedEndIndex - startIndex + 1;
+        delegations = new AccountDelegation[](numDelegations);
         DelegateEscrow escrow;
         AccountDelegation memory delegateInfo;
-        for (uint256 i = startIndex; i <= requestedEndIndex; ++i) {
+        for (uint256 i; i < numDelegations; ++i) {
             delegateInfo = delegations[i];
-            delegateInfo.delegate = acctDelegateAddresses.at(i);
+            delegateInfo.delegate = acctDelegateAddresses.at(i+startIndex);
             escrow = delegateEscrowFactory.escrowFor(delegateInfo.delegate);
             delegateInfo.escrow = address(escrow);
-
             // Note the amount here is the amount for this account over *all* policies
             delegateInfo.totalAmount = escrow.delegations(address(this), account);
         }
