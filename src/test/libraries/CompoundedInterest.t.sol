@@ -147,18 +147,21 @@ contract CompoundedInterestTest is Test {
     }
 
     // Revert tests
+    /// forge-config: default.allow_internal_expect_revert = true
     function test_compute_maxPrincipal_expectOverflow() public {
         vm.expectRevert();
         type(uint256).max.continuouslyCompounded(1 days, TEN_PCT_INTEREST);
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function test_compute_maxRate_expectInputTooBig() public {
-        vm.expectRevert();
+        vm.expectRevert("EXP_OVERFLOW");
         initialPrincipalAmount.continuouslyCompounded(1 days, type(uint96).max);
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function test_compute_maxDays_expectInputTooBig() public {
-        vm.expectRevert();
+        vm.expectRevert("EXP_OVERFLOW");
         initialPrincipalAmount.continuouslyCompounded(type(uint96).max, TEN_PCT_INTEREST);
     }
 }

@@ -7,7 +7,6 @@ import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 
 import {RolesAdmin, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
@@ -84,16 +83,16 @@ contract CoolerLtvOracleTestBase is Test {
 
     function checkOltvData(
         uint96 expectedStartingValue,
-        uint32 expectedStartTime,
+        uint40 expectedStartTime,
         uint96 expectedTargetValue,
-        uint32 expectedTargetTime,
+        uint40 expectedTargetTime,
         uint96 expectedSlope
     ) internal view {
         (
             uint96 startingValue,
-            uint32 startTime,
+            uint40 startTime,
             uint96 targetValue,
-            uint32 targetTime,
+            uint40 targetTime,
             uint96 slope
         ) = oracle.originationLtvData();
         assertEq(startingValue, expectedStartingValue, "startingValue");
@@ -173,9 +172,9 @@ contract CoolerLtvOracleTestAdmin is CoolerLtvOracleTestBase {
 
         checkOltvData(
             defaultOLTV,
-            uint32(vm.getBlockTimestamp()),
+            uint40(vm.getBlockTimestamp()),
             defaultOLTV,
-            uint32(vm.getBlockTimestamp()),
+            uint40(vm.getBlockTimestamp()),
             0
         );
         assertEq(oracle.maxOriginationLtvDelta(), defaultMaxDelta);
@@ -245,7 +244,7 @@ contract CoolerLtvOracleTestAdmin is CoolerLtvOracleTestBase {
     function test_setMaxOriginationLtvRateOfChange() public {
         vm.startPrank(OVERSEER);
 
-        uint96 expectedRate = uint96(0.05e18) / uint32(1 weeks);
+        uint96 expectedRate = uint96(0.05e18) / 1 weeks;
         vm.expectEmit(address(oracle));
         emit MaxOriginationLtvRateOfChangeSet(expectedRate);
 
@@ -311,7 +310,7 @@ contract CoolerLtvOracleTestNotEnabled is CoolerLtvOracleTestBase {
         vm.prank(OVERSEER);
         oracle.setMinOriginationLtvTargetTimeDelta(uint32(vm.getBlockTimestamp() + 1));
 
-        assertEq(oracle.minOriginationLtvTargetTimeDelta(), uint32(vm.getBlockTimestamp() + 1));
+        assertEq(oracle.minOriginationLtvTargetTimeDelta(), uint40(vm.getBlockTimestamp() + 1));
     }
 
     function test_access_setMaxOriginationLtvRateOfChange() public {
@@ -323,7 +322,7 @@ contract CoolerLtvOracleTestNotEnabled is CoolerLtvOracleTestBase {
 
     function test_access_setOriginationLtvAt() public {
         vm.prank(OVERSEER);
-        oracle.setOriginationLtvAt(defaultOLTV, uint32(vm.getBlockTimestamp()) + 365 days);
+        oracle.setOriginationLtvAt(defaultOLTV, uint40(vm.getBlockTimestamp()) + 365 days);
 
         assertEq(oracle.currentOriginationLtv(), defaultOLTV);
     }
@@ -366,7 +365,7 @@ contract CoolerLtvOracleTestAccess is CoolerLtvOracleTestBase {
 
     function test_access_setOriginationLtvAt() public {
         expectOnlyOverseer();
-        oracle.setOriginationLtvAt(1.02e18, uint32(vm.getBlockTimestamp() + 1 weeks));
+        oracle.setOriginationLtvAt(1.02e18, uint40(vm.getBlockTimestamp() + 1 weeks));
     }
 
     function test_access_setMaxLiquidationLtvPremiumBps() public {
@@ -385,7 +384,7 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         uint96 newTargetOltv = defaultOLTV - 1;
         vm.startPrank(OVERSEER);
         vm.expectRevert(abi.encodeWithSelector(ICoolerLtvOracle.CannotDecreaseLtv.selector));
-        oracle.setOriginationLtvAt(newTargetOltv, uint32(vm.getBlockTimestamp()) + 1 weeks);
+        oracle.setOriginationLtvAt(newTargetOltv, uint40(vm.getBlockTimestamp()) + 1 weeks);
     }
 
     function test_setOriginationLtvAt_immediate_successUp() public {
@@ -394,8 +393,8 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         oracle.setMinOriginationLtvTargetTimeDelta(0);
         oracle.setMaxOriginationLtvRateOfChange(100e18, 1);
 
-        uint32 setTime = uint32(vm.getBlockTimestamp());
-        uint32 targetTime = setTime + 1;
+        uint40 setTime = uint40(vm.getBlockTimestamp());
+        uint40 targetTime = setTime + 1;
 
         vm.expectEmit(address(oracle));
         emit OriginationLtvSetAt(defaultOLTV, newTargetOltv, targetTime);
@@ -421,10 +420,10 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
                 defaultMaxDelta
             )
         );
-        oracle.setOriginationLtvAt(newTargetOltv, uint32(vm.getBlockTimestamp()) + 1 weeks);
+        oracle.setOriginationLtvAt(newTargetOltv, uint40(vm.getBlockTimestamp()) + 1 weeks);
 
         newTargetOltv -= 1;
-        oracle.setOriginationLtvAt(newTargetOltv, uint32(vm.getBlockTimestamp()) + 1 weeks);
+        oracle.setOriginationLtvAt(newTargetOltv, uint40(vm.getBlockTimestamp()) + 1 weeks);
     }
 
     function test_setOriginationLtvAt_breachMinDateDelta() public {
@@ -433,7 +432,7 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         oracle.setMaxOriginationLtvRateOfChange(100e18, 1);
 
         // targetTime < now
-        uint32 targetTime = uint32(vm.getBlockTimestamp()) - 1;
+        uint40 targetTime = uint40(vm.getBlockTimestamp()) - 1;
         vm.expectRevert(
             abi.encodeWithSelector(
                 ICoolerLtvOracle.BreachedMinDateDelta.selector,
@@ -445,7 +444,7 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         oracle.setOriginationLtvAt(newTargetOltv, targetTime);
 
         // targetTime <= now
-        targetTime = uint32(vm.getBlockTimestamp());
+        targetTime = uint40(vm.getBlockTimestamp());
         vm.expectRevert(
             abi.encodeWithSelector(
                 ICoolerLtvOracle.BreachedMinDateDelta.selector,
@@ -457,7 +456,7 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         oracle.setOriginationLtvAt(newTargetOltv, targetTime);
 
         // (targetTime - now) < minOriginationLtvTargetTimeDelta
-        targetTime = uint32(vm.getBlockTimestamp()) + 7 days - 1;
+        targetTime = uint40(vm.getBlockTimestamp()) + 7 days - 1;
         vm.expectRevert(
             abi.encodeWithSelector(
                 ICoolerLtvOracle.BreachedMinDateDelta.selector,
@@ -469,11 +468,11 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         oracle.setOriginationLtvAt(newTargetOltv, targetTime);
 
         // Works with a 7 day target date
-        targetTime = uint32(vm.getBlockTimestamp()) + 7 days;
+        targetTime = uint40(vm.getBlockTimestamp()) + 7 days;
         oracle.setOriginationLtvAt(newTargetOltv, targetTime);
         checkOltvData(
             defaultOLTV,
-            uint32(vm.getBlockTimestamp()),
+            uint40(vm.getBlockTimestamp()),
             newTargetOltv,
             targetTime,
             63425925925925
@@ -494,10 +493,10 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         );
         oracle.setOriginationLtvAt(
             defaultOLTV + 0.30e18 + 1e7,
-            uint32(vm.getBlockTimestamp() + 30 days)
+            uint40(vm.getBlockTimestamp() + 30 days)
         );
 
-        oracle.setOriginationLtvAt(defaultOLTV + 0.30e18, uint32(vm.getBlockTimestamp() + 30 days));
+        oracle.setOriginationLtvAt(defaultOLTV + 0.30e18, uint40(vm.getBlockTimestamp() + 30 days));
     }
 
     function test_setOriginationLtvAt_flatAtTargetTime() public {
@@ -506,7 +505,7 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         oracle.setMinOriginationLtvTargetTimeDelta(0);
         oracle.setMaxOriginationLtvRateOfChange(100e18, 1);
 
-        oracle.setOriginationLtvAt(newTargetOltv, uint32(vm.getBlockTimestamp()) + 1);
+        oracle.setOriginationLtvAt(newTargetOltv, uint40(vm.getBlockTimestamp()) + 1);
         // check at target date we're at the target OLTV
         skip(1);
         uint96 actualOLTV = oracle.currentOriginationLtv();
@@ -525,12 +524,12 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
 
         uint96 currentOltv = oracle.currentOriginationLtv();
         assertEq(defaultOLTV, currentOltv);
-        oracle.setOriginationLtvAt(newTargetOltv, uint32(vm.getBlockTimestamp()) + 4);
+        oracle.setOriginationLtvAt(newTargetOltv, uint40(vm.getBlockTimestamp()) + 4);
         checkOltvData(
             defaultOLTV,
-            uint32(vm.getBlockTimestamp()),
+            uint40(vm.getBlockTimestamp()),
             newTargetOltv,
-            uint32(vm.getBlockTimestamp()) + 4,
+            uint40(vm.getBlockTimestamp()) + 4,
             9.59e18
         );
 
@@ -576,7 +575,7 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         vm.startPrank(OVERSEER);
         oracle.setOriginationLtvAt(
             oltvStart + oltvDelta,
-            uint32(vm.getBlockTimestamp()) + 365 days
+            uint40(vm.getBlockTimestamp()) + 365 days
         );
 
         uint256 currentOltv = oracle.currentOriginationLtv();
@@ -619,13 +618,13 @@ contract CoolerLtvOracleTestOLTV is CoolerLtvOracleTestBase {
         assertEq(oracle.currentOriginationLtv(), defaultOLTV);
 
         vm.startPrank(OVERSEER);
-        oracle.setOriginationLtvAt(defaultOLTV, uint32(vm.getBlockTimestamp()) + 365 days);
+        oracle.setOriginationLtvAt(defaultOLTV, uint40(vm.getBlockTimestamp()) + 365 days);
 
         checkOltvData(
             defaultOLTV,
-            uint32(vm.getBlockTimestamp()),
+            uint40(vm.getBlockTimestamp()),
             defaultOLTV,
-            uint32(vm.getBlockTimestamp()) + 365 days,
+            uint40(vm.getBlockTimestamp()) + 365 days,
             0
         );
 

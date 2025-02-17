@@ -335,13 +335,13 @@ interface IMonoCooler {
      *      authorized via `setAuthorization()` or `setAuthorizationWithSig()`
      * @param recipient Send the borrowed token to a specified recipient address.
      *    - MUST NOT be address(0)
-     * @return amountBorrowed The amount actually borrowed.
+     * @return amountBorrowedInWad The amount actually borrowed.
      */
     function borrow(
         uint128 borrowAmountInWad,
         address onBehalfOf,
         address recipient
-    ) external returns (uint128 amountBorrowed);
+    ) external returns (uint128 amountBorrowedInWad);
 
     /**
      * @notice Repay a portion, or all of the debt
@@ -353,12 +353,12 @@ interface IMonoCooler {
      *    - MAY be greater than the latest debt as of this block. In which case it will be capped
      *      to that latest debt
      * @param onBehalfOf A caller can repay the debt on behalf of themselves or another address
-     * @return amountRepaid The amount actually repaid.
+     * @return amountRepaidInWad The amount actually repaid.
      */
     function repay(
         uint128 repayAmountInWad,
         address onBehalfOf
-    ) external returns (uint128 amountRepaid);
+    ) external returns (uint128 amountRepaidInWad);
 
     //============================================================================================//
     //                                       LIQUIDATIONS                                         //
@@ -472,11 +472,11 @@ interface IMonoCooler {
 
     /// @notice An account's current collateral
     /// @dev to 18 decimal places
-    function accountCollateral(address account) external view returns (uint128 collateral);
+    function accountCollateral(address account) external view returns (uint128 collateralInWad);
 
     /// @notice An account's current debt as of this block
     //  @notice to 18 decimal places regardless of the debt token
-    function accountDebt(address account) external view returns (uint128 debt);
+    function accountDebt(address account) external view returns (uint128 debtInWad);
 
     /// @notice A view of the derived/internal cache data.
     function globalState()

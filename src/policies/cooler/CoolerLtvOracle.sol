@@ -31,11 +31,11 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
         /// @notice The Origination LTV at the time `setOriginationLtvAt()` was last called
         uint96 startingValue;
         /// @notice The time at which Origination LTV was last updated via `setOriginationLtvAt()`
-        uint32 startTime;
+        uint40 startTime;
         /// @notice The target Origination LTV at the `targetTime`
         uint96 targetValue;
         /// @notice The date which the `targetValue` will be reached.
-        uint32 targetTime;
+        uint40 targetTime;
         /// @notice The rate at which the `startingValue` will change over time from `startTime` until `targetTime`.
         uint96 slope;
     }
@@ -83,9 +83,9 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
 
         originationLtvData = OriginationLtvData({
             startingValue: initialOriginationLtv_,
-            startTime: uint32(block.timestamp),
+            startTime: uint40(block.timestamp),
             targetValue: initialOriginationLtv_,
-            targetTime: uint32(block.timestamp),
+            targetTime: uint40(block.timestamp),
             slope: 0
         });
         maxOriginationLtvDelta = maxOriginationLtvDelta_;
@@ -143,10 +143,10 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
     /// @inheritdoc ICoolerLtvOracle
     function setOriginationLtvAt(
         uint96 targetValue,
-        uint32 targetTime
+        uint40 targetTime
     ) external override onlyAdminRole {
         uint96 _currentOriginationLtv = currentOriginationLtv();
-        uint32 _now = uint32(block.timestamp);
+        uint40 _now = uint40(block.timestamp);
 
         // Cannot decrease the OLTV
         if (targetValue < _currentOriginationLtv) revert CannotDecreaseLtv();
@@ -155,7 +155,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
         // targetTime must be at or after (now + minOriginationLtvTargetTimeDelta)
         if (targetTime < _now + minOriginationLtvTargetTimeDelta)
             revert BreachedMinDateDelta(targetTime, _now, minOriginationLtvTargetTimeDelta);
-        uint32 _timeDelta = targetTime - _now;
+        uint40 _timeDelta = targetTime - _now;
 
         // Check that the delta is within tolerance
         if (_originationLtvDelta > maxOriginationLtvDelta)
@@ -231,7 +231,7 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
 
     /// @inheritdoc ICoolerLtvOracle
     function currentOriginationLtv() public view override returns (uint96) {
-        uint32 _now = uint32(block.timestamp);
+        uint40 _now = uint40(block.timestamp);
         if (_now >= originationLtvData.targetTime) {
             // Target date reached, no calculation required just return the target Origination LTV
             return originationLtvData.targetValue;

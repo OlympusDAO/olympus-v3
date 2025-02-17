@@ -652,6 +652,24 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
         cooler.borrow(borrowAmount, ALICE, ALICE);
     }
 
+    function test_borrow_success_maxBorrow_twice() public {
+        uint128 collateralAmount = 10e18;
+        uint128 borrowAmount = type(uint128).max;
+        addCollateral(ALICE, collateralAmount);
+        vm.startPrank(ALICE);
+        uint128 borrowed = cooler.borrow(borrowAmount, ALICE, ALICE);
+        assertEq(borrowed, 29_616.4e18);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMonoCooler.ExceededMaxOriginationLtv.selector,
+                2_961.64e18,
+                2_961.64e18
+            )
+        );
+        cooler.borrow(borrowAmount, ALICE, ALICE);
+    }
+
     function test_borrow_success_maxBorrow() public {
         uint128 collateralAmount = 10e18;
         uint128 borrowAmount = type(uint128).max;
