@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GLP-3.0
 pragma solidity ^0.8.15;
 
+// Libraries
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -8,16 +9,23 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {IDaiUsdsMigrator} from "src/interfaces/maker-dao/IDaiUsdsMigrator.sol";
+
+// Bophades
+import {Kernel, Keycode, Permissions, Policy, toKeycdeo} from "src/Kernel.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title  CoolerV2Migrator
 /// @notice A contract that migrates debt from Olympus Cooler V1 facilities to Cooler V2.
 ///         This is compatible with all three versions of Cooler V1.
 /// @dev    This contract uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
-contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
+contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, PolicyEnabler {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when the caller is not the contract itself.
@@ -26,8 +34,17 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
     /// @notice Thrown when the caller is not the flash lender.
     error OnlyLender();
 
+    /// @notice Thrown when the Cooler is not owned by the caller
+    error Only_CoolerOwner();
+
     /// @notice Thrown when the number of Clearinghouses does not equal the number of Coolers
     error Params_InvalidArrays();
+
+    /// @notice Thrown when the Clearinghouse is not valid
+    error Params_InvalidClearinghouse();
+
+    /// @notice Thrown when the Cooler is not valid
+    error Params_InvalidCooler();
 
     /// @notice Thrown when the new owner address provided does not match the authorization
     error Params_InvalidNewOwner();
@@ -42,6 +59,16 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
         address newOwner;
         uint256 toDAI;
     }
+
+    // ========= MODULES ========= //
+
+    /// @notice The Clearinghouse registry module
+    /// @dev    The value is set when the policy is activated
+    CHREGv1 internal CHREG;
+
+    /// @notice The contract registry module
+    /// @dev    The value is set when the policy is activated
+    RGSTYv1 internal RGSTY;
 
     // ========= STATE ========= //
 
@@ -78,33 +105,62 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
     // TODO add PolicyEnabler
 
     constructor(
-        address _dai,
-        address _usds,
-        address _gohm,
-        address _migrator,
-        address _flash,
-        address _coolerv2,
+        address kernel_,
+        address coolerV2_,
         address[] memory chV1s
-    ) {
-        DAI = IERC20(_dai);
-        USDS = IERC20(_usds);
-        GOHM = IERC20(_gohm);
-        MIGRATOR = IDaiUsdsMigrator(_migrator);
-        FLASH = IERC3156FlashLender(_flash);
-        COOLERV2 = IMonoCooler(_coolerv2);
+    ) Policy(Kernel(kernel_)) {
+        COOLERV2 = IMonoCooler(coolerV2_);
 
         for (uint256 i; i < chV1s.length; ++i) {
             isCHV1[chV1s[i]] = true;
         }
-
-        IERC20(_gohm).approve(_coolerv2, type(uint256).max);
-        IERC20(_usds).approve(_migrator, type(uint256).max);
-        IERC20(_dai).approve(_migrator, type(uint256).max);
     }
 
-    // TODO add back configureDependencies
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](3);
+        dependencies[0] = toKeycode("CHREG");
+        dependencies[1] = toKeycode("RGSTY");
+        dependencies[2] = toKeycode("ROLES");
+
+        // Populate module dependencies
+        CHREG = CHREGv1(getModuleAddress(dependencies[0]));
+        RGSTY = RGSTYv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
+        (uint8 RGSTY_MAJOR, ) = RGSTY.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        if (CHREG_MAJOR != 1 || RGSTY_MAJOR != 1 || ROLES_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Populate variables
+        // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
+        // Token contract addresses are immutable
+        DAI = IERC20(RGSTY.getImmutableContract("dai"));
+        USDS = IERC20(RGSTY.getImmutableContract("usds"));
+        GOHM = IERC20(RGSTY.getImmutableContract("gohm"));
+        // Utility contract addresses are mutable
+        FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
+        MIGRATOR = IDaiUsdsMigrator(RGSTY.getContract("dmgtr"));
+
+        return dependencies;
+    }
+
+    /// @inheritdoc Policy
+    /// @dev        This policy does not require any permissions
+    function requestPermissions() external pure override returns (Permissions[] memory requests) {
+        requests = new Permissions[](0);
+
+        return requests;
+    }
 
     // ========= OPERATION ========= //
+
+    // TODO extract interface
 
     /// @notice Internal logic for loan consolidation
     /// @dev    Utilized by `consolidate()` and `consolidateWithNewOwner()`
@@ -125,21 +181,29 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
         address newOwner,
         IMonoCooler.Authorization memory authorization,
         IMonoCooler.Signature calldata signature
-    ) external {
-        // Validate array length
+    ) external onlyPolicyActive onlyEnabled nonReentrant {
+        // Validate that the number of clearinghouses and coolers are the same
         if (clearinghouses.length != coolers.length) revert Params_InvalidArrays();
 
-        // TODO validate clearinghouse
+        // Validate that the Clearinghouses and Coolers are protocol-owned
+        for (uint256 i; i < clearinghouses.length; i++) {
+            // Check that the Clearinghouse is owned by the protocol
+            if (!_isValidClearinghouse(clearinghouses[i])) revert Params_InvalidClearinghouse();
 
-        // TODO validate cooler
+            // Check that the Clearinghouse's CoolerFactory created the Cooler
+            if (!_isValidCooler(clearinghouses[i], coolers[i])) revert Params_InvalidCooler();
 
-        // Validate new owner
+            // Check that the Cooler is owned by the caller
+            if (Cooler(coolers[i]).owner() != msg.sender) revert Only_CoolerOwner();
+
+            // TODO determine flashloan amount and params
+        }
+
+        // Validate that authorization has been provided by the new owner
         if (authorization.account != newOwner) revert Params_InvalidNewOwner();
 
         // Authorize this contract to manage user Cooler V2 position
         COOLERV2.setAuthorizationWithSig(authorization, signature);
-
-        // TODO determine flashloan amount and params
 
         // TODO Transfer in interest and fees from the caller
         // vs taking from Cooler V2?
@@ -147,7 +211,12 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
         // TODO change to DAI
-        FLASH.flashLoan(this, address(USDS), flashBorrow, abi.encode(FlashLoanData(clearinghouses, coolers, msg.sender, newOwner, toDAI)));
+        FLASH.flashLoan(
+            this,
+            address(USDS),
+            flashBorrow,
+            abi.encode(FlashLoanData(clearinghouses, coolers, msg.sender, newOwner, toDAI))
+        );
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
         uint256 usdsBalanceAfter = USDS.balanceOf(address(this));
@@ -162,7 +231,7 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
     /// @dev        This function reverts if:
     ///             - The caller is not the flash loan provider
     ///             - The initiator is not this contract
-    function onFlashLoan (
+    function onFlashLoan(
         address initiator_,
         address, // flashloan token is only DAI
         uint256 amount_,
@@ -206,7 +275,9 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
         GOHM.transferFrom(currentOwner, address(this), totalCollateral);
 
         // TODO Add delegation requests
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](0);
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            0
+        );
 
         // Add collateral and borrow spent flash loan from Cooler V2
         COOLERV2.addCollateral(totalCollateral, newOwner, delegationRequests);
@@ -222,7 +293,11 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
 
-    function _handleRepayments (Cooler cooler) internal returns (uint256 repaid, uint256 collateral) {
+    // TODO add gohm/usds/DAI approvals
+
+    function _handleRepayments(
+        Cooler cooler
+    ) internal returns (uint256 repaid, uint256 collateral) {
         // provide upfront infinite approval to cooler
         cooler.debt().approve(cooler, type(uint256).max);
 
@@ -244,5 +319,34 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
 
         // revoke approval
         cooler.debt().approve(cooler, 0);
+    }
+
+    // ========= HELPER FUNCTIONS ========= //
+
+    /// @notice Check if a given cooler was created by the CoolerFactory for a Clearinghouse
+    /// @dev    This function assumes that the authenticity of the Clearinghouse is already verified
+    ///
+    /// @param  clearinghouse_ Clearinghouse contract
+    /// @param  cooler_       Cooler contract
+    /// @return bool          Whether the cooler was created by the CoolerFactory for the Clearinghouse
+    function _isValidCooler(address clearinghouse_, address cooler_) internal view returns (bool) {
+        Clearinghouse clearinghouse = Clearinghouse(clearinghouse_);
+        CoolerFactory coolerFactory = CoolerFactory(clearinghouse.factory());
+
+        return coolerFactory.created(cooler_);
+    }
+
+    function _isValidClearinghouse(address clearinghouse_) internal view returns (bool) {
+        // We check against the registry (not just active), as repayments are still allowed when a Clearinghouse is deactivated
+        uint256 registryCount = CHREG.registryCount();
+        bool found;
+        for (uint256 i; i < registryCount; i++) {
+            if (CHREG.registry(i) == clearinghouse_) {
+                found = true;
+                break;
+            }
+        }
+
+        return found;
     }
 }
