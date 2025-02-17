@@ -13,11 +13,11 @@ import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
-/// @title  Loan Consolidator
+/// @title  CoolerV2Migrator
 /// @notice A contract that migrates debt from Olympus Cooler V1 facilities to Cooler V2.
 ///         This is compatible with all three versions of Cooler V1.
 /// @dev    This contract uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
-contract LoanConsolidator is IERC3156FlashBorrower, ReentrancyGuard {
+contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when the caller is not the contract itself.
@@ -116,7 +116,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, ReentrancyGuard {
         uint256 flashBorrow,
         uint256 toDAI,
         address newOwner,
-        MonoCooler.Authorization memory authorization, 
+        MonoCooler.Authorization memory authorization,
         MonoCooler.Signature calldata signature
     ) external {
         // Validate array length
@@ -215,7 +215,7 @@ contract LoanConsolidator is IERC3156FlashBorrower, ReentrancyGuard {
 
                 repaid += amount;
                 collateral += loan.collateral;
-                
+
                 cooler.repayLoan(i, amount);
             }
         }
