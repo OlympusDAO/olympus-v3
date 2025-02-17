@@ -102,7 +102,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         aState.totalGOhm += amount.encodeUInt112();
 
         // Pull gOHM from the calling policy
-        gOHM.safeTransferFrom(msg.sender, address(this), amount);
+        _gOHM.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function withdrawUndelegatedGohm(
@@ -128,7 +128,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         aState.totalGOhm = (accountTotalBalance - amount).encodeUInt112();
 
         // Send the gOHM
-        gOHM.safeTransfer(msg.sender, amount);
+        _gOHM.safeTransfer(msg.sender, amount);
     }
 
     /// @inheritdoc DLGTEv1
@@ -335,7 +335,7 @@ contract OlympusGovDelegation is DLGTEv1 {
             );
 
             // Push gOhm to the new escrow
-            gOHM.safeApprove(address(delegateEscrow), delegatedAmount);
+            _gOHM.safeApprove(address(delegateEscrow), delegatedAmount);
             delegateEscrow.delegate(onBehalfOf, delegatedAmount);
         } else {
             // Otherwise if the amount is negative, is is undelegating
