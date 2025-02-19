@@ -185,8 +185,8 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
     /// @param  coolers_            The Coolers from which the loans will be migrated.
     /// @param  clearinghouses_     The respective Clearinghouses that created and issued the loans in `coolers_`. This array must be the same length as `coolers_`.
     /// @param  newOwner_           Address of the owner of the Cooler V2 position. This can be the same as the caller, or a different address.
-    /// @param  authorization_      Authorization parameters for the new owner.
-    /// @param  signature_          Authorization signature for the new owner.
+    /// @param  authorization_      Authorization parameters for the new owner. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
+    /// @param  signature_          Authorization signature for the new owner. Ignored if `authorization_.account` is the zero address.
     /// @param  delegationRequests_ Delegation requests for the new owner.
     function consolidate(
         address[] memory coolers_,
@@ -247,11 +247,15 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
             }
         }
 
-        // Validate that authorization has been provided by the new owner
-        if (authorization_.account != newOwner_) revert Params_InvalidNewOwner();
+        // Set the Cooler V2 authorization signature, if provided
+        // If the new owner cannot provide a signature (e.g. multisig), they can call `IMonoCooler.setAuthorization()` instead
+        if (authorization_.account != address(0)) {
+            // Validate that authorization provider and new owner matches
+            if (authorization_.account != newOwner_) revert Params_InvalidNewOwner();
 
-        // Authorize this contract to manage user Cooler V2 position
-        COOLERV2.setAuthorizationWithSig(authorization_, signature_);
+            // Authorize this contract to manage user Cooler V2 position
+            COOLERV2.setAuthorizationWithSig(authorization_, signature_);
+        }
 
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
