@@ -6,6 +6,7 @@ import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {IDaiUsdsMigrator} from "src/interfaces/maker-dao/IDaiUsdsMigrator.sol";
+import {ICoolerV2Migrator} from "../interfaces/cooler/ICoolerV2Migrator.sol";
 
 // Libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -27,37 +28,18 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @notice A contract that migrates debt from Olympus Cooler V1 facilities to Cooler V2.
 ///         This is compatible with all three versions of Cooler V1.
 /// @dev    This contract uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
-contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, PolicyEnabler {
+contract CoolerV2Migrator is
+    IERC3156FlashBorrower,
+    ICoolerV2Migrator,
+    ReentrancyGuard,
+    Policy,
+    PolicyEnabler
+{
     using SafeCast for uint256;
-
-    // ========= ERRORS ========= //
-
-    /// @notice Thrown when the caller is not the contract itself.
-    error OnlyThis();
-
-    /// @notice Thrown when the caller is not the flash lender.
-    error OnlyLender();
-
-    /// @notice Thrown when the Cooler is not owned by the caller
-    error Only_CoolerOwner();
-
-    /// @notice Thrown when the number of Clearinghouses does not equal the number of Coolers
-    error Params_InvalidArrays();
-
-    /// @notice Thrown when the Clearinghouse is not valid
-    error Params_InvalidClearinghouse();
-
-    /// @notice Thrown when the Cooler is not valid
-    error Params_InvalidCooler();
-
-    /// @notice Thrown when the new owner address provided does not match the authorization
-    error Params_InvalidNewOwner();
-
-    /// @notice Thrown when the Cooler is duplicated
-    error Params_DuplicateCooler();
 
     // ========= DATA STRUCTURES ========= //
 
+    /// @notice Data structure used to store data about a Cooler
     struct CoolerData {
         Cooler cooler;
         IERC20 debtToken;
@@ -106,12 +88,14 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
     IERC3156FlashLender internal FLASH;
 
     /// @notice The Cooler V2 contract
-    /// @dev    The value is set when the policy is activated
-    IMonoCooler internal COOLERV2;
+    IMonoCooler internal immutable COOLERV2;
 
     // ========= CONSTRUCTOR ========= //
 
     constructor(address kernel_, address coolerV2_) Policy(Kernel(kernel_)) {
+        // Validate
+        if (coolerV2_ == address(0)) revert Params_InvalidAddress("coolerV2");
+
         COOLERV2 = IMonoCooler(coolerV2_);
     }
 
@@ -159,18 +143,31 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
 
     // ========= OPERATION ========= //
 
-    // TODO extract interface
+    /// @inheritdoc ICoolerV2Migrator
+    function previewConsolidate(
+        address[] memory coolers_
+    ) external view onlyEnabled returns (uint256 collateralAmount, uint256 borrowAmount) {
+        // Determine the totals
+        uint256 totalDebt;
+        for (uint256 i; i < coolers_.length; i++) {
+            Cooler cooler = Cooler(coolers_[i]);
 
-    // TODO add requiredApprovals() function
+            (uint256 principal, uint256 interest, uint256 collateral, , ) = _getDebtForCooler(
+                cooler
+            );
 
-    /// @notice Consolidate Cooler V1 loans into Cooler V2
-    ///
-    ///         This function supports consolidation of loans from multiple Clearinghouses and Coolers, provided that the caller is the owner.
-    ///
-    ///         As Cooler V2 has a higher LTV than Cooler V1, the additional funds required to pay for the interest and fees do not need to be provided by the caller, and will be borrowed from Cooler V2.
-    ///
-    ///         It is expected that the caller will have already provided approval for this contract to spend the required tokens. See `requiredApprovals()` for more details.
-    ///
+            collateralAmount += collateral;
+            totalDebt += principal + interest;
+        }
+
+        // Determine the lender fee
+        uint256 lenderFee = FLASH.flashFee(address(DAI), totalDebt);
+        borrowAmount = totalDebt + lenderFee;
+
+        return (collateralAmount, borrowAmount);
+    }
+
+    /// @inheritdoc ICoolerV2Migrator
     /// @dev    This function will revert if:
     ///         - The number of elements in `clearinghouses_` and `coolers_` are not the same.
     ///         - Any of the Coolers are not owned by the caller.
@@ -181,13 +178,6 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
     ///         - The caller has not approved this contract to spend the collateral token, gOHM.
     ///         - The contract is not active.
     ///         - Re-entrancy is detected.
-    ///
-    /// @param  coolers_            The Coolers from which the loans will be migrated.
-    /// @param  clearinghouses_     The respective Clearinghouses that created and issued the loans in `coolers_`. This array must be the same length as `coolers_`.
-    /// @param  newOwner_           Address of the owner of the Cooler V2 position. This can be the same as the caller, or a different address.
-    /// @param  authorization_      Authorization parameters for the new owner. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
-    /// @param  signature_          Authorization signature for the new owner. Ignored if `authorization_.account` is the zero address.
-    /// @param  delegationRequests_ Delegation requests for the new owner.
     function consolidate(
         address[] memory coolers_,
         address[] memory clearinghouses_,
@@ -226,6 +216,7 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
             (
                 uint256 coolerPrincipal,
                 uint256 coolerInterest,
+                ,
                 address debtToken,
                 uint256 numLoans
             ) = _getDebtForCooler(cooler);
@@ -373,6 +364,8 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
 
         // Revoke approval
         debtToken_.approve(address(cooler_), 0);
+
+        return (repaid, collateral);
     }
 
     // ========= HELPER FUNCTIONS ========= //
@@ -385,6 +378,7 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
         returns (
             uint256 coolerPrincipal,
             uint256 coolerInterest,
+            uint256 coolerCollateral,
             address debtToken,
             uint256 numLoans
         )
@@ -395,20 +389,12 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
         // The Cooler contract does not expose the number of loans, so we iterate until the call reverts
         uint256 i;
         while (true) {
-            try cooler_.loans(i) returns (
-                Cooler.Request memory,
-                uint256 principal,
-                uint256 interestDue,
-                uint256,
-                uint256,
-                address,
-                address,
-                bool
-            ) {
+            try cooler_.getLoan(i) returns (Cooler.Loan memory loan) {
                 // Interest is paid down first, so if the principal is 0, the loan has been paid off
-                if (principal > 0) {
-                    coolerPrincipal += principal;
-                    coolerInterest += interestDue;
+                if (loan.principal > 0) {
+                    coolerPrincipal += loan.principal;
+                    coolerInterest += loan.interestDue;
+                    coolerCollateral += loan.collateral;
                 }
                 i++;
             } catch {
@@ -416,7 +402,7 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
             }
         }
 
-        return (coolerPrincipal, coolerInterest, debtToken, i);
+        return (coolerPrincipal, coolerInterest, coolerCollateral, debtToken, i);
     }
 
     /// @notice Check if a given cooler was created by the CoolerFactory for a Clearinghouse
