@@ -70,6 +70,7 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
         address currentOwner;
         address newOwner;
         uint256 usdsRequired;
+        IDLGTEv1.DelegationRequest[] delegationRequests;
     }
 
     // ========= MODULES ========= //
@@ -181,17 +182,19 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
     ///         - The contract is not active.
     ///         - Re-entrancy is detected.
     ///
-    /// @param  coolers_        The Coolers from which the loans will be migrated.
-    /// @param  clearinghouses_ The respective Clearinghouses that created and issued the loans in `coolers_`. This array must be the same length as `coolers_`.
-    /// @param  newOwner_       Address of the owner of the Cooler V2 position. This can be the same as the caller, or a different address.
-    /// @param  authorization_  Authorization parameters for the new owner.
-    /// @param  signature_      Authorization signature for the new owner.
+    /// @param  coolers_            The Coolers from which the loans will be migrated.
+    /// @param  clearinghouses_     The respective Clearinghouses that created and issued the loans in `coolers_`. This array must be the same length as `coolers_`.
+    /// @param  newOwner_           Address of the owner of the Cooler V2 position. This can be the same as the caller, or a different address.
+    /// @param  authorization_      Authorization parameters for the new owner.
+    /// @param  signature_          Authorization signature for the new owner.
+    /// @param  delegationRequests_ Delegation requests for the new owner.
     function consolidate(
         address[] memory coolers_,
         address[] memory clearinghouses_,
         address newOwner_,
         IMonoCooler.Authorization memory authorization_,
-        IMonoCooler.Signature calldata signature_
+        IMonoCooler.Signature calldata signature_,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests_
     ) external onlyEnabled nonReentrant {
         // Validate that the number of clearinghouses and coolers are the same
         if (clearinghouses_.length != coolers_.length) revert Params_InvalidArrays();
@@ -211,7 +214,8 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
             if (!_isValidCooler(clearinghouses_[i], coolers_[i])) revert Params_InvalidCooler();
 
             // Check that the Cooler is owned by the caller
-            if (Cooler(coolers_[i]).owner() != msg.sender) revert Only_CoolerOwner();
+            Cooler cooler = Cooler(coolers_[i]);
+            if (cooler.owner() != msg.sender) revert Only_CoolerOwner();
 
             // Check that the Cooler is not already in the array
             for (uint256 j; j < coolerData.length; j++) {
@@ -224,9 +228,9 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
                 uint256 coolerInterest,
                 address debtToken,
                 uint256 numLoans
-            ) = _getDebtForCooler(Cooler(coolers_[i]));
+            ) = _getDebtForCooler(cooler);
             coolerData[i] = CoolerData({
-                cooler: Cooler(coolers_[i]),
+                cooler: cooler,
                 debtToken: IERC20(debtToken),
                 numLoans: numLoans
             });
@@ -255,7 +259,9 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
             this,
             address(DAI),
             daiRequired + usdsRequired,
-            abi.encode(FlashLoanData(coolerData, msg.sender, newOwner_, usdsRequired))
+            abi.encode(
+                FlashLoanData(coolerData, msg.sender, newOwner_, usdsRequired, delegationRequests_)
+            )
         );
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
@@ -287,14 +293,11 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
         // Unpack param data
         FlashLoanData memory flashLoanData = abi.decode(params_, (FlashLoanData));
         CoolerData[] memory coolers = flashLoanData.coolers;
-        address currentOwner = flashLoanData.currentOwner;
-        address newOwner = flashLoanData.newOwner;
-        uint256 usdsRequired = flashLoanData.usdsRequired;
 
         // If there are loans in USDS, convert the required amount to DAI
-        if (usdsRequired > 0) {
-            DAI.approve(address(MIGRATOR), usdsRequired);
-            MIGRATOR.daiToUsds(address(this), usdsRequired);
+        if (flashLoanData.usdsRequired > 0) {
+            DAI.approve(address(MIGRATOR), flashLoanData.usdsRequired);
+            MIGRATOR.daiToUsds(address(this), flashLoanData.usdsRequired);
         }
 
         // Keep track of debt tokens out and collateral in
@@ -315,16 +318,19 @@ contract CoolerV2Migrator is IERC3156FlashBorrower, ReentrancyGuard, Policy, Pol
         }
 
         // Transfer the collateral from the cooler owner to this contract
-        GOHM.transferFrom(currentOwner, address(this), totalCollateral);
-
-        // TODO Add delegation requests
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
-            0
-        );
+        GOHM.transferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
 
         // Add collateral and borrow spent flash loan from Cooler V2
-        COOLERV2.addCollateral(totalCollateral.encodeUInt128(), newOwner, delegationRequests);
-        COOLERV2.borrow((totalRepaid + lenderFee_).encodeUInt128(), newOwner, address(this));
+        COOLERV2.addCollateral(
+            totalCollateral.encodeUInt128(),
+            flashLoanData.newOwner,
+            flashLoanData.delegationRequests
+        );
+        COOLERV2.borrow(
+            (totalRepaid + lenderFee_).encodeUInt128(),
+            flashLoanData.newOwner,
+            address(this)
+        );
 
         // Convert the USDS to DAI
         uint256 usdsBalance = USDS.balanceOf(address(this));
