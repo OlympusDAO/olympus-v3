@@ -35,7 +35,7 @@ interface IMonoCooler {
     error ExpiredSignature(uint256 deadline);
     error InvalidNonce(uint256 deadline);
     error InvalidSigner(address signer, address owner);
-    error UnathorizedOnBehalfOf();
+    error UnauthorizedOnBehalfOf();
 
     event BorrowPausedSet(bool isPaused);
     event LiquidationsPausedSet(bool isPaused);

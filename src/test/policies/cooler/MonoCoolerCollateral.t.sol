@@ -227,7 +227,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), 100);
 
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
         cooler.addCollateral(100, BOB, new IDLGTEv1.DelegationRequest[](1));
     }
 
@@ -430,7 +430,7 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
 
         // Need authorization to do it on behalf of BOB
         {
-            vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+            vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
             cooler.applyDelegations(delegationRequest(BOB, collateralAmount / 2), BOB);
         }
 
@@ -1004,7 +1004,7 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
 
     function test_withdrawCollateral_onBehalfOf_notAuthorized() public {
         vm.startPrank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
         cooler.withdrawCollateral(100, ALICE, ALICE, noDelegationRequest());
     }
 
@@ -1097,7 +1097,7 @@ contract MonoCoolerCollateralApplyDelegationsTest is MonoCoolerBaseTest {
     function test_applyDelegations_fail_notAuthorized() public {
         addCollateral(ALICE, 10e18);
 
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
         cooler.applyDelegations(delegationRequest(BOB, 10e18), ALICE);
     }
 

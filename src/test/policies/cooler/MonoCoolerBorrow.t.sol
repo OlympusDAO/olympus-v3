@@ -785,7 +785,7 @@ contract MonoCoolerBorrowTest is MonoCoolerBaseTest {
 
     function test_borrow_onBehalfOf_fail_noAuthorization() public {
         vm.startPrank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
         cooler.borrow(100, ALICE, ALICE);
     }
 

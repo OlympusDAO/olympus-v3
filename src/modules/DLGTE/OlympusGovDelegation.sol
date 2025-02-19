@@ -102,7 +102,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         aState.totalGOhm += amount.encodeUInt112();
 
         // Pull gOHM from the calling policy
-        gOHM.safeTransferFrom(msg.sender, address(this), amount);
+        _gOHM.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function withdrawUndelegatedGohm(
@@ -128,7 +128,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         aState.totalGOhm = (accountTotalBalance - amount).encodeUInt112();
 
         // Send the gOHM
-        gOHM.safeTransfer(msg.sender, amount);
+        _gOHM.safeTransfer(msg.sender, amount);
     }
 
     /// @inheritdoc DLGTEv1
@@ -202,18 +202,18 @@ contract OlympusGovDelegation is DLGTEv1 {
 
         // end index is the max of the requested items or the length
         uint256 requestedEndIndex = startIndex + maxItems - 1;
-        uint256 maxPossibleEndIndex = length - startIndex - 1;
+        uint256 maxPossibleEndIndex = length - 1;
         if (maxPossibleEndIndex < requestedEndIndex) requestedEndIndex = maxPossibleEndIndex;
 
-        delegations = new AccountDelegation[](requestedEndIndex - startIndex + 1);
+        uint256 numDelegations = requestedEndIndex - startIndex + 1;
+        delegations = new AccountDelegation[](numDelegations);
         DelegateEscrow escrow;
         AccountDelegation memory delegateInfo;
-        for (uint256 i = startIndex; i <= requestedEndIndex; ++i) {
+        for (uint256 i; i < numDelegations; ++i) {
             delegateInfo = delegations[i];
-            delegateInfo.delegate = acctDelegateAddresses.at(i);
+            delegateInfo.delegate = acctDelegateAddresses.at(i + startIndex);
             escrow = delegateEscrowFactory.escrowFor(delegateInfo.delegate);
             delegateInfo.escrow = address(escrow);
-
             // Note the amount here is the amount for this account over *all* policies
             delegateInfo.totalAmount = escrow.delegations(address(this), account);
         }
@@ -335,7 +335,7 @@ contract OlympusGovDelegation is DLGTEv1 {
             );
 
             // Push gOhm to the new escrow
-            gOHM.safeApprove(address(delegateEscrow), delegatedAmount);
+            _gOHM.safeApprove(address(delegateEscrow), delegatedAmount);
             delegateEscrow.delegate(onBehalfOf, delegatedAmount);
         } else {
             // Otherwise if the amount is negative, is is undelegating
