@@ -697,3 +697,189 @@ contract DLGTETestDelegationsMultipleDelegates is DLGTETestBase {
         assertEq(gohm.balanceOf(expectedAliceEscrow), 20e18);
     }
 }
+
+contract DLGTETestViews is DLGTETestBase {
+    function test_accountDelegationsList_underOnePage() public {
+        vm.startPrank(policy);
+        uint256 totalCollateral = 100_000e18;
+        deal(address(gohm), address(policy), totalCollateral);
+        gohm.approve(address(dlgte), totalCollateral);
+        dlgte.depositUndelegatedGohm(ALICE, totalCollateral);
+
+        address delegate;
+        uint32 numDelegates = 30;
+        dlgte.setMaxDelegateAddresses(ALICE, numDelegates);
+
+        for (uint256 i; i < numDelegates; ++i) {
+            delegate = makeAddr(vm.toString(i));
+            dlgte.applyDelegations(ALICE, delegationRequest(delegate, 1e18 + i));
+        }
+
+        uint256 extra_i = ((numDelegates - 1) * numDelegates) / 2;
+        verifyAccountSummary(
+            address(policy),
+            ALICE,
+            totalCollateral,
+            uint256(1e18) * numDelegates + extra_i,
+            numDelegates,
+            numDelegates,
+            totalCollateral
+        );
+
+        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            ALICE,
+            0,
+            50
+        );
+        assertEq(delegations.length, numDelegates);
+        assertNotEq(delegations[0].delegate, address(0));
+        assertNotEq(delegations[0].escrow, address(0));
+        assertEq(delegations[0].totalAmount, 1e18);
+        assertNotEq(delegations[numDelegates - 1].delegate, address(0));
+        assertNotEq(delegations[numDelegates - 1].escrow, address(0));
+        assertEq(delegations[numDelegates - 1].totalAmount, 1e18 + numDelegates - 1);
+
+        delegations = dlgte.accountDelegationsList(ALICE, 60, 80);
+        assertEq(delegations.length, 0);
+    }
+
+    function test_accountDelegationsList_exactlyOnePage() public {
+        vm.startPrank(policy);
+        uint256 totalCollateral = 100_000e18;
+        deal(address(gohm), address(policy), totalCollateral);
+        gohm.approve(address(dlgte), totalCollateral);
+        dlgte.depositUndelegatedGohm(ALICE, totalCollateral);
+
+        address delegate;
+        uint32 numDelegates = 25;
+        dlgte.setMaxDelegateAddresses(ALICE, numDelegates);
+
+        for (uint256 i; i < numDelegates; ++i) {
+            delegate = makeAddr(vm.toString(i));
+            dlgte.applyDelegations(ALICE, delegationRequest(delegate, 1e18 + i));
+        }
+
+        uint256 extra_i = ((numDelegates - 1) * numDelegates) / 2;
+        verifyAccountSummary(
+            address(policy),
+            ALICE,
+            totalCollateral,
+            uint256(1e18) * numDelegates + extra_i,
+            numDelegates,
+            numDelegates,
+            totalCollateral
+        );
+
+        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            ALICE,
+            0,
+            numDelegates
+        );
+        assertEq(delegations.length, numDelegates);
+        assertNotEq(delegations[0].delegate, address(0));
+        assertNotEq(delegations[0].escrow, address(0));
+        assertEq(delegations[0].totalAmount, 1e18 + 0);
+        assertNotEq(delegations[numDelegates - 1].delegate, address(0));
+        assertNotEq(delegations[numDelegates - 1].escrow, address(0));
+        assertEq(delegations[numDelegates - 1].totalAmount, 1e18 + numDelegates - 1);
+
+        delegations = dlgte.accountDelegationsList(ALICE, numDelegates, 100);
+        assertEq(delegations.length, 0);
+    }
+
+    function test_accountDelegationsList_partOnePage() public {
+        vm.startPrank(policy);
+        uint256 totalCollateral = 100_000e18;
+        deal(address(gohm), address(policy), totalCollateral);
+        gohm.approve(address(dlgte), totalCollateral);
+        dlgte.depositUndelegatedGohm(ALICE, totalCollateral);
+
+        address delegate;
+        uint32 numDelegates = 30;
+        dlgte.setMaxDelegateAddresses(ALICE, numDelegates);
+
+        for (uint256 i; i < numDelegates; ++i) {
+            delegate = makeAddr(vm.toString(i));
+            dlgte.applyDelegations(ALICE, delegationRequest(delegate, 1e18 + i));
+        }
+
+        uint256 extra_i = ((numDelegates - 1) * numDelegates) / 2;
+        verifyAccountSummary(
+            address(policy),
+            ALICE,
+            totalCollateral,
+            uint256(1e18) * numDelegates + extra_i,
+            numDelegates,
+            numDelegates,
+            totalCollateral
+        );
+
+        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            ALICE,
+            10,
+            numDelegates
+        );
+        assertEq(delegations.length, numDelegates - 10);
+        assertNotEq(delegations[0].delegate, address(0));
+        assertNotEq(delegations[0].escrow, address(0));
+        assertEq(delegations[0].totalAmount, 1e18 + 10);
+        assertNotEq(delegations[delegations.length - 1].delegate, address(0));
+        assertNotEq(delegations[delegations.length - 1].escrow, address(0));
+        assertEq(delegations[delegations.length - 1].totalAmount, 1e18 + numDelegates - 1);
+
+        delegations = dlgte.accountDelegationsList(ALICE, 0, 0);
+        assertEq(delegations.length, 0);
+        delegations = dlgte.accountDelegationsList(ALICE, 10, 0);
+        assertEq(delegations.length, 0);
+    }
+
+    function test_accountDelegationsList_twoPages() public {
+        vm.startPrank(policy);
+        uint256 totalCollateral = 100_000e18;
+        deal(address(gohm), address(policy), totalCollateral);
+        gohm.approve(address(dlgte), totalCollateral);
+        dlgte.depositUndelegatedGohm(ALICE, totalCollateral);
+
+        address delegate;
+        uint32 numDelegates = 30;
+        dlgte.setMaxDelegateAddresses(ALICE, numDelegates);
+
+        for (uint256 i; i < numDelegates; ++i) {
+            delegate = makeAddr(vm.toString(i));
+            dlgte.applyDelegations(ALICE, delegationRequest(delegate, 1e18 + i));
+        }
+
+        uint256 extra_i = ((numDelegates - 1) * numDelegates) / 2;
+        verifyAccountSummary(
+            address(policy),
+            ALICE,
+            totalCollateral,
+            uint256(1e18) * numDelegates + extra_i,
+            numDelegates,
+            numDelegates,
+            totalCollateral
+        );
+
+        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            ALICE,
+            0,
+            15
+        );
+        assertEq(delegations.length, 15);
+        assertNotEq(delegations[0].delegate, address(0));
+        assertNotEq(delegations[0].escrow, address(0));
+        assertEq(delegations[0].totalAmount, 1e18);
+        assertNotEq(delegations[delegations.length - 1].delegate, address(0));
+        assertNotEq(delegations[delegations.length - 1].escrow, address(0));
+        assertEq(delegations[delegations.length - 1].totalAmount, 1e18 + 14);
+
+        delegations = dlgte.accountDelegationsList(ALICE, 15, 50);
+        assertEq(delegations.length, 15);
+        assertNotEq(delegations[0].delegate, address(0));
+        assertNotEq(delegations[0].escrow, address(0));
+        assertEq(delegations[0].totalAmount, 1e18 + 15);
+        assertNotEq(delegations[delegations.length - 1].delegate, address(0));
+        assertNotEq(delegations[delegations.length - 1].escrow, address(0));
+        assertEq(delegations[delegations.length - 1].totalAmount, 1e18 + 29);
+    }
+}
