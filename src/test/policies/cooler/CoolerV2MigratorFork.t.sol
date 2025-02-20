@@ -6,12 +6,16 @@ import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {Actions, Kernel} from "src/Kernel.sol";
 import {CoolerV2Migrator} from "src/policies/cooler/CoolerV2Migrator.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
+import {Cooler} from "src/external/cooler/Cooler.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract CoolerV2MigratorForkTest is MonoCoolerBaseTest {
     CoolerV2Migrator internal migrator;
     Clearinghouse internal clearinghouseUsds;
     Clearinghouse internal clearinghouseDai;
     string internal RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+
+    ERC20 internal dai;
 
     function setUp() public virtual override {
         // Fork
@@ -25,6 +29,7 @@ contract CoolerV2MigratorForkTest is MonoCoolerBaseTest {
         // Clearinghouse setup
         clearinghouseDai = Clearinghouse(0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c);
         clearinghouseUsds = Clearinghouse(0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0);
+        dai = ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
 
         // CoolerV2Migrator setup
         migrator = new CoolerV2Migrator(address(kernel), address(cooler));
@@ -64,8 +69,26 @@ contract CoolerV2MigratorForkTest is MonoCoolerBaseTest {
         bool isUsds_,
         uint256 collateralAmount_
     ) {
+        Clearinghouse clearinghouse;
+        if (isUsds_) {
+            clearinghouse = clearinghouseUsds;
+        } else {
+            clearinghouse = clearinghouseDai;
+        }
+
         // Create Cooler if needed
+        vm.prank(wallet_);
+        address cooler = clearinghouse.factory().generateCooler(gohm, isUsds_ ? usds : dai);
+
+        // Approve spending of collateral
+        vm.prank(wallet_);
+        gohm.approve(cooler, collateralAmount_);
+
         // Create loan
+        vm.prank(wallet_);
+        clearinghouse.lendToCooler(Cooler(cooler), collateralAmount_);
+
+        _;
     }
 
     // ========= TESTS ========= //
