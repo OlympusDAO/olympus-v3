@@ -8,13 +8,14 @@ import {IERC20} from "../../../interfaces/IERC20.sol";
 interface ICoolerComposites {
     // ===== Composite Functions ===== //
 
-    /// @notice allow user to add collateral and borrow from Cooler V2
-    /// @dev    user must provide authorization signature before using function
-    /// @param authorization        authorization info
-    /// @param signature            offchain auth signature
-    /// @param collateralAmount     amount of gOHM collateral to deposit
-    /// @param borrowAmount         amount of USDS to borrow
-    /// @param delegationRequests   resulting collateral delegation
+    /// @notice Allow user to add collateral and borrow from Cooler V2
+    /// @dev    User must provide authorization signature before using function
+    ///
+    /// @param authorization        Authorization info. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
+    /// @param signature            Off-chain auth signature. Ignored if `authorization_.account` is the zero address.
+    /// @param collateralAmount     Amount of gOHM collateral to deposit
+    /// @param borrowAmount         Amount of USDS to borrow
+    /// @param delegationRequests   Resulting collateral delegation
     function addCollateralAndBorrow(
         IMonoCooler.Authorization memory authorization,
         IMonoCooler.Signature calldata signature,
@@ -23,13 +24,14 @@ interface ICoolerComposites {
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external;
 
-    /// @notice allow user to add collateral and borrow from Cooler V2
-    /// @dev    user must provide authorization signature before using function
-    /// @param authorization        authorization info
-    /// @param signature            offchain auth signature
-    /// @param repayAmount          amount of USDS to repay
-    /// @param collateralAmount     amount of gOHM collateral to withdraw
-    /// @param delegationRequests   resulting collateral delegation
+    /// @notice Allow user to add collateral and borrow from Cooler V2
+    /// @dev    User must provide authorization signature before using function
+    ///
+    /// @param authorization        Authorization info. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
+    /// @param signature            Off-chain auth signature. Ignored if `authorization_.account` is the zero address.
+    /// @param repayAmount          Amount of USDS to repay
+    /// @param collateralAmount     Amount of gOHM collateral to withdraw
+    /// @param delegationRequests   Resulting collateral delegation
     function repayAndRemoveCollateral(
         IMonoCooler.Authorization memory authorization,
         IMonoCooler.Signature calldata signature,
