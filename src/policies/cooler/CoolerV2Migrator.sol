@@ -2,7 +2,6 @@
 pragma solidity ^0.8.15;
 
 // Interfaces
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {IDaiUsdsMigrator} from "src/interfaces/maker-dao/IDaiUsdsMigrator.sol";
@@ -11,6 +10,8 @@ import {ICoolerV2Migrator} from "../interfaces/cooler/ICoolerV2Migrator.sol";
 // Libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -36,13 +37,14 @@ contract CoolerV2Migrator is
     PolicyEnabler
 {
     using SafeCast for uint256;
+    using SafeTransferLib for ERC20;
 
     // ========= DATA STRUCTURES ========= //
 
     /// @notice Data structure used to store data about a Cooler
     struct CoolerData {
         Cooler cooler;
-        IERC20 debtToken;
+        ERC20 debtToken;
         uint256 numLoans;
     }
 
@@ -69,15 +71,15 @@ contract CoolerV2Migrator is
 
     /// @notice The DAI token
     /// @dev    The value is set when the policy is activated
-    IERC20 internal DAI;
+    ERC20 internal DAI;
 
     /// @notice The USDS token
     /// @dev    The value is set when the policy is activated
-    IERC20 internal USDS;
+    ERC20 internal USDS;
 
     /// @notice The gOHM token
     /// @dev    The value is set when the policy is activated
-    IERC20 internal GOHM;
+    ERC20 internal GOHM;
 
     /// @notice The DAI <> USDS Migrator
     /// @dev    The value is set when the policy is activated
@@ -123,9 +125,9 @@ contract CoolerV2Migrator is
         // Populate variables
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
         // Token contract addresses are immutable
-        DAI = IERC20(RGSTY.getImmutableContract("dai"));
-        USDS = IERC20(RGSTY.getImmutableContract("usds"));
-        GOHM = IERC20(RGSTY.getImmutableContract("gohm"));
+        DAI = ERC20(RGSTY.getImmutableContract("dai"));
+        USDS = ERC20(RGSTY.getImmutableContract("usds"));
+        GOHM = ERC20(RGSTY.getImmutableContract("gohm"));
         // Utility contract addresses are mutable
         FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
         MIGRATOR = IDaiUsdsMigrator(RGSTY.getContract("dmgtr"));
@@ -222,7 +224,7 @@ contract CoolerV2Migrator is
             ) = _getDebtForCooler(cooler);
             coolerData[i] = CoolerData({
                 cooler: cooler,
-                debtToken: IERC20(debtToken),
+                debtToken: ERC20(debtToken),
                 numLoans: numLoans
             });
 
@@ -262,11 +264,11 @@ contract CoolerV2Migrator is
         // This shouldn't happen, but transfer any leftover funds back to the sender
         uint256 usdsBalanceAfter = USDS.balanceOf(address(this));
         if (usdsBalanceAfter > 0) {
-            USDS.transfer(msg.sender, usdsBalanceAfter);
+            USDS.safeTransfer(msg.sender, usdsBalanceAfter);
         }
         uint256 daiBalanceAfter = DAI.balanceOf(address(this));
         if (daiBalanceAfter > 0) {
-            DAI.transfer(msg.sender, daiBalanceAfter);
+            DAI.safeTransfer(msg.sender, daiBalanceAfter);
         }
     }
 
@@ -291,7 +293,7 @@ contract CoolerV2Migrator is
 
         // If there are loans in USDS, convert the required amount to DAI
         if (flashLoanData.usdsRequired > 0) {
-            DAI.approve(address(MIGRATOR), flashLoanData.usdsRequired);
+            DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
             MIGRATOR.daiToUsds(address(this), flashLoanData.usdsRequired);
         }
 
@@ -313,7 +315,7 @@ contract CoolerV2Migrator is
         }
 
         // Transfer the collateral from the cooler owner to this contract
-        GOHM.transferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
+        GOHM.safeTransferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
 
         // Add collateral and borrow spent flash loan from Cooler V2
         COOLERV2.addCollateral(
@@ -333,19 +335,19 @@ contract CoolerV2Migrator is
 
         // Approve the flash loan provider to collect the flashloan amount and fee
         // The initiator will transfer any remaining DAI and USDS back to the caller
-        DAI.approve(address(FLASH), amount_ + lenderFee_);
+        DAI.safeApprove(address(FLASH), amount_ + lenderFee_);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
 
     function _handleRepayments(
         Cooler cooler_,
-        IERC20 debtToken_,
+        ERC20 debtToken_,
         uint256 numLoans_
     ) internal returns (uint256 repaid, uint256 collateral) {
         // Provide upfront infinite approval to cooler
         // The consolidate() function is gated by a nonReentrant modifier, so there cannot be a reentrancy attack during the approval and revocation
-        debtToken_.approve(address(cooler_), type(uint256).max);
+        debtToken_.safeApprove(address(cooler_), type(uint256).max);
 
         // Iterate through and repay loans
         for (uint256 i; i < numLoans_; i++) {
@@ -363,7 +365,7 @@ contract CoolerV2Migrator is
         }
 
         // Revoke approval
-        debtToken_.approve(address(cooler_), 0);
+        debtToken_.safeApprove(address(cooler_), 0);
 
         return (repaid, collateral);
     }

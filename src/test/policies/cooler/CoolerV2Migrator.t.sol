@@ -35,17 +35,31 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     OlympusContractRegistry internal contractRegistry;
     ContractRegistryAdmin internal contractRegistryAdmin;
 
-    address internal USER = makeAddr("user");
+    address internal USER;
+    uint256 internal USER_PK;
 
     IMonoCooler.Authorization internal authorization;
     IMonoCooler.Signature internal signature;
     IDLGTEv1.DelegationRequest[] internal delegationRequests;
+
+    bytes32 private constant DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
+    bytes32 private constant AUTHORIZATION_TYPEHASH =
+        keccak256(
+            "Authorization(address account,address authorized,uint96 authorizationDeadline,uint256 nonce,uint256 signatureDeadline)"
+        );
+
+    function buildDomainSeparator() internal view returns (bytes32) {
+        return keccak256(abi.encode(DOMAIN_TYPEHASH, block.chainid, address(cooler)));
+    }
 
     mapping(address => address) internal clearinghouseToCooler;
 
     function setUp() public virtual override {
         // MonoCooler setup
         super.setUp();
+
+        (USER, USER_PK) = makeAddrAndKey("user");
 
         // Tokens
         dai = new MockERC20("DAI", "DAI", 18);
@@ -56,6 +70,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Set up a mock flash loan lender
         flashLender = new MockFlashloanLender(0, address(dai));
+        dai.mint(address(flashLender), 1000000e18);
 
         // Grant roles
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
@@ -292,6 +307,65 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
+    function signedAuth(
+        address account,
+        uint256 accountPk,
+        address authorized,
+        uint96 authorizationDeadline,
+        uint256 signatureDeadline
+    )
+        internal
+        view
+        returns (IMonoCooler.Authorization memory auth, IMonoCooler.Signature memory sig)
+    {
+        bytes32 domainSeparator = buildDomainSeparator();
+        auth = IMonoCooler.Authorization({
+            account: account,
+            authorized: authorized,
+            authorizationDeadline: authorizationDeadline,
+            nonce: cooler.authorizationNonces(account),
+            signatureDeadline: signatureDeadline
+        });
+        bytes32 structHash = keccak256(abi.encode(AUTHORIZATION_TYPEHASH, auth));
+        bytes32 typedDataHash = ECDSA.toTypedDataHash(domainSeparator, structHash);
+        (sig.v, sig.r, sig.s) = vm.sign(accountPk, typedDataHash);
+    }
+
+    modifier givenAuthorization() {
+        vm.prank(USER);
+        cooler.setAuthorization(address(migrator), uint96(block.timestamp + 1));
+        _;
+    }
+
+    modifier givenAuthorizationCleared() {
+        vm.prank(USER);
+        cooler.setAuthorization(address(migrator), 0);
+        _;
+    }
+
+    modifier givenAuthorizationSignatureSet() {
+        (authorization, signature) = signedAuth(
+            USER,
+            USER_PK,
+            address(migrator),
+            uint96(block.timestamp + 1),
+            uint96(block.timestamp + 1)
+        );
+        _;
+    }
+
+    modifier givenAuthorizationSignatureCleared() {
+        authorization = IMonoCooler.Authorization({
+            account: address(0),
+            authorized: address(0),
+            authorizationDeadline: 0,
+            nonce: 0,
+            signatureDeadline: 0
+        });
+        signature = IMonoCooler.Signature({v: 0, r: bytes32(0), s: bytes32(0)});
+        _;
+    }
+
     // ========= ASSERTIONS ========= //
 
     function _expectRevert_disabled() internal {
@@ -431,7 +505,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // given the Cooler debt token is not DAI or USDS
     //  [X] it reverts
     // given the caller has not approved the CoolerV2Migrator to spend the collateral
-    //  [ ] it reverts
+    //  [X] it reverts
     // given MonoCooler authorization has been provided
     //  [ ] it does not set the authorization signature
     //  [ ] it deposits the collateral into MonoCooler
@@ -464,6 +538,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         public
         givenWalletHasCollateralToken(USER, 1e18)
         givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
         givenDisabled
     {
         // Prepare input data
@@ -752,6 +827,29 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         migrator.consolidate(
             coolersWithNew,
             clearinghousesWithNew,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+    }
+
+    function test_consolidate_givenSpendingCollateralNotApproved_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Expect revert
+        vm.expectRevert("TRANSFER_FROM_FAILED");
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
             USER,
             authorization,
             signature,
