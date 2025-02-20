@@ -153,32 +153,70 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
+    function _createCooler(
+        address wallet_,
+        bool isUsds_
+    ) internal returns (address clearinghouse, address cooler) {
+        if (isUsds_) {
+            clearinghouse = address(clearinghouseUsds);
+        } else {
+            clearinghouse = address(clearinghouseDai);
+        }
+
+        // Create Cooler if needed
+        vm.prank(wallet_);
+        cooler = Clearinghouse(clearinghouse).factory().generateCooler(gohm, isUsds_ ? usds : dai);
+
+        // Store the relationship
+        clearinghouseToCooler[clearinghouse] = cooler;
+
+        return (clearinghouse, cooler);
+    }
+
+    function _getCoolerArrays(
+        bool includeUsds_,
+        bool includeDai_
+    ) internal view returns (address[] memory coolers, address[] memory clearinghouses) {
+        uint256 length;
+        if (includeUsds_) {
+            length++;
+        }
+        if (includeDai_) {
+            length++;
+        }
+
+        coolers = new address[](length);
+        clearinghouses = new address[](length);
+        uint256 index;
+
+        if (includeUsds_) {
+            coolers[index] = clearinghouseToCooler[address(clearinghouseUsds)];
+            clearinghouses[index] = address(clearinghouseUsds);
+            index++;
+        }
+        if (includeDai_) {
+            coolers[index] = clearinghouseToCooler[address(clearinghouseDai)];
+            clearinghouses[index] = address(clearinghouseDai);
+            index++;
+        }
+
+        return (coolers, clearinghouses);
+    }
+
     modifier givenWalletHasLoan(
         address wallet_,
         bool isUsds_,
         uint256 collateralAmount_
     ) {
-        Clearinghouse clearinghouse;
-        if (isUsds_) {
-            clearinghouse = clearinghouseUsds;
-        } else {
-            clearinghouse = clearinghouseDai;
-        }
-
-        // Create Cooler if needed
-        vm.prank(wallet_);
-        address cooler = clearinghouse.factory().generateCooler(gohm, isUsds_ ? usds : dai);
-
-        // Store the relationship
-        clearinghouseToCooler[address(clearinghouse)] = cooler;
+        (address clearinghouse_, address cooler_) = _createCooler(wallet_, isUsds_);
 
         // Approve spending of collateral
         vm.prank(wallet_);
-        gohm.approve(address(clearinghouse), collateralAmount_);
+        gohm.approve(clearinghouse_, collateralAmount_);
 
         // Create loan
         vm.prank(wallet_);
-        clearinghouse.lendToCooler(Cooler(cooler), collateralAmount_);
+        Clearinghouse(clearinghouse_).lendToCooler(Cooler(cooler_), collateralAmount_);
         _;
     }
 
@@ -198,10 +236,10 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
     // previewConsolidate
     // given the contract is disabled
-    //  [ ] it reverts
+    //  [X] it reverts
     // given there are no loans
-    //  [ ] it returns 0 collateral
-    //  [ ] it returns 0 borrowed
+    //  [X] it returns 0 collateral
+    //  [X] it returns 0 borrowed
     // given there is a repaid loan
     //  [ ] it ignores the repaid loan
     // given the flash fee is non-zero
@@ -225,6 +263,21 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Function
         migrator.previewConsolidate(coolers);
+    }
+
+    function test_previewConsolidate_givenNoLoans() public {
+        // Create a Cooler, but no loan
+        _createCooler(USER, true);
+
+        // Prepare input data
+        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+
+        // Function
+        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+
+        // Assertions
+        assertEq(collateralAmount, 0, "collateralAmount");
+        assertEq(borrowedAmount, 0, "borrowedAmount");
     }
 
     // consolidate
