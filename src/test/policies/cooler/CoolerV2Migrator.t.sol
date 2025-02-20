@@ -153,15 +153,19 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
+    function _getClearinghouse(bool isUsds_) internal view returns (Clearinghouse clearinghouse) {
+        if (isUsds_) {
+            return Clearinghouse(address(clearinghouseUsds));
+        }
+
+        return Clearinghouse(address(clearinghouseDai));
+    }
+
     function _createCooler(
         address wallet_,
         bool isUsds_
     ) internal returns (address clearinghouse, address cooler) {
-        if (isUsds_) {
-            clearinghouse = address(clearinghouseUsds);
-        } else {
-            clearinghouse = address(clearinghouseDai);
-        }
+        clearinghouse = address(_getClearinghouse(isUsds_));
 
         // Create Cooler if needed
         vm.prank(wallet_);
@@ -214,15 +218,68 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         vm.prank(wallet_);
         gohm.approve(clearinghouse_, collateralAmount_);
 
+        // Determine the loan amount
+        (uint256 principal, uint256 interest) = Clearinghouse(clearinghouse_).getLoanForCollateral(
+            collateralAmount_
+        );
+
         // Create loan
         vm.prank(wallet_);
-        Clearinghouse(clearinghouse_).lendToCooler(Cooler(cooler_), collateralAmount_);
+        Clearinghouse(clearinghouse_).lendToCooler(Cooler(cooler_), principal);
+        _;
+    }
+
+    modifier givenWalletHasRepaidLoan(
+        address wallet_,
+        bool isUsds_,
+        uint256 loanId_
+    ) {
+        Cooler cooler = _getCooler(isUsds_);
+        Cooler.Loan memory loan = cooler.getLoan(loanId_);
+        uint256 payableAmount = loan.principal + loan.interestDue;
+
+        // Mint debt token to the wallet and approve spending
+        if (isUsds_) {
+            usds.mint(wallet_, payableAmount);
+            vm.prank(wallet_);
+            usds.approve(address(cooler), payableAmount);
+        } else {
+            dai.mint(wallet_, payableAmount);
+            vm.prank(wallet_);
+            dai.approve(address(cooler), payableAmount);
+        }
+
+        // Repay the loan
+        vm.prank(wallet_);
+        Cooler(cooler).repayLoan(loanId_, payableAmount);
         _;
     }
 
     modifier givenWalletHasApprovedMigratorSpendingCollateral(address wallet_, uint256 amount_) {
         vm.prank(wallet_);
         gohm.approve(address(migrator), amount_);
+        _;
+    }
+
+    function _getCooler(bool isUsds_) internal view returns (Cooler cooler) {
+        Clearinghouse clearinghouse = _getClearinghouse(isUsds_);
+        cooler = Cooler(clearinghouseToCooler[address(clearinghouse)]);
+
+        return cooler;
+    }
+
+    function _getLoan(
+        bool isUsds_,
+        uint256 loanId_
+    ) internal view returns (Cooler.Loan memory loan) {
+        Cooler cooler = _getCooler(isUsds_);
+        loan = cooler.getLoan(loanId_);
+
+        return loan;
+    }
+
+    modifier givenFlashFee(uint16 flashFee_) {
+        flashLender.setFeePercent(flashFee_);
         _;
     }
 
@@ -241,12 +298,12 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     //  [X] it returns 0 collateral
     //  [X] it returns 0 borrowed
     // given there is a repaid loan
-    //  [ ] it ignores the repaid loan
+    //  [X] it ignores the repaid loan
     // given the flash fee is non-zero
-    //  [ ] it returns the total collateral returned
-    //  [ ] the total borrowed is the principal + interest + flash fee
-    // [ ] it returns the total collateral returned
-    // [ ] the total borrowed is the principal + interest
+    //  [X] it returns the total collateral returned
+    //  [X] the total borrowed is the principal + interest + flash fee
+    // [X] it returns the total collateral returned
+    // [X] the total borrowed is the principal + interest
 
     function test_previewConsolidate_givenDisabled_reverts()
         public
@@ -278,6 +335,76 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         // Assertions
         assertEq(collateralAmount, 0, "collateralAmount");
         assertEq(borrowedAmount, 0, "borrowedAmount");
+    }
+
+    function test_previewConsolidate_givenRepaidLoan()
+        public
+        givenWalletHasCollateralToken(USER, 2e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasRepaidLoan(USER, true, 0)
+    {
+        // Prepare input data
+        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+
+        Cooler.Loan memory loanOne = _getLoan(true, 1);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        // Function
+        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+
+        // Assertions
+        assertEq(collateralAmount, 1e18, "collateralAmount");
+        assertEq(borrowedAmount, loanOnePayable, "borrowedAmount");
+    }
+
+    function test_previewConsolidate_givenFlashFee()
+        public
+        givenWalletHasCollateralToken(USER, 3e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasLoan(USER, true, 2e18)
+        givenFlashFee(1e2)
+    {
+        // Prepare input data
+        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+
+        Cooler.Loan memory loanZero = _getLoan(true, 0);
+        uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
+
+        Cooler.Loan memory loanOne = _getLoan(true, 1);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        uint256 flashFee = ((loanZeroPayable + loanOnePayable) * 1e2) / 100e2;
+
+        // Function
+        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+
+        // Assertions
+        assertEq(collateralAmount, 3e18, "collateralAmount");
+        assertEq(borrowedAmount, loanZeroPayable + loanOnePayable + flashFee, "borrowedAmount");
+    }
+
+    function test_previewConsolidate()
+        public
+        givenWalletHasCollateralToken(USER, 3e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasLoan(USER, true, 2e18)
+    {
+        // Prepare input data
+        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+
+        Cooler.Loan memory loanZero = _getLoan(true, 0);
+        uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
+
+        Cooler.Loan memory loanOne = _getLoan(true, 1);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        // Function
+        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+
+        // Assertions
+        assertEq(collateralAmount, 3e18, "collateralAmount");
+        assertEq(borrowedAmount, loanZeroPayable + loanOnePayable, "borrowedAmount");
     }
 
     // consolidate
