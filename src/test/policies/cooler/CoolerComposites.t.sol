@@ -201,7 +201,7 @@ contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
         givenAccountHasApprovedCollateralToken(2e18)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
 
         // Call function
         vm.prank(accountOwner);
@@ -335,7 +335,7 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
         givenAuthorizationSignatureCleared
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnathorizedOnBehalfOf.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
 
         // Call function
         vm.prank(accountOwner);
