@@ -65,17 +65,28 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         (USER, USER_PK) = makeAddrAndKey("user");
         (USER2, USER2_PK) = makeAddrAndKey("user2");
+        vm.label(USER, "USER");
+        vm.label(USER2, "USER2");
 
         // Tokens
         dai = new MockERC20("DAI", "DAI", 18);
         sDai = new MockERC4626(dai, "sDAI", "sDAI");
+        vm.label(address(dai), "DAI");
+        vm.label(address(sDai), "sDAI");
+
+        // Ensure the treasury has sDAI
+        dai.mint(address(this), 200000000e18);
+        dai.approve(address(sDai), 200000000e18);
+        sDai.mint(100000000e18, address(TRSRY));
 
         // Set up a mock DAI-USDS migrator
         daiMigrator = new MockDaiUsds(dai, usds);
+        vm.label(address(daiMigrator), "DAI-USDS Migrator");
 
         // Set up a mock flash loan lender
         flashLender = new MockFlashloanLender(0, address(dai));
         dai.mint(address(flashLender), 1000000e18);
+        vm.label(address(flashLender), "Flash Lender");
 
         // Grant roles
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
@@ -120,6 +131,9 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             address(coolerFactory),
             address(kernel)
         );
+        vm.label(address(coolerFactory), "Cooler Factory");
+        vm.label(address(clearinghouseDai), "DAI Clearinghouse");
+        vm.label(address(clearinghouseUsds), "USDS Clearinghouse");
 
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.ActivatePolicy, address(clearinghouseDai));
@@ -177,6 +191,13 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
     modifier givenWalletHasCollateralToken(address wallet_, uint256 amount_) {
         gohm.mint(wallet_, amount_);
+        _;
+    }
+
+    modifier givenDaiClearinghouseIsEnabled() {
+        vm.startPrank(OVERSEER);
+        clearinghouseDai.activate();
+        vm.stopPrank();
         _;
     }
 
@@ -351,10 +372,10 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
-    modifier givenAuthorizationSignatureSet() {
+    modifier givenAuthorizationSignatureSet(address owner_, uint256 ownerPk_) {
         (authorization, signature) = signedAuth(
-            USER,
-            USER_PK,
+            owner_,
+            ownerPk_,
             address(migrator),
             uint96(block.timestamp + 1),
             uint96(block.timestamp + 1)
@@ -371,6 +392,11 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             signatureDeadline: 0
         });
         signature = IMonoCooler.Signature({v: 0, r: bytes32(0), s: bytes32(0)});
+        _;
+    }
+
+    modifier givenDelegationRequest(int256 amount_) {
+        delegationRequests.push(IDLGTEv1.DelegationRequest({delegate: USER2, amount: amount_}));
         _;
     }
 
@@ -414,10 +440,14 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         assertEq(position.currentDebt, debtBalance_, "account position debt");
     }
 
-    function _assertAuthorization(uint256 nonce_, uint96 deadline_) internal view {
-        assertEq(cooler.authorizationNonces(USER), nonce_, "authorization nonce");
+    function _assertAuthorization(
+        address account_,
+        uint256 nonce_,
+        uint96 deadline_
+    ) internal view {
+        assertEq(cooler.authorizationNonces(account_), nonce_, "authorization nonce");
         assertEq(
-            cooler.authorizations(USER, address(migrator)),
+            cooler.authorizations(account_, address(migrator)),
             deadline_,
             "authorization deadline"
         );
@@ -501,7 +531,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         assertEq(borrowedAmount, loanOnePayable, "borrowedAmount");
     }
 
-    function test_previewConsolidate_givenFlashFee()
+    function test_previewConsolidate_givenFlashFeeNonZero()
         public
         givenWalletHasCollateralToken(USER, 3e18)
         givenWalletHasLoan(USER, true, 1e18)
@@ -576,24 +606,51 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // when a MonoCooler authorization signature is not provided
     //  [X] it reverts
     // when the new owner is different to the existing owner
-    //  [ ] it sets the authorization signature
-    //  [ ] it deposits the collateral into MonoCooler
-    //  [ ] it borrows the principal + interest from MonoCooler
-    //  [ ] it sets the new owner as the owner of the Cooler V2 position
-    //  [ ] the Cooler V1 loans are repaid
-    //  [ ] the migrator does not hold any tokens
+    //  when the authorization account does not match the new owner
+    //   [X] it reverts
+    //  [X] it sets the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest from MonoCooler
+    //  [X] it sets the new owner as the owner of the Cooler V2 position
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
     // given the flash fee is non-zero
-    //  [ ] it sets the authorization signature
-    //  [ ] it deposits the collateral into MonoCooler
-    //  [ ] it borrows the principal + interest + flash fee from MonoCooler
-    //  [ ] the Cooler V1 loans are repaid
-    //  [ ] the migrator does not hold any tokens
-    // [ ] it sets the authorization signature
-    // [ ] it deposits the collateral into MonoCooler
-    // [ ] it borrows the principal + interest from MonoCooler
-    // [ ] it sets the existing owner as the owner of the Cooler V2 position
-    // [ ] the Cooler V1 loans are repaid
-    // [ ] the migrator does not hold any tokens
+    //  [X] it sets the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest + flash fee from MonoCooler
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
+    // when there are multiple loans
+    //  [X] it sets the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest + flash fee from MonoCooler
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
+    // when there are loans from a DAI clearinghouse
+    //  [X] it sets the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest from MonoCooler
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
+    // when there are loans from clearinghouses with different debt tokens
+    //  [X] it sets the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest from MonoCooler
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
+    // when delegation requests are provided
+    //  [X] it sets the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest from MonoCooler
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
+    //  [X] the delegation requests are applied
+    // [X] it sets the authorization signature
+    // [X] it deposits the collateral into MonoCooler
+    // [X] it borrows the principal + interest from MonoCooler
+    // [X] it sets the existing owner as the owner of the Cooler V2 position
+    // [X] the Cooler V1 loans are repaid
+    // [X] the migrator does not hold any tokens
 
     function test_consolidate_givenDisabled_reverts()
         public
@@ -950,7 +1007,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _assertTokenBalances(address(migrator), 0, 0, 0);
 
         // Assert authorization via the contract call
-        _assertAuthorization(0, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER, 0, uint96(START_TIMESTAMP + 1));
 
         // Assert cooler V1 loans are zeroed out
         _assertCoolerV1Loans(true, 1);
@@ -960,7 +1017,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _assertCoolerV2Loan(USER2, 0, 0);
     }
 
-    function test_consolidate_givenNoAuthorization()
+    function test_consolidate_givenNoAuthorization_reverts()
         public
         givenWalletHasCollateralToken(USER, 1e18)
         givenWalletHasLoan(USER, true, 1e18)
@@ -982,5 +1039,368 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             signature,
             delegationRequests
         );
+    }
+
+    function test_consolidate_whenNewOwnerIsGiven_whenNewOwnerAccountDoesNotMatch_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorizationSignatureSet(USER2, USER2_PK)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidNewOwner.selector));
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER, // does not match authorization.account
+            authorization,
+            signature,
+            delegationRequests
+        );
+    }
+
+    function test_consolidate_whenNewOwnerIsGiven()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorizationSignatureSet(USER2, USER2_PK)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loan = _getLoan(true, 0);
+        uint256 totalPayable = loan.principal + loan.interestDue;
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER2,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(USER2, 0, 0, 0);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 0, 0);
+        _assertAuthorization(USER2, 1, uint96(START_TIMESTAMP + 1));
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 0, 0);
+        _assertCoolerV2Loan(USER2, 1e18, totalPayable);
+    }
+
+    function test_consolidate_givenFlashFeeNonZero()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+        givenFlashFee(1e2)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loan = _getLoan(true, 0);
+        uint256 totalPayable = loan.principal + loan.interestDue;
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        // Calculate expected flash fee
+        uint256 flashFee = (totalPayable * 1e2) / 100e2;
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 1e18, totalPayable + flashFee);
+        _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    function test_consolidate_givenMultipleLoans_givenFlashFeeNonZero()
+        public
+        givenWalletHasCollateralToken(USER, 2e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 2e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+        givenFlashFee(1e2)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loanZero = _getLoan(true, 0);
+        uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
+
+        Cooler.Loan memory loanOne = _getLoan(true, 1);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        uint256 flashFee = ((loanZeroPayable + loanOnePayable) * 1e2) / 100e2;
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 2);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 2e18, loanZeroPayable + loanOnePayable + flashFee);
+        _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    function test_consolidate_givenDaiClearinghouse_givenFlashFeeNonZero()
+        public
+        givenWalletHasCollateralToken(USER, 2e18)
+        givenDaiClearinghouseIsEnabled
+        givenWalletHasLoan(USER, false, 1e18)
+        givenWalletHasLoan(USER, false, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 2e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+        givenFlashFee(1e2)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(false, true);
+
+        // Get loan details
+        Cooler.Loan memory loanZero = _getLoan(false, 0);
+        uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
+
+        Cooler.Loan memory loanOne = _getLoan(false, 1);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        uint256 flashFee = ((loanZeroPayable + loanOnePayable) * 1e2) / 100e2;
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 0);
+        _assertCoolerV1Loans(false, 2);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 2e18, loanZeroPayable + loanOnePayable + flashFee);
+        _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    function test_consolidate_givenMultipleClearinghouses_givenFlashFeeNonZero()
+        public
+        givenWalletHasCollateralToken(USER, 2e18)
+        givenDaiClearinghouseIsEnabled
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasLoan(USER, false, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 2e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+        givenFlashFee(1e2)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, true);
+
+        // Get loan details
+        Cooler.Loan memory loanZero = _getLoan(true, 0);
+        uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
+
+        Cooler.Loan memory loanOne = _getLoan(false, 0);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        uint256 flashFee = ((loanZeroPayable + loanOnePayable) * 1e2) / 100e2;
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+        _assertCoolerV1Loans(false, 1);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 2e18, loanZeroPayable + loanOnePayable + flashFee);
+        _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    function test_consolidate_whenDelegationRequestsAreGiven()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+        givenDelegationRequest(1e18)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loan = _getLoan(true, 0);
+        uint256 totalPayable = loan.principal + loan.interestDue;
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 1e18, totalPayable);
+        _assertCoolerV2Loan(USER2, 0, 0);
+
+        // Assert delegation requests
+        expectOneDelegation(cooler, USER, USER2, 1e18);
+    }
+
+    function test_consolidate_whenAuthorizationSignatureIsGiven()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loan = _getLoan(true, 0);
+        uint256 totalPayable = loan.principal + loan.interestDue;
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 1e18, totalPayable);
+        _assertCoolerV2Loan(USER2, 0, 0);
     }
 }
