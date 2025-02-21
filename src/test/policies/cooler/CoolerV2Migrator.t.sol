@@ -19,6 +19,8 @@ import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 import {ICoolerV2Migrator} from "src/policies/interfaces/cooler/ICoolerV2Migrator.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     CoolerV2Migrator internal migrator;
@@ -36,7 +38,9 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     ContractRegistryAdmin internal contractRegistryAdmin;
 
     address internal USER;
+    address internal USER2;
     uint256 internal USER_PK;
+    uint256 internal USER2_PK;
 
     IMonoCooler.Authorization internal authorization;
     IMonoCooler.Signature internal signature;
@@ -60,6 +64,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         super.setUp();
 
         (USER, USER_PK) = makeAddrAndKey("user");
+        (USER2, USER2_PK) = makeAddrAndKey("user2");
 
         // Tokens
         dai = new MockERC20("DAI", "DAI", 18);
@@ -191,7 +196,10 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Create Cooler if needed
         vm.startPrank(wallet_);
-        cooler_ = Clearinghouse(clearinghouse_).factory().generateCooler(gohm, isUsds_ ? usds : dai);
+        cooler_ = Clearinghouse(clearinghouse_).factory().generateCooler(
+            gohm,
+            isUsds_ ? usds : dai
+        );
         vm.stopPrank();
 
         // Store the relationship
@@ -373,18 +381,37 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     }
 
     function _assertTokenBalances(
-        uint256 accountOwnerCollateralTokenBalance_,
-        uint256 accountOwnerDebtTokenBalance_
+        address wallet_,
+        uint256 collateralTokenBalance_,
+        uint256 usdsBalance_,
+        uint256 daiBalance_
     ) internal view {
         assertEq(
-            gohm.balanceOf(USER),
-            accountOwnerCollateralTokenBalance_,
-            "USER collateral balance"
+            gohm.balanceOf(wallet_),
+            collateralTokenBalance_,
+            string.concat(Strings.toHexString(wallet_), ": wallet collateral token balance")
         );
-        assertEq(gohm.balanceOf(address(migrator)), 0, "migrator collateral balance");
+        assertEq(
+            usds.balanceOf(wallet_),
+            usdsBalance_,
+            string.concat(Strings.toHexString(wallet_), ": wallet USDS balance")
+        );
+        assertEq(
+            dai.balanceOf(wallet_),
+            daiBalance_,
+            string.concat(Strings.toHexString(wallet_), ": wallet DAI balance")
+        );
+    }
 
-        assertEq(usds.balanceOf(USER), accountOwnerDebtTokenBalance_, "USER debt balance");
-        assertEq(usds.balanceOf(address(migrator)), 0, "migrator debt balance");
+    function _assertCoolerV2Loan(
+        address wallet_,
+        uint256 collateralBalance_,
+        uint256 debtBalance_
+    ) internal view {
+        // MonoCooler should have a collateral token balance and debt token balance
+        IMonoCooler.AccountPosition memory position = cooler.accountPosition(wallet_);
+        assertEq(position.collateral, collateralBalance_, "account position collateral");
+        assertEq(position.currentDebt, debtBalance_, "account position debt");
     }
 
     function _assertAuthorization(uint256 nonce_, uint96 deadline_) internal view {
@@ -394,6 +421,16 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             deadline_,
             "authorization deadline"
         );
+    }
+
+    function _assertCoolerV1Loans(bool isUsds_, uint256 numLoans_) internal view {
+        Cooler coolerV1 = _getCooler(isUsds_);
+
+        for (uint256 i; i < numLoans_; i++) {
+            Cooler.Loan memory loan = coolerV1.getLoan(i);
+            assertEq(loan.principal, 0, "loan principal");
+            assertEq(loan.interestDue, 0, "loan interest due");
+        }
     }
 
     // ========= TESTS ========= //
@@ -531,13 +568,13 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // given the caller has not approved the CoolerV2Migrator to spend the collateral
     //  [X] it reverts
     // given MonoCooler authorization has been provided
-    //  [ ] it does not set the authorization signature
-    //  [ ] it deposits the collateral into MonoCooler
-    //  [ ] it borrows the principal + interest from MonoCooler
-    //  [ ] the Cooler V1 loans are repaid
-    //  [ ] the migrator does not hold any tokens
+    //  [X] it does not set the authorization signature
+    //  [X] it deposits the collateral into MonoCooler
+    //  [X] it borrows the principal + interest from MonoCooler
+    //  [X] the Cooler V1 loans are repaid
+    //  [X] the migrator does not hold any tokens
     // when a MonoCooler authorization signature is not provided
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the new owner is different to the existing owner
     //  [ ] it sets the authorization signature
     //  [ ] it deposits the collateral into MonoCooler
@@ -868,6 +905,72 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Expect revert
         vm.expectRevert("TRANSFER_FROM_FAILED");
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+    }
+
+    function test_consolidate_givenAuthorization()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorization
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loan = _getLoan(true, 0);
+        uint256 totalPayable = loan.principal + loan.interestDue;
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the contract call
+        _assertAuthorization(0, uint96(START_TIMESTAMP + 1));
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+
+        // Assert cooler V2 loans are created
+        _assertCoolerV2Loan(USER, 1e18, totalPayable);
+        _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    function test_consolidate_givenNoAuthorization()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+    {
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
 
         // Call function
         vm.prank(USER);

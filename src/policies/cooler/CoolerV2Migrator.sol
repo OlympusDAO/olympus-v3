@@ -317,6 +317,9 @@ contract CoolerV2Migrator is
         // Transfer the collateral from the cooler owner to this contract
         GOHM.safeTransferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
 
+        // Approve the Cooler V2 to spend the collateral
+        GOHM.safeApprove(address(COOLERV2), totalCollateral);
+
         // Add collateral and borrow spent flash loan from Cooler V2
         COOLERV2.addCollateral(
             totalCollateral.encodeUInt128(),
