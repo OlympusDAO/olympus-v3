@@ -259,11 +259,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         return (coolers, clearinghouses);
     }
 
-    modifier givenWalletHasLoan(
-        address wallet_,
-        bool isUsds_,
-        uint256 collateralAmount_
-    ) {
+    function _takeLoan(address wallet_, bool isUsds_, uint256 collateralAmount_) internal {
         (address clearinghouse_, address cooler_) = _createCooler(wallet_, isUsds_);
 
         // Approve spending of collateral
@@ -271,7 +267,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         gohm.approve(clearinghouse_, collateralAmount_);
 
         // Determine the loan amount
-        (uint256 principal, uint256 interest) = Clearinghouse(clearinghouse_).getLoanForCollateral(
+        (uint256 principal, ) = Clearinghouse(clearinghouse_).getLoanForCollateral(
             collateralAmount_
         );
 
@@ -279,6 +275,14 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         vm.startPrank(wallet_);
         Clearinghouse(clearinghouse_).lendToCooler(Cooler(cooler_), principal);
         vm.stopPrank();
+    }
+
+    modifier givenWalletHasLoan(
+        address wallet_,
+        bool isUsds_,
+        uint256 collateralAmount_
+    ) {
+        _takeLoan(wallet_, isUsds_, collateralAmount_);
         _;
     }
 
@@ -308,9 +312,13 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
-    modifier givenWalletHasApprovedMigratorSpendingCollateral(address wallet_, uint256 amount_) {
+    function _approveMigratorSpendingCollateral(address wallet_, uint256 amount_) internal {
         vm.prank(wallet_);
         gohm.approve(address(migrator), amount_);
+    }
+
+    modifier givenWalletHasApprovedMigratorSpendingCollateral(address wallet_, uint256 amount_) {
+        _approveMigratorSpendingCollateral(wallet_, amount_);
         _;
     }
 
@@ -1401,6 +1409,71 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Assert cooler V2 loans are created
         _assertCoolerV2Loan(USER, 1e18, totalPayable);
+        _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    function test_consolidate_fuzz(
+        uint256 loanOneCollateral_,
+        uint256 loanTwoCollateral_
+    ) public givenAuthorizationSignatureSet(USER, USER_PK) {
+        // 0.5-100 gOHM
+        uint256 loanOneCollateral = bound(loanOneCollateral_, 5e17, 100e18);
+        uint256 loanTwoCollateral = bound(loanTwoCollateral_, 5e17, 100e18);
+
+        // Mint collateral
+        gohm.mint(USER, loanOneCollateral);
+        gohm.mint(USER, loanTwoCollateral);
+
+        // Take loans
+        _takeLoan(USER, true, loanOneCollateral);
+        _takeLoan(USER, true, loanTwoCollateral);
+
+        // Approve spending of collateral by the migrator
+        _approveMigratorSpendingCollateral(USER, loanOneCollateral + loanTwoCollateral);
+
+        // Prepare input data
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+
+        // Get loan details
+        Cooler.Loan memory loanZero = _getLoan(true, 0);
+        uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
+
+        Cooler.Loan memory loanOne = _getLoan(true, 1);
+        uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
+
+        uint256 userUsdsBalance = usds.balanceOf(USER);
+        uint256 userDaiBalance = dai.balanceOf(USER);
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(
+            coolers,
+            clearinghouses,
+            USER,
+            authorization,
+            signature,
+            delegationRequests
+        );
+
+        // Assert token balances
+        // The user may have a gOHM balance
+        uint256 userGohmBalance = gohm.balanceOf(USER);
+        _assertTokenBalances(USER, userGohmBalance, userUsdsBalance, userDaiBalance);
+        _assertTokenBalances(address(migrator), 0, 0, 0);
+
+        // Assert authorization via the signature
+        _assertAuthorization(USER, 1, uint96(START_TIMESTAMP + 1));
+        _assertAuthorization(USER2, 0, 0);
+
+        // Assert cooler V1 loans are zeroed out
+        _assertCoolerV1Loans(true, 1);
+
+        // Assert cooler V2 loans are created
+        // In a fuzz test, the exact amount of collateral deposited may vary (due to rounding), but we have an invariant that the user gOHM balance + the collateral deposited should equal the loan principal
+        uint256 expectedDepositedCollateral = loanOneCollateral +
+            loanTwoCollateral -
+            userGohmBalance;
+        _assertCoolerV2Loan(USER, expectedDepositedCollateral, loanZeroPayable + loanOnePayable);
         _assertCoolerV2Loan(USER2, 0, 0);
     }
 }
