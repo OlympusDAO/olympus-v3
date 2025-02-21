@@ -186,18 +186,18 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     function _createCooler(
         address wallet_,
         bool isUsds_
-    ) internal returns (address clearinghouse, address cooler) {
-        clearinghouse = address(_getClearinghouse(isUsds_));
+    ) internal returns (address clearinghouse_, address cooler_) {
+        clearinghouse_ = address(_getClearinghouse(isUsds_));
 
         // Create Cooler if needed
         vm.startPrank(wallet_);
-        cooler = Clearinghouse(clearinghouse).factory().generateCooler(gohm, isUsds_ ? usds : dai);
+        cooler_ = Clearinghouse(clearinghouse_).factory().generateCooler(gohm, isUsds_ ? usds : dai);
         vm.stopPrank();
 
         // Store the relationship
-        clearinghouseToCooler[clearinghouse] = cooler;
+        clearinghouseToCooler[clearinghouse_] = cooler_;
 
-        return (clearinghouse, cooler);
+        return (clearinghouse_, cooler_);
     }
 
     function _getCoolerArrays(
@@ -258,24 +258,24 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         bool isUsds_,
         uint256 loanId_
     ) {
-        Cooler cooler = _getCooler(isUsds_);
-        Cooler.Loan memory loan = cooler.getLoan(loanId_);
+        Cooler walletCooler = _getCooler(isUsds_);
+        Cooler.Loan memory loan = walletCooler.getLoan(loanId_);
         uint256 payableAmount = loan.principal + loan.interestDue;
 
         // Mint debt token to the wallet and approve spending
         if (isUsds_) {
             usds.mint(wallet_, payableAmount);
             vm.prank(wallet_);
-            usds.approve(address(cooler), payableAmount);
+            usds.approve(address(walletCooler), payableAmount);
         } else {
             dai.mint(wallet_, payableAmount);
             vm.prank(wallet_);
-            dai.approve(address(cooler), payableAmount);
+            dai.approve(address(walletCooler), payableAmount);
         }
 
         // Repay the loan
         vm.prank(wallet_);
-        Cooler(cooler).repayLoan(loanId_, payableAmount);
+        walletCooler.repayLoan(loanId_, payableAmount);
         _;
     }
 
@@ -285,19 +285,19 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
-    function _getCooler(bool isUsds_) internal view returns (Cooler cooler) {
+    function _getCooler(bool isUsds_) internal view returns (Cooler cooler_) {
         Clearinghouse clearinghouse = _getClearinghouse(isUsds_);
-        cooler = Cooler(clearinghouseToCooler[address(clearinghouse)]);
+        cooler_ = Cooler(clearinghouseToCooler[address(clearinghouse)]);
 
-        return cooler;
+        return cooler_;
     }
 
     function _getLoan(
         bool isUsds_,
         uint256 loanId_
     ) internal view returns (Cooler.Loan memory loan) {
-        Cooler cooler = _getCooler(isUsds_);
-        loan = cooler.getLoan(loanId_);
+        Cooler existingCooler = _getCooler(isUsds_);
+        loan = existingCooler.getLoan(loanId_);
 
         return loan;
     }
@@ -370,6 +370,30 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
     function _expectRevert_disabled() internal {
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+    }
+
+    function _assertTokenBalances(
+        uint256 accountOwnerCollateralTokenBalance_,
+        uint256 accountOwnerDebtTokenBalance_
+    ) internal view {
+        assertEq(
+            gohm.balanceOf(USER),
+            accountOwnerCollateralTokenBalance_,
+            "USER collateral balance"
+        );
+        assertEq(gohm.balanceOf(address(migrator)), 0, "migrator collateral balance");
+
+        assertEq(usds.balanceOf(USER), accountOwnerDebtTokenBalance_, "USER debt balance");
+        assertEq(usds.balanceOf(address(migrator)), 0, "migrator debt balance");
+    }
+
+    function _assertAuthorization(uint256 nonce_, uint96 deadline_) internal view {
+        assertEq(cooler.authorizationNonces(USER), nonce_, "authorization nonce");
+        assertEq(
+            cooler.authorizations(USER, address(migrator)),
+            deadline_,
+            "authorization deadline"
+        );
     }
 
     // ========= TESTS ========= //
