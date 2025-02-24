@@ -14,6 +14,7 @@ import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.s
  * can rescind the delegation to pull the gOHM back.
  * This contract uses Clones (https://github.com/wighawag/clones-with-immutable-args)
  * to save gas on deployment.
+ * Note: Any donated gOHM (transferred directly rather than using `delegate()`) cannot be recovered.
  */
 contract DelegateEscrow is Clone {
     using SafeTransferLib for ERC20;
@@ -80,6 +81,11 @@ contract DelegateEscrow is Clone {
         gohm.safeTransfer(msg.sender, gohmAmount);
 
         factory().logDelegate(msg.sender, onBehalfOf, -int256(gohmAmount));
+    }
+
+    /// @notice The total amount delegated via this escrow across all callers, including donations.
+    function totalDelegated() external view returns (uint256) {
+        return gohm.balanceOf(address(this));
     }
 
     /// @notice Ensure that the caller is the factory which created this contract only.

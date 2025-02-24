@@ -472,7 +472,14 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         skip(2 * 365 days);
-        vm.expectRevert(abi.encodeWithSelector(DelegateEscrow.ExceededDelegationBalance.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDLGTEv1.DLGTE_ExceededDelegatedBalance.selector,
+                BOB,
+                8e18,
+                8e18 + 1
+            )
+        );
         cooler.applyUnhealthyDelegations(ALICE, unDelegationRequest(BOB, 8e18 + 1));
     }
 
@@ -1199,7 +1206,14 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         skip(2 * 365 days);
 
         // No 'delegation' requests allowed - only undelegations
-        vm.expectRevert(abi.encodeWithSelector(DelegateEscrow.ExceededDelegationBalance.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDLGTEv1.DLGTE_ExceededDelegatedBalance.selector,
+                BOB,
+                3e18,
+                3.3e18
+            )
+        );
         cooler.batchLiquidate(
             oneAddress(ALICE),
             oneDelegationRequest(unDelegationRequest(BOB, 3.3e18))

@@ -13,6 +13,7 @@ interface IDLGTEv1 {
     error DLGTE_InvalidAmount();
 
     error DLGTE_ExceededUndelegatedBalance(uint256 balance, uint256 requested);
+    error DLGTE_ExceededDelegatedBalance(address delegate, uint256 balance, uint256 requested);
     error DLGTE_ExceededPolicyAccountBalance(uint256 balance, uint256 requested);
 
     // ========= EVENTS ========= //
@@ -34,10 +35,10 @@ interface IDLGTEv1 {
     struct AccountDelegation {
         /// @dev The delegate address - the receiver account of the gOHM voting power.
         address delegate;
+        /// @dev The amount of gOHM delegated to `delegate`
+        uint256 amount;
         /// @dev The DelegateEscrow contract address for this `delegate`
         address escrow;
-        /// @dev The amount delegated to this delegate address
-        uint256 totalAmount;
     }
 
     // ========= FUNCTIONS ========= //
@@ -110,6 +111,12 @@ interface IDLGTEv1 {
             uint256 numDelegateAddresses,
             uint256 maxAllowedDelegateAddresses
         );
+
+    /**
+     * @notice The total amount delegated to a particular delegate across all policies,
+     * and externally made delegations (including any permanent donations)
+     */
+    function totalDelegatedTo(address delegate) external view returns (uint256);
 
     /**
      * @notice The maximum number of delegates an account can have accross all policies

@@ -80,6 +80,9 @@ abstract contract DLGTEv1 is Module, IDLGTEv1 {
         );
 
     /// @inheritdoc IDLGTEv1
+    function totalDelegatedTo(address delegate) external view virtual returns (uint256);
+
+    /// @inheritdoc IDLGTEv1
     function maxDelegateAddresses(
         address account
     ) external view virtual override returns (uint32 result);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {EnumerableSet} from "openzeppelin/utils/structs/EnumerableSet.sol";
+import {EnumerableMap} from "openzeppelin/utils/structs/EnumerableMap.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -24,13 +24,13 @@ import {SafeCast} from "libraries/SafeCast.sol";
  */
 contract OlympusGovDelegation is DLGTEv1 {
     using SafeCast for uint256;
-    using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableMap for EnumerableMap.AddressToUintMap;
     using SafeTransferLib for ERC20;
 
     struct AccountState {
         /// @dev A regular account is allowed to delegate up to 10 different addresses.
         /// The account may be whitelisted to delegate more than that.
-        EnumerableSet.AddressSet delegateAddresses;
+        EnumerableMap.AddressToUintMap delegatedAmounts;
         /// @dev The total gOHM undelegated and delegated gOHM for this account across all delegates.
         uint112 totalGOhm;
         /// @dev The total gOhm delegated for this account across all delegates
@@ -190,11 +190,11 @@ contract OlympusGovDelegation is DLGTEv1 {
         uint256 maxItems
     ) external view override returns (IDLGTEv1.AccountDelegation[] memory delegations) {
         AccountState storage aState = _accountState[account];
-        EnumerableSet.AddressSet storage acctDelegateAddresses = aState.delegateAddresses;
+        EnumerableMap.AddressToUintMap storage acctDelegatedAmounts = aState.delegatedAmounts;
 
         // No items if either maxItems is zero or there are no delegate addresses.
         if (maxItems == 0) return new AccountDelegation[](0);
-        uint256 length = acctDelegateAddresses.length();
+        uint256 length = acctDelegatedAmounts.length();
         if (length == 0) return new AccountDelegation[](0);
 
         // No items if startIndex is greater than the max array index
@@ -211,12 +211,16 @@ contract OlympusGovDelegation is DLGTEv1 {
         AccountDelegation memory delegateInfo;
         for (uint256 i; i < numDelegations; ++i) {
             delegateInfo = delegations[i];
-            delegateInfo.delegate = acctDelegateAddresses.at(i + startIndex);
+            (delegateInfo.delegate, delegateInfo.amount) = acctDelegatedAmounts.at(i + startIndex);
             escrow = delegateEscrowFactory.escrowFor(delegateInfo.delegate);
             delegateInfo.escrow = address(escrow);
-            // Note the amount here is the amount for this account over *all* policies
-            delegateInfo.totalAmount = escrow.delegations(address(this), account);
         }
+    }
+
+    /// @inheritdoc DLGTEv1
+    function totalDelegatedTo(address delegate) external view override returns (uint256) {
+        DelegateEscrow escrow = delegateEscrowFactory.escrowFor(delegate);
+        return address(escrow) == address(0) ? 0 : escrow.totalDelegated();
     }
 
     /// @inheritdoc DLGTEv1
@@ -239,7 +243,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         return (
             aState.totalGOhm,
             aState.delegatedGOhm,
-            aState.delegateAddresses.length(),
+            aState.delegatedAmounts.length(),
             maxDelegates
         );
     }
@@ -268,7 +272,7 @@ contract OlympusGovDelegation is DLGTEv1 {
         )
     {
         uint32 maxDelegates = _maxDelegateAddresses(aState);
-        EnumerableSet.AddressSet storage acctDelegateAddresses = aState.delegateAddresses;
+        EnumerableMap.AddressToUintMap storage acctDelegatedAmounts = aState.delegatedAmounts;
 
         uint256 length = delegationRequests.length;
         uint256 currentDelegatedAmount;
@@ -279,7 +283,7 @@ contract OlympusGovDelegation is DLGTEv1 {
                 onBehalfOf,
                 newUndelegatedBalance,
                 maxDelegates,
-                acctDelegateAddresses,
+                acctDelegatedAmounts,
                 delegationRequests[i]
             );
 
@@ -308,69 +312,98 @@ contract OlympusGovDelegation is DLGTEv1 {
         address onBehalfOf,
         uint256 undelegatedBalance,
         uint32 maxDelegates,
-        EnumerableSet.AddressSet storage acctDelegateAddresses,
+        EnumerableMap.AddressToUintMap storage acctDelegatedAmounts,
         IDLGTEv1.DelegationRequest calldata delegationRequest
     ) private returns (uint256 delegatedAmount, uint256 undelegatedAmount) {
         if (delegationRequest.delegate == address(0)) revert DLGTE_InvalidAddress();
 
-        // Special case to delegate all remaining (undelegated) gOhm.
-        int256 delegatedDelta = delegationRequest.amount == type(int256).max
-            ? int256(undelegatedBalance)
-            : delegationRequest.amount;
-        if (delegatedDelta == 0) revert DLGTE_InvalidAmount();
-
-        // If the amount is positive, it is adding to the delegation
-        if (delegationRequest.amount > 0) {
-            delegatedAmount = uint256(delegatedDelta);
+        // If the amount is positive, it is add a delegation
+        // negative will rescind the delegation
+        if (delegationRequest.amount >= 0) {
+            // Special case to delegate all remaining (undelegated) gOhm.
+            delegatedAmount = delegationRequest.amount == type(int256).max
+                ? undelegatedBalance
+                : uint256(delegationRequest.amount);       
+            if (delegatedAmount == 0) revert DLGTE_InvalidAmount();
 
             // Ensure the account isn't delegating more than the undelegated balance
             if (delegatedAmount > undelegatedBalance) {
                 revert DLGTE_ExceededUndelegatedBalance(undelegatedBalance, delegatedAmount);
             }
 
-            DelegateEscrow delegateEscrow = _getOrCreateDelegateEscrow(
-                delegationRequest.delegate,
-                acctDelegateAddresses,
-                maxDelegates
-            );
-
-            // Push gOhm to the new escrow
-            _gOHM.safeApprove(address(delegateEscrow), delegatedAmount);
-            delegateEscrow.delegate(onBehalfOf, delegatedAmount);
+            _addDelegation(onBehalfOf, delegationRequest.delegate, delegatedAmount, acctDelegatedAmounts, maxDelegates);
         } else {
-            // Otherwise if the amount is negative, is is undelegating
-            undelegatedAmount = uint256(delegatedDelta * -1);
+            // Revert with a custom error if trying to rescind and there's no record of this delegation.
+            (bool exists, uint256 delegatedBalance) = acctDelegatedAmounts.tryGet(delegationRequest.delegate);
+            if (!exists) revert DLGTE_InvalidDelegateEscrow();
 
-            DelegateEscrow delegateEscrow = delegateEscrowFactory.escrowFor(
-                delegationRequest.delegate
-            );
-            if (address(delegateEscrow) == address(0)) revert DLGTE_InvalidDelegateEscrow();
+            // Special case to undelegate all remaining (delegated) gOhm.
+            undelegatedAmount = delegationRequest.amount == type(int256).min
+                ? delegatedBalance
+                : uint256(-delegationRequest.amount);
+            if (undelegatedAmount == 0) revert DLGTE_InvalidAmount();
 
-            // Pull gOhm from the escrow
-            // And remove from acctDelegateAddresses if it's now empty
-            uint256 delegatedBalance = delegateEscrow.rescindDelegation(
-                onBehalfOf,
-                undelegatedAmount
-            );
-            if (delegatedBalance == 0) {
-                acctDelegateAddresses.remove(delegationRequest.delegate);
+            // Ensure the account isn't trying to undelegate more than the recorded amount
+            if (undelegatedAmount > delegatedBalance) {
+                revert DLGTE_ExceededDelegatedBalance(
+                    delegationRequest.delegate,
+                    delegatedBalance,
+                    undelegatedAmount
+                );
             }
-        }
 
-        emit DelegationApplied(onBehalfOf, delegationRequest.delegate, delegatedDelta);
+            _rescindDelegation(
+                onBehalfOf,
+                delegationRequest.delegate,
+                delegatedBalance,
+                undelegatedAmount, 
+                acctDelegatedAmounts
+            );
+        }
     }
 
-    function _getOrCreateDelegateEscrow(
+    function _addDelegation(
+        address onBehalfOf,
         address delegate,
-        EnumerableSet.AddressSet storage acctDelegateAddresses,
-        uint128 maxDelegates
-    ) private returns (DelegateEscrow delegateEscrow) {
-        delegateEscrow = delegateEscrowFactory.create(delegate);
+        uint256 delegatedAmount,
+        EnumerableMap.AddressToUintMap storage acctDelegatedAmounts,
+        uint32 maxDelegates
+    ) private {
+        // Check the maxDelegates if this is a new delegation record for the `onBehalfOf`
+        (bool alreadyExisted, uint256 existingAmount) = acctDelegatedAmounts.tryGet(delegate);
+        if (!alreadyExisted && acctDelegatedAmounts.length() == maxDelegates) {
+            revert DLGTE_TooManyDelegates();
+        }
 
-        // Ensure it's added to this user's set of delegate addresses
-        if (acctDelegateAddresses.add(delegate)) {
-            // A given account cannot have more than the permissable number of delegates
-            if (acctDelegateAddresses.length() > maxDelegates) revert DLGTE_TooManyDelegates();
+        // Increase the delegation record amount
+        acctDelegatedAmounts.set(delegate, existingAmount + delegatedAmount);
+
+        // Delegate gOhm to the new escrow.
+        DelegateEscrow delegateEscrow = delegateEscrowFactory.create(delegate);
+        _gOHM.safeApprove(address(delegateEscrow), delegatedAmount);
+        delegateEscrow.delegate(onBehalfOf, delegatedAmount);
+        emit DelegationApplied(onBehalfOf, delegate, int256(delegatedAmount));
+    }
+
+    function _rescindDelegation(
+        address onBehalfOf,
+        address delegate,
+        uint256 delegatedBalance,
+        uint256 rescindAmount,
+        EnumerableMap.AddressToUintMap storage acctDelegatedAmounts
+    ) private {
+        // Rescind the delegaiton from the escrow
+        DelegateEscrow delegateEscrow = delegateEscrowFactory.create(delegate);
+        delegateEscrow.rescindDelegation(onBehalfOf, rescindAmount);
+        emit DelegationApplied(onBehalfOf, delegate, -int256(rescindAmount));
+
+        // Decrease the delegation record amount. 
+        // Remove if that is now zero such that it doesn't count towards the `maxDelegates` cap
+        delegatedBalance -= rescindAmount;
+        if (delegatedBalance == 0) {
+            acctDelegatedAmounts.remove(delegate);
+        } else {
+            acctDelegatedAmounts.set(delegate, delegatedBalance);
         }
     }
 }
