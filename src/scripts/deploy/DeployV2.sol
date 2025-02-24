@@ -65,6 +65,10 @@ import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol
 import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
+import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
+import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
+import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
+import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
@@ -92,6 +96,7 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
+    OlympusGovDelegation public DLGTE;
 
     /// Policies
     Operator public operator;
@@ -116,6 +121,9 @@ contract OlympusDeploy is Script {
     YieldRepurchaseFacility public yieldRepo;
     ReserveMigrator public reserveMigrator;
     EmissionManager public emissionManager;
+    CoolerLtvOracle public coolerV2LtvOracle;
+    CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
+    MonoCooler public coolerV2;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -204,6 +212,7 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
+        selectorMap["OlympusGovDelegation"] = this._deployGovDelegation.selector;
         // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
@@ -231,6 +240,11 @@ contract OlympusDeploy is Script {
         selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
+
+        // Cooler Loans V2
+        selectorMap["CoolerV2LtvOracle"] = this._deployCoolerV2LtvOracle.selector;
+        selectorMap["CoolerV2TreasuryBorrower"] = this._deployCoolerV2TreasuryBorrower.selector;
+        selectorMap["CoolerV2"] = this._deployCoolerV2.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -299,6 +313,7 @@ contract OlympusDeploy is Script {
             envAddress("olympus.modules.OlympusBoostedLiquidityRegistry")
         );
         RGSTY = OlympusContractRegistry(envAddress("olympus.modules.OlympusContractRegistry"));
+        DLGTE = DLGTEv1(envAddress("olympus.modules.OlympusGovDelegation"));
         // Policies
         operator = Operator(envAddress("olympus.policies.Operator"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
@@ -327,6 +342,13 @@ contract OlympusDeploy is Script {
         loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
+
+        // Cooler Loans V2
+        coolerV2LtvOracle = CoolerLtvOracle(envAddress("olympus.policies.CoolerV2LtvOracle"));
+        coolerV2TreasuryBorrower = CoolerTreasuryBorrower(
+            envAddress("olympus.policies.CoolerV2TreasuryBorrower")
+        );
+        coolerV2 = MonoCooler(envAddress("olympus.policies.CoolerV2"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
