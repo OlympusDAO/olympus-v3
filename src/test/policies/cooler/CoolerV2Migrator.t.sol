@@ -153,15 +153,18 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Register contracts
         vm.startPrank(OVERSEER);
-        contractRegistryAdmin.registerImmutableContract("dai", address(dai));
-        contractRegistryAdmin.registerImmutableContract("usds", address(usds));
-        contractRegistryAdmin.registerImmutableContract("gohm", address(gohm));
         contractRegistryAdmin.registerContract("flash", address(flashLender));
         contractRegistryAdmin.registerContract("dmgtr", address(daiMigrator));
         vm.stopPrank();
 
         // CoolerV2Migrator setup
-        migrator = new CoolerV2Migrator(address(kernel), address(cooler));
+        migrator = new CoolerV2Migrator(
+            address(kernel),
+            address(cooler),
+            address(dai),
+            address(usds),
+            address(gohm)
+        );
 
         // Install the policy
         vm.prank(EXECUTOR);

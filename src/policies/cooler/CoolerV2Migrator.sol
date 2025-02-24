@@ -70,16 +70,13 @@ contract CoolerV2Migrator is
     // ========= STATE ========= //
 
     /// @notice The DAI token
-    /// @dev    The value is set when the policy is activated
-    ERC20 internal DAI;
+    ERC20 internal immutable _DAI;
 
     /// @notice The USDS token
-    /// @dev    The value is set when the policy is activated
-    ERC20 internal USDS;
+    ERC20 internal immutable _USDS;
 
     /// @notice The gOHM token
-    /// @dev    The value is set when the policy is activated
-    ERC20 internal GOHM;
+    ERC20 internal immutable _GOHM;
 
     /// @notice The DAI <> USDS Migrator
     /// @dev    The value is set when the policy is activated
@@ -94,11 +91,23 @@ contract CoolerV2Migrator is
 
     // ========= CONSTRUCTOR ========= //
 
-    constructor(address kernel_, address coolerV2_) Policy(Kernel(kernel_)) {
+    constructor(
+        address kernel_,
+        address coolerV2_,
+        address dai_,
+        address usds_,
+        address gohm_
+    ) Policy(Kernel(kernel_)) {
         // Validate
         if (coolerV2_ == address(0)) revert Params_InvalidAddress("coolerV2");
+        if (dai_ == address(0)) revert Params_InvalidAddress("dai");
+        if (usds_ == address(0)) revert Params_InvalidAddress("usds");
+        if (gohm_ == address(0)) revert Params_InvalidAddress("gohm");
 
         COOLERV2 = IMonoCooler(coolerV2_);
+        _DAI = ERC20(dai_);
+        _USDS = ERC20(usds_);
+        _GOHM = ERC20(gohm_);
     }
 
     /// @inheritdoc Policy
@@ -124,10 +133,6 @@ contract CoolerV2Migrator is
 
         // Populate variables
         // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
-        // Token contract addresses are immutable
-        DAI = ERC20(RGSTY.getImmutableContract("dai"));
-        USDS = ERC20(RGSTY.getImmutableContract("usds"));
-        GOHM = ERC20(RGSTY.getImmutableContract("gohm"));
         // Utility contract addresses are mutable
         FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
         MIGRATOR = IDaiUsdsMigrator(RGSTY.getContract("dmgtr"));
@@ -163,7 +168,7 @@ contract CoolerV2Migrator is
         }
 
         // Determine the lender fee
-        uint256 lenderFee = FLASH.flashFee(address(DAI), totalDebt);
+        uint256 lenderFee = FLASH.flashFee(address(_DAI), totalDebt);
         borrowAmount = totalDebt + lenderFee;
 
         return (collateralAmount, borrowAmount);
@@ -228,10 +233,10 @@ contract CoolerV2Migrator is
                 numLoans: numLoans
             });
 
-            if (debtToken == address(DAI)) {
+            if (debtToken == address(_DAI)) {
                 daiRequired += coolerPrincipal;
                 daiRequired += coolerInterest;
-            } else if (debtToken == address(USDS)) {
+            } else if (debtToken == address(_USDS)) {
                 usdsRequired += coolerPrincipal;
                 usdsRequired += coolerInterest;
             } else {
@@ -254,7 +259,7 @@ contract CoolerV2Migrator is
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
         FLASH.flashLoan(
             this,
-            address(DAI),
+            address(_DAI),
             daiRequired + usdsRequired,
             abi.encode(
                 FlashLoanData(coolerData, msg.sender, newOwner_, usdsRequired, delegationRequests_)
@@ -262,13 +267,13 @@ contract CoolerV2Migrator is
         );
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
-        uint256 usdsBalanceAfter = USDS.balanceOf(address(this));
+        uint256 usdsBalanceAfter = _USDS.balanceOf(address(this));
         if (usdsBalanceAfter > 0) {
-            USDS.safeTransfer(msg.sender, usdsBalanceAfter);
+            _USDS.safeTransfer(msg.sender, usdsBalanceAfter);
         }
-        uint256 daiBalanceAfter = DAI.balanceOf(address(this));
+        uint256 daiBalanceAfter = _DAI.balanceOf(address(this));
         if (daiBalanceAfter > 0) {
-            DAI.safeTransfer(msg.sender, daiBalanceAfter);
+            _DAI.safeTransfer(msg.sender, daiBalanceAfter);
         }
     }
 
@@ -293,7 +298,7 @@ contract CoolerV2Migrator is
 
         // If there are loans in USDS, convert the required amount to DAI
         if (flashLoanData.usdsRequired > 0) {
-            DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
+            _DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
             MIGRATOR.daiToUsds(address(this), flashLoanData.usdsRequired);
         }
 
@@ -315,10 +320,10 @@ contract CoolerV2Migrator is
         }
 
         // Transfer the collateral from the cooler owner to this contract
-        GOHM.safeTransferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
+        _GOHM.safeTransferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
 
         // Approve the Cooler V2 to spend the collateral
-        GOHM.safeApprove(address(COOLERV2), totalCollateral);
+        _GOHM.safeApprove(address(COOLERV2), totalCollateral);
 
         // Add collateral and borrow spent flash loan from Cooler V2
         COOLERV2.addCollateral(
@@ -333,12 +338,12 @@ contract CoolerV2Migrator is
         );
 
         // Convert the USDS to DAI
-        uint256 usdsBalance = USDS.balanceOf(address(this));
+        uint256 usdsBalance = _USDS.balanceOf(address(this));
         if (usdsBalance > 0) MIGRATOR.usdsToDai(address(this), usdsBalance);
 
         // Approve the flash loan provider to collect the flashloan amount and fee
         // The initiator will transfer any remaining DAI and USDS back to the caller
-        DAI.safeApprove(address(FLASH), amount_ + lenderFee_);
+        _DAI.safeApprove(address(FLASH), amount_ + lenderFee_);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
