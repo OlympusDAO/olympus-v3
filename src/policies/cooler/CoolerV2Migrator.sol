@@ -402,7 +402,7 @@ contract CoolerV2Migrator is
                     coolerCollateral += loan.collateral;
                 }
                 i++;
-            } catch {
+            } catch Panic(uint256 /*errorCode*/) {
                 break;
             }
         }
