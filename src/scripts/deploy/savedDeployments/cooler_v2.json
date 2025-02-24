@@ -1,0 +1,31 @@
+{
+    "sequence": [
+        {
+            "name": "DelegateEscrowFactory"
+        },
+        {
+            "name": "OlympusGovDelegation"
+        },
+        {
+            "name": "CoolerV2LtvOracle",
+            "args": {
+                "initialOriginationLtv": 0,
+                "maxOriginationLtvDelta": 0,
+                "minOriginationLtvTargetTimeDelta": 0,
+                "maxOriginationLtvRateOfChange": 0,
+                "maxLiquidationLtvPremiumBps": 0,
+                "liquidationLtvPremiumBps": 0
+            }
+        },
+        {
+            "name": "CoolerV2TreasuryBorrower"
+        },
+        {
+            "name": "CoolerV2",
+            "args": {
+                "interestRateWad": 0,
+                "minDebtRequired": 0
+            }
+        }
+    ]
+}

@@ -69,6 +69,7 @@ import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
+import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
@@ -78,12 +79,14 @@ import {Faucet} from "src/test/mocks/Faucet.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
+import {SafeCast} from "libraries/SafeCast.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;
+    using SafeCast for uint256;
     Kernel public kernel;
 
     /// Modules
@@ -127,6 +130,7 @@ contract OlympusDeploy is Script {
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
+    DelegateEscrowFactory public delegateEscrowFactory;
 
     /// Legacy Olympus contracts
     address public inverseBondDepository;
@@ -197,6 +201,10 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
+    /// @notice Stores the contents of the deployment JSON file as a string
+    /// @dev    Individual deployment args can be accessed using the _readDeploymentArgString and _readDeploymentArgAddress functions
+    string public deploymentFileJson;
+
     function _setUp(string calldata chain_, string calldata deployFilePath_) internal {
         chain = chain_;
 
@@ -213,6 +221,7 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
         selectorMap["OlympusGovDelegation"] = this._deployGovDelegation.selector;
+        selectorMap["DelegateEscrowFactory"] = this._deployDelegateEscrowFactory.selector;
         // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
@@ -313,7 +322,10 @@ contract OlympusDeploy is Script {
             envAddress("olympus.modules.OlympusBoostedLiquidityRegistry")
         );
         RGSTY = OlympusContractRegistry(envAddress("olympus.modules.OlympusContractRegistry"));
-        DLGTE = DLGTEv1(envAddress("olympus.modules.OlympusGovDelegation"));
+        DLGTE = OlympusGovDelegation(envAddress("olympus.modules.OlympusGovDelegation"));
+        delegateEscrowFactory = DelegateEscrowFactory(
+            envAddress("olympus.periphery.DelegateEscrowFactory")
+        );
         // Policies
         operator = Operator(envAddress("olympus.policies.Operator"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
@@ -360,10 +372,10 @@ contract OlympusDeploy is Script {
         );
 
         // Load deployment data
-        string memory data = vm.readFile(deployFilePath_);
+        deploymentFileJson = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
-        bytes memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes));
+        bytes memory sequence = abi.decode(deploymentFileJson.parseRaw(".sequence"), (bytes));
         uint256 len = sequence.length;
         console2.log("Contracts to be deployed:", len);
 
@@ -371,20 +383,26 @@ contract OlympusDeploy is Script {
             return;
         } else if (len == 1) {
             // Only one deployment
-            string memory name = abi.decode(data.parseRaw(".sequence..name"), (string));
+            string memory name = abi.decode(
+                deploymentFileJson.parseRaw(".sequence..name"),
+                (string)
+            );
             deployments.push(name);
             console2.log("Deploying", name);
             // Parse and store args if not kernel
             // Note: constructor args need to be provided in alphabetical order
             // due to changes with forge-std or a struct needs to be used
             if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
-                argsMap[name] = data.parseRaw(
+                argsMap[name] = deploymentFileJson.parseRaw(
                     string.concat(".sequence[?(@.name == '", name, "')].args")
                 );
             }
         } else {
             // More than one deployment
-            string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+            string[] memory names = abi.decode(
+                deploymentFileJson.parseRaw(".sequence..name"),
+                (string[])
+            );
             for (uint256 i = 0; i < len; i++) {
                 string memory name = names[i];
                 deployments.push(name);
@@ -394,7 +412,7 @@ contract OlympusDeploy is Script {
                 // Note: constructor args need to be provided in alphabetical order
                 // due to changes with forge-std or a struct needs to be used
                 if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
-                    argsMap[name] = data.parseRaw(
+                    argsMap[name] = deploymentFileJson.parseRaw(
                         string.concat(".sequence[?(@.name == '", name, "')].args")
                     );
                 }
@@ -402,7 +420,7 @@ contract OlympusDeploy is Script {
         }
     }
 
-    function envAddress(string memory key_) internal returns (address) {
+    function envAddress(string memory key_) internal view returns (address) {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
@@ -1128,6 +1146,178 @@ contract OlympusDeploy is Script {
         return address(loanConsolidator);
     }
 
+    // ========== COOLER LOANS V2 ========== //
+
+    function _deployDelegateEscrowFactory(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        // None
+
+        // Dependencies
+        require(address(gohm) != address(0), "gohm is not set");
+
+        // Print the arguments
+        console2.log("  gOHM:", address(gohm));
+
+        // Deploy DelegateEscrowFactory
+        vm.broadcast();
+        delegateEscrowFactory = new DelegateEscrowFactory(address(gohm));
+        console2.log("DelegateEscrowFactory deployed at:", address(delegateEscrowFactory));
+
+        return address(delegateEscrowFactory);
+    }
+
+    function _deployGovDelegation(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        // None
+
+        // Dependencies
+        require(address(kernel) != address(0), "kernel is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+        require(address(delegateEscrowFactory) != address(0), "delegateEscrowFactory is not set");
+
+        // Print the arguments
+        console2.log("  Kernel:", address(kernel));
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  DelegateEscrowFactory:", address(delegateEscrowFactory));
+
+        // Deploy OlympusGovDelegation
+        vm.broadcast();
+        DLGTE = new OlympusGovDelegation(kernel, address(gohm), delegateEscrowFactory);
+        console2.log("OlympusGovDelegation deployed at:", address(DLGTE));
+
+        return address(DLGTE);
+    }
+
+    function _deployCoolerV2LtvOracle(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        uint96 initialOriginationLtv = _readDeploymentArgUint256(
+            "CoolerV2LtvOracle",
+            "initialOriginationLtv"
+        ).encodeUInt96();
+        uint96 maxOriginationLtvDelta = _readDeploymentArgUint256(
+            "CoolerV2LtvOracle",
+            "maxOriginationLtvDelta"
+        ).encodeUInt96();
+        uint32 minOriginationLtvTargetTimeDelta = _readDeploymentArgUint256(
+            "CoolerV2LtvOracle",
+            "minOriginationLtvTargetTimeDelta"
+        ).encodeUInt32();
+        uint96 maxOriginationLtvRateOfChange = _readDeploymentArgUint256(
+            "CoolerV2LtvOracle",
+            "maxOriginationLtvRateOfChange"
+        ).encodeUInt96();
+        uint16 maxLiquidationLtvPremiumBps = _readDeploymentArgUint256(
+            "CoolerV2LtvOracle",
+            "maxLiquidationLtvPremiumBps"
+        ).encodeUInt16();
+        uint16 liquidationLtvPremiumBps = _readDeploymentArgUint256(
+            "CoolerV2LtvOracle",
+            "liquidationLtvPremiumBps"
+        ).encodeUInt16();
+
+        // Dependencies
+        require(address(kernel) != address(0), "kernel is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+        require(address(reserve) != address(0), "reserve is not set");
+        require(initialOriginationLtv > 0, "initialOriginationLtv is not set");
+        require(maxOriginationLtvDelta > 0, "maxOriginationLtvDelta is not set");
+        require(
+            minOriginationLtvTargetTimeDelta > 0,
+            "minOriginationLtvTargetTimeDelta is not set"
+        );
+        require(maxOriginationLtvRateOfChange > 0, "maxOriginationLtvRateOfChange is not set");
+        require(maxLiquidationLtvPremiumBps > 0, "maxLiquidationLtvPremiumBps is not set");
+        require(liquidationLtvPremiumBps > 0, "liquidationLtvPremiumBps is not set");
+
+        // Print the arguments
+        console2.log("  Kernel:", address(kernel));
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  Reserve:", address(reserve));
+        console2.log("  Initial Origination LTV:", initialOriginationLtv);
+        console2.log("  Max Origination LTV Delta:", maxOriginationLtvDelta);
+        console2.log("  Min Origination LTV Target Time Delta:", minOriginationLtvTargetTimeDelta);
+        console2.log("  Max Origination LTV Rate Of Change:", maxOriginationLtvRateOfChange);
+        console2.log("  Max Liquidation LTV Premium Bps:", maxLiquidationLtvPremiumBps);
+        console2.log("  Liquidation LTV Premium Bps:", liquidationLtvPremiumBps);
+
+        // Deploy CoolerLtvOracle
+        vm.broadcast();
+        coolerV2LtvOracle = new CoolerLtvOracle(
+            address(kernel),
+            address(gohm),
+            address(reserve),
+            initialOriginationLtv,
+            maxOriginationLtvDelta,
+            minOriginationLtvTargetTimeDelta,
+            maxOriginationLtvRateOfChange,
+            maxLiquidationLtvPremiumBps,
+            liquidationLtvPremiumBps
+        );
+        console2.log("CoolerLtvOracle deployed at:", address(coolerV2LtvOracle));
+
+        return address(coolerV2LtvOracle);
+    }
+
+    function _deployCoolerV2TreasuryBorrower(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        // None
+
+        // Dependencies
+        require(address(kernel) != address(0), "kernel is not set");
+        require(address(sReserve) != address(0), "sReserve is not set");
+
+        // Print the arguments
+        console2.log("  Kernel:", address(kernel));
+        console2.log("  sReserve:", address(sReserve));
+
+        // Deploy CoolerV2TreasuryBorrower
+        vm.broadcast();
+        coolerV2TreasuryBorrower = new CoolerTreasuryBorrower(address(kernel), address(sReserve));
+        console2.log("CoolerV2TreasuryBorrower deployed at:", address(coolerV2TreasuryBorrower));
+
+        return address(coolerV2TreasuryBorrower);
+    }
+
+    function _deployCoolerV2(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        uint96 interestRateWad = _readDeploymentArgUint256("CoolerV2", "interestRateWad")
+            .encodeUInt96();
+        uint256 minDebtRequired = _readDeploymentArgUint256("CoolerV2", "minDebtRequired");
+
+        // Dependencies
+        require(address(ohm) != address(0), "ohm is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+        require(address(staking) != address(0), "staking is not set");
+        require(address(kernel) != address(0), "kernel is not set");
+        require(address(coolerV2LtvOracle) != address(0), "coolerV2LtvOracle is not set");
+        require(interestRateWad > 0, "interestRateWad is not set");
+        require(minDebtRequired > 0, "minDebtRequired is not set");
+
+        // Print the arguments
+        console2.log("  OHM:", address(ohm));
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  Staking:", address(staking));
+        console2.log("  Kernel:", address(kernel));
+        console2.log("  CoolerV2LtvOracle:", address(coolerV2LtvOracle));
+        console2.log("  Interest Rate Wad:", interestRateWad);
+        console2.log("  Min Debt Required:", minDebtRequired);
+
+        // Deploy CoolerV2
+        vm.broadcast();
+        coolerV2 = new MonoCooler(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(kernel),
+            address(coolerV2LtvOracle),
+            interestRateWad,
+            minDebtRequired
+        );
+        console2.log("CoolerV2 deployed at:", address(coolerV2));
+
+        return address(coolerV2);
+    }
+
     // ========== GOVERNANCE ========== //
 
     function _deployTimelock(bytes calldata args) public returns (address) {
@@ -1461,6 +1651,46 @@ contract OlympusDeploy is Script {
             );
         }
         vm.writeLine(file, "}");
+    }
+
+    function _readDeploymentArgString(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (string memory) {
+        return
+            deploymentFileJson.readString(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
+    }
+
+    function _readDeploymentArgBytes32(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (bytes32) {
+        return
+            deploymentFileJson.readBytes32(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
+    }
+
+    function _readDeploymentArgAddress(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (address) {
+        return
+            deploymentFileJson.readAddress(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
+    }
+
+    function _readDeploymentArgUint256(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (uint256) {
+        return
+            deploymentFileJson.readUint(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
     }
 }
 
