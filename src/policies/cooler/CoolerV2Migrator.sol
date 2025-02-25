@@ -45,7 +45,7 @@ contract CoolerV2Migrator is
     struct CoolerData {
         Cooler cooler;
         ERC20 debtToken;
-        uint256 numLoans;
+        uint8 numLoans;
     }
 
     /// @notice Data structure used for flashloan parameters
@@ -88,6 +88,11 @@ contract CoolerV2Migrator is
 
     /// @notice The Cooler V2 contract
     IMonoCooler internal immutable COOLERV2;
+
+    /// @notice This constant is used when iterating through the loans of a Cooler
+    /// @dev    This is used to prevent infinite loops, and is an appropriate upper bound
+    ///         as the maximum number of loans seen per Cooler is less than 50.
+    uint8 internal constant MAX_LOANS = type(uint8).max;
 
     // ========= CONSTRUCTOR ========= //
 
@@ -225,7 +230,7 @@ contract CoolerV2Migrator is
                 uint256 coolerInterest,
                 ,
                 address debtToken,
-                uint256 numLoans
+                uint8 numLoans
             ) = _getDebtForCooler(cooler);
             coolerData[i] = CoolerData({
                 cooler: cooler,
@@ -390,15 +395,15 @@ contract CoolerV2Migrator is
             uint256 coolerInterest,
             uint256 coolerCollateral,
             address debtToken,
-            uint256 numLoans
+            uint8 numLoans
         )
     {
         // Determine the debt token
         debtToken = address(cooler_.debt());
 
         // The Cooler contract does not expose the number of loans, so we iterate until the call reverts
-        uint256 i;
-        while (true) {
+        uint8 i;
+        for (i; i < MAX_LOANS; i++) {
             try cooler_.getLoan(i) returns (Cooler.Loan memory loan) {
                 // Interest is paid down first, so if the principal is 0, the loan has been paid off
                 if (loan.principal > 0) {
@@ -406,7 +411,6 @@ contract CoolerV2Migrator is
                     coolerInterest += loan.interestDue;
                     coolerCollateral += loan.collateral;
                 }
-                i++;
             } catch Panic(uint256 /*errorCode*/) {
                 break;
             }
