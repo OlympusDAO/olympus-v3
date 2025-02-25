@@ -131,6 +131,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     /// @dev expected decimals for the `_COLLATERAL_TOKEN` and `treasuryBorrower`
     uint8 private constant _EXPECTED_DECIMALS = 18;
 
+    /// @dev Cannot set an interest rate higher than 10%
+    uint96 private constant MAX_INTEREST_RATE = 0.1e18;
+
     //============================================================================================//
     //                                      INITIALIZATION                                        //
     //============================================================================================//
@@ -649,6 +652,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function setInterestRateWad(uint96 newInterestRate) external override onlyAdminRole {
+        if (newInterestRate > MAX_INTEREST_RATE) revert InvalidParam();
+
         // Force an update of state on the old rate first.
         _globalStateRW();
 

@@ -409,7 +409,9 @@ interface IMonoCooler {
     function setBorrowPaused(bool isPaused) external;
 
     /// @notice Update the interest rate (APR), specified in Wad (18 decimals)
-    /// @dev Interest (approximately) continuously compounds at this rate.
+    /// @dev 
+    ///     - Cannot be set higher than 10% APR
+    ///     - Interest (approximately) continuously compounds at this rate.
     function setInterestRateWad(uint96 newInterestRateWad) external;
 
     /// @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES
