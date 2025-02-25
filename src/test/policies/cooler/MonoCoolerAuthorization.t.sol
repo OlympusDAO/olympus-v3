@@ -53,22 +53,16 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
         assertEq(cooler.isSenderAuthorized(ALICE, ALICE), true);
     }
 
-    function test_setAuthorization_atDeadline() public {
-        assertEq(cooler.isSenderAuthorized(BOB, ALICE), false);
-
-        vm.startPrank(ALICE);
-        vm.expectEmit(address(cooler));
-        emit AuthorizationSet(ALICE, ALICE, BOB, uint96(block.timestamp));
-        cooler.setAuthorization(BOB, uint96(block.timestamp));
-        assertEq(cooler.isSenderAuthorized(BOB, ALICE), false);
-    }
-
-    function test_setAuthorization_beforeDeadline() public {
+    function test_setAuthorization_beforeAtAfterDeadline() public {
         assertEq(cooler.isSenderAuthorized(BOB, ALICE), false);
         vm.startPrank(ALICE);
         vm.expectEmit(address(cooler));
-        emit AuthorizationSet(ALICE, ALICE, BOB, uint96(block.timestamp + 1));
-        cooler.setAuthorization(BOB, uint96(block.timestamp + 1));
+        emit AuthorizationSet(ALICE, ALICE, BOB, uint96(vm.getBlockTimestamp() + 1));
+        cooler.setAuthorization(BOB, uint96(vm.getBlockTimestamp() + 1));
+        assertEq(cooler.isSenderAuthorized(BOB, ALICE), true);
+
+        // Still ok on the deadline
+        skip(1);
         assertEq(cooler.isSenderAuthorized(BOB, ALICE), true);
 
         // Rugged 1sec later
@@ -78,13 +72,13 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
 
     function test_setAuthorizationWithSig() public {
         (address accountOwner, uint256 accountOwnerPk) = makeAddrAndKey("ACCOUNT_OWNER");
-        uint96 authorizationDeadline = uint96(block.timestamp + 1);
+        uint96 authorizationDeadline = uint96(vm.getBlockTimestamp() + 1);
 
         // Starts as not authorized
         assertEq(cooler.isSenderAuthorized(BOB, accountOwner), false);
 
         // Check for expired deadlines
-        uint256 signatureDeadline = block.timestamp - 1;
+        uint256 signatureDeadline = vm.getBlockTimestamp() - 1;
         IMonoCooler.Authorization memory auth;
         IMonoCooler.Signature memory sig;
         {
@@ -104,7 +98,7 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
         // Successfully gives authorization if in future
         // ALICE actually calls using the signature pre-signed by `accountOwner`
         {
-            signatureDeadline = block.timestamp + 3600;
+            signatureDeadline = vm.getBlockTimestamp() + 3600;
             (auth, sig) = signedAuth(
                 accountOwner,
                 accountOwnerPk,
@@ -117,6 +111,11 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
             vm.expectEmit(address(cooler));
             emit AuthorizationSet(ALICE, accountOwner, BOB, authorizationDeadline);
             cooler.setAuthorizationWithSig(auth, sig);
+            assertEq(cooler.isSenderAuthorized(BOB, accountOwner), true);
+            assertEq(cooler.isSenderAuthorized(ALICE, accountOwner), false);
+
+            // Still ok 1sec later (on the deadline)
+            skip(1);
             assertEq(cooler.isSenderAuthorized(BOB, accountOwner), true);
             assertEq(cooler.isSenderAuthorized(ALICE, accountOwner), false);
 

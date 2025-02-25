@@ -259,7 +259,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function isSenderAuthorized(address sender, address onBehalfOf) public view returns (bool) {
-        return sender == onBehalfOf || block.timestamp < authorizations[onBehalfOf][sender];
+        return sender == onBehalfOf || block.timestamp <= authorizations[onBehalfOf][sender];
     }
 
     function _requireSenderAuthorized(address sender, address onBehalfOf) internal view {
