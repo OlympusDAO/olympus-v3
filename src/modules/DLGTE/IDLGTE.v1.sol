@@ -77,6 +77,25 @@ interface IDLGTEv1 {
         returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance);
 
     /**
+     * @notice Rescind delegations until the amount undelegated for the `onBehalfOf` account
+     * is greater or equal to `requestedUndelegatedBalance`.
+     * @dev
+     *    - Delegations are rescinded by iterating through the delegate addresses for the
+     *      `onBehalfOf` address.
+     *    - No guarantees on the order of who is rescinded -- it may change as delegations are
+     *      removed (pop and swap)
+     *    - A calling policy may be able to rescind more than it added via `depositUndelegatedGohm()` 
+     *      however the policy cannot then withdraw an amount higher than what it deposited.
+     *    - If the full `requestedUndelegatedBalance` cannot be fulfilled the `actualUndelegatedBalance`
+     *      return parameter may be less than `requestedUndelegatedBalance`. The caller must decide
+     *      on how to handle that.
+     */
+    function rescindDelegations(
+        address onBehalfOf,
+        uint256 requestedUndelegatedBalance
+    ) external returns (uint256 actualUndelegatedBalance);
+
+    /**
      * @notice Report the total delegated and undelegated gOHM balance for an account
      * in a given policy
      */

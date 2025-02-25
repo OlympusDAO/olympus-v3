@@ -132,6 +132,58 @@ contract OlympusGovDelegation is DLGTEv1 {
     }
 
     /// @inheritdoc DLGTEv1
+    function rescindDelegations(
+        address onBehalfOf,
+        uint256 requestedUndelegatedBalance
+    ) external override permissioned returns (uint256 actualUndelegatedBalance) {
+        if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
+
+        AccountState storage aState = _accountState[onBehalfOf];
+        uint256 totalAccountGOhm = aState.totalGOhm;
+        actualUndelegatedBalance = totalAccountGOhm - aState.delegatedGOhm;
+
+        // Nothing to do if the undelegated balance is already greater than the requested amount
+        if (actualUndelegatedBalance >= requestedUndelegatedBalance) return actualUndelegatedBalance;
+
+        // EnumerableMap internals are used here for gas efficiency.
+        // Deleting keys from the EnumerableMap changes the order (swap and pop) and size
+        // So take an upfront in-memory copy of the delegateAddrs keys to iterate over first.
+        EnumerableMap.AddressToUintMap storage acctDelegatedAmounts = aState.delegatedAmounts;
+        bytes32[] memory delegateAddrs = acctDelegatedAmounts._inner._keys._inner._values;
+        bytes32 delegateAddr;
+        uint256 delegatedBalance;
+        uint256 rescindAmount;
+        for (uint256 i; i < delegateAddrs.length; ++i) {
+            delegateAddr = delegateAddrs[i];
+            delegatedBalance = uint256(acctDelegatedAmounts._inner._values[delegateAddr]);
+
+            // Cap the amount to rescind for this delegate by the remaining required to get to the
+            // requested undelegated balance
+            rescindAmount = requestedUndelegatedBalance - actualUndelegatedBalance;
+            rescindAmount = delegatedBalance < rescindAmount ? delegatedBalance : rescindAmount;
+
+            _rescindDelegation(
+                onBehalfOf,
+                address(uint160(uint256(delegateAddr))),
+                delegatedBalance,
+                rescindAmount,
+                acctDelegatedAmounts
+            );
+
+            actualUndelegatedBalance += rescindAmount;
+
+            // Reached the requested undelegated balance
+            if (actualUndelegatedBalance == requestedUndelegatedBalance) break;
+        }
+
+        // Update state for the delegated amount of gOHM for this account
+        aState.delegatedGOhm = (totalAccountGOhm - actualUndelegatedBalance).encodeUInt112();
+
+        // May not have undelegated the full requested amount - left up to the calling policy on how to handle this gap
+        return actualUndelegatedBalance;
+    }
+
+    /// @inheritdoc DLGTEv1
     function applyDelegations(
         address onBehalfOf,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests

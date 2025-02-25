@@ -308,6 +308,12 @@ contract DLGTETestAccess is DLGTETestBase {
         vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, ALICE));
         dlgte.applyDelegations(policy, new IDLGTEv1.DelegationRequest[](0));
     }
+
+    function test_rescindDelegations_access() public {
+        vm.startPrank(ALICE);
+        vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, ALICE));
+        dlgte.rescindDelegations(ALICE, 123);
+    }
 }
 
 contract DLGTETestDeposit is DLGTETestBase {
@@ -778,6 +784,161 @@ contract DLGTETestDelegationsMultipleDelegates is DLGTETestBase {
         assertEq(gohm.balanceOf(address(policy2)), 0);
         assertEq(gohm.balanceOf(expectedBobEscrow), 50e18);
         assertEq(gohm.balanceOf(expectedAliceEscrow), 20e18);
+    }
+}
+
+contract DLGTETestRescindDelegations is DLGTETestBase {
+    function test_rescindDelegations_badAddress() public {
+        vm.startPrank(policy);
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidAddress.selector));
+        dlgte.rescindDelegations(address(0), 123);
+    }
+
+    function test_rescindDelegations_alreadyEnoughUndelegated() public {
+        seedDelegate(policy, ALICE, BOB, 100e18);
+        setupUndelegated(policy, ALICE, 33e18);
+
+        address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;        
+        vm.startPrank(policy);
+        assertEq(dlgte.rescindDelegations(ALICE, 10e18), 33e18);
+        verifyDelegationsOne(ALICE, BOB, 100e18, expectedEscrow);
+    }
+
+    function test_rescindDelegations_noDelegations() public {
+        setupUndelegated(policy, ALICE, 33e18);
+
+        vm.startPrank(policy);
+        assertEq(dlgte.rescindDelegations(ALICE, 50e18), 33e18);
+    }
+
+    function test_rescindDelegations_oneDelegateMoreThanEnough() public {
+        seedDelegate(policy, ALICE, BOB, 100e18);
+
+        uint256 expectedRescindAmount = 33e18;
+        address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;        
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -int256(expectedRescindAmount));
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), expectedRescindAmount);
+        verifyDelegationsOne(ALICE, BOB, 100e18-expectedRescindAmount, expectedEscrow);
+    }
+
+    function test_rescindDelegations_oneDelegateLessThanEnough() public {
+        seedDelegate(policy, ALICE, BOB, 100e18);
+
+        uint256 expectedRescindAmount = 133e18;
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -int256(100e18));
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), 100e18);
+        verifyDelegationsZero(ALICE);
+    }
+
+    function test_rescindDelegations_oneDelegateExactlyEnough() public {
+        seedDelegate(policy, ALICE, BOB, 100e18);
+
+        uint256 expectedRescindAmount = 100e18;
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -int256(100e18));
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), 100e18);
+        verifyDelegationsZero(ALICE);
+    }
+
+    function test_rescindDelegations_withOtherPolicyDelegation() public {
+        // policy is able to undelegate policy2's delegated amount.
+        // Policy is not able to actually withdraw those funds though.
+        seedDelegate(policy, ALICE, BOB, 100e18);
+        seedDelegate(policy2, ALICE, BOB, 100e18);
+
+        verifyAccountSummary(address(policy), ALICE, 200e18, 200e18, 1, 10, 100e18);
+        verifyAccountSummary(address(policy2), ALICE, 200e18, 200e18, 1, 10, 100e18);
+
+        uint256 expectedRescindAmount = 133e18;
+        address expectedEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;        
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -int256(expectedRescindAmount));
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), expectedRescindAmount);
+        verifyDelegationsOne(ALICE, BOB, 200e18-expectedRescindAmount, expectedEscrow);
+        verifyAccountSummary(address(policy), ALICE, 200e18, 200e18-expectedRescindAmount, 1, 10, 100e18);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IDLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 100e18, 133e18)
+        );
+        dlgte.withdrawUndelegatedGohm(ALICE, expectedRescindAmount);
+
+        dlgte.withdrawUndelegatedGohm(ALICE, 100e18);
+        verifyAccountSummary(address(policy), ALICE, 100e18, 200e18-expectedRescindAmount, 1, 10, 0);
+        verifyAccountSummary(address(policy2), ALICE, 100e18, 200e18-expectedRescindAmount, 1, 10, 100e18);
+    }
+
+    function test_rescindDelegations_multiDelegatesMoreThanEnough() public {
+        seedDelegate(policy, ALICE, ALICE, 100e18);
+        seedDelegate(policy, ALICE, BOB, 100e18);
+        seedDelegate(policy, ALICE, CHARLIE, 100e18);
+        seedDelegate(policy2, ALICE, ALICE, 100e18);
+
+        uint256 expectedRescindAmount = 320e18;
+        address expectedEscrow = 0x5Fa39CD9DD20a3A77BA0CaD164bD5CF0d7bb3303;        
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, ALICE, -200e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -100e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, CHARLIE, -20e18);
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), expectedRescindAmount);
+        verifyDelegationsOne(ALICE, CHARLIE, 80e18, expectedEscrow);
+    }
+
+    function test_rescindDelegations_multiDelegatesLessThanEnough() public {
+        seedDelegate(policy, ALICE, ALICE, 100e18);
+        seedDelegate(policy, ALICE, BOB, 100e18);
+        seedDelegate(policy, ALICE, CHARLIE, 100e18);
+        seedDelegate(policy2, ALICE, ALICE, 100e18);
+
+        uint256 expectedRescindAmount = 520e18;
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, ALICE, -200e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -100e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, CHARLIE, -100e18);
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), 400e18);
+        verifyDelegationsZero(ALICE);
+    }
+
+    function test_rescindDelegations_multiDelegatesExactlyEnough() public {
+        seedDelegate(policy, ALICE, ALICE, 100e18);
+        seedDelegate(policy, ALICE, BOB, 100e18);
+        seedDelegate(policy, ALICE, CHARLIE, 100e18);
+        seedDelegate(policy2, ALICE, ALICE, 100e18);
+
+        uint256 expectedRescindAmount = 400e18;
+        vm.startPrank(policy);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, ALICE, -200e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, BOB, -100e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, CHARLIE, -100e18);
+        assertEq(dlgte.rescindDelegations(ALICE, expectedRescindAmount), expectedRescindAmount);
+        verifyDelegationsZero(ALICE);
+    }
+
+    function test_rescindDelegations_gas() public {
+        uint256 totalCollateral = 100_000e18;
+        uint32 numDelegates = 100;
+        applyManyDelegations(totalCollateral, numDelegates);
+
+        vm.startPrank(policy);
+        uint256 actualUndelegatedBalance;
+        uint256 gasBefore = gasleft();
+        actualUndelegatedBalance = dlgte.rescindDelegations(ALICE, totalCollateral);
+        assertLt(gasBefore-gasleft(), 3_600_000);
+        assertEq(actualUndelegatedBalance, totalCollateral);
     }
 }
 

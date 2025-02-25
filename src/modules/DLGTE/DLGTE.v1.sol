@@ -53,6 +53,12 @@ abstract contract DLGTEv1 is Module, IDLGTEv1 {
         returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance);
 
     /// @inheritdoc IDLGTEv1
+    function rescindDelegations(
+        address onBehalfOf,
+        uint256 requestedUndelegatedBalance
+    ) external virtual override returns (uint256 actualUndelegatedBalance);
+
+    /// @inheritdoc IDLGTEv1
     function policyAccountBalances(
         address policy,
         address account
