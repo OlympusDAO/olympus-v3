@@ -8,6 +8,7 @@ import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol"
 import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {Actions} from "policies/RolesAdmin.sol";
+import {MockStakingReal} from "test/mocks/MockStakingReal.sol";
 
 contract MonoCoolerComputeLiquidityBaseTest is MonoCoolerBaseTest {
     function noAddresses() internal pure returns (address[] memory accounts) {
@@ -840,6 +841,37 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             collateralAmount,
             expectedDebt,
             collateralAmount
+        );
+    }
+
+    function test_batchLiquidate_noOhmToBurn() external {
+        vm.prank(OVERSEER);
+        cooler.setInterestRateWad(0.1e18); // 10% APR
+
+        uint128 collateralAmount = 10e18;
+        addCollateral(ALICE, collateralAmount);
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
+
+        skip(7 * 365 days + 11 days);
+        uint128 expectedDebt = 59_820.114099647806356219e18;
+
+        // Mock that unstake gives back zero ohm
+        vm.mockCall(
+            address(staking),
+            abi.encodeWithSelector(MockStakingReal.unstake.selector),
+            abi.encode(0)
+        );
+
+        vm.startPrank(OTHERS);
+        vm.expectEmit(address(cooler));
+        emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, 9.998323814584335317e18);
+        checkBatchLiquidate(
+            oneAddress(ALICE),
+            oneDelegationRequest(noDelegationRequest()),
+            collateralAmount,
+            expectedDebt,
+            9.998323814584335317e18
         );
     }
 

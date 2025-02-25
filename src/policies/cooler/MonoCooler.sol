@@ -588,13 +588,11 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
-
             if (gOhmToBurn > 0) {
-                _COLLATERAL_TOKEN.safeApprove(address(_STAKING), gOhmToBurn);
-                MINTR.burnOhm(
-                    address(this),
-                    _STAKING.unstake(address(this), gOhmToBurn, false, false)
-                );
+                uint256 ohmAmount = _STAKING.unstake(address(this), gOhmToBurn, false, false);
+                if (ohmAmount > 0) {
+                    MINTR.burnOhm(address(this), ohmAmount);
+                }
             }
 
             totalCollateral -= totalCollateralClaimed;

@@ -313,7 +313,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
 
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
         cooler.setInterestRateWad(0.1e18 + 1);
-        
+
         vm.expectEmit(address(cooler));
         emit InterestRateSet(0.1e18);
         cooler.setInterestRateWad(0.1e18);
