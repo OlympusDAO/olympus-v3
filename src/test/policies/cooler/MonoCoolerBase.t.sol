@@ -443,7 +443,6 @@ abstract contract MonoCoolerBaseTest is Test {
 
     function checkBatchLiquidate(
         address[] memory accounts,
-        IDLGTEv1.DelegationRequest[][] memory requests,
         uint128 expectedCollateralClaimed,
         uint128 expectedDebtWiped,
         uint128 expectedIncentives
@@ -452,7 +451,7 @@ abstract contract MonoCoolerBaseTest is Test {
             uint128 totalCollateralClaimed,
             uint128 totalDaiDebtWiped,
             uint128 totalIncentives
-        ) = cooler.batchLiquidate(accounts, requests);
+        ) = cooler.batchLiquidate(accounts);
         assertEq(
             totalCollateralClaimed,
             expectedCollateralClaimed,

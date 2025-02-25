@@ -367,12 +367,11 @@ interface IMonoCooler {
     /**
      * @notice Liquidate one or more accounts which have exceeded the `liquidationLtv`
      * The gOHM collateral is seized (unstaked to OHM and burned), and the accounts debt is wiped.
-     * @dev If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
+     * @dev 
+     *    - If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
+     *    - Delegations are auto-rescinded if required. Ordering of this is not guaranteed.
      */
-    function batchLiquidate(
-        address[] calldata accounts,
-        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
-    )
+    function batchLiquidate(address[] calldata accounts)
         external
         returns (
             uint128 totalCollateralClaimed,
