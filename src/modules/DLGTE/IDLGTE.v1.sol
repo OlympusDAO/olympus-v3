@@ -50,18 +50,23 @@ interface IDLGTEv1 {
     function setMaxDelegateAddresses(address account, uint32 maxDelegateAddresses) external;
 
     /**
-     * @notice gOHM is pulled from the calling policy - this will not be used for governance delegation
-     * @dev Balances are tracked per policy such that policyA cannot interfere with policyB's gOHM
+     * @notice gOHM is pulled from the calling policy and added to the undelegated balance.
+     * @dev
+     *   - This gOHM cannot be used for governance voting until it is delegated.
+     *   - Deposted gOHM balances are tracked per policy. policyA cannot withdraw gOHM that policyB deposited
      */
     function depositUndelegatedGohm(address onBehalfOf, uint256 amount) external;
 
     /**
      * @notice Undelegated gOHM is transferred to the calling policy.
-     * This will revert if there is not enough undelegated gOHM for `onBehalfOf`
-     * or if policy is attempting to withdraw more gOHM than it is entitled to.
-     * @dev Balances are tracked per policy such that policyA cannot interfere with policyB's gOHM
+     * @dev
+     *   - If `autoRescindDelegations` is true, delegations will be automatically rescinded if required, 
+     *     see `rescindDelegations()` for details
+     *   - Will revert if there is still not enough undelegated gOHM for `onBehalfOf` OR 
+     *     if policy is attempting to withdraw more gOHM than it deposited
+     *     Deposted gOHM balances are tracked per policy. policyA cannot withdraw gOHM that policyB deposited
      */
-    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount) external;
+    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount, bool autoRescindDelegations) external;
 
     /**
      * @notice Apply a set of delegation requests on behalf of a given account.

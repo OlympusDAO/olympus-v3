@@ -354,7 +354,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             _accountCollateral -= collateralWithdrawn;
         }
 
-        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn);
+        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, false);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
         aState.collateral = _accountCollateral;
@@ -573,7 +573,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                 _undelegateForLiquidation(account, delegationRequests[i], status.collateral);
 
                 // Withdraw the undelegated gOHM
-                DLGTE.withdrawUndelegatedGohm(account, status.collateral);
+                DLGTE.withdrawUndelegatedGohm(account, status.collateral, false);
 
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;

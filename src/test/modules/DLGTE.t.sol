@@ -300,7 +300,7 @@ contract DLGTETestAccess is DLGTETestBase {
     function test_withdrawUndelegatedGohm_access() public {
         vm.startPrank(ALICE);
         vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, ALICE));
-        dlgte.withdrawUndelegatedGohm(ALICE, 0);
+        dlgte.withdrawUndelegatedGohm(ALICE, 0, false);
     }
 
     function test_applyDelegations_access() public {
@@ -376,13 +376,13 @@ contract DLGTETestWithdraw is DLGTETestBase {
     function test_withdrawUndelegatedGohm_fail_invalidOnBehalfOf() public {
         vm.startPrank(policy);
         vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidAddress.selector));
-        dlgte.withdrawUndelegatedGohm(address(0), 123);
+        dlgte.withdrawUndelegatedGohm(address(0), 123, false);
     }
 
     function test_withdrawUndelegatedGohm_fail_invalidAmount() public {
         vm.startPrank(policy);
         vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidAmount.selector));
-        dlgte.withdrawUndelegatedGohm(ALICE, 0);
+        dlgte.withdrawUndelegatedGohm(ALICE, 0, false);
     }
 
     function test_withdrawUndelegatedGohm_fail_notEnoughForPolicy() public {
@@ -392,10 +392,10 @@ contract DLGTETestWithdraw is DLGTETestBase {
         vm.expectRevert(
             abi.encodeWithSelector(IDLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 0, 123)
         );
-        dlgte.withdrawUndelegatedGohm(ALICE, 123);
+        dlgte.withdrawUndelegatedGohm(ALICE, 123, false);
     }
 
-    function test_withdrawUndelegatedGohm_fail_notEnoughUndelegated() public {
+    function test_withdrawUndelegatedGohm_fail_notEnoughUndelegated_noAutoRescind() public {
         setupUndelegated(policy, ALICE, 100e18);
 
         dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
@@ -406,14 +406,25 @@ contract DLGTETestWithdraw is DLGTETestBase {
                 100e18
             )
         );
-        dlgte.withdrawUndelegatedGohm(ALICE, 100e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 100e18, false);
+    }
+
+    function test_withdrawUndelegatedGohm_success_withAutoRescind() public {
+        setupUndelegated(policy, ALICE, 100e18);
+
+        dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
+        verifyAccountSummary(address(policy), ALICE, 100e18, 25e18, 1, 10, 100e18);
+        vm.expectEmit(address(dlgte));
+        emit DelegationApplied(ALICE, ALICE, -25e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 100e18, true);
+        verifyAccountSummary(address(policy), ALICE, 0, 0, 0, 10, 0);
     }
 
     function test_withdrawUndelegatedGohm_success_fullWithdrawal() public {
         setupUndelegated(policy, ALICE, 100e18);
         dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
 
-        dlgte.withdrawUndelegatedGohm(ALICE, 75e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 75e18, false);
         verifyAccountSummary(address(policy), ALICE, 25e18, 25e18, 1, 10, 25e18);
         assertEq(gohm.balanceOf(policy), 75e18);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -423,11 +434,11 @@ contract DLGTETestWithdraw is DLGTETestBase {
         assertEq(gohm.balanceOf(expectedAliceEscrow), 25e18);
     }
 
-    function test_withdrawUndelegatedGohm_success_partialWithdrawal() public {
+    function test_withdrawUndelegatedGohm_success_partialWithdrawal_noAutoRescind() public {
         setupUndelegated(policy, ALICE, 100e18);
         dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
 
-        dlgte.withdrawUndelegatedGohm(ALICE, 25e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 25e18, false);
         verifyAccountSummary(address(policy), ALICE, 75e18, 25e18, 1, 10, 75e18);
         assertEq(gohm.balanceOf(policy), 25e18);
         assertEq(gohm.balanceOf(ALICE), 0);
@@ -437,14 +448,42 @@ contract DLGTETestWithdraw is DLGTETestBase {
         assertEq(gohm.balanceOf(expectedAliceEscrow), 25e18);
     }
 
+    function test_withdrawUndelegatedGohm_success_partialWithdrawal_withAutoRescind1() public {
+        setupUndelegated(policy, ALICE, 100e18);
+        dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
+
+        dlgte.withdrawUndelegatedGohm(ALICE, 25e18, true);
+        verifyAccountSummary(address(policy), ALICE, 75e18, 25e18, 1, 10, 75e18);
+        assertEq(gohm.balanceOf(policy), 25e18);
+        assertEq(gohm.balanceOf(ALICE), 0);
+        assertEq(gohm.balanceOf(address(dlgte)), 50e18);
+
+        address expectedAliceEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
+        assertEq(gohm.balanceOf(expectedAliceEscrow), 25e18);
+    }
+
+    function test_withdrawUndelegatedGohm_success_partialWithdrawal_withAutoRescind2() public {
+        setupUndelegated(policy, ALICE, 100e18);
+        dlgte.applyDelegations(ALICE, delegationRequest(ALICE, 25e18));
+
+        dlgte.withdrawUndelegatedGohm(ALICE, 85e18, true);
+        verifyAccountSummary(address(policy), ALICE, 15e18, 15e18, 1, 10, 15e18);
+        assertEq(gohm.balanceOf(policy), 85e18);
+        assertEq(gohm.balanceOf(ALICE), 0);
+        assertEq(gohm.balanceOf(address(dlgte)), 0);
+
+        address expectedAliceEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
+        assertEq(gohm.balanceOf(expectedAliceEscrow), 15e18);
+    }
+
     function test_withdrawUndelegatedGohm_success_multiPolicy() public {
         setupUndelegated(policy, ALICE, 100e18);
         setupUndelegated(policy2, ALICE, 100e18);
 
         vm.startPrank(policy);
-        dlgte.withdrawUndelegatedGohm(ALICE, 25e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 25e18, false);
         vm.startPrank(policy2);
-        dlgte.withdrawUndelegatedGohm(ALICE, 65e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 65e18, false);
 
         verifyAccountSummary(address(policy), ALICE, 200e18 - 90e18, 0, 0, 10, 75e18);
         verifyAccountSummary(address(policy2), ALICE, 200e18 - 90e18, 0, 0, 10, 35e18);
@@ -866,9 +905,9 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         vm.expectRevert(
             abi.encodeWithSelector(IDLGTEv1.DLGTE_ExceededPolicyAccountBalance.selector, 100e18, 133e18)
         );
-        dlgte.withdrawUndelegatedGohm(ALICE, expectedRescindAmount);
+        dlgte.withdrawUndelegatedGohm(ALICE, expectedRescindAmount, false);
 
-        dlgte.withdrawUndelegatedGohm(ALICE, 100e18);
+        dlgte.withdrawUndelegatedGohm(ALICE, 100e18, false);
         verifyAccountSummary(address(policy), ALICE, 100e18, 200e18-expectedRescindAmount, 1, 10, 0);
         verifyAccountSummary(address(policy2), ALICE, 100e18, 200e18-expectedRescindAmount, 1, 10, 100e18);
     }

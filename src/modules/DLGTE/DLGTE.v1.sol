@@ -40,7 +40,7 @@ abstract contract DLGTEv1 is Module, IDLGTEv1 {
     function depositUndelegatedGohm(address onBehalfOf, uint256 amount) external virtual override;
 
     /// @inheritdoc IDLGTEv1
-    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount) external virtual override;
+    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount, bool autoRescindDelegations) external virtual override;
 
     /// @inheritdoc IDLGTEv1
     function applyDelegations(
