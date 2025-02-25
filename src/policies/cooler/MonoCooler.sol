@@ -536,7 +536,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function batchLiquidate(address[] calldata accounts)
+    function batchLiquidate(
+        address[] calldata accounts
+    )
         external
         override
         returns (

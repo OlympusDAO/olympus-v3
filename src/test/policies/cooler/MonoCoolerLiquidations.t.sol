@@ -675,12 +675,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             })
         );
 
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            0,
-            0,
-            0
-        );
+        checkBatchLiquidate(oneAddress(ALICE), 0, 0, 0);
 
         // No change
         assertEq(cooler.totalCollateral(), collateralAmount);
@@ -730,12 +725,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             })
         );
 
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            0,
-            0,
-            0
-        );
+        checkBatchLiquidate(oneAddress(ALICE), 0, 0, 0);
     }
 
     function test_batchLiquidate_oneAccount_canLiquidateAboveMax() external {
@@ -777,12 +767,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         vm.startPrank(OTHERS);
         vm.expectEmit(address(cooler));
         emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, expectedIncentives);
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            collateralAmount,
-            expectedDebt,
-            expectedIncentives
-        );
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, expectedIncentives);
 
         // Check position is empty now (debt + collateral)
         {
@@ -833,12 +818,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         vm.startPrank(OTHERS);
         vm.expectEmit(address(cooler));
         emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, collateralAmount);
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            collateralAmount,
-            expectedDebt,
-            collateralAmount
-        );
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, collateralAmount);
     }
 
     function test_batchLiquidate_noOhmToBurn() external {
@@ -865,7 +845,6 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, 9.998323814584335317e18);
         checkBatchLiquidate(
             oneAddress(ALICE),
-            oneDelegationRequest(noDelegationRequest()),
             collateralAmount,
             expectedDebt,
             9.998323814584335317e18

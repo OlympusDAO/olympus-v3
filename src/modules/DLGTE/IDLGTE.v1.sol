@@ -60,13 +60,17 @@ interface IDLGTEv1 {
     /**
      * @notice Undelegated gOHM is transferred to the calling policy.
      * @dev
-     *   - If `autoRescindDelegations` is true, delegations will be automatically rescinded if required, 
+     *   - If `autoRescindDelegations` is true, delegations will be automatically rescinded if required,
      *     see `rescindDelegations()` for details
-     *   - Will revert if there is still not enough undelegated gOHM for `onBehalfOf` OR 
+     *   - Will revert if there is still not enough undelegated gOHM for `onBehalfOf` OR
      *     if policy is attempting to withdraw more gOHM than it deposited
      *     Deposted gOHM balances are tracked per policy. policyA cannot withdraw gOHM that policyB deposited
      */
-    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount, bool autoRescindDelegations) external;
+    function withdrawUndelegatedGohm(
+        address onBehalfOf,
+        uint256 amount,
+        bool autoRescindDelegations
+    ) external;
 
     /**
      * @notice Apply a set of delegation requests on behalf of a given account.
@@ -89,7 +93,7 @@ interface IDLGTEv1 {
      *      `onBehalfOf` address.
      *    - No guarantees on the order of who is rescinded -- it may change as delegations are
      *      removed (pop and swap)
-     *    - A calling policy may be able to rescind more than it added via `depositUndelegatedGohm()` 
+     *    - A calling policy may be able to rescind more than it added via `depositUndelegatedGohm()`
      *      however the policy cannot then withdraw an amount higher than what it deposited.
      *    - If the full `requestedUndelegatedBalance` cannot be fulfilled the `actualUndelegatedBalance`
      *      return parameter may be less than `requestedUndelegatedBalance`. The caller must decide

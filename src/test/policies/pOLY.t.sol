@@ -162,7 +162,12 @@ contract pOLYTest is Test {
         }
     }
 
-    function _checkTerms(address user, uint256 expectedPercent, uint256 expectedGClaimed, uint256 expectedNewMax) private view {
+    function _checkTerms(
+        address user,
+        uint256 expectedPercent,
+        uint256 expectedGClaimed,
+        uint256 expectedNewMax
+    ) private view {
         (uint256 newPercent, uint256 newGClaimed, uint256 newMax) = poly.terms(user);
         assertEq(newPercent, expectedPercent);
         assertEq(newGClaimed, expectedGClaimed);

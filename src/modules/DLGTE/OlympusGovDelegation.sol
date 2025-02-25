@@ -145,7 +145,13 @@ contract OlympusGovDelegation is DLGTEv1 {
     ) external override permissioned returns (uint256 actualUndelegatedBalance) {
         if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
         AccountState storage aState = _accountState[onBehalfOf];
-        return _autoRescindDelegations(onBehalfOf, requestedUndelegatedBalance, aState, aState.totalGOhm);
+        return
+            _autoRescindDelegations(
+                onBehalfOf,
+                requestedUndelegatedBalance,
+                aState,
+                aState.totalGOhm
+            );
     }
 
     /// @inheritdoc DLGTEv1
@@ -340,7 +346,7 @@ contract OlympusGovDelegation is DLGTEv1 {
             // Special case to delegate all remaining (undelegated) gOhm.
             delegatedAmount = delegationRequest.amount == type(int256).max
                 ? undelegatedBalance
-                : uint256(delegationRequest.amount);       
+                : uint256(delegationRequest.amount);
             if (delegatedAmount == 0) revert DLGTE_InvalidAmount();
 
             // Ensure the account isn't delegating more than the undelegated balance
@@ -348,10 +354,18 @@ contract OlympusGovDelegation is DLGTEv1 {
                 revert DLGTE_ExceededUndelegatedBalance(undelegatedBalance, delegatedAmount);
             }
 
-            _addDelegation(onBehalfOf, delegationRequest.delegate, delegatedAmount, acctDelegatedAmounts, maxDelegates);
+            _addDelegation(
+                onBehalfOf,
+                delegationRequest.delegate,
+                delegatedAmount,
+                acctDelegatedAmounts,
+                maxDelegates
+            );
         } else {
             // Revert with a custom error if trying to rescind and there's no record of this delegation.
-            (bool exists, uint256 delegatedBalance) = acctDelegatedAmounts.tryGet(delegationRequest.delegate);
+            (bool exists, uint256 delegatedBalance) = acctDelegatedAmounts.tryGet(
+                delegationRequest.delegate
+            );
             if (!exists) revert DLGTE_InvalidDelegateEscrow();
 
             // Special case to undelegate all remaining (delegated) gOhm.
@@ -373,7 +387,7 @@ contract OlympusGovDelegation is DLGTEv1 {
                 onBehalfOf,
                 delegationRequest.delegate,
                 delegatedBalance,
-                undelegatedAmount, 
+                undelegatedAmount,
                 acctDelegatedAmounts
             );
         }
@@ -411,7 +425,8 @@ contract OlympusGovDelegation is DLGTEv1 {
         actualUndelegatedBalance = totalAccountGOhm - aState.delegatedGOhm;
 
         // Nothing to do if the undelegated balance is already greater than the requested amount
-        if (actualUndelegatedBalance >= requestedUndelegatedBalance) return actualUndelegatedBalance;
+        if (actualUndelegatedBalance >= requestedUndelegatedBalance)
+            return actualUndelegatedBalance;
 
         // EnumerableMap internals are used here for gas efficiency.
         // Deleting keys from the EnumerableMap changes the order (swap and pop) and size
@@ -458,12 +473,12 @@ contract OlympusGovDelegation is DLGTEv1 {
         uint256 rescindAmount,
         EnumerableMap.AddressToUintMap storage acctDelegatedAmounts
     ) private {
-        // Rescind the delegaiton from the escrow
+        // Rescind the delegation from the escrow
         DelegateEscrow delegateEscrow = delegateEscrowFactory.create(delegate);
         delegateEscrow.rescindDelegation(onBehalfOf, rescindAmount);
         emit DelegationApplied(onBehalfOf, delegate, -int256(rescindAmount));
 
-        // Decrease the delegation record amount. 
+        // Decrease the delegation record amount.
         // Remove if that is now zero such that it doesn't count towards the `maxDelegates` cap
         delegatedBalance -= rescindAmount;
         if (delegatedBalance == 0) {
