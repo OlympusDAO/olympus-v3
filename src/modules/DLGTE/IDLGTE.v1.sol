@@ -13,6 +13,7 @@ interface IDLGTEv1 {
     error DLGTE_InvalidAmount();
 
     error DLGTE_ExceededUndelegatedBalance(uint256 balance, uint256 requested);
+    error DLGTE_ExceededDelegatedBalance(address delegate, uint256 balance, uint256 requested);
     error DLGTE_ExceededPolicyAccountBalance(uint256 balance, uint256 requested);
 
     // ========= EVENTS ========= //
@@ -34,10 +35,10 @@ interface IDLGTEv1 {
     struct AccountDelegation {
         /// @dev The delegate address - the receiver account of the gOHM voting power.
         address delegate;
+        /// @dev The amount of gOHM delegated to `delegate`
+        uint256 amount;
         /// @dev The DelegateEscrow contract address for this `delegate`
         address escrow;
-        /// @dev The amount delegated to this delegate address
-        uint256 totalAmount;
     }
 
     // ========= FUNCTIONS ========= //
@@ -49,18 +50,27 @@ interface IDLGTEv1 {
     function setMaxDelegateAddresses(address account, uint32 maxDelegateAddresses) external;
 
     /**
-     * @notice gOHM is pulled from the calling policy - this will not be used for governance delegation
-     * @dev Balances are tracked per policy such that policyA cannot interfere with policyB's gOHM
+     * @notice gOHM is pulled from the calling policy and added to the undelegated balance.
+     * @dev
+     *   - This gOHM cannot be used for governance voting until it is delegated.
+     *   - Deposted gOHM balances are tracked per policy. policyA cannot withdraw gOHM that policyB deposited
      */
     function depositUndelegatedGohm(address onBehalfOf, uint256 amount) external;
 
     /**
      * @notice Undelegated gOHM is transferred to the calling policy.
-     * This will revert if there is not enough undelegated gOHM for `onBehalfOf`
-     * or if policy is attempting to withdraw more gOHM than it is entitled to.
-     * @dev Balances are tracked per policy such that policyA cannot interfere with policyB's gOHM
+     * @dev
+     *   - If `autoRescindDelegations` is true, delegations will be automatically rescinded if required,
+     *     see `rescindDelegations()` for details
+     *   - Will revert if there is still not enough undelegated gOHM for `onBehalfOf` OR
+     *     if policy is attempting to withdraw more gOHM than it deposited
+     *     Deposted gOHM balances are tracked per policy. policyA cannot withdraw gOHM that policyB deposited
      */
-    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount) external;
+    function withdrawUndelegatedGohm(
+        address onBehalfOf,
+        uint256 amount,
+        bool autoRescindDelegations
+    ) external;
 
     /**
      * @notice Apply a set of delegation requests on behalf of a given account.
@@ -74,6 +84,25 @@ interface IDLGTEv1 {
     )
         external
         returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance);
+
+    /**
+     * @notice Rescind delegations until the amount undelegated for the `onBehalfOf` account
+     * is greater or equal to `requestedUndelegatedBalance`.
+     * @dev
+     *    - Delegations are rescinded by iterating through the delegate addresses for the
+     *      `onBehalfOf` address.
+     *    - No guarantees on the order of who is rescinded -- it may change as delegations are
+     *      removed (pop and swap)
+     *    - A calling policy may be able to rescind more than it added via `depositUndelegatedGohm()`
+     *      however the policy cannot then withdraw an amount higher than what it deposited.
+     *    - If the full `requestedUndelegatedBalance` cannot be fulfilled the `actualUndelegatedBalance`
+     *      return parameter may be less than `requestedUndelegatedBalance`. The caller must decide
+     *      on how to handle that.
+     */
+    function rescindDelegations(
+        address onBehalfOf,
+        uint256 requestedUndelegatedBalance
+    ) external returns (uint256 actualUndelegatedBalance);
 
     /**
      * @notice Report the total delegated and undelegated gOHM balance for an account
@@ -110,6 +139,12 @@ interface IDLGTEv1 {
             uint256 numDelegateAddresses,
             uint256 maxAllowedDelegateAddresses
         );
+
+    /**
+     * @notice The total amount delegated to a particular delegate across all policies,
+     * and externally made delegations (including any permanent donations)
+     */
+    function totalDelegatedTo(address delegate) external view returns (uint256);
 
     /**
      * @notice The maximum number of delegates an account can have accross all policies

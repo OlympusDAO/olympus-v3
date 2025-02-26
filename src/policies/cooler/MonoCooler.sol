@@ -354,7 +354,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             _accountCollateral -= collateralWithdrawn;
         }
 
-        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn);
+        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, false);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
         aState.collateral = _accountCollateral;
@@ -537,8 +537,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
-        address[] calldata accounts,
-        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
+        address[] calldata accounts
     )
         external
         override
@@ -549,7 +548,6 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         )
     {
         if (liquidationsPaused) revert Paused();
-        if (delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
 
         LiquidationStatus memory status;
         GlobalStateCache memory gState = _globalStateRW();
@@ -569,11 +567,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                     status.currentIncentive
                 );
 
-                // Apply any undelegation requests.
-                _undelegateForLiquidation(account, delegationRequests[i], status.collateral);
-
-                // Withdraw the undelegated gOHM
-                DLGTE.withdrawUndelegatedGohm(account, status.collateral);
+                // Withdraw the undelegated gOHM, auto-rescinding delegations if required
+                DLGTE.withdrawUndelegatedGohm(account, status.collateral, true);
 
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;

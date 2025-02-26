@@ -5,7 +5,6 @@ import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
-import {DelegateEscrow} from "src/external/cooler/DelegateEscrow.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {Actions} from "policies/RolesAdmin.sol";
 import {MockStakingReal} from "test/mocks/MockStakingReal.sol";
@@ -472,7 +471,14 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         borrow(ALICE, ALICE, borrowAmount, ALICE);
 
         skip(2 * 365 days);
-        vm.expectRevert(abi.encodeWithSelector(DelegateEscrow.ExceededDelegationBalance.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDLGTEv1.DLGTE_ExceededDelegatedBalance.selector,
+                BOB,
+                8e18,
+                8e18 + 1
+            )
+        );
         cooler.applyUnhealthyDelegations(ALICE, unDelegationRequest(BOB, 8e18 + 1));
     }
 
@@ -607,12 +613,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         cooler.setLiquidationsPaused(true);
 
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
-        cooler.batchLiquidate(oneAddress(ALICE), oneDelegationRequest(noDelegationRequest()));
-    }
-
-    function test_batchLiquidate_fail_badDelegationRequests() external {
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.batchLiquidate(oneAddress(ALICE), noDelegationRequests());
+        cooler.batchLiquidate(oneAddress(ALICE));
     }
 
     function test_batchLiquidate_noAccounts() external {
@@ -636,7 +637,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             })
         );
 
-        checkBatchLiquidate(noAddresses(), noDelegationRequests(), 0, 0, 0);
+        checkBatchLiquidate(noAddresses(), 0, 0, 0);
 
         // No change
         assertEq(cooler.totalCollateral(), collateralAmount);
@@ -674,13 +675,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             })
         );
 
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(noDelegationRequest()),
-            0,
-            0,
-            0
-        );
+        checkBatchLiquidate(oneAddress(ALICE), 0, 0, 0);
 
         // No change
         assertEq(cooler.totalCollateral(), collateralAmount);
@@ -730,13 +725,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             })
         );
 
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(noDelegationRequest()),
-            0,
-            0,
-            0
-        );
+        checkBatchLiquidate(oneAddress(ALICE), 0, 0, 0);
     }
 
     function test_batchLiquidate_oneAccount_canLiquidateAboveMax() external {
@@ -778,13 +767,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         vm.startPrank(OTHERS);
         vm.expectEmit(address(cooler));
         emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, expectedIncentives);
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(noDelegationRequest()),
-            collateralAmount,
-            expectedDebt,
-            expectedIncentives
-        );
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, expectedIncentives);
 
         // Check position is empty now (debt + collateral)
         {
@@ -835,13 +818,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         vm.startPrank(OTHERS);
         vm.expectEmit(address(cooler));
         emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, collateralAmount);
-        checkBatchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(noDelegationRequest()),
-            collateralAmount,
-            expectedDebt,
-            collateralAmount
-        );
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, collateralAmount);
     }
 
     function test_batchLiquidate_noOhmToBurn() external {
@@ -868,7 +845,6 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         emit Liquidated(OTHERS, ALICE, collateralAmount, expectedDebt, 9.998323814584335317e18);
         checkBatchLiquidate(
             oneAddress(ALICE),
-            oneDelegationRequest(noDelegationRequest()),
             collateralAmount,
             expectedDebt,
             9.998323814584335317e18
@@ -930,7 +906,6 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         emit Liquidated(OTHERS, BOB, collateralAmount, expectedDebt, expectedIncentives);
         checkBatchLiquidate(
             twoAddresses(ALICE, BOB),
-            twoDelegationRequests(noDelegationRequest(), noDelegationRequest()),
             collateralAmount,
             expectedDebt,
             expectedIncentives
@@ -1057,7 +1032,6 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         emit Liquidated(OTHERS, BOB, collateralAmount, expectedDebt, expectedIncentives);
         checkBatchLiquidate(
             twoAddresses(ALICE, BOB),
-            twoDelegationRequests(noDelegationRequest(), noDelegationRequest()),
             collateralAmount * 2,
             expectedDebt * 2,
             expectedIncentives * 2
@@ -1156,69 +1130,9 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         emit Liquidated(OTHERS, BOB, collateralAmount, expectedDebt, expectedIncentives);
         checkBatchLiquidate(
             twoAddresses(ALICE, BOB),
-            twoDelegationRequests(noDelegationRequest(), noDelegationRequest()),
             collateralAmount * 2,
             expectedDebt * 2,
             expectedIncentives * 2
-        );
-    }
-
-    function test_batchLiquidate_wrongSizeDelegationRequests() external {
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.batchLiquidate(
-            twoAddresses(ALICE, BOB),
-            oneDelegationRequest(noDelegationRequest())
-        );
-    }
-
-    function test_batchLiquidate_fail_withPositiveDelegation() external {
-        // Alice delegates some to BOB
-        uint128 collateralAmount = 10e18;
-        addCollateral(ALICE, collateralAmount);
-        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
-        borrow(ALICE, ALICE, borrowAmount, ALICE);
-
-        skip(2 * 365 days);
-
-        // No 'delegation' requests allowed - only undelegations
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.batchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(delegationRequest(BOB, 3.3e18))
-        );
-    }
-
-    function test_batchLiquidate_fail_undelegateTooMuch() external {
-        // Alice delegates some to BOB
-        uint128 collateralAmount = 10e18;
-        uint128 delegationAmount = 3e18;
-        addCollateral(ALICE, ALICE, collateralAmount, delegationRequest(BOB, delegationAmount));
-        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
-        borrow(ALICE, ALICE, borrowAmount, ALICE);
-
-        skip(2 * 365 days);
-
-        // No 'delegation' requests allowed - only undelegations
-        vm.expectRevert(abi.encodeWithSelector(DelegateEscrow.ExceededDelegationBalance.selector));
-        cooler.batchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(unDelegationRequest(BOB, 3.3e18))
-        );
-    }
-
-    function test_batchLiquidate_notEnoughUndelegated() external {
-        uint128 collateralAmount = 10e18;
-        addCollateral(ALICE, ALICE, collateralAmount, delegationRequest(BOB, 8e18));
-        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
-        borrow(ALICE, ALICE, borrowAmount, ALICE);
-        skip(2 * 365 days);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IDLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 7e18, 10e18)
-        );
-        cooler.batchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(unDelegationRequest(BOB, 5e18))
         );
     }
 
@@ -1257,7 +1171,6 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         vm.startPrank(OTHERS);
         checkBatchLiquidate(
             twoAddresses(ALICE, BOB),
-            twoDelegationRequests(delegationRequests, unDelegationRequest(BOB, 10e18)),
             collateralAmount * 2,
             expectedDebt * 2,
             expectedIncentives * 2
@@ -1335,27 +1248,8 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
         vm.startPrank(OTHERS);
-
-        // If only undelegating 2e18, then only 6+2=8e18 undelegated which isn't enough
-        vm.expectRevert(
-            abi.encodeWithSelector(IDLGTEv1.DLGTE_ExceededUndelegatedBalance.selector, 8e18, 10e18)
-        );
-        cooler.batchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(unDelegationRequest(BOB, 2e18))
-        );
-
-        // If undelegating 4e18+1, then only 6+4=10e18+1 undelegated which is too much
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.batchLiquidate(
-            oneAddress(ALICE),
-            oneDelegationRequest(unDelegationRequest(BOB, 4e18 + 1))
-        );
-
-        // Just right
         checkBatchLiquidate(
             oneAddress(ALICE),
-            oneDelegationRequest(unDelegationRequest(BOB, 4e18)),
             collateralAmount,
             29_914.049768431554843335e18,
             0.000496703803644129e18

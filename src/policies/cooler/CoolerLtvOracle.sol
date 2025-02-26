@@ -239,9 +239,6 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyAdmin {
             unchecked {
                 uint96 delta = originationLtvData.slope * (_now - originationLtvData.startTime);
                 return delta + originationLtvData.startingValue;
-
-                // int96 delta = tpiData.tpiSlope * int32(_now - tpiData.startTime);
-                // return uint96(delta + int96(tpiData.startingTpi));
             }
         }
     }
