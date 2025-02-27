@@ -225,7 +225,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setAuthorization(address authorized, uint96 authorizationDeadline) external {
+    function setAuthorization(address authorized, uint96 authorizationDeadline) external override {
         emit AuthorizationSet(msg.sender, msg.sender, authorized, authorizationDeadline);
         authorizations[msg.sender][authorized] = authorizationDeadline;
     }
@@ -234,7 +234,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     function setAuthorizationWithSig(
         Authorization memory authorization,
         Signature calldata signature
-    ) external {
+    ) external override {
         /// Do not check whether authorization is already set because the nonce increment is a desired side effect.
         if (block.timestamp > authorization.signatureDeadline)
             revert ExpiredSignature(authorization.signatureDeadline);
@@ -261,7 +261,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     }
 
     /// @inheritdoc IMonoCooler
-    function isSenderAuthorized(address sender, address onBehalfOf) public view returns (bool) {
+    function isSenderAuthorized(address sender, address onBehalfOf) public view override returns (bool) {
         return sender == onBehalfOf || block.timestamp <= authorizations[onBehalfOf][sender];
     }
 
@@ -339,7 +339,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                 gStateCache.maxOriginationLtv
             );
             if (_accountCollateral > minRequiredCollateral) {
-                collateralWithdrawn = _accountCollateral - minRequiredCollateral;
+                unchecked {
+                    collateralWithdrawn = _accountCollateral - minRequiredCollateral;
+                }
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
@@ -351,7 +353,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         } else {
             collateralWithdrawn = collateralAmount;
             if (_accountCollateral < collateralWithdrawn) revert ExceededCollateralBalance();
-            _accountCollateral -= collateralWithdrawn;
+            unchecked {
+                _accountCollateral -= collateralWithdrawn;
+            }
         }
 
         DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, false);
@@ -405,7 +409,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (borrowAmount == type(uint128).max) {
             uint128 accountTotalDebt = _maxDebt(_accountCollateral, gStateCache.maxOriginationLtv);
             if (accountTotalDebt > currentDebt) {
-                amountBorrowed = accountTotalDebt - currentDebt;
+                unchecked {
+                    amountBorrowed = accountTotalDebt - currentDebt;
+                }
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
@@ -466,7 +472,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             amountRepaid = repayAmount;
 
             // Ensure the minimum debt amounts are still maintained
-            aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
+            unchecked {
+                aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
+            }
             if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED) {
                 revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
             }

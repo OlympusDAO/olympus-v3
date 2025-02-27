@@ -77,7 +77,9 @@ contract DelegateEscrow is Clone {
         uint256 existingDelegatedAmount = delegatorAmounts[onBehalfOf];
         if (gohmAmount > existingDelegatedAmount) revert ExceededDelegationBalance();
 
-        delegatorAmounts[onBehalfOf] = delegatedAmount = existingDelegatedAmount - gohmAmount;
+        unchecked {
+            delegatorAmounts[onBehalfOf] = delegatedAmount = existingDelegatedAmount - gohmAmount;
+        }
         gohm.safeTransfer(msg.sender, gohmAmount);
 
         factory().logDelegate(msg.sender, onBehalfOf, -int256(gohmAmount));
