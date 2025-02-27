@@ -109,7 +109,9 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
         uint256 outstandingDebt = TRSRY.reserveDebt(_USDS, address(this));
         uint256 delta;
         if (outstandingDebt > debtTokenAmount) {
-            delta = outstandingDebt - debtTokenAmount;
+            unchecked {
+                delta = outstandingDebt - debtTokenAmount;                
+            }
         }
         TRSRY.setDebt({
             debtor_: address(this),
