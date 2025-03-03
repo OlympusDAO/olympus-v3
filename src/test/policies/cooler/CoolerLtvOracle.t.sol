@@ -74,11 +74,6 @@ contract CoolerLtvOracleTestBase is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         rolesAdmin.grantRole("admin", OVERSEER);
-
-        // Enanle the policy
-        vm.startPrank(OVERSEER);
-        oracle.enable(abi.encode(""));
-        vm.stopPrank();
     }
 
     function checkOltvData(
@@ -287,58 +282,6 @@ contract CoolerLtvOracleTestAdmin is CoolerLtvOracleTestBase {
         assertEq(oracle.liquidationLtvPremiumBps(), 123);
 
         assertEq(oracle.currentLiquidationLtv(), (defaultOLTV * (10_000 + 123)) / 10_000);
-    }
-}
-
-contract CoolerLtvOracleTestNotEnabled is CoolerLtvOracleTestBase {
-    function setUp() public override {
-        super.setUp();
-
-        vm.startPrank(OVERSEER);
-        oracle.disable(abi.encode(""));
-        vm.stopPrank();
-    }
-
-    function test_access_setMaxOriginationLtvDelta() public {
-        vm.prank(OVERSEER);
-        oracle.setMaxOriginationLtvDelta(0.15e18);
-
-        assertEq(oracle.maxOriginationLtvDelta(), 0.15e18);
-    }
-
-    function test_access_setMinOriginationLtvTargetTimeDelta() public {
-        vm.prank(OVERSEER);
-        oracle.setMinOriginationLtvTargetTimeDelta(uint32(vm.getBlockTimestamp() + 1));
-
-        assertEq(oracle.minOriginationLtvTargetTimeDelta(), uint40(vm.getBlockTimestamp() + 1));
-    }
-
-    function test_access_setMaxOriginationLtvRateOfChange() public {
-        vm.prank(OVERSEER);
-        oracle.setMaxOriginationLtvRateOfChange(0.01e18, 1 days);
-
-        assertEq(oracle.maxOriginationLtvRateOfChange(), 0.01e18 / uint96(1 days));
-    }
-
-    function test_access_setOriginationLtvAt() public {
-        vm.prank(OVERSEER);
-        oracle.setOriginationLtvAt(defaultOLTV, uint40(vm.getBlockTimestamp()) + 365 days);
-
-        assertEq(oracle.currentOriginationLtv(), defaultOLTV);
-    }
-
-    function test_access_setMaxLiquidationLtvPremiumBps() public {
-        vm.prank(OVERSEER);
-        oracle.setMaxLiquidationLtvPremiumBps(123);
-
-        assertEq(oracle.maxLiquidationLtvPremiumBps(), 123);
-    }
-
-    function test_access_setLiquidationLtvPremiumBps() public {
-        vm.prank(OVERSEER);
-        oracle.setLiquidationLtvPremiumBps(123);
-
-        assertEq(oracle.liquidationLtvPremiumBps(), 123);
     }
 }
 

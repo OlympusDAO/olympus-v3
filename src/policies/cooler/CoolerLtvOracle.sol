@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -18,7 +18,7 @@ import {SafeCast} from "libraries/SafeCast.sol";
  *  - Origination LTV updates on a per second basis according to a policy set rate of change (and is up only or flat)
  *  - Liquidation LTV is a policy set percentage above the Origination LTV
  */
-contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
+contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyAdmin {
     using SafeCast for uint256;
 
     /// @dev The debt token
@@ -239,9 +239,6 @@ contract CoolerLtvOracle is ICoolerLtvOracle, Policy, PolicyEnabler {
             unchecked {
                 uint96 delta = originationLtvData.slope * (_now - originationLtvData.startTime);
                 return delta + originationLtvData.startingValue;
-
-                // int96 delta = tpiData.tpiSlope * int32(_now - tpiData.startTime);
-                // return uint96(delta + int96(tpiData.startingTpi));
             }
         }
     }

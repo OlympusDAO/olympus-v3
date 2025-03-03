@@ -367,11 +367,12 @@ interface IMonoCooler {
     /**
      * @notice Liquidate one or more accounts which have exceeded the `liquidationLtv`
      * The gOHM collateral is seized (unstaked to OHM and burned), and the accounts debt is wiped.
-     * @dev If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
+     * @dev
+     *    - If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
+     *    - Delegations are auto-rescinded if required. Ordering of this is not guaranteed.
      */
     function batchLiquidate(
-        address[] calldata accounts,
-        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
+        address[] calldata accounts
     )
         external
         returns (
@@ -409,7 +410,9 @@ interface IMonoCooler {
     function setBorrowPaused(bool isPaused) external;
 
     /// @notice Update the interest rate (APR), specified in Wad (18 decimals)
-    /// @dev Interest (approximately) continuously compounds at this rate.
+    /// @dev
+    ///     - Cannot be set higher than 10% APR
+    ///     - Interest (approximately) continuously compounds at this rate.
     function setInterestRateWad(uint96 newInterestRateWad) external;
 
     /// @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES

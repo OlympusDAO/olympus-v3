@@ -107,10 +107,16 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
         // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
         // and any future repayments are just deposited. There are no 'credits' for overpaying
         uint256 outstandingDebt = TRSRY.reserveDebt(_USDS, address(this));
+        uint256 delta;
+        if (outstandingDebt > debtTokenAmount) {
+            unchecked {
+                delta = outstandingDebt - debtTokenAmount;                
+            }
+        }
         TRSRY.setDebt({
             debtor_: address(this),
             token_: _USDS,
-            amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
+            amount_: delta
         });
 
         _USDS.safeApprove(address(SUSDS), debtTokenAmount);

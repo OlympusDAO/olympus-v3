@@ -144,11 +144,6 @@ abstract contract MonoCoolerBaseTest is Test {
         vm.startPrank(TB_ADMIN);
         treasuryBorrower.enable(abi.encode(""));
         vm.stopPrank();
-
-        // Enable the CoolerLtvOracle
-        vm.startPrank(OVERSEER);
-        ltvOracle.enable(abi.encode(""));
-        vm.stopPrank();
     }
 
     function checkGlobalState(
@@ -261,11 +256,7 @@ abstract contract MonoCoolerBaseTest is Test {
         );
         assertEq(delegations.length, 1, "AccountDelegation::length::1");
         assertEq(delegations[0].delegate, expectedDelegate, "AccountDelegation::delegate");
-        assertEq(
-            delegations[0].totalAmount,
-            expectedDelegationAmount,
-            "AccountDelegation::totalAmount"
-        );
+        assertEq(delegations[0].amount, expectedDelegationAmount, "AccountDelegation::amount");
         assertEq(
             gohm.balanceOf(delegations[0].escrow),
             expectedDelegationAmount,
@@ -287,22 +278,14 @@ abstract contract MonoCoolerBaseTest is Test {
         );
         assertEq(delegations.length, 2, "AccountDelegation::length::2");
         assertEq(delegations[0].delegate, expectedDelegate1, "AccountDelegation::delegate1");
-        assertEq(
-            delegations[0].totalAmount,
-            expectedDelegationAmount1,
-            "AccountDelegation::totalAmount1"
-        );
+        assertEq(delegations[0].amount, expectedDelegationAmount1, "AccountDelegation::amount1");
         assertEq(
             gohm.balanceOf(delegations[0].escrow),
             expectedDelegationAmount1,
             "AccountDelegation::escrow1::gOHM::balanceOf"
         );
         assertEq(delegations[1].delegate, expectedDelegate2, "AccountDelegation::delegate2");
-        assertEq(
-            delegations[1].totalAmount,
-            expectedDelegationAmount2,
-            "AccountDelegation::totalAmount2"
-        );
+        assertEq(delegations[1].amount, expectedDelegationAmount2, "AccountDelegation::amount2");
         assertEq(
             gohm.balanceOf(delegations[1].escrow),
             expectedDelegationAmount2,
@@ -460,7 +443,6 @@ abstract contract MonoCoolerBaseTest is Test {
 
     function checkBatchLiquidate(
         address[] memory accounts,
-        IDLGTEv1.DelegationRequest[][] memory requests,
         uint128 expectedCollateralClaimed,
         uint128 expectedDebtWiped,
         uint128 expectedIncentives
@@ -469,7 +451,7 @@ abstract contract MonoCoolerBaseTest is Test {
             uint128 totalCollateralClaimed,
             uint128 totalDaiDebtWiped,
             uint128 totalIncentives
-        ) = cooler.batchLiquidate(accounts, requests);
+        ) = cooler.batchLiquidate(accounts);
         assertEq(
             totalCollateralClaimed,
             expectedCollateralClaimed,
