@@ -1465,7 +1465,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     function test_consolidate_fuzz(
         uint256 loanOneCollateral_,
         uint256 loanTwoCollateral_
-    ) public givenAuthorizationSignatureSet(USER, USER_PK) {
+    ) public givenDaiClearinghouseIsEnabled givenAuthorizationSignatureSet(USER, USER_PK) {
         // 0.5-100 gOHM
         uint256 loanOneCollateral = bound(loanOneCollateral_, 5e17, 100e18);
         uint256 loanTwoCollateral = bound(loanTwoCollateral_, 5e17, 100e18);
@@ -1476,19 +1476,19 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Take loans
         _takeLoan(USER, true, loanOneCollateral);
-        _takeLoan(USER, true, loanTwoCollateral);
+        _takeLoan(USER, false, loanTwoCollateral);
 
         // Approve spending of collateral by the migrator
         _approveMigratorSpendingCollateral(USER, loanOneCollateral + loanTwoCollateral);
 
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, true);
 
         // Get loan details
         Cooler.Loan memory loanZero = _getLoan(true, 0);
         uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
 
-        Cooler.Loan memory loanOne = _getLoan(true, 1);
+        Cooler.Loan memory loanOne = _getLoan(false, 0);
         uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
 
         uint256 userUsdsBalance = usds.balanceOf(USER);
