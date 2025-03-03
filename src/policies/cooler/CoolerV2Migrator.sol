@@ -29,6 +29,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @notice A contract that migrates debt from Olympus Cooler V1 facilities to Cooler V2.
 ///         This is compatible with all three versions of Cooler V1.
 /// @dev    This contract uses the `IERC3156FlashBorrower` interface to interact with Maker flashloans.
+///         The debt token of MonoCooler is assumed to be USDS. If that is changed in the future, this contract will need to be re-deployed.
 contract CoolerV2Migrator is
     IERC3156FlashBorrower,
     ICoolerV2Migrator,
@@ -110,6 +111,11 @@ contract CoolerV2Migrator is
         if (gohm_ == address(0)) revert Params_InvalidAddress("gohm");
 
         COOLERV2 = IMonoCooler(coolerV2_);
+
+        // Validate tokens
+        if (address(COOLERV2.collateralToken()) != gohm_) revert Params_InvalidAddress("gohm");
+        if (address(COOLERV2.debtToken()) != usds_) revert Params_InvalidAddress("usds");
+
         _DAI = ERC20(dai_);
         _USDS = ERC20(usds_);
         _GOHM = ERC20(gohm_);
