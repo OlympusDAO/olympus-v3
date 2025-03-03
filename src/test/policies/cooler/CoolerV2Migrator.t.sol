@@ -485,10 +485,16 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // given there is a repaid loan
     //  [X] it ignores the repaid loan
     // given the flash fee is non-zero
+    //  given the caller will pay interest and fees
+    //   [ ] it returns the total collateral returned
+    //   [ ] the total borrowed is the principal
+    //   [ ] the payment amount is the interest + flash fee
     //  [X] it returns the total collateral returned
     //  [X] the total borrowed is the principal + interest + flash fee
+    //  [ ] the payment amount is 0
     // [X] it returns the total collateral returned
     // [X] the total borrowed is the principal + interest
+    // [ ] the payment amount is 0
 
     function test_previewConsolidate_givenDisabled_reverts()
         public
@@ -503,7 +509,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _expectRevert_disabled();
 
         // Function
-        migrator.previewConsolidate(coolers);
+        migrator.previewConsolidate(coolers, false);
     }
 
     function test_previewConsolidate_givenNoLoans() public {
@@ -514,7 +520,8 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         (address[] memory coolers, ) = _getCoolerArrays(true, false);
 
         // Function
-        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+        (uint256 collateralAmount, uint256 borrowedAmount, uint256 paymentAmount) = migrator
+            .previewConsolidate(coolers, false);
 
         // Assertions
         assertEq(collateralAmount, 0, "collateralAmount");
@@ -535,7 +542,8 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
 
         // Function
-        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+        (uint256 collateralAmount, uint256 borrowedAmount, uint256 paymentAmount) = migrator
+            .previewConsolidate(coolers, false);
 
         // Assertions
         assertEq(collateralAmount, 1e18, "collateralAmount");
@@ -561,7 +569,8 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         uint256 flashFee = ((loanZeroPayable + loanOnePayable) * 1e2) / 100e2;
 
         // Function
-        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+        (uint256 collateralAmount, uint256 borrowedAmount, uint256 paymentAmount) = migrator
+            .previewConsolidate(coolers, false);
 
         // Assertions
         assertEq(collateralAmount, 3e18, "collateralAmount");
@@ -584,7 +593,8 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
 
         // Function
-        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
+        (uint256 collateralAmount, uint256 borrowedAmount, uint256 paymentAmount) = migrator
+            .previewConsolidate(coolers, false);
 
         // Assertions
         assertEq(collateralAmount, 3e18, "collateralAmount");
@@ -626,6 +636,13 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     //  [X] the Cooler V1 loans are repaid
     //  [X] the migrator does not hold any tokens
     // given the flash fee is non-zero
+    //  when the caller pays interest and fees
+    //   [ ] it sets the authorization signature
+    //   [ ] it deposits the collateral into MonoCooler
+    //   [ ] it pays the interest and flash fee from the caller
+    //   [ ] it borrows the principal from MonoCooler
+    //   [ ] the Cooler V1 loans are repaid
+    //   [ ] the migrator does not hold any tokens
     //  [X] it sets the authorization signature
     //  [X] it deposits the collateral into MonoCooler
     //  [X] it borrows the principal + interest + flash fee from MonoCooler
@@ -656,6 +673,16 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     //  [X] the Cooler V1 loans are repaid
     //  [X] the migrator does not hold any tokens
     //  [X] the delegation requests are applied
+    // when the caller pays interest and fees
+    //  given the caller has not provided spending approval
+    //   [ ] it reverts
+    //  [ ] it sets the authorization signature
+    //  [ ] it deposits the collateral into MonoCooler
+    //  [ ] it pays the interest from the caller
+    //  [ ] it borrows the principal from MonoCooler
+    //  [ ] it sets the existing owner as the owner of the Cooler V2 position
+    //  [ ] the Cooler V1 loans are repaid
+    //  [ ] the migrator does not hold any tokens
     // [X] it sets the authorization signature
     // [X] it deposits the collateral into MonoCooler
     // [X] it borrows the principal + interest from MonoCooler
@@ -682,6 +709,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -709,6 +737,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghousesWithExtra,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -738,6 +767,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghousesWithLess,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -763,6 +793,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghousesWithLess,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -809,6 +840,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolersWithNew,
             clearinghousesWithNew,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -846,6 +878,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolersWithNew,
             clearinghousesWithNew,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -871,6 +904,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -903,6 +937,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolersWithDuplicate,
             clearinghousesWithDuplicate,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -957,6 +992,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolersWithNew,
             clearinghousesWithNew,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -980,6 +1016,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1008,6 +1045,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1046,6 +1084,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1071,6 +1110,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER, // does not match authorization.account
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1099,6 +1139,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER2,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1147,6 +1188,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1198,6 +1240,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1250,6 +1293,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1303,6 +1347,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1348,6 +1393,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1394,6 +1440,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests
@@ -1453,6 +1500,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             coolers,
             clearinghouses,
             USER,
+            false,
             authorization,
             signature,
             delegationRequests

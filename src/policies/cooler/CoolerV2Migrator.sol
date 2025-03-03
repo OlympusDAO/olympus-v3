@@ -157,8 +157,14 @@ contract CoolerV2Migrator is
 
     /// @inheritdoc ICoolerV2Migrator
     function previewConsolidate(
-        address[] memory coolers_
-    ) external view onlyEnabled returns (uint256 collateralAmount, uint256 borrowAmount) {
+        address[] memory coolers_,
+        bool callerPays_
+    )
+        external
+        view
+        onlyEnabled
+        returns (uint256 collateralAmount, uint256 borrowAmount, uint256 paymentAmount)
+    {
         // Determine the totals
         uint256 totalDebt;
         for (uint256 i; i < coolers_.length; i++) {
@@ -194,6 +200,7 @@ contract CoolerV2Migrator is
         address[] memory coolers_,
         address[] memory clearinghouses_,
         address newOwner_,
+        bool callerPays_,
         IMonoCooler.Authorization memory authorization_,
         IMonoCooler.Signature calldata signature_,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests_
