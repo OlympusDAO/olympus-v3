@@ -49,12 +49,21 @@ contract CoolerV2Migrator is
         uint8 numLoans;
     }
 
+    /// @dev    Temporary storage for the principal and interest for each debt token
+    struct CoolerTotal {
+        uint256 daiPrincipal;
+        uint256 daiInterest;
+        uint256 usdsPrincipal;
+        uint256 usdsInterest;
+    }
+
     /// @notice Data structure used for flashloan parameters
     struct FlashLoanData {
         CoolerData[] coolers;
         address currentOwner;
         address newOwner;
         uint256 usdsRequired;
+        bool callerPays;
         IDLGTEv1.DelegationRequest[] delegationRequests;
     }
 
@@ -172,7 +181,7 @@ contract CoolerV2Migrator is
         returns (uint256 collateralAmount, uint256 borrowAmount, uint256 paymentAmount)
     {
         // Determine the totals
-        uint256 totalDebt;
+        uint256 totalInterest;
         for (uint256 i; i < coolers_.length; i++) {
             Cooler cooler = Cooler(coolers_[i]);
 
@@ -181,14 +190,28 @@ contract CoolerV2Migrator is
             );
 
             collateralAmount += collateral;
-            totalDebt += principal + interest;
+            borrowAmount += principal;
+            totalInterest += interest;
+        }
+
+        // If caller pays is false, we need to include the interest in the borrow amount, which is used to calculate the lender fee
+        if (!callerPays_) {
+            borrowAmount += totalInterest;
         }
 
         // Determine the lender fee
-        uint256 lenderFee = FLASH.flashFee(address(_DAI), totalDebt);
-        borrowAmount = totalDebt + lenderFee;
+        uint256 lenderFee = FLASH.flashFee(address(_DAI), borrowAmount);
 
-        return (collateralAmount, borrowAmount);
+        // If enabled, the caller will pay for the interest and fee
+        if (callerPays_) {
+            paymentAmount += totalInterest + lenderFee;
+        }
+        // Otherwise the interest (already included) and lender fee will be borrowed
+        else {
+            borrowAmount += lenderFee;
+        }
+
+        return (collateralAmount, borrowAmount, paymentAmount);
     }
 
     /// @inheritdoc ICoolerV2Migrator
@@ -219,8 +242,7 @@ contract CoolerV2Migrator is
         CoolerData[] memory coolerData = new CoolerData[](clearinghouses_.length);
 
         // Keep track of the total principal and interest for each debt token
-        uint256 daiRequired;
-        uint256 usdsRequired;
+        CoolerTotal memory totals;
         for (uint256 i; i < clearinghouses_.length; i++) {
             // Check that the Clearinghouse is owned by the protocol
             if (!_isValidClearinghouse(clearinghouses_[i])) revert Params_InvalidClearinghouse();
@@ -252,11 +274,11 @@ contract CoolerV2Migrator is
             });
 
             if (debtToken == address(_DAI)) {
-                daiRequired += coolerPrincipal;
-                daiRequired += coolerInterest;
+                totals.daiPrincipal += coolerPrincipal;
+                totals.daiInterest += coolerInterest;
             } else if (debtToken == address(_USDS)) {
-                usdsRequired += coolerPrincipal;
-                usdsRequired += coolerInterest;
+                totals.usdsPrincipal += coolerPrincipal;
+                totals.usdsInterest += coolerInterest;
             } else {
                 // Unsupported debt token
                 revert Params_InvalidCooler();
@@ -275,14 +297,40 @@ contract CoolerV2Migrator is
 
         // Take flashloan
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
-        FLASH.flashLoan(
-            this,
-            address(_DAI),
-            daiRequired + usdsRequired,
-            abi.encode(
-                FlashLoanData(coolerData, msg.sender, newOwner_, usdsRequired, delegationRequests_)
-            )
-        );
+        {
+            // Calculate the flashloan amount
+            uint256 flashloanAmount = totals.daiPrincipal + totals.usdsPrincipal;
+            // If the caller is not paying, then the interest is added to the flashloan amount
+            if (!callerPays_) {
+                flashloanAmount += totals.daiInterest + totals.usdsInterest;
+            }
+            // Otherwise transfer in the interest and fee from the caller
+            // No change to the flashloan amount
+            else {
+                uint256 lenderFee = FLASH.flashFee(address(_DAI), flashloanAmount);
+                _DAI.safeTransferFrom(
+                    msg.sender,
+                    address(this),
+                    totals.daiInterest + totals.usdsInterest + lenderFee
+                );
+            }
+
+            FLASH.flashLoan(
+                this,
+                address(_DAI),
+                flashloanAmount,
+                abi.encode(
+                    FlashLoanData(
+                        coolerData,
+                        msg.sender,
+                        newOwner_,
+                        totals.usdsPrincipal + totals.usdsInterest, // The amount of DAI that will be migrated to USDS
+                        callerPays_,
+                        delegationRequests_
+                    )
+                )
+            );
+        }
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
         uint256 usdsBalanceAfter = _USDS.balanceOf(address(this));
@@ -315,25 +363,28 @@ contract CoolerV2Migrator is
         CoolerData[] memory coolers = flashLoanData.coolers;
 
         // If there are loans in USDS, convert the required amount from DAI
+        // The DAI can come from the flash loan or the caller
         if (flashLoanData.usdsRequired > 0) {
             _DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
             MIGRATOR.daiToUsds(address(this), flashLoanData.usdsRequired);
         }
 
         // Keep track of debt tokens out and collateral in
-        uint256 totalRepaid;
+        uint256 totalPrincipal;
+        uint256 totalInterest;
         uint256 totalCollateral;
 
         // Validate and repay loans for each cooler
         for (uint256 i; i < coolers.length; ++i) {
             CoolerData memory coolerData = coolers[i];
 
-            (uint256 repaid, uint256 collateral) = _handleRepayments(
+            (uint256 principal, uint256 interest, uint256 collateral) = _handleRepayments(
                 coolerData.cooler,
                 coolerData.debtToken,
                 coolerData.numLoans
             );
-            totalRepaid += repaid;
+            totalPrincipal += principal;
+            totalInterest += interest;
             totalCollateral += collateral;
         }
 
@@ -343,17 +394,20 @@ contract CoolerV2Migrator is
         // Approve the Cooler V2 to spend the collateral
         _GOHM.safeApprove(address(COOLERV2), totalCollateral);
 
+        // Calculate the amount to borrow from Cooler V2
+        // If the caller is not paying, then the interest and lender fee will be borrowed from Cooler V2
+        uint256 borrowAmount = totalPrincipal;
+        if (!flashLoanData.callerPays) {
+            borrowAmount += totalInterest + lenderFee_;
+        }
+
         // Add collateral and borrow spent flash loan from Cooler V2
         COOLERV2.addCollateral(
             totalCollateral.encodeUInt128(),
             flashLoanData.newOwner,
             flashLoanData.delegationRequests
         );
-        COOLERV2.borrow(
-            (totalRepaid + lenderFee_).encodeUInt128(),
-            flashLoanData.newOwner,
-            address(this)
-        );
+        COOLERV2.borrow(borrowAmount.encodeUInt128(), flashLoanData.newOwner, address(this));
 
         // Convert the USDS to DAI
         uint256 usdsBalance = _USDS.balanceOf(address(this));
@@ -370,7 +424,7 @@ contract CoolerV2Migrator is
         Cooler cooler_,
         ERC20 debtToken_,
         uint256 numLoans_
-    ) internal returns (uint256 repaid, uint256 collateral) {
+    ) internal returns (uint256 principal, uint256 interest, uint256 collateral) {
         // Provide upfront infinite approval to cooler
         // The consolidate() function is gated by a nonReentrant modifier, so there cannot be a reentrancy attack during the approval and revocation
         debtToken_.safeApprove(address(cooler_), type(uint256).max);
@@ -381,19 +435,18 @@ contract CoolerV2Migrator is
 
             // Only repay outstanding loans
             if (loan.principal > 0) {
-                uint256 amount = loan.principal + loan.interestDue;
-
-                repaid += amount;
+                principal += loan.principal;
+                interest += loan.interestDue;
                 collateral += loan.collateral;
 
-                cooler_.repayLoan(i, amount);
+                cooler_.repayLoan(i, loan.principal + loan.interestDue);
             }
         }
 
         // Revoke approval
         debtToken_.safeApprove(address(cooler_), 0);
 
-        return (repaid, collateral);
+        return (principal, interest, collateral);
     }
 
     // ========= HELPER FUNCTIONS ========= //
