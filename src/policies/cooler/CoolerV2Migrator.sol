@@ -308,7 +308,7 @@ contract CoolerV2Migrator is
         FlashLoanData memory flashLoanData = abi.decode(params_, (FlashLoanData));
         CoolerData[] memory coolers = flashLoanData.coolers;
 
-        // If there are loans in USDS, convert the required amount to DAI
+        // If there are loans in USDS, convert the required amount from DAI
         if (flashLoanData.usdsRequired > 0) {
             _DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
             MIGRATOR.daiToUsds(address(this), flashLoanData.usdsRequired);
