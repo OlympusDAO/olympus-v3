@@ -44,7 +44,7 @@ interface ICoolerV2Migrator {
     /// @param  callerPays_         True if the caller will pay the interest owed and any fees
     /// @return collateralAmount    The amount of collateral that will be migrated into Cooler V2.
     /// @return borrowAmount        The amount of debt that will be borrowed from Cooler V2.
-    /// @return paymentAmount       The amount of debt token that the caller will need to approve and provide
+    /// @return paymentAmount       The amount of DAI that the caller will need to approve and provide to the migrator.
     function previewConsolidate(
         address[] calldata coolers_,
         bool callerPays_
@@ -68,7 +68,7 @@ interface ICoolerV2Migrator {
     /// @param  coolers_            The Coolers from which the loans will be migrated.
     /// @param  clearinghouses_     The respective Clearinghouses that created and issued the loans in `coolers_`. This array must be the same length as `coolers_`.
     /// @param  newOwner_           Address of the owner of the Cooler V2 position. This can be the same as the caller, or a different address.
-    /// @param  callerPays_         True if the caller will pay the interest owed and any fees.
+    /// @param  callerPays_         True if the caller will pay the interest owed and fees, in terms of DAI.
     /// @param  authorization_      Authorization parameters for the new owner. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
     /// @param  signature_          Authorization signature for the new owner. Ignored if `authorization_.account` is the zero address.
     /// @param  delegationRequests_ Delegation requests for the new owner.
