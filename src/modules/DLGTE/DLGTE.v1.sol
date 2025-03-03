@@ -40,7 +40,11 @@ abstract contract DLGTEv1 is Module, IDLGTEv1 {
     function depositUndelegatedGohm(address onBehalfOf, uint256 amount) external virtual override;
 
     /// @inheritdoc IDLGTEv1
-    function withdrawUndelegatedGohm(address onBehalfOf, uint256 amount) external virtual override;
+    function withdrawUndelegatedGohm(
+        address onBehalfOf,
+        uint256 amount,
+        bool autoRescindDelegations
+    ) external virtual override;
 
     /// @inheritdoc IDLGTEv1
     function applyDelegations(
@@ -51,6 +55,12 @@ abstract contract DLGTEv1 is Module, IDLGTEv1 {
         virtual
         override
         returns (uint256 totalDelegated, uint256 totalUndelegated, uint256 undelegatedBalance);
+
+    /// @inheritdoc IDLGTEv1
+    function rescindDelegations(
+        address onBehalfOf,
+        uint256 requestedUndelegatedBalance
+    ) external virtual override returns (uint256 actualUndelegatedBalance);
 
     /// @inheritdoc IDLGTEv1
     function policyAccountBalances(
@@ -78,6 +88,9 @@ abstract contract DLGTEv1 is Module, IDLGTEv1 {
             uint256 numDelegateAddresses,
             uint256 maxAllowedDelegateAddresses
         );
+
+    /// @inheritdoc IDLGTEv1
+    function totalDelegatedTo(address delegate) external view virtual returns (uint256);
 
     /// @inheritdoc IDLGTEv1
     function maxDelegateAddresses(

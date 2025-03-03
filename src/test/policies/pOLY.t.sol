@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -12,7 +11,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {IPOLY, pOLY} from "policies/pOLY.sol";
+import {pOLY} from "policies/pOLY.sol";
 import "src/Kernel.sol";
 
 import {IgOHM} from "interfaces/IgOHM.sol";
@@ -161,6 +160,18 @@ contract pOLYTest is Test {
             // Set OHM circulating supply
             ohm.mint(address(0), 100_000_000e9);
         }
+    }
+
+    function _checkTerms(
+        address user,
+        uint256 expectedPercent,
+        uint256 expectedGClaimed,
+        uint256 expectedNewMax
+    ) private view {
+        (uint256 newPercent, uint256 newGClaimed, uint256 newMax) = poly.terms(user);
+        assertEq(newPercent, expectedPercent);
+        assertEq(newGClaimed, expectedGClaimed);
+        assertEq(newMax, expectedNewMax);
     }
 
     //============================================================================================//
@@ -326,18 +337,12 @@ contract pOLYTest is Test {
         vm.prank(alice);
         poly.pushWalletChange(bob);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(bob);
-        assertEq(percent, 10_000);
-        assertEq(gClaimed, 0);
-        assertEq(max, 100_000e9);
+        _checkTerms(bob, 10_000, 0, 100_000e9);
 
         vm.prank(bob);
         poly.pullWalletChange(alice);
 
-        (percent, gClaimed, max) = poly.terms(bob);
-        assertEq(percent, 20_000);
-        assertEq(gClaimed, 0);
-        assertEq(max, 200_000e9);
+        _checkTerms(bob, 20_000, 0, 200_000e9);
     }
 
     function test_pullWalletSetsWalletChangeToZeroAddress(address newWallet_) public {
@@ -362,25 +367,13 @@ contract pOLYTest is Test {
         vm.prank(alice);
         poly.pushWalletChange(newWallet_);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(alice);
-        assertEq(percent, 10_000);
-        assertEq(gClaimed, 0);
-        assertEq(max, 100_000e9);
-
-        (uint256 newWalletPercent, uint256 newWalletGClaimed, uint256 newWalletMax) = poly.terms(
-            newWallet_
-        );
-        assertEq(newWalletPercent, 0);
-        assertEq(newWalletGClaimed, 0);
-        assertEq(newWalletMax, 0);
+        _checkTerms(alice, 10_000, 0, 100_000e9);
+        _checkTerms(newWallet_, 0, 0, 0);
 
         vm.prank(newWallet_);
         poly.pullWalletChange(alice);
 
-        (newWalletPercent, newWalletGClaimed, newWalletMax) = poly.terms(newWallet_);
-        assertEq(newWalletPercent, 10_000);
-        assertEq(newWalletGClaimed, 0);
-        assertEq(newWalletMax, 100_000e9);
+        _checkTerms(newWallet_, 10_000, 0, 100_000e9);
     }
 
     function test_pullWalletDeletesTermsForOldWallet(address newWallet_) public {
@@ -389,18 +382,12 @@ contract pOLYTest is Test {
         vm.prank(alice);
         poly.pushWalletChange(newWallet_);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(alice);
-        assertEq(percent, 10_000);
-        assertEq(gClaimed, 0);
-        assertEq(max, 100_000e9);
+        _checkTerms(alice, 10_000, 0, 100_000e9);
 
         vm.prank(newWallet_);
         poly.pullWalletChange(alice);
 
-        (percent, gClaimed, max) = poly.terms(alice);
-        assertEq(percent, 0);
-        assertEq(gClaimed, 0);
-        assertEq(max, 0);
+        _checkTerms(alice, 0, 0, 0);
     }
 
     function test_pullWalletOldWalletCanNoLongerClaim(address newWallet_) public {
@@ -460,15 +447,8 @@ contract pOLYTest is Test {
         previous.setTerms(migratedUser1_, 10_000, 0, 100_000e9);
         previous.setTerms(migratedUser2_, 5_000, 1e18, 50_000e9);
 
-        (uint256 newPercent1, uint256 newGClaimed1, uint256 newMax1) = poly.terms(migratedUser1_);
-        assertEq(newPercent1, 0);
-        assertEq(newGClaimed1, 0);
-        assertEq(newMax1, 0);
-
-        (uint256 newPercent2, uint256 newGClaimed2, uint256 newMax2) = poly.terms(migratedUser2_);
-        assertEq(newPercent2, 0);
-        assertEq(newGClaimed2, 0);
-        assertEq(newMax2, 0);
+        _checkTerms(migratedUser1_, 0, 0, 0);
+        _checkTerms(migratedUser2_, 0, 0, 0);
 
         address[] memory users = new address[](2);
         users[0] = migratedUser1_;
@@ -476,15 +456,8 @@ contract pOLYTest is Test {
 
         poly.migrate(users);
 
-        (newPercent1, newGClaimed1, newMax1) = poly.terms(migratedUser1_);
-        assertEq(newPercent1, 10_000);
-        assertEq(newGClaimed1, 0);
-        assertEq(newMax1, 100_000e9);
-
-        (newPercent2, newGClaimed2, newMax2) = poly.terms(migratedUser2_);
-        assertEq(newPercent2, 5_000);
-        assertEq(newGClaimed2, 1e18);
-        assertEq(newMax2, 50_000e9);
+        _checkTerms(migratedUser1_, 10_000, 0, 100_000e9);
+        _checkTerms(migratedUser2_, 5_000, 1e18, 50_000e9);
     }
 
     /// [X]  migrateGenesis
@@ -518,15 +491,8 @@ contract pOLYTest is Test {
         previousGenesis.setTerms(migratedUser1_, 10_000, 100e9, 1e18, 100_000e9);
         previousGenesis.setTerms(migratedUser2_, 5_000, 5e9, 5e17, 50_000e9);
 
-        (uint256 newPercent1, uint256 newGClaimed1, uint256 newMax1) = poly.terms(migratedUser1_);
-        assertEq(newPercent1, 0);
-        assertEq(newGClaimed1, 0);
-        assertEq(newMax1, 0);
-
-        (uint256 newPercent2, uint256 newGClaimed2, uint256 newMax2) = poly.terms(migratedUser2_);
-        assertEq(newPercent2, 0);
-        assertEq(newGClaimed2, 0);
-        assertEq(newMax2, 0);
+        _checkTerms(migratedUser1_, 0, 0, 0);
+        _checkTerms(migratedUser2_, 0, 0, 0);
 
         address[] memory users = new address[](2);
         users[0] = migratedUser1_;
@@ -534,15 +500,8 @@ contract pOLYTest is Test {
 
         poly.migrateGenesis(users);
 
-        (newPercent1, newGClaimed1, newMax1) = poly.terms(migratedUser1_);
-        assertEq(newPercent1, 10_000);
-        assertEq(newGClaimed1, 2e18);
-        assertEq(newMax1, 100_000e9);
-
-        (newPercent2, newGClaimed2, newMax2) = poly.terms(migratedUser2_);
-        assertEq(newPercent2, 5_000);
-        assertEq(newGClaimed2, 55e16);
-        assertEq(newMax2, 50_000e9);
+        _checkTerms(migratedUser1_, 10_000, 2e18, 100_000e9);
+        _checkTerms(migratedUser2_, 5_000, 55e16, 50_000e9);
     }
 
     /// [X]  setTerms
@@ -584,17 +543,11 @@ contract pOLYTest is Test {
     function test_setTermsSetsTermsForAccount(address user_) public {
         vm.assume(user_ != alice && user_ != bob);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(user_);
-        assertEq(percent, 0);
-        assertEq(gClaimed, 0);
-        assertEq(max, 0);
+        _checkTerms(user_, 0, 0, 0);
 
         poly.setTerms(user_, 10_000, 0, 100_000e9);
 
-        (percent, gClaimed, max) = poly.terms(user_);
-        assertEq(percent, 10_000);
-        assertEq(gClaimed, 0);
-        assertEq(max, 100_000e9);
+        _checkTerms(user_, 10_000, 0, 100_000e9);
     }
 
     function test_setTermsIncreasesTotalAllocatedValue(address user_) public {

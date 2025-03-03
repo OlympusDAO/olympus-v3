@@ -131,6 +131,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     /// @dev expected decimals for the `_COLLATERAL_TOKEN` and `treasuryBorrower`
     uint8 private constant _EXPECTED_DECIMALS = 18;
 
+    /// @dev Cannot set an interest rate higher than 10%
+    uint96 private constant MAX_INTEREST_RATE = 0.1e18;
+
     //============================================================================================//
     //                                      INITIALIZATION                                        //
     //============================================================================================//
@@ -222,7 +225,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setAuthorization(address authorized, uint96 authorizationDeadline) external {
+    function setAuthorization(address authorized, uint96 authorizationDeadline) external override {
         emit AuthorizationSet(msg.sender, msg.sender, authorized, authorizationDeadline);
         authorizations[msg.sender][authorized] = authorizationDeadline;
     }
@@ -231,7 +234,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     function setAuthorizationWithSig(
         Authorization memory authorization,
         Signature calldata signature
-    ) external {
+    ) external override {
         /// Do not check whether authorization is already set because the nonce increment is a desired side effect.
         if (block.timestamp > authorization.signatureDeadline)
             revert ExpiredSignature(authorization.signatureDeadline);
@@ -258,8 +261,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     }
 
     /// @inheritdoc IMonoCooler
-    function isSenderAuthorized(address sender, address onBehalfOf) public view returns (bool) {
-        return sender == onBehalfOf || block.timestamp < authorizations[onBehalfOf][sender];
+    function isSenderAuthorized(address sender, address onBehalfOf) public view override returns (bool) {
+        return sender == onBehalfOf || block.timestamp <= authorizations[onBehalfOf][sender];
     }
 
     function _requireSenderAuthorized(address sender, address onBehalfOf) internal view {
@@ -336,7 +339,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                 gStateCache.maxOriginationLtv
             );
             if (_accountCollateral > minRequiredCollateral) {
-                collateralWithdrawn = _accountCollateral - minRequiredCollateral;
+                unchecked {
+                    collateralWithdrawn = _accountCollateral - minRequiredCollateral;
+                }
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
@@ -348,10 +353,12 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         } else {
             collateralWithdrawn = collateralAmount;
             if (_accountCollateral < collateralWithdrawn) revert ExceededCollateralBalance();
-            _accountCollateral -= collateralWithdrawn;
+            unchecked {
+                _accountCollateral -= collateralWithdrawn;
+            }
         }
 
-        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn);
+        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, false);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
         aState.collateral = _accountCollateral;
@@ -402,7 +409,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (borrowAmount == type(uint128).max) {
             uint128 accountTotalDebt = _maxDebt(_accountCollateral, gStateCache.maxOriginationLtv);
             if (accountTotalDebt > currentDebt) {
-                amountBorrowed = accountTotalDebt - currentDebt;
+                unchecked {
+                    amountBorrowed = accountTotalDebt - currentDebt;
+                }
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
@@ -463,7 +472,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             amountRepaid = repayAmount;
 
             // Ensure the minimum debt amounts are still maintained
-            aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
+            unchecked {
+                aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
+            }
             if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED) {
                 revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
             }
@@ -534,8 +545,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
-        address[] calldata accounts,
-        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
+        address[] calldata accounts
     )
         external
         override
@@ -546,7 +556,6 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         )
     {
         if (liquidationsPaused) revert Paused();
-        if (delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
 
         LiquidationStatus memory status;
         GlobalStateCache memory gState = _globalStateRW();
@@ -566,11 +575,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                     status.currentIncentive
                 );
 
-                // Apply any undelegation requests.
-                _undelegateForLiquidation(account, delegationRequests[i], status.collateral);
-
-                // Withdraw the undelegated gOHM
-                DLGTE.withdrawUndelegatedGohm(account, status.collateral);
+                // Withdraw the undelegated gOHM, auto-rescinding delegations if required
+                DLGTE.withdrawUndelegatedGohm(account, status.collateral, true);
 
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;
@@ -585,13 +591,11 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
-
             if (gOhmToBurn > 0) {
-                _COLLATERAL_TOKEN.safeApprove(address(_STAKING), gOhmToBurn);
-                MINTR.burnOhm(
-                    address(this),
-                    _STAKING.unstake(address(this), gOhmToBurn, false, false)
-                );
+                uint256 ohmAmount = _STAKING.unstake(address(this), gOhmToBurn, false, false);
+                if (ohmAmount > 0) {
+                    MINTR.burnOhm(address(this), ohmAmount);
+                }
             }
 
             totalCollateral -= totalCollateralClaimed;
@@ -649,6 +653,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function setInterestRateWad(uint96 newInterestRate) external override onlyAdminRole {
+        if (newInterestRate > MAX_INTEREST_RATE) revert InvalidParam();
+
         // Force an update of state on the old rate first.
         _globalStateRW();
 
