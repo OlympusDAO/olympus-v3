@@ -257,8 +257,8 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
             amounts_[i] = 3e18;
         }
 
-        // Warp to the normal redemption expiry
-        vm.warp(REDEMPTION_EXPIRY);
+        // Warp to before the normal redemption expiry
+        vm.warp(REDEMPTION_EXPIRY - 1);
 
         // Expect revert
         vm.expectRevert(

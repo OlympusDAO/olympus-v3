@@ -250,10 +250,8 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256[] memory amounts_ = new uint256[](3);
 
         for (uint256 i; i < 3; i++) {
-            uint48 expiry = CONVERSION_EXPIRY;
             uint48 redemptionExpiry = REDEMPTION_EXPIRY;
             if (positionIndex == i) {
-                expiry = CONVERSION_EXPIRY - 1;
                 redemptionExpiry = REDEMPTION_EXPIRY - 1;
             }
 
@@ -262,7 +260,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
                 recipient,
                 3e18,
                 CONVERSION_PRICE,
-                expiry,
+                CONVERSION_EXPIRY,
                 redemptionExpiry,
                 false
             );
@@ -275,11 +273,9 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(REDEMPTION_EXPIRY - 1);
 
         // Expect revert
+        // Reclaim is not allowed after conversion expiry
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionExpired.selector,
-                positionIndex
-            )
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_PositionExpired.selector, 0)
         );
 
         // Call function

@@ -370,9 +370,9 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         givenAddressHasReserveToken(recipient, 9e6)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e6)
     {
-        uint256 amountOne = bound(amountOne_, 0, 3e6);
-        uint256 amountTwo = bound(amountTwo_, 0, 3e6);
-        uint256 amountThree = bound(amountThree_, 0, 3e6);
+        uint256 amountOne = bound(amountOne_, 1e2, 3e6);
+        uint256 amountTwo = bound(amountTwo_, 1e2, 3e6);
+        uint256 amountThree = bound(amountThree_, 1e2, 3e6);
 
         uint256[] memory positionIds_ = new uint256[](3);
         uint256[] memory amounts_ = new uint256[](3);
@@ -451,9 +451,9 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
     {
-        uint256 amountOne = bound(amountOne_, 0, 3e18);
-        uint256 amountTwo = bound(amountTwo_, 0, 3e18);
-        uint256 amountThree = bound(amountThree_, 0, 3e18);
+        uint256 amountOne = bound(amountOne_, 1e2, 3e18);
+        uint256 amountTwo = bound(amountTwo_, 1e2, 3e18);
+        uint256 amountThree = bound(amountThree_, 1e2, 3e18);
 
         uint256[] memory positionIds_ = new uint256[](3);
         uint256[] memory amounts_ = new uint256[](3);

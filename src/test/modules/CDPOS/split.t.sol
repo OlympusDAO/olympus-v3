@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 import {CDPOSTest} from "./CDPOSTest.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {Module} from "src/Kernel.sol";
 
 contract SplitCDPOSTest is CDPOSTest {
     event PositionSplit(

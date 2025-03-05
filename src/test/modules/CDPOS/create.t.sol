@@ -31,7 +31,7 @@ contract CreateCDPOSTest is CDPOSTest {
     // when the expiry is in the past or now
     //  [X] it reverts
     // when the redemption expiry is less than or equal to the conversion expiry
-    //  [ ] it reverts
+    //  [X] it reverts
     // when multiple positions are created
     //  [X] the position IDs are sequential
     //  [X] the position IDs are unique
@@ -65,7 +65,7 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_PERIOD,
+            REDEMPTION_EXPIRY,
             false
         );
     }
@@ -102,7 +102,7 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_PERIOD,
+            REDEMPTION_EXPIRY,
             false
         );
     }
@@ -134,17 +134,19 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             0,
             CONVERSION_EXPIRY,
-            REDEMPTION_PERIOD,
+            REDEMPTION_EXPIRY,
             false
         );
     }
 
-    function test_expiryIsInPastOrNow_reverts(uint48 expiry_) public {
+    function test_conversionExpiryIsInPastOrNow_reverts(uint48 expiry_) public {
         uint48 expiry = uint48(bound(expiry_, 0, block.timestamp));
         uint48 redemptionExpiry = expiry + REDEMPTION_PERIOD;
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "expiry"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "conversion expiry")
+        );
 
         // Call function
         _createPosition(
@@ -213,7 +215,7 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_PERIOD,
+            REDEMPTION_EXPIRY,
             true
         );
     }
@@ -228,7 +230,7 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_PERIOD,
+            REDEMPTION_EXPIRY,
             true
         );
 
@@ -238,7 +240,7 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_PERIOD,
+            REDEMPTION_EXPIRY,
             true
         );
 
@@ -272,7 +274,7 @@ contract CreateCDPOSTest is CDPOSTest {
                 REMAINING_DEPOSIT,
                 CONVERSION_PRICE,
                 CONVERSION_EXPIRY,
-                REDEMPTION_PERIOD,
+                REDEMPTION_EXPIRY,
                 false
             );
         }
@@ -311,7 +313,7 @@ contract CreateCDPOSTest is CDPOSTest {
                 REMAINING_DEPOSIT,
                 CONVERSION_PRICE,
                 CONVERSION_EXPIRY,
-                REDEMPTION_PERIOD,
+                REDEMPTION_EXPIRY,
                 false
             );
         }
@@ -323,7 +325,7 @@ contract CreateCDPOSTest is CDPOSTest {
                 REMAINING_DEPOSIT,
                 CONVERSION_PRICE,
                 CONVERSION_EXPIRY,
-                REDEMPTION_PERIOD,
+                REDEMPTION_EXPIRY,
                 false
             );
         }
@@ -362,8 +364,10 @@ contract CreateCDPOSTest is CDPOSTest {
         }
     }
 
-    function test_expiryInFuture(uint48 expiry_) public {
-        uint48 expiry = uint48(bound(expiry_, block.timestamp + 1, type(uint48).max));
+    function test_conversionExpiryInFuture(uint48 expiry_) public {
+        uint48 expiry = uint48(
+            bound(expiry_, block.timestamp + 1, type(uint48).max - REDEMPTION_PERIOD)
+        );
         uint48 redemptionExpiry = expiry + REDEMPTION_PERIOD;
 
         // Expect event
@@ -396,6 +400,27 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             expiry,
+            redemptionExpiry,
+            false
+        );
+    }
+
+    function test_redemptionExpiryLessThanOrEqualToConversionExpiry_reverts(
+        uint48 redemptionExpiry_
+    ) public {
+        uint48 redemptionExpiry = uint48(bound(redemptionExpiry_, 0, CONVERSION_EXPIRY));
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "redemption expiry")
+        );
+
+        // Call function
+        _createPosition(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
             redemptionExpiry,
             false
         );
