@@ -21,6 +21,8 @@ abstract contract OlyBatch is BatchScript {
         chain = vm.envString("CHAIN");
         env = vm.readFile("./src/scripts/env.json");
 
+        // TODO shift to using WithEnvironment.s.sol
+
         // Set safe addresses
         daoMS = vm.envAddress("DAO_MS"); // DAO MS address
         policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
