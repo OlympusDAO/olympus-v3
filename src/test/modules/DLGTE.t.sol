@@ -793,6 +793,25 @@ contract DLGTETestDelegationsMultipleDelegates is DLGTETestBase {
         dlgte.applyDelegations(ALICE, delegationRequest(DANIEL, 10e18));
     }
 
+    function test_fail_tooManyDelegates_afterReduction() public {
+        vm.startPrank(policy);
+        dlgte.setMaxDelegateAddresses(ALICE, 3);
+
+        setupUndelegated(policy, ALICE, 150e18);
+        verifyApplyDelegations(ALICE, delegationRequest(BOB, 50e18), 50e18, 0, 100e18);
+        verifyApplyDelegations(ALICE, delegationRequest(CHARLIE, 25e18), 25e18, 0, 75e18);
+        verifyApplyDelegations(ALICE, delegationRequest(ALICE, 25e18), 25e18, 0, 50e18);
+
+        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(ALICE, 0, 10);
+        assertEq(delegations.length, 3);
+
+        vm.startPrank(policy);
+        dlgte.setMaxDelegateAddresses(ALICE, 2);
+
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_TooManyDelegates.selector));
+        dlgte.applyDelegations(ALICE, delegationRequest(DANIEL, 10e18));
+    }
+
     function test_multipleUsers_multiplePolicies() public {
         // Add for policy 1
         {

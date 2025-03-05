@@ -402,7 +402,7 @@ contract OlympusGovDelegation is DLGTEv1 {
     ) private {
         // Check the maxDelegates if this is a new delegation record for the `onBehalfOf`
         (bool alreadyExisted, uint256 existingAmount) = acctDelegatedAmounts.tryGet(delegate);
-        if (!alreadyExisted && acctDelegatedAmounts.length() == maxDelegates) {
+        if (!alreadyExisted && acctDelegatedAmounts.length() >= maxDelegates) {
             revert DLGTE_TooManyDelegates();
         }
 
