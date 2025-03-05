@@ -91,6 +91,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    See `getTimeToExpiry()` for more information
     uint48 internal _timeToExpiry;
 
+    /// @notice The number of seconds that redemption is allowed
+    /// @dev    See `getRedemptionPeriod()` for more information
+    uint48 internal _redemptionPeriod;
+
     /// @notice The index of the next auction result
     uint8 internal _auctionResultsNextIndex;
 
@@ -194,6 +198,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
             depositIn,
             conversionPrice,
             uint48(block.timestamp + _timeToExpiry),
+            uint48(block.timestamp + _timeToExpiry + _redemptionPeriod),
             false
         );
 
@@ -412,6 +417,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    function getRedemptionPeriod() external view override returns (uint48) {
+        return _redemptionPeriod;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
     function getAuctionTrackingPeriod() external view override returns (uint8) {
         return _auctionTrackingPeriod;
     }
@@ -542,6 +552,22 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
+    ///             - The new redemption period is 0
+    ///
+    /// @param  newRedemptionPeriod_ The new redemption period
+    function setRedemptionPeriod(uint48 newRedemptionPeriod_) public override onlyRole(ROLE_ADMIN) {
+        // Value must be non-zero
+        if (newRedemptionPeriod_ == 0) revert CDAuctioneer_InvalidParams("redemption period");
+
+        _redemptionPeriod = newRedemptionPeriod_;
+
+        // Emit event
+        emit RedemptionPeriodUpdated(newRedemptionPeriod_);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN role
     ///             - The new tick step is < 100e2
     ///
     /// @param      newStep_    The new tick step
@@ -591,6 +617,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         uint256 minPrice_,
         uint24 tickStep_,
         uint48 timeToExpiry_,
+        uint48 redemptionPeriod_,
         uint8 auctionTrackingPeriod_
     ) external onlyRole(ROLE_ADMIN) {
         // If initialized, revert
@@ -606,6 +633,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Set the time to expiry
         // This emits the event
         setTimeToExpiry(timeToExpiry_);
+
+        // Set the redemption period
+        // This emits the event
+        setRedemptionPeriod(redemptionPeriod_);
 
         // Set the auction tracking period
         // This emits the event

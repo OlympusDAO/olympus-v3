@@ -111,7 +111,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 expiry_,
+        uint48 conversionExpiry_,
+        uint48 redemptionExpiry_,
         bool wrap_
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyActive returns (uint256 positionId) {
         // Mint the CD token to the account
@@ -124,7 +125,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
             address(CDEPO),
             amount_,
             conversionPrice_,
-            expiry_,
+            conversionExpiry_,
+            redemptionExpiry_,
             wrap_
         );
 
@@ -155,7 +157,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
             revert CDF_InvalidToken(positionId_, position.convertibleDepositToken);
 
         // Validate that the position has not expired
-        if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId_);
+        if (block.timestamp >= position.conversionExpiry) revert CDF_PositionExpired(positionId_);
 
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
@@ -274,7 +276,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
             revert CDF_InvalidToken(positionId_, position.convertibleDepositToken);
 
         // Validate that the position has expired
-        if (block.timestamp < position.expiry) revert CDF_PositionNotExpired(positionId_);
+        if (block.timestamp < position.conversionExpiry) revert CDF_PositionNotExpired(positionId_);
 
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
@@ -402,7 +404,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
             revert CDF_InvalidToken(positionId_, position.convertibleDepositToken);
 
         // Validate that the position has not expired
-        if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId_);
+        if (block.timestamp >= position.conversionExpiry) revert CDF_PositionExpired(positionId_);
 
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);

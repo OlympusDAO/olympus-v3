@@ -32,7 +32,14 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(auctioneer);
-        facility.create(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, EXPIRY, false);
+        facility.create(
+            recipient,
+            RESERVE_TOKEN_AMOUNT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
     }
 
     function test_callerNotAuctioneer_reverts()
@@ -46,7 +53,14 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.create(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, EXPIRY, false);
+        facility.create(
+            recipient,
+            RESERVE_TOKEN_AMOUNT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
     }
 
     function test_spendingNotApproved_reverts()
@@ -58,7 +72,14 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
-        _createPosition(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, EXPIRY, false);
+        _createPosition(
+            recipient,
+            RESERVE_TOKEN_AMOUNT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
     }
 
     function test_reserveTokenHasSmallerDecimals()
@@ -78,7 +99,14 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         emit CreatedDeposit(recipient, 0, 10e6);
 
         // Call function
-        uint256 positionId = _createPosition(recipient, 10e6, conversionPrice, EXPIRY, false);
+        uint256 positionId = _createPosition(
+            recipient,
+            10e6,
+            conversionPrice,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // Assert that the position ID is 0
         assertEq(positionId, 0, "positionId");
@@ -128,7 +156,8 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
-            EXPIRY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 
@@ -172,14 +201,22 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         uint256 expectedOhmAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
 
         // Call function
-        _createPosition(recipient, RESERVE_TOKEN_AMOUNT / 2, CONVERSION_PRICE, EXPIRY, false);
+        _createPosition(
+            recipient,
+            RESERVE_TOKEN_AMOUNT / 2,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // Call function again
         uint256 positionId2 = _createPosition(
             recipient,
             RESERVE_TOKEN_AMOUNT / 2,
             CONVERSION_PRICE,
-            EXPIRY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 

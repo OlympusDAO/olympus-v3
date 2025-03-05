@@ -48,6 +48,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant MIN_PRICE = 15e18;
     uint256 public constant TARGET = 20e9;
     uint48 public constant TIME_TO_EXPIRY = 1 days;
+    uint48 public constant REDEMPTION_PERIOD = 2 days;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
 
@@ -55,6 +56,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     event Activated();
     event TickStepUpdated(uint24 newTickStep);
     event TimeToExpiryUpdated(uint48 newTimeToExpiry);
+    event RedemptionPeriodUpdated(uint48 newRedemptionPeriod);
     event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
     event AuctionTrackingPeriodUpdated(uint8 newAuctionTrackingPeriod);
     event AuctionResult(uint256 ohmConvertible, uint256 target, uint8 periodIndex);
@@ -265,6 +267,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
         _;
@@ -282,6 +285,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
             minPrice_,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
         _;

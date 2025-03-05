@@ -25,6 +25,11 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newTimeToExpiry Time to expiry
     event TimeToExpiryUpdated(uint48 newTimeToExpiry);
 
+    /// @notice Emitted when the redemption period is updated
+    ///
+    /// @param  newRedemptionPeriod The new redemption period
+    event RedemptionPeriodUpdated(uint48 newRedemptionPeriod);
+
     /// @notice Emitted when the tick step is updated
     ///
     /// @param  newTickStep     Percentage increase (decrease) per tick
@@ -146,9 +151,17 @@ interface IConvertibleDepositAuctioneer {
     function getTickStep() external view returns (uint24 tickStep);
 
     /// @notice Get the number of seconds between creation and expiry of convertible deposits
+    ///         Prior to the expiry, the deposit can be converted to OHM
     ///
     /// @return timeToExpiry The time to expiry
     function getTimeToExpiry() external view returns (uint48 timeToExpiry);
+
+    /// @notice Get the number of seconds after expiry that redemption is allowed.
+    ///         After the redemption period has passed, the deposit can no longer be redeemed 1:1
+    ///         for the deposit token, and must be reclaimed.
+    ///
+    /// @return redemptionPeriod The redemption period
+    function getRedemptionPeriod() external view returns (uint48 redemptionPeriod);
 
     /// @notice The token that is being bid
     ///
@@ -186,12 +199,22 @@ interface IConvertibleDepositAuctioneer {
     /// @param  minPrice_      new minimum tick price
     function setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) external;
 
-    /// @notice Set the time to expiry
+    /// @notice Set the number of seconds between creation and expiry of convertible deposits
+    ///         Prior to the expiry, the deposit can be converted to OHM
     /// @dev    See `getTimeToExpiry()` for more information
     ///         Only callable by the admin
     ///
     /// @param  timeToExpiry_     new time to expiry
     function setTimeToExpiry(uint48 timeToExpiry_) external;
+
+    /// @notice Set the number of seconds after expiry that redemption of the deposit is allowed.
+    ///         After the redemption period has passed, the deposit can no longer be redeemed 1:1
+    ///         for the deposit token, and must be reclaimed.
+    /// @dev    See `getRedemptionPeriod()` for more information
+    ///         Only callable by the admin
+    ///
+    /// @param  redemptionPeriod_ new redemption period
+    function setRedemptionPeriod(uint48 redemptionPeriod_) external;
 
     /// @notice Sets the multiplier applied to the conversion price at every tick, in terms of `ONE_HUNDRED_PERCENT`
     /// @dev    See `getTickStep()` for more information
@@ -216,6 +239,7 @@ interface IConvertibleDepositAuctioneer {
     /// @param  minPrice_        The minimum price that OHM can be sold for, in terms of the bid token
     /// @param  tickStep_        The tick step, in terms of `ONE_HUNDRED_PERCENT`
     /// @param  timeToExpiry_    The number of seconds between creation and expiry of convertible deposits
+    /// @param  redemptionPeriod_ The number of seconds after expiry that redemption of the deposit is allowed
     /// @param  auctionTrackingPeriod_ The number of days that auction results are tracked for
     function initialize(
         uint256 target_,
@@ -223,6 +247,7 @@ interface IConvertibleDepositAuctioneer {
         uint256 minPrice_,
         uint24 tickStep_,
         uint48 timeToExpiry_,
+        uint48 redemptionPeriod_,
         uint8 auctionTrackingPeriod_
     ) external;
 

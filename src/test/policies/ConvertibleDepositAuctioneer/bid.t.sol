@@ -49,7 +49,16 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(position.owner, recipient, "position owner");
         assertEq(position.remainingDeposit, bidAmount_, "position remaining deposit");
         assertEq(position.conversionPrice, conversionPrice, "position conversion price");
-        assertEq(position.expiry, uint48(block.timestamp) + TIME_TO_EXPIRY, "position expiry");
+        assertEq(
+            position.conversionExpiry,
+            uint48(block.timestamp) + TIME_TO_EXPIRY,
+            "position expiry"
+        );
+        assertEq(
+            position.redemptionExpiry,
+            uint48(block.timestamp) + TIME_TO_EXPIRY + REDEMPTION_PERIOD,
+            "position redemption expiry"
+        );
         assertEq(position.wrapped, false, "position wrapped");
     }
 
@@ -124,7 +133,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] the next tick size is set to half of the previous tick size
     //  when the tick step is > 100e2
     //   [X] it returns the amount of OHM that can be converted at multiple prices
-    //   [X] it issues CD terms with the average price and time to expiry
+    //   [X] it issues CD terms with the average price, time to expiry and redemption period
     //   [X] it updates the day's deposit balance
     //   [X] it updates the day's converted balance
     //   [X] it updates the tick capacity to the tick size minus the converted amount at the new tick price
@@ -133,7 +142,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] it sets the lastUpdate to the current block timestamp
     //  when the tick step is = 100e2
     //   [X] it returns the amount of OHM that can be converted at multiple prices
-    //   [X] it issues CD terms with the average price and time to expiry
+    //   [X] it issues CD terms with the average price, time to expiry and redemption period
     //   [X] it updates the day's deposit balance
     //   [X] it updates the day's converted balance
     //   [X] it updates the tick capacity to the tick size minus the converted amount at the new tick price

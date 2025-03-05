@@ -17,6 +17,8 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
     //  [X] it reverts
     // when the time to expiry is 0
     //  [X] it reverts
+    // when the redemption period is 0
+    //  [X] it reverts
     // when the auction tracking period is 0
     //  [X] it reverts
     // given the contract is already initialized
@@ -46,6 +48,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -64,6 +67,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -85,6 +89,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -106,6 +111,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             0,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -129,6 +135,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             tickStep,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -144,7 +151,37 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, 0, AUCTION_TRACKING_PERIOD);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            0,
+            REDEMPTION_PERIOD,
+            AUCTION_TRACKING_PERIOD
+        );
+    }
+
+    function test_redemptionPeriodZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "redemption period"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            0,
+            AUCTION_TRACKING_PERIOD
+        );
     }
 
     function test_auctionTrackingPeriodZero_reverts() public {
@@ -158,7 +195,15 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(admin);
-        auctioneer.initialize(TARGET, TICK_SIZE, MIN_PRICE, TICK_STEP, TIME_TO_EXPIRY, 0);
+        auctioneer.initialize(
+            TARGET,
+            TICK_SIZE,
+            MIN_PRICE,
+            TICK_STEP,
+            TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
+            0
+        );
     }
 
     function test_contractInitialized_reverts() public givenInitialized {
@@ -175,6 +220,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -197,6 +243,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
     }
@@ -216,6 +263,9 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
         emit TimeToExpiryUpdated(TIME_TO_EXPIRY);
 
         vm.expectEmit(true, true, true, true);
+        emit RedemptionPeriodUpdated(REDEMPTION_PERIOD);
+
+        vm.expectEmit(true, true, true, true);
         emit AuctionTrackingPeriodUpdated(AUCTION_TRACKING_PERIOD);
 
         vm.expectEmit(true, true, true, true);
@@ -229,6 +279,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD
         );
 
@@ -237,6 +288,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
 
         assertEq(auctioneer.getTickStep(), TICK_STEP, "tick step");
         assertEq(auctioneer.getTimeToExpiry(), TIME_TO_EXPIRY, "time to expiry");
+        assertEq(auctioneer.getRedemptionPeriod(), REDEMPTION_PERIOD, "redemption period");
         assertEq(
             auctioneer.getAuctionTrackingPeriod(),
             AUCTION_TRACKING_PERIOD,
@@ -266,6 +318,7 @@ contract ConvertibleDepositAuctioneerInitializeTest is ConvertibleDepositAuction
             MIN_PRICE,
             TICK_STEP,
             TIME_TO_EXPIRY,
+            REDEMPTION_PERIOD,
             AUCTION_TRACKING_PERIOD + 1
         );
 

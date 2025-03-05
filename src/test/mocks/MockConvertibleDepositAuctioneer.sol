@@ -34,6 +34,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256 minPrice_,
         uint24 tickStep_,
         uint48 timeToExpiry_,
+        uint48 redemptionPeriod_,
         uint8 auctionTrackingPeriod_
     ) external override {}
 
@@ -46,7 +47,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function bid(
         uint256 deposit
-    ) external override returns (uint256 convertable, uint256 positionId) {
+    ) external pure override returns (uint256 convertable, uint256 positionId) {
         return (deposit, 0);
     }
 
@@ -93,11 +94,15 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function setTimeToExpiry(uint48 newTime) external override {}
 
+    function setRedemptionPeriod(uint48 newPeriod) external override {}
+
     function setTickStep(uint24 newStep) external override {}
 
     function getTickStep() external view override returns (uint24) {}
 
     function getTimeToExpiry() external view override returns (uint48) {}
+
+    function getRedemptionPeriod() external view override returns (uint48) {}
 
     function getAuctionTrackingPeriod() external view override returns (uint8) {}
 

@@ -15,7 +15,9 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when any position is not valid
     //  [X] it reverts
-    // when any position has not expired
+    // when any position has not reached the conversion expiry
+    //  [X] it reverts
+    // when any position has reached the redemption expiry
     //  [X] it reverts
     // when any position has an amount greater than the remaining deposit
     //  [X] it reverts
@@ -66,9 +68,23 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         for (uint256 i; i < 3; i++) {
             uint256 positionId;
             if (positionIndex == i) {
-                positionId = _createPosition(recipientTwo, 5e18, CONVERSION_PRICE, EXPIRY, false);
+                positionId = _createPosition(
+                    recipientTwo,
+                    5e18,
+                    CONVERSION_PRICE,
+                    CONVERSION_EXPIRY,
+                    REDEMPTION_EXPIRY,
+                    false
+                );
             } else {
-                positionId = _createPosition(recipient, 5e18, CONVERSION_PRICE, EXPIRY, false);
+                positionId = _createPosition(
+                    recipient,
+                    5e18,
+                    CONVERSION_PRICE,
+                    CONVERSION_EXPIRY,
+                    REDEMPTION_EXPIRY,
+                    false
+                );
             }
 
             positionIds_[i] = positionId;
@@ -76,7 +92,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         }
 
         // Warp to beyond the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
         vm.expectRevert(
@@ -107,7 +123,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         amounts_[2] = 3e18;
 
         // Warp to beyond the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
         vm.expectRevert(
@@ -151,7 +167,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         }
 
         // Warp to beyond the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
@@ -160,7 +176,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         facility.previewRedeem(recipient, positionIds_, amounts_);
     }
 
-    function test_anyPositionHasNotExpired_reverts(
+    function test_anyPositionHasNotReachedConversionExpiry_reverts(
         uint256 positionIndex_
     )
         public
@@ -174,25 +190,80 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         uint256[] memory amounts_ = new uint256[](3);
 
         for (uint256 i; i < 3; i++) {
-            uint48 expiry = EXPIRY;
+            uint48 expiry = CONVERSION_EXPIRY;
             if (positionIndex == i) {
-                expiry = EXPIRY + 1;
+                expiry = CONVERSION_EXPIRY + 1;
             }
 
             // Create position
-            uint256 positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, expiry, false);
+            uint256 positionId = _createPosition(
+                recipient,
+                3e18,
+                CONVERSION_PRICE,
+                expiry,
+                REDEMPTION_EXPIRY,
+                false
+            );
 
             positionIds_[i] = positionId;
             amounts_[i] = 3e18;
         }
 
         // Warp to beyond the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleDepositFacility.CDF_PositionNotExpired.selector,
+                positionIndex
+            )
+        );
+
+        // Call function
+        facility.previewRedeem(recipient, positionIds_, amounts_);
+    }
+
+    function test_anyPositionHasReachedRedemptionExpiry_reverts(
+        uint256 positionIndex_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+    {
+        uint256 positionIndex = bound(positionIndex_, 0, 2);
+
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        for (uint256 i; i < 3; i++) {
+            uint48 redemptionExpiry = REDEMPTION_EXPIRY;
+            if (positionIndex == i) {
+                redemptionExpiry = REDEMPTION_EXPIRY - 1;
+            }
+
+            // Create position
+            uint256 positionId = _createPosition(
+                recipient,
+                3e18,
+                CONVERSION_PRICE,
+                CONVERSION_EXPIRY,
+                redemptionExpiry,
+                false
+            );
+
+            positionIds_[i] = positionId;
+            amounts_[i] = 3e18;
+        }
+
+        // Warp to the normal redemption expiry
+        vm.warp(REDEMPTION_EXPIRY);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_PositionExpired.selector,
                 positionIndex
             )
         );
@@ -231,7 +302,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         }
 
         // Warp to beyond the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
         vm.expectRevert(
@@ -260,7 +331,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         amounts_[0] = 0;
 
         // Warp to the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
@@ -297,7 +368,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         amounts_[2] = amountThree;
 
         // Warp to the normal expiry
-        vm.warp(EXPIRY);
+        vm.warp(CONVERSION_EXPIRY);
 
         // Call function
         (uint256 redeemed, address spender) = facility.previewRedeem(

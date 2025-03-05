@@ -33,7 +33,7 @@ contract SplitCDPOSTest is CDPOSTest {
     //  [X] the new position is unwrapped
     // when the to_ address is the same as the owner
     //  [X] it creates the new position
-    // [X] it creates a new position with the new amount, new owner and the same expiry
+    // [X] it creates a new position with the new amount, new owner, and the same conversion expiry and redemption expiry
     // [X] it updates the remaining deposit of the original position
     // [X] it emits a PositionSplit event
 
@@ -47,7 +47,14 @@ contract SplitCDPOSTest is CDPOSTest {
 
     function test_callerIsNotOwner_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
@@ -58,7 +65,14 @@ contract SplitCDPOSTest is CDPOSTest {
 
     function test_callerIsPermissioned_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
@@ -69,7 +83,14 @@ contract SplitCDPOSTest is CDPOSTest {
 
     function test_amountIsZero_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "amount"));
@@ -82,7 +103,14 @@ contract SplitCDPOSTest is CDPOSTest {
         uint256 amount_
     )
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         uint256 amount = bound(amount_, REMAINING_DEPOSIT + 1, REMAINING_DEPOSIT + 2e18);
 
@@ -95,7 +123,14 @@ contract SplitCDPOSTest is CDPOSTest {
 
     function test_recipientIsZeroAddress_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "to"));
@@ -108,7 +143,14 @@ contract SplitCDPOSTest is CDPOSTest {
         uint256 amount_
     )
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         uint256 amount = bound(amount_, 1, REMAINING_DEPOSIT);
 
@@ -125,12 +167,21 @@ contract SplitCDPOSTest is CDPOSTest {
             address(this),
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
-            EXPIRY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 
         // Assert new position
-        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            1,
+            address(0x1),
+            amount,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 0);
@@ -147,7 +198,14 @@ contract SplitCDPOSTest is CDPOSTest {
         uint256 amount_
     )
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         uint256 amount = bound(amount_, 1, REMAINING_DEPOSIT);
 
@@ -164,12 +222,21 @@ contract SplitCDPOSTest is CDPOSTest {
             address(this),
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
-            EXPIRY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 
         // Assert new position
-        _assertPosition(1, address(this), amount, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            1,
+            address(this),
+            amount,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 0);
@@ -185,7 +252,14 @@ contract SplitCDPOSTest is CDPOSTest {
         uint256 amount_
     )
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         uint256 amount = bound(amount_, 1, REMAINING_DEPOSIT);
 
@@ -202,12 +276,21 @@ contract SplitCDPOSTest is CDPOSTest {
             address(this),
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
-            EXPIRY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             true
         );
 
         // Assert new position
-        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            1,
+            address(0x1),
+            amount,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 1);
@@ -224,7 +307,14 @@ contract SplitCDPOSTest is CDPOSTest {
         uint256 amount_
     )
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         uint256 amount = bound(amount_, 1, REMAINING_DEPOSIT);
 
@@ -241,12 +331,21 @@ contract SplitCDPOSTest is CDPOSTest {
             address(this),
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
-            EXPIRY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 
         // Assert new position
-        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, EXPIRY, true);
+        _assertPosition(
+            1,
+            address(0x1),
+            amount,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
 
         // ERC721 balances for the old position are not updated
         _assertERC721Balance(address(this), 0);

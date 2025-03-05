@@ -16,14 +16,16 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  convertibleDepositToken Address of the convertible deposit token
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
     /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token
-    /// @param  expiry                  Timestamp when the term expires
+    /// @param  conversionExpiry        Timestamp when the deposit can no longer be converted
+    /// @param  redemptionExpiry        Timestamp when the deposit can no longer be redeemed
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
         address owner;
         address convertibleDepositToken;
         uint256 remainingDeposit;
         uint256 conversionPrice;
-        uint48 expiry;
+        uint48 conversionExpiry;
+        uint48 redemptionExpiry;
         bool wrapped;
     }
 
@@ -36,7 +38,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
         address indexed convertibleDepositToken,
         uint256 remainingDeposit,
         uint256 conversionPrice,
-        uint48 expiry,
+        uint48 conversionExpiry,
+        uint48 redemptionExpiry,
         bool wrapped
     );
 
@@ -122,7 +125,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     ///         - Validate that the convertible deposit token is not the zero address
     ///         - Validate that the remaining deposit is greater than 0
     ///         - Validate that the conversion price is greater than 0
-    ///         - Validate that the expiry is in the future
+    ///         - Validate that the conversion expiry is in the future
+    ///         - Validate that the redemption expiry is after the conversion expiry
     ///         - Create the position record
     ///         - Wrap the position if requested
     ///
@@ -130,7 +134,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  convertibleDepositToken_    The address of the convertible deposit token
     /// @param  remainingDeposit_           The amount of reserve tokens remaining to be converted
     /// @param  conversionPrice_            The price of the reserve token in USD
-    /// @param  expiry_                     The timestamp when the position expires
+    /// @param  conversionExpiry_           The timestamp when the position can no longer be converted
+    /// @param  redemptionExpiry_           The timestamp when the position can no longer be redeemed
     /// @param  wrap_                       Whether the position should be wrapped
     /// @return positionId                  The ID of the new position
     function create(
@@ -138,7 +143,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
         address convertibleDepositToken_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
-        uint48 expiry_,
+        uint48 conversionExpiry_,
+        uint48 redemptionExpiry_,
         bool wrap_
     ) external virtual returns (uint256 positionId);
 

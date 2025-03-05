@@ -13,7 +13,8 @@ contract CreateCDPOSTest is CDPOSTest {
         address indexed convertibleDepositToken,
         uint256 remainingDeposit,
         uint256 conversionPrice,
-        uint48 expiry,
+        uint48 conversionExpiry,
+        uint48 redemptionExpiry,
         bool wrapped
     );
 
@@ -29,6 +30,8 @@ contract CreateCDPOSTest is CDPOSTest {
     //  [X] it reverts
     // when the expiry is in the past or now
     //  [X] it reverts
+    // when the redemption expiry is less than or equal to the conversion expiry
+    //  [ ] it reverts
     // when multiple positions are created
     //  [X] the position IDs are sequential
     //  [X] the position IDs are unique
@@ -61,7 +64,8 @@ contract CreateCDPOSTest is CDPOSTest {
             convertibleDepositToken,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            EXPIRY_DELAY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_PERIOD,
             false
         );
     }
@@ -71,7 +75,14 @@ contract CreateCDPOSTest is CDPOSTest {
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "owner"));
 
         // Call function
-        _createPosition(address(0), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY_DELAY, false);
+        _createPosition(
+            address(0),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
     }
 
     function test_convertibleDepositTokenIsZeroAddress_reverts() public {
@@ -90,7 +101,8 @@ contract CreateCDPOSTest is CDPOSTest {
             address(0),
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            EXPIRY_DELAY,
+            CONVERSION_EXPIRY,
+            REDEMPTION_PERIOD,
             false
         );
     }
@@ -100,7 +112,14 @@ contract CreateCDPOSTest is CDPOSTest {
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "deposit"));
 
         // Call function
-        _createPosition(address(this), 0, CONVERSION_PRICE, EXPIRY_DELAY, false);
+        _createPosition(
+            address(this),
+            0,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
     }
 
     function test_conversionPriceIsZero_reverts() public {
@@ -110,17 +129,32 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         // Call function
-        _createPosition(address(this), REMAINING_DEPOSIT, 0, EXPIRY_DELAY, false);
+        _createPosition(
+            address(this),
+            REMAINING_DEPOSIT,
+            0,
+            CONVERSION_EXPIRY,
+            REDEMPTION_PERIOD,
+            false
+        );
     }
 
     function test_expiryIsInPastOrNow_reverts(uint48 expiry_) public {
         uint48 expiry = uint48(bound(expiry_, 0, block.timestamp));
+        uint48 redemptionExpiry = expiry + REDEMPTION_PERIOD;
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "expiry"));
 
         // Call function
-        _createPosition(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
+        _createPosition(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            expiry,
+            redemptionExpiry,
+            false
+        );
     }
 
     function test_singlePosition() public {
@@ -132,7 +166,8 @@ contract CreateCDPOSTest is CDPOSTest {
             convertibleDepositToken,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            uint48(block.timestamp + EXPIRY_DELAY),
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 
@@ -141,7 +176,8 @@ contract CreateCDPOSTest is CDPOSTest {
             address(this),
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            uint48(block.timestamp + EXPIRY_DELAY),
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
             false
         );
 
@@ -153,7 +189,15 @@ contract CreateCDPOSTest is CDPOSTest {
         _assertERC721Owner(0, address(this), false);
 
         // Assert that the position is correct
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // Assert that the owner's list of positions is updated
         _assertUserPosition(address(this), 0, 1);
@@ -168,7 +212,8 @@ contract CreateCDPOSTest is CDPOSTest {
             address(convertibleDepositToken), // Needs to be a contract
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            uint48(block.timestamp + EXPIRY_DELAY),
+            CONVERSION_EXPIRY,
+            REDEMPTION_PERIOD,
             true
         );
     }
@@ -182,7 +227,8 @@ contract CreateCDPOSTest is CDPOSTest {
             convertibleDepositToken,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            uint48(block.timestamp + EXPIRY_DELAY),
+            CONVERSION_EXPIRY,
+            REDEMPTION_PERIOD,
             true
         );
 
@@ -191,7 +237,8 @@ contract CreateCDPOSTest is CDPOSTest {
             address(this),
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            uint48(block.timestamp + EXPIRY_DELAY),
+            CONVERSION_EXPIRY,
+            REDEMPTION_PERIOD,
             true
         );
 
@@ -203,7 +250,15 @@ contract CreateCDPOSTest is CDPOSTest {
         _assertERC721Owner(0, address(this), true);
 
         // Assert that the position is correct
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
 
         // Assert that the owner's list of positions is updated
         _assertUserPosition(address(this), 0, 1);
@@ -216,7 +271,8 @@ contract CreateCDPOSTest is CDPOSTest {
                 address(this),
                 REMAINING_DEPOSIT,
                 CONVERSION_PRICE,
-                uint48(block.timestamp + EXPIRY_DELAY),
+                CONVERSION_EXPIRY,
+                REDEMPTION_PERIOD,
                 false
             );
         }
@@ -254,7 +310,8 @@ contract CreateCDPOSTest is CDPOSTest {
                 owner1,
                 REMAINING_DEPOSIT,
                 CONVERSION_PRICE,
-                uint48(block.timestamp + EXPIRY_DELAY),
+                CONVERSION_EXPIRY,
+                REDEMPTION_PERIOD,
                 false
             );
         }
@@ -265,7 +322,8 @@ contract CreateCDPOSTest is CDPOSTest {
                 owner2,
                 REMAINING_DEPOSIT,
                 CONVERSION_PRICE,
-                uint48(block.timestamp + EXPIRY_DELAY),
+                CONVERSION_EXPIRY,
+                REDEMPTION_PERIOD,
                 false
             );
         }
@@ -306,6 +364,7 @@ contract CreateCDPOSTest is CDPOSTest {
 
     function test_expiryInFuture(uint48 expiry_) public {
         uint48 expiry = uint48(bound(expiry_, block.timestamp + 1, type(uint48).max));
+        uint48 redemptionExpiry = expiry + REDEMPTION_PERIOD;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -316,13 +375,29 @@ contract CreateCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             expiry,
+            redemptionExpiry,
             false
         );
 
         // Call function
-        _createPosition(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
+        _createPosition(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            expiry,
+            redemptionExpiry,
+            false
+        );
 
         // Assert that the position is correct
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            expiry,
+            redemptionExpiry,
+            false
+        );
     }
 }

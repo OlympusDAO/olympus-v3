@@ -37,7 +37,14 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_callerIsNotOwner_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
@@ -48,7 +55,14 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_callerIsPermissionedAddress_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
@@ -59,7 +73,14 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_positionIsNotWrapped_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotWrapped.selector, 0));
@@ -70,7 +91,14 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_success()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -80,7 +108,15 @@ contract UnwrapCDPOSTest is CDPOSTest {
         _unwrapPosition(address(this), 0);
 
         // Assert position is unwrapped
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // Assert ERC721 balances are updated
         _assertERC721Balance(address(this), 0);
@@ -92,15 +128,45 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_multiplePositions_unwrapFirst()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Call function
         _unwrapPosition(address(this), 0);
 
         // Assert position is unwrapped
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false);
-        _assertPosition(1, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
+        _assertPosition(
+            1,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
 
         // Assert ERC721 balances are updated
         _assertERC721Balance(address(this), 1);
@@ -114,15 +180,45 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_multiplePositions_unwrapSecond()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Call function
         _unwrapPosition(address(this), 1);
 
         // Assert position is unwrapped
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
-        _assertPosition(1, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
+        _assertPosition(
+            1,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
 
         // Assert ERC721 balances are updated
         _assertERC721Balance(address(this), 1);

@@ -45,7 +45,8 @@ contract TokenURICDPOSTest is CDPOSTest {
     // [X] the symbol value is the symbol of the contract
     // [X] the position ID attribute is the position ID
     // [X] the convertible deposit token attribute is the convertible deposit token address
-    // [X] the expiry attribute is the expiry timestamp
+    // [X] the conversion expiry attribute is the conversion expiry timestamp
+    // [ ] the redemption expiry attribute is the redemption expiry timestamp
     // [X] the remaining deposit attribute is the remaining deposit
     // [X] the conversion price attribute is the conversion price
     // [X] the image value is set
@@ -63,6 +64,7 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_EXPIRY_DATE,
+            REDEMPTION_PERIOD,
             false
         )
     {
@@ -161,6 +163,7 @@ contract TokenURICDPOSTest is CDPOSTest {
             25123456e14,
             CONVERSION_PRICE,
             SAMPLE_EXPIRY_DATE,
+            REDEMPTION_PERIOD,
             false
         )
     {
@@ -195,6 +198,7 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_EXPIRY_DATE,
+            REDEMPTION_PERIOD,
             false
         )
     {
@@ -232,6 +236,7 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             20123456e14,
             SAMPLE_EXPIRY_DATE,
+            REDEMPTION_PERIOD,
             false
         )
     {
@@ -266,6 +271,7 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_EXPIRY_DATE,
+            REDEMPTION_PERIOD,
             false
         )
         givenPositionCreated(
@@ -273,6 +279,7 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_EXPIRY_DATE,
+            REDEMPTION_PERIOD,
             false
         )
     {

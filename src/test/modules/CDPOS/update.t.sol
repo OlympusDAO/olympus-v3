@@ -30,7 +30,14 @@ contract UpdateCDPOSTest is CDPOSTest {
 
     function test_callerNotPermissioned_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         address owner1 = address(0x1);
 
@@ -44,7 +51,14 @@ contract UpdateCDPOSTest is CDPOSTest {
 
     function test_callerIsOwner_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(
@@ -57,7 +71,14 @@ contract UpdateCDPOSTest is CDPOSTest {
 
     function test_amountIsZero()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Call function
         _updatePosition(0, 0);
@@ -70,7 +91,14 @@ contract UpdateCDPOSTest is CDPOSTest {
         uint256 remainingDeposit_
     )
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         uint256 remainingDeposit = bound(remainingDeposit_, 0, REMAINING_DEPOSIT);
 
@@ -82,6 +110,14 @@ contract UpdateCDPOSTest is CDPOSTest {
         _updatePosition(0, remainingDeposit);
 
         // Assert
-        _assertPosition(0, address(this), remainingDeposit, CONVERSION_PRICE, EXPIRY, false);
+        _assertPosition(
+            0,
+            address(this),
+            remainingDeposit,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
     }
 }

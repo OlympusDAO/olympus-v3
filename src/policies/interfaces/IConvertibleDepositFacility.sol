@@ -44,14 +44,16 @@ interface IConvertibleDepositFacility {
     /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of reserve token to deposit
     /// @param  conversionPrice_    The amount of convertible deposit tokens per OHM token
-    /// @param  expiry_             The timestamp when the position expires
+    /// @param  conversionExpiry_   The timestamp when the position can no longer be converted
+    /// @param  redemptionExpiry_   The timestamp when the position can no longer be redeemed
     /// @param  wrap_               Whether the position should be wrapped
     /// @return termId              The ID of the new term
     function create(
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 expiry_,
+        uint48 conversionExpiry_,
+        uint48 redemptionExpiry_,
         bool wrap_
     ) external returns (uint256 termId);
 

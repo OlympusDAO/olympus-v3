@@ -38,7 +38,8 @@ contract ConvertibleDepositFacilityTest is Test {
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
-    uint48 public constant EXPIRY = INITIAL_BLOCK + 1 days;
+    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + 1 days;
+    uint48 public constant REDEMPTION_EXPIRY = INITIAL_BLOCK + 2 days;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
     uint16 public constant RECLAIM_RATE = 90e2;
 
@@ -99,15 +100,30 @@ contract ConvertibleDepositFacilityTest is Test {
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 expiry_,
+        uint48 conversionExpiry_,
+        uint48 redemptionExpiry_,
         bool wrap_
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        positionId = facility.create(account_, amount_, conversionPrice_, expiry_, wrap_);
+        positionId = facility.create(
+            account_,
+            amount_,
+            conversionPrice_,
+            conversionExpiry_,
+            redemptionExpiry_,
+            wrap_
+        );
     }
 
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
-        _createPosition(account_, amount_, CONVERSION_PRICE, EXPIRY, false);
+        _createPosition(
+            account_,
+            amount_,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
         _;
     }
 

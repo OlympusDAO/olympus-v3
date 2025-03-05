@@ -28,7 +28,14 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
     function test_callerIsNotOwner_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Expect revert
         vm.expectRevert("NOT_AUTHORIZED");
@@ -40,7 +47,14 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
     function test_callerIsPermissioned_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Expect revert
         vm.expectRevert("NOT_AUTHORIZED");
@@ -52,7 +66,14 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
     function test_notMinted_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotWrapped.selector, 0));
@@ -64,7 +85,14 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
     function test_success()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Call function
         CDPOS.transferFrom(address(this), address(0x1), 0);
@@ -75,7 +103,15 @@ contract TransferFromCDPOSTest is CDPOSTest {
         _assertERC721Owner(0, address(0x1), true);
 
         // Position record updated
-        _assertPosition(0, address(0x1), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
+        _assertPosition(
+            0,
+            address(0x1),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
 
         // Position ownership updated
         assertEq(

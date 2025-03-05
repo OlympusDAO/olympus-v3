@@ -37,7 +37,14 @@ contract WrapCDPOSTest is CDPOSTest {
 
     function test_callerIsNotOwner_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
@@ -48,7 +55,14 @@ contract WrapCDPOSTest is CDPOSTest {
 
     function test_callerIsPermissionedAddress_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
@@ -59,7 +73,14 @@ contract WrapCDPOSTest is CDPOSTest {
 
     function test_positionIsAlreadyWrapped_reverts()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_AlreadyWrapped.selector, 0));
@@ -70,7 +91,14 @@ contract WrapCDPOSTest is CDPOSTest {
 
     function test_success()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -80,7 +108,15 @@ contract WrapCDPOSTest is CDPOSTest {
         _wrapPosition(address(this), 0);
 
         // Assert position is updated
-        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
 
         // Assert ERC721 token is minted
         _assertERC721PositionReceived(0, 1, true);
@@ -95,8 +131,22 @@ contract WrapCDPOSTest is CDPOSTest {
 
     function test_multiplePositions()
         public
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true)
-        givenPositionCreated(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, false)
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        )
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        )
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -106,7 +156,15 @@ contract WrapCDPOSTest is CDPOSTest {
         _wrapPosition(address(this), 1);
 
         // Assert position is updated
-        _assertPosition(1, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, EXPIRY, true);
+        _assertPosition(
+            1,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            true
+        );
 
         // Assert ERC721 token is minted
         _assertERC721PositionReceived(1, 2, true);
