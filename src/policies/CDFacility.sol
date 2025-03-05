@@ -278,6 +278,9 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         // Validate that the position has expired
         if (block.timestamp < position.conversionExpiry) revert CDF_PositionNotExpired(positionId_);
 
+        // Validate that the position has not reached the redemption expiry
+        if (block.timestamp >= position.redemptionExpiry) revert CDF_PositionExpired(positionId_);
+
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
