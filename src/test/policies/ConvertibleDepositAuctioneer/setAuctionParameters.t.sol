@@ -7,9 +7,6 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "cd_emissionmanager" role
     //  [X] it reverts
-    // given the contract is not initialized
-    //  [X] it sets the parameters
-    //  [X] it resets the day state
     // when the new target is 0
     //  [X] it reverts
     // when the new tick size is 0
@@ -90,7 +87,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertAuctionResultsNextIndex(0);
     }
 
-    function test_targetZero_reverts() public givenInitialized {
+    function test_targetZero_reverts() public givenEnabled {
         uint256 newTickSize = 11e9;
         uint256 newMinPrice = 14e18;
 
@@ -107,7 +104,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
     }
 
-    function test_tickSizeZero_reverts() public givenInitialized {
+    function test_tickSizeZero_reverts() public givenEnabled {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -121,7 +118,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(21e9, 0, 16e18);
     }
 
-    function test_minPriceZero_reverts() public givenInitialized {
+    function test_minPriceZero_reverts() public givenEnabled {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -135,12 +132,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(21e9, 11e9, 0);
     }
 
-    function test_contractInactive()
-        public
-        givenInitialized
-        givenRecipientHasBid(1e18)
-        givenContractInactive
-    {
+    function test_contractInactive() public givenEnabled givenRecipientHasBid(1e18) givenDisabled {
         uint256 lastConvertible = auctioneer.getDayState().convertible;
         uint256 lastDeposits = auctioneer.getDayState().deposits;
         int256[] memory lastAuctionResults = auctioneer.getAuctionResults();
@@ -188,7 +180,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertAuctionResultsNextIndex(lastAuctionResultsIndex);
     }
 
-    function test_contractActive() public givenInitialized givenRecipientHasBid(1e18) {
+    function test_contractActive() public givenEnabled givenRecipientHasBid(1e18) {
         uint256 lastConvertible = auctioneer.getDayState().convertible;
         uint256 lastDeposits = auctioneer.getDayState().deposits;
         int256[] memory lastAuctionResults = auctioneer.getAuctionResults();
@@ -237,9 +229,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertAuctionResultsNextIndex(lastAuctionResultsIndex);
     }
 
-    function test_newTickSizeLessThanCurrentTickCapacity(
-        uint256 newTickSize_
-    ) public givenInitialized {
+    function test_newTickSizeLessThanCurrentTickCapacity(uint256 newTickSize_) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -261,7 +251,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newTickSizeGreaterThanCurrentTickCapacity(
         uint256 newTickSize_
-    ) public givenInitialized {
+    ) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -281,9 +271,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, lastUpdate);
     }
 
-    function test_newMinPriceGreaterThanCurrentTickPrice(
-        uint256 newMinPrice_
-    ) public givenInitialized {
+    function test_newMinPriceGreaterThanCurrentTickPrice(uint256 newMinPrice_) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -303,9 +291,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, lastUpdate);
     }
 
-    function test_newMinPriceLessThanCurrentTickPrice(
-        uint256 newMinPrice_
-    ) public givenInitialized {
+    function test_newMinPriceLessThanCurrentTickPrice(uint256 newMinPrice_) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -327,7 +313,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnSameDay()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(1e18)
         givenAuctionParametersStandard
     {
@@ -363,7 +349,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnDayTwo()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(1e18)
         givenAuctionParametersStandard
     {
@@ -399,7 +385,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnDayEight()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(1e18)
         givenAuctionParametersStandard
     {
@@ -513,7 +499,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnDayNine()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(1e18)
         givenAuctionParametersStandard
     {

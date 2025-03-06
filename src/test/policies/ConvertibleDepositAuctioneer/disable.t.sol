@@ -7,11 +7,11 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuctioneerTest {
     event Deactivated();
 
-    // when the caller does not have the "emergency_shutdown" role
+    // when the caller does not have the "emergency" role
     //  [X] it reverts
-    // when the contract is already deactivated
+    // when the contract is already disabled
     //  [X] it reverts
-    // when the contract is active
+    // when the contract is enabled
     //  [X] it deactivates the contract
     //  [X] it emits an event
     //  [X] the day state is unchanged
@@ -22,14 +22,14 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
         vm.assume(caller_ != emergency);
 
         // Expect revert
-        _expectRoleRevert("emergency_shutdown");
+        _expectRoleRevert("emergency");
 
         // Call function
         vm.prank(caller_);
-        auctioneer.deactivate();
+        auctioneer.disable("");
     }
 
-    function test_contractInactive_reverts() public givenInitialized givenContractInactive {
+    function test_contractDisabled_reverts() public {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
@@ -37,10 +37,10 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
 
         // Call function
         vm.prank(emergency);
-        auctioneer.deactivate();
+        auctioneer.disable("");
     }
 
-    function test_contractActive() public givenInitialized givenRecipientHasBid(1e18) {
+    function test_contractEnabled() public givenEnabled givenRecipientHasBid(1e18) {
         // Cache auction results
         int256[] memory auctionResults = auctioneer.getAuctionResults();
         uint8 nextIndex = auctioneer.getAuctionResultsNextIndex();
@@ -52,14 +52,14 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Deactivated();
+        emit Disabled();
 
         // Call function
         vm.prank(emergency);
-        auctioneer.deactivate();
+        auctioneer.disable("");
 
         // Assert state
-        assertEq(auctioneer.locallyActive(), false);
+        assertEq(auctioneer.isEnabled(), false);
         // lastUpdate has not changed
         assertEq(auctioneer.getPreviousTick().lastUpdate, lastUpdate);
         // Auction results are unchanged

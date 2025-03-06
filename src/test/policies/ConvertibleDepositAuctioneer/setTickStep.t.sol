@@ -53,7 +53,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(tickStep);
     }
 
-    function test_contractInactive(uint24 tickStep_) public givenInitialized givenContractInactive {
+    function test_contractInactive(uint24 tickStep_) public {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
 
         uint48 lastUpdate = uint48(block.timestamp);
@@ -73,7 +73,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         assertEq(auctioneer.getTickStep(), tickStep, "tick step");
     }
 
-    function test_contractActive(uint24 tickStep_) public givenInitialized {
+    function test_contractActive(uint24 tickStep_) public givenEnabled {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
 
         uint48 lastUpdate = uint48(block.timestamp);

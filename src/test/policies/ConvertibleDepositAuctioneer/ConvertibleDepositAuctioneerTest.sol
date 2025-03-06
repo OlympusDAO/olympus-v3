@@ -53,7 +53,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint16 public constant RECLAIM_RATE = 90e2;
 
     // Events
-    event Activated();
+    event Enabled();
+    event Disabled();
     event TickStepUpdated(uint24 newTickStep);
     event TimeToExpiryUpdated(uint48 newTimeToExpiry);
     event RedemptionPeriodUpdated(uint48 newRedemptionPeriod);
@@ -95,13 +96,13 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
         // Grant roles
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
-        rolesAdmin.grantRole(bytes32("cd_admin"), admin);
-        rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
+        rolesAdmin.grantRole(bytes32("admin"), admin);
+        rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
 
         // Activate policy dependencies
-        vm.prank(emergency);
-        facility.activate();
+        vm.prank(admin);
+        facility.enable("");
     }
 
     // ========== HELPERS ========== //
@@ -193,15 +194,49 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     // ========== MODIFIERS ========== //
 
-    modifier givenContractActive() {
-        vm.prank(emergency);
-        auctioneer.activate();
+    modifier givenEnabled() {
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
         _;
     }
 
-    modifier givenContractInactive() {
+    modifier givenEnabledWithParameters(
+        uint256 target_,
+        uint256 tickSize_,
+        uint256 minPrice_
+    ) {
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: target_,
+                    tickSize: tickSize_,
+                    minPrice: minPrice_,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+        _;
+    }
+
+    modifier givenDisabled() {
         vm.prank(emergency);
-        auctioneer.deactivate();
+        auctioneer.disable("");
         _;
     }
 
@@ -257,38 +292,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
         vm.prank(emissionManager);
         auctioneer.setAuctionParameters(target_, tickSize_, minPrice_);
-    }
-
-    modifier givenInitialized() {
-        vm.prank(admin);
-        auctioneer.initialize(
-            TARGET,
-            TICK_SIZE,
-            MIN_PRICE,
-            TICK_STEP,
-            TIME_TO_EXPIRY,
-            REDEMPTION_PERIOD,
-            AUCTION_TRACKING_PERIOD
-        );
-        _;
-    }
-
-    modifier givenInitializedWithParameters(
-        uint256 target_,
-        uint256 tickSize_,
-        uint256 minPrice_
-    ) {
-        vm.prank(admin);
-        auctioneer.initialize(
-            target_,
-            tickSize_,
-            minPrice_,
-            TICK_STEP,
-            TIME_TO_EXPIRY,
-            REDEMPTION_PERIOD,
-            AUCTION_TRACKING_PERIOD
-        );
-        _;
     }
 
     modifier givenAuctionParametersStandard() {

@@ -9,7 +9,8 @@ import {FullMath} from "src/libraries/FullMath.sol";
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
-import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {CDFacility} from "./CDFacility.sol";
 
@@ -27,19 +28,13 @@ import {CDFacility} from "./CDFacility.sol";
 ///         - The auction has a target amount of convertible OHM to sell per day
 ///         - When the target is reached, the amount of OHM required to increase the conversion price will decrease, resulting in more rapid price increases (assuming there is demand)
 ///         - The auction parameters are able to be updated in order to tweak the auction's behaviour
-contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, ReentrancyGuard {
+contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
     bytes32 public constant ROLE_HEART = "cd_emissionmanager";
-
-    /// @notice The role that can perform administrative actions, such as changing parameters
-    bytes32 public constant ROLE_ADMIN = "cd_admin";
-
-    /// @notice The role that can perform emergency actions, such as shutting down the contract
-    bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
 
     /// @notice Address of the CDEPO module
     CDEPOv1 public CDEPO;
@@ -69,18 +64,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @notice Address of the Convertible Deposit Facility
     CDFacility public cdFacility;
 
-    /// @notice Whether the contract functionality has been activated
-    bool public locallyActive;
-
-    /// @notice Whether the contract has been initialized
-    /// @dev    When the contract has been initialized, the following can be assumed:
-    ///         - The auction parameters have been set
-    ///         - The tick step has been set
-    ///         - The time to expiry has been set
-    ///         - The tick capacity and price have been set to the standard tick size and minimum price
-    ///         - The last update has been set to the current block timestamp
-    bool public initialized;
-
     /// @notice The tick step
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
@@ -105,6 +88,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     /// @dev    The length of this array is equal to the auction tracking period
     int256[] internal _auctionResults;
 
+    /// @notice The length of the enable parameters
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 128;
+
     // ========== SETUP ========== //
 
     constructor(address kernel_, address cdFacility_) Policy(Kernel(kernel_)) {
@@ -113,8 +99,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
         cdFacility = CDFacility(cdFacility_);
 
-        // Disable functionality until initialized
-        locallyActive = false;
+        // PolicyEnabler makes this disabled until enabled
     }
 
     /// @inheritdoc Policy
@@ -159,7 +144,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The calculated converted amount is 0
     function bid(
         uint256 deposit_
-    ) external override nonReentrant onlyActive returns (uint256 ohmOut, uint256 positionId) {
+    ) external override nonReentrant onlyEnabled returns (uint256 ohmOut, uint256 positionId) {
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
         _previousTick = getCurrentTick();
@@ -351,7 +336,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - If the calculation is occurring on a new day, the tick size will reset to the standard
     ///             - Until the new capacity is <= to the tick size, reduce the capacity by the tick size and reduce the price by the tick step
     ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
-    function getCurrentTick() public view onlyActive returns (Tick memory tick) {
+    function getCurrentTick() public view onlyEnabled returns (Tick memory tick) {
         // Find amount of time passed and new capacity to add
         uint256 timePassed = block.timestamp - _previousTick.lastUpdate;
         uint256 capacityToAdd = (_auctionParameters.target * timePassed) / 1 days;
@@ -461,7 +446,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     function _storeAuctionResults(uint256 previousTarget_) internal {
         // Skip if inactive
-        if (!locallyActive) return;
+        if (!isEnabled) return;
 
         // Skip if the day state was set on the same day
         if (!isDayComplete()) return;
@@ -539,7 +524,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The new time to expiry is 0
     ///
     /// @param  newTime_ The new time to expiry
-    function setTimeToExpiry(uint48 newTime_) public override onlyRole(ROLE_ADMIN) {
+    function setTimeToExpiry(uint48 newTime_) public override onlyAdminRole {
         // Value must be non-zero
         if (newTime_ == 0) revert CDAuctioneer_InvalidParams("time to expiry");
 
@@ -555,7 +540,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The new redemption period is 0
     ///
     /// @param  newRedemptionPeriod_ The new redemption period
-    function setRedemptionPeriod(uint48 newRedemptionPeriod_) public override onlyRole(ROLE_ADMIN) {
+    function setRedemptionPeriod(uint48 newRedemptionPeriod_) public override onlyAdminRole {
         // Value must be non-zero
         if (newRedemptionPeriod_ == 0) revert CDAuctioneer_InvalidParams("redemption period");
 
@@ -571,7 +556,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The new tick step is < 100e2
     ///
     /// @param      newStep_    The new tick step
-    function setTickStep(uint24 newStep_) public override onlyRole(ROLE_ADMIN) {
+    function setTickStep(uint24 newStep_) public override onlyAdminRole {
         // Value must be more than 100e2
         if (newStep_ < ONE_HUNDRED_PERCENT) revert CDAuctioneer_InvalidParams("tick step");
 
@@ -587,7 +572,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
     ///             - The new auction tracking period is 0
     ///
     /// @param      days_    The new auction tracking period
-    function setAuctionTrackingPeriod(uint8 days_) public override onlyRole(ROLE_ADMIN) {
+    function setAuctionTrackingPeriod(uint8 days_) public override onlyAdminRole {
         // Value must be non-zero
         if (days_ == 0) revert CDAuctioneer_InvalidParams("auction tracking period");
 
@@ -603,67 +588,41 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
 
     // ========== ACTIVATION/DEACTIVATION ========== //
 
-    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @inheritdoc PolicyEnabler
     /// @dev        This function will revert if:
-    ///             - The caller does not have the ROLE_ADMIN role
-    ///             - The contract is already initialized
-    ///             - The contract is already active
-    ///             - Validation of the inputs fails
-    ///
-    ///             The outcome of running this function is that the contract will be in a valid state for bidding to take place.
-    function initialize(
-        uint256 target_,
-        uint256 tickSize_,
-        uint256 minPrice_,
-        uint24 tickStep_,
-        uint48 timeToExpiry_,
-        uint48 redemptionPeriod_,
-        uint8 auctionTrackingPeriod_
-    ) external onlyRole(ROLE_ADMIN) {
-        // If initialized, revert
-        if (initialized) revert CDAuctioneer_InvalidState();
+    ///             - The enable data is not the correct length
+    ///             - The enable data is not an encoded `EnableParams` struct
+    ///             - The auction parameters are invalid
+    ///             - The tick step is invalid
+    ///             - The time to expiry is invalid
+    ///             - The redemption period is invalid
+    ///             - The auction tracking period is invalid
+    function _enable(bytes calldata enableData_) internal override {
+        if (enableData_.length != _ENABLE_PARAMS_LENGTH)
+            revert CDAuctioneer_InvalidParams("enable data");
+
+        // Decode the enable data
+        EnableParams memory params = abi.decode(enableData_, (EnableParams));
 
         // Set the auction parameters
-        _setAuctionParameters(target_, tickSize_, minPrice_);
+        _setAuctionParameters(params.target, params.tickSize, params.minPrice);
 
         // Set the tick step
-        // This emits the event
-        setTickStep(tickStep_);
+        setTickStep(params.tickStep);
 
         // Set the time to expiry
-        // This emits the event
-        setTimeToExpiry(timeToExpiry_);
+        setTimeToExpiry(params.timeToExpiry);
 
         // Set the redemption period
-        // This emits the event
-        setRedemptionPeriod(redemptionPeriod_);
+        setRedemptionPeriod(params.redemptionPeriod);
 
         // Set the auction tracking period
-        // This emits the event
-        setAuctionTrackingPeriod(auctionTrackingPeriod_);
+        setAuctionTrackingPeriod(params.auctionTrackingPeriod);
 
         // Initialize the current tick
-        _previousTick.capacity = tickSize_;
-        _previousTick.price = minPrice_;
-        _previousTick.tickSize = tickSize_;
-
-        // Set the initialized flag
-        initialized = true;
-
-        // Activate the contract
-        // This emits the event
-        _activate();
-    }
-
-    function _activate() internal {
-        // If not initialized, revert
-        if (!initialized) revert CDAuctioneer_NotInitialized();
-
-        // If the contract is already active, revert
-        if (locallyActive) revert CDAuctioneer_InvalidState();
-
-        // Set the contract to active
-        locallyActive = true;
+        _previousTick.capacity = params.tickSize;
+        _previousTick.price = params.minPrice;
+        _previousTick.tickSize = params.tickSize;
 
         // Also set the lastUpdate to the current block timestamp
         // Otherwise, getCurrentTick() will calculate a long period of time having passed
@@ -675,39 +634,5 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer, R
         // Reset the auction results
         _auctionResults = new int256[](_auctionTrackingPeriod);
         _auctionResultsNextIndex = 0;
-
-        // Emit event
-        emit Activated();
-    }
-
-    /// @notice Activate the contract functionality
-    /// @dev    This function will revert if:
-    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
-    ///         - The contract has not previously been initialized
-    ///         - The contract is already active
-    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
-        _activate();
-    }
-
-    /// @notice Deactivate the contract functionality
-    /// @dev    This function will revert if:
-    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
-    ///         - The contract is already inactive
-    function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
-        // If the contract is already inactive, revert
-        if (!locallyActive) revert CDAuctioneer_InvalidState();
-
-        // Set the contract to inactive
-        locallyActive = false;
-
-        // Emit event
-        emit Deactivated();
-    }
-
-    // ========== MODIFIERS ========== //
-
-    modifier onlyActive() {
-        if (!locallyActive) revert CDAuctioneer_NotActive();
-        _;
     }
 }

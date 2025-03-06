@@ -51,7 +51,7 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         auctioneer.setTimeToExpiry(0);
     }
 
-    function test_contractInactive() public givenInitialized givenContractInactive {
+    function test_contractInactive() public {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -69,7 +69,7 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         assertEq(auctioneer.getTimeToExpiry(), 100, "time to expiry");
     }
 
-    function test_contractActive(uint48 timeToExpiry_) public givenInitialized {
+    function test_contractActive(uint48 timeToExpiry_) public givenEnabled {
         uint48 timeToExpiry = uint48(bound(timeToExpiry_, 1, 1 weeks));
 
         uint48 lastUpdate = uint48(block.timestamp);

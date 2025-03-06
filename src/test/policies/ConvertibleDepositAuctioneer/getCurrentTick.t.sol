@@ -5,9 +5,7 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctioneerTest {
-    // given the contract has not been initialized
-    //  [X] it reverts
-    // given the contract is inactive
+    // given the contract is disabled
     //  [X] it reverts
     // given a bid has never been received and the tick price is at the minimum price
     //  given no time has passed
@@ -53,7 +51,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     //   [X] it reduces the price by the tick step until the total capacity is less than the standard tick size
     //   [X] the tick capacity is set to the remainder
 
-    function test_contractNotInitialized_reverts() public {
+    function test_contractDisabled_reverts() public {
         // Expect revert
         vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
 
@@ -61,15 +59,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         auctioneer.getCurrentTick();
     }
 
-    function test_contractInactive_reverts() public givenInitialized givenContractInactive {
-        // Expect revert
-        vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
-
-        // Call function
-        auctioneer.getCurrentTick();
-    }
-
-    function test_fullCapacity_sameTime(uint48 secondsPassed_) public givenInitialized {
+    function test_fullCapacity_sameTime(uint48 secondsPassed_) public givenEnabled {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 0, 86400 - 1));
 
         // Warp to change the block timestamp
@@ -87,7 +77,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
-    function test_fullCapacity(uint48 secondsPassed_) public givenInitialized {
+    function test_fullCapacity(uint48 secondsPassed_) public givenEnabled {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
 
         // Warp to change the block timestamp
@@ -117,7 +107,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
-    function test_newCapacityEqualToTickSize() public givenInitialized givenRecipientHasBid(75e18) {
+    function test_newCapacityEqualToTickSize() public givenEnabled givenRecipientHasBid(75e18) {
         // Min price is 15e18
         // We need a bid and time to pass so that remaining capacity + new capacity = tick size
         // Given a tick size of 10e9
@@ -161,7 +151,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityEqualToTickSize_dayTargetMet()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(360375e15)
     {
         // Bid size of 360375e15 results in:
@@ -191,7 +181,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityEqualToTickSize_dayTargetMet_nextDay()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(378861111101700000000)
     {
         // 150e18 + 165e18 + 63861111101700000000 = 378861111101700000000
@@ -221,11 +211,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
-    function test_newCapacityLessThanTickSize()
-        public
-        givenInitialized
-        givenRecipientHasBid(90e18)
-    {
+    function test_newCapacityLessThanTickSize() public givenEnabled givenRecipientHasBid(90e18) {
         // Bid size of 90e18 results in convertible amount of 6e9
         // Remaining capacity is 4e9
 
@@ -245,11 +231,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
-    function test_newCapacityGreaterThanTickSize()
-        public
-        givenInitialized
-        givenRecipientHasBid(45e18)
-    {
+    function test_newCapacityGreaterThanTickSize() public givenEnabled givenRecipientHasBid(45e18) {
         // Bid size of 45e18 results in convertible amount of 3e9
         // Remaining capacity is 7e9
 
@@ -274,7 +256,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickStepSame_newCapacityGreaterThanTickSize()
         public
-        givenInitialized
+        givenEnabled
         givenTickStep(100e2)
         givenRecipientHasBid(45e18)
     {
@@ -301,7 +283,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickStepSame_newCapacityLessThanTickSize()
         public
-        givenInitialized
+        givenEnabled
         givenTickStep(100e2)
         givenRecipientHasBid(75e18)
     {
@@ -327,7 +309,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickStepSame_newCapacityEqualToTickSize()
         public
-        givenInitialized
+        givenEnabled
         givenTickStep(100e2)
         givenRecipientHasBid(75e18)
     {
@@ -353,7 +335,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -384,7 +366,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -415,7 +397,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet_nextDay()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -447,7 +429,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newPriceBelowMinimum()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -483,7 +465,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newPriceBelowMinimum_dayTargetMet_nextDay()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:

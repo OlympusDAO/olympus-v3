@@ -62,9 +62,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(position.wrapped, false, "position wrapped");
     }
 
-    // when the contract is deactivated
-    //  [X] it reverts
-    // when the contract has not been initialized
+    // when the contract is disabled
     //  [X] it reverts
     // when the caller has not approved CDEPO to spend the bid token
     //  [X] it reverts
@@ -150,15 +148,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //   [X] it sets the current tick size to the standard tick size
     //   [X] it sets the lastUpdate to the current block timestamp
 
-    function test_givenContractNotInitialized_reverts() public {
-        // Expect revert
-        vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
-
-        // Call function
-        auctioneer.bid(1e18);
-    }
-
-    function test_givenContractInactive_reverts() public givenInitialized givenContractInactive {
+    function test_givenDisabled_reverts() public {
         // Expect revert
         vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
 
@@ -168,7 +158,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenSpendingNotApproved_reverts()
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
     {
         // Expect revert
@@ -181,7 +171,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenAuctioneerRoleNotGranted_reverts()
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
     {
@@ -200,7 +190,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
     {
@@ -226,7 +216,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
     {
@@ -263,7 +253,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_reserveTokenHasSmallerDecimals()
         public
         givenReserveTokenHasDecimals(6)
-        givenInitializedWithParameters(TARGET, TICK_SIZE, 15e6)
+        givenEnabledWithParameters(TARGET, TICK_SIZE, 15e6)
         givenAddressHasReserveToken(recipient, 3e6)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 3e6)
     {
@@ -311,7 +301,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenFirstBid()
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 3e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 3e18)
     {
@@ -359,7 +349,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenFirstBidOfDay()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(120e18)
         givenAddressHasReserveToken(recipient, 6e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 6e18)
@@ -419,7 +409,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_secondBidUpdatesDayState()
         public
-        givenInitialized
+        givenEnabled
         givenRecipientHasBid(3e18)
         givenAddressHasReserveToken(recipient, 6e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 6e18)
@@ -480,7 +470,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 150e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 150e18)
     {
@@ -533,7 +523,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 151e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 151e18)
     {
@@ -585,7 +575,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenTickStep(100e2)
         givenAddressHasReserveToken(recipient, 151e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 151e18)
@@ -638,7 +628,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 300e18)
     {
@@ -696,7 +686,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenTickStep(100e2)
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 300e18)
@@ -751,7 +741,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 40575e16)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 40575e16)
     {
@@ -821,7 +811,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 796064875e12)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 796064875e12)
     {
@@ -898,7 +888,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenInitialized
+        givenEnabled
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 300e18)
     {

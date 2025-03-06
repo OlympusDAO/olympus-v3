@@ -40,12 +40,6 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newAuctionTrackingPeriod The number of days that auction results are tracked for
     event AuctionTrackingPeriodUpdated(uint8 newAuctionTrackingPeriod);
 
-    /// @notice Emitted when the contract is activated
-    event Activated();
-
-    /// @notice Emitted when the contract is deactivated
-    event Deactivated();
-
     // ========== ERRORS ========== //
 
     /// @notice Emitted when the parameters are invalid
@@ -98,6 +92,25 @@ interface IConvertibleDepositAuctioneer {
         uint256 capacity;
         uint256 tickSize;
         uint48 lastUpdate;
+    }
+
+    /// @notice Parameters provided to the `enable()` function
+    ///
+    /// @param  target                  Number of OHM available to sell per day
+    /// @param  tickSize                Number of OHM in a tick
+    /// @param  minPrice                Minimum price that OHM can be sold for, in terms of the bid token
+    /// @param  tickStep                Percentage increase (decrease) per tick
+    /// @param  timeToExpiry            Number of seconds between creation and expiry of convertible deposits
+    /// @param  redemptionPeriod        Number of seconds after expiry that redemption of the deposit is allowed
+    /// @param  auctionTrackingPeriod   Number of days that auction results are tracked for
+    struct EnableParams {
+        uint256 target;
+        uint256 tickSize;
+        uint256 minPrice;
+        uint24 tickStep;
+        uint48 timeToExpiry;
+        uint48 redemptionPeriod;
+        uint8 auctionTrackingPeriod;
     }
 
     // ========== AUCTION ========== //
@@ -228,34 +241,4 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  days_ The number of days that auction results are tracked for
     function setAuctionTrackingPeriod(uint8 days_) external;
-
-    // ========== ACTIVATION/DEACTIVATION ========== //
-
-    /// @notice Enables governance to initialize and activate the contract. This ensures that the contract is in a valid state when activated.
-    /// @dev    Only callable by the admin role
-    ///
-    /// @param  target_          The target for OHM sold per day
-    /// @param  tickSize_        The size of each tick
-    /// @param  minPrice_        The minimum price that OHM can be sold for, in terms of the bid token
-    /// @param  tickStep_        The tick step, in terms of `ONE_HUNDRED_PERCENT`
-    /// @param  timeToExpiry_    The number of seconds between creation and expiry of convertible deposits
-    /// @param  redemptionPeriod_ The number of seconds after expiry that redemption of the deposit is allowed
-    /// @param  auctionTrackingPeriod_ The number of days that auction results are tracked for
-    function initialize(
-        uint256 target_,
-        uint256 tickSize_,
-        uint256 minPrice_,
-        uint24 tickStep_,
-        uint48 timeToExpiry_,
-        uint48 redemptionPeriod_,
-        uint8 auctionTrackingPeriod_
-    ) external;
-
-    /// @notice Activate the contract functionality
-    /// @dev    Only callable by the emergency role
-    function activate() external;
-
-    /// @notice Deactivate the contract functionality
-    /// @dev    Only callable by the emergency role
-    function deactivate() external;
 }

@@ -9,8 +9,6 @@ contract ConvertibleDepositAuctioneerRedemptionPeriodTest is ConvertibleDepositA
     //  [X] it reverts
     // when the new redemption period is 0
     //  [X] it reverts
-    // given the contract is not initialized
-    //  [X] it sets the redemption period
     // when the contract is deactivated
     //  [X] it sets the redemption period
     // [X] it sets the redemption period
@@ -28,15 +26,6 @@ contract ConvertibleDepositAuctioneerRedemptionPeriodTest is ConvertibleDepositA
         auctioneer.setRedemptionPeriod(100);
     }
 
-    function test_contractNotInitialized() public {
-        // Call function
-        vm.prank(admin);
-        auctioneer.setRedemptionPeriod(100);
-
-        // Assert state
-        assertEq(auctioneer.getRedemptionPeriod(), 100, "redemption period");
-    }
-
     function test_newRedemptionPeriodZero_reverts() public {
         // Expect revert
         vm.expectRevert(
@@ -51,7 +40,7 @@ contract ConvertibleDepositAuctioneerRedemptionPeriodTest is ConvertibleDepositA
         auctioneer.setRedemptionPeriod(0);
     }
 
-    function test_contractInactive() public givenInitialized givenContractInactive {
+    function test_contractDisabled() public {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -69,7 +58,7 @@ contract ConvertibleDepositAuctioneerRedemptionPeriodTest is ConvertibleDepositA
         assertEq(auctioneer.getRedemptionPeriod(), 100, "redemption period");
     }
 
-    function test_contractActive(uint48 redemptionPeriod_) public givenInitialized {
+    function test_contractActive(uint48 redemptionPeriod_) public givenEnabled {
         uint48 redemptionPeriod = uint48(bound(redemptionPeriod_, 1, 1 weeks));
 
         uint48 lastUpdate = uint48(block.timestamp);

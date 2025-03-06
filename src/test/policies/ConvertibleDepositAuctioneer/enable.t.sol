@@ -1,0 +1,330 @@
+// SPDX-License-Identifier: Unlicensed
+pragma solidity 0.8.15;
+
+import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+
+contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctioneerTest {
+    // when the caller does not have the "admin" role
+    //  [X] it reverts
+    // when the contract is already enabled
+    //  [X] it reverts
+    // when the contract is disabled
+    //  when the enable parameters length is incorrect
+    //   [X] it reverts
+    //  when the tick size is 0
+    //   [X] it reverts
+    //  when the min price is 0
+    //   [X] it reverts
+    //  when the tick step is < 100e2
+    //   [X] it reverts
+    //  when the time to expiry is 0
+    //   [X] it reverts
+    //  when the redemption period is 0
+    //   [X] it reverts
+    //  when the auction tracking period is 0
+    //   [X] it reverts
+    //  [X] it activates the contract
+    //  [X] it emits an event
+    //  [X] it sets the auction parameters
+    //  [X] it sets the tick step
+    //  [X] it sets the time to expiry
+    //  [X] it sets the redemption period
+    //  [X] it sets the auction tracking period
+    //  [X] it sets the previous tick
+    //  [X] it sets the last update to the current block timestamp
+    //  [X] it resets the day state
+    //  [X] it resets the auction results history and index
+
+    function test_callerDoesNotHaveAdminRole_reverts(address caller_) public {
+        // Ensure caller is not emergency address
+        vm.assume(caller_ != admin);
+
+        // Expect revert
+        _expectRoleRevert("admin");
+
+        // Call function
+        vm.prank(caller_);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_contractEnabled_reverts() public givenEnabled {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_enableParamsLengthIncorrect_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "enable params"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.AuctionParameters({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE
+                })
+            )
+        );
+    }
+
+    function test_tickSizeZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "tick size"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: 0,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_minPriceZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "min price"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: 0,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_tickStepOutOfBounds_reverts(uint24 tickStep_) public {
+        uint24 tickStep = uint24(bound(tickStep_, 0, 100e2 - 1));
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "min price"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: tickStep,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_timeToExpiryZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "time to expiry"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: 0,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_redemptionPeriodZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "redemption period"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: 0,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
+    function test_auctionTrackingPeriodZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "auction tracking period"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: 0
+                })
+            )
+        );
+    }
+
+    function test_contractDisabled() public givenEnabled givenRecipientHasBid(1e18) givenDisabled {
+        uint48 lastUpdate = uint48(block.timestamp);
+        uint48 newBlock = lastUpdate + 1;
+
+        // Warp to change the block timestamp
+        vm.warp(newBlock);
+
+        // Expect events
+        vm.expectEmit(true, true, true, true);
+        emit AuctionParametersUpdated(TARGET, TICK_SIZE, MIN_PRICE);
+
+        vm.expectEmit(true, true, true, true);
+        emit TickStepUpdated(TICK_STEP);
+
+        vm.expectEmit(true, true, true, true);
+        emit TimeToExpiryUpdated(TIME_TO_EXPIRY);
+
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionPeriodUpdated(REDEMPTION_PERIOD);
+
+        vm.expectEmit(true, true, true, true);
+        emit AuctionTrackingPeriodUpdated(AUCTION_TRACKING_PERIOD);
+
+        vm.expectEmit(true, true, true, true);
+        emit Enabled();
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    timeToExpiry: TIME_TO_EXPIRY,
+                    redemptionPeriod: REDEMPTION_PERIOD,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+
+        // Assert state
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
+        assertEq(auctioneer.getTickStep(), TICK_STEP, "tick step");
+        assertEq(auctioneer.getTimeToExpiry(), TIME_TO_EXPIRY, "time to expiry");
+        assertEq(auctioneer.getRedemptionPeriod(), REDEMPTION_PERIOD, "redemption period");
+        assertEq(
+            auctioneer.getAuctionTrackingPeriod(),
+            AUCTION_TRACKING_PERIOD,
+            "auction tracking period"
+        );
+        assertEq(auctioneer.isEnabled(), true, "enabled");
+        // lastUpdate has changed
+        assertEq(auctioneer.getPreviousTick().lastUpdate, newBlock);
+        // Day state is reset
+        _assertDayState(0, 0);
+
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, INITIAL_BLOCK);
+
+        _assertAuctionResults(0, 0, 0, 0, 0, 0, 0);
+        _assertAuctionResultsNextIndex(0);
+    }
+}

@@ -2,10 +2,11 @@
 pragma solidity 0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
-import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
-contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, RolesConsumer {
+contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler {
     uint48 internal _initTimestamp;
     int256[] internal _auctionResults;
 
@@ -23,20 +24,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
         return dependencies;
     }
-
-    function activate() external override {}
-
-    function deactivate() external override {}
-
-    function initialize(
-        uint256 target_,
-        uint256 tickSize_,
-        uint256 minPrice_,
-        uint24 tickStep_,
-        uint48 timeToExpiry_,
-        uint48 redemptionPeriod_,
-        uint8 auctionTrackingPeriod_
-    ) external override {}
 
     function requestPermissions()
         external
