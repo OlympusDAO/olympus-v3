@@ -172,11 +172,11 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - account_ is not the owner of all of the positions
-    ///             - The position is not valid
-    ///             - The position is not CDEPO
-    ///             - The position has expired
-    ///             - The deposit amount is greater than the remaining deposit
-    ///             - The deposit amount is 0
+    ///             - Any position is not valid
+    ///             - Any position is not CDEPO
+    ///             - Any position has reached the conversion expiry
+    ///             - Any conversion amount is greater than the remaining deposit
+    ///             - The amount of CD tokens to convert is 0
     ///             - The converted amount is 0
     function previewConvert(
         address account_,
@@ -212,11 +212,11 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
-    ///             - The position is not valid
-    ///             - The position is not CDEPO
-    ///             - The position has expired
-    ///             - The deposit amount is greater than the remaining deposit
-    ///             - The deposit amount is 0
+    ///             - Any position is not valid
+    ///             - Any position is not CDEPO
+    ///             - Any position has reached the conversion expiry
+    ///             - Any position has a conversion amount greater than the remaining deposit
+    ///             - The amount of CD tokens to convert is 0
     ///             - The converted amount is 0
     function convert(
         uint256[] memory positionIds_,
@@ -293,11 +293,12 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
-    ///             - The position is not valid
-    ///             - The position is not CDEPO
-    ///             - The position has not expired
-    ///             - The deposit amount is greater than the remaining deposit
-    ///             - The deposit amount is 0
+    ///             - Any position is not valid
+    ///             - Any position is not CDEPO
+    ///             - Any position has not reached the conversion expiry
+    ///             - Any position has reached the redemption expiry
+    ///             - Any redemption amount is greater than the remaining deposit
+    ///             - The amount of CD tokens to redeem is 0
     function previewRedeem(
         address account_,
         uint256[] memory positionIds_,
@@ -331,11 +332,12 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     ///             - The contract is not active
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
-    ///             - The position is not valid
-    ///             - The position is not CDEPO
-    ///             - The position has not expired
-    ///             - The deposit amount is greater than the remaining deposit
-    ///             - The deposit amount is 0
+    ///             - Any position is not valid
+    ///             - Any position is not CDEPO
+    ///             - Any position has not reached the conversion expiry
+    ///             - Any position has reached the redemption expiry
+    ///             - Any redemption amount is greater than the remaining deposit
+    ///             - The amount of CD tokens to redeem is 0
     function redeem(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
