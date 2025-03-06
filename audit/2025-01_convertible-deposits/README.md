@@ -120,10 +120,10 @@ Callers with the appropriate permissions can activate and deactivate the functio
 
 ```mermaid
 flowchart TD
-  cd_admin((cd_admin)) -- initialize --> CDAuctioneer
+  admin((admin)) -- enable --> CDAuctioneer
   emergency_restart((emergency_restart)) -- restart --> EmissionManager
-  emergency_shutdown((emergency_shutdown)) -- activate/deactivate --> CDAuctioneer
-  emergency_shutdown((emergency_shutdown)) -- activate/deactivate --> CDFacility
+  emergency((emergency)) -- activate/deactivate --> CDAuctioneer
+  emergency((emergency)) -- activate/deactivate --> CDFacility
   emergency_shutdown((emergency_shutdown)) -- deactivate --> EmissionManager
   emissions_admin((emissions_admin)) -- initialize --> EmissionManager
 
@@ -222,22 +222,18 @@ sequenceDiagram
 
 #### Reclaim Deposit
 
-Prior to the expiry of the convertible deposit terms, a deposit owner can reclaim their underlying deposit. A discount (`reclaimRate()` on the CDFacility contract) is applied on the deposit that is returned. The forfeited asset quantity will be swept into the TRSRY module during the next heartbeat.
+The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`reclaimRate()` on the CDFacility contract) is applied on the deposit that is returned. The forfeited asset quantity will be swept into the TRSRY module during the next heartbeat.
 
 ```mermaid
 sequenceDiagram
     participant caller
     participant CDFacility
-    participant CDPOS
     participant CDEPO
     participant MINTR
     participant ReserveToken
     participant VaultToken
 
-    caller->>CDFacility: reclaim(positionIds, amounts)
-    loop For each position
-        CDFacility->>CDPOS: update(positionId, remainingAmount)
-    end
+    caller->>CDFacility: reclaim(amount)
     CDFacility->>CDEPO: reclaimFor(caller, amount)
     caller-->>CDEPO: CD tokens
     CDEPO->>CDEPO: burns tokens
@@ -245,12 +241,11 @@ sequenceDiagram
     ReserveToken-->>CDFacility: reserve tokens
     CDFacility->>ReserveToken: transfer(discounted amount, caller)
     ReserveToken-->>caller: reserve tokens
-    CDFacility->>MINTR: decreaseMintApproval(CDFacility, unconverted amount)
 ```
 
 #### Redeem Deposit
 
-After the expiry of the convertible deposit terms, a deposit owner can redeem their underlying deposit. The full underlying deposit is returned.
+After the convertible deposit conversion expiry and before the redemption expiry, a deposit owner can redeem their underlying deposit. The full underlying deposit is returned.
 
 ```mermaid
 sequenceDiagram
