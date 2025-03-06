@@ -60,8 +60,8 @@ interface IDLGTEv1 {
     /**
      * @notice Undelegated gOHM is transferred to the calling policy.
      * @dev
-     *   - If `autoRescindDelegations` is true, delegations will be automatically rescinded if required,
-     *     see `rescindDelegations()` for details
+     *   - If `autoRescindMaxNumDelegates` is greater than zero, the delegations will be automatically rescinded if required
+     *     from up to `autoRescindMaxNumDelegates` number of delegate escrows. See `rescindDelegations()` for details
      *   - Will revert if there is still not enough undelegated gOHM for `onBehalfOf` OR
      *     if policy is attempting to withdraw more gOHM than it deposited
      *     Deposted gOHM balances are tracked per policy. policyA cannot withdraw gOHM that policyB deposited
@@ -69,7 +69,7 @@ interface IDLGTEv1 {
     function withdrawUndelegatedGohm(
         address onBehalfOf,
         uint256 amount,
-        bool autoRescindDelegations
+        uint256 autoRescindMaxNumDelegates
     ) external;
 
     /**
@@ -87,12 +87,13 @@ interface IDLGTEv1 {
 
     /**
      * @notice Rescind delegations until the amount undelegated for the `onBehalfOf` account
-     * is greater or equal to `requestedUndelegatedBalance`.
+     * is greater or equal to `requestedUndelegatedBalance`. No more than `maxNumDelegates`
+     * will be rescinded as part of this
      * @dev
      *    - Delegations are rescinded by iterating through the delegate addresses for the
      *      `onBehalfOf` address.
      *    - No guarantees on the order of who is rescinded -- it may change as delegations are
-     *      removed (pop and swap)
+     *      removed
      *    - A calling policy may be able to rescind more than it added via `depositUndelegatedGohm()`
      *      however the policy cannot then withdraw an amount higher than what it deposited.
      *    - If the full `requestedUndelegatedBalance` cannot be fulfilled the `actualUndelegatedBalance`
@@ -101,8 +102,9 @@ interface IDLGTEv1 {
      */
     function rescindDelegations(
         address onBehalfOf,
-        uint256 requestedUndelegatedBalance
-    ) external returns (uint256 actualUndelegatedBalance);
+        uint256 requestedUndelegatedBalance,
+        uint256 maxNumDelegates
+    ) external returns (uint256 totalRescinded, uint256 newUndelegatedBalance);
 
     /**
      * @notice Report the total delegated and undelegated gOHM balance for an account

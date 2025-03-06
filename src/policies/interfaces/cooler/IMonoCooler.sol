@@ -388,8 +388,8 @@ interface IMonoCooler {
      */
     function applyUnhealthyDelegations(
         address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint256 totalUndelegated);
+        uint256 autoRescindMaxNumDelegates
+    ) external returns (uint256 totalUndelegated, uint256 undelegatedBalance);
 
     //============================================================================================//
     //                                           ADMIN                                            //

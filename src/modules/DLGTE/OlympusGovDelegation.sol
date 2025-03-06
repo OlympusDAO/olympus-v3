@@ -87,6 +87,7 @@ contract OlympusGovDelegation is DLGTEv1 {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @inheritdoc DLGTEv1
     function depositUndelegatedGohm(
         address onBehalfOf,
         uint256 amount
@@ -105,20 +106,21 @@ contract OlympusGovDelegation is DLGTEv1 {
         _gOHM.safeTransferFrom(msg.sender, address(this), amount);
     }
 
+    /// @inheritdoc DLGTEv1
     function withdrawUndelegatedGohm(
         address onBehalfOf,
         uint256 amount,
-        bool autoRescindDelegations
+        uint256 autoRescindMaxNumDelegates
     ) external override permissioned {
         if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
         if (amount == 0) revert DLGTE_InvalidAmount();
         AccountState storage aState = _accountState[onBehalfOf];
         uint256 totalAccountGOhm = aState.totalGOhm;
 
-        if (autoRescindDelegations) {
+        if (autoRescindMaxNumDelegates > 0) {
             // Don't need to handle the case where it didn't rescind enough
             // As it will just fail with DLGTE_ExceededUndelegatedBalance below.
-            _autoRescindDelegations(onBehalfOf, amount, aState, totalAccountGOhm);
+            _autoRescindDelegations(onBehalfOf, amount, aState, totalAccountGOhm, autoRescindMaxNumDelegates);
         }
 
         mapping(address => uint256) storage policyBalances = _policyAccountBalances[msg.sender];
@@ -141,17 +143,19 @@ contract OlympusGovDelegation is DLGTEv1 {
     /// @inheritdoc DLGTEv1
     function rescindDelegations(
         address onBehalfOf,
-        uint256 requestedUndelegatedBalance
-    ) external override permissioned returns (uint256 actualUndelegatedBalance) {
+        uint256 requestedUndelegatedBalance,
+        uint256 maxNumDelegates
+    ) external override permissioned returns (uint256 totalRescinded, uint256 newUndelegatedBalance) {
         if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
+        if (maxNumDelegates == 0) revert DLGTE_InvalidAmount();
         AccountState storage aState = _accountState[onBehalfOf];
-        return
-            _autoRescindDelegations(
-                onBehalfOf,
-                requestedUndelegatedBalance,
-                aState,
-                aState.totalGOhm
-            );
+        return _autoRescindDelegations(
+            onBehalfOf,
+            requestedUndelegatedBalance,
+            aState,
+            aState.totalGOhm,
+            maxNumDelegates
+        );
     }
 
     /// @inheritdoc DLGTEv1
@@ -420,29 +424,46 @@ contract OlympusGovDelegation is DLGTEv1 {
         address onBehalfOf,
         uint256 requestedUndelegatedBalance,
         AccountState storage aState,
-        uint256 totalAccountGOhm
-    ) private returns (uint256 actualUndelegatedBalance) {
-        actualUndelegatedBalance = totalAccountGOhm - aState.delegatedGOhm;
+        uint256 totalAccountGOhm,
+        uint256 maxNumDelegates
+    ) private returns (uint256 totalRescinded, uint256 newUndelegatedBalance) {
+        newUndelegatedBalance = totalAccountGOhm - aState.delegatedGOhm;
 
         // Nothing to do if the undelegated balance is already greater than the requested amount
-        if (actualUndelegatedBalance >= requestedUndelegatedBalance)
-            return actualUndelegatedBalance;
+        if (newUndelegatedBalance >= requestedUndelegatedBalance) {
+            return (totalRescinded, newUndelegatedBalance);
+        }
 
-        // EnumerableMap internals are used here for gas efficiency.
-        // Deleting keys from the EnumerableMap changes the order (swap and pop) and size
-        // So take an upfront in-memory copy of the delegateAddrs keys to iterate over first.
+        uint256 requestedToRescind;
+        unchecked {
+            requestedToRescind = requestedUndelegatedBalance - newUndelegatedBalance;
+        }
+
+        // Using low level functions here, as the OZ version doesn't have a keys() function
         EnumerableMap.AddressToUintMap storage acctDelegatedAmounts = aState.delegatedAmounts;
-        bytes32[] memory delegateAddrs = acctDelegatedAmounts._inner._keys._inner._values;
+        bytes32[] storage delegateAddrs = acctDelegatedAmounts._inner._keys._inner._values;
+
+        // If no delegates, then nothing to do
+        uint256 index = delegateAddrs.length;
+        if (index == 0) {
+            return (totalRescinded, newUndelegatedBalance);
+        }
+
+        // Iterate over the delegates in reverse, to avoid 'pop and swap' on deleting unused 
+        // delegates, changing the array order.
+        // Only iterate over the minimum of number of delegates and the requested max number.
+        uint256 minIndex = index > maxNumDelegates ? index - maxNumDelegates : 0;
         bytes32 delegateAddr;
         uint256 delegatedBalance;
         uint256 rescindAmount;
-        for (uint256 i; i < delegateAddrs.length; ++i) {
-            delegateAddr = delegateAddrs[i];
+        while (index > minIndex) {
+            index--;
+            delegateAddr = delegateAddrs[index];
             delegatedBalance = uint256(acctDelegatedAmounts._inner._values[delegateAddr]);
 
             // Cap the amount to rescind for this delegate by the remaining required to get to the
             // requested undelegated balance
-            rescindAmount = requestedUndelegatedBalance - actualUndelegatedBalance;
+            rescindAmount = requestedToRescind - totalRescinded;
             rescindAmount = delegatedBalance < rescindAmount ? delegatedBalance : rescindAmount;
 
             _rescindDelegation(
@@ -453,17 +474,15 @@ contract OlympusGovDelegation is DLGTEv1 {
                 acctDelegatedAmounts
             );
 
-            actualUndelegatedBalance += rescindAmount;
-
-            // Reached the requested undelegated balance
-            if (actualUndelegatedBalance == requestedUndelegatedBalance) break;
+            // Break if the requested undelegated balance is reached
+            totalRescinded += rescindAmount;
+            if (totalRescinded == requestedToRescind) break;
         }
 
         // Update state for the delegated amount of gOHM for this account
-        aState.delegatedGOhm = (totalAccountGOhm - actualUndelegatedBalance).encodeUInt112();
-
-        // May not have undelegated the full requested amount - left up to the calling policy on how to handle this gap
-        return actualUndelegatedBalance;
+        // Note: May not have undelegated the full requested amount - left up to the calling policy on how to handle this gap
+        newUndelegatedBalance = newUndelegatedBalance + totalRescinded;
+        aState.delegatedGOhm = (totalAccountGOhm - newUndelegatedBalance).encodeUInt112();
     }
 
     function _rescindDelegation(

@@ -212,12 +212,13 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
 
-        requests = new Permissions[](5);
+        requests = new Permissions[](6);
         requests[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         requests[1] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
         requests[2] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
         requests[3] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
         requests[4] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        requests[5] = Permissions(DLGTE_KEYCODE, DLGTE.rescindDelegations.selector);
     }
 
     //============================================================================================//
@@ -358,7 +359,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             }
         }
 
-        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, false);
+        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, 0);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
         aState.collateral = _accountCollateral;
@@ -526,17 +527,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     /// @inheritdoc IMonoCooler
     function applyUnhealthyDelegations(
         address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external override returns (uint256 totalUndelegated) {
+        uint256 autoRescindMaxNumDelegates
+    ) external override returns (uint256 totalUndelegated, uint256 undelegatedBalance) {
         if (liquidationsPaused) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
         LiquidationStatus memory status = _computeLiquidity(allAccountState[account], gState);
         if (!status.exceededLiquidationLtv) revert CannotLiquidate();
-        totalUndelegated = _undelegateForLiquidation(
-            account,
-            delegationRequests,
-            status.collateral
-        );
+
+        return DLGTE.rescindDelegations(account, status.collateral, autoRescindMaxNumDelegates);
     }
 
     //============================================================================================//
@@ -576,7 +574,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                 );
 
                 // Withdraw the undelegated gOHM, auto-rescinding delegations if required
-                DLGTE.withdrawUndelegatedGohm(account, status.collateral, true);
+                DLGTE.withdrawUndelegatedGohm(account, status.collateral, type(uint256).max);
 
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;
@@ -1018,27 +1016,6 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             // Cap the incentive to the current collateral only (liquidator cannot claim more than the user collateral)
             if (status.currentIncentive > status.collateral)
                 status.currentIncentive = status.collateral;
-        }
-    }
-
-    function _undelegateForLiquidation(
-        address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
-        uint256 acctCollateral
-    ) private returns (uint256 totalUndelegated) {
-        if (delegationRequests.length > 0) {
-            uint256 totalDelegated;
-            uint256 undelegatedBalance;
-            (totalDelegated, totalUndelegated, undelegatedBalance) = DLGTE.applyDelegations(
-                account,
-                delegationRequests
-            );
-
-            // Only allowed to undelegate.
-            if (totalDelegated > 0) revert InvalidDelegationRequests();
-
-            // Cannot undelegate more collateral than required in order to fullfill a liquidation.
-            if (undelegatedBalance > acctCollateral) revert InvalidDelegationRequests();
         }
     }
 
