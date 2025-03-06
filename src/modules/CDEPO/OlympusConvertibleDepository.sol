@@ -167,6 +167,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
         assetsOut = FullMath.mulDiv(amount_, reclaimRate, ONE_HUNDRED_PERCENT);
 
+        // If the reclaimed amount is 0, revert
+        if (assetsOut == 0) revert CDEPO_InvalidArgs("reclaimed amount");
+
         return assetsOut;
     }
 

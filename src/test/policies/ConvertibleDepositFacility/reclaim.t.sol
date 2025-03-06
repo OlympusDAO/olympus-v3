@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
 contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
@@ -11,142 +10,26 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
     // given the contract is inactive
     //  [X] it reverts
-    // when the length of the positionIds_ array does not match the length of the amounts_ array
+    // when the amount of CD tokens to reclaim is 0
     //  [X] it reverts
-    // when any position is not valid
+    // when the reclaimed amount is 0
     //  [X] it reverts
-    // when any position has an owner that is not the caller
+    // given the caller has not approved CDEPO to spend the total amount of CD tokens
     //  [X] it reverts
-    // when any position has reached the conversion expiry
-    //  [X] it reverts
-    // when any position has reached the redemption expiry
-    //  [X] it reverts
-    // when any position has an amount greater than the remaining deposit
-    //  [X] it reverts
-    // when the caller has not approved CDEPO to spend the total amount of CD tokens
-    //  [X] it reverts
-    // when the reclaim amount is 0
-    //  [X] it reverts
-    // [X] it updates the remaining deposit of each position
     // [X] it transfers the reclaimed reserve tokens to the caller
-    // [X] it decreases the OHM mint approval by the amount of OHM that would have been converted
     // [X] it returns the reclaimed amount
     // [X] it emits a ReclaimedDeposit event
+    // [X] the OHM mint approval is not changed
 
     function test_contractInactive_reverts() public {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
 
         // Call function
-        facility.reclaim(new uint256[](0), new uint256[](0));
+        facility.reclaim(1e18);
     }
 
-    function test_arrayLengthMismatch_reverts() public givenLocallyActive {
-        uint256[] memory positionIds_ = new uint256[](1);
-        uint256[] memory amounts_ = new uint256[](2);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
-                "array length"
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_anyPositionHasDifferentOwner_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 10e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 10e18)
-        givenAddressHasReserveToken(recipientTwo, 5e18)
-        givenReserveTokenSpendingIsApproved(recipientTwo, address(convertibleDepository), 5e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            uint256 positionId;
-            if (positionIndex == i) {
-                positionId = _createPosition(
-                    recipientTwo,
-                    5e18,
-                    CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
-                    false
-                );
-            } else {
-                positionId = _createPosition(
-                    recipient,
-                    5e18,
-                    CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
-                    false
-                );
-            }
-
-            positionIds_[i] = positionId;
-            amounts_[i] = 5e18;
-        }
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, positionIndex)
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_allPositionsHaveDifferentOwner_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-        givenAddressHasPosition(recipient, 3e18)
-        givenAddressHasPosition(recipient, 3e18)
-        givenAddressHasPosition(recipient, 3e18)
-    {
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        positionIds_[0] = 0;
-        amounts_[0] = 3e18;
-        positionIds_[1] = 1;
-        amounts_[1] = 3e18;
-        positionIds_[2] = 2;
-        amounts_[2] = 3e18;
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, 0)
-        );
-
-        // Call function
-        vm.prank(recipientTwo);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_anyPositionIsNotValid_reverts(
-        uint256 positionIndex_
-    )
+    function test_amountToReclaimIsZero_reverts()
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
@@ -155,202 +38,19 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             address(convertibleDepository),
             RESERVE_TOKEN_AMOUNT
         )
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenConvertibleDepositTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
     {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            // Invalid position
-            if (positionIndex == i) {
-                positionIds_[i] = 2;
-                amounts_[i] = RESERVE_TOKEN_AMOUNT / 2;
-            }
-            // Valid position
-            else {
-                positionIds_[i] = i;
-                amounts_[i] = RESERVE_TOKEN_AMOUNT / 2;
-            }
-        }
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
-
-        // Call function
-        vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_anyPositionHasReachedConversionExpiry_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            uint48 expiry = CONVERSION_EXPIRY;
-            if (positionIndex == i) {
-                expiry = CONVERSION_EXPIRY - 1;
-            }
-
-            // Create position
-            uint256 positionId = _createPosition(
-                recipient,
-                3e18,
-                CONVERSION_PRICE,
-                expiry,
-                REDEMPTION_EXPIRY,
-                false
-            );
-
-            positionIds_[i] = positionId;
-            amounts_[i] = 3e18;
-        }
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionExpired.selector,
-                positionIndex
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_anyPositionHasReachedRedemptionExpiry_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            uint48 redemptionExpiry = REDEMPTION_EXPIRY;
-            if (positionIndex == i) {
-                redemptionExpiry = REDEMPTION_EXPIRY - 1;
-            }
-
-            // Create position
-            uint256 positionId = _createPosition(
-                recipient,
-                3e18,
-                CONVERSION_PRICE,
-                CONVERSION_EXPIRY,
-                redemptionExpiry,
-                false
-            );
-
-            positionIds_[i] = positionId;
-            amounts_[i] = 3e18;
-        }
-
-        // Warp to before the normal redemption expiry
-        vm.warp(REDEMPTION_EXPIRY - 1);
-
-        // Expect revert
-        // Reclaim is not allowed after conversion expiry
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_PositionExpired.selector, 0)
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_anyAmountIsGreaterThanRemainingDeposit_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-        givenAddressHasPosition(recipient, 3e18)
-        givenAddressHasPosition(recipient, 3e18)
-        givenAddressHasPosition(recipient, 3e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            positionIds_[i] = i;
-
-            // Invalid position
-            if (positionIndex == i) {
-                amounts_[i] = 4e18;
-            }
-            // Valid position
-            else {
-                amounts_[i] = 3e18;
-            }
-        }
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_InvalidAmount.selector,
-                positionIndex,
-                4e18
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
-    }
-
-    function test_amountIsZero_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-        givenAddressHasPosition(recipient, 3e18)
-    {
-        uint256[] memory positionIds_ = new uint256[](1);
-        uint256[] memory amounts_ = new uint256[](1);
-
-        positionIds_[0] = 0;
-        amounts_[0] = 0;
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.reclaim(0);
     }
 
     function test_spendingIsNotApproved_reverts()
@@ -362,23 +62,43 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             address(convertibleDepository),
             RESERVE_TOKEN_AMOUNT
         )
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT)
+        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
     {
-        uint256[] memory positionIds_ = new uint256[](1);
-        uint256[] memory amounts_ = new uint256[](1);
-
-        positionIds_[0] = 0;
-        amounts_[0] = RESERVE_TOKEN_AMOUNT;
-
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
-
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "allowance"));
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(positionIds_, amounts_);
+        facility.reclaim(RESERVE_TOKEN_AMOUNT);
+    }
+
+    function test_reclaimedAmountIsZero_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenConvertibleDepositTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        // Will round down to 0 after the reclaim rate is applied
+        uint256 amount = 1;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+        );
+
+        // Call function
+        vm.prank(recipient);
+        facility.reclaim(amount);
     }
 
     function test_success()
@@ -390,28 +110,18 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             address(convertibleDepository),
             RESERVE_TOKEN_AMOUNT
         )
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenConvertibleDepositTokenSpendingIsApproved(
             recipient,
             address(convertibleDepository),
             RESERVE_TOKEN_AMOUNT
         )
     {
-        uint256[] memory positionIds_ = new uint256[](2);
-        uint256[] memory amounts_ = new uint256[](2);
-
-        positionIds_[0] = 0;
-        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
-        positionIds_[1] = 1;
-        amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
-
-        uint256 expectedReclaimedAmount = ((amounts_[0] + amounts_[1]) *
+        uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
             convertibleDepository.reclaimRate()) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
+        uint256 beforeMintApproval = minter.mintApproval(address(facility));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -419,7 +129,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(positionIds_, amounts_);
+        uint256 reclaimed = facility.reclaim(RESERVE_TOKEN_AMOUNT);
 
         // Assertion that the reclaimed amount is the sum of the amounts adjusted by the reclaim rate
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
@@ -437,20 +147,8 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         // No dangling mint approval
         assertEq(
             minter.mintApproval(address(facility)),
-            0,
+            beforeMintApproval,
             "minter.mintApproval(address(facility))"
-        );
-
-        // Assertion that the remaining deposit of each position is updated
-        assertEq(
-            convertibleDepositPositions.getPosition(0).remainingDeposit,
-            0,
-            "remainingDeposit[0]"
-        );
-        assertEq(
-            convertibleDepositPositions.getPosition(1).remainingDeposit,
-            0,
-            "remainingDeposit[1]"
         );
 
         // Deposit token is transferred to the recipient
@@ -477,8 +175,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
     }
 
     function test_success_fuzz(
-        uint256 amountOne_,
-        uint256 amountTwo_
+        uint256 amount_
     )
         public
         givenLocallyActive
@@ -488,39 +185,20 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             address(convertibleDepository),
             RESERVE_TOKEN_AMOUNT
         )
-        givenAddressHasPosition(recipient, 5e18)
-        givenAddressHasPosition(recipient, 5e18)
+        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
         givenConvertibleDepositTokenSpendingIsApproved(
             recipient,
             address(convertibleDepository),
             RESERVE_TOKEN_AMOUNT
         )
     {
-        // Both 3+ so that the converted amount is not 0
-        uint256 amountOne = bound(amountOne_, 3, 5e18);
-        uint256 amountTwo = bound(amountTwo_, 3, 5e18);
-
-        uint256[] memory positionIds_ = new uint256[](2);
-        uint256[] memory amounts_ = new uint256[](2);
-
-        positionIds_[0] = 0;
-        amounts_[0] = amountOne;
-        positionIds_[1] = 1;
-        amounts_[1] = amountTwo;
-
-        uint256 originalMintApproval = minter.mintApproval(address(facility));
-        uint256 expectedConvertedAmount = (amountOne * 1e18) /
-            CONVERSION_PRICE +
-            (amountTwo * 1e18) /
-            CONVERSION_PRICE;
+        uint256 amountOne = bound(amount_, 3, RESERVE_TOKEN_AMOUNT);
 
         // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimedAmount = ((amountOne + amountTwo) *
-            convertibleDepository.reclaimRate()) / 100e2;
-        uint256 expectedForfeitedAmount = amountOne + amountTwo - expectedReclaimedAmount;
+        uint256 expectedReclaimedAmount = (amountOne * convertibleDepository.reclaimRate()) / 100e2;
+        uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
 
-        // Warp to before the expiry
-        vm.warp(CONVERSION_EXPIRY - 1);
+        uint256 beforeMintApproval = minter.mintApproval(address(facility));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -528,7 +206,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(positionIds_, amounts_);
+        uint256 reclaimed = facility.reclaim(amountOne);
 
         // Assert reclaimed amount
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
@@ -536,7 +214,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         // Assert convertible deposit tokens are transferred from the recipient
         assertEq(
             convertibleDepository.balanceOf(recipient),
-            RESERVE_TOKEN_AMOUNT - amountOne - amountTwo,
+            RESERVE_TOKEN_AMOUNT - amountOne,
             "convertibleDepository.balanceOf(recipient)"
         );
 
@@ -544,23 +222,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
         // Assert the remaining mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            originalMintApproval - expectedConvertedAmount,
-            "mintApproval"
-        );
-
-        // Assertion that the remaining deposit of each position is updated
-        assertEq(
-            convertibleDepositPositions.getPosition(0).remainingDeposit,
-            5e18 - amountOne,
-            "remainingDeposit[0]"
-        );
-        assertEq(
-            convertibleDepositPositions.getPosition(1).remainingDeposit,
-            5e18 - amountTwo,
-            "remainingDeposit[1]"
-        );
+        assertEq(minter.mintApproval(address(facility)), beforeMintApproval, "mintApproval");
 
         // Deposit token is transferred to the recipient
         assertEq(

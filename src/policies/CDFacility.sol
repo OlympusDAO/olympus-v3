@@ -249,6 +249,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         CDEPO.ASSET().approve(address(vault), tokensOut);
         vault.deposit(tokensOut, address(TRSRY));
 
+        // TODO JIT mint approval
+
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert
         MINTR.mintOhm(msg.sender, convertedTokenOut);
@@ -421,37 +423,14 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not active
-    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
-    ///             - The caller is not the owner of all of the positions
-    ///             - The position is not valid
-    ///             - The position is not CDEPO
-    ///             - The position has expired
-    ///             - The deposit amount is greater than the remaining deposit
-    ///             - The deposit amount is 0
+    ///             - The amount of CD tokens to reclaim is 0
+    ///             - The reclaimed amount is 0
     function previewReclaim(
-        address account_,
-        uint256[] memory positionIds_,
-        uint256[] memory amounts_
+        uint256 amount_
     ) external view onlyActive returns (uint256 reclaimed, address cdTokenSpender) {
-        // Make sure the lengths of the arrays are the same
-        if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
-
-        uint256 totalDeposit;
-
-        for (uint256 i; i < positionIds_.length; ++i) {
-            uint256 positionId = positionIds_[i];
-            uint256 amount = amounts_[i];
-            totalDeposit += amount;
-
-            // Validate
-            _previewReclaim(account_, positionId, amount);
-        }
-
-        // Preview reclaiming the deposits in bulk
-        reclaimed = CDEPO.previewReclaim(totalDeposit);
-
-        // If the reclaimed amount is 0, revert
-        if (reclaimed == 0) revert CDF_InvalidArgs("amount");
+        // Preview reclaiming the amount
+        // This will revert if the amount or reclaimed amount is 0
+        reclaimed = CDEPO.previewReclaim(amount_);
 
         return (reclaimed, address(CDEPO));
     }
@@ -459,45 +438,13 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not active
-    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
-    ///             - The caller is not the owner of all of the positions
-    ///             - The position is not valid
-    ///             - The position is not CDEPO
-    ///             - The position has expired
-    ///             - The deposit amount is greater than the remaining deposit
-    ///             - The deposit amount is 0
-    function reclaim(
-        uint256[] memory positionIds_,
-        uint256[] memory amounts_
-    ) external nonReentrant onlyActive returns (uint256 reclaimed) {
-        // Make sure the lengths of the arrays are the same
-        if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
-
-        uint256 unconverted;
-        uint256 totalDeposit;
-
-        // Iterate over all positions
-        for (uint256 i; i < positionIds_.length; ++i) {
-            uint256 positionId = positionIds_[i];
-            uint256 depositAmount = amounts_[i];
-            totalDeposit += depositAmount;
-
-            // Validate
-            _previewReclaim(msg.sender, positionId, depositAmount);
-
-            // Unconverted must be calculated for each position, as the conversion price can differ
-            unconverted += (depositAmount * SCALE) / CDPOS.getPosition(positionId).conversionPrice;
-
-            // Update the position
-            CDPOS.update(
-                positionId,
-                CDPOS.getPosition(positionId).remainingDeposit - depositAmount
-            );
-        }
-
-        // Redeem the CD deposits in bulk
-        // This will revert if the reclaimed amount is 0
-        reclaimed = CDEPO.reclaimFor(msg.sender, totalDeposit);
+    ///             - The amount of CD tokens to reclaim is 0
+    ///             - The reclaimed amount is 0
+    function reclaim(uint256 amount_) external nonReentrant onlyActive returns (uint256 reclaimed) {
+        // Reclaim the CD deposit
+        // This will revert if the amount or reclaimed amount is 0
+        // It will return the discount quantity of underlying asset to this contract
+        reclaimed = CDEPO.reclaimFor(msg.sender, amount_);
 
         // Transfer the tokens to the caller
         ERC20 cdepoAsset = CDEPO.ASSET();
@@ -511,11 +458,8 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
             vault.deposit(remainingTokens, address(TRSRY));
         }
 
-        // Decrease the mint approval
-        MINTR.decreaseMintApproval(address(this), unconverted);
-
         // Emit event
-        emit ReclaimedDeposit(msg.sender, reclaimed, totalDeposit - reclaimed);
+        emit ReclaimedDeposit(msg.sender, reclaimed, amount_ - reclaimed);
 
         return reclaimed;
     }

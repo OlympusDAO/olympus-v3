@@ -115,6 +115,12 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
+    modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
+        vm.prank(account_);
+        convertibleDepository.mint(amount_);
+        _;
+    }
+
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
         _createPosition(
             account_,
