@@ -802,7 +802,11 @@ contract DLGTETestDelegationsMultipleDelegates is DLGTETestBase {
         verifyApplyDelegations(ALICE, delegationRequest(CHARLIE, 25e18), 25e18, 0, 75e18);
         verifyApplyDelegations(ALICE, delegationRequest(ALICE, 25e18), 25e18, 0, 50e18);
 
-        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(ALICE, 0, 10);
+        IDLGTEv1.AccountDelegation[] memory delegations = dlgte.accountDelegationsList(
+            ALICE,
+            0,
+            10
+        );
         assertEq(delegations.length, 3);
 
         vm.startPrank(policy);
@@ -861,8 +865,16 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
             requestedUndelegatedBalance,
             maxNumDelegates
         );
-        assertEq(totalRescinded, expectedTotalRescinded, "DLGTE::rescindDelegations::totalRescinded");
-        assertEq(newUndelegatedBalance, expectedNewUndelegatedBalance, "DLGTE::rescindDelegations::newUndelegatedBalance");
+        assertEq(
+            totalRescinded,
+            expectedTotalRescinded,
+            "DLGTE::rescindDelegations::totalRescinded"
+        );
+        assertEq(
+            newUndelegatedBalance,
+            expectedNewUndelegatedBalance,
+            "DLGTE::rescindDelegations::newUndelegatedBalance"
+        );
     }
 
     function test_rescindDelegations_badAddress() public {
@@ -896,7 +908,13 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         vm.startPrank(policy);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -int256(expectedRescindAmount));
-        checkRescindDelegations(ALICE, expectedRescindAmount, type(uint256).max, expectedRescindAmount, expectedRescindAmount);
+        checkRescindDelegations(
+            ALICE,
+            expectedRescindAmount,
+            type(uint256).max,
+            expectedRescindAmount,
+            expectedRescindAmount
+        );
         verifyDelegationsOne(ALICE, BOB, 100e18 - expectedRescindAmount, expectedEscrow);
     }
 
@@ -914,7 +932,7 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -int256(expectedRescindAmount));
         checkRescindDelegations(ALICE, 133e18, type(uint256).max, expectedRescindAmount, 133e18);
-        verifyDelegationsOne(ALICE, BOB, 100e18-expectedRescindAmount, expectedEscrow);
+        verifyDelegationsOne(ALICE, BOB, 100e18 - expectedRescindAmount, expectedEscrow);
     }
 
     function test_rescindDelegations_existingUndelegated_over() public {
@@ -949,7 +967,13 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         vm.startPrank(policy);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -int256(100e18));
-        checkRescindDelegations(ALICE, expectedRescindAmount, type(uint256).max, expectedRescindAmount, 100e18);
+        checkRescindDelegations(
+            ALICE,
+            expectedRescindAmount,
+            type(uint256).max,
+            expectedRescindAmount,
+            100e18
+        );
         verifyDelegationsZero(ALICE);
     }
 
@@ -967,7 +991,13 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         vm.startPrank(policy);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, BOB, -int256(expectedRescindAmount));
-        checkRescindDelegations(ALICE, expectedRescindAmount, type(uint256).max, expectedRescindAmount, expectedRescindAmount);
+        checkRescindDelegations(
+            ALICE,
+            expectedRescindAmount,
+            type(uint256).max,
+            expectedRescindAmount,
+            expectedRescindAmount
+        );
         verifyDelegationsOne(ALICE, BOB, 200e18 - expectedRescindAmount, expectedEscrow);
         verifyAccountSummary(
             address(policy),
@@ -1026,15 +1056,16 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         emit DelegationApplied(ALICE, BOB, -100e18);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, ALICE, -20e18);
-        checkRescindDelegations(ALICE, expectedRescindAmount, type(uint256).max, expectedRescindAmount, expectedRescindAmount);
+        checkRescindDelegations(
+            ALICE,
+            expectedRescindAmount,
+            type(uint256).max,
+            expectedRescindAmount,
+            expectedRescindAmount
+        );
 
         address expectedAliceEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
-        verifyDelegationsOne(
-            ALICE,
-            ALICE,
-            180e18,
-            expectedAliceEscrow
-        );
+        verifyDelegationsOne(ALICE, ALICE, 180e18, expectedAliceEscrow);
 
         verifyAccountSummary(policy, ALICE, 500e18, 500e18 - 320e18, 1, 10, 400e18);
         verifyAccountSummary(policy2, ALICE, 500e18, 500e18 - 320e18, 1, 10, 100e18);
@@ -1062,15 +1093,16 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         emit DelegationApplied(ALICE, DANIEL, -100e18);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, ALICE, -20e18);
-        checkRescindDelegations(ALICE, expectedRescindAmount, type(uint256).max, 320e18, expectedRescindAmount);
+        checkRescindDelegations(
+            ALICE,
+            expectedRescindAmount,
+            type(uint256).max,
+            320e18,
+            expectedRescindAmount
+        );
 
         address expectedAliceEscrow = 0xCB6f5076b5bbae81D7643BfBf57897E8E3FB1db9;
-        verifyDelegationsOne(
-            ALICE,
-            ALICE,
-            180e18,
-            expectedAliceEscrow
-        );
+        verifyDelegationsOne(ALICE, ALICE, 180e18, expectedAliceEscrow);
 
         verifyAccountSummary(policy, ALICE, 500e18, 500e18 - 320e18, 1, 10, 400e18);
         verifyAccountSummary(policy2, ALICE, 500e18, 500e18 - 320e18, 1, 10, 100e18);
@@ -1108,7 +1140,13 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         emit DelegationApplied(ALICE, BOB, -100e18);
         vm.expectEmit(address(dlgte));
         emit DelegationApplied(ALICE, ALICE, -200e18);
-        checkRescindDelegations(ALICE, expectedRescindAmount, type(uint256).max, expectedRescindAmount, expectedRescindAmount);
+        checkRescindDelegations(
+            ALICE,
+            expectedRescindAmount,
+            type(uint256).max,
+            expectedRescindAmount,
+            expectedRescindAmount
+        );
         verifyDelegationsZero(ALICE);
     }
 
@@ -1116,8 +1154,16 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         uint256 totalCollateral = 100_000e18;
         uint32 numDelegates = 100;
         applyManyDelegations(totalCollateral, numDelegates);
-        uint256 expectedExtra = numDelegates*(numDelegates-1)/2; // 1 extra added within applyManyDelegations()
-        verifyAccountSummary(policy, ALICE, totalCollateral, 100e18 + expectedExtra, numDelegates, numDelegates, totalCollateral);
+        uint256 expectedExtra = (numDelegates * (numDelegates - 1)) / 2; // 1 extra added within applyManyDelegations()
+        verifyAccountSummary(
+            policy,
+            ALICE,
+            totalCollateral,
+            100e18 + expectedExtra,
+            numDelegates,
+            numDelegates,
+            totalCollateral
+        );
 
         vm.startPrank(policy);
         uint256 totalRescinded;
@@ -1125,7 +1171,7 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         uint256 gasBefore = gasleft();
         (totalRescinded, newUndelegatedBalance) = dlgte.rescindDelegations(
             ALICE,
-            totalCollateral, 
+            totalCollateral,
             type(uint256).max
         );
         assertLt(gasBefore - gasleft(), 1_400_000);

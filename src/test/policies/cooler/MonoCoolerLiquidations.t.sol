@@ -450,8 +450,11 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
 
         skip(2 * 365 days);
 
-        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(ALICE, 2);
-        assertEq(totalUndelegated, 3e18+6e18);
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            2
+        );
+        assertEq(totalUndelegated, 3e18 + 6e18);
         assertEq(undelegatedBalance, collateralAmount);
 
         expectNoDelegations(ALICE);
@@ -465,7 +468,10 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 delegationAmount = 5e18;
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
-        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(ALICE, 10);
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            10
+        );
         assertEq(totalUndelegated, 0);
         assertEq(undelegatedBalance, collateralAmount);
 
@@ -481,7 +487,10 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 delegationAmount = 5e18;
         _cooler2Setup(collateralAmount, delegationAmount);
 
-        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(ALICE, 10);
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            10
+        );
         assertEq(totalUndelegated, 0);
         assertEq(undelegatedBalance, collateralAmount);
     }
@@ -493,7 +502,10 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 delegationAmount = 7e18;
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
-        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(ALICE, 10);
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            10
+        );
         assertEq(totalUndelegated, 4e18);
         assertEq(undelegatedBalance, collateralAmount);
 
@@ -510,24 +522,21 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
         address CHARLIE = makeAddr("CHARLIE");
-        addCollateral(
-            cooler,
-            ALICE,
-            ALICE,
-            33e18,
-            delegationRequest(CHARLIE, 33e18)
-        );
+        addCollateral(cooler, ALICE, ALICE, 33e18, delegationRequest(CHARLIE, 33e18));
         uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
         borrow(cooler, ALICE, ALICE, borrowAmount, ALICE);
         skip(2 * 365 days);
 
-        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(ALICE, 1);
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            1
+        );
         assertEq(totalUndelegated, 33e18);
         assertEq(undelegatedBalance, 33e18 + 6e18);
 
         expectOneDelegation(cooler, ALICE, BOB, 14e18);
         expectOneDelegation(cooler2, ALICE, BOB, 14e18);
-        expectAccountDelegationSummary(ALICE, 33e18+20e18, 14e18, 1, 10);
+        expectAccountDelegationSummary(ALICE, 33e18 + 20e18, 14e18, 1, 10);
     }
 }
 

@@ -110,14 +110,10 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
         uint256 delta;
         if (outstandingDebt > debtTokenAmount) {
             unchecked {
-                delta = outstandingDebt - debtTokenAmount;                
+                delta = outstandingDebt - debtTokenAmount;
             }
         }
-        TRSRY.setDebt({
-            debtor_: address(this),
-            token_: _USDS,
-            amount_: delta
-        });
+        TRSRY.setDebt({debtor_: address(this), token_: _USDS, amount_: delta});
 
         _USDS.safeApprove(address(SUSDS), debtTokenAmount);
         SUSDS.deposit(debtTokenAmount, address(TRSRY));

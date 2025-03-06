@@ -120,7 +120,13 @@ contract OlympusGovDelegation is DLGTEv1 {
         if (autoRescindMaxNumDelegates > 0) {
             // Don't need to handle the case where it didn't rescind enough
             // As it will just fail with DLGTE_ExceededUndelegatedBalance below.
-            _autoRescindDelegations(onBehalfOf, amount, aState, totalAccountGOhm, autoRescindMaxNumDelegates);
+            _autoRescindDelegations(
+                onBehalfOf,
+                amount,
+                aState,
+                totalAccountGOhm,
+                autoRescindMaxNumDelegates
+            );
         }
 
         mapping(address => uint256) storage policyBalances = _policyAccountBalances[msg.sender];
@@ -145,17 +151,23 @@ contract OlympusGovDelegation is DLGTEv1 {
         address onBehalfOf,
         uint256 requestedUndelegatedBalance,
         uint256 maxNumDelegates
-    ) external override permissioned returns (uint256 totalRescinded, uint256 newUndelegatedBalance) {
+    )
+        external
+        override
+        permissioned
+        returns (uint256 totalRescinded, uint256 newUndelegatedBalance)
+    {
         if (onBehalfOf == address(0)) revert DLGTE_InvalidAddress();
         if (maxNumDelegates == 0) revert DLGTE_InvalidAmount();
         AccountState storage aState = _accountState[onBehalfOf];
-        return _autoRescindDelegations(
-            onBehalfOf,
-            requestedUndelegatedBalance,
-            aState,
-            aState.totalGOhm,
-            maxNumDelegates
-        );
+        return
+            _autoRescindDelegations(
+                onBehalfOf,
+                requestedUndelegatedBalance,
+                aState,
+                aState.totalGOhm,
+                maxNumDelegates
+            );
     }
 
     /// @inheritdoc DLGTEv1
@@ -449,7 +461,7 @@ contract OlympusGovDelegation is DLGTEv1 {
             return (totalRescinded, newUndelegatedBalance);
         }
 
-        // Iterate over the delegates in reverse, to avoid 'pop and swap' on deleting unused 
+        // Iterate over the delegates in reverse, to avoid 'pop and swap' on deleting unused
         // delegates, changing the array order.
         // Only iterate over the minimum of number of delegates and the requested max number.
         uint256 minIndex = index > maxNumDelegates ? index - maxNumDelegates : 0;
