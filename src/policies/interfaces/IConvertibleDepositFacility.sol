@@ -57,12 +57,12 @@ interface IConvertibleDepositFacility {
         bool wrap_
     ) external returns (uint256 termId);
 
-    /// @notice Converts convertible deposit tokens to OHM before expiry
+    /// @notice Converts convertible deposit tokens to OHM before conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
-    ///         - Validating that all of the positions have not expired
+    ///         - Validating that the conversion expiry for all of the positions has not passed
     ///         - Burning the convertible deposit tokens
     ///         - Minting OHM to `account_`
     ///         - Transferring the sReserve token to the treasury
@@ -82,7 +82,7 @@ interface IConvertibleDepositFacility {
     ///         - Validating that `account_` is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
-    ///         - Validating that all of the positions have not expired
+    ///         - Validating that the conversion expiry for all of the positions has not passed
     ///         - Returning the total amount of convertible deposit tokens and OHM that would be converted
     ///
     /// @param  account_            The address to preview the conversion for
@@ -97,12 +97,13 @@ interface IConvertibleDepositFacility {
         uint256[] memory amounts_
     ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender);
 
-    /// @notice Redeems convertible deposit tokens after expiry
+    /// @notice Redeems convertible deposit tokens after conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
-    ///         - Validating that all of the positions have expired
+    ///         - Validating that the conversion expiry for all of the positions has passed
+    ///         - Validating that the redemption expiry for all of the positions has not passed
     ///         - Burning the convertible deposit tokens
     ///         - Transferring the reserve token to `account_`
     ///         - Emitting an event
@@ -120,7 +121,8 @@ interface IConvertibleDepositFacility {
     ///         - Validating that `account_` is the owner of all of the positions
     ///         - Validating that convertible deposit token in the position is CDEPO
     ///         - Validating that all of the positions are valid
-    ///         - Validating that all of the positions have expired
+    ///         - Validating that the conversion expiry for all of the positions has passed
+    ///         - Validating that the redemption expiry for all of the positions has not passed
     ///         - Returning the total amount of reserve token that would be redeemed
     ///
     /// @param  account_        The address to preview the redeem for
