@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
-contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctioneerTest {
+contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "admin" role
     //  [X] it reverts
     // when the contract is already enabled
@@ -37,7 +37,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
     //  [X] it resets the auction results history and index
 
     function test_callerDoesNotHaveAdminRole_reverts(address caller_) public {
-        // Ensure caller is not emergency address
+        // Ensure caller is not admin address
         vm.assume(caller_ != admin);
 
         // Expect revert
@@ -62,9 +62,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
 
     function test_contractEnabled_reverts() public givenEnabled {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
-        );
+        _expectNotDisabledRevert();
 
         // Call function
         vm.prank(admin);
@@ -88,7 +86,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
-                "enable params"
+                "enable data"
             )
         );
 
@@ -164,7 +162,7 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
-                "min price"
+                "tick step"
             )
         );
 
@@ -317,12 +315,11 @@ contract ConvertibleDepositAuctioneerActivateTest is ConvertibleDepositAuctionee
             "auction tracking period"
         );
         assertEq(auctioneer.isEnabled(), true, "enabled");
-        // lastUpdate has changed
-        assertEq(auctioneer.getPreviousTick().lastUpdate, newBlock);
+
         // Day state is reset
         _assertDayState(0, 0);
 
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, INITIAL_BLOCK);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, newBlock);
 
         _assertAuctionResults(0, 0, 0, 0, 0, 0, 0);
         _assertAuctionResultsNextIndex(0);

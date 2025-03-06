@@ -16,6 +16,7 @@ import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConve
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositAuctioneerTest is Test {
@@ -109,6 +110,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
+    }
+
+    function _expectNotEnabledRevert() internal {
+        vm.expectRevert(PolicyEnabler.NotEnabled.selector);
+    }
+
+    function _expectNotDisabledRevert() internal {
+        vm.expectRevert(PolicyEnabler.NotDisabled.selector);
     }
 
     function _assertAuctionParameters(

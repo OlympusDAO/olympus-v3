@@ -53,7 +53,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_contractDisabled_reverts() public {
         // Expect revert
-        vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
+        _expectNotEnabledRevert();
 
         // Call function
         auctioneer.getCurrentTick();

@@ -5,7 +5,7 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerRedemptionPeriodTest is ConvertibleDepositAuctioneerTest {
-    // when the caller does not have the "cd_admin" role
+    // when the caller does not have the "admin" role
     //  [X] it reverts
     // when the new redemption period is 0
     //  [X] it reverts
@@ -19,7 +19,7 @@ contract ConvertibleDepositAuctioneerRedemptionPeriodTest is ConvertibleDepositA
         vm.assume(caller_ != admin);
 
         // Expect revert
-        _expectRoleRevert("cd_admin");
+        _expectRoleRevert("admin");
 
         // Call function
         vm.prank(caller_);

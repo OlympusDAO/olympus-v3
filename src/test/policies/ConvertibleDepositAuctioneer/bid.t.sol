@@ -150,7 +150,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenDisabled_reverts() public {
         // Expect revert
-        vm.expectRevert(IConvertibleDepositAuctioneer.CDAuctioneer_NotActive.selector);
+        _expectNotEnabledRevert();
 
         // Call function
         auctioneer.bid(1e18);

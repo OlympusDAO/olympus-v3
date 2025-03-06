@@ -89,7 +89,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     int256[] internal _auctionResults;
 
     /// @notice The length of the enable parameters
-    uint256 internal constant _ENABLE_PARAMS_LENGTH = 128;
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 224;
 
     // ========== SETUP ========== //
 

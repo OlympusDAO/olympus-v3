@@ -40,7 +40,7 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
 
     function test_callerDoesNotHaveAdminRole_reverts() public givenEnabled {
         // Expect revert
-        _expectRoleRevert("cd_admin");
+        _expectRoleRevert("admin");
 
         // Call function
         vm.prank(recipient);

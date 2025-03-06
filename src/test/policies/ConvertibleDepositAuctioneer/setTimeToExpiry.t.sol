@@ -5,7 +5,7 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAuctioneerTest {
-    // when the caller does not have the "cd_admin" role
+    // when the caller does not have the "admin" role
     //  [X] it reverts
     // when the new time to expiry is 0
     //  [X] it reverts
@@ -21,7 +21,7 @@ contract ConvertibleDepositAuctioneerTimeToExpiryTest is ConvertibleDepositAucti
         vm.assume(caller_ != admin);
 
         // Expect revert
-        _expectRoleRevert("cd_admin");
+        _expectRoleRevert("admin");
 
         // Call function
         vm.prank(caller_);

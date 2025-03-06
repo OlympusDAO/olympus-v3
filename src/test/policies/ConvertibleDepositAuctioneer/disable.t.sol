@@ -2,11 +2,9 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
-contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuctioneerTest {
-    event Deactivated();
-
+contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "emergency" role
     //  [X] it reverts
     // when the contract is already disabled
@@ -17,12 +15,12 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
     //  [X] the day state is unchanged
     //  [X] the auction results history and index are unchanged
 
-    function test_callerDoesNotHaveEmergencyShutdownRole_reverts(address caller_) public {
-        // Ensure caller is not emergency address
-        vm.assume(caller_ != emergency);
+    function test_callerDoesNotHaveEmergencyRole_reverts(address caller_) public givenEnabled {
+        // Ensure caller is not emergency or admin address
+        vm.assume(caller_ != emergency && caller_ != admin);
 
         // Expect revert
-        _expectRoleRevert("emergency");
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
 
         // Call function
         vm.prank(caller_);
@@ -31,9 +29,7 @@ contract ConvertibleDepositAuctioneerDeactivateTest is ConvertibleDepositAuction
 
     function test_contractDisabled_reverts() public {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidState.selector)
-        );
+        _expectNotEnabledRevert();
 
         // Call function
         vm.prank(emergency);
