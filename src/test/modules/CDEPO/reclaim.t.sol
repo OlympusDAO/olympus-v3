@@ -42,7 +42,9 @@ contract ReclaimCDEPOTest is CDEPOTest {
         uint256 amount = 1;
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "shares"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+        );
 
         // Call function
         vm.prank(recipient);

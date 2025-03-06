@@ -9,6 +9,8 @@ import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 contract PreviewReclaimCDEPOTest is CDEPOTest {
     // when the amount is zero
     //  [X] it reverts
+    // when the reclaimed amount is zero
+    //  [X] it reverts
     // when the amount is greater than zero
     //  [X] it returns the amount after applying the burn rate
 
@@ -20,8 +22,18 @@ contract PreviewReclaimCDEPOTest is CDEPOTest {
         CDEPO.previewReclaim(0);
     }
 
+    function test_reclaimedAmountIsZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+        );
+
+        // Call function
+        CDEPO.previewReclaim(1);
+    }
+
     function test_amountGreaterThanZero(uint256 amount_) public {
-        uint256 amount = bound(amount_, 1, type(uint256).max);
+        uint256 amount = bound(amount_, 2, type(uint256).max);
 
         // Call function
         uint256 reclaimAmount = CDEPO.previewReclaim(amount);
