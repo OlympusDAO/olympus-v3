@@ -5,6 +5,7 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
@@ -28,7 +29,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
 
     function test_contractInactive_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
 
         // Call function
         facility.previewRedeem(recipient, new uint256[](0), new uint256[](0));

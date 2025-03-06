@@ -11,9 +11,6 @@ interface IConvertibleDepositFacility {
     event RedeemedDeposit(address indexed user, uint256 redeemedAmount);
     event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount, uint256 forfeitedAmount);
 
-    event Activated();
-    event Deactivated();
-
     // ========== ERRORS ========== //
 
     error CDF_InvalidArgs(string reason_);
@@ -27,8 +24,6 @@ interface IConvertibleDepositFacility {
     error CDF_InvalidAmount(uint256 positionId_, uint256 amount_);
 
     error CDF_InvalidToken(uint256 positionId_, address token_);
-
-    error CDF_NotActive();
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 

@@ -14,7 +14,7 @@ contract SetReclaimRateCDFTest is ConvertibleDepositFacilityTest {
     function test_callerNotAdmin_reverts() public {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("cd_admin"))
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
         );
 
         // Call function

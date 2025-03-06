@@ -8,15 +8,16 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {RolesConsumer, ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 
-contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, ReentrancyGuard {
+contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
@@ -33,13 +34,6 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     CDEPOv1 public CDEPO;
     CDPOSv1 public CDPOS;
 
-    /// @notice Whether the contract functionality has been activated
-    bool public locallyActive;
-
-    bytes32 public constant ROLE_EMERGENCY_SHUTDOWN = "emergency_shutdown";
-
-    bytes32 public constant ROLE_ADMIN = "cd_admin";
-
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
 
     // ========== ERRORS ========== //
@@ -50,8 +44,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {
-        // Disable functionality until initialized
-        locallyActive = false;
+        // Disabled by default by PolicyEnabler
     }
 
     /// @inheritdoc Policy
@@ -114,7 +107,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         uint48 conversionExpiry_,
         uint48 redemptionExpiry_,
         bool wrap_
-    ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyActive returns (uint256 positionId) {
+    ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
         CDEPO.mintFor(account_, amount_);
@@ -185,7 +178,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     )
         external
         view
-        onlyActive
+        onlyEnabled
         returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender)
     {
         // Make sure the lengths of the arrays are the same
@@ -221,7 +214,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external nonReentrant onlyActive returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
+    ) external nonReentrant onlyEnabled returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -303,7 +296,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external view onlyActive returns (uint256 redeemed, address cdTokenSpender) {
+    ) external view onlyEnabled returns (uint256 redeemed, address cdTokenSpender) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -341,7 +334,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     function redeem(
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external nonReentrant onlyActive returns (uint256 redeemed) {
+    ) external nonReentrant onlyEnabled returns (uint256 redeemed) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -425,7 +418,7 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     ///             - The reclaimed amount is 0
     function previewReclaim(
         uint256 amount_
-    ) external view onlyActive returns (uint256 reclaimed, address cdTokenSpender) {
+    ) external view onlyEnabled returns (uint256 reclaimed, address cdTokenSpender) {
         // Preview reclaiming the amount
         // This will revert if the amount or reclaimed amount is 0
         reclaimed = CDEPO.previewReclaim(amount_);
@@ -438,7 +431,9 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
     ///             - The contract is not active
     ///             - The amount of CD tokens to reclaim is 0
     ///             - The reclaimed amount is 0
-    function reclaim(uint256 amount_) external nonReentrant onlyActive returns (uint256 reclaimed) {
+    function reclaim(
+        uint256 amount_
+    ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
         // Reclaim the CD deposit
         // This will revert if the amount or reclaimed amount is 0
         // It will return the discount quantity of underlying asset to this contract
@@ -476,55 +471,14 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         return address(MINTR.ohm());
     }
 
-    // ========== ADMIN FUNCTIONS ========== //
-
-    /// @notice Activate the contract functionality
-    /// @dev    This function will revert if:
-    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
-    ///
-    ///         Note that if the contract is already active, this function will do nothing.
-    function activate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
-        // If the contract is already active, do nothing
-        if (locallyActive) return;
-
-        // Set the contract to active
-        locallyActive = true;
-
-        // Emit event
-        emit Activated();
-    }
-
-    /// @notice Deactivate the contract functionality
-    /// @dev    This function will revert if:
-    ///         - The caller does not have the ROLE_EMERGENCY_SHUTDOWN role
-    ///
-    ///         Note that if the contract is already inactive, this function will do nothing.
-    function deactivate() external onlyRole(ROLE_EMERGENCY_SHUTDOWN) {
-        // If the contract is already inactive, do nothing
-        if (!locallyActive) return;
-
-        // Set the contract to inactive
-        locallyActive = false;
-
-        // Emit event
-        emit Deactivated();
-    }
-
     /// @notice Set the reclaim rate for CDEPO
     /// @dev    This function will revert if:
     ///         - The caller is not permissioned
     ///         - CDEPO reverts
     ///
     /// @param  reclaimRate_  The new reclaim rate to set
-    function setReclaimRate(uint16 reclaimRate_) external onlyRole(ROLE_ADMIN) {
+    function setReclaimRate(uint16 reclaimRate_) external onlyAdminRole {
         // CDEPO will handle validation
         CDEPO.setReclaimRate(reclaimRate_);
-    }
-
-    // ========== MODIFIERS ========== //
-
-    modifier onlyActive() {
-        if (!locallyActive) revert CDF_NotActive();
-        _;
     }
 }

@@ -75,8 +75,8 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Grant roles
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
-        rolesAdmin.grantRole(bytes32("emergency_shutdown"), emergency);
-        rolesAdmin.grantRole(bytes32("cd_admin"), admin);
+        rolesAdmin.grantRole(bytes32("emergency"), emergency);
+        rolesAdmin.grantRole(bytes32("admin"), admin);
     }
 
     // ========== MODIFIERS ========== //
@@ -144,14 +144,14 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     modifier givenLocallyActive() {
-        vm.prank(emergency);
-        facility.activate();
+        vm.prank(admin);
+        facility.enable("");
         _;
     }
 
     modifier givenLocallyInactive() {
         vm.prank(emergency);
-        facility.deactivate();
+        facility.disable("");
         _;
     }
 

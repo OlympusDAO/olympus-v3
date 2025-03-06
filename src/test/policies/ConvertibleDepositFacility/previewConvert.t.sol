@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
@@ -33,7 +34,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
 
     function test_contractInactive_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotActive.selector));
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
 
         // Call function
         facility.previewConvert(recipient, new uint256[](0), new uint256[](0));

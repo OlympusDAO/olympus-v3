@@ -12,6 +12,6 @@ contract ConstructorCDFTest is ConvertibleDepositFacilityTest {
         facility = new CDFacility(address(kernel));
 
         // Assert state
-        assertEq(facility.locallyActive(), false, "inactive");
+        assertEq(facility.isEnabled(), false, "isEnabled");
     }
 }
