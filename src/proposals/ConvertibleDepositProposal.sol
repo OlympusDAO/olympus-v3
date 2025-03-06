@@ -13,11 +13,26 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 /// @notice Activates the Convertible Deposit contracts
 contract ConvertibleDepositProposal is GovernorBravoProposal {
     Kernel internal _kernel;
+
+    // ========== CONSTANTS ========== //
+
+    // TODO set initial values for CDAuctioneer
+
+    uint256 internal constant INITIAL_TARGET = 0;
+    uint256 internal constant INITIAL_TICK_SIZE = 0;
+    uint256 internal constant INITIAL_MIN_PRICE = 0;
+    uint24 internal constant INITIAL_TICK_STEP = 0;
+    uint48 internal constant INITIAL_TIME_TO_EXPIRY = 0;
+    uint48 internal constant INITIAL_REDEMPTION_PERIOD = 0;
+    uint8 internal constant INITIAL_AUCTION_TRACKING_PERIOD = 0;
+
+    // ========== PROPOSAL ========== //
 
     function id() public pure override returns (uint256) {
         return 8;
@@ -104,6 +119,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         );
         address cdFacility = addresses.getAddress("olympus-policy-convertible-deposit-facility");
 
+        ROLESv1 ROLES = ROLESv1(addresses.getAddress("olympus-module-roles"));
+
         // Pre-requisites
         // - Old Heart policy has been deactivated in the kernel
         // - Old EmissionManager policy has been deactivated in the kernel
@@ -121,19 +138,23 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             "Revoke heart role from old Heart policy"
         );
 
-        // Grant the "cd_admin" role to the Timelock
-        _pushAction(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("cd_admin"), timelock),
-            "Grant cd_admin to Timelock"
-        );
+        // Grant the "admin" role to the Timelock (if needed)
+        if (!ROLES.hasRole(timelock, bytes32("admin"))) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), timelock),
+                "Grant admin to Timelock"
+            );
+        }
 
-        // Grant the "cd_admin" role to the DAO MS
-        _pushAction(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("cd_admin"), daoMS),
-            "Grant cd_admin to DAO MS"
-        );
+        // Grant the "admin" role to the DAO MS (if needed)
+        if (!ROLES.hasRole(daoMS, bytes32("admin"))) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), daoMS),
+                "Grant admin to DAO MS"
+            );
+        }
 
         // Grant the "emissions_admin" role to the Timelock
         _pushAction(
@@ -189,13 +210,32 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         // Activate the ConvertibleDepositFacility contract functionality
         _pushAction(
             cdFacility,
-            abi.encodeWithSelector(CDFacility.activate.selector),
+            abi.encodeWithSelector(PolicyEnabler.enable.selector, ""),
             "Activate ConvertibleDepositFacility"
+        );
+
+        // Activate the ConvertibleDepositAuctioneer contract functionality
+        _pushAction(
+            cdAuctioneer,
+            abi.encodeWithSelector(
+                PolicyEnabler.enable.selector,
+                abi.encode(
+                    IConvertibleDepositAuctioneer.EnableParams({
+                        target: INITIAL_TARGET,
+                        tickSize: INITIAL_TICK_SIZE,
+                        minPrice: INITIAL_MIN_PRICE,
+                        tickStep: INITIAL_TICK_STEP,
+                        timeToExpiry: INITIAL_TIME_TO_EXPIRY,
+                        redemptionPeriod: INITIAL_REDEMPTION_PERIOD,
+                        auctionTrackingPeriod: INITIAL_AUCTION_TRACKING_PERIOD
+                    })
+                )
+            ),
+            "Activate ConvertibleDepositAuctioneer"
         );
 
         // Next steps:
         // - DAO MS needs to initialize the new EmissionManager policy
-        // - DAO MS needs to initialize the new CDAuctioneer policy
     }
 
     // Executes the proposal actions.
@@ -255,17 +295,14 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             "DAO MS does not have the emissions_admin role"
         );
 
-        // Validate that the Timelock has the "cd_admin" role
+        // Validate that the Timelock has the "admin" role
         require(
-            roles.hasRole(timelock, bytes32("cd_admin")),
+            roles.hasRole(timelock, bytes32("admin")),
             "Timelock does not have the cd_admin role"
         );
 
-        // Validate that the DAO MS has the "cd_admin" role
-        require(
-            roles.hasRole(daoMS, bytes32("cd_admin")),
-            "DAO MS does not have the cd_admin role"
-        );
+        // Validate that the DAO MS has the "admin" role
+        require(roles.hasRole(daoMS, bytes32("admin")), "DAO MS does not have the cd_admin role");
 
         // Validate that the new Heart has the "heart" role
         require(
@@ -297,10 +334,13 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         // Validate that the new ConvertibleDepositFacility policy is active
         require(Policy(cdFacility).isActive() == true, "CDFacility policy is not active");
 
-        // Validate that the new ConvertibleDepositFacility policy is locally active
+        // Validate that the new ConvertibleDepositFacility policy is enabled
+        require(PolicyEnabler(cdFacility).isEnabled() == true, "CDFacility policy is not enabled");
+
+        // Validate that the new ConvertibleDepositAuctioneer policy is enabled
         require(
-            CDFacility(cdFacility).locallyActive() == true,
-            "CDFacility policy is not locally active"
+            PolicyEnabler(cdAuctioneer).isEnabled() == true,
+            "CDAuctioneer policy is not enabled"
         );
     }
 }
