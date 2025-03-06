@@ -249,8 +249,6 @@ contract CDFacility is Policy, RolesConsumer, IConvertibleDepositFacility, Reent
         CDEPO.ASSET().approve(address(vault), tokensOut);
         vault.deposit(tokensOut, address(TRSRY));
 
-        // TODO JIT mint approval
-
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert
         MINTR.mintOhm(msg.sender, convertedTokenOut);
