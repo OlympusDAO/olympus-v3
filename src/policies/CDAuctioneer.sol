@@ -333,7 +333,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///
     ///             It uses the following approach:
     ///             - Calculate the added capacity based on the time passed since the last bid, and add it to the current capacity to get the new capacity
-    ///             - If the calculation is occurring on a new day, the tick size will reset to the standard
     ///             - Until the new capacity is <= to the tick size, reduce the capacity by the tick size and reduce the price by the tick step
     ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
     function getCurrentTick() public view onlyEnabled returns (Tick memory tick) {
@@ -346,11 +345,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         tick = _previousTick;
         uint256 newCapacity = tick.capacity + capacityToAdd;
-
-        // If the current date is on a different day to the last bid, the tick size will reset to the standard
-        if (isDayComplete()) {
-            tick.tickSize = _auctionParameters.tickSize;
-        }
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
@@ -421,11 +415,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         return _auctionResults;
     }
 
-    /// @inheritdoc IConvertibleDepositAuctioneer
-    function isDayComplete() public view override returns (bool) {
-        return block.timestamp / 86400 > _dayState.initTimestamp / 86400;
-    }
-
     // ========== ADMIN FUNCTIONS ========== //
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
@@ -447,9 +436,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     function _storeAuctionResults(uint256 previousTarget_) internal {
         // Skip if inactive
         if (!isEnabled) return;
-
-        // Skip if the day state was set on the same day
-        if (!isDayComplete()) return;
 
         // If the next index is 0, reset the results before inserting
         // This ensures that the previous results are available for 24 hours
@@ -478,10 +464,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function performs the following:
+    /// @dev        This function assumes that the the caller is only calling once per period (day), as the contract does not track epochs or timestamps.
+    ///
+    ///             This function performs the following:
     ///             - Performs validation of the inputs
     ///             - Sets the auction parameters
     ///             - Adjusts the current tick capacity and price, if necessary
+    ///             - Resets the tick size to the standard
+    ///             - Stores the auction results for the period
     ///
     ///             This function reverts if:
     ///             - The caller does not have the ROLE_HEART role
@@ -500,6 +490,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price
 
         // Set the tick size
+        // This has the affect of resetting the tick size to the default
+        // The tick size may have been adjusted for the previous day if the target was met
         _previousTick.tickSize = tickSize_;
 
         // Ensure that the tick capacity is not larger than the new tick size

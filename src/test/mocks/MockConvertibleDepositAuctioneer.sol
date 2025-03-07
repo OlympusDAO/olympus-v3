@@ -51,10 +51,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getDayState() external view override returns (Day memory day) {}
 
-    function isDayComplete() public view override returns (bool isComplete) {
-        return block.timestamp / 86400 > _initTimestamp / 86400;
-    }
-
     function bidToken() external view override returns (address token) {}
 
     function previewBid(
@@ -66,10 +62,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256 newSize,
         uint256 newMinPrice
     ) external override {
-        if (isDayComplete()) {
-            _initTimestamp = uint48(block.timestamp);
-        }
-
         target = newTarget;
         tickSize = newSize;
         minPrice = newMinPrice;

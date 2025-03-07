@@ -197,10 +197,13 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Calculate the expected tick price
         // As it is the next day, the tick size will reset to 10e9
 
-        // Warp forward
-        // This will result in the next day being reached
-        uint48 timePassed = 36800;
-        vm.warp(block.timestamp + timePassed);
+        // Warp forward to the next day
+        // Otherwise the time passed will not be correct
+        vm.warp(block.timestamp + 36800);
+
+        // Call setAuctionParameters, which resets the day
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick();
@@ -415,8 +418,12 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Tick price = 165e17
 
         // Warp forward
-        uint48 timePassed = 36800;
-        vm.warp(block.timestamp + timePassed);
+        // Otherwise the time passed will not be correct
+        vm.warp(block.timestamp + 36800);
+
+        // Call setAuctionParameters, which resets the day
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick();
@@ -489,8 +496,12 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         //    New capacity = current tick size = 10e9
 
         // Warp forward
-        uint48 timePassed = 6 * 21600;
-        vm.warp(block.timestamp + timePassed);
+        // Otherwise the time passed will not be correct
+        vm.warp(block.timestamp + 6 * 21600);
+
+        // Call setAuctionParameters, which resets the day
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick();

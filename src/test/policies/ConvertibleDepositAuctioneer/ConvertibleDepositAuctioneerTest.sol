@@ -304,6 +304,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     }
 
     modifier givenAuctionParametersStandard() {
+        // Irrespective of the current block timestamp, this will shift to the next period (day)
         _setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
         _;
     }

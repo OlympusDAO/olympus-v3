@@ -175,9 +175,6 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
             else baseEmissionRate -= rateChange.changeBy;
         }
 
-        // Cache if the day is complete
-        bool isDayComplete = cdAuctioneer.isDayComplete();
-
         // It then calculates the amount to sell for the coming day
         (, , uint256 emission) = getNextEmission();
 
@@ -189,7 +186,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
-        if (isDayComplete && cdAuctioneer.getAuctionResultsNextIndex() == 0) {
+        if (cdAuctioneer.getAuctionResultsNextIndex() == 0) {
             int256[] memory auctionResults = cdAuctioneer.getAuctionResults();
             int256 difference;
             for (uint256 i = 0; i < auctionResults.length; i++) {

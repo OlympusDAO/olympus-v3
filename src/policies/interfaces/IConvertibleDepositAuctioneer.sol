@@ -196,11 +196,6 @@ interface IConvertibleDepositAuctioneer {
     /// @return index The index where the next auction result will be stored
     function getAuctionResultsNextIndex() external view returns (uint8 index);
 
-    /// @notice Check if enough time has passed since the last day to allow for a new day to start
-    ///
-    /// @return isComplete  True if the day is complete, false otherwise
-    function isDayComplete() external view returns (bool isComplete);
-
     // ========== ADMIN ========== //
 
     /// @notice Update the auction parameters
