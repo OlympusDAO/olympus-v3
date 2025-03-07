@@ -298,9 +298,9 @@ The CDAuctioneer is able to call the following function:
 
 CD token holders can perform the following actions:
 
-- `convert()`: convert their deposit position into OHM before expiry
-- `reclaim()`: reclaim the underlying asset, USDS, for their deposit position before expiry
-- `redeem()`: redeem their deposit position for the underlying asset, USDS, after expiry
+- `convert()`: convert their deposit position into OHM before conversion expiry
+- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a CDPOS position id.
+- `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry
 
 ### CDEPO (Module)
 
