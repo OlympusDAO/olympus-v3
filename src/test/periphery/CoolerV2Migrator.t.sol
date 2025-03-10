@@ -541,9 +541,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
 
         // Function
-        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(
-            coolers
-        );
+        (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
 
         // Assertions
         assertEq(collateralAmount, 3e18, "collateralAmount");
