@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {IMonoCooler} from "./IMonoCooler.sol";
-import {IDLGTEv1} from "../../../modules/DLGTE/IDLGTE.v1.sol";
+import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
+import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 
 /// @title  Cooler V2 Migrator
 /// @notice Interface for contracts that migrate Cooler V1 loans to Cooler V2

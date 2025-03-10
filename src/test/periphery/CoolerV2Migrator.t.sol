@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
+import {MonoCoolerBaseTest} from "../policies/cooler/MonoCoolerBase.t.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {CoolerV2Migrator} from "src/policies/cooler/CoolerV2Migrator.sol";
+import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -13,12 +13,10 @@ import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockDaiUsds} from "src/test/mocks/MockDaiUsds.sol";
 import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 import {OlympusClearinghouseRegistry} from "src/modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {OlympusContractRegistry} from "src/modules/RGSTY/OlympusContractRegistry.sol";
-import {ContractRegistryAdmin} from "src/policies/ContractRegistryAdmin.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
-import {ICoolerV2Migrator} from "src/policies/interfaces/cooler/ICoolerV2Migrator.sol";
+import {ICoolerV2Migrator} from "src/periphery/interfaces/ICoolerV2Migrator.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
@@ -34,8 +32,6 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     MockFlashloanLender internal flashLender;
 
     OlympusClearinghouseRegistry internal clearinghouseRegistry;
-    OlympusContractRegistry internal contractRegistry;
-    ContractRegistryAdmin internal contractRegistryAdmin;
 
     address internal USER;
     address internal USER2;
@@ -99,18 +95,9 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             address(0),
             new address[](0)
         );
-        contractRegistry = new OlympusContractRegistry(address(kernel));
 
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.InstallModule, address(clearinghouseRegistry));
-        kernel.executeAction(Actions.InstallModule, address(contractRegistry));
-        vm.stopPrank();
-
-        // Install ContractRegistryAdmin
-        contractRegistryAdmin = new ContractRegistryAdmin(address(kernel));
-
-        vm.startPrank(EXECUTOR);
-        kernel.executeAction(Actions.ActivatePolicy, address(contractRegistryAdmin));
         vm.stopPrank();
 
         // Install Clearinghouses
@@ -151,24 +138,17 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         clearinghouseUsds.activate();
         vm.stopPrank();
 
-        // Register contracts
-        vm.startPrank(OVERSEER);
-        contractRegistryAdmin.registerContract("flash", address(flashLender));
-        contractRegistryAdmin.registerContract("dmgtr", address(daiMigrator));
-        vm.stopPrank();
-
         // CoolerV2Migrator setup
         migrator = new CoolerV2Migrator(
-            address(kernel),
+            OVERSEER,
             address(cooler),
             address(dai),
             address(usds),
-            address(gohm)
+            address(gohm),
+            address(daiMigrator),
+            address(flashLender),
+            address(clearinghouseRegistry)
         );
-
-        // Install the policy
-        vm.prank(EXECUTOR);
-        kernel.executeAction(Actions.ActivatePolicy, address(migrator));
 
         // Enable the policy
         vm.startPrank(OVERSEER);

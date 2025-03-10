@@ -5,25 +5,23 @@ pragma solidity ^0.8.15;
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {IDaiUsdsMigrator} from "src/interfaces/maker-dao/IDaiUsdsMigrator.sol";
-import {ICoolerV2Migrator} from "../interfaces/cooler/ICoolerV2Migrator.sol";
+import {ICoolerV2Migrator} from "./interfaces/ICoolerV2Migrator.sol";
+import {IEnabler} from "./interfaces/IEnabler.sol";
 
 // Libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {Owned} from "solmate/auth/Owned.sol";
 
 // Bophades
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
-import {RGSTYv1} from "src/modules/RGSTY/RGSTY.v1.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title  CoolerV2Migrator
 /// @notice A contract that migrates debt from Olympus Cooler V1 facilities to Cooler V2.
@@ -34,8 +32,8 @@ contract CoolerV2Migrator is
     IERC3156FlashBorrower,
     ICoolerV2Migrator,
     ReentrancyGuard,
-    Policy,
-    PolicyEnabler
+    Owned,
+    IEnabler
 {
     using SafeCast for uint256;
     using SafeTransferLib for ERC20;
@@ -67,37 +65,31 @@ contract CoolerV2Migrator is
         IDLGTEv1.DelegationRequest[] delegationRequests;
     }
 
-    // ========= MODULES ========= //
-
-    /// @notice The Clearinghouse registry module
-    /// @dev    The value is set when the policy is activated
-    CHREGv1 internal CHREG;
-
-    /// @notice The contract registry module
-    /// @dev    The value is set when the policy is activated
-    RGSTYv1 internal RGSTY;
-
     // ========= STATE ========= //
 
+    /// @notice Whether the contract is enabled
+    bool public isEnabled;
+
+    /// @notice The Clearinghouse registry module
+    CHREGv1 public immutable CHREG;
+
     /// @notice The DAI token
-    ERC20 internal immutable _DAI;
+    ERC20 public immutable DAI;
 
     /// @notice The USDS token
-    ERC20 internal immutable _USDS;
+    ERC20 public immutable USDS;
 
     /// @notice The gOHM token
-    ERC20 internal immutable _GOHM;
+    ERC20 public immutable GOHM;
 
     /// @notice The DAI <> USDS Migrator
-    /// @dev    The value is set when the policy is activated
-    IDaiUsdsMigrator internal MIGRATOR;
+    IDaiUsdsMigrator public immutable MIGRATOR;
 
     /// @notice The ERC3156 flash loan provider
-    /// @dev    The value is set when the policy is activated
-    IERC3156FlashLender internal FLASH;
+    IERC3156FlashLender public immutable FLASH;
 
     /// @notice The Cooler V2 contract
-    IMonoCooler internal immutable COOLERV2;
+    IMonoCooler public immutable COOLERV2;
 
     /// @notice This constant is used when iterating through the loans of a Cooler
     /// @dev    This is used to prevent infinite loops, and is an appropriate upper bound
@@ -107,17 +99,23 @@ contract CoolerV2Migrator is
     // ========= CONSTRUCTOR ========= //
 
     constructor(
-        address kernel_,
+        address owner_,
         address coolerV2_,
         address dai_,
         address usds_,
-        address gohm_
-    ) Policy(Kernel(kernel_)) {
+        address gohm_,
+        address migrator_,
+        address flash_,
+        address chreg_
+    ) Owned(owner_) {
         // Validate
         if (coolerV2_ == address(0)) revert Params_InvalidAddress("coolerV2");
         if (dai_ == address(0)) revert Params_InvalidAddress("dai");
         if (usds_ == address(0)) revert Params_InvalidAddress("usds");
         if (gohm_ == address(0)) revert Params_InvalidAddress("gohm");
+        if (migrator_ == address(0)) revert Params_InvalidAddress("migrator");
+        if (flash_ == address(0)) revert Params_InvalidAddress("flash");
+        if (chreg_ == address(0)) revert Params_InvalidAddress("chreg");
 
         COOLERV2 = IMonoCooler(coolerV2_);
 
@@ -125,47 +123,12 @@ contract CoolerV2Migrator is
         if (address(COOLERV2.collateralToken()) != gohm_) revert Params_InvalidAddress("gohm");
         if (address(COOLERV2.debtToken()) != usds_) revert Params_InvalidAddress("usds");
 
-        _DAI = ERC20(dai_);
-        _USDS = ERC20(usds_);
-        _GOHM = ERC20(gohm_);
-    }
-
-    /// @inheritdoc Policy
-    function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
-        dependencies[0] = toKeycode("CHREG");
-        dependencies[1] = toKeycode("RGSTY");
-        dependencies[2] = toKeycode("ROLES");
-
-        // Populate module dependencies
-        CHREG = CHREGv1(getModuleAddress(dependencies[0]));
-        RGSTY = RGSTYv1(getModuleAddress(dependencies[1]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-
-        // Ensure Modules are using the expected major version.
-        // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1]);
-        (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
-        (uint8 RGSTY_MAJOR, ) = RGSTY.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        if (CHREG_MAJOR != 1 || RGSTY_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert Policy_WrongModuleVersion(expected);
-
-        // Populate variables
-        // This function will be called whenever a contract is registered or deregistered, which enables caching of the values
-        // Utility contract addresses are mutable
-        FLASH = IERC3156FlashLender(RGSTY.getContract("flash"));
-        MIGRATOR = IDaiUsdsMigrator(RGSTY.getContract("dmgtr"));
-
-        return dependencies;
-    }
-
-    /// @inheritdoc Policy
-    /// @dev        This policy does not require any permissions
-    function requestPermissions() external pure override returns (Permissions[] memory requests) {
-        requests = new Permissions[](0);
-
-        return requests;
+        DAI = ERC20(dai_);
+        USDS = ERC20(usds_);
+        GOHM = ERC20(gohm_);
+        MIGRATOR = IDaiUsdsMigrator(migrator_);
+        FLASH = IERC3156FlashLender(flash_);
+        CHREG = CHREGv1(chreg_);
     }
 
     // ========= OPERATION ========= //
@@ -200,7 +163,7 @@ contract CoolerV2Migrator is
         }
 
         // Determine the lender fee
-        uint256 lenderFee = FLASH.flashFee(address(_DAI), borrowAmount);
+        uint256 lenderFee = FLASH.flashFee(address(DAI), borrowAmount);
 
         // If enabled, the caller will pay for the interest and fee
         if (callerPays_) {
@@ -273,10 +236,10 @@ contract CoolerV2Migrator is
                 numLoans: numLoans
             });
 
-            if (debtToken == address(_DAI)) {
+            if (debtToken == address(DAI)) {
                 totals.daiPrincipal += coolerPrincipal;
                 totals.daiInterest += coolerInterest;
-            } else if (debtToken == address(_USDS)) {
+            } else if (debtToken == address(USDS)) {
                 totals.usdsPrincipal += coolerPrincipal;
                 totals.usdsInterest += coolerInterest;
             } else {
@@ -307,8 +270,8 @@ contract CoolerV2Migrator is
             // Otherwise transfer in the interest and fee from the caller
             // No change to the flashloan amount
             else {
-                uint256 lenderFee = FLASH.flashFee(address(_DAI), flashloanAmount);
-                _DAI.safeTransferFrom(
+                uint256 lenderFee = FLASH.flashFee(address(DAI), flashloanAmount);
+                DAI.safeTransferFrom(
                     msg.sender,
                     address(this),
                     totals.daiInterest + totals.usdsInterest + lenderFee
@@ -317,7 +280,7 @@ contract CoolerV2Migrator is
 
             FLASH.flashLoan(
                 this,
-                address(_DAI),
+                address(DAI),
                 flashloanAmount,
                 abi.encode(
                     FlashLoanData(
@@ -333,13 +296,13 @@ contract CoolerV2Migrator is
         }
 
         // This shouldn't happen, but transfer any leftover funds back to the sender
-        uint256 usdsBalanceAfter = _USDS.balanceOf(address(this));
+        uint256 usdsBalanceAfter = USDS.balanceOf(address(this));
         if (usdsBalanceAfter > 0) {
-            _USDS.safeTransfer(msg.sender, usdsBalanceAfter);
+            USDS.safeTransfer(msg.sender, usdsBalanceAfter);
         }
-        uint256 daiBalanceAfter = _DAI.balanceOf(address(this));
+        uint256 daiBalanceAfter = DAI.balanceOf(address(this));
         if (daiBalanceAfter > 0) {
-            _DAI.safeTransfer(msg.sender, daiBalanceAfter);
+            DAI.safeTransfer(msg.sender, daiBalanceAfter);
         }
     }
 
@@ -365,7 +328,7 @@ contract CoolerV2Migrator is
         // If there are loans in USDS, convert the required amount from DAI
         // The DAI can come from the flash loan or the caller
         if (flashLoanData.usdsRequired > 0) {
-            _DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
+            DAI.safeApprove(address(MIGRATOR), flashLoanData.usdsRequired);
             MIGRATOR.daiToUsds(address(this), flashLoanData.usdsRequired);
         }
 
@@ -389,10 +352,10 @@ contract CoolerV2Migrator is
         }
 
         // Transfer the collateral from the cooler owner to this contract
-        _GOHM.safeTransferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
+        GOHM.safeTransferFrom(flashLoanData.currentOwner, address(this), totalCollateral);
 
         // Approve the Cooler V2 to spend the collateral
-        _GOHM.safeApprove(address(COOLERV2), totalCollateral);
+        GOHM.safeApprove(address(COOLERV2), totalCollateral);
 
         // Calculate the amount to borrow from Cooler V2
         // If the caller is not paying, then the interest and lender fee will be borrowed from Cooler V2
@@ -410,12 +373,12 @@ contract CoolerV2Migrator is
         COOLERV2.borrow(borrowAmount.encodeUInt128(), flashLoanData.newOwner, address(this));
 
         // Convert the USDS to DAI
-        uint256 usdsBalance = _USDS.balanceOf(address(this));
+        uint256 usdsBalance = USDS.balanceOf(address(this));
         if (usdsBalance > 0) MIGRATOR.usdsToDai(address(this), usdsBalance);
 
         // Approve the flash loan provider to collect the flashloan amount and fee
         // The initiator will transfer any remaining DAI and USDS back to the caller
-        _DAI.safeApprove(address(FLASH), amount_ + lenderFee_);
+        DAI.safeApprove(address(FLASH), amount_ + lenderFee_);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
@@ -510,5 +473,33 @@ contract CoolerV2Migrator is
         }
 
         return found;
+    }
+
+    // ============ ENABLER FUNCTIONS ============ //
+
+    modifier onlyEnabled() {
+        if (!isEnabled) revert NotEnabled();
+        _;
+    }
+
+    /// @inheritdoc IEnabler
+    function enable(bytes calldata) external onlyOwner {
+        // Validate that the contract is disabled
+        if (isEnabled) revert NotDisabled();
+
+        // Enable the contract
+        isEnabled = true;
+
+        // Emit the enabled event
+        emit Enabled();
+    }
+
+    /// @inheritdoc IEnabler
+    function disable(bytes calldata) external onlyEnabled onlyOwner {
+        // Disable the contract
+        isEnabled = false;
+
+        // Emit the disabled event
+        emit Disabled();
     }
 }
