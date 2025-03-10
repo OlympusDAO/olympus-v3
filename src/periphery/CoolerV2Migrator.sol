@@ -61,7 +61,6 @@ contract CoolerV2Migrator is
         address currentOwner;
         address newOwner;
         uint256 usdsRequired;
-        bool callerPays;
         IDLGTEv1.DelegationRequest[] delegationRequests;
     }
 
@@ -135,16 +134,9 @@ contract CoolerV2Migrator is
 
     /// @inheritdoc ICoolerV2Migrator
     function previewConsolidate(
-        address[] memory coolers_,
-        bool callerPays_
-    )
-        external
-        view
-        onlyEnabled
-        returns (uint256 collateralAmount, uint256 borrowAmount, uint256 paymentAmount)
-    {
+        address[] memory coolers_
+    ) external view onlyEnabled returns (uint256 collateralAmount, uint256 borrowAmount) {
         // Determine the totals
-        uint256 totalInterest;
         for (uint256 i; i < coolers_.length; i++) {
             Cooler cooler = Cooler(coolers_[i]);
 
@@ -153,28 +145,12 @@ contract CoolerV2Migrator is
             );
 
             collateralAmount += collateral;
-            borrowAmount += principal;
-            totalInterest += interest;
+            borrowAmount += principal + interest;
         }
 
-        // If caller pays is false, we need to include the interest in the borrow amount, which is used to calculate the lender fee
-        if (!callerPays_) {
-            borrowAmount += totalInterest;
-        }
+        // Lender contract is immutable and the fee is also hard-coded to 0. No need to calculate.
 
-        // Determine the lender fee
-        uint256 lenderFee = FLASH.flashFee(address(DAI), borrowAmount);
-
-        // If enabled, the caller will pay for the interest and fee
-        if (callerPays_) {
-            paymentAmount += totalInterest + lenderFee;
-        }
-        // Otherwise the interest (already included) and lender fee will be borrowed
-        else {
-            borrowAmount += lenderFee;
-        }
-
-        return (collateralAmount, borrowAmount, paymentAmount);
+        return (collateralAmount, borrowAmount);
     }
 
     /// @inheritdoc ICoolerV2Migrator
@@ -192,7 +168,6 @@ contract CoolerV2Migrator is
         address[] memory coolers_,
         address[] memory clearinghouses_,
         address newOwner_,
-        bool callerPays_,
         IMonoCooler.Authorization memory authorization_,
         IMonoCooler.Signature calldata signature_,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests_
@@ -262,21 +237,10 @@ contract CoolerV2Migrator is
         // This will trigger the `onFlashLoan` function after the flashloan amount has been transferred to this contract
         {
             // Calculate the flashloan amount
-            uint256 flashloanAmount = totals.daiPrincipal + totals.usdsPrincipal;
-            // If the caller is not paying, then the interest is added to the flashloan amount
-            if (!callerPays_) {
-                flashloanAmount += totals.daiInterest + totals.usdsInterest;
-            }
-            // Otherwise transfer in the interest and fee from the caller
-            // No change to the flashloan amount
-            else {
-                uint256 lenderFee = FLASH.flashFee(address(DAI), flashloanAmount);
-                DAI.safeTransferFrom(
-                    msg.sender,
-                    address(this),
-                    totals.daiInterest + totals.usdsInterest + lenderFee
-                );
-            }
+            uint256 flashloanAmount = totals.daiPrincipal +
+                totals.usdsPrincipal +
+                totals.daiInterest +
+                totals.usdsInterest;
 
             FLASH.flashLoan(
                 this,
@@ -288,7 +252,6 @@ contract CoolerV2Migrator is
                         msg.sender,
                         newOwner_,
                         totals.usdsPrincipal + totals.usdsInterest, // The amount of DAI that will be migrated to USDS
-                        callerPays_,
                         delegationRequests_
                     )
                 )
@@ -314,7 +277,7 @@ contract CoolerV2Migrator is
         address initiator_,
         address, // flashloan token is only DAI
         uint256 amount_,
-        uint256 lenderFee_,
+        uint256, // lender fee is 0
         bytes calldata params_
     ) external override returns (bytes32) {
         // perform sanity checks
@@ -358,11 +321,9 @@ contract CoolerV2Migrator is
         GOHM.safeApprove(address(COOLERV2), totalCollateral);
 
         // Calculate the amount to borrow from Cooler V2
-        // If the caller is not paying, then the interest and lender fee will be borrowed from Cooler V2
-        uint256 borrowAmount = totalPrincipal;
-        if (!flashLoanData.callerPays) {
-            borrowAmount += totalInterest + lenderFee_;
-        }
+        // The LTC of Cooler V1 is fixed, and the LTC of Cooler V2 is higher at the outset
+        // Lender fee will be 0
+        uint256 borrowAmount = totalPrincipal + totalInterest;
 
         // Add collateral and borrow spent flash loan from Cooler V2
         COOLERV2.addCollateral(
@@ -376,9 +337,9 @@ contract CoolerV2Migrator is
         uint256 usdsBalance = USDS.balanceOf(address(this));
         if (usdsBalance > 0) MIGRATOR.usdsToDai(address(this), usdsBalance);
 
-        // Approve the flash loan provider to collect the flashloan amount and fee
+        // Approve the flash loan provider to collect the flashloan amount and fee (0)
         // The initiator will transfer any remaining DAI and USDS back to the caller
-        DAI.safeApprove(address(FLASH), amount_ + lenderFee_);
+        DAI.safeApprove(address(FLASH), amount_);
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
