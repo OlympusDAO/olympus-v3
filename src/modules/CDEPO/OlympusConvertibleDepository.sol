@@ -61,7 +61,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         minor = 0;
     }
 
-    // ========== ERC20 OVERRIDES ========== //
+    // ========== MINT/BURN ========== //
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
@@ -106,6 +106,17 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Return the same amount of CD tokens
         return amount_;
     }
+
+    /// @inheritdoc CDEPOv1
+    function burn(uint256 amount_) external virtual override {
+        // Decrease the total shares
+        totalShares -= VAULT.previewWithdraw(amount_);
+
+        // Burn the CD tokens from the caller
+        _burn(msg.sender, amount_);
+    }
+
+    // ========== RECLAIM/REDEEM ========== //
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
@@ -329,7 +340,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         override
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
-        // The yield is the difference between the quantity of underlying assets in the vault and the quantity CD tokens issued
+        // The yield is the difference between the quantity of underlying assets in the vault and the quantity of CD tokens issued
         yieldReserve = VAULT.previewRedeem(totalShares) - totalSupply;
 
         // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed

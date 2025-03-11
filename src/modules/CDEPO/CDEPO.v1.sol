@@ -44,7 +44,7 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @notice The total amount of vault shares in the contract
     uint256 public totalShares;
 
-    // ========== ERC20 OVERRIDES ========== //
+    // ========== MINT/BURN ========== //
 
     /// @notice Mint tokens to the caller in exchange for the underlying asset
     /// @dev    The implementing function should perform the following:
@@ -78,6 +78,15 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @param  amount_   The amount of underlying asset to transfer
     /// @return tokensOut The amount of convertible deposit tokens that would be minted
     function previewMint(uint256 amount_) external view virtual returns (uint256 tokensOut);
+
+    /// @notice Burn tokens from the caller
+    /// @dev    The implementing function should perform the following:
+    ///         - Burns the corresponding amount of convertible deposit tokens from the caller
+    ///
+    /// @param  amount_   The amount of convertible deposit tokens to burn
+    function burn(uint256 amount_) external virtual;
+
+    // ========== RECLAIM/REDEEM ========== //
 
     /// @notice Burn tokens from the caller and reclaim the underlying asset
     ///         The amount of underlying asset may not be 1:1 with the amount of
