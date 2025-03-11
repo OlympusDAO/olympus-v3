@@ -23,6 +23,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     uint16 public override reclaimRate;
 
+    /// @inheritdoc CDEPOv1
+    mapping(address => uint256) public override borrowed;
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(
@@ -234,6 +237,52 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
         tokensOut = amount_;
         return tokensOut;
+    }
+
+    // ========== LENDING ========== //
+
+    /// @inheritdoc CDEPOv1
+    function borrow(uint256 amount_) external virtual override permissioned {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Validate that the amount is within the vault balance
+        if (totalShares < VAULT.convertToShares(amount_)) revert CDEPO_InsufficientBalance();
+
+        // Update the borrowed amount
+        borrowed[msg.sender] += amount_;
+
+        // Withdraw the underlying asset from the vault to the caller
+        VAULT.withdraw(amount_, msg.sender, address(this));
+
+        // Emit the event
+        emit Borrowed(msg.sender, amount_);
+    }
+
+    /// @inheritdoc CDEPOv1
+    function repay(
+        uint256 amount_
+    ) external virtual override permissioned returns (uint256 repaidAmount) {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Cap the repaid amount to the borrowed amount
+        repaidAmount = borrowed[msg.sender] < amount_ ? borrowed[msg.sender] : amount_;
+
+        // Update the borrowed amount
+        borrowed[msg.sender] -= repaidAmount;
+
+        // Transfer the underlying asset to the contract
+        ASSET.safeTransferFrom(msg.sender, address(this), repaidAmount);
+
+        // Repay the borrowed amount
+        ASSET.safeApprove(address(VAULT), repaidAmount);
+        VAULT.deposit(repaidAmount, address(this));
+
+        // Emit the event
+        emit Repaid(msg.sender, repaidAmount);
+
+        return repaidAmount;
     }
 
     // ========== YIELD MANAGER ========== //

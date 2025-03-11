@@ -16,10 +16,19 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @notice Emitted when the yield is swept
     event YieldSwept(address receiver, uint256 reserveAmount, uint256 sReserveAmount);
 
+    /// @notice Emitted when the caller borrows the underlying asset
+    event Borrowed(address borrower, uint256 amount);
+
+    /// @notice Emitted when the caller repays a borrowed amount of the underlying asset
+    event Repaid(address borrower, uint256 amount);
+
     // ========== ERRORS ========== //
 
     /// @notice Thrown when the caller provides invalid arguments
     error CDEPO_InvalidArgs(string reason);
+
+    /// @notice Thrown when the depository has insufficient balance
+    error CDEPO_InsufficientBalance();
 
     // ========== CONSTANTS ========== //
 
@@ -148,6 +157,33 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @param  amount_   The amount of convertible deposit tokens to burn
     /// @return tokensOut The amount of underlying asset that would be redeemed
     function previewRedeem(uint256 amount_) external view virtual returns (uint256 tokensOut);
+
+    // ========== LENDING ========== //
+
+    /// @notice Allows the permissioned caller to borrow the underlying asset
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Transfers the underlying asset from the contract to the caller
+    ///         - Emits a `Borrowed` event
+    ///
+    /// @param  amount_   The amount of underlying asset to borrow
+    function borrow(uint256 amount_) external virtual;
+
+    /// @notice Allows the permissioned caller to repay an amount of the underlying asset
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Transfers the underlying asset from the caller to the contract
+    ///         - Emits a `Repaid` event
+    ///
+    /// @param  amount_         The amount of underlying asset to repay
+    /// @return repaidAmount    The amount of underlying asset that was repaid
+    function repay(uint256 amount_) external virtual returns (uint256 repaidAmount);
+
+    /// @notice Returns the amount of underlying asset that has been borrowed by the given address
+    ///
+    /// @param  borrower_       The address to check the borrowed amount for
+    /// @return borrowedAmount  The amount of underlying asset that has been borrowed by the given address
+    function borrowed(address borrower_) external view virtual returns (uint256 borrowedAmount);
 
     // ========== YIELD MANAGER ========== //
 
