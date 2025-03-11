@@ -32,21 +32,24 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     ICoolerFactory public immutable coolerFactory;
 
+    /// @inheritdoc IGenericClearinghouse
     uint256 public principalReceivables;
 
+    /// @inheritdoc IGenericClearinghouse
     uint256 public interestReceivables;
 
+    /// @notice The duration of the loan.
     uint256 public constant DURATION = 121 days; // Four months
-
-    uint256 public constant INTEREST_RATE = 1e18;
-
-    uint256 public constant MAX_REWARD = 500e18; // 500 debt tokens
 
     // TODO interest rate
 
-    uint256 public loanToCollateral = 9e17; // 0.9 debt token per collateral token
+    uint256 public constant INTEREST_RATE = 1e18;
 
-    // TODO setter for LTC
+    /// @notice The maximum reward (in collateral tokens) per loan.
+    uint256 public maxRewardPerLoan;
+
+    /// @notice The ratio of debt tokens to collateral tokens.
+    uint256 public constant loanToCollateral = 9e17; // 0.9 debt token per collateral token
 
     // ===== MODULES ===== //
 
@@ -64,11 +67,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     constructor(
         address sDebtToken_,
         address coolerFactory_,
-        address kernel_
+        address kernel_,
+        uint256 maxRewardPerLoan_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
         _sDebtToken = ERC4626(sDebtToken_);
         _debtToken = ERC20(address(_sDebtToken.asset()));
         coolerFactory = ICoolerFactory(coolerFactory_);
+        maxRewardPerLoan = maxRewardPerLoan_;
     }
 
     // ===== POLICY FUNCTIONS ===== //
@@ -125,7 +130,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     // ===== LENDING FUNCTIONS ===== //
 
     /// @inheritdoc IGenericClearinghouse
-    function lendToCooler(ICooler cooler_, uint256 amount_) external returns (uint256) {
+    function lendToCooler(ICooler cooler_, uint256 amount_) external onlyEnabled returns (uint256) {
         // Validate that cooler was deployed by the trusted factory.
         if (!factory.created(address(cooler_))) revert OnlyFromFactory();
 
@@ -212,7 +217,9 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             uint256 maxAuctionReward = (collateral * 5e16) / 1e18;
 
             // Cap rewards to avoid exorbitant amounts.
-            uint256 maxReward = (maxAuctionReward < MAX_REWARD) ? maxAuctionReward : MAX_REWARD;
+            uint256 maxReward = (maxAuctionReward < maxRewardPerLoan)
+                ? maxAuctionReward
+                : maxRewardPerLoan;
 
             // Calculate rewards based on the elapsed time since default.
             keeperRewards = (elapsed < 7 days)
@@ -325,5 +332,15 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     function _disable(bytes calldata) internal override {
         // Deactivate the Clearinghouse in CHREG
         CHREG.deactivateClearinghouse(address(this));
+    }
+
+    // ===== ADMIN FUNCTIONS ===== //
+
+    /// @notice Sets the maximum reward (in collateral tokens) per loan.
+    /// @dev    This function is restricted to the admin role.
+    ///
+    /// @param  maxRewardPerLoan_ The maximum reward (in collateral tokens) per loan.
+    function setMaxRewardPerLoan(uint256 maxRewardPerLoan_) external onlyAdminRole {
+        maxRewardPerLoan = maxRewardPerLoan_;
     }
 }
