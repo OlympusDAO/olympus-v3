@@ -335,7 +335,10 @@ contract CoolerV2Migrator is
 
         // Convert the USDS to DAI
         uint256 usdsBalance = USDS.balanceOf(address(this));
-        if (usdsBalance > 0) MIGRATOR.usdsToDai(address(this), usdsBalance);
+        if (usdsBalance > 0) {
+            USDS.safeApprove(address(MIGRATOR), usdsBalance);
+            MIGRATOR.usdsToDai(address(this), usdsBalance);
+        }
 
         // Approve the flash loan provider to collect the flashloan amount and fee (0)
         // The initiator will transfer any remaining DAI and USDS back to the caller
