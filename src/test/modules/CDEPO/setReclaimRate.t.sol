@@ -19,9 +19,7 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
 
     function test_callerNotPermissioned_reverts() public {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
-        );
+        _expectRevertPolicyNotPermitted(address(this));
 
         // Call function
         CDEPO.setReclaimRate(100e2);

@@ -6,7 +6,7 @@ import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerato
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, Module} from "src/Kernel.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 
 abstract contract CDEPOTest is Test {
@@ -178,5 +178,9 @@ abstract contract CDEPOTest is Test {
 
         reclaimRate = reclaimRate_;
         _;
+    }
+
+    function _expectRevertPolicyNotPermitted(address caller_) internal {
+        vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, caller_));
     }
 }

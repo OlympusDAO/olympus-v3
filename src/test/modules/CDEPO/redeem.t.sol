@@ -68,9 +68,7 @@ contract RedeemCDEPOTest is CDEPOTest {
 
     function test_callerIsNotPermissioned_reverts() public {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, recipient)
-        );
+        _expectRevertPolicyNotPermitted(recipient);
 
         // Call function
         vm.prank(recipient);
