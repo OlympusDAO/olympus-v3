@@ -183,4 +183,10 @@ abstract contract CDEPOTest is Test {
     function _expectRevertPolicyNotPermitted(address caller_) internal {
         vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, caller_));
     }
+
+    modifier givenAddressHasBorrowed(uint256 amount_) {
+        vm.prank(address(godmode));
+        CDEPO.incurDebt(amount_);
+        _;
+    }
 }

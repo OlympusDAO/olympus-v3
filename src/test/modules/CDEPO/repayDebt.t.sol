@@ -5,14 +5,8 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
-contract RepayCDEPOTest is CDEPOTest {
-    event Repaid(address borrower, uint256 amount);
-
-    modifier givenAddressHasBorrowed(address borrower_, uint256 amount_) {
-        vm.prank(address(godmode));
-        CDEPO.borrow(amount_);
-        _;
-    }
+contract RepayDebtCDEPOTest is CDEPOTest {
+    event DebtRepaid(address indexed borrower, uint256 amount);
 
     // when the caller is not permissioned
     //  [X] it reverts
@@ -36,7 +30,7 @@ contract RepayCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(caller_);
-        CDEPO.repay(10e18);
+        CDEPO.repayDebt(10e18);
     }
 
     function test_amountIsZero_reverts()
@@ -44,14 +38,14 @@ contract RepayCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDEPO(recipient, 10e18)
-        givenAddressHasBorrowed(recipient, 10e18)
+        givenAddressHasBorrowed(10e18)
     {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.repay(0);
+        CDEPO.repayDebt(0);
     }
 
     function test_spendingNotApproved_reverts()
@@ -59,14 +53,14 @@ contract RepayCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDEPO(recipient, 10e18)
-        givenAddressHasBorrowed(recipient, 10e18)
+        givenAddressHasBorrowed(10e18)
     {
         // Expect revert
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.repay(10e18);
+        CDEPO.repayDebt(10e18);
     }
 
     function test_amountIsGreaterThanBorrowed()
@@ -74,7 +68,7 @@ contract RepayCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDEPO(recipient, 10e18)
-        givenAddressHasBorrowed(recipient, 10e18)
+        givenAddressHasBorrowed(10e18)
         givenReserveTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
     {
         uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) +
@@ -82,7 +76,7 @@ contract RepayCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        uint256 repaidAmount = CDEPO.repay(10e18 + 1);
+        uint256 repaidAmount = CDEPO.repayDebt(10e18 + 1);
 
         // Assert balances
         assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
@@ -90,8 +84,8 @@ contract RepayCDEPOTest is CDEPOTest {
         assertEq(vault.balanceOf(address(godmode)), 0, "godmode: vault balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
-        // Assert borrowed amount
-        assertEq(CDEPO.borrowed(address(godmode)), 0, "borrowed");
+        // Assert debt
+        assertEq(CDEPO.debt(address(godmode)), 0, "debt");
 
         // Assert repaid amount
         assertEq(repaidAmount, 10e18, "repaid amount");
@@ -104,7 +98,7 @@ contract RepayCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDEPO(recipient, 10e18)
-        givenAddressHasBorrowed(recipient, 10e18)
+        givenAddressHasBorrowed(10e18)
         givenReserveTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
     {
         uint256 amount = bound(amount_, 2, 10e18);
@@ -114,7 +108,7 @@ contract RepayCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        uint256 repaidAmount = CDEPO.repay(amount);
+        uint256 repaidAmount = CDEPO.repayDebt(amount);
 
         // Assert balances
         assertEq(
@@ -126,8 +120,8 @@ contract RepayCDEPOTest is CDEPOTest {
         assertEq(vault.balanceOf(address(godmode)), 0, "godmode: vault balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
-        // Assert borrowed amount
-        assertEq(CDEPO.borrowed(address(godmode)), 10e18 - amount, "borrowed");
+        // Assert debt
+        assertEq(CDEPO.debt(address(godmode)), 10e18 - amount, "debt");
 
         // Assert repaid amount
         assertEq(repaidAmount, amount, "repaid amount");

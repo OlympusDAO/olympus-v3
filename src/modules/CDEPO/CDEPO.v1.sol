@@ -14,13 +14,16 @@ abstract contract CDEPOv1 is Module, ERC20 {
     event ReclaimRateUpdated(uint16 newReclaimRate);
 
     /// @notice Emitted when the yield is swept
-    event YieldSwept(address receiver, uint256 reserveAmount, uint256 sReserveAmount);
+    event YieldSwept(address indexed receiver, uint256 reserveAmount, uint256 sReserveAmount);
 
     /// @notice Emitted when the caller borrows the underlying asset
-    event Borrowed(address borrower, uint256 amount);
+    event DebtIncurred(address indexed borrower, uint256 amount);
 
     /// @notice Emitted when the caller repays a borrowed amount of the underlying asset
-    event Repaid(address borrower, uint256 amount);
+    event DebtRepaid(address indexed borrower, uint256 amount);
+
+    /// @notice Emitted when the debt is reduced for a borrower
+    event DebtReduced(address indexed borrower, uint256 amount);
 
     // ========== ERRORS ========== //
 
@@ -173,26 +176,37 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the caller is permissioned
     ///         - Transfers the underlying asset from the contract to the caller
-    ///         - Emits a `Borrowed` event
+    ///         - Emits a `DebtIncurred` event
     ///
     /// @param  amount_   The amount of underlying asset to borrow
-    function borrow(uint256 amount_) external virtual;
+    function incurDebt(uint256 amount_) external virtual;
 
     /// @notice Allows the permissioned caller to repay an amount of the underlying asset
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the caller is permissioned
     ///         - Transfers the underlying asset from the caller to the contract
-    ///         - Emits a `Repaid` event
+    ///         - Emits a `DebtRepaid` event
     ///
     /// @param  amount_         The amount of underlying asset to repay
     /// @return repaidAmount    The amount of underlying asset that was repaid
-    function repay(uint256 amount_) external virtual returns (uint256 repaidAmount);
+    function repayDebt(uint256 amount_) external virtual returns (uint256 repaidAmount);
+
+    /// @notice Allows the permissioned caller to reduce the debt of a borrower
+    ///         This can be used to forgive debt, e.g. in the case of a liquidation.
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Updates the debt of the borrower
+    ///         - Emits a `DebtSet` event
+    ///
+    /// @param  amount_         The amount of underlying asset to reduce the debt by
+    /// @return borrowedAmount  The updated amount of underlying asset that has been borrowed by the given address
+    function reduceDebt(uint256 amount_) external virtual returns (uint256 borrowedAmount);
 
     /// @notice Returns the amount of underlying asset that has been borrowed by the given address
     ///
     /// @param  borrower_       The address to check the borrowed amount for
     /// @return borrowedAmount  The amount of underlying asset that has been borrowed by the given address
-    function borrowed(address borrower_) external view virtual returns (uint256 borrowedAmount);
+    function debt(address borrower_) external view virtual returns (uint256 borrowedAmount);
 
     // ========== YIELD MANAGER ========== //
 

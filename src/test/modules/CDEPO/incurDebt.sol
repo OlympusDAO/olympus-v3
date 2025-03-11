@@ -5,8 +5,8 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
-contract BorrowCDEPOTest is CDEPOTest {
-    event Borrowed(address borrower, uint256 amount);
+contract IncurDebtCDEPOTest is CDEPOTest {
+    event DebtIncurred(address indexed borrower, uint256 amount);
 
     // when the caller is not permissioned
     //  [X] it reverts
@@ -15,7 +15,7 @@ contract BorrowCDEPOTest is CDEPOTest {
     // when the amount is greater than the balance of the contract
     //  [X] it reverts
     // [X] it transfers the underlying asset to the caller
-    // [X] it emits a Borrowed event
+    // [X] it emits a DebtIncurred event
     // [X] it updates the borrowed amount
 
     function test_notPermissioned_reverts(address caller_) public {
@@ -26,7 +26,7 @@ contract BorrowCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(caller_);
-        CDEPO.borrow(10e18);
+        CDEPO.incurDebt(10e18);
     }
 
     function test_amountIsZero_reverts()
@@ -40,7 +40,7 @@ contract BorrowCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.borrow(0);
+        CDEPO.incurDebt(0);
     }
 
     function test_amountIsGreaterThanBalance_reverts()
@@ -54,7 +54,7 @@ contract BorrowCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.borrow(100e18 + 1);
+        CDEPO.incurDebt(100e18 + 1);
     }
 
     function test_success(
@@ -72,11 +72,11 @@ contract BorrowCDEPOTest is CDEPOTest {
 
         // Expect event
         vm.expectEmit();
-        emit Borrowed(address(godmode), amount);
+        emit DebtIncurred(address(godmode), amount);
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.borrow(amount);
+        CDEPO.incurDebt(amount);
 
         // Assert balances
         assertEq(
@@ -89,6 +89,6 @@ contract BorrowCDEPOTest is CDEPOTest {
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert borrowed amount
-        assertEq(CDEPO.borrowed(address(godmode)), amount, "borrowed");
+        assertEq(CDEPO.debt(address(godmode)), amount, "debt");
     }
 }

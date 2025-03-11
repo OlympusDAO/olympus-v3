@@ -7,7 +7,7 @@ import {Module} from "src/Kernel.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
 contract SweepYieldCDEPOTest is CDEPOTest {
-    event YieldSwept(address receiver, uint256 reserveAmount, uint256 sReserveAmount);
+    event YieldSwept(address indexed receiver, uint256 reserveAmount, uint256 sReserveAmount);
 
     // when the caller is not permissioned
     //  [X] it reverts
