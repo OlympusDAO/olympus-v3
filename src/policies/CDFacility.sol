@@ -62,6 +62,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
         CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
 
+        // TODO what if CDEPO changes
+
         SCALE = 10 ** CDEPO.decimals();
     }
 

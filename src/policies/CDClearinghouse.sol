@@ -35,6 +35,9 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     uint256 public constant DURATION = 121 days; // Four months
 
+    uint256 public constant INTEREST_RATE = 1e18;
+    uint256 public constant MAX_REWARD = 5e16; // 5%
+
     // TODO interest rate
 
     // TODO max reward
@@ -73,6 +76,9 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
+        // TODO add DEPO
+        // TODO consider what if CDEPO changes
+
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
@@ -106,11 +112,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         if (!factory.created(address(cooler_))) revert OnlyFromFactory();
 
         // Validate cooler collateral and debt tokens.
-        if (cooler_.collateral() != _collateralToken || cooler_.debt() != _debtToken)
-            revert BadEscrow();
+        if (
+            address(cooler_.collateral()) != address(_collateralToken) ||
+            address(cooler_.debt()) != address(_debtToken)
+        ) revert BadEscrow();
 
         // Transfer in collateral owed
-        uint256 collateral = cooler_.collateralFor(amount_, LOAN_TO_COLLATERAL);
+        uint256 collateral = cooler_.collateralFor(amount_, loanToCollateral);
         _collateralToken.transferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
@@ -120,7 +128,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Create a new loan request.
         _collateralToken.approve(address(cooler_), collateral);
-        uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, LOAN_TO_COLLATERAL, DURATION);
+        uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, loanToCollateral, DURATION);
 
         // Clear the created loan request by providing enough reserve.
         _sDebtToken.withdraw(amount_, address(this), address(this));
@@ -248,21 +256,18 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc IGenericClearinghouse
     function getCollateralForLoan(uint256 principal_) external view returns (uint256) {
-        return (principal_ * 1e18) / LOAN_TO_COLLATERAL;
+        return (principal_ * 1e18) / loanToCollateral;
     }
 
     /// @inheritdoc IGenericClearinghouse
     function getLoanForCollateral(uint256 collateral_) public view returns (uint256, uint256) {
-        uint256 principal = (collateral_ * LOAN_TO_COLLATERAL) / 1e18;
+        uint256 principal = (collateral_ * loanToCollateral) / 1e18;
         uint256 interest = interestForLoan(principal, DURATION);
         return (principal, interest);
     }
 
     /// @inheritdoc IGenericClearinghouse
-    function interestForLoan(
-        uint256 principal_,
-        uint256 duration_
-    ) public view returns (uint256) {
+    function interestForLoan(uint256 principal_, uint256 duration_) public view returns (uint256) {
         uint256 interestPercent = (INTEREST_RATE * duration_) / 365 days;
         return (principal_ * interestPercent) / 1e18;
     }

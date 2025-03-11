@@ -111,6 +111,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
+        // TODO what if CDEPO changes
+
         bidToken = address(CDEPO.ASSET());
         bidTokenScale = 10 ** ERC20(bidToken).decimals();
     }
