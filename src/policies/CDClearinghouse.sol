@@ -4,6 +4,7 @@ pragma solidity ^0.8.15;
 // Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -17,15 +18,17 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
+import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
 contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, CoolerCallback {
+    using SafeTransferLib for ERC20;
+
     // ===== STATE VARIABLES ===== //
 
     ERC20 internal immutable _debtToken;
 
     ERC4626 internal immutable _sDebtToken;
-
-    ERC20 internal immutable _collateralToken;
 
     ICoolerFactory public immutable coolerFactory;
 
@@ -36,27 +39,33 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     uint256 public constant DURATION = 121 days; // Four months
 
     uint256 public constant INTEREST_RATE = 1e18;
-    uint256 public constant MAX_REWARD = 5e16; // 5%
+
+    uint256 public constant MAX_REWARD = 500e18; // 500 debt tokens
 
     // TODO interest rate
 
-    // TODO max reward
-
     uint256 public loanToCollateral = 9e17; // 0.9 debt token per collateral token
+
+    // TODO setter for LTC
 
     // ===== MODULES ===== //
 
-    CHREGv1 public CHREG; // Olympus V3 Clearinghouse Registry Module
+    /// @notice Clearinghouse Registry Module
+    CHREGv1 public CHREG;
+
+    /// @notice Convertible Depository Module
+    CDEPOv1 public CDEPO;
+
+    /// @notice Treasury Module
+    TRSRYv1 public TRSRY;
 
     // ===== CONSTRUCTOR ===== //
 
     constructor(
-        address collateralToken_,
         address sDebtToken_,
         address coolerFactory_,
         address kernel_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
-        _collateralToken = ERC20(collateralToken_);
         _sDebtToken = ERC4626(sDebtToken_);
         _debtToken = ERC20(address(_sDebtToken.asset()));
         coolerFactory = ICoolerFactory(coolerFactory_);
@@ -66,34 +75,43 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("CHREG");
-        dependencies[1] = toKeycode("ROLES");
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("CDEPO");
+        dependencies[1] = toKeycode("CHREG");
+        dependencies[2] = toKeycode("ROLES");
+        dependencies[3] = toKeycode("TRSRY");
 
+        CDEPO = CDEPOv1(getModuleAddress(toKeycode("CDEPO")));
         CHREG = CHREGv1(getModuleAddress(toKeycode("CHREG")));
         ROLES = ROLESv1(getModuleAddress(toKeycode("ROLES")));
+        TRSRY = TRSRYv1(getModuleAddress(toKeycode("TRSRY")));
 
+        (uint8 CDEPO_MAJOR, ) = CDEPO.VERSION();
         (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
-        // TODO add DEPO
         // TODO consider what if CDEPO changes
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1]);
-        if (CHREG_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
+        bytes memory expected = abi.encode([1, 1, 1, 1]);
+        if (CDEPO_MAJOR != 1 || CHREG_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
+        Keycode CDEPO_KEYCODE = toKeycode("CDEPO");
 
-        requests = new Permissions[](2);
+        requests = new Permissions[](4);
         requests[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
         requests[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
+        requests[2] = Permissions(CDEPO_KEYCODE, CDEPO.incurDebt.selector);
+        requests[3] = Permissions(CDEPO_KEYCODE, CDEPO.repayDebt.selector);
 
-        // TODO CDEPO permissions
+        return requests;
     }
 
     /// @notice Returns the version of the policy.
@@ -113,13 +131,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Validate cooler collateral and debt tokens.
         if (
-            address(cooler_.collateral()) != address(_collateralToken) ||
+            address(cooler_.collateral()) != address(CDEPO) ||
             address(cooler_.debt()) != address(_debtToken)
         ) revert BadEscrow();
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, loanToCollateral);
-        _collateralToken.transferFrom(msg.sender, address(this), collateral);
+        CDEPO.transferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
         (, uint256 interest) = getLoanForCollateral(collateral);
@@ -127,11 +145,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         principalReceivables += amount_;
 
         // Create a new loan request.
-        _collateralToken.approve(address(cooler_), collateral);
+        CDEPO.approve(address(cooler_), collateral);
         uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, loanToCollateral, DURATION);
 
+        // Borrow the debt token from CDEPO
+        // This will transfer the debt token from CDEPO to this contract
+        CDEPO.incurDebt(amount_);
+
         // Clear the created loan request by providing enough reserve.
-        _sDebtToken.withdraw(amount_, address(this), address(this));
         _debtToken.approve(address(cooler_), amount_);
         uint256 loanID = cooler_.clearRequest(reqID, address(this), true);
 
@@ -150,15 +171,12 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Transfer in extension interest from the caller.
         _debtToken.transferFrom(msg.sender, address(this), interestBase * times_);
-        // TODO implement sweep
-        // if (active) {
-        //     _sweepIntoSavingsVault(interestBase * times_);
-        // } else {
-        //     _defund(reserve, interestBase * times_);
-        // }
 
         // Signal to cooler that loan should be extended.
         cooler_.extendLoanTerms(loanId_, times_);
+
+        // Sweep yield
+        _sweepYield();
     }
 
     /// @inheritdoc IGenericClearinghouse
@@ -177,6 +195,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             if (ICooler(coolers_[i]).getLoan(loans_[i]).lender != address(this)) revert NotLender();
 
             // Claim defaults and update cached metrics.
+            // This will transfer the collateral from the cooler to this contract
             (uint256 principal, uint256 interest, uint256 collateral, uint256 elapsed) = ICooler(
                 coolers_[i]
             ).claimDefaulted(loans_[i]);
@@ -209,20 +228,31 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             ? principalReceivables - totalPrincipal
             : 0;
 
-        // TODO handle debt
-
-        // // Update outstanding debt owed to the Treasury upon default.
-        // uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
-
-        // // debt owed to TRSRY = user debt - user interest
-        // TRSRY.setDebt({
-        //     debtor_: address(this),
-        //     token_: reserve,
-        //     amount_: (outstandingDebt > totalPrincipal) ? outstandingDebt - totalPrincipal : 0
-        // });
+        // Reduce the debt owed to CDEPO
+        // CDEPO will capped the reduction to the amount owed
+        CDEPO.reduceDebt(totalPrincipal);
 
         // Reward keeper.
-        _collateralToken.transfer(msg.sender, keeperRewards);
+        CDEPO.transfer(msg.sender, keeperRewards);
+
+        // Burn the collateral token
+        CDEPO.burn(CDEPO.balanceOf(address(this)));
+
+        // Sweep yield
+        _sweepYield();
+    }
+
+    /// @notice Sweeps yield held in the Clearinghouse into the TRSRY as `_sDebtToken`
+    function _sweepYield() internal {
+        // This contract does not hold any reserve or sReserve tokens as part of the operations
+        // Any balances are therefore yield and should be swept to the TRSRY contract
+        uint256 yieldReserve = _debtToken.balanceOf(address(this));
+        uint256 yieldSReserve = _sDebtToken.previewDeposit(yieldReserve);
+        _debtToken.approve(address(_sDebtToken), yieldReserve);
+        _sDebtToken.deposit(yieldReserve, address(TRSRY));
+
+        // Emit event
+        emit YieldSwept(address(TRSRY), yieldReserve, yieldSReserve);
     }
 
     // ===== COOLER CALLBACKS ===== //
@@ -232,13 +262,6 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @param  principalPaid_ in reserve.
     /// @param  interestPaid_ in reserve.
     function _onRepay(uint256, uint256 principalPaid_, uint256 interestPaid_) internal override {
-        // TODO handle sweep
-        // if (active) {
-        //     _sweepIntoSavingsVault(principalPaid_ + interestPaid_);
-        // } else {
-        //     _defund(reserve, principalPaid_ + interestPaid_);
-        // }
-
         // Decrement loan receivables.
         interestReceivables = (interestReceivables > interestPaid_)
             ? interestReceivables - interestPaid_
@@ -246,6 +269,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         principalReceivables = (principalReceivables > principalPaid_)
             ? principalReceivables - principalPaid_
             : 0;
+
+        // Repay the debt token to CDEPO
+        _debtToken.safeApprove(address(CDEPO), principalPaid_);
+        CDEPO.repayDebt(principalPaid_);
+
+        // Sweep the yield
+        _sweepYield();
     }
 
     /// @notice Unused callback since defaults are handled by the clearinghouse.
@@ -284,7 +314,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     }
 
     function collateralToken() external view override returns (IERC20) {
-        return IERC20(address(_collateralToken));
+        return IERC20(address(CDEPO));
     }
 
     function _enable(bytes calldata) internal override {

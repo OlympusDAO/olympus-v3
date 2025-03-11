@@ -16,6 +16,10 @@ interface IGenericClearinghouse {
     error OnlyBorrower();
     error NotLender();
 
+    // ===== EVENTS ===== //
+
+    event YieldSwept(address indexed to, uint256 yieldReserve, uint256 yieldSReserve);
+
     // ===== STATE VARIABLES ===== //
 
     /// @notice The debt token of the clearinghouse.
