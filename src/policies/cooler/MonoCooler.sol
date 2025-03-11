@@ -301,7 +301,15 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             // While adding collateral on another user's behalf is ok,
             // delegating on behalf of someone else is not allowed unless authorized
             _requireSenderAuthorized(msg.sender, onBehalfOf);
-            DLGTE.applyDelegations(onBehalfOf, delegationRequests);
+
+            // Not allowed to undelegate, and not allowed to delegate more than this collateral amount
+            (uint256 totalDelegated, uint256 totalUndelegated, ) = DLGTE.applyDelegations(
+                onBehalfOf,
+                delegationRequests
+            );
+            if (totalUndelegated > 0 || totalDelegated > collateralAmount) {
+                revert IDLGTEv1.DLGTE_InvalidDelegationRequests();
+            }
         }
 
         // NB: No need to check if the position is healthy when adding collateral as this
@@ -327,7 +335,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
         if (delegationRequests.length > 0) {
             // Apply the delegation requests in order to pull the required collateral back into this contract.
-            DLGTE.applyDelegations(onBehalfOf, delegationRequests);
+            // Not allowed to delegate, and not allowed to undelegate more than this collateral amount
+            (uint256 totalDelegated, uint256 totalUndelegated, ) = DLGTE.applyDelegations(
+                onBehalfOf,
+                delegationRequests
+            );
+            if (totalDelegated > 0 || totalUndelegated > collateralAmount) {
+                revert IDLGTEv1.DLGTE_InvalidDelegationRequests();
+            }
         }
 
         uint128 currentDebt = _currentAccountDebt(
