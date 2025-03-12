@@ -57,6 +57,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     CHREGv1 public CHREG;
 
     /// @notice Convertible Depository Module
+    /// @dev    The value for this module cannot be changed after it is initially set through `configureDependencies()`.
     CDEPOv1 public CDEPO;
 
     /// @notice Treasury Module
@@ -86,17 +87,20 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         dependencies[2] = toKeycode("ROLES");
         dependencies[3] = toKeycode("TRSRY");
 
-        CDEPO = CDEPOv1(getModuleAddress(toKeycode("CDEPO")));
-        CHREG = CHREGv1(getModuleAddress(toKeycode("CHREG")));
-        ROLES = ROLESv1(getModuleAddress(toKeycode("ROLES")));
-        TRSRY = TRSRYv1(getModuleAddress(toKeycode("TRSRY")));
+        // Validate that CDEPO is not being changed
+        address newCDEPO = getModuleAddress(dependencies[0]);
+        if (address(CDEPO) != address(0) && address(CDEPO) != address(newCDEPO))
+            revert InvalidParams("CDEPO");
+
+        CDEPO = CDEPOv1(newCDEPO);
+        CHREG = CHREGv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
 
         (uint8 CDEPO_MAJOR, ) = CDEPO.VERSION();
         (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-
-        // TODO consider what if CDEPO changes
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.

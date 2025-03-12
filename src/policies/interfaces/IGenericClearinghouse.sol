@@ -15,6 +15,7 @@ interface IGenericClearinghouse {
     error LengthDiscrepancy();
     error OnlyBorrower();
     error NotLender();
+    error InvalidParams(string reason);
 
     // ===== EVENTS ===== //
 

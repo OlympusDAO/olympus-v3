@@ -70,6 +70,12 @@ contract ConvertibleDepositAuctioneerTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
+        _createStack();
+    }
+
+    // ========== HELPERS ========== //
+
+    function _createStack() internal {
         // Instantiate bophades
         kernel = new Kernel();
         treasury = new OlympusTreasury(kernel);
@@ -105,8 +111,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vm.prank(admin);
         facility.enable("");
     }
-
-    // ========== HELPERS ========== //
 
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
@@ -344,15 +348,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
-        // Re-instantiate the module
-        convertibleDepository = new OlympusConvertibleDepository(
-            address(kernel),
-            address(vault),
-            RECLAIM_RATE
-        );
-
-        // Upgrade the module
-        kernel.executeAction(Actions.UpgradeModule, address(convertibleDepository));
+        // Re-create the stack
+        _createStack();
         _;
     }
 }
