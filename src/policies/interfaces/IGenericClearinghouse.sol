@@ -18,7 +18,7 @@ interface IGenericClearinghouse {
 
     // ===== EVENTS ===== //
 
-    event YieldSwept(address indexed to, uint256 amount);
+    event YieldSwept(address indexed to, uint256 yieldReserve, uint256 yieldSReserve);
 
     event InterestRateState(uint16 interestRate);
 
