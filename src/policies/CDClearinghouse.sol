@@ -5,6 +5,7 @@ pragma solidity ^0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -23,6 +24,7 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
 contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, CoolerCallback {
     using SafeTransferLib for ERC20;
+    using FullMath for uint256;
 
     // ===== STATE VARIABLES ===== //
 
@@ -41,15 +43,19 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @notice The duration of the loan.
     uint256 public constant DURATION = 121 days; // Four months
 
-    // TODO interest rate
-
-    uint256 public constant INTEREST_RATE = 1e18;
-
     /// @notice The maximum reward (in collateral tokens) per loan.
     uint256 public maxRewardPerLoan;
 
+    /// @notice The interest rate of the loan.
+    /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
+    uint16 public interestRate;
+
     /// @notice The ratio of debt tokens to collateral tokens.
-    uint256 public constant loanToCollateral = 9e17; // 0.9 debt token per collateral token
+    /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
+    uint16 public loanToCollateral;
+
+    /// @notice The constant value of 100%.
+    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     // ===== MODULES ===== //
 
@@ -69,12 +75,21 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         address sDebtToken_,
         address coolerFactory_,
         address kernel_,
-        uint256 maxRewardPerLoan_
+        uint256 maxRewardPerLoan_,
+        uint16 loanToCollateral_,
+        uint16 interestRate_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
         _sDebtToken = ERC4626(sDebtToken_);
         _debtToken = ERC20(address(_sDebtToken.asset()));
         coolerFactory = ICoolerFactory(coolerFactory_);
+
         maxRewardPerLoan = maxRewardPerLoan_;
+        loanToCollateral = loanToCollateral_;
+        interestRate = interestRate_;
+
+        emit MaxRewardPerLoanSet(maxRewardPerLoan_);
+        emit LoanToCollateralSet(loanToCollateral_);
+        emit InterestRateState(interestRate_);
     }
 
     // ===== POLICY FUNCTIONS ===== //
@@ -155,7 +170,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Create a new loan request.
         CDEPO.approve(address(cooler_), collateral);
-        uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, loanToCollateral, DURATION);
+        uint256 reqID = cooler_.requestLoan(amount_, interestRate, loanToCollateral, DURATION);
 
         // Borrow the debt token from CDEPO
         // This will transfer the debt token from CDEPO to this contract
@@ -297,20 +312,20 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc IGenericClearinghouse
     function getCollateralForLoan(uint256 principal_) external view returns (uint256) {
-        return (principal_ * 1e18) / loanToCollateral;
+        return principal_.mulDiv(ONE_HUNDRED_PERCENT, loanToCollateral);
     }
 
     /// @inheritdoc IGenericClearinghouse
     function getLoanForCollateral(uint256 collateral_) public view returns (uint256, uint256) {
-        uint256 principal = (collateral_ * loanToCollateral) / 1e18;
+        uint256 principal = collateral_.mulDiv(loanToCollateral, ONE_HUNDRED_PERCENT);
         uint256 interest = interestForLoan(principal, DURATION);
         return (principal, interest);
     }
 
     /// @inheritdoc IGenericClearinghouse
     function interestForLoan(uint256 principal_, uint256 duration_) public view returns (uint256) {
-        uint256 interestPercent = (INTEREST_RATE * duration_) / 365 days;
-        return (principal_ * interestPercent) / 1e18;
+        uint256 interestPercent = uint256(interestRate).mulDiv(duration_, 365 days);
+        return principal_.mulDiv(interestPercent, ONE_HUNDRED_PERCENT);
     }
 
     /// @inheritdoc IGenericClearinghouse
@@ -346,5 +361,27 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @param  maxRewardPerLoan_ The maximum reward (in collateral tokens) per loan.
     function setMaxRewardPerLoan(uint256 maxRewardPerLoan_) external onlyAdminRole {
         maxRewardPerLoan = maxRewardPerLoan_;
+
+        emit MaxRewardPerLoanSet(maxRewardPerLoan_);
+    }
+
+    /// @notice Sets the ratio of debt tokens to collateral tokens.
+    /// @dev    This function is restricted to the admin role.
+    ///
+    /// @param  loanToCollateral_ The ratio of debt tokens to collateral tokens.
+    function setLoanToCollateral(uint16 loanToCollateral_) external onlyAdminRole {
+        loanToCollateral = loanToCollateral_;
+
+        emit LoanToCollateralSet(loanToCollateral_);
+    }
+
+    /// @notice Sets the interest rate of the loan.
+    /// @dev    This function is restricted to the admin role.
+    ///
+    /// @param  interestRate_ The interest rate of the loan.
+    function setInterestRate(uint16 interestRate_) external onlyAdminRole {
+        interestRate = interestRate_;
+
+        emit InterestRateState(interestRate_);
     }
 }

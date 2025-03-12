@@ -21,6 +21,12 @@ interface IGenericClearinghouse {
 
     event YieldSwept(address indexed to, uint256 yieldReserve, uint256 yieldSReserve);
 
+    event InterestRateState(uint16 interestRate);
+
+    event MaxRewardPerLoanSet(uint256 maxRewardPerLoan);
+
+    event LoanToCollateralSet(uint16 loanToCollateral);
+
     // ===== STATE VARIABLES ===== //
 
     /// @notice The debt token of the clearinghouse.
