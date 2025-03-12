@@ -31,15 +31,15 @@ library SSRLib {
 
         // Second term: (n(n-1)/2)x^2
         uint256 x_squared = (x * x) / SSR_PRECISION;
-        sum += (n * (n - 1) / 2) * x_squared;
+        sum += ((n * (n - 1)) / 2) * x_squared;
 
         // Third term: (n(n-1)(n-2)/6)x^3
         uint256 x_cubed = (x_squared * x) / SSR_PRECISION;
-        sum += (n * (n - 1) * (n - 2) / 6) * x_cubed;
+        sum += ((n * (n - 1) * (n - 2)) / 6) * x_cubed;
 
         // Fourth term: (n(n-1)(n-2)(n-3)/24)x^4
         uint256 x_fourth = (x_cubed * x) / SSR_PRECISION;
-        sum += (n * (n - 1) * (n - 2) * (n - 3) / 24) * x_fourth;
+        sum += ((n * (n - 1) * (n - 2) * (n - 3)) / 24) * x_fourth;
 
         // Convert to basis points (100e2) with rounding
         sum = sum * ONE_HUNDRED_PERCENT + (SSR_PRECISION / 2);
