@@ -61,9 +61,9 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
         uint256 actualAmount = CDEPO.reduceDebt(10e18 + 1);
 
         // Assert balances
-        assertEq(reserveToken.balanceOf(address(godmode)), 10e18, "godmode: reserve token balance");
+        assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
         assertEq(reserveToken.balanceOf(address(CDEPO)), 0, "CDEPO: reserve token balance");
-        assertEq(vault.balanceOf(address(godmode)), 0, "godmode: vault balance");
+        assertEq(vault.balanceOf(address(godmode)), 10e18, "godmode: vault balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert borrowed amount
@@ -93,9 +93,9 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
         uint256 actualAmount = CDEPO.reduceDebt(amount);
 
         // Assert balances
-        assertEq(reserveToken.balanceOf(address(godmode)), 10e18, "godmode: reserve token balance");
+        assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
         assertEq(reserveToken.balanceOf(address(CDEPO)), 0, "CDEPO: reserve token balance");
-        assertEq(vault.balanceOf(address(godmode)), 0, "godmode: vault balance");
+        assertEq(vault.balanceOf(address(godmode)), 10e18, "godmode: vault balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert borrowed amount

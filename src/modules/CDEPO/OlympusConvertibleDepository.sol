@@ -258,13 +258,13 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Validate that the amount is within the vault balance
-        if (totalShares < VAULT.convertToShares(amount_)) revert CDEPO_InsufficientBalance();
+        if (totalShares < amount_) revert CDEPO_InsufficientBalance();
 
         // Update the debt
         debt[msg.sender] += amount_;
 
-        // Withdraw the underlying asset from the vault to the caller
-        VAULT.withdraw(amount_, msg.sender, address(this));
+        // Transfer the vault asset to the caller
+        VAULT.safeTransfer(msg.sender, amount_);
 
         // Emit the event
         emit DebtIncurred(msg.sender, amount_);
@@ -283,12 +283,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Update the borrowed amount
         debt[msg.sender] -= repaidAmount;
 
-        // Transfer the underlying asset to the contract
-        ASSET.safeTransferFrom(msg.sender, address(this), repaidAmount);
-
-        // Repay the borrowed amount
-        ASSET.safeApprove(address(VAULT), repaidAmount);
-        VAULT.deposit(repaidAmount, address(this));
+        // Transfer the vault asset from the caller to the contract
+        VAULT.safeTransferFrom(msg.sender, address(this), repaidAmount);
 
         // Emit the event
         emit DebtRepaid(msg.sender, repaidAmount);
@@ -302,7 +298,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Cap the reduced amount to the borrowed amount
     ///             - Reduces the debt
     ///             - Emits an event
-    ///             - Returns the amount of underlying asset that was reduced
+    ///             - Returns the amount of vault asset that was reduced
     function reduceDebt(
         uint256 amount_
     ) external virtual override permissioned returns (uint256 actualAmount) {
@@ -318,7 +314,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Emit the event
         emit DebtReduced(msg.sender, actualAmount);
 
-        // Return the amount of underlying asset that was reduced
+        // Return the amount of vault asset that was reduced
         return actualAmount;
     }
 

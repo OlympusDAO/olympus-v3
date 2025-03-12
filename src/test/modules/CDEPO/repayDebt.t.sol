@@ -12,13 +12,13 @@ contract RepayDebtCDEPOTest is CDEPOTest {
     //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
-    // when the caller has not approved spending of the underlying asset
+    // when the caller has not approved spending of the vault asset
     //  [X] it reverts
     // when the amount is greater than the borrowed amount
     //  [X] it repays the borrowed amount
     //  [X] it transfers the borrowed amount from the caller to the contract
     //  [X] it returns the repaid amount
-    // [X] it transfers the underlying asset to the contract
+    // [X] it transfers the vault asset to the contract
     // [X] it emits a Repaid event
     // [X] it updates the borrowed amount
 
@@ -69,10 +69,9 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDEPO(recipient, 10e18)
         givenAddressHasBorrowed(10e18)
-        givenReserveTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
+        givenVaultTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
     {
-        uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) +
-            vault.previewDeposit(10e18);
+        uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) + 10e18;
 
         // Call function
         vm.prank(address(godmode));
@@ -99,25 +98,20 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDEPO(recipient, 10e18)
         givenAddressHasBorrowed(10e18)
-        givenReserveTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
+        givenVaultTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
     {
         uint256 amount = bound(amount_, 2, 10e18);
 
-        uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) +
-            vault.convertToShares(amount);
+        uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) + amount;
 
         // Call function
         vm.prank(address(godmode));
         uint256 repaidAmount = CDEPO.repayDebt(amount);
 
         // Assert balances
-        assertEq(
-            reserveToken.balanceOf(address(godmode)),
-            10e18 - amount,
-            "godmode: reserve token balance"
-        );
+        assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
         assertEq(reserveToken.balanceOf(address(CDEPO)), 0, "CDEPO: reserve token balance");
-        assertEq(vault.balanceOf(address(godmode)), 0, "godmode: vault balance");
+        assertEq(vault.balanceOf(address(godmode)), 10e18 - amount, "godmode: vault balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert debt
