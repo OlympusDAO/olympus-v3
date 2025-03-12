@@ -35,6 +35,12 @@ interface ICoolerFactory {
 
     // ===== AUX FUNCTIONS ===== //
 
+    /// @notice Check if a cooler was created by the factory.
+    ///
+    /// @param  cooler_ The cooler address.
+    /// @return created True if the cooler was created by the factory, false otherwise.
+    function created(address cooler_) external view returns (bool);
+
     /// @notice Get the cooler for a given user <> collateral <> debt combination.
     ///
     /// @param  user_       The user address.

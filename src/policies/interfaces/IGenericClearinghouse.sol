@@ -3,7 +3,6 @@ pragma solidity ^0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
-import {ICoolerFactory} from "src/external/cooler/interfaces/ICoolerFactory.sol";
 
 interface IGenericClearinghouse {
     // ===== ERRORS ===== //
@@ -34,9 +33,6 @@ interface IGenericClearinghouse {
 
     /// @notice The collateral token of the clearinghouse.
     function collateralToken() external view returns (IERC20);
-
-    /// @notice The factory for generating new Coolers.
-    function coolerFactory() external view returns (ICoolerFactory);
 
     // ===== LENDING FUNCTIONS ===== //
 

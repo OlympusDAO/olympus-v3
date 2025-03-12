@@ -10,7 +10,6 @@ import {FullMath} from "src/libraries/FullMath.sol";
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
-import {ICoolerFactory} from "src/external/cooler/interfaces/ICoolerFactory.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
 
 // Bophades
@@ -31,8 +30,6 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     ERC20 internal immutable _debtToken;
 
     ERC4626 internal immutable _sDebtToken;
-
-    ICoolerFactory public immutable coolerFactory;
 
     /// @inheritdoc IGenericClearinghouse
     uint256 public principalReceivables;
@@ -81,7 +78,6 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
         _sDebtToken = ERC4626(sDebtToken_);
         _debtToken = ERC20(address(_sDebtToken.asset()));
-        coolerFactory = ICoolerFactory(coolerFactory_);
 
         maxRewardPerLoan = maxRewardPerLoan_;
         loanToCollateral = loanToCollateral_;
