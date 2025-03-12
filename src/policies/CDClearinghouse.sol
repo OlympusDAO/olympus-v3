@@ -6,11 +6,13 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SSRLib} from "src/libraries/SSR.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
+import {ISUsds} from "src/interfaces/maker-dao/ISUsds.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -27,9 +29,9 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     // ===== STATE VARIABLES ===== //
 
-    ERC20 internal immutable _debtToken;
+    ERC20 internal immutable _DEBT_TOKEN;
 
-    ERC4626 internal immutable _sDebtToken;
+    ERC4626 internal immutable _SDEBT_TOKEN;
 
     /// @inheritdoc IGenericClearinghouse
     uint256 public principalReceivables;
@@ -44,6 +46,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     uint256 public maxRewardPerLoan;
 
     /// @notice The interest rate of the loan.
+    ///         This interest rate will be added to the Sky Savings Rate (SSR) of the debt token to calculate the APR of the loan.
     /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
     uint16 public interestRate;
 
@@ -76,8 +79,11 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         uint16 loanToCollateral_,
         uint16 interestRate_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
-        _sDebtToken = ERC4626(sDebtToken_);
-        _debtToken = ERC20(address(_sDebtToken.asset()));
+        _SDEBT_TOKEN = ERC4626(sDebtToken_);
+        _DEBT_TOKEN = ERC20(address(_SDEBT_TOKEN.asset()));
+
+        // Validate that it is sUSDS with an ssr() function
+        if (ISUsds(sDebtToken_).ssr() == 0) revert InvalidParams("sDebtToken");
 
         maxRewardPerLoan = maxRewardPerLoan_;
         loanToCollateral = loanToCollateral_;
@@ -152,7 +158,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         // Validate cooler collateral and debt tokens.
         if (
             address(cooler_.collateral()) != address(CDEPO) ||
-            address(cooler_.debt()) != address(_debtToken)
+            address(cooler_.debt()) != address(_DEBT_TOKEN)
         ) revert BadEscrow();
 
         // Transfer in collateral owed
@@ -173,7 +179,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         CDEPO.incurDebt(amount_);
 
         // Clear the created loan request by providing enough reserve.
-        _debtToken.approve(address(cooler_), amount_);
+        _DEBT_TOKEN.approve(address(cooler_), amount_);
         uint256 loanID = cooler_.clearRequest(reqID, address(this), true);
 
         return loanID;
@@ -190,7 +196,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         uint256 interestBase = interestForLoan(loan.principal, loan.request.duration);
 
         // Transfer in extension interest from the caller.
-        _debtToken.transferFrom(msg.sender, address(this), interestBase * times_);
+        _DEBT_TOKEN.transferFrom(msg.sender, address(this), interestBase * times_);
 
         // Signal to cooler that loan should be extended.
         cooler_.extendLoanTerms(loanId_, times_);
@@ -264,14 +270,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         _sweepYield();
     }
 
-    /// @notice Sweeps yield held in the Clearinghouse into the TRSRY as `_sDebtToken`
+    /// @notice Sweeps yield held in the Clearinghouse into the TRSRY as `_SDEBT_TOKEN`
     function _sweepYield() internal {
         // This contract does not hold any reserve or sReserve tokens as part of the operations
         // Any balances are therefore yield and should be swept to the TRSRY contract
-        uint256 yieldReserve = _debtToken.balanceOf(address(this));
-        uint256 yieldSReserve = _sDebtToken.previewDeposit(yieldReserve);
-        _debtToken.approve(address(_sDebtToken), yieldReserve);
-        _sDebtToken.deposit(yieldReserve, address(TRSRY));
+        uint256 yieldReserve = _DEBT_TOKEN.balanceOf(address(this));
+        uint256 yieldSReserve = _SDEBT_TOKEN.previewDeposit(yieldReserve);
+        _DEBT_TOKEN.approve(address(_SDEBT_TOKEN), yieldReserve);
+        _SDEBT_TOKEN.deposit(yieldReserve, address(TRSRY));
 
         // Emit event
         emit YieldSwept(address(TRSRY), yieldReserve, yieldSReserve);
@@ -293,7 +299,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             : 0;
 
         // Repay the debt token to CDEPO
-        _debtToken.safeApprove(address(CDEPO), principalPaid_);
+        _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
         CDEPO.repayDebt(principalPaid_);
 
         // Sweep the yield
@@ -319,8 +325,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     }
 
     /// @inheritdoc IGenericClearinghouse
+    /// @dev    The configured interest rate is applied on top of the Sky Savings Rate (SSR)
     function interestForLoan(uint256 principal_, uint256 duration_) public view returns (uint256) {
-        uint256 interestPercent = uint256(interestRate).mulDiv(duration_, 365 days);
+        // Configured interest rate + SSR (as an APR)
+        uint16 annualInterestRate = interestRate +
+            SSRLib.ssrToApr(ISUsds(address(_SDEBT_TOKEN)).ssr());
+
+        uint256 interestPercent = uint256(annualInterestRate).mulDiv(duration_, 365 days);
         return principal_.mulDiv(interestPercent, ONE_HUNDRED_PERCENT);
     }
 
@@ -332,7 +343,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     // ===== OVERRIDE FUNCTIONS ===== //
 
     function debtToken() external view override returns (IERC20) {
-        return IERC20(address(_debtToken));
+        return IERC20(address(_DEBT_TOKEN));
     }
 
     function collateralToken() external view override returns (IERC20) {
@@ -371,10 +382,10 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         emit LoanToCollateralSet(loanToCollateral_);
     }
 
-    /// @notice Sets the interest rate of the loan.
+    /// @notice Sets the interest rate of loans, in addition to the Sky Savings Rate (SSR).
     /// @dev    This function is restricted to the admin role.
     ///
-    /// @param  interestRate_ The interest rate of the loan.
+    /// @param  interestRate_ The interest rate of loans.
     function setInterestRate(uint16 interestRate_) external onlyAdminRole {
         interestRate = interestRate_;
 
