@@ -134,24 +134,6 @@ abstract contract CDEPOTest is Test {
         _;
     }
 
-    function _approveVaultTokenSpending(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) internal {
-        vm.prank(owner_);
-        vault.approve(spender_, amount_);
-    }
-
-    modifier givenVaultTokenSpendingIsApproved(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) {
-        _approveVaultTokenSpending(owner_, spender_, amount_);
-        _;
-    }
-
     function _approveConvertibleDepositTokenSpending(
         address owner_,
         address spender_,

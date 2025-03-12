@@ -14,7 +14,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
     //  [X] it reverts
     // when the amount is greater than the balance of the contract
     //  [X] it reverts
-    // [X] it transfers the vault asset to the caller
+    // [X] it transfers the underlying asset to the caller
     // [X] it emits a DebtIncurred event
     // [X] it updates the borrowed amount
 
@@ -67,7 +67,8 @@ contract IncurDebtCDEPOTest is CDEPOTest {
     {
         uint256 amount = bound(amount_, 2, 10e18);
 
-        uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) - amount;
+        uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) -
+            vault.previewWithdraw(amount);
 
         // Expect event
         vm.expectEmit();
@@ -78,9 +79,13 @@ contract IncurDebtCDEPOTest is CDEPOTest {
         CDEPO.incurDebt(amount);
 
         // Assert balances
-        assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
+        assertEq(
+            reserveToken.balanceOf(address(godmode)),
+            amount,
+            "godmode: reserve token balance"
+        );
         assertEq(reserveToken.balanceOf(address(CDEPO)), 0, "CDEPO: reserve token balance");
-        assertEq(vault.balanceOf(address(godmode)), amount, "godmode: vault balance");
+        assertEq(vault.balanceOf(address(godmode)), 0, "godmode: vault balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert borrowed amount

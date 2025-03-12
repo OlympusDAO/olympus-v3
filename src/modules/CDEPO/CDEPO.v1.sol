@@ -172,23 +172,23 @@ abstract contract CDEPOv1 is Module, ERC20 {
 
     // ========== LENDING ========== //
 
-    /// @notice Allows the permissioned caller to borrow the vault asset
+    /// @notice Allows the permissioned caller to borrow the underlying asset
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the caller is permissioned
-    ///         - Transfers the vault asset from the contract to the caller
+    ///         - Transfers the underlying asset from the contract to the caller
     ///         - Emits a `DebtIncurred` event
     ///
-    /// @param  amount_   The amount of vault asset to borrow
+    /// @param  amount_   The amount of underlying asset to borrow
     function incurDebt(uint256 amount_) external virtual;
 
-    /// @notice Allows the permissioned caller to repay an amount of the vault asset
+    /// @notice Allows the permissioned caller to repay an amount of the underlying asset
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the caller is permissioned
-    ///         - Transfers the vault asset from the caller to the contract
+    ///         - Transfers the underlying asset from the caller to the contract
     ///         - Emits a `DebtRepaid` event
     ///
-    /// @param  amount_         The amount of vault asset to repay
-    /// @return repaidAmount    The amount of vault asset that was repaid
+    /// @param  amount_         The amount of underlying asset to repay
+    /// @return repaidAmount    The amount of underlying asset that was repaid
     function repayDebt(uint256 amount_) external virtual returns (uint256 repaidAmount);
 
     /// @notice Allows the permissioned caller to reduce the debt of a borrower
@@ -198,14 +198,14 @@ abstract contract CDEPOv1 is Module, ERC20 {
     ///         - Updates the debt of the borrower
     ///         - Emits a `DebtSet` event
     ///
-    /// @param  amount_         The amount of vault asset to reduce the debt by
-    /// @return borrowedAmount  The updated amount of vault asset that has been borrowed by the given address
+    /// @param  amount_         The amount of underlying asset to reduce the debt by
+    /// @return borrowedAmount  The updated amount of underlying asset that has been borrowed by the given address
     function reduceDebt(uint256 amount_) external virtual returns (uint256 borrowedAmount);
 
-    /// @notice Returns the amount of vault asset that has been borrowed by the given address
+    /// @notice Returns the amount of underlying asset that has been borrowed by the given address
     ///
     /// @param  borrower_       The address to check the borrowed amount for
-    /// @return borrowedAmount  The amount of vault asset that has been borrowed by the given address
+    /// @return borrowedAmount  The amount of underlying asset that has been borrowed by the given address
     function debt(address borrower_) external view virtual returns (uint256 borrowedAmount);
 
     // ========== YIELD MANAGER ========== //
