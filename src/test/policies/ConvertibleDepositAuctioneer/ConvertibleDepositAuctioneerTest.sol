@@ -128,7 +128,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_
-    ) internal {
+    ) internal view {
         IConvertibleDepositAuctioneer.AuctionParameters memory auctionParameters = auctioneer
             .getAuctionParameters();
 
@@ -142,7 +142,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 price_,
         uint256 tickSize_,
         uint48 lastUpdate_
-    ) internal {
+    ) internal view {
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick();
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
@@ -151,7 +151,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
     }
 
-    function _assertDayState(uint256 deposits_, uint256 convertible_) internal {
+    function _assertDayState(uint256 deposits_, uint256 convertible_) internal view {
         IConvertibleDepositAuctioneer.Day memory day = auctioneer.getDayState();
 
         assertEq(day.deposits, deposits_, "deposits");
@@ -166,7 +166,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         int256 resultFive_,
         int256 resultSix_,
         int256 resultSeven_
-    ) internal {
+    ) internal view {
         int256[] memory auctionResults = auctioneer.getAuctionResults();
 
         assertEq(auctionResults.length, 7, "auction results length");
@@ -179,7 +179,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(auctionResults[6], resultSeven_, "result seven");
     }
 
-    function _assertAuctionResultsEmpty(uint8 length_) internal {
+    function _assertAuctionResultsEmpty(uint8 length_) internal view {
         int256[] memory auctionResults = auctioneer.getAuctionResults();
 
         assertEq(auctionResults.length, length_, "auction results length");
@@ -188,7 +188,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         }
     }
 
-    function _assertAuctionResults(int256[] memory auctionResults_) internal {
+    function _assertAuctionResults(int256[] memory auctionResults_) internal view {
         int256[] memory auctionResults = auctioneer.getAuctionResults();
 
         assertEq(auctionResults.length, auctionResults_.length, "auction results length");
@@ -201,7 +201,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         }
     }
 
-    function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal {
+    function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal view {
         assertEq(auctioneer.getAuctionResultsNextIndex(), nextIndex_, "next index");
     }
 
