@@ -16,11 +16,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 
 // Bophades
-import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
-import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
+import {ICoolerFactory} from "src/external/cooler/interfaces/ICoolerFactory.sol";
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 
 /// @title  CoolerV2Migrator
@@ -90,6 +89,9 @@ contract CoolerV2Migrator is
     /// @notice The Cooler V2 contract
     IMonoCooler public immutable COOLERV2;
 
+    /// @notice The CoolerFactory contract
+    ICoolerFactory public immutable COOLER_FACTORY;
+
     /// @notice This constant is used when iterating through the loans of a Cooler
     /// @dev    This is used to prevent infinite loops, and is an appropriate upper bound
     ///         as the maximum number of loans seen per Cooler is less than 50.
@@ -105,7 +107,8 @@ contract CoolerV2Migrator is
         address gohm_,
         address migrator_,
         address flash_,
-        address chreg_
+        address chreg_,
+        address coolerFactory_
     ) Owned(owner_) {
         // Validate
         if (coolerV2_ == address(0)) revert Params_InvalidAddress("coolerV2");
@@ -115,8 +118,10 @@ contract CoolerV2Migrator is
         if (migrator_ == address(0)) revert Params_InvalidAddress("migrator");
         if (flash_ == address(0)) revert Params_InvalidAddress("flash");
         if (chreg_ == address(0)) revert Params_InvalidAddress("chreg");
+        if (coolerFactory_ == address(0)) revert Params_InvalidAddress("coolerFactory");
 
         COOLERV2 = IMonoCooler(coolerV2_);
+        COOLER_FACTORY = ICoolerFactory(coolerFactory_);
 
         // Validate tokens
         if (address(COOLERV2.collateralToken()) != gohm_) revert Params_InvalidAddress("gohm");
@@ -136,13 +141,35 @@ contract CoolerV2Migrator is
     function previewConsolidate(
         address[] memory coolers_
     ) external view onlyEnabled returns (uint256 collateralAmount, uint256 borrowAmount) {
+        address[] memory clearinghouses = _getClearinghouses();
+        address[] memory coolers = new address[](coolers_.length);
+
         // Determine the totals
         for (uint256 i; i < coolers_.length; i++) {
+            // Check that the CoolerFactory created the Cooler
+            if (!_isValidCooler(coolers_[i])) revert Params_InvalidCooler();
+
+            // Check that the Cooler is not already in the array
+            for (uint256 j; j < coolers.length; j++) {
+                if (coolers[j] == coolers_[i]) revert Params_DuplicateCooler();
+            }
+
+            // Add the Cooler to the array
+            coolers[i] = coolers_[i];
+
             Cooler cooler = Cooler(coolers_[i]);
 
-            (uint256 principal, uint256 interest, uint256 collateral, , ) = _getDebtForCooler(
-                cooler
-            );
+            (
+                uint256 principal,
+                uint256 interest,
+                uint256 collateral,
+                address debtToken,
+
+            ) = _getDebtForCooler(cooler, clearinghouses);
+
+            // Check that the debt token is DAI or USDS
+            if (debtToken != address(DAI) && debtToken != address(USDS))
+                revert Params_InvalidCooler();
 
             collateralAmount += collateral;
             borrowAmount += principal + interest;
@@ -155,10 +182,9 @@ contract CoolerV2Migrator is
 
     /// @inheritdoc ICoolerV2Migrator
     /// @dev    This function will revert if:
-    ///         - The number of elements in `clearinghouses_` and `coolers_` are not the same.
     ///         - Any of the Coolers are not owned by the caller.
-    ///         - Any of the Clearinghouses are not owned by the Olympus protocol.
-    ///         - Any of the Coolers have not been created by the Clearinghouse's CoolerFactory.
+    ///         - Any of the Coolers have not been created by the CoolerFactory.
+    ///         - Any of the Coolers have a different lender than an Olympus Clearinghouse.
     ///         - A duplicate Cooler is provided.
     ///         - The owner of the destination Cooler V2 has not provided authorization for this contract to manage their Cooler V2 position.
     ///         - The caller has not approved this contract to spend the collateral token, gOHM.
@@ -166,60 +192,58 @@ contract CoolerV2Migrator is
     ///         - Re-entrancy is detected.
     function consolidate(
         address[] memory coolers_,
-        address[] memory clearinghouses_,
         address newOwner_,
         IMonoCooler.Authorization memory authorization_,
         IMonoCooler.Signature calldata signature_,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests_
     ) external onlyEnabled nonReentrant {
-        // Validate that the number of clearinghouses and coolers are the same
-        if (clearinghouses_.length != coolers_.length) revert Params_InvalidArrays();
-
         // Validate that the Clearinghouses and Coolers are protocol-owned
         // Also calculate the principal and interest for each cooler
-        CoolerData[] memory coolerData = new CoolerData[](clearinghouses_.length);
+        CoolerData[] memory coolerData = new CoolerData[](coolers_.length);
 
         // Keep track of the total principal and interest for each debt token
         CoolerTotal memory totals;
-        for (uint256 i; i < clearinghouses_.length; i++) {
-            // Check that the Clearinghouse is owned by the protocol
-            if (!_isValidClearinghouse(clearinghouses_[i])) revert Params_InvalidClearinghouse();
+        {
+            address[] memory clearinghouses = _getClearinghouses();
 
-            // Check that the Clearinghouse's CoolerFactory created the Cooler
-            if (!_isValidCooler(clearinghouses_[i], coolers_[i])) revert Params_InvalidCooler();
+            for (uint256 i; i < coolers_.length; i++) {
+                // Check that the CoolerFactory created the Cooler
+                if (!_isValidCooler(coolers_[i])) revert Params_InvalidCooler();
 
-            // Check that the Cooler is owned by the caller
-            Cooler cooler = Cooler(coolers_[i]);
-            if (cooler.owner() != msg.sender) revert Only_CoolerOwner();
+                // Check that the Cooler is owned by the caller
+                Cooler cooler = Cooler(coolers_[i]);
+                if (cooler.owner() != msg.sender) revert Only_CoolerOwner();
 
-            // Check that the Cooler is not already in the array
-            for (uint256 j; j < coolerData.length; j++) {
-                if (address(coolerData[j].cooler) == coolers_[i]) revert Params_DuplicateCooler();
-            }
+                // Check that the Cooler is not already in the array
+                for (uint256 j; j < coolerData.length; j++) {
+                    if (address(coolerData[j].cooler) == coolers_[i])
+                        revert Params_DuplicateCooler();
+                }
 
-            // Determine the total principal and interest for the cooler
-            (
-                uint256 coolerPrincipal,
-                uint256 coolerInterest,
-                ,
-                address debtToken,
-                uint8 numLoans
-            ) = _getDebtForCooler(cooler);
-            coolerData[i] = CoolerData({
-                cooler: cooler,
-                debtToken: ERC20(debtToken),
-                numLoans: numLoans
-            });
+                // Determine the total principal and interest for the cooler
+                (
+                    uint256 coolerPrincipal,
+                    uint256 coolerInterest,
+                    ,
+                    address debtToken,
+                    uint8 numLoans
+                ) = _getDebtForCooler(cooler, clearinghouses);
+                coolerData[i] = CoolerData({
+                    cooler: cooler,
+                    debtToken: ERC20(debtToken),
+                    numLoans: numLoans
+                });
 
-            if (debtToken == address(DAI)) {
-                totals.daiPrincipal += coolerPrincipal;
-                totals.daiInterest += coolerInterest;
-            } else if (debtToken == address(USDS)) {
-                totals.usdsPrincipal += coolerPrincipal;
-                totals.usdsInterest += coolerInterest;
-            } else {
-                // Unsupported debt token
-                revert Params_InvalidCooler();
+                if (debtToken == address(DAI)) {
+                    totals.daiPrincipal += coolerPrincipal;
+                    totals.daiInterest += coolerInterest;
+                } else if (debtToken == address(USDS)) {
+                    totals.usdsPrincipal += coolerPrincipal;
+                    totals.usdsInterest += coolerInterest;
+                } else {
+                    // Unsupported debt token
+                    revert Params_InvalidCooler();
+                }
             }
         }
 
@@ -379,7 +403,8 @@ contract CoolerV2Migrator is
     // ========= HELPER FUNCTIONS ========= //
 
     function _getDebtForCooler(
-        Cooler cooler_
+        Cooler cooler_,
+        address[] memory clearinghouses_
     )
         internal
         view
@@ -398,6 +423,9 @@ contract CoolerV2Migrator is
         uint8 i;
         for (i; i < MAX_LOANS; i++) {
             try cooler_.getLoan(i) returns (Cooler.Loan memory loan) {
+                // Each loan is issued by a Clearinghouse, so we need to check that the Clearinghouse is valid
+                if (!_inArray(clearinghouses_, loan.lender)) revert Params_InvalidCooler();
+
                 // Interest is paid down first, so if the principal is 0, the loan has been paid off
                 if (loan.principal > 0) {
                     coolerPrincipal += loan.principal;
@@ -412,31 +440,35 @@ contract CoolerV2Migrator is
         return (coolerPrincipal, coolerInterest, coolerCollateral, debtToken, i);
     }
 
-    /// @notice Check if a given cooler was created by the CoolerFactory for a Clearinghouse
-    /// @dev    This function assumes that the authenticity of the Clearinghouse is already verified
+    /// @notice Check if a given cooler was created by the CoolerFactory
     ///
-    /// @param  clearinghouse_ Clearinghouse contract
     /// @param  cooler_       Cooler contract
-    /// @return bool          Whether the cooler was created by the CoolerFactory for the Clearinghouse
-    function _isValidCooler(address clearinghouse_, address cooler_) internal view returns (bool) {
-        Clearinghouse clearinghouse = Clearinghouse(clearinghouse_);
-        CoolerFactory coolerFactory = CoolerFactory(clearinghouse.factory());
-
-        return coolerFactory.created(cooler_);
+    /// @return bool          Whether the cooler was created by the CoolerFactory
+    function _isValidCooler(address cooler_) internal view returns (bool) {
+        return COOLER_FACTORY.created(cooler_);
     }
 
-    function _isValidClearinghouse(address clearinghouse_) internal view returns (bool) {
-        // We check against the registry (not just active), as repayments are still allowed when a Clearinghouse is deactivated
-        uint256 registryCount = CHREG.registryCount();
-        bool found;
-        for (uint256 i; i < registryCount; i++) {
-            if (CHREG.registry(i) == clearinghouse_) {
-                found = true;
-                break;
+    function _inArray(address[] memory array_, address item_) internal pure returns (bool) {
+        // Check that the item is in the list
+        for (uint256 i; i < array_.length; i++) {
+            if (array_[i] == item_) {
+                return true;
             }
         }
 
-        return found;
+        return false;
+    }
+
+    /// @notice Get all of the clearinghouses in the registry
+    ///
+    /// @return clearinghouses The list of clearinghouses
+    function _getClearinghouses() internal view returns (address[] memory clearinghouses) {
+        uint256 registryCount = CHREG.registryCount();
+        clearinghouses = new address[](registryCount);
+        for (uint256 i; i < registryCount; i++) {
+            clearinghouses[i] = CHREG.registry(i);
+        }
+        return clearinghouses;
     }
 
     // ============ ENABLER FUNCTIONS ============ //

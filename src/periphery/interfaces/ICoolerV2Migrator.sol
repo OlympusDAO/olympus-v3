@@ -18,9 +18,6 @@ interface ICoolerV2Migrator {
     /// @notice Thrown when the Cooler is not owned by the caller
     error Only_CoolerOwner();
 
-    /// @notice Thrown when the number of Clearinghouses does not equal the number of Coolers
-    error Params_InvalidArrays();
-
     /// @notice Thrown when the Clearinghouse is not valid
     error Params_InvalidClearinghouse();
 
@@ -56,21 +53,19 @@ interface ICoolerV2Migrator {
     ///         It is expected that the caller will have already provided approval for this contract to spend the required tokens. See `previewConsolidate()` for more details.
     ///
     /// @dev    The implementing function is expected to handle the following:
-    ///         - Ensure that `clearinghouses_` and `coolers_` are valid
+    ///         - Ensure that `coolers_` are valid
     ///         - Ensure that the caller is the owner of the Coolers
     ///         - Repay all loans in the Coolers
     ///         - Deposit the collateral into Cooler V2
     ///         - Borrow the required amount from Cooler V2 to repay the Cooler V1 loans
     ///
     /// @param  coolers_            The Coolers from which the loans will be migrated.
-    /// @param  clearinghouses_     The respective Clearinghouses that created and issued the loans in `coolers_`. This array must be the same length as `coolers_`.
     /// @param  newOwner_           Address of the owner of the Cooler V2 position. This can be the same as the caller, or a different address.
     /// @param  authorization_      Authorization parameters for the new owner. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
     /// @param  signature_          Authorization signature for the new owner. Ignored if `authorization_.account` is the zero address.
     /// @param  delegationRequests_ Delegation requests for the new owner.
     function consolidate(
         address[] memory coolers_,
-        address[] memory clearinghouses_,
         address newOwner_,
         IMonoCooler.Authorization memory authorization_,
         IMonoCooler.Signature calldata signature_,

@@ -19,6 +19,10 @@ import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 import {ICoolerV2Migrator} from "src/periphery/interfaces/ICoolerV2Migrator.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
 contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     CoolerV2Migrator internal migrator;
@@ -87,7 +91,6 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         // Grant roles
         rolesAdmin.grantRole("cooler_overseer", OVERSEER);
         rolesAdmin.grantRole("emergency_shutdown", OVERSEER);
-        rolesAdmin.grantRole("contract_registry_admin", OVERSEER);
 
         // Install additional modules
         clearinghouseRegistry = new OlympusClearinghouseRegistry(
@@ -147,7 +150,8 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             address(gohm),
             address(daiMigrator),
             address(flashLender),
-            address(clearinghouseRegistry)
+            address(clearinghouseRegistry),
+            address(coolerFactory)
         );
 
         // Enable the policy
@@ -220,7 +224,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     function _getCoolerArrays(
         bool includeUsds_,
         bool includeDai_
-    ) internal view returns (address[] memory coolers, address[] memory clearinghouses) {
+    ) internal view returns (address[] memory coolers) {
         uint256 length;
         if (includeUsds_) {
             length++;
@@ -230,21 +234,18 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         }
 
         coolers = new address[](length);
-        clearinghouses = new address[](length);
         uint256 index;
 
         if (includeUsds_) {
             coolers[index] = clearinghouseToCooler[address(clearinghouseUsds)];
-            clearinghouses[index] = address(clearinghouseUsds);
             index++;
         }
         if (includeDai_) {
             coolers[index] = clearinghouseToCooler[address(clearinghouseDai)];
-            clearinghouses[index] = address(clearinghouseDai);
             index++;
         }
 
-        return (coolers, clearinghouses);
+        return coolers;
     }
 
     function _takeLoan(address wallet_, bool isUsds_, uint256 collateralAmount_) internal {
@@ -397,6 +398,71 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _;
     }
 
+    function _fundTreasury(MockERC4626 vaultToken_, address trsry_) internal {
+        MockERC20(address(vaultToken_.asset())).mint(trsry_, INITIAL_TRSRY_MINT);
+        // Deposit all reserves into the DSR
+        vm.startPrank(trsry_);
+        vaultToken_.asset().approve(address(vaultToken_), INITIAL_TRSRY_MINT);
+        vaultToken_.deposit(INITIAL_TRSRY_MINT, trsry_);
+        vm.stopPrank();
+    }
+
+    function _createNewClearinghouse(
+        MockERC4626 vaultToken_
+    ) internal returns (Clearinghouse newClearinghouse) {
+        vm.prank(EXECUTOR);
+        Kernel newKernel = new Kernel();
+
+        // Modules
+        OlympusMinter newMintr = new OlympusMinter(newKernel, address(ohm));
+        OlympusRoles newRoles = new OlympusRoles(newKernel);
+        OlympusTreasury newTrsry = new OlympusTreasury(newKernel);
+        OlympusClearinghouseRegistry newChreg = new OlympusClearinghouseRegistry(
+            newKernel,
+            address(0),
+            new address[](0)
+        );
+        vm.startPrank(EXECUTOR);
+        newKernel.executeAction(Actions.InstallModule, address(newMintr));
+        newKernel.executeAction(Actions.InstallModule, address(newRoles));
+        newKernel.executeAction(Actions.InstallModule, address(newTrsry));
+        newKernel.executeAction(Actions.InstallModule, address(newChreg));
+        vm.stopPrank();
+
+        // Policies
+        newClearinghouse = new Clearinghouse(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(vaultToken_),
+            address(coolerFactory),
+            address(newKernel)
+        );
+        RolesAdmin newRolesAdmin = new RolesAdmin(newKernel);
+        vm.startPrank(EXECUTOR);
+        newKernel.executeAction(Actions.ActivatePolicy, address(newClearinghouse));
+        newKernel.executeAction(Actions.ActivatePolicy, address(newRolesAdmin));
+        vm.stopPrank();
+
+        // Activate the Clearinghouse
+        newRolesAdmin.grantRole("cooler_overseer", OVERSEER);
+        vm.startPrank(OVERSEER);
+        newClearinghouse.activate();
+        vm.stopPrank();
+
+        vm.label(address(newKernel), "New Kernel");
+        vm.label(address(newMintr), "New MINTR");
+        vm.label(address(newRoles), "New ROLES");
+        vm.label(address(newTrsry), "New TRSRY");
+        vm.label(address(newChreg), "New CHREG");
+        vm.label(address(newClearinghouse), "New Clearinghouse");
+
+        // Fund treasury
+        _fundTreasury(vaultToken_, address(newTrsry));
+
+        return newClearinghouse;
+    }
+
     // ========= ASSERTIONS ========= //
 
     function _expectRevert_disabled() internal {
@@ -465,6 +531,14 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // previewConsolidate
     // given the contract is disabled
     //  [X] it reverts
+    // given any cooler is not created by the CoolerFactory
+    //  [X] it reverts
+    // given the lender for any loan is not an Olympus clearinghouse
+    //  [X] it reverts
+    // given any cooler is a duplicate
+    //  [X] it reverts
+    // given the Cooler debt token is not DAI or USDS
+    //  [X] it reverts
     // given there are no loans
     //  [X] it returns 0 collateral
     //  [X] it returns 0 borrowed
@@ -480,7 +554,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenDisabled
     {
         // Prepare input data
-        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Expect revert
         _expectRevert_disabled();
@@ -489,12 +563,140 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         migrator.previewConsolidate(coolers);
     }
 
+    function test_previewConsolidate_givenCoolerDifferentFactory_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+    {
+        // Create a new Cooler from a different CoolerFactory
+        CoolerFactory newCoolerFactory = new CoolerFactory();
+        vm.startPrank(USER);
+        address newCooler = CoolerFactory(newCoolerFactory).generateCooler(gohm, usds);
+        vm.stopPrank();
+
+        // Prepare input data
+        address[] memory coolers = _getCoolerArrays(true, false);
+
+        address[] memory coolersWithNew = new address[](2);
+        coolersWithNew[0] = coolers[0];
+        coolersWithNew[1] = newCooler;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidCooler.selector));
+
+        // Call function
+        migrator.previewConsolidate(coolersWithNew);
+    }
+
+    function test_previewConsolidate_whenDuplicateCooler_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasLoan(USER, true, 1e18)
+    {
+        // Prepare input data
+        address[] memory coolers = _getCoolerArrays(true, false);
+
+        // Add duplicate entries
+        address[] memory coolersWithDuplicate = new address[](2);
+        coolersWithDuplicate[0] = coolers[0];
+        coolersWithDuplicate[1] = coolers[0];
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_DuplicateCooler.selector));
+
+        // Call function
+        migrator.previewConsolidate(coolersWithDuplicate);
+    }
+
+    function test_previewConsolidate_givenDebtTokenDifferent_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+    {
+        // Create a new Clearinghouse with a different debt token
+        MockERC20 newDebtToken = new MockERC20("New Debt Token", "NDT", 18);
+        MockERC4626 newDebtTokenVault = new MockERC4626(
+            newDebtToken,
+            "New Debt Token Vault",
+            "NDTV"
+        );
+        vm.label(address(newDebtTokenVault), "New Debt Token Vault");
+        vm.label(address(newDebtToken), "New Debt Token");
+
+        Clearinghouse newClearinghouse = new Clearinghouse(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(newDebtTokenVault),
+            address(coolerFactory),
+            address(kernel)
+        );
+        vm.startPrank(EXECUTOR);
+        kernel.executeAction(Actions.ActivatePolicy, address(newClearinghouse));
+        vm.stopPrank();
+        vm.startPrank(OVERSEER);
+        newClearinghouse.activate();
+        vm.stopPrank();
+
+        // Fund treasury
+        _fundTreasury(newDebtTokenVault, address(TRSRY));
+
+        vm.label(address(newClearinghouse), "New Clearinghouse");
+
+        // Take a loan with the new Clearinghouse
+        vm.startPrank(USER);
+        address newCooler = Clearinghouse(newClearinghouse).factory().generateCooler(
+            gohm,
+            newDebtToken
+        );
+        vm.label(address(newCooler), "New Cooler");
+        gohm.approve(address(newClearinghouse), 1e18);
+        (uint256 principal, ) = newClearinghouse.getLoanForCollateral(1e18);
+        newClearinghouse.lendToCooler(Cooler(newCooler), principal);
+        vm.stopPrank();
+
+        // Prepare input data
+        address[] memory coolers = new address[](1);
+        coolers[0] = newCooler;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidCooler.selector));
+
+        // Call function
+        migrator.previewConsolidate(coolers);
+    }
+
+    function test_previewConsolidate_loanHasDifferentLender_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+    {
+        Clearinghouse newClearinghouse = _createNewClearinghouse(susds);
+
+        // Take a loan with the new Clearinghouse
+        vm.startPrank(USER);
+        address newCooler = Clearinghouse(newClearinghouse).factory().generateCooler(gohm, usds);
+        vm.label(address(newCooler), "New Cooler");
+        gohm.approve(address(newClearinghouse), 1e18);
+        (uint256 principal, ) = newClearinghouse.getLoanForCollateral(1e18);
+        newClearinghouse.lendToCooler(Cooler(newCooler), principal);
+        vm.stopPrank();
+
+        // Prepare input data
+        address[] memory coolers = new address[](1);
+        coolers[0] = newCooler;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidCooler.selector));
+
+        // Call function
+        migrator.previewConsolidate(coolers);
+    }
+
     function test_previewConsolidate_givenNoLoans() public {
         // Create a Cooler, but no loan
         _createCooler(USER, true);
 
         // Prepare input data
-        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Function
         (uint256 collateralAmount, uint256 borrowedAmount) = migrator.previewConsolidate(coolers);
@@ -512,7 +714,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenWalletHasRepaidLoan(USER, true, 0)
     {
         // Prepare input data
-        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         Cooler.Loan memory loanOne = _getLoan(true, 1);
         uint256 loanOnePayable = loanOne.principal + loanOne.interestDue;
@@ -532,7 +734,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenWalletHasLoan(USER, true, 2e18)
     {
         // Prepare input data
-        (address[] memory coolers, ) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         Cooler.Loan memory loanZero = _getLoan(true, 0);
         uint256 loanZeroPayable = loanZero.principal + loanZero.interestDue;
@@ -551,11 +753,9 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // consolidate
     // given the contract is disabled
     //  [X] it reverts
-    // given the number of clearinghouses and coolers are not the same
+    // given any cooler is not created by the CoolerFactory
     //  [X] it reverts
-    // given any clearinghouse is not owned by the Olympus protocol
-    //  [X] it reverts
-    // given any cooler is not created by the clearinghouse's CoolerFactory
+    // given the lender for any loan is not an Olympus clearinghouse
     //  [X] it reverts
     // given any cooler is not owned by the caller
     //  [X] it reverts
@@ -622,151 +822,17 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenDisabled
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Expect revert
         _expectRevert_disabled();
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
     }
 
-    function test_consolidate_givenClearinghouseCountGreater_reverts()
-        public
-        givenWalletHasCollateralToken(USER, 1e18)
-        givenWalletHasLoan(USER, true, 1e18)
-    {
-        // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
-
-        address[] memory clearinghousesWithExtra = new address[](2);
-        clearinghousesWithExtra[0] = clearinghouses[0];
-        clearinghousesWithExtra[1] = address(clearinghouseDai);
-
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidArrays.selector));
-
-        // Call function
-        vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghousesWithExtra,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
-    }
-
-    function test_consolidate_givenClearinghouseCountLess_reverts()
-        public
-        givenWalletHasCollateralToken(USER, 1e18)
-        givenWalletHasLoan(USER, true, 1e18)
-    {
-        // Create a DAI cooler, but no loan
-        _createCooler(USER, false);
-
-        // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, true);
-
-        address[] memory clearinghousesWithLess = new address[](1);
-        clearinghousesWithLess[0] = clearinghouses[0];
-
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidArrays.selector));
-
-        // Call function
-        vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghousesWithLess,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
-    }
-
-    function test_consolidate_givenClearinghouseCountZero_reverts()
-        public
-        givenWalletHasCollateralToken(USER, 1e18)
-        givenWalletHasLoan(USER, true, 1e18)
-    {
-        // Prepare input data
-        (address[] memory coolers, ) = _getCoolerArrays(true, false);
-
-        address[] memory clearinghousesWithLess = new address[](0);
-
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidArrays.selector));
-
-        // Call function
-        vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghousesWithLess,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
-    }
-
-    function test_consolidate_givenClearinghouseNotOwned_reverts()
-        public
-        givenWalletHasCollateralToken(USER, 1e18)
-        givenWalletHasLoan(USER, true, 1e18)
-    {
-        // Create a new Clearinghouse, not owned by the Olympus protocol
-        Clearinghouse newClearinghouse = new Clearinghouse(
-            address(ohm),
-            address(gohm),
-            address(staking),
-            address(susds),
-            address(coolerFactory),
-            address(kernel)
-        );
-        vm.startPrank(USER);
-        address newCooler = Clearinghouse(newClearinghouse).factory().generateCooler(gohm, usds);
-        vm.stopPrank();
-
-        // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
-
-        address[] memory coolersWithNew = new address[](2);
-        coolersWithNew[0] = coolers[0];
-        coolersWithNew[1] = newCooler;
-
-        address[] memory clearinghousesWithNew = new address[](2);
-        clearinghousesWithNew[0] = clearinghouses[0];
-        clearinghousesWithNew[1] = address(newClearinghouse);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidClearinghouse.selector)
-        );
-
-        // Call function
-        vm.prank(USER);
-        migrator.consolidate(
-            coolersWithNew,
-            clearinghousesWithNew,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
-    }
-
-    function test_consolidate_givenCoolerNotOwned_reverts()
+    function test_consolidate_givenCoolerDifferentFactory_reverts()
         public
         givenWalletHasCollateralToken(USER, 1e18)
         givenWalletHasLoan(USER, true, 1e18)
@@ -778,29 +844,18 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         vm.stopPrank();
 
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         address[] memory coolersWithNew = new address[](2);
         coolersWithNew[0] = coolers[0];
         coolersWithNew[1] = newCooler;
-
-        address[] memory clearinghousesWithNew = new address[](2);
-        clearinghousesWithNew[0] = clearinghouses[0];
-        clearinghousesWithNew[1] = address(clearinghouseUsds);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidCooler.selector));
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolersWithNew,
-            clearinghousesWithNew,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolersWithNew, USER, authorization, signature, delegationRequests);
     }
 
     function test_consolidate_givenDifferentOwner_reverts()
@@ -811,21 +866,14 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenWalletHasLoan(address(this), true, 1e18)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Only_CoolerOwner.selector));
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
     }
 
     function test_consolidate_whenDuplicateCooler_reverts()
@@ -834,16 +882,12 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenWalletHasLoan(USER, true, 1e18)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Add duplicate entries
         address[] memory coolersWithDuplicate = new address[](2);
         coolersWithDuplicate[0] = coolers[0];
         coolersWithDuplicate[1] = coolers[0];
-
-        address[] memory clearinghousesWithDuplicate = new address[](2);
-        clearinghousesWithDuplicate[0] = clearinghouses[0];
-        clearinghousesWithDuplicate[1] = clearinghouses[0];
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_DuplicateCooler.selector));
@@ -852,7 +896,6 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         vm.prank(USER);
         migrator.consolidate(
             coolersWithDuplicate,
-            clearinghousesWithDuplicate,
             USER,
             authorization,
             signature,
@@ -860,7 +903,12 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         );
     }
 
-    function test_consolidate_givenDebtTokenDifferent_reverts() public {
+    function test_consolidate_givenDebtTokenDifferent_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorization
+    {
         // Create a new Clearinghouse with a different debt token
         MockERC20 newDebtToken = new MockERC20("New Debt Token", "NDT", 18);
         MockERC4626 newDebtTokenVault = new MockERC4626(
@@ -868,6 +916,9 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             "New Debt Token Vault",
             "NDTV"
         );
+        vm.label(address(newDebtTokenVault), "New Debt Token Vault");
+        vm.label(address(newDebtToken), "New Debt Token");
+
         Clearinghouse newClearinghouse = new Clearinghouse(
             address(ohm),
             address(gohm),
@@ -883,35 +934,33 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         newClearinghouse.activate();
         vm.stopPrank();
 
-        // Create a Cooler in the new Clearinghouse
+        // Fund treasury
+        _fundTreasury(newDebtTokenVault, address(TRSRY));
+
+        vm.label(address(newClearinghouse), "New Clearinghouse");
+
+        // Take a loan with the new Clearinghouse
         vm.startPrank(USER);
-        address newCooler = coolerFactory.generateCooler(gohm, newDebtToken);
+        address newCooler = Clearinghouse(newClearinghouse).factory().generateCooler(
+            gohm,
+            newDebtToken
+        );
+        vm.label(address(newCooler), "New Cooler");
+        gohm.approve(address(newClearinghouse), 1e18);
+        (uint256 principal, ) = newClearinghouse.getLoanForCollateral(1e18);
+        newClearinghouse.lendToCooler(Cooler(newCooler), principal);
         vm.stopPrank();
 
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
-
-        address[] memory coolersWithNew = new address[](2);
-        coolersWithNew[0] = coolers[0];
-        coolersWithNew[1] = newCooler;
-
-        address[] memory clearinghousesWithNew = new address[](2);
-        clearinghousesWithNew[0] = clearinghouses[0];
-        clearinghousesWithNew[1] = address(newClearinghouse);
+        address[] memory coolers = new address[](1);
+        coolers[0] = newCooler;
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidCooler.selector));
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolersWithNew,
-            clearinghousesWithNew,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
     }
 
     function test_consolidate_givenSpendingCollateralNotApproved_reverts()
@@ -920,21 +969,43 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenWalletHasLoan(USER, true, 1e18)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Expect revert
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
+    }
+
+    function test_consolidate_loanHasDifferentLender_reverts()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorization
+    {
+        Clearinghouse newClearinghouse = _createNewClearinghouse(susds);
+
+        // Take a loan with the new Clearinghouse
+        vm.startPrank(USER);
+        address newCooler = Clearinghouse(newClearinghouse).factory().generateCooler(gohm, usds);
+        vm.label(address(newCooler), "New Cooler");
+        gohm.approve(address(newClearinghouse), 1e18);
+        (uint256 principal, ) = newClearinghouse.getLoanForCollateral(1e18);
+        newClearinghouse.lendToCooler(Cooler(newCooler), principal);
+        vm.stopPrank();
+
+        // Prepare input data
+        address[] memory coolers = new address[](1);
+        coolers[0] = newCooler;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidCooler.selector));
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
     }
 
     function test_consolidate_givenAuthorization()
@@ -945,7 +1016,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenAuthorization
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Get loan details
         Cooler.Loan memory loan = _getLoan(true, 0);
@@ -955,14 +1026,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
 
         // Assert token balances
         _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
@@ -986,21 +1050,14 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.UnauthorizedOnBehalfOf.selector));
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
     }
 
     function test_consolidate_whenNewOwnerIsGiven_whenNewOwnerAccountDoesNotMatch_reverts()
@@ -1011,7 +1068,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenAuthorizationSignatureSet(USER2, USER2_PK)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidNewOwner.selector));
@@ -1020,7 +1077,6 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         vm.prank(USER);
         migrator.consolidate(
             coolers,
-            clearinghouses,
             USER, // does not match authorization.account
             authorization,
             signature,
@@ -1036,7 +1092,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenAuthorizationSignatureSet(USER2, USER2_PK)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Get loan details
         Cooler.Loan memory loan = _getLoan(true, 0);
@@ -1046,14 +1102,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER2,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER2, authorization, signature, delegationRequests);
 
         // Assert token balances
         _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
@@ -1082,7 +1131,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenAuthorizationSignatureSet(USER, USER_PK)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(false, true);
+        address[] memory coolers = _getCoolerArrays(false, true);
 
         // Get loan details
         Cooler.Loan memory loanZero = _getLoan(false, 0);
@@ -1096,14 +1145,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
 
         // Assert token balances
         _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
@@ -1132,7 +1174,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenAuthorizationSignatureSet(USER, USER_PK)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, true);
+        address[] memory coolers = _getCoolerArrays(true, true);
 
         // Get loan details
         Cooler.Loan memory loanZero = _getLoan(true, 0);
@@ -1146,14 +1188,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
 
         // Assert token balances
         _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
@@ -1181,7 +1216,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenDelegationRequest(1e18)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Get loan details
         Cooler.Loan memory loan = _getLoan(true, 0);
@@ -1191,14 +1226,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
 
         // Assert token balances
         _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
@@ -1227,7 +1255,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         givenAuthorizationSignatureSet(USER, USER_PK)
     {
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, false);
+        address[] memory coolers = _getCoolerArrays(true, false);
 
         // Get loan details
         Cooler.Loan memory loan = _getLoan(true, 0);
@@ -1237,14 +1265,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
 
         // Assert token balances
         _assertTokenBalances(USER, 0, userUsdsBalance, userDaiBalance);
@@ -1282,7 +1303,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         _approveMigratorSpendingCollateral(USER, loanOneCollateral + loanTwoCollateral);
 
         // Prepare input data
-        (address[] memory coolers, address[] memory clearinghouses) = _getCoolerArrays(true, true);
+        address[] memory coolers = _getCoolerArrays(true, true);
 
         // Get loan details
         Cooler.Loan memory loanZero = _getLoan(true, 0);
@@ -1296,14 +1317,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
 
         // Call function
         vm.prank(USER);
-        migrator.consolidate(
-            coolers,
-            clearinghouses,
-            USER,
-            authorization,
-            signature,
-            delegationRequests
-        );
+        migrator.consolidate(coolers, USER, authorization, signature, delegationRequests);
 
         // Assert token balances
         // The user may have a gOHM balance
