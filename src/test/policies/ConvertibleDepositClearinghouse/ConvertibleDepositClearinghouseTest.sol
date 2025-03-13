@@ -30,8 +30,10 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
     uint256 internal constant MAX_REWARD_PER_LOAN = 5e18;
     uint48 internal constant DURATION = 121 days;
-    uint16 internal constant LOAN_TO_COLLATERAL = 90e2;
+    uint16 internal constant LOAN_TO_COLLATERAL = 75e2;
     uint16 internal constant INTEREST_RATE = 1e2;
+
+    uint256 internal constant ASSETS_PER_SHARE = 2e18;
 
     CoolerFactory internal coolerFactory;
     MockERC4626 internal vault;
@@ -119,6 +121,9 @@ contract ConvertibleDepositClearinghouseTest is Test {
         asset.approve(address(vault), 100e18);
         vault.deposit(100e18, OTHERS);
         vm.stopPrank();
+
+        // Deposit 200e18 assets into the vault so the conversion is not 1:1
+        asset.mint(address(vault), 200e18);
     }
 
     modifier givenDisabled() {
