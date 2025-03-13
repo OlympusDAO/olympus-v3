@@ -36,15 +36,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @inheritdoc IGenericClearinghouse
     uint256 public interestReceivables;
 
-    /// @notice The duration of the loan.
-    uint256 public constant DURATION = 121 days; // Four months
+    /// @inheritdoc IGenericClearinghouse
+    uint256 public override maxRewardPerLoan;
 
-    /// @notice The maximum reward (in collateral tokens) per loan.
-    uint256 public maxRewardPerLoan;
+    /// @inheritdoc IGenericClearinghouse
+    uint48 public override duration;
 
-    /// @notice The interest rate of the loan.
-    /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
-    uint16 public interestRate;
+    /// @inheritdoc IGenericClearinghouse
+    uint16 public override interestRate;
 
     /// @notice The ratio of the debt token (ERC4626) underlying asset to collateral tokens.
     ///         The ERC4626 underlying asset is used as it has the same terms as the collateral (CD) token. When a loan is originated, the current value in debt tokens will be calculated.
@@ -74,6 +73,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         address coolerFactory_,
         address kernel_,
         uint256 maxRewardPerLoan_,
+        uint48 duration_,
         uint16 loanToCollateral_,
         uint16 interestRate_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
@@ -83,6 +83,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         _DEBT_TOKEN = ERC4626(debtToken_);
 
         maxRewardPerLoan = maxRewardPerLoan_;
+        duration = duration_;
         loanToCollateral = loanToCollateral_;
         interestRate = interestRate_;
 
@@ -172,7 +173,12 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Create a new loan request.
         CDEPO.approve(address(cooler_), collateral);
-        uint256 reqID = cooler_.requestLoan(amount_, interestRate, loanToCollateral, DURATION);
+        uint256 reqID = cooler_.requestLoan(
+            amount_,
+            interestRate,
+            loanToCollateral,
+            uint256(duration)
+        );
 
         // Borrow from CDEPO
         // This will transfer `_DEBT_TOKEN` from CDEPO to this contract
@@ -334,7 +340,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         // Convert amount to debt token
         uint256 principal = _DEBT_TOKEN.convertToShares(principalUnderlyingAsset);
 
-        uint256 interest = interestForLoan(principal, DURATION);
+        uint256 interest = interestForLoan(principal, duration);
         return (principal, interest);
     }
 
@@ -385,6 +391,16 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         maxRewardPerLoan = maxRewardPerLoan_;
 
         emit MaxRewardPerLoanSet(maxRewardPerLoan_);
+    }
+
+    /// @notice Sets the duration of the loan.
+    /// @dev    This function is restricted to the admin role.
+    ///
+    /// @param  duration_ The duration of the loan.
+    function setDuration(uint48 duration_) external onlyAdminRole {
+        duration = duration_;
+
+        emit DurationSet(duration_);
     }
 
     /// @notice Sets the ratio of debt tokens to collateral tokens.

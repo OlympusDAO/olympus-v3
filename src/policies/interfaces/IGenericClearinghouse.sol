@@ -26,6 +26,8 @@ interface IGenericClearinghouse {
 
     event LoanToCollateralSet(uint16 loanToCollateral);
 
+    event DurationSet(uint48 duration);
+
     // ===== STATE VARIABLES ===== //
 
     /// @notice The debt token of the clearinghouse.
@@ -33,6 +35,19 @@ interface IGenericClearinghouse {
 
     /// @notice The collateral token of the clearinghouse.
     function collateralToken() external view returns (IERC20);
+
+    /// @notice The duration of the loan.
+    function duration() external view returns (uint48);
+
+    /// @notice The interest rate of the loan.
+    ///         Stored as a percentage, in terms of 100e2.
+    function interestRate() external view returns (uint16);
+
+    /// @notice The ratio of debt tokens to collateral tokens.
+    function loanToCollateral() external view returns (uint16);
+
+    /// @notice The maximum reward (in collateral tokens) per loan.
+    function maxRewardPerLoan() external view returns (uint256);
 
     // ===== LENDING FUNCTIONS ===== //
 
