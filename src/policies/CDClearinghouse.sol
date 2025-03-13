@@ -46,7 +46,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
     uint16 public interestRate;
 
-    /// @notice The ratio of debt tokens to collateral tokens.
+    /// @notice The ratio of the debt token (ERC4626) underlying asset to collateral tokens.
+    ///         The ERC4626 underlying asset is used as it has the same terms as the collateral (CD) token. When a loan is originated, the current value in debt tokens will be calculated.
     /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
     ///         As the debt token is the yield-bearing vault token and the collateral is the CD token (which is in terms of the vault token's underlying asset), the ratio should be less than 100%. Otherwise, a borrower can borrow more than the value of the collateral that they provide.
     uint16 public loanToCollateral;
@@ -77,8 +78,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         uint16 interestRate_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
         // Validate that the debt token is an ERC4626
-        if (address(ERC4626(debtToken_).asset()) == address(0))
-            revert InvalidParams("debt token");
+        if (address(ERC4626(debtToken_).asset()) == address(0)) revert InvalidParams("debt token");
 
         _DEBT_TOKEN = ERC4626(debtToken_);
 
@@ -315,13 +315,25 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     // ===== AUX FUNCTIONS ===== //
 
     /// @inheritdoc IGenericClearinghouse
+    /// @dev    Adjusts the principal amount (in debt tokens) to the underlying asset of the debt token before calculating the collateral amount.
     function getCollateralForLoan(uint256 principal_) external view returns (uint256) {
-        return principal_.mulDiv(ONE_HUNDRED_PERCENT, loanToCollateral);
+        // Get the current value of the debt token in terms of the underlying asset
+        uint256 debtTokenValue = _DEBT_TOKEN.convertToAssets(principal_);
+
+        return debtTokenValue.mulDiv(ONE_HUNDRED_PERCENT, loanToCollateral);
     }
 
     /// @inheritdoc IGenericClearinghouse
+    /// @dev    As the loan to collateral ratio is in terms of the debt token underlying asset, it is converted to debt token terms before returning.
     function getLoanForCollateral(uint256 collateral_) public view returns (uint256, uint256) {
-        uint256 principal = collateral_.mulDiv(loanToCollateral, ONE_HUNDRED_PERCENT);
+        uint256 principalUnderlyingAsset = collateral_.mulDiv(
+            loanToCollateral,
+            ONE_HUNDRED_PERCENT
+        );
+
+        // Convert amount to debt token
+        uint256 principal = _DEBT_TOKEN.convertToShares(principalUnderlyingAsset);
+
         uint256 interest = interestForLoan(principal, DURATION);
         return (principal, interest);
     }
