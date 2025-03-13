@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 // Libraries
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -24,7 +24,7 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 /// @notice Enables CD token holders to borrow against their position
 contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, CoolerCallback {
     using SafeTransferLib for ERC4626;
-    using FullMath for uint256;
+    using FixedPointMathLib for uint256;
 
     // ===== STATE VARIABLES ===== //
 
@@ -324,17 +324,20 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc IGenericClearinghouse
     /// @dev    Adjusts the principal amount (in debt tokens) to the underlying asset of the debt token before calculating the collateral amount.
+    ///         The collateral calculation rounds up to ensure that the collateral is sufficient to cover the loan.
     function getCollateralForLoan(uint256 principal_) external view returns (uint256) {
         // Get the current value of the debt token in terms of the underlying asset
         uint256 debtTokenValue = _DEBT_TOKEN.convertToAssets(principal_);
 
-        return debtTokenValue.mulDiv(ONE_HUNDRED_PERCENT, loanToCollateral);
+        // Principal = Collateral * LoanToCollateral
+        // => Collateral = Principal / LoanToCollateral
+        return debtTokenValue.mulDivUp(ONE_HUNDRED_PERCENT, loanToCollateral);
     }
 
     /// @inheritdoc IGenericClearinghouse
     /// @dev    As the loan to collateral ratio is in terms of the debt token underlying asset, it is converted to debt token terms before returning.
     function getLoanForCollateral(uint256 collateral_) public view returns (uint256, uint256) {
-        uint256 principalUnderlyingAsset = collateral_.mulDiv(
+        uint256 principalUnderlyingAsset = collateral_.mulDivDown(
             loanToCollateral,
             ONE_HUNDRED_PERCENT
         );
@@ -348,8 +351,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc IGenericClearinghouse
     function interestForLoan(uint256 principal_, uint256 duration_) public view returns (uint256) {
-        uint256 interestPercent = uint256(interestRate).mulDiv(duration_, 365 days);
-        return principal_.mulDiv(interestPercent, ONE_HUNDRED_PERCENT);
+        uint256 interestPercent = uint256(interestRate).mulDivUp(duration_, 365 days);
+        return principal_.mulDivDown(interestPercent, ONE_HUNDRED_PERCENT);
     }
 
     /// @inheritdoc IGenericClearinghouse
