@@ -17,7 +17,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 previousPositionCount_,
         uint256 returnedOhmOut_,
         uint256 returnedPositionId_
-    ) internal view {
+    ) internal {
         // Assert that the converted amount is as expected
         assertEq(returnedOhmOut_, expectedConvertedAmount_, "converted amount");
 
