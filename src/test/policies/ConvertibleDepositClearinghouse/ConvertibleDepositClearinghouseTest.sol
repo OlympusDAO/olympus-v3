@@ -17,6 +17,9 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CDClearinghouse} from "src/policies/CDClearinghouse.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract ConvertibleDepositClearinghouseTest is Test {
     address internal constant EXECUTOR = address(0x1111);
@@ -49,6 +52,8 @@ contract ConvertibleDepositClearinghouseTest is Test {
         // Set up tokens
         asset = new MockERC20("Asset", "ASSET", 18);
         vault = new MockERC4626(asset, "Vault", "VAULT");
+
+        coolerFactory = new CoolerFactory();
 
         // Kernel
         vm.startPrank(EXECUTOR);
@@ -106,7 +111,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Create a cooler for USER
         vm.prank(USER);
-        cooler = Cooler(coolerFactory.generateCooler(address(CDEPO), address(vault)));
+        cooler = Cooler(coolerFactory.generateCooler(CDEPO, vault));
 
         // Fund others so that TRSRY is not the only with vault shares
         asset.mint(OTHERS, 100e18);
@@ -114,5 +119,44 @@ contract ConvertibleDepositClearinghouseTest is Test {
         asset.approve(address(vault), 100e18);
         vault.deposit(100e18, OTHERS);
         vm.stopPrank();
+    }
+
+    modifier givenDisabled() {
+        vm.prank(ADMIN);
+        clearinghouse.disable("");
+        _;
+    }
+
+    function _expectNotEnabled() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyEnabler.NotEnabled.selector
+            )
+        );
+    }
+
+    function _expectNotDisabled() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyEnabler.NotDisabled.selector
+            )
+        );
+    }
+
+    function _expectRoleRevert(bytes32 role_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                role_
+            )
+        );
+    }
+
+    function _expectNotAuthorized() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PolicyAdmin.NotAuthorised.selector
+            )
+        );
     }
 }

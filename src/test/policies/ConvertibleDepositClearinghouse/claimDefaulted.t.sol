@@ -20,4 +20,6 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
     // [ ] the collateral is burned
     // [ ] the debt on CDEPO is manually reduced
     // [ ] the keeper receives 5% of the collateral
+    // [ ] the principal receivables are decremented
+    // [ ] the interest receivables are decremented
 }
