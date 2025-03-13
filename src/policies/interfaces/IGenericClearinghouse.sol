@@ -20,7 +20,7 @@ interface IGenericClearinghouse {
 
     event YieldSwept(address indexed to, uint256 amount);
 
-    event InterestRateState(uint16 interestRate);
+    event InterestRateSet(uint16 interestRate);
 
     event MaxRewardPerLoanSet(uint256 maxRewardPerLoan);
 

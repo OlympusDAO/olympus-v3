@@ -87,9 +87,11 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         loanToCollateral = loanToCollateral_;
         interestRate = interestRate_;
 
+        // Emit events
         emit MaxRewardPerLoanSet(maxRewardPerLoan_);
+        emit DurationSet(duration_);
         emit LoanToCollateralSet(loanToCollateral_);
-        emit InterestRateState(interestRate_);
+        emit InterestRateSet(interestRate_);
     }
 
     // ===== POLICY FUNCTIONS ===== //
@@ -420,6 +422,6 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     function setInterestRate(uint16 interestRate_) external onlyAdminRole {
         interestRate = interestRate_;
 
-        emit InterestRateState(interestRate_);
+        emit InterestRateSet(interestRate_);
     }
 }
