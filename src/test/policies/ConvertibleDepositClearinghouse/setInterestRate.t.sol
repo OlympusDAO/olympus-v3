@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositClearinghouseTest} from "./ConvertibleDepositClearinghouseTest.sol";
 
 contract SetInterestRateCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
-    event InterestRateSet(uint16 interestRate);
+    event InterestRateSet(uint256 interestRate);
 
     // given the caller is not an admin
     //  [X] it reverts
@@ -22,8 +22,8 @@ contract SetInterestRateCDClearinghouseTest is ConvertibleDepositClearinghouseTe
         clearinghouse.setInterestRate(100);
     }
 
-    function test_success(uint16 interestRate_) public {
-        uint16 interestRate = uint16(bound(interestRate_, 0, type(uint16).max));
+    function test_success(uint256 interestRate_) public {
+        uint256 interestRate = uint256(bound(interestRate_, 0, type(uint256).max));
 
         // Expect event
         vm.expectEmit();

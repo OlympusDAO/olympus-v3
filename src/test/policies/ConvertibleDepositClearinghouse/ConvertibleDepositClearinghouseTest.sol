@@ -17,6 +17,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CDClearinghouse} from "src/policies/CDClearinghouse.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
+import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -30,8 +31,8 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
     uint256 internal constant MAX_REWARD_PER_LOAN = 5e18;
     uint48 internal constant DURATION = 121 days;
-    uint16 internal constant LOAN_TO_COLLATERAL = 75e2;
-    uint16 internal constant INTEREST_RATE = 1e2;
+    uint256 internal constant LOAN_TO_COLLATERAL = 75e16; // 75%
+    uint256 internal constant INTEREST_RATE = 1e16; // 1%
 
     uint256 internal constant ASSETS_PER_SHARE = 2e18;
 
@@ -48,7 +49,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
     RolesAdmin internal rolesAdmin;
     CDClearinghouse internal clearinghouse;
 
-    Cooler internal cooler;
+    ICooler internal cooler;
 
     function setUp() public {
         // Set up tokens
@@ -113,7 +114,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Create a cooler for USER
         vm.prank(USER);
-        cooler = Cooler(coolerFactory.generateCooler(CDEPO, vault));
+        cooler = ICooler(coolerFactory.generateCooler(CDEPO, vault));
 
         // Fund others so that TRSRY is not the only with vault shares
         asset.mint(OTHERS, 100e18);
@@ -124,6 +125,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Deposit 200e18 assets into the vault so the conversion is not 1:1
         asset.mint(address(vault), 200e18);
+
+        // Labels
+        vm.label(USER, "USER");
+        vm.label(OTHERS, "OTHERS");
+        vm.label(address(vault), "VAULT");
+        vm.label(address(asset), "ASSET");
     }
 
     modifier givenDisabled() {
@@ -163,5 +170,23 @@ contract ConvertibleDepositClearinghouseTest is Test {
                 PolicyAdmin.NotAuthorised.selector
             )
         );
+    }
+
+    modifier givenUserHasApprovedCollateralSpending(uint256 amount_) {
+        vm.prank(USER);
+        CDEPO.approve(address(cooler), amount_);
+        _;
+    }
+
+    modifier givenUserHasCollateral(uint256 amount_) {
+        // USER requires assets
+        asset.mint(USER, amount_);
+
+        // Mint CDEPO to USER
+        vm.startPrank(USER);
+        asset.approve(address(CDEPO), amount_);
+        CDEPO.mint(amount_);
+        vm.stopPrank();
+        _;
     }
 }

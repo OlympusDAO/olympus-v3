@@ -22,25 +22,25 @@ contract GetCollateralForLoanCDClearinghouseTest is ConvertibleDepositClearingho
 
     function test_success() public {
         // assetsPerShare = 2e18
-        // principal = collateral * loanToCollateral / 100e2
-        // => collateral = principal * 100e2 / loanToCollateral
+        // principal = collateral * loanToCollateral / 1e18
+        // => collateral = principal * 1e18 / loanToCollateral
 
         // Case 1:
         // Principal (shares) = 3e18
         // Principal (assets) = 3e18 * assetsPerShare / 1e18 = 6e18
-        // Collateral = 6e18 * 100e2 / 75e2 = 8e18
+        // Collateral = 6e18 * 1e18 / 75e16 = 8e18
         assertEq(clearinghouse.getCollateralForLoan(3e18), 8e18, "case 1");
 
         // Case 2:
         // Principal (shares) = 1e18
         // Principal (assets) = 1e18 * assetsPerShare / 1e18 = 2e18
-        // Collateral = 2e18 * 100e2 / 75e2 = 2666666666666666667 (rounds up)
+        // Collateral = 2e18 * 1e18 / 75e16 = 2666666666666666667 (rounds up)
         assertEq(clearinghouse.getCollateralForLoan(1e18), 2666666666666666667, "case 2");
 
         // Case 3:
         // Principal (shares) = 50e18
         // Principal (assets) = 50e18 * assetsPerShare / 1e18 = 100e18
-        // Collateral = 100e18 * 100e2 / 75e2 = 133333333333333333334 (rounds up)
+        // Collateral = 100e18 * 1e18 / 75e16 = 133333333333333333334 (rounds up)
         assertEq(clearinghouse.getCollateralForLoan(50e18), 133333333333333333334, "case 3");
     }
 }

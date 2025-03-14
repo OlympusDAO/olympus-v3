@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositClearinghouseTest} from "./ConvertibleDepositClearinghouseTest.sol";
 
 contract SetLoanToCollateralCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
-    event LoanToCollateralSet(uint16 loanToCollateral);
+    event LoanToCollateralSet(uint256 loanToCollateral);
 
     // given the caller is not an admin
     //  [X] it reverts
@@ -22,8 +22,8 @@ contract SetLoanToCollateralCDClearinghouseTest is ConvertibleDepositClearinghou
         clearinghouse.setLoanToCollateral(100);
     }
 
-    function test_success(uint16 loanToCollateral_) public {
-        uint16 loanToCollateral = uint16(bound(loanToCollateral_, 0, type(uint16).max));
+    function test_success(uint256 loanToCollateral_) public {
+        uint256 loanToCollateral = uint256(bound(loanToCollateral_, 0, type(uint256).max));
 
         // Expect event
         vm.expectEmit();
