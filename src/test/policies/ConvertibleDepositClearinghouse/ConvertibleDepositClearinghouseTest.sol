@@ -162,6 +162,18 @@ contract ConvertibleDepositClearinghouseTest is Test {
         _;
     }
 
+    modifier givenUserHasApprovedDebtSpendingToClearinghouse(uint256 amount_) {
+        vm.prank(USER);
+        vault.approve(address(clearinghouse), amount_);
+        _;
+    }
+
+    modifier givenUserHasApprovedDebtSpendingToCooler(uint256 amount_) {
+        vm.prank(USER);
+        vault.approve(address(cooler), amount_);
+        _;
+    }
+
     modifier givenUserHasCollateral(uint256 amount_) {
         // USER requires assets
         asset.mint(USER, amount_);
@@ -171,6 +183,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
         asset.approve(address(CDEPO), amount_);
         CDEPO.mint(amount_);
         vm.stopPrank();
+        _;
+    }
+
+    modifier givenUserHasDebt(uint256 amount_) {
+        vm.prank(USER);
+        clearinghouse.lendToCooler(cooler, amount_);
         _;
     }
 }

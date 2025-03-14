@@ -317,8 +317,10 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             : 0;
 
         // Repay the debt token to CDEPO
-        _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
-        CDEPO.repayDebt(principalPaid_);
+        if (principalPaid_ > 0) {
+            _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
+            CDEPO.repayDebt(principalPaid_);
+        }
 
         // Sweep the yield
         _sweepYield();
