@@ -23,6 +23,7 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 /// @title  Convertible Depository Clearinghouse
 /// @notice Enables CD token holders to borrow against their position
 contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, CoolerCallback {
+    using SafeTransferLib for CDEPOv1;
     using SafeTransferLib for ERC4626;
     using FixedPointMathLib for uint256;
 
@@ -166,7 +167,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, loanToCollateral);
-        CDEPO.transferFrom(msg.sender, address(this), collateral);
+        CDEPO.safeTransferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
         (, uint256 interest) = getLoanForCollateral(collateral);
@@ -174,7 +175,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         principalReceivables += amount_;
 
         // Create a new loan request.
-        CDEPO.approve(address(cooler_), collateral);
+        CDEPO.safeApprove(address(cooler_), collateral);
         uint256 reqID = cooler_.requestLoan(
             amount_,
             interestRate,
@@ -187,7 +188,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         CDEPO.incurDebt(amount_);
 
         // Clear the created loan request by providing enough reserve.
-        _DEBT_TOKEN.approve(address(cooler_), amount_);
+        _DEBT_TOKEN.safeApprove(address(cooler_), amount_);
         uint256 loanID = cooler_.clearRequest(reqID, address(this), true);
 
         return loanID;
@@ -204,7 +205,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         uint256 interestBase = interestForLoan(loan.principal, loan.request.duration);
 
         // Transfer in extension interest from the caller.
-        _DEBT_TOKEN.transferFrom(msg.sender, address(this), interestBase * times_);
+        _DEBT_TOKEN.safeTransferFrom(msg.sender, address(this), interestBase * times_);
 
         // Signal to cooler that loan should be extended.
         cooler_.extendLoanTerms(loanId_, times_);
