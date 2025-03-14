@@ -89,8 +89,8 @@ contract CoolerV2Migrator is
     /// @notice The Cooler V2 contract
     IMonoCooler public immutable COOLERV2;
 
-    /// @notice The CoolerFactory contract
-    ICoolerFactory public immutable COOLER_FACTORY;
+    /// @notice The list of CoolerFactories
+    address[] internal _COOLER_FACTORIES;
 
     /// @notice This constant is used when iterating through the loans of a Cooler
     /// @dev    This is used to prevent infinite loops, and is an appropriate upper bound
@@ -108,7 +108,7 @@ contract CoolerV2Migrator is
         address migrator_,
         address flash_,
         address chreg_,
-        address coolerFactory_
+        address[] memory coolerFactories_
     ) Owned(owner_) {
         // Validate
         if (coolerV2_ == address(0)) revert Params_InvalidAddress("coolerV2");
@@ -118,10 +118,8 @@ contract CoolerV2Migrator is
         if (migrator_ == address(0)) revert Params_InvalidAddress("migrator");
         if (flash_ == address(0)) revert Params_InvalidAddress("flash");
         if (chreg_ == address(0)) revert Params_InvalidAddress("chreg");
-        if (coolerFactory_ == address(0)) revert Params_InvalidAddress("coolerFactory");
 
         COOLERV2 = IMonoCooler(coolerV2_);
-        COOLER_FACTORY = ICoolerFactory(coolerFactory_);
 
         // Validate tokens
         if (address(COOLERV2.collateralToken()) != gohm_) revert Params_InvalidAddress("gohm");
@@ -133,6 +131,22 @@ contract CoolerV2Migrator is
         MIGRATOR = IDaiUsdsMigrator(migrator_);
         FLASH = IERC3156FlashLender(flash_);
         CHREG = CHREGv1(chreg_);
+
+        // Validate the cooler factories for duplicates
+        for (uint256 i; i < coolerFactories_.length; i++) {
+            if (coolerFactories_[i] == address(0)) revert Params_InvalidAddress("zero");
+
+            // Check for duplicates
+            for (uint256 j; j < i; j++) {
+                if (coolerFactories_[j] == coolerFactories_[i])
+                    revert Params_InvalidAddress("duplicate");
+            }
+
+            _COOLER_FACTORIES.push(coolerFactories_[i]);
+
+            // Emit the event
+            emit CoolerFactoryAdded(coolerFactories_[i]);
+        }
     }
 
     // ========= OPERATION ========= //
@@ -445,7 +459,13 @@ contract CoolerV2Migrator is
     /// @param  cooler_       Cooler contract
     /// @return bool          Whether the cooler was created by the CoolerFactory
     function _isValidCooler(address cooler_) internal view returns (bool) {
-        return COOLER_FACTORY.created(cooler_);
+        for (uint256 i; i < _COOLER_FACTORIES.length; i++) {
+            if (ICoolerFactory(_COOLER_FACTORIES[i]).created(cooler_)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     function _inArray(address[] memory array_, address item_) internal pure returns (bool) {
@@ -469,6 +489,54 @@ contract CoolerV2Migrator is
             clearinghouses[i] = CHREG.registry(i);
         }
         return clearinghouses;
+    }
+
+    // ============ ADMIN FUNCTIONS ============ //
+
+    /// @notice Add a CoolerFactory to the migrator
+    ///
+    /// @param  coolerFactory_ The CoolerFactory to add
+    function addCoolerFactory(address coolerFactory_) external onlyOwner {
+        // Validate that the CoolerFactory is not the zero address
+        if (coolerFactory_ == address(0)) revert Params_InvalidAddress("zero");
+
+        // Validate that the CoolerFactory is not already in the array
+        for (uint256 i; i < _COOLER_FACTORIES.length; i++) {
+            if (_COOLER_FACTORIES[i] == coolerFactory_) revert Params_InvalidAddress("duplicate");
+        }
+
+        // Add the CoolerFactory to the array
+        _COOLER_FACTORIES.push(coolerFactory_);
+
+        // Emit the event
+        emit CoolerFactoryAdded(coolerFactory_);
+    }
+
+    /// @notice Remove a CoolerFactory from the migrator
+    ///
+    /// @param  coolerFactory_ The CoolerFactory to remove
+    function removeCoolerFactory(address coolerFactory_) external onlyOwner {
+        // Remove the CoolerFactory from the array
+        bool found;
+        for (uint256 i; i < _COOLER_FACTORIES.length; i++) {
+            if (_COOLER_FACTORIES[i] == coolerFactory_) {
+                _COOLER_FACTORIES[i] = _COOLER_FACTORIES[_COOLER_FACTORIES.length - 1];
+                _COOLER_FACTORIES.pop();
+                found = true;
+                break;
+            }
+        }
+        if (!found) revert Params_InvalidAddress("not found");
+
+        // Emit the event
+        emit CoolerFactoryRemoved(coolerFactory_);
+    }
+
+    /// @notice Get the list of CoolerFactories
+    ///
+    /// @return coolerFactories The list of CoolerFactories
+    function getCoolerFactories() external view returns (address[] memory coolerFactories) {
+        return _COOLER_FACTORIES;
     }
 
     // ============ ENABLER FUNCTIONS ============ //

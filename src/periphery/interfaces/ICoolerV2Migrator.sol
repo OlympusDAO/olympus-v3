@@ -33,6 +33,14 @@ interface ICoolerV2Migrator {
     /// @notice Thrown when the address is invalid
     error Params_InvalidAddress(string reason_);
 
+    // ========= EVENTS ========= //
+
+    /// @notice Emitted when a CoolerFactory is added to the migrator
+    event CoolerFactoryAdded(address indexed coolerFactory);
+
+    /// @notice Emitted when a CoolerFactory is removed from the migrator
+    event CoolerFactoryRemoved(address indexed coolerFactory);
+
     // ========= FUNCTIONS ========= //
 
     /// @notice Preview the consolidation of a set of loans.
@@ -71,4 +79,21 @@ interface ICoolerV2Migrator {
         IMonoCooler.Signature calldata signature_,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests_
     ) external;
+
+    // ===== ADMIN FUNCTIONS ===== //
+
+    /// @notice Add a CoolerFactory to the migrator
+    ///
+    /// @param  coolerFactory_ The CoolerFactory to add
+    function addCoolerFactory(address coolerFactory_) external;
+
+    /// @notice Remove a CoolerFactory from the migrator
+    ///
+    /// @param  coolerFactory_ The CoolerFactory to remove
+    function removeCoolerFactory(address coolerFactory_) external;
+
+    /// @notice Get the list of CoolerFactories
+    ///
+    /// @return coolerFactories The list of CoolerFactories
+    function getCoolerFactories() external view returns (address[] memory coolerFactories);
 }

@@ -25,6 +25,9 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
 contract CoolerV2MigratorTest is MonoCoolerBaseTest {
+    event CoolerFactoryAdded(address indexed coolerFactory);
+    event CoolerFactoryRemoved(address indexed coolerFactory);
+
     CoolerV2Migrator internal migrator;
     CoolerFactory internal coolerFactory;
     Clearinghouse internal clearinghouseUsds;
@@ -141,6 +144,9 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         clearinghouseUsds.activate();
         vm.stopPrank();
 
+        address[] memory coolerFactories = new address[](1);
+        coolerFactories[0] = address(coolerFactory);
+
         // CoolerV2Migrator setup
         migrator = new CoolerV2Migrator(
             OVERSEER,
@@ -151,7 +157,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             address(daiMigrator),
             address(flashLender),
             address(clearinghouseRegistry),
-            address(coolerFactory)
+            coolerFactories
         );
 
         // Enable the policy
@@ -858,6 +864,67 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         migrator.consolidate(coolersWithNew, USER, authorization, signature, delegationRequests);
     }
 
+    function test_consolidate_givenCoolerDifferentFactory()
+        public
+        givenWalletHasCollateralToken(USER, 1e18)
+        givenWalletHasApprovedMigratorSpendingCollateral(USER, 1e18)
+        givenAuthorizationSignatureSet(USER, USER_PK)
+    {
+        // Create a new Cooler from a different CoolerFactory
+        CoolerFactory newCoolerFactory = new CoolerFactory();
+        vm.label(address(newCoolerFactory), "New Cooler Factory");
+        vm.startPrank(USER);
+        address newCooler = CoolerFactory(newCoolerFactory).generateCooler(gohm, usds);
+        vm.stopPrank();
+
+        // Create a Clearinghouse that uses the new CoolerFactory
+        Clearinghouse newClearinghouse = new Clearinghouse(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(susds),
+            address(newCoolerFactory),
+            address(kernel)
+        );
+        vm.label(address(newClearinghouse), "New Clearinghouse");
+
+        vm.startPrank(EXECUTOR);
+        kernel.executeAction(Actions.ActivatePolicy, address(newClearinghouse));
+        vm.stopPrank();
+
+        // Activate the Clearinghouse
+        vm.startPrank(OVERSEER);
+        newClearinghouse.activate();
+        vm.stopPrank();
+
+        // Add the new Cooler Factory to the migrator
+        vm.startPrank(OVERSEER);
+        migrator.addCoolerFactory(address(newCoolerFactory));
+        vm.stopPrank();
+
+        // Take a loan with the new Clearinghouse
+        vm.startPrank(USER);
+        gohm.approve(address(newClearinghouse), 1e18);
+        (uint256 principal, ) = newClearinghouse.getLoanForCollateral(1e18);
+        newClearinghouse.lendToCooler(Cooler(newCooler), principal);
+        vm.stopPrank();
+
+        // Prepare input data
+        address[] memory coolers = _getCoolerArrays(true, false);
+
+        address[] memory coolersWithNew = new address[](1);
+        coolersWithNew[0] = newCooler;
+
+        // Call function
+        vm.prank(USER);
+        migrator.consolidate(coolersWithNew, USER, authorization, signature, delegationRequests);
+
+        // Assert that newCooler loan is repaid
+        Cooler.Loan memory newCoolerLoan = Cooler(newCooler).getLoan(0);
+        assertEq(newCoolerLoan.principal, 0, "newCoolerLoan.principal");
+        assertEq(newCoolerLoan.interestDue, 0, "newCoolerLoan.interestDue");
+    }
+
     function test_consolidate_givenDifferentOwner_reverts()
         public
         givenWalletHasCollateralToken(USER, 1e18)
@@ -1339,5 +1406,240 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
             userGohmBalance;
         _assertCoolerV2Loan(USER, expectedDepositedCollateral, loanZeroPayable + loanOnePayable);
         _assertCoolerV2Loan(USER2, 0, 0);
+    }
+
+    // constructor
+    // when a duplicate cooler factory is provided
+    //  [X] it reverts
+    // [X] it emits an event for each cooler factory added
+    // [X] the cooler factory array is updated
+
+    function test_constructor_givenDuplicateCoolerFactory_reverts() public {
+        // Prepare input data
+        address[] memory coolerFactories = new address[](2);
+        coolerFactories[0] = address(coolerFactory);
+        coolerFactories[1] = address(coolerFactory);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidAddress.selector, "duplicate")
+        );
+
+        // Call function
+        CoolerV2Migrator migrator = new CoolerV2Migrator(
+            OVERSEER,
+            address(cooler),
+            address(dai),
+            address(usds),
+            address(gohm),
+            address(daiMigrator),
+            address(flashLender),
+            address(clearinghouseRegistry),
+            coolerFactories
+        );
+    }
+
+    function test_constructor_givenZeroAddress_reverts() public {
+        // Prepare input data
+        address[] memory coolerFactories = new address[](1);
+        coolerFactories[0] = address(0);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidAddress.selector, "zero")
+        );
+
+        // Call function
+        CoolerV2Migrator migrator = new CoolerV2Migrator(
+            OVERSEER,
+            address(cooler),
+            address(dai),
+            address(usds),
+            address(gohm),
+            address(daiMigrator),
+            address(flashLender),
+            address(clearinghouseRegistry),
+            coolerFactories
+        );
+    }
+
+    function test_constructor_givenMultipleCoolerFactories() public {
+        CoolerFactory coolerFactoryTwo = new CoolerFactory();
+
+        // Prepare input data
+        address[] memory coolerFactories = new address[](2);
+        coolerFactories[0] = address(coolerFactory);
+        coolerFactories[1] = address(coolerFactoryTwo);
+
+        // Call function
+        CoolerV2Migrator migrator = new CoolerV2Migrator(
+            OVERSEER,
+            address(cooler),
+            address(dai),
+            address(usds),
+            address(gohm),
+            address(daiMigrator),
+            address(flashLender),
+            address(clearinghouseRegistry),
+            coolerFactories
+        );
+
+        // Assert values
+        assertEq(migrator.getCoolerFactories().length, 2, "migrator.getCoolerFactories().length");
+        assertEq(
+            migrator.getCoolerFactories()[0],
+            address(coolerFactory),
+            "migrator.getCoolerFactories()[0]"
+        );
+        assertEq(
+            migrator.getCoolerFactories()[1],
+            address(coolerFactoryTwo),
+            "migrator.getCoolerFactories()[1]"
+        );
+    }
+
+    // addCoolerFactory
+    // when the caller is not the owner
+    //  [X] it reverts
+    // when a duplicate cooler factory is provided
+    //  [X] it reverts
+    // [X] it emits an event
+    // [X] the cooler factory array is updated
+
+    function test_addCoolerFactory_givenNotOwner_reverts(address caller_) public {
+        vm.assume(caller_ != OVERSEER);
+
+        CoolerFactory coolerFactoryTwo = new CoolerFactory();
+
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(caller_);
+        migrator.addCoolerFactory(address(coolerFactoryTwo));
+    }
+
+    function test_addCoolerFactory_duplicateCoolerFactory_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidAddress.selector, "duplicate")
+        );
+
+        // Call function
+        vm.prank(OVERSEER);
+        migrator.addCoolerFactory(address(coolerFactory));
+    }
+
+    function test_addCoolerFactory_zeroAddress_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidAddress.selector, "zero")
+        );
+
+        // Call function
+        vm.prank(OVERSEER);
+        migrator.addCoolerFactory(address(0));
+    }
+
+    function test_addCoolerFactory() public {
+        CoolerFactory coolerFactoryTwo = new CoolerFactory();
+
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit CoolerFactoryAdded(address(coolerFactoryTwo));
+
+        // Call function
+        vm.prank(OVERSEER);
+        migrator.addCoolerFactory(address(coolerFactoryTwo));
+
+        // Assert values
+        assertEq(migrator.getCoolerFactories().length, 2, "migrator.getCoolerFactories().length");
+        assertEq(
+            migrator.getCoolerFactories()[0],
+            address(coolerFactory),
+            "migrator.getCoolerFactories()[0]"
+        );
+        assertEq(
+            migrator.getCoolerFactories()[1],
+            address(coolerFactoryTwo),
+            "migrator.getCoolerFactories()[1]"
+        );
+    }
+
+    // removeCoolerFactory
+    // when the caller is not the owner
+    //  [X] it reverts
+    // when a cooler factory is not found
+    //  [X] it reverts
+    // [X] it emits an event
+    // [X] the cooler factory array is updated
+
+    function test_removeCoolerFactory_givenNotOwner_reverts(address caller_) public {
+        vm.assume(caller_ != OVERSEER);
+
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(caller_);
+        migrator.removeCoolerFactory(address(coolerFactory));
+    }
+
+    function test_removeCoolerFactory_coolerFactoryNotFound_reverts() public {
+        CoolerFactory coolerFactoryTwo = new CoolerFactory();
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoolerV2Migrator.Params_InvalidAddress.selector, "not found")
+        );
+
+        // Call function
+        vm.prank(OVERSEER);
+        migrator.removeCoolerFactory(address(coolerFactoryTwo));
+    }
+
+    function test_removeCoolerFactory() public {
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit CoolerFactoryRemoved(address(coolerFactory));
+
+        // Call function
+        vm.prank(OVERSEER);
+        migrator.removeCoolerFactory(address(coolerFactory));
+
+        // Assert values
+        assertEq(migrator.getCoolerFactories().length, 0, "migrator.getCoolerFactories().length");
+    }
+
+    function test_removeCoolerFactory_multipleCoolerFactories() public {
+        // Add multiple cooler factories
+        CoolerFactory coolerFactoryTwo = new CoolerFactory();
+        CoolerFactory coolerFactoryThree = new CoolerFactory();
+
+        vm.startPrank(OVERSEER);
+        migrator.addCoolerFactory(address(coolerFactoryTwo));
+        migrator.addCoolerFactory(address(coolerFactoryThree));
+        vm.stopPrank();
+
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit CoolerFactoryRemoved(address(coolerFactory));
+
+        // Call function
+        vm.prank(OVERSEER);
+        migrator.removeCoolerFactory(address(coolerFactory));
+
+        // Assert values
+        assertEq(migrator.getCoolerFactories().length, 2, "migrator.getCoolerFactories().length");
+
+        // Independent of order, only two and three should be in the array
+        bool foundTwo = false;
+        bool foundThree = false;
+        for (uint256 i = 0; i < migrator.getCoolerFactories().length; i++) {
+            if (migrator.getCoolerFactories()[i] == address(coolerFactoryTwo)) foundTwo = true;
+            if (migrator.getCoolerFactories()[i] == address(coolerFactoryThree)) foundThree = true;
+        }
+        assertEq(foundTwo, true, "coolerFactoryTwo should be in the array");
+        assertEq(foundThree, true, "coolerFactoryThree should be in the array");
     }
 }
