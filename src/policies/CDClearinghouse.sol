@@ -361,8 +361,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc IGenericClearinghouse
     function interestForLoan(uint256 principal_, uint256 duration_) public view returns (uint256) {
-        uint256 interestPercent = uint256(interestRate).mulDivUp(duration_, 365 days);
-        return principal_.mulDivUp(interestPercent, _COLLATERAL_TOKEN_SCALE);
+        uint256 interestPercent = uint256(interestRate).mulDivDown(duration_, 365 days);
+        return principal_.mulDivDown(interestPercent, 1e18);
     }
 
     /// @inheritdoc IGenericClearinghouse

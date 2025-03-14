@@ -28,46 +28,46 @@ contract GetLoanForCollateralCDClearinghouseTest is ConvertibleDepositClearingho
         // interestBps = (interestRate * duration / 365 days)
         // interest = principal * interestBps / 1e18
 
-        // interestBps = 1e16 * 121 days / 365 days = 3315068493150684.93150684931506849315068493150684932 = 3315068493150685 (rounded up)
+        // interestBps = 1e16 * 121 days / 365 days = 3315068493150684.93150684931506849315068493150684932 = 3315068493150684 (rounded down)
 
         // Case 1:
         // collateral = 10e18
         // principal (assets) = 10e18 * 75e16 / 1e18 = 75e17
         // principal (shares) = 75e17 * 1e18 / 2e18 = 375e16
-        // interest = 375e16 * 3315068493150685 / 1e18 = 12431506849315068.75 = 12431506849315069 (rounded up)
+        // interest = 375e16 * 3315068493150684 / 1e18 = 12431506849315065
         (uint256 principal, uint256 interest) = clearinghouse.getLoanForCollateral(10e18);
         assertEq(principal, 375e16, "principal");
-        assertEq(interest, 12431506849315069, "interest");
+        assertEq(interest, 12431506849315065, "interest");
 
         // Case 2:
         // collateral = 95e17
         // principal (assets) = 95e17 * 75e16 / 1e18 = 7125e15
         // principal (shares) = 7125e15 * 1e18 / 2e18 = 35625e14
-        // interest = 35625e14 * 3315068493150685 / 1e18 = 11809931506849315.3125 = 11809931506849316 (rounded up)
+        // interest = 35625e14 * 3315068493150684 / 1e18 = 11809931506849311.75 = 11809931506849311 (rounded down)
         (uint256 principalTwo, uint256 interestTwo) = clearinghouse.getLoanForCollateral(95e17);
         assertEq(principalTwo, 35625e14, "principalTwo");
-        assertEq(interestTwo, 11809931506849316, "interestTwo");
+        assertEq(interestTwo, 11809931506849311, "interestTwo");
 
         // Case 3:
         // collateral = 987654321
         // principal (assets) = 987654321 * 75e16 / 1e18 = 740740740.75 = 740740740 (rounded down)
         // principal (shares) = 740740740 * 1e18 / 2e18 = 370370370
-        // interest = 370370370 * 3315068493150685 / 1e18 = 1227803.1443835617 = 1227804 (rounded up)
+        // interest = 370370370 * 3315068493150684 / 1e18 = 1227803.1443835613 = 1227803 (rounded down)
         (uint256 principalThree, uint256 interestThree) = clearinghouse.getLoanForCollateral(
             987654321
         );
         assertEq(principalThree, 370370370, "principalThree");
-        assertEq(interestThree, 1227804, "interestThree");
+        assertEq(interestThree, 1227803, "interestThree");
 
         // Case 4:
         // collateral = 2666666666666666666
         // principal (assets) = 2666666666666666666 * 75e16 / 1e18 = 1999999999999999999.5 = 2000000000000000000 (rounded up)
         // principal (shares) = 2000000000000000000 * 1e18 / 2e18 = 1000000000000000000
-        // interest = 1000000000000000000 * 3315068493150685 / 1e18 = 3315068493150685
+        // interest = 1000000000000000000 * 3315068493150684 / 1e18 = 3315068493150684
         (uint256 principalFour, uint256 interestFour) = clearinghouse.getLoanForCollateral(
             2666666666666666666
         );
         assertEq(principalFour, 1000000000000000000, "principalFour");
-        assertEq(interestFour, 3315068493150685, "interestFour");
+        assertEq(interestFour, 3315068493150684, "interestFour");
     }
 }

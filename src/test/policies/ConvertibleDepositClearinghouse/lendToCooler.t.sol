@@ -122,5 +122,13 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), interest, "interest receivables");
         assertEq(clearinghouse.principalReceivables(), principal, "principal receivables");
+
+        // Cooler Loan
+        ICooler.Loan memory loan = cooler.getLoan(0);
+        assertEq(loan.principal, 1e18, "loan principal");
+        assertEq(loan.interestDue, interest, "loan interest due");
+        assertEq(loan.collateral, expectedCollateralUsed, "loan collateral");
+        assertEq(loan.lender, address(clearinghouse), "loan lender");
+        assertEq(loan.expiry, block.timestamp + 121 days, "loan duration");
     }
 }

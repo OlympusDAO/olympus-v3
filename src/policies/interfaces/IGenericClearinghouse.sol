@@ -40,7 +40,7 @@ interface IGenericClearinghouse {
     function duration() external view returns (uint48);
 
     /// @notice The interest rate of the loan.
-    ///         Stored as a percentage, in terms of 100e2.
+    ///         Stored as a percentage, in terms of 1e18.
     function interestRate() external view returns (uint256);
 
     /// @notice The ratio of debt tokens to collateral tokens.
