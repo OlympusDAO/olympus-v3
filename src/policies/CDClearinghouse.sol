@@ -31,6 +31,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     ERC4626 internal immutable _DEBT_TOKEN;
 
+    uint256 internal _COLLATERAL_TOKEN_SCALE;
+
     /// @inheritdoc IGenericClearinghouse
     uint256 public principalReceivables;
 
@@ -44,16 +46,12 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     uint48 public override duration;
 
     /// @inheritdoc IGenericClearinghouse
-    uint16 public override interestRate;
+    uint256 public override interestRate;
 
-    /// @notice The ratio of the debt token (ERC4626) underlying asset to collateral tokens.
+    /// @notice The ratio of the debt token (ERC4626) underlying asset to collateral tokens. Stored in terms of collateral tokens.
     ///         The ERC4626 underlying asset is used as it has the same terms as the collateral (CD) token. When a loan is originated, the current value in debt tokens will be calculated.
-    /// @dev    Stored as a percentage, in terms of `ONE_HUNDRED_PERCENT`.
     ///         As the debt token is the yield-bearing vault token and the collateral is the CD token (which is in terms of the vault token's underlying asset), the ratio should be less than 100%. Otherwise, a borrower can borrow more than the value of the collateral that they provide.
-    uint16 public loanToCollateral;
-
-    /// @notice The constant value of 100%.
-    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
+    uint256 public loanToCollateral;
 
     // ===== MODULES ===== //
 
@@ -75,8 +73,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         address kernel_,
         uint256 maxRewardPerLoan_,
         uint48 duration_,
-        uint16 loanToCollateral_,
-        uint16 interestRate_
+        uint256 loanToCollateral_,
+        uint256 interestRate_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
         // Validate that the debt token is an ERC4626
         if (address(ERC4626(debtToken_).asset()) == address(0)) revert InvalidParams("debt token");
@@ -128,6 +126,9 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Ensure that the tokens match with CDEPO's
         if (address(CDEPO.VAULT()) != address(_DEBT_TOKEN)) revert InvalidParams("CDEPO vault");
+
+        // Set the collateral token scale
+        _COLLATERAL_TOKEN_SCALE = 10 ** CDEPO.decimals();
     }
 
     /// @inheritdoc Policy
@@ -332,7 +333,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Principal = Collateral * LoanToCollateral
         // => Collateral = Principal / LoanToCollateral
-        return debtTokenValue.mulDivUp(ONE_HUNDRED_PERCENT, loanToCollateral);
+        return debtTokenValue.mulDivUp(_COLLATERAL_TOKEN_SCALE, loanToCollateral);
     }
 
     /// @inheritdoc IGenericClearinghouse
@@ -340,7 +341,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     function getLoanForCollateral(uint256 collateral_) public view returns (uint256, uint256) {
         uint256 principalUnderlyingAsset = collateral_.mulDivDown(
             loanToCollateral,
-            ONE_HUNDRED_PERCENT
+            _COLLATERAL_TOKEN_SCALE
         );
 
         // Convert amount to debt token
@@ -353,7 +354,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @inheritdoc IGenericClearinghouse
     function interestForLoan(uint256 principal_, uint256 duration_) public view returns (uint256) {
         uint256 interestPercent = uint256(interestRate).mulDivUp(duration_, 365 days);
-        return principal_.mulDivDown(interestPercent, ONE_HUNDRED_PERCENT);
+        return principal_.mulDivUp(interestPercent, _COLLATERAL_TOKEN_SCALE);
     }
 
     /// @inheritdoc IGenericClearinghouse
@@ -413,7 +414,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @dev    This function is restricted to the admin role.
     ///
     /// @param  loanToCollateral_ The ratio of debt tokens to collateral tokens.
-    function setLoanToCollateral(uint16 loanToCollateral_) external onlyAdminRole {
+    function setLoanToCollateral(uint256 loanToCollateral_) external onlyAdminRole {
         loanToCollateral = loanToCollateral_;
 
         emit LoanToCollateralSet(loanToCollateral_);
@@ -423,7 +424,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @dev    This function is restricted to the admin role.
     ///
     /// @param  interestRate_ The interest rate of the loan.
-    function setInterestRate(uint16 interestRate_) external onlyAdminRole {
+    function setInterestRate(uint256 interestRate_) external onlyAdminRole {
         interestRate = interestRate_;
 
         emit InterestRateSet(interestRate_);

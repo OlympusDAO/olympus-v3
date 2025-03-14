@@ -20,11 +20,11 @@ interface IGenericClearinghouse {
 
     event YieldSwept(address indexed to, uint256 amount);
 
-    event InterestRateSet(uint16 interestRate);
+    event InterestRateSet(uint256 interestRate);
 
     event MaxRewardPerLoanSet(uint256 maxRewardPerLoan);
 
-    event LoanToCollateralSet(uint16 loanToCollateral);
+    event LoanToCollateralSet(uint256 loanToCollateral);
 
     event DurationSet(uint48 duration);
 
@@ -41,10 +41,10 @@ interface IGenericClearinghouse {
 
     /// @notice The interest rate of the loan.
     ///         Stored as a percentage, in terms of 100e2.
-    function interestRate() external view returns (uint16);
+    function interestRate() external view returns (uint256);
 
     /// @notice The ratio of debt tokens to collateral tokens.
-    function loanToCollateral() external view returns (uint16);
+    function loanToCollateral() external view returns (uint256);
 
     /// @notice The maximum reward (in collateral tokens) per loan.
     function maxRewardPerLoan() external view returns (uint256);
