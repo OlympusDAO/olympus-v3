@@ -136,11 +136,12 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode CDEPO_KEYCODE = toKeycode("CDEPO");
 
-        requests = new Permissions[](4);
+        requests = new Permissions[](5);
         requests[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
         requests[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
         requests[2] = Permissions(CDEPO_KEYCODE, CDEPO.incurDebt.selector);
         requests[3] = Permissions(CDEPO_KEYCODE, CDEPO.repayDebt.selector);
+        requests[4] = Permissions(CDEPO_KEYCODE, CDEPO.reduceDebt.selector);
 
         return requests;
     }
