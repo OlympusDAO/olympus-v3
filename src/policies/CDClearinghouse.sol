@@ -166,8 +166,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             address(cooler_.debt()) != address(_DEBT_TOKEN)
         ) revert BadEscrow();
 
+        // Adjust the loanToCollateral ratio to be in terms of the debt token
+        uint256 loanToCollateralShares = loanToCollateral.mulDivDown(
+            _DEBT_TOKEN.convertToShares(1e18),
+            _COLLATERAL_TOKEN_SCALE
+        );
+
         // Transfer in collateral owed
-        uint256 collateral = cooler_.collateralFor(amount_, loanToCollateral);
+        uint256 collateral = cooler_.collateralFor(amount_, loanToCollateralShares);
         CDEPO.safeTransferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
@@ -180,7 +186,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         uint256 reqID = cooler_.requestLoan(
             amount_,
             interestRate,
-            loanToCollateral,
+            loanToCollateralShares,
             uint256(duration)
         );
 
@@ -333,13 +339,15 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Principal = Collateral * LoanToCollateral
         // => Collateral = Principal / LoanToCollateral
-        return debtTokenValue.mulDivUp(_COLLATERAL_TOKEN_SCALE, loanToCollateral);
+        // This uses mulDivDown to be consistent with the calculations in Cooler.collateralFor()
+        return debtTokenValue.mulDivDown(_COLLATERAL_TOKEN_SCALE, loanToCollateral);
     }
 
     /// @inheritdoc IGenericClearinghouse
     /// @dev    As the loan to collateral ratio is in terms of the debt token underlying asset, it is converted to debt token terms before returning.
     function getLoanForCollateral(uint256 collateral_) public view returns (uint256, uint256) {
-        uint256 principalUnderlyingAsset = collateral_.mulDivDown(
+        // This uses mulDivUp to avoid double-rounding when converting to debt token terms
+        uint256 principalUnderlyingAsset = collateral_.mulDivUp(
             loanToCollateral,
             _COLLATERAL_TOKEN_SCALE
         );

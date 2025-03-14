@@ -131,6 +131,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
         vm.label(OTHERS, "OTHERS");
         vm.label(address(vault), "VAULT");
         vm.label(address(asset), "ASSET");
+        vm.label(address(cooler), "COOLER");
     }
 
     modifier givenDisabled() {
@@ -140,41 +141,24 @@ contract ConvertibleDepositClearinghouseTest is Test {
     }
 
     function _expectNotEnabled() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                PolicyEnabler.NotEnabled.selector
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
     }
 
     function _expectNotDisabled() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                PolicyEnabler.NotDisabled.selector
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotDisabled.selector));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ROLESv1.ROLES_RequireRole.selector,
-                role_
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
     function _expectNotAuthorized() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                PolicyAdmin.NotAuthorised.selector
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
     }
 
     modifier givenUserHasApprovedCollateralSpending(uint256 amount_) {
         vm.prank(USER);
-        CDEPO.approve(address(cooler), amount_);
+        CDEPO.approve(address(clearinghouse), amount_);
         _;
     }
 

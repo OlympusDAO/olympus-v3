@@ -53,8 +53,21 @@ contract GetLoanForCollateralCDClearinghouseTest is ConvertibleDepositClearingho
         // principal (assets) = 987654321 * 75e16 / 1e18 = 740740740.75 = 740740740 (rounded down)
         // principal (shares) = 740740740 * 1e18 / 2e18 = 370370370
         // interest = 370370370 * 3315068493150685 / 1e18 = 1227803.1443835617 = 1227804 (rounded up)
-        (uint256 principalThree, uint256 interestThree) = clearinghouse.getLoanForCollateral(987654321);
+        (uint256 principalThree, uint256 interestThree) = clearinghouse.getLoanForCollateral(
+            987654321
+        );
         assertEq(principalThree, 370370370, "principalThree");
         assertEq(interestThree, 1227804, "interestThree");
+
+        // Case 4:
+        // collateral = 2666666666666666666
+        // principal (assets) = 2666666666666666666 * 75e16 / 1e18 = 1999999999999999999.5 = 2000000000000000000 (rounded up)
+        // principal (shares) = 2000000000000000000 * 1e18 / 2e18 = 1000000000000000000
+        // interest = 1000000000000000000 * 3315068493150685 / 1e18 = 3315068493150685
+        (uint256 principalFour, uint256 interestFour) = clearinghouse.getLoanForCollateral(
+            2666666666666666666
+        );
+        assertEq(principalFour, 1000000000000000000, "principalFour");
+        assertEq(interestFour, 3315068493150685, "interestFour");
     }
 }
