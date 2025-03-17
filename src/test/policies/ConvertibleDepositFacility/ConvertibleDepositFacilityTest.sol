@@ -51,6 +51,10 @@ contract ConvertibleDepositFacilityTest is Test {
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
         // Instantiate bophades
+        _createStack();
+    }
+
+    function _createStack() internal {
         kernel = new Kernel();
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
@@ -159,15 +163,7 @@ contract ConvertibleDepositFacilityTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
-        // Re-instantiate the CDEPO module
-        convertibleDepository = new OlympusConvertibleDepository(
-            address(kernel),
-            address(vault),
-            RECLAIM_RATE
-        );
-
-        // Upgrade the module
-        kernel.executeAction(Actions.UpgradeModule, address(convertibleDepository));
+        _createStack();
         _;
     }
 

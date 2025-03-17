@@ -36,11 +36,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
 
-    // ========== ERRORS ========== //
-
-    /// @notice An error that is thrown when the parameters are invalid
-    error CDFacility_InvalidParams(string reason);
-
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {
@@ -56,10 +51,17 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         dependencies[3] = toKeycode("CDEPO");
         dependencies[4] = toKeycode("CDPOS");
 
+        // Validate that CDEPO is not being changed
+        // This will block the CDEPO module from being upgraded
+        // Changing the CDEPO module will break
+        address newCDEPO = getModuleAddress(dependencies[3]);
+        if (address(CDEPO) != address(0) && address(CDEPO) != address(newCDEPO))
+            revert CDF_InvalidArgs("CDEPO");
+
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
+        CDEPO = CDEPOv1(newCDEPO);
         CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
 
         SCALE = 10 ** CDEPO.decimals();

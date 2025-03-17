@@ -23,6 +23,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     uint16 public override reclaimRate;
 
+    /// @inheritdoc CDEPOv1
+    mapping(address => uint256) public override debt;
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(
@@ -58,7 +61,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         minor = 0;
     }
 
-    // ========== ERC20 OVERRIDES ========== //
+    // ========== MINT/BURN ========== //
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
@@ -103,6 +106,17 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Return the same amount of CD tokens
         return amount_;
     }
+
+    /// @inheritdoc CDEPOv1
+    function burn(uint256 amount_) external virtual override {
+        // Decrease the total shares
+        totalShares -= VAULT.previewWithdraw(amount_);
+
+        // Burn the CD tokens from the caller
+        _burn(msg.sender, amount_);
+    }
+
+    // ========== RECLAIM/REDEEM ========== //
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
@@ -236,6 +250,74 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return tokensOut;
     }
 
+    // ========== LENDING ========== //
+
+    /// @inheritdoc CDEPOv1
+    function incurDebt(uint256 amount_) external virtual override permissioned {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Validate that the amount is within the vault balance
+        if (totalShares < amount_) revert CDEPO_InsufficientBalance();
+
+        // Update the debt
+        debt[msg.sender] += amount_;
+
+        // Transfer the vault asset to the caller
+        VAULT.safeTransfer(msg.sender, amount_);
+
+        // Emit the event
+        emit DebtIncurred(msg.sender, amount_);
+    }
+
+    /// @inheritdoc CDEPOv1
+    function repayDebt(
+        uint256 amount_
+    ) external virtual override permissioned returns (uint256 repaidAmount) {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Cap the repaid amount to the borrowed amount
+        repaidAmount = debt[msg.sender] < amount_ ? debt[msg.sender] : amount_;
+
+        // Update the borrowed amount
+        debt[msg.sender] -= repaidAmount;
+
+        // Transfer the vault asset from the caller to the contract
+        VAULT.safeTransferFrom(msg.sender, address(this), repaidAmount);
+
+        // Emit the event
+        emit DebtRepaid(msg.sender, repaidAmount);
+
+        return repaidAmount;
+    }
+
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Validates that the amount is greater than zero
+    ///             - Cap the reduced amount to the borrowed amount
+    ///             - Reduces the debt
+    ///             - Emits an event
+    ///             - Returns the amount of vault asset that was reduced
+    function reduceDebt(
+        uint256 amount_
+    ) external virtual override permissioned returns (uint256 actualAmount) {
+        // Validate that the amount is greater than zero
+        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
+
+        // Cap the reduced amount to the borrowed amount
+        actualAmount = debt[msg.sender] < amount_ ? debt[msg.sender] : amount_;
+
+        // Update the debt
+        debt[msg.sender] -= actualAmount;
+
+        // Emit the event
+        emit DebtReduced(msg.sender, actualAmount);
+
+        // Return the amount of vault asset that was reduced
+        return actualAmount;
+    }
+
     // ========== YIELD MANAGER ========== //
 
     /// @inheritdoc CDEPOv1
@@ -280,7 +362,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         override
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
-        // The yield is the difference between the quantity of underlying assets in the vault and the quantity CD tokens issued
+        // The yield is the difference between the quantity of underlying assets in the vault and the quantity of CD tokens issued
         yieldReserve = VAULT.previewRedeem(totalShares) - totalSupply;
 
         // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed

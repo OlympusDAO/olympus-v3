@@ -14,12 +14,24 @@ abstract contract CDEPOv1 is Module, ERC20 {
     event ReclaimRateUpdated(uint16 newReclaimRate);
 
     /// @notice Emitted when the yield is swept
-    event YieldSwept(address receiver, uint256 reserveAmount, uint256 sReserveAmount);
+    event YieldSwept(address indexed receiver, uint256 reserveAmount, uint256 sReserveAmount);
+
+    /// @notice Emitted when the caller borrows the underlying asset
+    event DebtIncurred(address indexed borrower, uint256 amount);
+
+    /// @notice Emitted when the caller repays a borrowed amount of the underlying asset
+    event DebtRepaid(address indexed borrower, uint256 amount);
+
+    /// @notice Emitted when the debt is reduced for a borrower
+    event DebtReduced(address indexed borrower, uint256 amount);
 
     // ========== ERRORS ========== //
 
     /// @notice Thrown when the caller provides invalid arguments
     error CDEPO_InvalidArgs(string reason);
+
+    /// @notice Thrown when the depository has insufficient balance
+    error CDEPO_InsufficientBalance();
 
     // ========== CONSTANTS ========== //
 
@@ -35,7 +47,7 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @notice The total amount of vault shares in the contract
     uint256 public totalShares;
 
-    // ========== ERC20 OVERRIDES ========== //
+    // ========== MINT/BURN ========== //
 
     /// @notice Mint tokens to the caller in exchange for the underlying asset
     /// @dev    The implementing function should perform the following:
@@ -69,6 +81,15 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @param  amount_   The amount of underlying asset to transfer
     /// @return tokensOut The amount of convertible deposit tokens that would be minted
     function previewMint(uint256 amount_) external view virtual returns (uint256 tokensOut);
+
+    /// @notice Burn tokens from the caller
+    /// @dev    The implementing function should perform the following:
+    ///         - Burns the corresponding amount of convertible deposit tokens from the caller
+    ///
+    /// @param  amount_   The amount of convertible deposit tokens to burn
+    function burn(uint256 amount_) external virtual;
+
+    // ========== RECLAIM/REDEEM ========== //
 
     /// @notice Burn tokens from the caller and reclaim the underlying asset
     ///         The amount of underlying asset may not be 1:1 with the amount of
@@ -148,6 +169,44 @@ abstract contract CDEPOv1 is Module, ERC20 {
     /// @param  amount_   The amount of convertible deposit tokens to burn
     /// @return tokensOut The amount of underlying asset that would be redeemed
     function previewRedeem(uint256 amount_) external view virtual returns (uint256 tokensOut);
+
+    // ========== LENDING ========== //
+
+    /// @notice Allows the permissioned caller to borrow the vault asset
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Transfers the vault asset from the contract to the caller
+    ///         - Emits a `DebtIncurred` event
+    ///
+    /// @param  amount_   The amount of vault asset to borrow
+    function incurDebt(uint256 amount_) external virtual;
+
+    /// @notice Allows the permissioned caller to repay an amount of the vault asset
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Transfers the vault asset from the caller to the contract
+    ///         - Emits a `DebtRepaid` event
+    ///
+    /// @param  amount_         The amount of vault asset to repay
+    /// @return repaidAmount    The amount of vault asset that was repaid
+    function repayDebt(uint256 amount_) external virtual returns (uint256 repaidAmount);
+
+    /// @notice Allows the permissioned caller to reduce the debt of a borrower
+    ///         This can be used to forgive debt, e.g. in the case of a liquidation.
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the caller is permissioned
+    ///         - Updates the debt of the borrower
+    ///         - Emits a `DebtSet` event
+    ///
+    /// @param  amount_         The amount of vault asset to reduce the debt by
+    /// @return borrowedAmount  The updated amount of vault asset that has been borrowed by the given address
+    function reduceDebt(uint256 amount_) external virtual returns (uint256 borrowedAmount);
+
+    /// @notice Returns the amount of vault asset that has been borrowed by the given address
+    ///
+    /// @param  borrower_       The address to check the borrowed amount for
+    /// @return borrowedAmount  The amount of vault asset that has been borrowed by the given address
+    function debt(address borrower_) external view virtual returns (uint256 borrowedAmount);
 
     // ========== YIELD MANAGER ========== //
 
