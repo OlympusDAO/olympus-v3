@@ -3,9 +3,14 @@ pragma solidity 0.8.15;
 
 import {stdError} from "forge-std/StdError.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract BurnCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when the caller has an insufficient balance
+    //  [X] it reverts
+    // when the caller has not approved the CDEPO to spend the amount
     //  [X] it reverts
     // when the last CD token is burned
     //  [X] it burns the correct amount
@@ -13,9 +18,29 @@ contract BurnCDEPOTest is CDEPOTest {
     // [X] it burns the correct amount
     // [X] it updates the total shares
 
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.burn(iReserveTokenTwo, 10e18);
+    }
+
     function test_insufficientBalance_reverts() public {
         // Expect revert
         vm.expectRevert(stdError.arithmeticError);
+
+        // Call function
+        CDEPO.burn(iReserveToken, 10e18);
+    }
+
+    function test_spendingNotApproved_reverts() public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
+     {
+        // Expect revert
+        vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
         CDEPO.burn(iReserveToken, 10e18);
@@ -28,6 +53,7 @@ contract BurnCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 amount = bound(amount_, 2, 10e18);
 

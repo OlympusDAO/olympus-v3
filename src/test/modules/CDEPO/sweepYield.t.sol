@@ -15,6 +15,8 @@ contract SweepYieldCDEPOTest is CDEPOTest {
 
     // when the caller is not permissioned
     //  [X] it reverts
+    // when the input token is not supported
+    //  [X] it reverts
     // when the recipient_ address is the zero address
     //  [X] it reverts
     // when there are no deposits
@@ -37,6 +39,14 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         // Call function
         vm.prank(recipient);
         CDEPO.sweepYield(iReserveToken, recipient);
+    }
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.sweepYield(iReserveTokenTwo, recipient);
     }
 
     function test_recipientZeroAddress_reverts() public {

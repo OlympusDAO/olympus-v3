@@ -168,21 +168,25 @@ interface IConvertibleDepository {
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Get all supported input tokens
-    /// @return Array of supported token addresses
-    function getTokens() external view returns (address[] memory);
+    ///
+    /// @return tokens  Array of supported token addresses
+    function getTokens() external view returns (address[] memory tokens);
 
     /// @notice Get the cdToken for an input token
+    ///
     /// @param  inputToken_  The input token to check
     /// @return cdToken      The cdToken address, or address(0) if not supported
     function getToken(IERC20 inputToken_) external view returns (address cdToken);
 
     /// @notice Check if an input token is supported
+    ///
     /// @param  inputToken_  The input token to check
-    /// @return True if the token is supported
-    function isSupported(IERC20 inputToken_) external view returns (bool);
+    /// @return isSupported  True if the token is supported
+    function isSupported(IERC20 inputToken_) external view returns (bool isSupported);
 
     /// @notice Get the reclaim rate for a token
-    /// @param  inputToken_  The input token to check
-    /// @return The reclaim rate for the token
-    function reclaimRate(IERC20 inputToken_) external view returns (uint16);
+    ///
+    /// @param  inputToken_         The input token to check
+    /// @return tokenReclaimRate    The reclaim rate for the token
+    function reclaimRate(IERC20 inputToken_) external view returns (uint16 tokenReclaimRate);
 }

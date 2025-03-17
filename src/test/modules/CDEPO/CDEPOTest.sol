@@ -27,6 +27,8 @@ abstract contract CDEPOTest is Test {
     uint48 public constant INITIAL_BLOCK = 100000000;
 
     IERC20 public iReserveToken;
+    IERC20 public iReserveTokenTwo;
+    IERC4626 public iReserveTokenTwoVault;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -34,6 +36,10 @@ abstract contract CDEPOTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RST", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
+
+        MockERC20 reserveTokenTwo = new MockERC20("USDS", "USDS", 18);
+        iReserveTokenTwo = IERC20(address(reserveTokenTwo));
+        iReserveTokenTwoVault = IERC4626(address(new MockERC4626(reserveTokenTwo, "Savings USDS", "sUSDS")));
 
         // Mint reserve tokens to the vault without depositing, so that the conversion is not 1
         reserveToken.mint(address(vault), INITIAL_VAULT_BALANCE);

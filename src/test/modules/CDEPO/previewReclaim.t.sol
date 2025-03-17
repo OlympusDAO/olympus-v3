@@ -7,12 +7,22 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract PreviewReclaimCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the reclaimed amount is zero
     //  [X] it reverts
     // when the amount is greater than zero
     //  [X] it returns the amount after applying the burn rate
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.previewReclaim(iReserveTokenTwo, 10e18);
+    }
 
     function test_amountIsZero_reverts() public {
         // Expect revert

@@ -10,6 +10,8 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
 
     // when the caller is not permissioned
     //  [X] it reverts
+    // when the input token is not supported
+    //  [X] it reverts
     // when the new reclaim rate is greater than the maximum reclaim rate
     //  [X] it reverts
     // when the new reclaim rate is within bounds
@@ -22,6 +24,15 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
 
         // Call function
         CDEPO.setReclaimRate(iReserveToken, 100e2);
+    }
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        vm.prank(godmode);
+        CDEPO.setReclaimRate(iReserveTokenTwo, 100e2);
     }
 
     function test_aboveMax_reverts() public {

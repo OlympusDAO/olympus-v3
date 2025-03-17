@@ -7,6 +7,8 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract RedeemForCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the shares for the amount is zero
@@ -21,6 +23,14 @@ contract RedeemForCDEPOTest is CDEPOTest {
     //  [X] it burns the corresponding amount of convertible deposit tokens from the account address
     //  [X] it withdraws the underlying asset from the vault
     //  [X] it transfers the underlying asset to the caller and does not apply the reclaim rate
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.redeemFor(iReserveTokenTwo, recipient, 10e18);
+    }
 
     function test_amountIsZero_reverts() public {
         // Expect revert

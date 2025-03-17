@@ -6,10 +6,20 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract PreviewMintCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the amount is greater than zero
     //  [X] it returns the same amount
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.previewMint(iReserveTokenTwo, 10e18);
+    }
 
     function test_zeroAmount_reverts() public {
         // Expect revert

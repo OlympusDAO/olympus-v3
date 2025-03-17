@@ -3,7 +3,11 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+
 contract PreviewSweepYieldCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when there are no deposits
     //  when the vault has assets
     //   [X] it returns zero
@@ -12,6 +16,14 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
     //  when there have been reclaimed deposits
     //   [X] the forfeited amount is included in the yield
     //  [X] it returns the difference between the total deposits and the total assets in the vault
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.previewSweepYield(iReserveTokenTwo);
+    }
 
     function test_noDeposits() public {
         (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);

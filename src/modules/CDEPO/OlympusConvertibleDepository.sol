@@ -117,7 +117,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function previewMint(
         IERC20, // inputToken_
         uint256 amount_
-    ) external view override returns (uint256 tokensOut) {
+    ) external pure override returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
@@ -516,24 +516,20 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         // Get the input token from the vault
         address inputToken = vault_.asset();
 
-        if (_tokenToClone[inputToken] != address(0)) revert CDEPO_InvalidArgs("Token exists");
-        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("Rate exceeds 100%");
+        if (_tokenToClone[inputToken] != address(0)) revert CDEPO_InvalidArgs("exists");
+        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("reclaimRate");
 
         // Get token name and symbol
         IERC20 inputTokenContract = IERC20(inputToken);
-        string memory name = string(
-            abi.encodePacked("Convertible Deposit ", inputTokenContract.name())
-        );
-        string memory symbol = string(abi.encodePacked("cd", inputTokenContract.symbol()));
 
         // Deploy clone with immutable args
-        bytes memory data = abi.encode(
-            name, // TODO check max length of name
-            symbol, // TODO check max length of symbol
-            inputTokenContract.decimals(),
-            address(this),
-            inputToken,
-            address(vault_)
+        bytes memory data = abi.encodePacked(
+            _concatenateAndTruncate("Convertible Deposit ", inputTokenContract.name()), // Name
+            _concatenateAndTruncate("cd", inputTokenContract.symbol()), // Symbol
+            inputTokenContract.decimals(), // Decimals
+            address(this), // Owner
+            inputToken, // Asset
+            address(vault_) // Vault
         );
 
         address cdToken = _TOKEN_IMPLEMENTATION.clone(data);
@@ -545,6 +541,12 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         _setReclaimRate(inputTokenContract, reclaimRate_);
 
         return cdToken;
+    }
+
+    function _concatenateAndTruncate(string memory a_, string memory b_) internal pure returns (string memory) {
+        bytes32 nameBytes = bytes32(abi.encodePacked(a_, b_));
+
+        return string(abi.encodePacked(nameBytes));
     }
 
     // ========== VIEW FUNCTIONS ========== //

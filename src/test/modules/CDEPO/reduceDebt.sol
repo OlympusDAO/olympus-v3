@@ -10,6 +10,8 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
 
     // when the caller is not permissioned
     //  [X] it reverts
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the amount is greater than the borrowed amount
@@ -27,6 +29,14 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
         // Call function
         vm.prank(caller_);
         CDEPO.reduceDebt(iReserveToken, 10e18);
+    }
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.reduceDebt(iReserveTokenTwo, 10e18);
     }
 
     function test_amountIsZero_reverts()

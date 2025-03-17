@@ -8,6 +8,8 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract ReclaimForCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the discounted amount is zero
@@ -24,6 +26,14 @@ contract ReclaimForCDEPOTest is CDEPOTest {
     //  [X] it transfers the underlying asset to the caller after applying the reclaim rate
     //  [X] it marks the forfeited amount of the underlying asset as yield
     //  [X] it updates the total deposits
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.reclaimFor(iReserveTokenTwo, recipient, 10e18);
+    }
 
     function test_amountIsZero_reverts() public {
         // Expect revert

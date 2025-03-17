@@ -10,6 +10,8 @@ contract RepayDebtCDEPOTest is CDEPOTest {
 
     // when the caller is not permissioned
     //  [X] it reverts
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the caller has not approved spending of the vault asset
@@ -31,6 +33,14 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         // Call function
         vm.prank(caller_);
         CDEPO.repayDebt(iReserveToken, 10e18);
+    }
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+
+        // Call function
+        CDEPO.repayDebt(iReserveTokenTwo, 10e18);
     }
 
     function test_amountIsZero_reverts()
