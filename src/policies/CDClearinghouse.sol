@@ -125,10 +125,10 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             revert Policy_WrongModuleVersion(expected);
 
         // Ensure that the tokens match with CDEPO's
-        if (address(CDEPO.VAULT()) != address(_DEBT_TOKEN)) revert InvalidParams("CDEPO vault");
+        // if (address(CDEPO.VAULT()) != address(_DEBT_TOKEN)) revert InvalidParams("CDEPO vault");
 
         // Set the collateral token scale
-        _COLLATERAL_TOKEN_SCALE = 10 ** CDEPO.decimals();
+        // _COLLATERAL_TOKEN_SCALE = 10 ** CDEPO.decimals();
     }
 
     /// @inheritdoc Policy
@@ -175,7 +175,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, loanToCollateralShares);
-        CDEPO.safeTransferFrom(msg.sender, address(this), collateral);
+        // CDEPO.safeTransferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
         (, uint256 interest) = getLoanForCollateral(collateral);
@@ -183,7 +183,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         principalReceivables += amount_;
 
         // Create a new loan request.
-        CDEPO.safeApprove(address(cooler_), collateral);
+        // CDEPO.safeApprove(address(cooler_), collateral);
         uint256 reqID = cooler_.requestLoan(
             amount_,
             interestRate,
@@ -193,7 +193,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Borrow from CDEPO
         // This will transfer `_DEBT_TOKEN` from CDEPO to this contract
-        CDEPO.incurDebt(amount_);
+        // CDEPO.incurDebt(amount_);
 
         // Clear the created loan request by providing enough reserve.
         _DEBT_TOKEN.safeApprove(address(cooler_), amount_);
@@ -275,13 +275,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Reduce the debt owed to CDEPO
         // CDEPO will cap the reduction to the amount owed
-        CDEPO.reduceDebt(totalPrincipal);
+        // CDEPO.reduceDebt(totalPrincipal);
 
         // Reward keeper.
-        CDEPO.transfer(msg.sender, keeperRewards);
+        // CDEPO.transfer(msg.sender, keeperRewards);
 
         // Burn the collateral token
-        CDEPO.burn(CDEPO.balanceOf(address(this)));
+        // CDEPO.burn(CDEPO.balanceOf(address(this)));
 
         // Sweep yield
         _sweepYield();
@@ -320,7 +320,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         // Repay the debt token to CDEPO
         if (principalPaid_ > 0) {
             _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
-            CDEPO.repayDebt(principalPaid_);
+            // CDEPO.repayDebt(principalPaid_);
         }
 
         // Sweep the yield

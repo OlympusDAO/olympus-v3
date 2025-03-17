@@ -51,6 +51,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         dependencies[3] = toKeycode("CDEPO");
         dependencies[4] = toKeycode("CDPOS");
 
+        // TODO remove CDEPO check
         // Validate that CDEPO is not being changed
         // This will block the CDEPO module from being upgraded
         // Changing the CDEPO module will break
@@ -64,7 +65,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         CDEPO = CDEPOv1(newCDEPO);
         CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
 
-        SCALE = 10 ** CDEPO.decimals();
+        // SCALE = 10 ** CDEPO.decimals();
     }
 
     /// @inheritdoc Policy
@@ -112,7 +113,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will also transfer the reserve token
-        CDEPO.mintFor(account_, amount_);
+        // CDEPO.mintFor(account_, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.create(
@@ -237,12 +238,12 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
         // Redeem the CD deposits in bulk
         // This will revert if cdTokenIn is 0
-        uint256 tokensOut = CDEPO.redeemFor(msg.sender, cdTokenIn);
+        // uint256 tokensOut = CDEPO.redeemFor(msg.sender, cdTokenIn);
 
         // Wrap the tokens and transfer to the TRSRY
-        ERC4626 vault = CDEPO.VAULT();
-        CDEPO.ASSET().approve(address(vault), tokensOut);
-        vault.deposit(tokensOut, address(TRSRY));
+        // ERC4626 vault = CDEPO.VAULT();
+        // CDEPO.ASSET().approve(address(vault), tokensOut);
+        // vault.deposit(tokensOut, address(TRSRY));
 
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert
@@ -314,7 +315,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         }
 
         // Preview redeeming the deposits in bulk
-        redeemed = CDEPO.previewRedeem(totalDeposit);
+        // redeemed = CDEPO.previewRedeem(totalDeposit);
 
         // If the redeemed amount is 0, revert
         if (redeemed == 0) revert CDF_InvalidArgs("amount");
@@ -364,19 +365,19 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
         // Redeem the CD deposits in bulk
         // This will revert if the redeemed amount is 0
-        redeemed = CDEPO.redeemFor(msg.sender, totalDeposit);
+        // redeemed = CDEPO.redeemFor(msg.sender, totalDeposit);
 
         // Transfer the tokens to the caller
-        ERC20 cdepoAsset = CDEPO.ASSET();
-        cdepoAsset.transfer(msg.sender, redeemed);
+        // ERC20 cdepoAsset = CDEPO.ASSET();
+        // cdepoAsset.transfer(msg.sender, redeemed);
 
         // Wrap any remaining tokens and transfer to the TRSRY
-        uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
-        if (remainingTokens > 0) {
-            ERC4626 vault = CDEPO.VAULT();
-            cdepoAsset.approve(address(vault), remainingTokens);
-            vault.deposit(remainingTokens, address(TRSRY));
-        }
+        // uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
+        // if (remainingTokens > 0) {
+        // ERC4626 vault = CDEPO.VAULT();
+        // cdepoAsset.approve(address(vault), remainingTokens);
+        // vault.deposit(remainingTokens, address(TRSRY));
+        // }
 
         // Decrease the mint approval
         MINTR.decreaseMintApproval(address(this), unconverted);
@@ -409,7 +410,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
-        reclaimed = CDEPO.previewReclaim(amount_);
+        // reclaimed = CDEPO.previewReclaim(amount_);
         return reclaimed;
     }
 
@@ -423,7 +424,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ) external view onlyEnabled returns (uint256 reclaimed, address cdTokenSpender) {
         // Preview reclaiming the amount
         // This will revert if the amount or reclaimed amount is 0
-        reclaimed = CDEPO.previewReclaim(amount_);
+        // reclaimed = CDEPO.previewReclaim(amount_);
 
         return (reclaimed, address(CDEPO));
     }
@@ -439,19 +440,19 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Reclaim the CD deposit
         // This will revert if the amount or reclaimed amount is 0
         // It will return the discount quantity of underlying asset to this contract
-        reclaimed = CDEPO.reclaimFor(msg.sender, amount_);
+        // reclaimed = CDEPO.reclaimFor(msg.sender, amount_);
 
         // Transfer the tokens to the caller
-        ERC20 cdepoAsset = CDEPO.ASSET();
-        cdepoAsset.transfer(msg.sender, reclaimed);
+        // ERC20 cdepoAsset = CDEPO.ASSET();
+        // cdepoAsset.transfer(msg.sender, reclaimed);
 
         // Wrap any remaining tokens and transfer to the TRSRY
-        uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
-        if (remainingTokens > 0) {
-            ERC4626 vault = CDEPO.VAULT();
-            cdepoAsset.approve(address(vault), remainingTokens);
-            vault.deposit(remainingTokens, address(TRSRY));
-        }
+        // uint256 remainingTokens = cdepoAsset.balanceOf(address(this));
+        // if (remainingTokens > 0) {
+        //     ERC4626 vault = CDEPO.VAULT();
+        //     cdepoAsset.approve(address(vault), remainingTokens);
+        //     vault.deposit(remainingTokens, address(TRSRY));
+        // }
 
         // Emit event
         emit ReclaimedDeposit(msg.sender, reclaimed, amount_ - reclaimed);
@@ -462,11 +463,11 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     // ========== VIEW FUNCTIONS ========== //
 
     function depositToken() external view returns (address) {
-        return address(CDEPO.ASSET());
+        // return address(CDEPO.ASSET());
     }
 
     function convertibleDepositToken() external view returns (address) {
-        return address(CDEPO);
+        // return address(CDEPO);
     }
 
     function convertedToken() external view returns (address) {
@@ -481,6 +482,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     /// @param  reclaimRate_  The new reclaim rate to set
     function setReclaimRate(uint16 reclaimRate_) external onlyAdminRole {
         // CDEPO will handle validation
-        CDEPO.setReclaimRate(reclaimRate_);
+        // CDEPO.setReclaimRate(reclaimRate_);
     }
 }

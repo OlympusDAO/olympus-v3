@@ -1292,7 +1292,7 @@ contract OlympusDeploy is Script {
 
         // Deploy ConvertibleDepository
         vm.broadcast();
-        CDEPO = new OlympusConvertibleDepository(address(kernel), address(sReserve), reclaimRate);
+        // CDEPO = new OlympusConvertibleDepository(address(kernel), address(sReserve), reclaimRate);
         console2.log("ConvertibleDepository deployed at:", address(CDEPO));
 
         return address(CDEPO);
