@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD
 pragma solidity >=0.8.0;
 
-import {Clone} from "@clones-with-immutable-args-1.1.1/Clone.sol";
+import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
 
 /// @notice Modern and gas efficient ERC20 implementation.
 /// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/tokens/ERC20.sol)
