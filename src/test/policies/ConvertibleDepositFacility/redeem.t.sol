@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 contract RedeemCDFTest is ConvertibleDepositFacilityTest {
@@ -349,7 +349,9 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         vm.prank(recipient);
@@ -377,7 +379,9 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "allowance"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "allowance")
+        );
 
         // Call function
         vm.prank(recipient);
@@ -424,11 +428,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         assertEq(redeemed, RESERVE_TOKEN_AMOUNT, "redeemed");
 
         // Assert convertible deposit tokens are transferred from the recipient
-        assertEq(
-            convertibleDepository.balanceOf(recipient),
-            0,
-            "convertibleDepository.balanceOf(recipient)"
-        );
+        assertEq(_getCDToken().balanceOf(recipient), 0, "_getCDToken().balanceOf(recipient)");
 
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
@@ -525,9 +525,9 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
 
         // Assert convertible deposit tokens are transferred from the recipient
         assertEq(
-            convertibleDepository.balanceOf(recipient),
+            _getCDToken().balanceOf(recipient),
             RESERVE_TOKEN_AMOUNT - amountOne - amountTwo,
-            "convertibleDepository.balanceOf(recipient)"
+            "_getCDToken().balanceOf(recipient)"
         );
 
         // Assert OHM not minted to the recipient

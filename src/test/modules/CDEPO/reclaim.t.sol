@@ -5,7 +5,7 @@ import {stdError} from "forge-std/Test.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract ReclaimCDEPOTest is CDEPOTest {
     // when the amount is zero
@@ -25,51 +25,56 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
     function test_amountIsZero_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(0);
+        CDEPO.reclaim(iReserveToken, 0);
     }
 
     function test_discountedAmountIsZero_reverts()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenRecipientHasCDEPO(10e18)
+        givenRecipientHasCDToken(10e18)
     {
         // This amount would result in 0 shares being withdrawn, and should revert
         uint256 amount = 1;
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+            abi.encodeWithSelector(
+                IConvertibleDepository.CDEPO_InvalidArgs.selector,
+                "reclaimed amount"
+            )
         );
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(amount);
+        CDEPO.reclaim(iReserveToken, amount);
     }
 
     function test_insufficientBalance_reverts()
         public
         givenAddressHasReserveToken(recipient, 5e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
-        givenRecipientHasCDEPO(5e18)
+        givenRecipientHasCDToken(5e18)
     {
         // Expect revert
         vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(10e18);
+        CDEPO.reclaim(iReserveToken, 10e18);
     }
 
     function test_success()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenRecipientHasCDEPO(10e18)
+        givenRecipientHasCDToken(10e18)
     {
         uint256 expectedReserveTokenAmount = FullMath.mulDiv(10e18, reclaimRate, 100e2);
         assertEq(expectedReserveTokenAmount, 99e17, "expectedReserveTokenAmount");
@@ -77,7 +82,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(10e18);
+        CDEPO.reclaim(iReserveToken, 10e18);
 
         // Assert balances
         _assertReserveTokenBalance(expectedReserveTokenAmount, 0);
@@ -94,7 +99,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenRecipientHasCDEPO(10e18)
+        givenRecipientHasCDToken(10e18)
     {
         uint256 amount = bound(amount_, 2, 10e18);
 
@@ -103,7 +108,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(amount);
+        CDEPO.reclaim(iReserveToken, amount);
 
         // Assert balances
         _assertReserveTokenBalance(expectedReserveTokenAmount, 0);

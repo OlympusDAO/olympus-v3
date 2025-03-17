@@ -173,8 +173,8 @@ interface IConvertibleDepository {
 
     /// @notice Get the cdToken for an input token
     /// @param  inputToken_  The input token to check
-    /// @return The cdToken address, or address(0) if not supported
-    function getToken(IERC20 inputToken_) external view returns (address);
+    /// @return cdToken      The cdToken address, or address(0) if not supported
+    function getToken(IERC20 inputToken_) external view returns (address cdToken);
 
     /// @notice Check if an input token is supported
     /// @param  inputToken_  The input token to check

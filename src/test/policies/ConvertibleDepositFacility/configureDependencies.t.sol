@@ -12,11 +12,7 @@ contract ConfigureDependenciesCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
 
     function test_cdepoUpgrade_reverts() public {
-        convertibleDepository = new OlympusConvertibleDepository(
-            address(kernel),
-            address(vault),
-            RECLAIM_RATE
-        );
+        convertibleDepository = new OlympusConvertibleDepository(kernel);
 
         // Expect revert
         // CDFacility is installed first, so it will have configuredDependencies called first and revert first

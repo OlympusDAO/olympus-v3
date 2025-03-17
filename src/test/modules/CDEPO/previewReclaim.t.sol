@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {CDEPOTest} from "./CDEPOTest.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract PreviewReclaimCDEPOTest is CDEPOTest {
     // when the amount is zero
@@ -16,27 +16,32 @@ contract PreviewReclaimCDEPOTest is CDEPOTest {
 
     function test_amountIsZero_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
-        CDEPO.previewReclaim(0);
+        CDEPO.previewReclaim(iReserveToken, 0);
     }
 
     function test_reclaimedAmountIsZero_reverts() public {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+            abi.encodeWithSelector(
+                IConvertibleDepository.CDEPO_InvalidArgs.selector,
+                "reclaimed amount"
+            )
         );
 
         // Call function
-        CDEPO.previewReclaim(1);
+        CDEPO.previewReclaim(iReserveToken, 1);
     }
 
     function test_amountGreaterThanZero(uint256 amount_) public {
         uint256 amount = bound(amount_, 2, type(uint256).max);
 
         // Call function
-        uint256 reclaimAmount = CDEPO.previewReclaim(amount);
+        uint256 reclaimAmount = CDEPO.previewReclaim(iReserveToken, amount);
 
         // Calculate the expected reclaim amount
         uint256 expectedReclaimAmount = FullMath.mulDiv(amount, reclaimRate, 100e2);

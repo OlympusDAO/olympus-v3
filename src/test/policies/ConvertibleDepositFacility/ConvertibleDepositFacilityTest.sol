@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -29,7 +31,7 @@ contract ConvertibleDepositFacilityTest is Test {
     MockERC20 public ohm;
     MockERC20 public reserveToken;
     MockERC4626 public vault;
-
+    IERC20 internal iReserveToken;
     address public recipient = address(0x1);
     address public auctioneer = address(0x2);
     address public recipientTwo = address(0x3);
@@ -48,6 +50,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
+        iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
         // Instantiate bophades
@@ -59,11 +62,7 @@ contract ConvertibleDepositFacilityTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(
-            address(kernel),
-            address(vault),
-            RECLAIM_RATE
-        );
+        convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
         facility = new CDFacility(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);
@@ -119,9 +118,13 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
+    function _getCDToken() internal view returns (IERC20) {
+        return IERC20(convertibleDepository.getToken(iReserveToken));
+    }
+
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        convertibleDepository.mint(amount_);
+        convertibleDepository.mint(iReserveToken, amount_);
         _;
     }
 
@@ -143,7 +146,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        convertibleDepository.approve(spender_, amount_);
+        _getCDToken().approve(spender_, amount_);
         _;
     }
 
@@ -161,6 +164,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier givenReserveTokenHasDecimals(uint8 decimals_) {
         reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
+        iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
         _createStack();

@@ -549,12 +549,12 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc CDEPOv1
+    /// @inheritdoc IConvertibleDepository
     function getTokens() external view override returns (address[] memory) {
         return _tokens;
     }
 
-    /// @inheritdoc CDEPOv1
+    /// @inheritdoc IConvertibleDepository
     ///
     /// @return     cdToken The address of the clone for the input token, or the zero address
     function getToken(IERC20 inputToken_) external view override returns (address cdToken) {
@@ -563,12 +563,12 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return cdToken;
     }
 
-    /// @inheritdoc CDEPOv1
+    /// @inheritdoc IConvertibleDepository
     function isSupported(IERC20 inputToken_) external view override returns (bool) {
         return _tokenToClone[address(inputToken_)] != address(0);
     }
 
-    /// @inheritdoc CDEPOv1
+    /// @inheritdoc IConvertibleDepository
     ///
     /// @return     tokenReclaimRate The reclaim rate for the input token, or 0
     function reclaimRate(
@@ -589,5 +589,12 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         tokenDebt = _debt[address(inputToken_)][borrower_];
 
         return tokenDebt;
+    }
+
+    /// @inheritdoc CDEPOv1
+    function getVaultShares(IERC20 inputToken_) external view override returns (uint256 shares) {
+        shares = _totalShares[address(inputToken_)];
+
+        return shares;
     }
 }

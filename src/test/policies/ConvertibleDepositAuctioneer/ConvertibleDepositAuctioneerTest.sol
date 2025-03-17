@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
 import {CDAuctioneer} from "src/policies/CDAuctioneer.sol";
@@ -81,11 +83,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(
-            address(kernel),
-            address(vault),
-            RECLAIM_RATE
-        );
+        convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
         facility = new CDFacility(address(kernel));
         auctioneer = new CDAuctioneer(address(kernel), address(facility));
@@ -271,6 +269,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
         reserveToken.approve(spender_, amount_);
     }
 
+    function _getCDToken() internal view returns (IERC20) {
+        return IERC20(address(convertibleDepository));
+    }
+
     modifier givenReserveTokenSpendingIsApproved(
         address owner_,
         address spender_,
@@ -286,7 +288,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        convertibleDepository.approve(spender_, amount_);
+        _getCDToken().approve(spender_, amount_);
         _;
     }
 

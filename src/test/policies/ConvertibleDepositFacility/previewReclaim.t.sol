@@ -2,8 +2,8 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
@@ -31,7 +31,9 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         mintConvertibleDepositToken(recipient, 9e18)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         facility.previewReclaim(0);
@@ -49,7 +51,10 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+            abi.encodeWithSelector(
+                IConvertibleDepository.CDEPO_InvalidArgs.selector,
+                "reclaimed amount"
+            )
         );
 
         // Call function
@@ -69,7 +74,8 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 amount = bound(amount_, 3, 9e18);
 
         // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimed = (amount * convertibleDepository.reclaimRate()) / 100e2;
+        uint256 expectedReclaimed = (amount * convertibleDepository.reclaimRate(iReserveToken)) /
+            100e2;
 
         // Call function
         (uint256 reclaimed, address spender) = facility.previewReclaim(amount);

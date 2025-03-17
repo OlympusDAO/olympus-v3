@@ -114,20 +114,14 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice Get all supported input tokens
-    function getTokens() external view virtual returns (address[] memory);
-
-    /// @notice Get the cdToken for an input token
-    function getToken(IERC20 inputToken_) external view virtual returns (address);
-
-    /// @notice Check if an input token is supported
-    function isSupported(IERC20 inputToken_) external view virtual returns (bool);
-
-    /// @notice Get the reclaim rate for a token
-    function reclaimRate(IERC20 inputToken_) external view virtual returns (uint16);
-
     /// @notice Get the debt amount for a token and borrower
     function debt(IERC20 inputToken_, address borrower_) external view virtual returns (uint256);
+
+    /// @notice Get the amount of vault shares managed by the contract
+    ///
+    /// @param  inputToken_  The input token to get vault shares for
+    /// @return shares       The amount of vault shares managed by the contract
+    function getVaultShares(IERC20 inputToken_) external view virtual returns (uint256 shares);
 
     // ========== ADMIN FUNCTIONS ========== //
 

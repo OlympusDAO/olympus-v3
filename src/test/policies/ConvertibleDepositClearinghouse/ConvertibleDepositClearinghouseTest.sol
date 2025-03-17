@@ -2,10 +2,14 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 // Libraries
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -23,6 +27,8 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract ConvertibleDepositClearinghouseTest is Test {
+    using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
+
     address internal constant EXECUTOR = address(0x1111);
     address internal constant ADMIN = address(0xAAAA);
     address internal constant EMERGENCY = address(0xEEEE);
@@ -39,6 +45,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
     CoolerFactory internal coolerFactory;
     MockERC4626 internal vault;
     MockERC20 internal asset;
+    IERC20 internal iAsset;
 
     Kernel internal kernel;
     OlympusTreasury internal TRSRY;
@@ -48,12 +55,16 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
     RolesAdmin internal rolesAdmin;
     CDClearinghouse internal clearinghouse;
+    address internal godmode;
+
+    ERC20 internal cdToken;
 
     ICooler internal cooler;
 
     function setUp() public {
         // Set up tokens
         asset = new MockERC20("Asset", "ASSET", 18);
+        iAsset = IERC20(address(asset));
         vault = new MockERC4626(asset, "Vault", "VAULT");
 
         coolerFactory = new CoolerFactory();
@@ -65,7 +76,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Modules
         TRSRY = new OlympusTreasury(kernel);
-        CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault), 90e2);
+        CDEPO = new OlympusConvertibleDepository(kernel);
         CHREG = new OlympusClearinghouseRegistry(kernel, address(0), new address[](0));
         ROLES = new OlympusRoles(kernel);
 
@@ -89,10 +100,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
             INTEREST_RATE
         );
         vm.stopPrank();
+        godmode = CDEPO.generateGodmodeFixture(type(OlympusConvertibleDepository).name);
 
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(clearinghouse));
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
         vm.stopPrank();
 
         // Assign roles
@@ -108,13 +121,18 @@ contract ConvertibleDepositClearinghouseTest is Test {
         vault.deposit(100e18, address(TRSRY));
         vm.stopPrank();
 
+        // Create a CD token
+        vm.startPrank(godmode);
+        cdToken = ERC20(CDEPO.createToken(IERC4626(address(vault)), 90e2));
+        vm.stopPrank();
+
         // Activate
         vm.prank(ADMIN);
         clearinghouse.enable("");
 
         // Create a cooler for USER
         vm.prank(USER);
-        cooler = ICooler(coolerFactory.generateCooler(CDEPO, vault));
+        cooler = ICooler(coolerFactory.generateCooler(cdToken, vault));
 
         // Fund others so that TRSRY is not the only with vault shares
         asset.mint(OTHERS, 100e18);
@@ -158,7 +176,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
     modifier givenUserHasApprovedCollateralSpending(uint256 amount_) {
         vm.prank(USER);
-        CDEPO.approve(address(clearinghouse), amount_);
+        cdToken.approve(address(clearinghouse), amount_);
         _;
     }
 
@@ -181,7 +199,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
         // Mint CDEPO to USER
         vm.startPrank(USER);
         asset.approve(address(CDEPO), amount_);
-        CDEPO.mint(amount_);
+        CDEPO.mint(iAsset, amount_);
         vm.stopPrank();
         _;
     }

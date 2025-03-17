@@ -97,7 +97,7 @@ contract HeartTest is Test {
             PRICE = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             ROLES = new OlympusRoles(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault), 90e2);
+            CDEPO = new OlympusConvertibleDepository(kernel);
             TRSRY = new OlympusTreasury(kernel);
 
             // Configure mocks

@@ -78,7 +78,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
         vm.prank(address(TRSRY));
         vault.transfer(USER, amount);
 
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
         uint256 expectedUserDebtTokenBalance = vault.balanceOf(USER) - amount;
         uint256 expectedCDEPODebtTokenBalance = vault.balanceOf(address(CDEPO));
         uint256 expectedTRSRYDebtTokenBalance = vault.balanceOf(address(TRSRY)) + amount;
@@ -102,13 +102,13 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "TRSRY debt token balance"
         );
 
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
-        assertEq(CDEPO.balanceOf(address(cooler)), loan.collateral, "cooler collateral balance");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
+        assertEq(cdToken.balanceOf(address(cooler)), loan.collateral, "cooler collateral balance");
 
         // CDEPO debt
         // No principal repaid, so it remains the same
-        assertEq(CDEPO.debt(address(clearinghouse)), 1e18, "CDEPO debt");
+        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 1e18, "CDEPO debt");
 
         // Receivables
         assertEq(
@@ -139,7 +139,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
         vm.prank(address(TRSRY));
         vault.transfer(USER, amount);
 
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER) + expectedCollateralReturned;
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER) + expectedCollateralReturned;
         uint256 expectedUserDebtTokenBalance = vault.balanceOf(USER) - amount;
         uint256 expectedCDEPODebtTokenBalance = vault.balanceOf(address(CDEPO)) + principalPaid;
         uint256 expectedTRSRYDebtTokenBalance = vault.balanceOf(address(TRSRY)) + loan.interestDue;
@@ -163,16 +163,16 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "TRSRY debt token balance"
         );
 
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
         assertEq(
-            CDEPO.balanceOf(address(cooler)),
+            cdToken.balanceOf(address(cooler)),
             loan.collateral - expectedCollateralReturned,
             "cooler collateral balance"
         );
 
         // CDEPO debt
-        assertEq(CDEPO.debt(address(clearinghouse)), totalDue - amount, "CDEPO debt");
+        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), totalDue - amount, "CDEPO debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), 0, "interest receivables");
@@ -204,7 +204,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
         vm.prank(address(TRSRY));
         vault.transfer(USER, amount);
 
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER) + expectedCollateralReturned;
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER) + expectedCollateralReturned;
         uint256 expectedUserDebtTokenBalance = vault.balanceOf(USER) - amount;
         uint256 expectedCDEPODebtTokenBalance = vault.balanceOf(address(CDEPO)) + principalPaid;
         uint256 expectedTRSRYDebtTokenBalance = vault.balanceOf(address(TRSRY)) + loan.interestDue;
@@ -228,16 +228,16 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "TRSRY debt token balance"
         );
 
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
         assertEq(
-            CDEPO.balanceOf(address(cooler)),
+            cdToken.balanceOf(address(cooler)),
             loan.collateral - expectedCollateralReturned,
             "cooler collateral balance"
         );
 
         // CDEPO debt
-        assertEq(CDEPO.debt(address(clearinghouse)), totalDue - amount, "CDEPO debt");
+        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), totalDue - amount, "CDEPO debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), 0, "interest receivables");

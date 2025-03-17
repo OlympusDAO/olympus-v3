@@ -18,7 +18,7 @@ contract BurnCDEPOTest is CDEPOTest {
         vm.expectRevert(stdError.arithmeticError);
 
         // Call function
-        CDEPO.burn(10e18);
+        CDEPO.burn(iReserveToken, 10e18);
     }
 
     function test_success(
@@ -27,54 +27,54 @@ contract BurnCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
     {
         uint256 amount = bound(amount_, 2, 10e18);
 
         uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO));
-        uint256 expectedTotalShares = CDEPO.totalShares() - vault.previewWithdraw(amount);
-        uint256 expectedTotalSupply = CDEPO.totalSupply() - amount;
+        uint256 expectedTotalShares = _getTotalShares() - vault.previewWithdraw(amount);
+        uint256 expectedTotalSupply = _getCDToken().totalSupply() - amount;
 
         // Call function
         vm.prank(recipient);
-        CDEPO.burn(amount);
+        CDEPO.burn(iReserveToken, amount);
 
         // Assert balances
-        assertEq(CDEPO.balanceOf(recipient), 10e18 - amount, "CDEPO: recipient balance");
+        assertEq(_getCDToken().balanceOf(recipient), 10e18 - amount, "CDEPO: recipient balance");
         assertEq(vault.balanceOf(recipient), 0, "vault: recipient balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "vault: CDEPO balance");
 
         // Assert total shares
-        assertEq(CDEPO.totalShares(), expectedTotalShares, "total shares");
-        assertEq(CDEPO.totalSupply(), expectedTotalSupply, "total supply");
+        assertEq(_getTotalShares(), expectedTotalShares, "total shares");
+        assertEq(_getCDToken().totalSupply(), expectedTotalSupply, "total supply");
     }
 
     function test_lastToken()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
     {
         uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO));
-        uint256 expectedTotalShares = CDEPO.totalShares() - vault.previewWithdraw(10e18);
+        uint256 expectedTotalShares = _getTotalShares() - vault.previewWithdraw(10e18);
 
         // Call function
         vm.prank(recipient);
-        CDEPO.burn(10e18);
+        CDEPO.burn(iReserveToken, 10e18);
 
         // Assert balances
-        assertEq(CDEPO.balanceOf(recipient), 0, "CDEPO: recipient balance");
+        assertEq(_getCDToken().balanceOf(recipient), 0, "CDEPO: recipient balance");
         assertEq(vault.balanceOf(recipient), 0, "vault: recipient balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "vault: CDEPO balance");
 
         // Assert total shares
-        assertEq(CDEPO.totalShares(), expectedTotalShares, "total shares");
-        assertEq(CDEPO.totalSupply(), 0, "total supply");
+        assertEq(_getTotalShares(), expectedTotalShares, "total shares");
+        assertEq(_getCDToken().totalSupply(), 0, "total supply");
 
         // Sweeping yield should bring total shares to 0
         vm.prank(address(godmode));
-        CDEPO.sweepYield(address(this));
+        CDEPO.sweepYield(iReserveToken, address(this));
 
-        assertEq(CDEPO.totalShares(), 0, "total shares after sweep");
+        assertEq(_getTotalShares(), 0, "total shares after sweep");
     }
 }

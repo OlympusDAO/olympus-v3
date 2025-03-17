@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract PreviewMintCDEPOTest is CDEPOTest {
     // when the amount is zero
@@ -13,17 +13,19 @@ contract PreviewMintCDEPOTest is CDEPOTest {
 
     function test_zeroAmount_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
-        CDEPO.previewMint(0);
+        CDEPO.previewMint(iReserveToken, 0);
     }
 
     function test_success(uint256 amount_) public {
         uint256 amount = bound(amount_, 1, type(uint256).max);
 
         // Call function
-        uint256 amountOut = CDEPO.previewMint(amount);
+        uint256 amountOut = CDEPO.previewMint(iReserveToken, amount);
 
         // Assert
         assertEq(amountOut, amount, "amountOut");
