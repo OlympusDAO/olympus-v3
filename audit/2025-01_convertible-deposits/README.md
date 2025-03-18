@@ -8,7 +8,7 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 ## Design
 
-The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`CDEPO`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
 
 ### Auction Design
 
@@ -33,7 +33,7 @@ There are a few additional behaviours:
 
 A successful bidder will receive a convertible deposit that can be converted into OHM or redeemed for the deposited reserve token. The deposit is composed of:
 
-- A quantity of `CDEPO` tokens, which is a fungible ERC20 token across all deposits and terms.
+- A quantity of CD tokens, which is a fungible ERC20 token across all deposits and terms.
 - A `CDPOS` ERC721 token, which represents the non-fungible position of the bidder. This includes terms such as the expiry date, conversion price and size of the convertible deposit.
 
 Using the `CDFacility` policy, convertible deposit holders are able to:
@@ -161,7 +161,7 @@ sequenceDiagram
 
 #### Deposit Creation
 
-A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CDEPO tokens and a CDPOS position.
+A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CD tokens and a CDPOS position.
 
 ```mermaid
 sequenceDiagram
@@ -173,6 +173,7 @@ sequenceDiagram
     participant MINTR
     participant ReserveToken as Reserve (ERC20)
     participant VaultToken as Vault (ERC4626)
+    participant cdReserve
 
     caller->>CDAuctioneer: bid(depositAmount)
     CDAuctioneer->>CDAuctioneer: determine conversion price
@@ -182,7 +183,8 @@ sequenceDiagram
     caller-->>CDEPO: reserve tokens
     CDEPO->>VaultToken: deposit(depositAmount, caller)
     VaultToken-->>CDEPO: vault tokens
-    CDEPO-->>caller: CDEPO tokens
+    CDEPO->>cdReserve: mintFor(caller, depositAmount)
+    cdReserve-->>caller: CDEPO tokens
     CDFacility->>CDPOS: create(caller, CDEPO, depositAmount, conversionPrice, expiry, wrapNft)
     CDPOS-->>caller: CDPOS ERC721 token
     CDFacility->>MINTR: increaseMintApproval(CDFacility, convertedAmount)
@@ -203,6 +205,7 @@ sequenceDiagram
     participant ReserveToken
     participant VaultToken
     participant OHM
+    participant cdReserve
 
     caller->>CDFacility: convert(positionIds, amounts)
     loop For each position
@@ -210,7 +213,7 @@ sequenceDiagram
     end
     CDFacility->>CDEPO: redeemFor(caller, amount)
     caller-->>CDEPO: CD tokens
-    CDEPO->>CDEPO: burns tokens
+    CDEPO->>cdReserve: burns tokens
     CDEPO->>VaultToken: withdraw(amount, CDFacility, CDEPO)
     ReserveToken-->>CDEPO: reserve tokens
     CDFacility->>VaultToken: deposit(amount, TRSRY)
@@ -232,11 +235,12 @@ sequenceDiagram
     participant MINTR
     participant ReserveToken
     participant VaultToken
+    participant cdReserve
 
     caller->>CDFacility: reclaim(amount)
     CDFacility->>CDEPO: reclaimFor(caller, amount)
     caller-->>CDEPO: CD tokens
-    CDEPO->>CDEPO: burns tokens
+    CDEPO->>cdReserve: burns tokens
     CDEPO->>VaultToken: withdraw(discounted amount, CDFacility, CDEPO)
     ReserveToken-->>CDFacility: reserve tokens
     CDFacility->>ReserveToken: transfer(discounted amount, caller)
@@ -256,6 +260,7 @@ sequenceDiagram
     participant MINTR
     participant ReserveToken
     participant VaultToken
+    participant cdReserve
 
     caller->>CDFacility: redeem(positionIds, amounts)
     loop For each position
@@ -263,7 +268,7 @@ sequenceDiagram
     end
     CDFacility->>CDEPO: redeemFor(caller, amount)
     caller-->>CDEPO: CD tokens
-    CDEPO->>CDEPO: burns tokens
+    CDEPO->>cdReserve: burns tokens
     CDEPO->>VaultToken: withdraw(amount, CDFacility, CDEPO)
     ReserveToken-->>CDFacility: reserve tokens
     CDFacility->>ReserveToken: transfer(amount, caller)
@@ -304,7 +309,9 @@ CD token holders can perform the following actions:
 
 ### CDEPO (Module)
 
-CDEPO is an ERC20 token and a Module representing the deposit of an underlying asset in a 1:1 ratio. The token is used with convertible deposits facilitated by the CDFacility, and so is typically shortened to "CD token" or "cd" + underlying token name, e.g. "cdUSDS".
+CDEPO is a Module that owns and manages the CD tokens that have been created.
+
+Each CD token is an ERC20 contract managed by the CDEPO module, and the token represents the deposit of the underlying asset in a 1:1 ratio. The token is used with convertible deposits facilitated by the CDFacility, and so is typically shortened to "CD token" or "cd" + underlying token name, e.g. "cdUSDS".
 
 Unpermissioned callers are able to perform the following actions:
 
@@ -313,7 +320,7 @@ Unpermissioned callers are able to perform the following actions:
 
 Bophades policies with the correct permissions are able to perform the additional following actions:
 
-- Redeem the underlying asset in exchange for the cd tokens (without applying a discount)
+- Redeem the underlying asset in exchange for the CD tokens (without applying a discount)
 - Sweep any forfeited yield and assets into the caller's address
 
 ### CDPOS (Module)
