@@ -38,6 +38,7 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
         );
 
         // Call function
+        vm.prank(godmode);
         CDEPO.reduceDebt(iReserveTokenTwo, 10e18);
     }
 

@@ -52,9 +52,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
         givenAddressHasCDToken(recipient, 10e18)
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "allowance")
-        );
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(godmode);
@@ -145,6 +143,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(godmode, 10e18)
         givenReserveTokenSpendingIsApproved(godmode, address(CDEPO), 10e18)
         givenAddressHasCDToken(godmode, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(godmode, address(CDEPO), 10e18)
     {
         uint256 amount = 5e18;
 

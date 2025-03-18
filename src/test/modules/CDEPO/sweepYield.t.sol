@@ -48,6 +48,7 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         );
 
         // Call function
+        vm.prank(godmode);
         CDEPO.sweepYield(iReserveTokenTwo, recipient);
     }
 
@@ -188,6 +189,7 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Recipient has reclaimed all of their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield

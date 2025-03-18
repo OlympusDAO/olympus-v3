@@ -22,8 +22,6 @@ contract ConvertibleDepositTokenClone is CloneERC20 {
     // 0x55 - asset, 20 bytes
     // 0x69 - vault, 20 bytes
 
-    // TODO check max length of name and symbol
-
     /// @notice The owner of the clone
     /// @return _owner The owner address stored in immutable args
     function owner() public pure returns (address _owner) {
@@ -52,6 +50,7 @@ contract ConvertibleDepositTokenClone is CloneERC20 {
 
     /// @notice Mint tokens to the specified address
     /// @dev    This is owner-only, as the underlying token is custodied by the owner.
+    ///         Minting should be performed through the owner contract.
     ///
     /// @param to_ The address to mint tokens to
     /// @param amount_ The amount of tokens to mint
@@ -61,11 +60,20 @@ contract ConvertibleDepositTokenClone is CloneERC20 {
 
     /// @notice Burn tokens from the specified address
     /// @dev    This is gated to the owner, as burning is controlled.
+    ///         Burning should be performed through the owner contract.
+    ///
+    /// @dev    This function reverts if:
+    ///         - The amount is greater than the allowance
     ///
     /// @param from_ The address to burn tokens from
     /// @param amount_ The amount of tokens to burn
     function burnFrom(address from_, uint256 amount_) external onlyOwner {
-        // TODO allowance
+        uint256 allowed = allowance[from_][msg.sender];
+
+        if (allowed != type(uint256).max) {
+            allowance[from_][msg.sender] = allowed - amount_;
+        }
+
         _burn(from_, amount_);
     }
 }

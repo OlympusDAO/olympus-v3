@@ -119,20 +119,6 @@ interface IConvertibleDepository {
     ) external view returns (uint256 assetsOut);
 
     /// @notice Redeem convertible deposit tokens for the input token
-    ///         This differs from the reclaim function, in that it is an admin-level and permissioned function that does not apply the burn rate.
-    /// @dev    The implementing function should perform the following:
-    ///         - Validates that the input token is supported
-    ///         - Validates that the caller is permissioned
-    ///         - Transfers the corresponding input token to the caller
-    ///         - Burns the corresponding amount of convertible deposit tokens from the caller
-    ///
-    /// @param  inputToken_  The input token to redeem
-    /// @param  amount_     The amount of convertible deposit tokens to burn
-    /// @return tokensOut   The amount of input token that was redeemed
-    function redeem(IERC20 inputToken_, uint256 amount_) external returns (uint256 tokensOut);
-
-    /// @notice Redeem convertible deposit tokens for the input token
-    ///         This differs from the redeem function, in that it allows the caller to specify the address to burn the convertible deposit tokens from.
     ///         The `account_` address must have approved the contract to spend the convertible deposit tokens.
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the input token is supported

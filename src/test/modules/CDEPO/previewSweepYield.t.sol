@@ -69,6 +69,7 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Call function
         (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
@@ -83,6 +84,7 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Recipient has reclaimed all of their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield
@@ -111,6 +113,7 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Start from 2 as it will revert due to 0 shares if amount is 1
         uint256 amount = bound(amount_, 2, 10e18);

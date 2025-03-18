@@ -6,7 +6,7 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract IncurDebtCDEPOTest is CDEPOTest {
-    event DebtIncurred(address indexed borrower, uint256 amount);
+    event DebtIncurred(address indexed inputToken, address indexed borrower, uint256 amount);
 
     // when the caller is not permissioned
     //  [X] it reverts
@@ -38,6 +38,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
         );
 
         // Call function
+        vm.prank(godmode);
         CDEPO.incurDebt(iReserveTokenTwo, 10e18);
     }
 
@@ -87,7 +88,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Expect event
         vm.expectEmit();
-        emit DebtIncurred(address(godmode), amount);
+        emit DebtIncurred(address(iReserveToken), address(godmode), amount);
 
         // Call function
         vm.prank(address(godmode));

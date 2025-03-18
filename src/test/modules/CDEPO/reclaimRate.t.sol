@@ -6,5 +6,5 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 contract ReclaimRateCDEPOTest is CDEPOTest {
     // when the input token is not supported
     //  [ ] it reverts
-    // it returns the reclaim rate for the input token
+    // [ ] it returns the reclaim rate for the input token
 }

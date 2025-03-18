@@ -18,6 +18,8 @@ contract ReclaimCDEPOTest is CDEPOTest {
     //  [X] it reverts
     // when the amount is greater than the caller's balance
     //  [X] it reverts
+    // when the caller has not approved spending of the convertible deposit tokens
+    //  [X] it reverts
     // when the amount is greater than zero
     //  [X] it burns the corresponding amount of convertible deposit tokens
     //  [X] it withdraws the underlying asset from the vault
@@ -68,11 +70,26 @@ contract ReclaimCDEPOTest is CDEPOTest {
         CDEPO.reclaim(iReserveToken, amount);
     }
 
+    function test_insufficientAllowance_reverts()
+        public
+        givenAddressHasReserveToken(recipient, 10e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
+        givenRecipientHasCDToken(5e18)
+    {
+        // Expect revert
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Call function
+        vm.prank(recipient);
+        CDEPO.reclaim(iReserveToken, 10e18);
+    }
+
     function test_insufficientBalance_reverts()
         public
         givenAddressHasReserveToken(recipient, 5e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
         givenRecipientHasCDToken(5e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
     {
         // Expect revert
         vm.expectRevert(stdError.arithmeticError);
@@ -87,6 +104,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenRecipientHasCDToken(10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 expectedReserveTokenAmount = FullMath.mulDiv(10e18, reclaimRate, 100e2);
         assertEq(expectedReserveTokenAmount, 99e17, "expectedReserveTokenAmount");
@@ -112,6 +130,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenRecipientHasCDToken(10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 amount = bound(amount_, 2, 10e18);
 

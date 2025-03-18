@@ -42,6 +42,7 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         );
 
         // Call function
+        vm.prank(godmode);
         CDEPO.repayDebt(iReserveTokenTwo, 10e18);
     }
 

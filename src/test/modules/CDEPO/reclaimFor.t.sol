@@ -77,9 +77,7 @@ contract ReclaimForCDEPOTest is CDEPOTest {
         givenAddressHasCDToken(recipientTwo, 10e18)
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "allowance")
-        );
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
@@ -130,6 +128,7 @@ contract ReclaimForCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipientTwo, 10e18)
         givenReserveTokenSpendingIsApproved(recipientTwo, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipientTwo, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipientTwo, address(CDEPO), 10e18)
     {
         uint256 expectedReserveTokenAmount = FullMath.mulDiv(10e18, reclaimRate, 100e2);
         assertEq(expectedReserveTokenAmount, 99e17, "expectedReserveTokenAmount");

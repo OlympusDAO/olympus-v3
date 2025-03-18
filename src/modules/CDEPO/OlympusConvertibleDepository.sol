@@ -115,9 +115,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc IConvertibleDepository
     /// @dev        CD tokens are minted 1:1 with input token, so this function returns the amount of input token
     function previewMint(
-        IERC20, // inputToken_
+        IERC20 inputToken_,
         uint256 amount_
-    ) external pure override returns (uint256 tokensOut) {
+    ) external view override onlyCreatedToken(inputToken_) returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
@@ -214,16 +214,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (assetsOut == 0) revert CDEPO_InvalidArgs("reclaimed amount");
 
         return assetsOut;
-    }
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function performs the following:
-    ///             - Calls `redeemFor` with the caller as the address to redeem the tokens to
-    function redeem(
-        IERC20 inputToken_,
-        uint256 amount_
-    ) external override permissioned returns (uint256 tokensOut) {
-        return redeemFor(inputToken_, msg.sender, amount_);
     }
 
     /// @inheritdoc IConvertibleDepository
@@ -457,9 +447,17 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     }
 
     /// @inheritdoc CDEPOv1
+    /// @dev        This function reverts if:
+    ///             - The input token is not supported
     function previewSweepYield(
         IERC20 inputToken_
-    ) public view override returns (uint256 yieldReserve, uint256 yieldSReserve) {
+    )
+        public
+        view
+        override
+        onlyCreatedToken(inputToken_)
+        returns (uint256 yieldReserve, uint256 yieldSReserve)
+    {
         address cdToken = _tokenToClone[address(inputToken_)];
 
         // Get vault from CDToken

@@ -43,9 +43,10 @@ contract BurnCDEPOTest is CDEPOTest {
         givenAddressHasCDToken(recipient, 10e18)
     {
         // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
+        vm.prank(recipient);
         CDEPO.burn(iReserveToken, 10e18);
     }
 
