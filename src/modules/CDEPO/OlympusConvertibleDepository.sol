@@ -524,7 +524,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
         // Deploy clone with immutable args
         bytes memory data = abi.encodePacked(
-            _concatenateAndTruncate("Convertible Deposit ", inputTokenContract.name()), // Name
+            _concatenateAndTruncate("Convertible ", inputTokenContract.name()), // Name
             _concatenateAndTruncate("cd", inputTokenContract.symbol()), // Symbol
             inputTokenContract.decimals(), // Decimals
             address(this), // Owner
@@ -543,7 +543,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return cdToken;
     }
 
-    function _concatenateAndTruncate(string memory a_, string memory b_) internal pure returns (string memory) {
+    function _concatenateAndTruncate(
+        string memory a_,
+        string memory b_
+    ) internal pure returns (string memory) {
         bytes32 nameBytes = bytes32(abi.encodePacked(a_, b_));
 
         return string(abi.encodePacked(nameBytes));
