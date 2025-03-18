@@ -6,6 +6,8 @@ import {IMonoCooler} from "./IMonoCooler.sol";
 import {IERC20} from "../../../interfaces/IERC20.sol";
 
 interface ICoolerComposites {
+    event TokenRefunded(address indexed token, address indexed caller, uint256 amount);
+
     // ===== Composite Functions ===== //
 
     /// @notice Allow user to add collateral and borrow from Cooler V2
