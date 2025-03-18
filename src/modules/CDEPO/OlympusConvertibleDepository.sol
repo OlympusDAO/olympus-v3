@@ -563,7 +563,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc IConvertibleDepository
     ///
     /// @return     cdToken The address of the clone for the input token, or the zero address
-    function getToken(IERC20 inputToken_) external view override returns (address cdToken) {
+    function getConvertibleToken(
+        IERC20 inputToken_
+    ) external view override returns (address cdToken) {
         cdToken = _tokenToClone[address(inputToken_)];
 
         return cdToken;

@@ -10,6 +10,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions, Module} from "src/Kernel.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
+import {ConvertibleDepositTokenClone} from "src/modules/CDEPO/ConvertibleDepositTokenClone.sol";
 
 abstract contract CDEPOTest is Test {
     using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
@@ -17,6 +18,7 @@ abstract contract CDEPOTest is Test {
     Kernel public kernel;
     OlympusConvertibleDepository public CDEPO;
     MockERC20 public reserveToken;
+    MockERC20 public reserveTokenTwo;
     MockERC4626 public vault;
     address public godmode;
     address public recipient = address(0x1);
@@ -30,6 +32,8 @@ abstract contract CDEPOTest is Test {
     IERC20 public iReserveTokenTwo;
     IERC4626 public iReserveTokenTwoVault;
 
+    ConvertibleDepositTokenClone public cdToken;
+
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
 
@@ -37,7 +41,7 @@ abstract contract CDEPOTest is Test {
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
 
-        MockERC20 reserveTokenTwo = new MockERC20("USDS", "USDS", 18);
+        reserveTokenTwo = new MockERC20("USDS", "USDS", 18);
         iReserveTokenTwo = IERC20(address(reserveTokenTwo));
         iReserveTokenTwoVault = IERC4626(
             address(new MockERC4626(reserveTokenTwo, "Savings USDS", "sUSDS"))
@@ -58,13 +62,15 @@ abstract contract CDEPOTest is Test {
 
         // Create a CD token
         vm.prank(godmode);
-        CDEPO.createToken(IERC4626(address(vault)), reclaimRate);
+        cdToken = ConvertibleDepositTokenClone(
+            CDEPO.createToken(IERC4626(address(vault)), reclaimRate)
+        );
     }
 
     // ========== ASSERTIONS ========== //
 
     function _getCDToken() internal view returns (IERC20) {
-        return IERC20(CDEPO.getToken(iReserveToken));
+        return IERC20(address(cdToken));
     }
 
     function _getTotalShares() internal view returns (uint256) {
@@ -94,8 +100,6 @@ abstract contract CDEPOTest is Test {
     }
 
     function _assertCDEPOBalance(uint256 recipientAmount_, uint256 recipientTwoAmount_) internal {
-        IERC20 cdToken = _getCDToken();
-
         assertEq(cdToken.balanceOf(recipient), recipientAmount_, "recipient: CDEPO balance");
         assertEq(
             cdToken.balanceOf(recipientTwo),
@@ -188,8 +192,6 @@ abstract contract CDEPOTest is Test {
         address spender_,
         uint256 amount_
     ) internal {
-        IERC20 cdToken = _getCDToken();
-
         vm.prank(owner_);
         cdToken.approve(spender_, amount_);
     }

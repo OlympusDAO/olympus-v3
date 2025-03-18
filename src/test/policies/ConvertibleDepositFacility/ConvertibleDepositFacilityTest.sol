@@ -119,7 +119,7 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     function _getCDToken() internal view returns (IERC20) {
-        return IERC20(convertibleDepository.getToken(iReserveToken));
+        return IERC20(convertibleDepository.getConvertibleToken(iReserveToken));
     }
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {

@@ -151,7 +151,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
         address cdToken = CDEPO.createToken(iReserveTokenTwoVault, 90e2);
 
         // Assert values
-        assertEq(CDEPO.getToken(iReserveTokenTwo), cdToken, "cdToken");
+        assertEq(CDEPO.getConvertibleToken(iReserveTokenTwo), cdToken, "cdToken");
         assertEq(CDEPO.isSupported(iReserveTokenTwo), true, "isSupported");
         assertEq(CDEPO.reclaimRate(iReserveTokenTwo), 90e2, "reclaimRate");
 
