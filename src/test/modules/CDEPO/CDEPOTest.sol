@@ -39,7 +39,9 @@ abstract contract CDEPOTest is Test {
 
         MockERC20 reserveTokenTwo = new MockERC20("USDS", "USDS", 18);
         iReserveTokenTwo = IERC20(address(reserveTokenTwo));
-        iReserveTokenTwoVault = IERC4626(address(new MockERC4626(reserveTokenTwo, "Savings USDS", "sUSDS")));
+        iReserveTokenTwoVault = IERC4626(
+            address(new MockERC4626(reserveTokenTwo, "Savings USDS", "sUSDS"))
+        );
 
         // Mint reserve tokens to the vault without depositing, so that the conversion is not 1
         reserveToken.mint(address(vault), INITIAL_VAULT_BALANCE);

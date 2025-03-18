@@ -20,7 +20,9 @@ contract BurnCDEPOTest is CDEPOTest {
 
     function test_notSupported_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
 
         // Call function
         CDEPO.burn(iReserveTokenTwo, 10e18);
@@ -34,11 +36,12 @@ contract BurnCDEPOTest is CDEPOTest {
         CDEPO.burn(iReserveToken, 10e18);
     }
 
-    function test_spendingNotApproved_reverts() public
+    function test_spendingNotApproved_reverts()
+        public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
-     {
+    {
         // Expect revert
         vm.expectRevert("TRANSFER_FROM_FAILED");
 

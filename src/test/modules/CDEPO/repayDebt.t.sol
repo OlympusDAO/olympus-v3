@@ -37,7 +37,9 @@ contract RepayDebtCDEPOTest is CDEPOTest {
 
     function test_notSupported_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
 
         // Call function
         CDEPO.repayDebt(iReserveTokenTwo, 10e18);
