@@ -122,7 +122,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Create a CD token
         vm.startPrank(godmode);
-        cdToken = ERC20(address(CDEPO.createToken(IERC4626(address(vault)), 90e2)));
+        cdToken = ERC20(address(CDEPO.create(IERC4626(address(vault)), 90e2)));
         vm.stopPrank();
 
         // Activate

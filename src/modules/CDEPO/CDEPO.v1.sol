@@ -142,7 +142,7 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @param  vault_          The ERC4626 vault for the input token
     /// @param  reclaimRate_    The initial reclaim rate
     /// @return cdToken         The address of the deployed cdToken
-    function createToken(
+    function create(
         IERC4626 vault_,
         uint16 reclaimRate_
     ) external virtual returns (IConvertibleDepositERC20 cdToken);

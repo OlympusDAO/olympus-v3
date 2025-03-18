@@ -62,7 +62,7 @@ abstract contract CDEPOTest is Test {
 
         // Create a CD token
         vm.prank(godmode);
-        cdToken = CDEPO.createToken(IERC4626(address(vault)), reclaimRate);
+        cdToken = CDEPO.create(IERC4626(address(vault)), reclaimRate);
     }
 
     // ========== ASSERTIONS ========== //

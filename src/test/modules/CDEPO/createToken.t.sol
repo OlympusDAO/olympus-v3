@@ -52,7 +52,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(caller_);
-        CDEPO.createToken(iReserveTokenTwoVault, 90e2);
+        CDEPO.create(iReserveTokenTwoVault, 90e2);
     }
 
     function test_alreadySupported_reverts() public {
@@ -63,7 +63,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.createToken(IERC4626(address(vault)), 90e2);
+        CDEPO.create(IERC4626(address(vault)), 90e2);
     }
 
     function test_reclaimRateGreaterThan100_reverts(uint16 reclaimRate_) public {
@@ -76,7 +76,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.createToken(iReserveTokenTwoVault, reclaimRate_);
+        CDEPO.create(iReserveTokenTwoVault, reclaimRate_);
     }
 
     function test_nameTooLong() public {
@@ -90,10 +90,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        IConvertibleDepositERC20 cdToken = CDEPO.createToken(
-            IERC4626(address(newTokenVault)),
-            90e2
-        );
+        IConvertibleDepositERC20 cdToken = CDEPO.create(IERC4626(address(newTokenVault)), 90e2);
 
         // Assert values
         assertEq(cdToken.name(), "Convertible AVeryLongTokenNameTh", "name");
@@ -109,10 +106,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        IConvertibleDepositERC20 cdToken = CDEPO.createToken(
-            IERC4626(address(newTokenVault)),
-            90e2
-        );
+        IConvertibleDepositERC20 cdToken = CDEPO.create(IERC4626(address(newTokenVault)), 90e2);
 
         // Assert values
         assertEq(_getSubstring(cdToken.name(), 21), "Convertible New Token", "name");
@@ -128,10 +122,7 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        IConvertibleDepositERC20 cdToken = CDEPO.createToken(
-            IERC4626(address(newTokenVault)),
-            90e2
-        );
+        IConvertibleDepositERC20 cdToken = CDEPO.create(IERC4626(address(newTokenVault)), 90e2);
 
         assertEq(cdToken.decimals(), 6, "decimals");
     }
@@ -145,13 +136,13 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.createToken(IERC4626(address(newToken)), 90e2);
+        CDEPO.create(IERC4626(address(newToken)), 90e2);
     }
 
     function test_success() public {
         // Call function
         vm.prank(godmode);
-        IConvertibleDepositERC20 cdToken = CDEPO.createToken(iReserveTokenTwoVault, 90e2);
+        IConvertibleDepositERC20 cdToken = CDEPO.create(iReserveTokenTwoVault, 90e2);
 
         // Assert values
         assertEq(address(CDEPO.getConvertibleToken(iReserveTokenTwo)), address(cdToken), "cdToken");

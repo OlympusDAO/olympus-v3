@@ -35,7 +35,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
 
     function test_multipleTokens() public {
         vm.prank(address(godmode));
-        IConvertibleDepositERC20 cdTokenTwo = CDEPO.createToken(iReserveTokenTwoVault, 99e2);
+        IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(iReserveTokenTwoVault, 99e2);
 
         assertEq(
             address(CDEPO.getConvertibleToken(iReserveToken)),

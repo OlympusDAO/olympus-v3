@@ -18,7 +18,7 @@ contract GetTokensCDEPOTest is CDEPOTest {
 
     function test_multipleTokens() public {
         vm.prank(address(godmode));
-        CDEPO.createToken(iReserveTokenTwoVault, 99e2);
+        CDEPO.create(iReserveTokenTwoVault, 99e2);
 
         assertEq(CDEPO.getTokens().length, 2, "getTokens: length");
         assertEq(address(CDEPO.getTokens()[0]), address(reserveToken), "getTokens: reserveToken");

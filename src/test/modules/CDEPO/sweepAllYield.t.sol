@@ -81,7 +81,7 @@ contract SweepAllYieldCDEPOTest is CDEPOTest {
 
         // Create the CD token
         vm.prank(godmode);
-        IConvertibleDepositERC20 cdTokenTwo = CDEPO.createToken(iReserveTokenTwoVault, 99e2);
+        IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(iReserveTokenTwoVault, 99e2);
 
         // Deposit the second token
         uint256 tokenTwoDeposit = 10e18;

@@ -511,7 +511,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - The reclaim rate is not within bounds
     ///             - The input token is already supported
     ///             - The caller is not permissioned
-    function createToken(
+    function create(
         IERC4626 vault_,
         uint16 reclaimRate_
     ) external override permissioned returns (IConvertibleDepositERC20) {
