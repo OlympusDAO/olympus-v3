@@ -140,7 +140,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ///             - The conversion price is 0
     ///             - The conversion expiry is in the past
     ///             - The redemption expiry is before the conversion expiry
-    function create(
+    function mint(
         address owner_,
         address convertibleDepositToken_,
         uint256 remainingDeposit_,
@@ -426,7 +426,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
 
     function _getPosition(uint256 positionId_) internal view returns (Position memory) {
         Position memory position = _positions[positionId_];
-        // `create()` blocks a 0 conversion price, so this should never happen on a valid position
+        // `mint()` blocks a 0 conversion price, so this should never happen on a valid position
         if (position.conversionPrice == 0) revert CDPOS_InvalidPositionId(positionId_);
 
         return position;
