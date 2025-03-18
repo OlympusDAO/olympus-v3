@@ -7,7 +7,7 @@ import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
-import {ConvertibleDepositTokenClone} from "src/modules/CDEPO/ConvertibleDepositTokenClone.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract CreateTokenCDEPOTest is CDEPOTest {
     function _getSubstring(string memory str_, uint256 end_) internal pure returns (string memory) {
@@ -90,15 +90,16 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        address cdToken = CDEPO.createToken(IERC4626(address(newTokenVault)), 90e2);
-
-        ConvertibleDepositTokenClone cdTokenContract = ConvertibleDepositTokenClone(cdToken);
+        IConvertibleDepositERC20 cdToken = CDEPO.createToken(
+            IERC4626(address(newTokenVault)),
+            90e2
+        );
 
         // Assert values
-        assertEq(cdTokenContract.name(), "Convertible AVeryLongTokenNameTh", "name");
-        assertEq(bytes(cdTokenContract.name()).length, 32, "name length");
-        assertEq(_getSubstring(cdTokenContract.symbol(), 6), "cdLONG", "symbol");
-        assertEq(bytes(cdTokenContract.symbol()).length, 32, "symbol length");
+        assertEq(cdToken.name(), "Convertible AVeryLongTokenNameTh", "name");
+        assertEq(bytes(cdToken.name()).length, 32, "name length");
+        assertEq(_getSubstring(cdToken.symbol(), 6), "cdLONG", "symbol");
+        assertEq(bytes(cdToken.symbol()).length, 32, "symbol length");
     }
 
     function test_symbolTooLong() public {
@@ -108,15 +109,16 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        address cdToken = CDEPO.createToken(IERC4626(address(newTokenVault)), 90e2);
-
-        ConvertibleDepositTokenClone cdTokenContract = ConvertibleDepositTokenClone(cdToken);
+        IConvertibleDepositERC20 cdToken = CDEPO.createToken(
+            IERC4626(address(newTokenVault)),
+            90e2
+        );
 
         // Assert values
-        assertEq(_getSubstring(cdTokenContract.name(), 21), "Convertible New Token", "name");
-        assertEq(bytes(cdTokenContract.name()).length, 32, "name length");
-        assertEq(cdTokenContract.symbol(), "cdAVERYLONGTOKENSYMBOLTHATISWAYT", "symbol");
-        assertEq(bytes(cdTokenContract.symbol()).length, 32, "symbol length");
+        assertEq(_getSubstring(cdToken.name(), 21), "Convertible New Token", "name");
+        assertEq(bytes(cdToken.name()).length, 32, "name length");
+        assertEq(cdToken.symbol(), "cdAVERYLONGTOKENSYMBOLTHATISWAYT", "symbol");
+        assertEq(bytes(cdToken.symbol()).length, 32, "symbol length");
     }
 
     function test_differentDecimals() public {
@@ -126,11 +128,12 @@ contract CreateTokenCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        address cdToken = CDEPO.createToken(IERC4626(address(newTokenVault)), 90e2);
+        IConvertibleDepositERC20 cdToken = CDEPO.createToken(
+            IERC4626(address(newTokenVault)),
+            90e2
+        );
 
-        ConvertibleDepositTokenClone cdTokenContract = ConvertibleDepositTokenClone(cdToken);
-
-        assertEq(cdTokenContract.decimals(), 6, "decimals");
+        assertEq(cdToken.decimals(), 6, "decimals");
     }
 
     function test_notERC4626_reverts() public {
@@ -148,22 +151,21 @@ contract CreateTokenCDEPOTest is CDEPOTest {
     function test_success() public {
         // Call function
         vm.prank(godmode);
-        address cdToken = CDEPO.createToken(iReserveTokenTwoVault, 90e2);
+        IConvertibleDepositERC20 cdToken = CDEPO.createToken(iReserveTokenTwoVault, 90e2);
 
         // Assert values
-        assertEq(CDEPO.getConvertibleToken(iReserveTokenTwo), cdToken, "cdToken");
+        assertEq(address(CDEPO.getConvertibleToken(iReserveTokenTwo)), address(cdToken), "cdToken");
         assertEq(CDEPO.isSupported(iReserveTokenTwo), true, "isSupported");
         assertEq(CDEPO.reclaimRate(iReserveTokenTwo), 90e2, "reclaimRate");
 
-        ConvertibleDepositTokenClone cdTokenContract = ConvertibleDepositTokenClone(cdToken);
         // Substring is required for the name and symbol, as they are padded with null characters
-        assertEq(_getSubstring(cdTokenContract.name(), 16), "Convertible USDS", "name");
-        assertEq(bytes(cdTokenContract.name()).length, 32, "name length");
-        assertEq(_getSubstring(cdTokenContract.symbol(), 6), "cdUSDS", "symbol");
-        assertEq(bytes(cdTokenContract.symbol()).length, 32, "symbol length");
-        assertEq(cdTokenContract.decimals(), 18, "decimals");
-        assertEq(cdTokenContract.owner(), address(CDEPO), "owner");
-        assertEq(address(cdTokenContract.asset()), address(iReserveTokenTwo), "asset");
-        assertEq(address(cdTokenContract.vault()), address(iReserveTokenTwoVault), "vault");
+        assertEq(_getSubstring(cdToken.name(), 16), "Convertible USDS", "name");
+        assertEq(bytes(cdToken.name()).length, 32, "name length");
+        assertEq(_getSubstring(cdToken.symbol(), 6), "cdUSDS", "symbol");
+        assertEq(bytes(cdToken.symbol()).length, 32, "symbol length");
+        assertEq(cdToken.decimals(), 18, "decimals");
+        assertEq(cdToken.owner(), address(CDEPO), "owner");
+        assertEq(address(cdToken.asset()), address(iReserveTokenTwo), "asset");
+        assertEq(address(cdToken.vault()), address(iReserveTokenTwoVault), "vault");
     }
 }

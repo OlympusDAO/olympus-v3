@@ -13,7 +13,7 @@ contract GetTokensCDEPOTest is CDEPOTest {
 
     function test_singleToken() public {
         assertEq(CDEPO.getTokens().length, 1, "getTokens: length");
-        assertEq(CDEPO.getTokens()[0], address(reserveToken), "getTokens: token");
+        assertEq(address(CDEPO.getTokens()[0]), address(reserveToken), "getTokens: token");
     }
 
     function test_multipleTokens() public {
@@ -21,7 +21,11 @@ contract GetTokensCDEPOTest is CDEPOTest {
         CDEPO.createToken(iReserveTokenTwoVault, 99e2);
 
         assertEq(CDEPO.getTokens().length, 2, "getTokens: length");
-        assertEq(CDEPO.getTokens()[0], address(reserveToken), "getTokens: reserveToken");
-        assertEq(CDEPO.getTokens()[1], address(iReserveTokenTwo), "getTokens: tokenTwo");
+        assertEq(address(CDEPO.getTokens()[0]), address(reserveToken), "getTokens: reserveToken");
+        assertEq(
+            address(CDEPO.getTokens()[1]),
+            address(iReserveTokenTwo),
+            "getTokens: iReserveTokenTwo"
+        );
     }
 }

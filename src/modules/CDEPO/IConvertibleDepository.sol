@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 /// @title  IConvertibleDepository
 /// @notice Interface for the Olympus Convertible Depository module
@@ -156,13 +157,15 @@ interface IConvertibleDepository {
     /// @notice Get all supported input tokens
     ///
     /// @return tokens  Array of supported token addresses
-    function getTokens() external view returns (address[] memory tokens);
+    function getTokens() external view returns (IERC20[] memory tokens);
 
     /// @notice Get the cdToken for an input token
     ///
     /// @param  inputToken_  The input token to check
     /// @return cdToken      The cdToken address, or address(0) if not supported
-    function getConvertibleToken(IERC20 inputToken_) external view returns (address cdToken);
+    function getConvertibleToken(
+        IERC20 inputToken_
+    ) external view returns (IConvertibleDepositERC20 cdToken);
 
     /// @notice Check if an input token is supported
     ///

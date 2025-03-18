@@ -17,6 +17,7 @@ import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesW
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {CDEPOv1} from "./CDEPO.v1.sol";
 import {ConvertibleDepositTokenClone} from "./ConvertibleDepositTokenClone.sol";
+import {IConvertibleDepositERC20} from "./IConvertibleDepositERC20.sol";
 
 contract OlympusConvertibleDepository is CDEPOv1 {
     using SafeTransferLib for ERC20;
@@ -28,7 +29,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     address private immutable _TOKEN_IMPLEMENTATION;
 
     /// @notice List of supported input tokens
-    address[] private _tokens;
+    IERC20[] private _tokens;
 
     /// @notice Mapping of input token to clone address
     mapping(address => address) private _tokenToClone;
@@ -400,9 +401,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     function sweepAllYield(address recipient_) external override permissioned {
         // Iterate over all supported tokens
-        address[] memory tokens = _tokens;
+        IERC20[] memory tokens = _tokens;
         for (uint256 i; i < tokens.length; ++i) {
-            sweepYield(IERC20(tokens[i]), recipient_);
+            sweepYield(tokens[i], recipient_);
         }
     }
 
@@ -513,7 +514,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function createToken(
         IERC4626 vault_,
         uint16 reclaimRate_
-    ) external override permissioned returns (address) {
+    ) external override permissioned returns (IConvertibleDepositERC20) {
         // Get the input token from the vault
         address inputToken = vault_.asset();
 
@@ -536,12 +537,12 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         address cdToken = _TOKEN_IMPLEMENTATION.clone(data);
 
         _tokenToClone[inputToken] = cdToken;
-        _tokens.push(inputToken);
+        _tokens.push(inputTokenContract);
         emit TokenAdded(inputToken, cdToken);
 
         _setReclaimRate(inputTokenContract, reclaimRate_);
 
-        return cdToken;
+        return IConvertibleDepositERC20(cdToken);
     }
 
     function _concatenateAndTruncate(
@@ -556,7 +557,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepository
-    function getTokens() external view override returns (address[] memory) {
+    function getTokens() external view override returns (IERC20[] memory) {
         return _tokens;
     }
 
@@ -565,8 +566,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @return     cdToken The address of the clone for the input token, or the zero address
     function getConvertibleToken(
         IERC20 inputToken_
-    ) external view override returns (address cdToken) {
-        cdToken = _tokenToClone[address(inputToken_)];
+    ) external view override returns (IConvertibleDepositERC20 cdToken) {
+        cdToken = IConvertibleDepositERC20(_tokenToClone[address(inputToken_)]);
 
         return cdToken;
     }

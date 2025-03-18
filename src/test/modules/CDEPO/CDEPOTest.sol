@@ -10,7 +10,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions, Module} from "src/Kernel.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
-import {ConvertibleDepositTokenClone} from "src/modules/CDEPO/ConvertibleDepositTokenClone.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 abstract contract CDEPOTest is Test {
     using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
@@ -32,7 +32,7 @@ abstract contract CDEPOTest is Test {
     IERC20 public iReserveTokenTwo;
     IERC4626 public iReserveTokenTwoVault;
 
-    ConvertibleDepositTokenClone public cdToken;
+    IConvertibleDepositERC20 public cdToken;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -62,9 +62,7 @@ abstract contract CDEPOTest is Test {
 
         // Create a CD token
         vm.prank(godmode);
-        cdToken = ConvertibleDepositTokenClone(
-            CDEPO.createToken(IERC4626(address(vault)), reclaimRate)
-        );
+        cdToken = CDEPO.createToken(IERC4626(address(vault)), reclaimRate);
     }
 
     // ========== ASSERTIONS ========== //

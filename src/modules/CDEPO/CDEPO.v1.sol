@@ -5,6 +5,7 @@ import {Module} from "src/Kernel.sol";
 import {IConvertibleDepository} from "./IConvertibleDepository.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "./IConvertibleDepositERC20.sol";
 
 /// @title  CDEPOv1
 /// @notice This is a base contract for a custodial convertible deposit token. It is designed to be used in conjunction with an ERC4626 vault.
@@ -141,5 +142,8 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @param  vault_          The ERC4626 vault for the input token
     /// @param  reclaimRate_    The initial reclaim rate
     /// @return cdToken         The address of the deployed cdToken
-    function createToken(IERC4626 vault_, uint16 reclaimRate_) external virtual returns (address);
+    function createToken(
+        IERC4626 vault_,
+        uint16 reclaimRate_
+    ) external virtual returns (IConvertibleDepositERC20 cdToken);
 }

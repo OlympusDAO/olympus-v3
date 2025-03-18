@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
-import {ConvertibleDepositTokenClone} from "src/modules/CDEPO/ConvertibleDepositTokenClone.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract SweepAllYieldCDEPOTest is CDEPOTest {
     event YieldSwept(
@@ -81,9 +81,7 @@ contract SweepAllYieldCDEPOTest is CDEPOTest {
 
         // Create the CD token
         vm.prank(godmode);
-        ConvertibleDepositTokenClone cdTokenTwo = ConvertibleDepositTokenClone(
-            CDEPO.createToken(iReserveTokenTwoVault, 99e2)
-        );
+        IConvertibleDepositERC20 cdTokenTwo = CDEPO.createToken(iReserveTokenTwoVault, 99e2);
 
         // Deposit the second token
         uint256 tokenTwoDeposit = 10e18;

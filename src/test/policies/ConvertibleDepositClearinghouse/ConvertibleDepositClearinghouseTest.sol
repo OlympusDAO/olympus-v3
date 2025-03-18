@@ -20,7 +20,6 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CDClearinghouse} from "src/policies/CDClearinghouse.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
-import {Cooler} from "src/external/cooler/Cooler.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
@@ -123,7 +122,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Create a CD token
         vm.startPrank(godmode);
-        cdToken = ERC20(CDEPO.createToken(IERC4626(address(vault)), 90e2));
+        cdToken = ERC20(address(CDEPO.createToken(IERC4626(address(vault)), 90e2)));
         vm.stopPrank();
 
         // Activate
