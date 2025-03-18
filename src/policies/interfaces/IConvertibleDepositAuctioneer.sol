@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+
 /// @title  IConvertibleDepositAuctioneer
 /// @notice Interface for a contract that runs auctions for convertible deposit tokens
 interface IConvertibleDepositAuctioneer {
@@ -179,7 +181,7 @@ interface IConvertibleDepositAuctioneer {
     /// @notice The token that is being bid
     ///
     /// @return token The token that is being bid
-    function bidToken() external view returns (address token);
+    function bidToken() external view returns (IERC20 token);
 
     /// @notice Get the number of days that auction results are tracked for
     ///

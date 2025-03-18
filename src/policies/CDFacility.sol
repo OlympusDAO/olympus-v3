@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-
+// Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
+// Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+
+// Bophades
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -15,18 +20,10 @@ import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-import {FullMath} from "src/libraries/FullMath.sol";
-
 contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, ReentrancyGuard {
     using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
-
-    // Constants
-
-    /// @notice The scale of the convertible deposit token
-    /// @dev    This will typically be 10 ** decimals, and is set by the `configureDependencies()` function
-    uint256 public SCALE;
 
     // Modules
     TRSRYv1 public TRSRY;
@@ -51,21 +48,11 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         dependencies[3] = toKeycode("CDEPO");
         dependencies[4] = toKeycode("CDPOS");
 
-        // TODO remove CDEPO check
-        // Validate that CDEPO is not being changed
-        // This will block the CDEPO module from being upgraded
-        // Changing the CDEPO module will break
-        address newCDEPO = getModuleAddress(dependencies[3]);
-        if (address(CDEPO) != address(0) && address(CDEPO) != address(newCDEPO))
-            revert CDF_InvalidArgs("CDEPO");
-
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-        CDEPO = CDEPOv1(newCDEPO);
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
         CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
-
-        // SCALE = 10 ** CDEPO.decimals();
     }
 
     /// @inheritdoc Policy
@@ -79,15 +66,16 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](8);
+        permissions = new Permissions[](9);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
         permissions[3] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
         permissions[4] = Permissions(cdepoKeycode, CDEPO.reclaimFor.selector);
         permissions[5] = Permissions(cdepoKeycode, CDEPO.setReclaimRate.selector);
-        permissions[6] = Permissions(cdposKeycode, CDPOS.create.selector);
-        permissions[7] = Permissions(cdposKeycode, CDPOS.update.selector);
+        permissions[6] = Permissions(cdepoKeycode, CDEPO.create.selector);
+        permissions[7] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions[8] = Permissions(cdposKeycode, CDPOS.update.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -103,7 +91,9 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     /// @dev        This function reverts if:
     ///             - The caller does not have the ROLE_AUCTIONEER role
     ///             - The contract is not active
-    function create(
+    ///             - The deposit token is not supported
+    function mint(
+        IERC20 depositToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
@@ -112,13 +102,15 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         bool wrap_
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
-        // This will also transfer the reserve token
-        // CDEPO.mintFor(account_, amount_);
+        // This will also transfer the deposit token
+        CDEPO.mintFor(depositToken_, account_, amount_);
+
+        IConvertibleDepositERC20 cdToken = CDEPO.getConvertibleToken(address(depositToken_));
 
         // Create a new term record in the CDPOS module
-        positionId = CDPOS.create(
+        positionId = CDPOS.mint(
             account_,
-            address(CDEPO),
+            address(cdToken),
             amount_,
             conversionPrice_,
             conversionExpiry_,
@@ -127,7 +119,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         );
 
         // Calculate the expected OHM amount
-        uint256 expectedOhmAmount = (amount_ * SCALE) / conversionPrice_;
+        uint256 expectedOhmAmount = (amount_ * (10 ** cdToken.decimals())) / conversionPrice_;
 
         // Pre-emptively increase the OHM mint approval
         MINTR.increaseMintApproval(address(this), expectedOhmAmount);
@@ -148,8 +140,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Validate that the caller is the owner of the position
         if (position.owner != account_) revert CDF_NotOwner(positionId_);
 
-        // Validate that the position is CDEPO
-        if (position.convertibleDepositToken != address(CDEPO))
+        // Validate that the position is a supported CD token
+        if (!CDEPO.isConvertibleDepositToken(position.convertibleDepositToken))
             revert CDF_InvalidToken(positionId_, position.convertibleDepositToken);
 
         // Validate that the position has not expired
@@ -158,7 +150,10 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
-        convertedTokenOut = (amount_ * SCALE) / position.conversionPrice;
+        IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
+            position.convertibleDepositToken
+        );
+        convertedTokenOut = (amount_ * (10 ** cdToken.decimals())) / position.conversionPrice;
 
         return convertedTokenOut;
     }
@@ -221,6 +216,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
+        // TODO remove cdTokenIn
+
         // Iterate over all positions
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
@@ -229,21 +226,23 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
             cdTokenIn += depositAmount;
             convertedTokenOut += _previewConvert(msg.sender, positionId, depositAmount);
 
-            // Update the position
-            CDPOS.update(
-                positionId,
-                CDPOS.getPosition(positionId).remainingDeposit - depositAmount
+            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
+            IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
+                position.convertibleDepositToken
             );
+
+            // Update the position
+            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
+
+            // Redeem the CD deposit
+            // This will revert if cdTokenIn is 0
+            uint256 tokensOut = CDEPO.redeemFor(cdToken, msg.sender, depositAmount);
+
+            // Wrap the tokens and transfer to the TRSRY
+            IERC4626 vault = cdToken.vault();
+            cdToken.asset().approve(address(vault), tokensOut);
+            vault.deposit(tokensOut, address(TRSRY));
         }
-
-        // Redeem the CD deposits in bulk
-        // This will revert if cdTokenIn is 0
-        // uint256 tokensOut = CDEPO.redeemFor(msg.sender, cdTokenIn);
-
-        // Wrap the tokens and transfer to the TRSRY
-        // ERC4626 vault = CDEPO.VAULT();
-        // CDEPO.ASSET().approve(address(vault), tokensOut);
-        // vault.deposit(tokensOut, address(TRSRY));
 
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert
@@ -353,14 +352,16 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
             // Validate
             _previewRedeem(msg.sender, positionId, depositAmount);
 
+            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
+            IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
+                position.convertibleDepositToken
+            );
+
             // Unconverted must be calculated for each position, as the conversion price can differ
-            unconverted += (depositAmount * SCALE) / CDPOS.getPosition(positionId).conversionPrice;
+            unconverted += (depositAmount * (10 ** cdToken.decimals())) / position.conversionPrice;
 
             // Update the position
-            CDPOS.update(
-                positionId,
-                CDPOS.getPosition(positionId).remainingDeposit - depositAmount
-            );
+            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
         }
 
         // Redeem the CD deposits in bulk
@@ -458,6 +459,19 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         emit ReclaimedDeposit(msg.sender, reclaimed, amount_ - reclaimed);
 
         return reclaimed;
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function create(
+        IERC4626 vault_,
+        uint16 reclaimRate_
+    ) external onlyAdminRole returns (IConvertibleDepositERC20 cdToken) {
+        // Create a new convertible deposit token
+        cdToken = CDEPO.create(vault_, reclaimRate_);
+
+        return cdToken;
     }
 
     // ========== VIEW FUNCTIONS ========== //

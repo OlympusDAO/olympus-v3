@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 
@@ -108,7 +109,8 @@ contract ConvertibleDepositFacilityTest is Test {
         bool wrap_
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        positionId = facility.create(
+        positionId = facility.mint(
+            IERC20(address(reserveToken)),
             account_,
             amount_,
             conversionPrice_,
@@ -118,8 +120,8 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
-    function _getCDToken() internal view returns (IERC20) {
-        return IERC20(convertibleDepository.getConvertibleToken(iReserveToken));
+    function _getCDToken() internal view returns (IConvertibleDepositERC20) {
+        return convertibleDepository.getConvertibleToken(address(iReserveToken));
     }
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {

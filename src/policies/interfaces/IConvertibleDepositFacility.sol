@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+
 /// @title  IConvertibleDepositFacility
 /// @notice Interface for a contract that can perform functions related to convertible deposit tokens
 interface IConvertibleDepositFacility {
@@ -27,15 +31,17 @@ interface IConvertibleDepositFacility {
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
-    /// @notice Creates a new convertible deposit position
+    /// @notice Mints a new convertible deposit position
     ///
     /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the deposit token is supported
     ///         - Validating that the caller has the correct role
     ///         - Depositing the reserve token into the CDEPO module and minting the convertible deposit token
     ///         - Creating a new term record in the CTERM module
     ///         - Pre-emptively increasing the OHM mint approval
     ///         - Emitting an event
     ///
+    /// @param  depositToken_       The address of the token to deposit
     /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of reserve token to deposit
     /// @param  conversionPrice_    The amount of convertible deposit tokens per OHM token
@@ -43,7 +49,8 @@ interface IConvertibleDepositFacility {
     /// @param  redemptionExpiry_   The timestamp when the position can no longer be redeemed
     /// @param  wrap_               Whether the position should be wrapped
     /// @return termId              The ID of the new term
-    function create(
+    function mint(
+        IERC20 depositToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
@@ -55,7 +62,7 @@ interface IConvertibleDepositFacility {
     /// @notice Converts convertible deposit tokens to OHM before conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that convertible deposit token in the position is CDEPO
+    ///         - Validating that convertible deposit token in the position is a CD token
     ///         - Validating that all of the positions are valid
     ///         - Validating that the conversion expiry for all of the positions has not passed
     ///         - Burning the convertible deposit tokens
@@ -153,6 +160,22 @@ interface IConvertibleDepositFacility {
     function previewReclaim(
         uint256 amount_
     ) external view returns (uint256 reclaimed, address cdTokenSpender);
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Creates a new convertible deposit token
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Creating a new convertible deposit token
+    ///         - Emitting an event
+    ///
+    /// @param  vault_          The address of the vault to use for the convertible deposit token
+    /// @param  reclaimRate_    The reclaim rate to set for the convertible deposit token
+    /// @return cdToken         The address of the new convertible deposit token
+    function create(
+        IERC4626 vault_,
+        uint16 reclaimRate_
+    ) external returns (IConvertibleDepositERC20 cdToken);
 
     // ========== VIEW FUNCTIONS ========== //
 

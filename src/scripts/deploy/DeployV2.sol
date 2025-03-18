@@ -1320,10 +1320,11 @@ contract OlympusDeploy is Script {
         console2.log("ConvertibleDepositAuctioneer parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   cdFacility", address(cdFacility));
+        console2.log("   reserveToken", address(reserve));
 
         // Deploy ConvertibleDepositAuctioneer
         vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility));
+        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility), address(reserve));
         console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);

@@ -86,7 +86,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
         facility = new CDFacility(address(kernel));
-        auctioneer = new CDAuctioneer(address(kernel), address(facility));
+        auctioneer = new CDAuctioneer(address(kernel), address(facility), address(reserveToken));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules

@@ -3,15 +3,17 @@ pragma solidity 0.8.15;
 
 // Libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+
+// Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {CDFacility} from "./CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
@@ -40,12 +42,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     CDEPOv1 public CDEPO;
 
     /// @notice Address of the token that is being bid
-    /// @dev    This is populated by the `configureDependencies()` function
-    address public bidToken;
+    // solhint-disable-next-line immutable-vars-naming
+    IERC20 public immutable bidToken;
 
     /// @notice Scale of the bid token
-    /// @dev    This is populated by the `configureDependencies()` function
-    uint256 public bidTokenScale;
+    // TODO required?
+    // solhint-disable-next-line immutable-vars-naming
+    uint256 public immutable bidTokenScale;
 
     /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -93,11 +96,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     // ========== SETUP ========== //
 
-    constructor(address kernel_, address cdFacility_) Policy(Kernel(kernel_)) {
+    constructor(address kernel_, address cdFacility_, address bidToken_) Policy(Kernel(kernel_)) {
         if (cdFacility_ == address(0))
             revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
 
         cdFacility = CDFacility(cdFacility_);
+
+        bidToken = IERC20(bidToken_);
+        bidTokenScale = 10 ** bidToken.decimals();
 
         // PolicyEnabler makes this disabled until enabled
     }
@@ -108,17 +114,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("CDEPO");
 
-        // TODO remove CDEPO check
-        // Validate that CDEPO is not being changed
-        address newCDEPO = getModuleAddress(dependencies[1]);
-        if (address(CDEPO) != address(0) && address(CDEPO) != address(newCDEPO))
-            revert CDAuctioneer_InvalidParams("CDEPO");
-
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        CDEPO = CDEPOv1(newCDEPO);
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
-        // bidToken = address(CDEPO.ASSET());
-        // bidTokenScale = 10 ** ERC20(bidToken).decimals();
+        // Validate that the bid token is supported by the CDEPO module
+        if (!CDEPO.isDepositToken(address(bidToken)))
+            revert CDAuctioneer_InvalidParams("bid token");
     }
 
     /// @inheritdoc Policy
@@ -184,7 +185,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
-        positionId = cdFacility.create(
+        positionId = cdFacility.mint(
+            bidToken,
             msg.sender,
             depositIn,
             conversionPrice,

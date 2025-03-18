@@ -5,8 +5,9 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
-contract CreateCDFTest is ConvertibleDepositFacilityTest {
+contract MintCDFTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
 
     // given the contract is inactive
@@ -32,7 +33,8 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(auctioneer);
-        facility.create(
+        facility.mint(
+            IERC20(address(reserveToken)),
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
@@ -53,7 +55,8 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.create(
+        facility.mint(
+            IERC20(address(reserveToken)),
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
