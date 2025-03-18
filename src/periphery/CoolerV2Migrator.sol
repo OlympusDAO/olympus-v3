@@ -300,10 +300,12 @@ contract CoolerV2Migrator is
         uint256 usdsBalanceAfter = USDS.balanceOf(address(this));
         if (usdsBalanceAfter > 0) {
             USDS.safeTransfer(msg.sender, usdsBalanceAfter);
+            emit TokenRefunded(address(USDS), msg.sender, usdsBalanceAfter);
         }
         uint256 daiBalanceAfter = DAI.balanceOf(address(this));
         if (daiBalanceAfter > 0) {
             DAI.safeTransfer(msg.sender, daiBalanceAfter);
+            emit TokenRefunded(address(DAI), msg.sender, daiBalanceAfter);
         }
     }
 

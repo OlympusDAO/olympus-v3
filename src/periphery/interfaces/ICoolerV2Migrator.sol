@@ -41,6 +41,9 @@ interface ICoolerV2Migrator {
     /// @notice Emitted when a CoolerFactory is removed from the migrator
     event CoolerFactoryRemoved(address indexed coolerFactory);
 
+    /// @notice Emitted when a token is refunded to the recipient
+    event TokenRefunded(address indexed token, address indexed recipient, uint256 amount);
+
     // ========= FUNCTIONS ========= //
 
     /// @notice Preview the consolidation of a set of loans.
