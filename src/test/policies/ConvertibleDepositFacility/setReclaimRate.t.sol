@@ -28,7 +28,7 @@ contract SetReclaimRateCDFTest is ConvertibleDepositFacilityTest {
         facility.setReclaimRate(99e2);
 
         // Assert
-        assertEq(convertibleDepository.reclaimRate(iReserveToken), 99e2);
+        assertEq(convertibleDepository.reclaimRate(address(iReserveToken)), 99e2);
     }
 
     function test_setReclaimRate() public givenLocallyActive {
@@ -37,6 +37,6 @@ contract SetReclaimRateCDFTest is ConvertibleDepositFacilityTest {
         facility.setReclaimRate(99e2);
 
         // Assert
-        assertEq(convertibleDepository.reclaimRate(iReserveToken), 99e2);
+        assertEq(convertibleDepository.reclaimRate(address(iReserveToken)), 99e2);
     }
 }

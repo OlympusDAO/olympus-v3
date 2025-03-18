@@ -34,6 +34,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @notice Mapping of input token to clone address
     mapping(address => address) private _tokenToClone;
 
+    /// @notice Mapping of clone address to input token
+    mapping(address => address) private _cloneToToken;
+
     /// @notice Mapping of input token to reclaim rate
     mapping(address => uint16) private _reclaimRates;
 
@@ -565,25 +568,46 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     /// @return     cdToken The address of the clone for the input token, or the zero address
     function getConvertibleToken(
-        IERC20 inputToken_
+        address inputToken_
     ) external view override returns (IConvertibleDepositERC20 cdToken) {
-        cdToken = IConvertibleDepositERC20(_tokenToClone[address(inputToken_)]);
+        cdToken = IConvertibleDepositERC20(_tokenToClone[inputToken_]);
 
         return cdToken;
     }
 
     /// @inheritdoc IConvertibleDepository
-    function isSupported(IERC20 inputToken_) external view override returns (bool) {
-        return _tokenToClone[address(inputToken_)] != address(0);
+    ///
+    /// @return     depositToken    The address of the deposit token, or the zero address
+    function getDepositToken(
+        address cdToken_
+    ) external view override returns (IERC20 depositToken) {
+        depositToken = IERC20(_cloneToToken[cdToken_]);
+
+        return depositToken;
+    }
+
+    /// @inheritdoc IConvertibleDepository
+    function isDepositToken(address inputToken_) external view override returns (bool) {
+        return _tokenToClone[inputToken_] != address(0);
+    }
+
+    function isConvertibleDepositToken(address inputToken_) external view override returns (bool) {
+        return _cloneToToken[inputToken_] != address(0);
     }
 
     /// @inheritdoc IConvertibleDepository
     ///
     /// @return     tokenReclaimRate The reclaim rate for the input token, or 0
     function reclaimRate(
-        IERC20 inputToken_
-    ) external view override onlyCreatedToken(inputToken_) returns (uint16 tokenReclaimRate) {
-        tokenReclaimRate = _reclaimRates[address(inputToken_)];
+        address inputToken_
+    )
+        external
+        view
+        override
+        onlyCreatedToken(IERC20(inputToken_))
+        returns (uint16 tokenReclaimRate)
+    {
+        tokenReclaimRate = _reclaimRates[inputToken_];
 
         return tokenReclaimRate;
     }
@@ -594,7 +618,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function debt(
         IERC20 inputToken_,
         address borrower_
-    ) external view override onlyCreatedToken(inputToken_) returns (uint256 tokenDebt) {
+    ) external view override onlyCreatedToken(IERC20(inputToken_)) returns (uint256 tokenDebt) {
         tokenDebt = _debt[address(inputToken_)][borrower_];
 
         return tokenDebt;

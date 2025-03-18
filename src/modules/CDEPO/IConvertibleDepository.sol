@@ -159,23 +159,35 @@ interface IConvertibleDepository {
     /// @return tokens  Array of supported token addresses
     function getTokens() external view returns (IERC20[] memory tokens);
 
+    /// @notice Get the deposit token for a cdToken
+    ///
+    /// @param  cdToken_        The cdToken to check
+    /// @return depositToken    The deposit token address, or address(0) if not supported
+    function getDepositToken(address cdToken_) external view returns (IERC20 depositToken);
+
     /// @notice Get the cdToken for an input token
     ///
     /// @param  inputToken_  The input token to check
     /// @return cdToken      The cdToken address, or address(0) if not supported
     function getConvertibleToken(
-        IERC20 inputToken_
+        address inputToken_
     ) external view returns (IConvertibleDepositERC20 cdToken);
 
-    /// @notice Check if an input token is supported
+    /// @notice Check if `inputToken_` is a supported deposit token
     ///
     /// @param  inputToken_  The input token to check
-    /// @return isSupported  True if the token is supported
-    function isSupported(IERC20 inputToken_) external view returns (bool isSupported);
+    /// @return result       True if the token is a supported deposit token
+    function isDepositToken(address inputToken_) external view returns (bool result);
+
+    /// @notice Check if `inputToken_` is a supported convertible deposit token
+    ///
+    /// @param  inputToken_  The input token to check
+    /// @return result       True if the token is a supported convertible deposit token
+    function isConvertibleDepositToken(address inputToken_) external view returns (bool result);
 
     /// @notice Get the reclaim rate for a token
     ///
     /// @param  inputToken_         The input token to check
     /// @return tokenReclaimRate    The reclaim rate for the token
-    function reclaimRate(IERC20 inputToken_) external view returns (uint16 tokenReclaimRate);
+    function reclaimRate(address inputToken_) external view returns (uint16 tokenReclaimRate);
 }

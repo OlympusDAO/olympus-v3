@@ -145,9 +145,47 @@ contract CreateTokenCDEPOTest is CDEPOTest {
         IConvertibleDepositERC20 cdToken = CDEPO.create(iReserveTokenTwoVault, 90e2);
 
         // Assert values
-        assertEq(address(CDEPO.getConvertibleToken(iReserveTokenTwo)), address(cdToken), "cdToken");
-        assertEq(CDEPO.isSupported(iReserveTokenTwo), true, "isSupported");
-        assertEq(CDEPO.reclaimRate(iReserveTokenTwo), 90e2, "reclaimRate");
+        assertEq(
+            address(CDEPO.getConvertibleToken(address(iReserveTokenTwo))),
+            address(cdToken),
+            "getConvertibleToken: iReserveTokenTwo"
+        );
+        assertEq(
+            address(CDEPO.getConvertibleToken(address(cdToken))),
+            address(0),
+            "getConvertibleToken: cdToken"
+        );
+
+        assertEq(
+            address(CDEPO.getDepositToken(address(cdToken))),
+            address(iReserveTokenTwo),
+            "getDepositToken: cdToken"
+        );
+        assertEq(
+            address(CDEPO.getDepositToken(address(iReserveTokenTwo))),
+            address(0),
+            "getDepositToken: iReserveTokenTwo"
+        );
+
+        assertEq(
+            CDEPO.isDepositToken(address(iReserveTokenTwo)),
+            true,
+            "isDepositToken: iReserveTokenTwo"
+        );
+        assertEq(CDEPO.isDepositToken(address(cdToken)), false, "isDepositToken: cdToken");
+
+        assertEq(
+            CDEPO.isConvertibleDepositToken(address(iReserveTokenTwo)),
+            true,
+            "isConvertibleDepositToken: iReserveTokenTwo"
+        );
+        assertEq(
+            CDEPO.isConvertibleDepositToken(address(cdToken)),
+            false,
+            "isConvertibleDepositToken: cdToken"
+        );
+
+        assertEq(CDEPO.reclaimRate(address(iReserveTokenTwo)), 90e2, "reclaimRate");
 
         // Substring is required for the name and symbol, as they are padded with null characters
         assertEq(_getSubstring(cdToken.name(), 16), "Convertible USDS", "name");

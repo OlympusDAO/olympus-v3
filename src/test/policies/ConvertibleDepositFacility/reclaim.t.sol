@@ -125,7 +125,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         )
     {
         uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
-            convertibleDepository.reclaimRate(iReserveToken)) / 100e2;
+            convertibleDepository.reclaimRate(address(iReserveToken))) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
         uint256 beforeMintApproval = minter.mintApproval(address(facility));
@@ -199,7 +199,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Calculate the amount that will be reclaimed
         uint256 expectedReclaimedAmount = (amountOne *
-            convertibleDepository.reclaimRate(iReserveToken)) / 100e2;
+            convertibleDepository.reclaimRate(address(iReserveToken))) / 100e2;
         uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
 
         uint256 beforeMintApproval = minter.mintApproval(address(facility));

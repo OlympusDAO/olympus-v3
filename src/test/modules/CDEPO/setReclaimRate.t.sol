@@ -63,6 +63,6 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
         CDEPO.setReclaimRate(iReserveToken, reclaimRate);
 
         // Assert
-        assertEq(CDEPO.reclaimRate(iReserveToken), reclaimRate, "reclaimRate");
+        assertEq(CDEPO.reclaimRate(address(iReserveToken)), reclaimRate, "reclaimRate");
     }
 }

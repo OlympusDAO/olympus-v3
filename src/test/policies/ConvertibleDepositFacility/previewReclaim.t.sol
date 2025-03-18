@@ -74,8 +74,8 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 amount = bound(amount_, 3, 9e18);
 
         // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimed = (amount * convertibleDepository.reclaimRate(iReserveToken)) /
-            100e2;
+        uint256 expectedReclaimed = (amount *
+            convertibleDepository.reclaimRate(address(iReserveToken))) / 100e2;
 
         // Call function
         (uint256 reclaimed, address spender) = facility.previewReclaim(amount);
