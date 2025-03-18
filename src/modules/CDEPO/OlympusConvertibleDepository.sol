@@ -133,9 +133,15 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         IERC20 inputToken_,
         uint256 amount_
     ) external override onlyCreatedToken(inputToken_) {
-        address cdToken = _tokenToClone[address(inputToken_)];
+        ConvertibleDepositTokenClone cdToken = ConvertibleDepositTokenClone(
+            _tokenToClone[address(inputToken_)]
+        );
 
-        ConvertibleDepositTokenClone(cdToken).burnFrom(msg.sender, amount_);
+        // Decrease the total shares
+        _totalShares[address(inputToken_)] -= cdToken.vault().previewWithdraw(amount_);
+
+        // Burn the CD tokens from the caller
+        cdToken.burnFrom(msg.sender, amount_);
     }
 
     // ========== RECLAIM/REDEEM ========== //
@@ -458,20 +464,17 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         onlyCreatedToken(inputToken_)
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
-        address cdToken = _tokenToClone[address(inputToken_)];
+        ConvertibleDepositTokenClone cdToken = ConvertibleDepositTokenClone(
+            _tokenToClone[address(inputToken_)]
+        );
 
         // Get vault from CDToken
-        IERC4626 vault = ConvertibleDepositTokenClone(cdToken).vault();
+        IERC4626 vault = cdToken.vault();
 
-        // Calculate total assets in vault
-        uint256 totalAssets = vault.convertToAssets(vault.balanceOf(address(this)));
-
-        // Calculate total liabilities (outstanding cdTokens)
-        uint256 totalLiabilities = ConvertibleDepositTokenClone(cdToken).totalSupply();
-
-        // Calculate yield (assets in excess of liabilities)
         // The yield is the difference between the quantity of underlying assets in the vault and the quantity of CD tokens issued
-        yieldReserve = totalAssets > totalLiabilities ? totalAssets - totalLiabilities : 0;
+        yieldReserve =
+            vault.previewRedeem(_totalShares[address(inputToken_)]) -
+            cdToken.totalSupply();
 
         // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed
         if (yieldReserve > 0) {

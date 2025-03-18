@@ -84,6 +84,7 @@ contract BurnCDEPOTest is CDEPOTest {
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
         givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO));
         uint256 expectedTotalShares = _getTotalShares() - vault.previewWithdraw(10e18);
