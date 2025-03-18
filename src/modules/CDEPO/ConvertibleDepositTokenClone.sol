@@ -5,13 +5,12 @@ import {CloneERC20} from "../../external/clones/CloneERC20.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDeposit} from "./IConvertibleDeposit.sol";
 
 /// @title  ConvertibleDepositTokenClone
 /// @notice Convertible deposit token implementation that is deployed as a clone
 ///         with immutable arguments for each supported input token.
-contract ConvertibleDepositTokenClone is CloneERC20 {
-    error OnlyOwner();
-
+contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
     // ========== IMMUTABLE ARGS ========== //
 
     // Storage layout:
