@@ -320,8 +320,8 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
     //  given the caller does not have enough debt token
     //   [X] it reverts
     //  given the repay amount is more than the debt
-    //   [ ] it repays and removes collateral
-    //   [ ] it returns the excess debt token to the caller
+    //   [X] it repays and removes collateral
+    //   [X] it returns the excess debt token to the caller
     //  given delegation requests are provided
     //   [X] it repays and removes collateral
     //   [X] it executes the delegation requests
