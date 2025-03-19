@@ -14,6 +14,8 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the account_ is not the owner of all of the positions
     //  [X] it reverts
+    // when any position has a different CD token
+    //  [X] it reverts
     // when any position is not valid
     //  [X] it reverts
     // when any position has not reached the conversion expiry
@@ -337,6 +339,38 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
+
+        // Call function
+        facility.previewRedeem(recipient, positionIds_, amounts_);
+    }
+
+    function test_anyPositionHasDifferentCDToken_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 1; // cdTokenTwo
+
+        amounts_[0] = 3e18;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT;
+
+        // Warp to the normal expiry
+        vm.warp(CONVERSION_EXPIRY);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "multiple CD tokens"
+            )
         );
 
         // Call function

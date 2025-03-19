@@ -19,24 +19,24 @@ contract SetReclaimRateCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(auctioneer);
-        facility.setReclaimRate(99e2);
+        facility.setReclaimRate(cdToken, 99e2);
     }
 
     function test_contractInactive() public {
         // Call function
         vm.prank(admin);
-        facility.setReclaimRate(99e2);
+        facility.setReclaimRate(cdToken, 99e2);
 
         // Assert
-        assertEq(convertibleDepository.reclaimRate(address(iReserveToken)), 99e2);
+        assertEq(convertibleDepository.reclaimRate(address(cdToken)), 99e2);
     }
 
     function test_setReclaimRate() public givenLocallyActive {
         // Call function
         vm.prank(admin);
-        facility.setReclaimRate(99e2);
+        facility.setReclaimRate(cdToken, 99e2);
 
         // Assert
-        assertEq(convertibleDepository.reclaimRate(address(iReserveToken)), 99e2);
+        assertEq(convertibleDepository.reclaimRate(address(cdToken)), 99e2);
     }
 }

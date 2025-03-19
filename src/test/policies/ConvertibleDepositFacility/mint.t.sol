@@ -5,10 +5,14 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract MintCDFTest is ConvertibleDepositFacilityTest {
-    event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
+    event CreatedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 indexed positionId,
+        uint256 depositAmount
+    );
 
     // given the contract is inactive
     //  [X] it reverts
@@ -99,7 +103,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit CreatedDeposit(recipient, 0, 10e6);
+        emit CreatedDeposit(address(reserveToken), recipient, 0, 10e6);
 
         // Call function
         uint256 positionId = _createPosition(
@@ -148,7 +152,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit CreatedDeposit(recipient, 0, RESERVE_TOKEN_AMOUNT);
+        emit CreatedDeposit(address(reserveToken), recipient, 0, RESERVE_TOKEN_AMOUNT);
 
         // Call function
         uint256 positionId = _createPosition(

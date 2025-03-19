@@ -20,7 +20,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
 
         // Call function
-        facility.previewReclaim(1e18);
+        facility.previewReclaim(cdToken, 1e18);
     }
 
     function test_amountIsZero_reverts()
@@ -36,7 +36,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(0);
+        facility.previewReclaim(cdToken, 0);
     }
 
     function test_reclaimedAmountIsZero_reverts()
@@ -58,7 +58,7 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.previewReclaim(amount);
+        facility.previewReclaim(cdToken, amount);
     }
 
     function test_success(
@@ -74,11 +74,11 @@ contract PreviewReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 amount = bound(amount_, 3, 9e18);
 
         // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimed = (amount *
-            convertibleDepository.reclaimRate(address(iReserveToken))) / 100e2;
+        uint256 expectedReclaimed = (amount * convertibleDepository.reclaimRate(address(cdToken))) /
+            100e2;
 
         // Call function
-        (uint256 reclaimed, address spender) = facility.previewReclaim(amount);
+        (uint256 reclaimed, address spender) = facility.previewReclaim(cdToken, amount);
 
         // Assertion that the reclaimed amount is the sum of the amounts adjsuted by the reclaim rate
         assertEq(reclaimed, expectedReclaimed, "reclaimed");

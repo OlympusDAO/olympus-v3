@@ -4,9 +4,15 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
-    event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount, uint256 forfeitedAmount);
+    event ReclaimedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 reclaimedAmount,
+        uint256 forfeitedAmount
+    );
 
     // given the contract is inactive
     //  [X] it reverts
@@ -26,7 +32,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
 
         // Call function
-        facility.reclaim(1e18);
+        facility.reclaim(cdToken, 1e18);
     }
 
     function test_amountToReclaimIsZero_reverts()
@@ -52,7 +58,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(0);
+        facility.reclaim(cdToken, 0);
     }
 
     function test_spendingIsNotApproved_reverts()
@@ -67,13 +73,11 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "allowance")
-        );
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(RESERVE_TOKEN_AMOUNT);
+        facility.reclaim(cdToken, RESERVE_TOKEN_AMOUNT);
     }
 
     function test_reclaimedAmountIsZero_reverts()
@@ -105,7 +109,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(amount);
+        facility.reclaim(cdToken, amount);
     }
 
     function test_success()
@@ -125,18 +129,23 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         )
     {
         uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
-            convertibleDepository.reclaimRate(address(iReserveToken))) / 100e2;
+            convertibleDepository.reclaimRate(address(cdToken))) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
         uint256 beforeMintApproval = minter.mintApproval(address(facility));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(recipient, expectedReclaimedAmount, expectedForfeitedAmount);
+        emit ReclaimedDeposit(
+            address(reserveToken),
+            recipient,
+            expectedReclaimedAmount,
+            expectedForfeitedAmount
+        );
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(RESERVE_TOKEN_AMOUNT);
+        uint256 reclaimed = facility.reclaim(cdToken, RESERVE_TOKEN_AMOUNT);
 
         // Assertion that the reclaimed amount is the sum of the amounts adjusted by the reclaim rate
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
@@ -199,18 +208,23 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Calculate the amount that will be reclaimed
         uint256 expectedReclaimedAmount = (amountOne *
-            convertibleDepository.reclaimRate(address(iReserveToken))) / 100e2;
+            convertibleDepository.reclaimRate(address(cdToken))) / 100e2;
         uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
 
         uint256 beforeMintApproval = minter.mintApproval(address(facility));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(recipient, expectedReclaimedAmount, expectedForfeitedAmount);
+        emit ReclaimedDeposit(
+            address(reserveToken),
+            recipient,
+            expectedReclaimedAmount,
+            expectedForfeitedAmount
+        );
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(amountOne);
+        uint256 reclaimed = facility.reclaim(cdToken, amountOne);
 
         // Assert reclaimed amount
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");

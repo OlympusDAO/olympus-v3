@@ -36,6 +36,11 @@ contract ConvertibleDepositFacilityTest is Test {
     IERC20 internal iReserveToken;
     IConvertibleDepositERC20 internal cdToken;
 
+    MockERC20 public reserveTokenTwo;
+    MockERC4626 public vaultTwo;
+    IERC20 internal iReserveTokenTwo;
+    IConvertibleDepositERC20 internal cdTokenTwo;
+
     address public recipient = address(0x1);
     address public auctioneer = address(0x2);
     address public recipientTwo = address(0x3);
@@ -56,6 +61,14 @@ contract ConvertibleDepositFacilityTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        vm.label(address(reserveToken), "RES");
+        vm.label(address(vault), "sRES");
+
+        reserveTokenTwo = new MockERC20("Reserve Token Two", "RES2", 18);
+        iReserveTokenTwo = IERC20(address(reserveTokenTwo));
+        vaultTwo = new MockERC4626(reserveTokenTwo, "Vault Two", "VAULT2");
+        vm.label(address(reserveTokenTwo), "RES2");
+        vm.label(address(vaultTwo), "sRES2");
 
         // Instantiate bophades
         _createStack();
@@ -85,10 +98,25 @@ contract ConvertibleDepositFacilityTest is Test {
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
 
+        // Enable the facility
+        vm.prank(admin);
+        facility.enable("");
+
         // Create a CD token
         vm.startPrank(admin);
-        cdToken = convertibleDepository.create(IERC4626(address(vault)), 90e2);
+        cdToken = facility.create(IERC4626(address(vault)), 90e2);
         vm.stopPrank();
+        vm.label(address(cdToken), "cdToken");
+
+        // Create a CD token
+        vm.startPrank(admin);
+        cdTokenTwo = facility.create(IERC4626(address(vaultTwo)), 90e2);
+        vm.stopPrank();
+        vm.label(address(cdTokenTwo), "cdTokenTwo");
+
+        // Disable the facility
+        vm.prank(emergency);
+        facility.disable("");
     }
 
     // ========== MODIFIERS ========== //
@@ -116,9 +144,30 @@ contract ConvertibleDepositFacilityTest is Test {
         uint48 redemptionExpiry_,
         bool wrap_
     ) internal returns (uint256 positionId) {
+        return
+            _createPosition(
+                cdToken,
+                account_,
+                amount_,
+                conversionPrice_,
+                conversionExpiry_,
+                redemptionExpiry_,
+                wrap_
+            );
+    }
+
+    function _createPosition(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_,
+        uint256 conversionPrice_,
+        uint48 conversionExpiry_,
+        uint48 redemptionExpiry_,
+        bool wrap_
+    ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
         positionId = facility.mint(
-            cdToken,
+            cdToken_,
             account_,
             amount_,
             conversionPrice_,
@@ -136,6 +185,27 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
         _createPosition(
+            account_,
+            amount_,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            REDEMPTION_EXPIRY,
+            false
+        );
+        _;
+    }
+
+    modifier givenAddressHasDifferentTokenAndPosition(address account_, uint256 amount_) {
+        // Mint
+        reserveTokenTwo.mint(account_, amount_);
+
+        // Approve
+        vm.prank(account_);
+        reserveTokenTwo.approve(address(convertibleDepository), amount_);
+
+        // Create position
+        _createPosition(
+            cdTokenTwo,
             account_,
             amount_,
             CONVERSION_PRICE,

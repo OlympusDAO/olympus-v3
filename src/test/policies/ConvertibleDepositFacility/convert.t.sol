@@ -3,14 +3,18 @@ pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 contract ConvertCDFTest is ConvertibleDepositFacilityTest {
-    event ConvertedDeposit(address indexed user, uint256 depositAmount, uint256 convertedAmount);
+    event ConvertedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 depositAmount,
+        uint256 convertedAmount
+    );
 
     // given the contract is inactive
     //  [X] it reverts
@@ -25,6 +29,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     // when any position has reached the redemption expiry
     //  [X] it reverts
     // when any position has an amount greater than the remaining deposit
+    //  [X] it reverts
+    // when any position has a different CD token
     //  [X] it reverts
     // when the caller has not approved CDEPO to spend the total amount of CD tokens
     //  [X] it reverts
@@ -353,9 +359,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         amounts_[1] = 5e18;
 
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "allowance")
-        );
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
@@ -437,7 +441,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ConvertedDeposit(recipient, 10e6, expectedConvertedAmount);
+        emit ConvertedDeposit(address(reserveToken), recipient, 10e6, expectedConvertedAmount);
 
         // Call function
         vm.prank(recipient);
@@ -497,6 +501,41 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
     }
 
+    function test_anyPositionHasDifferentCDToken_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 2; // cdTokenTwo
+
+        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "multiple CD tokens"
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        facility.convert(positionIds_, amounts_);
+    }
+
     function test_success()
         public
         givenLocallyActive
@@ -527,7 +566,12 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ConvertedDeposit(recipient, RESERVE_TOKEN_AMOUNT, expectedConvertedAmount);
+        emit ConvertedDeposit(
+            address(reserveToken),
+            recipient,
+            RESERVE_TOKEN_AMOUNT,
+            expectedConvertedAmount
+        );
 
         // Call function
         vm.prank(recipient);

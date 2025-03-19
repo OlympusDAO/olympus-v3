@@ -165,18 +165,24 @@ interface IConvertibleDepositFacility {
     ///         - Transferring the reserve token to `account_`
     ///         - Emitting an event
     ///
+    /// @param  cdToken_        The address of the CD token
     /// @param  amount_         The amount of convertible deposit tokens to reclaim
     /// @return reclaimed       The amount of reserve token returned to the caller
-    function reclaim(uint256 amount_) external returns (uint256 reclaimed);
+    function reclaim(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external returns (uint256 reclaimed);
 
     /// @notice Preview the amount of reserve token that would be reclaimed
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Returning the total amount of reserve token that would be reclaimed
     ///
+    /// @param  cdToken_        The address of the CD token
     /// @param  amount_         The amount of convertible deposit tokens to reclaim
     /// @return reclaimed       The amount of reserve token returned to the caller
     /// @return cdTokenSpender  The address that will spend the convertible deposit tokens. The caller must have approved this address to spend the total amount of CD tokens.
     function previewReclaim(
+        IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external view returns (uint256 reclaimed, address cdTokenSpender);
 

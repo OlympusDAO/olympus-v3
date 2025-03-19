@@ -25,6 +25,8 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when the account is not the owner of all of the positions
     //  [X] it reverts
+    // when any position has a different CD token
+    //  [X] it reverts
     // given the deposit asset has 6 decimals
     //  [X] it returns the correct amount of CD tokens that would be converted
     //  [X] it returns the correct amount of OHM that would be minted
@@ -437,6 +439,40 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
 
         // Assertion that the spender is the convertible depository
         assertEq(spender, address(convertibleDepository), "spender");
+    }
+
+    function test_anyPositionHasDifferentCDToken_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 2; // cdTokenTwo
+
+        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "multiple CD tokens"
+            )
+        );
+
+        // Call function
+        facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
     function test_success(
