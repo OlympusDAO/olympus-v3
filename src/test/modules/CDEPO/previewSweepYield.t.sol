@@ -89,9 +89,9 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         // Recipient has reclaimed all of their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, 10e18);
+        CDEPO.reclaim(cdToken, 10e18);
 
-        uint256 reclaimedAmount = CDEPO.previewReclaim(iReserveToken, 10e18);
+        uint256 reclaimedAmount = CDEPO.previewReclaim(cdToken, 10e18);
         uint256 forfeitedAmount = 10e18 - reclaimedAmount;
 
         // Call function
@@ -121,9 +121,9 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         // Recipient has reclaimed their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, amount);
+        CDEPO.reclaim(cdToken, amount);
 
-        uint256 reclaimedAmount = CDEPO.previewReclaim(iReserveToken, amount);
+        uint256 reclaimedAmount = CDEPO.previewReclaim(cdToken, amount);
         uint256 forfeitedAmount = amount - reclaimedAmount;
 
         // Call function

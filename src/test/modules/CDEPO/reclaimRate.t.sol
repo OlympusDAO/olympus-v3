@@ -15,10 +15,10 @@ contract ReclaimRateCDEPOTest is CDEPOTest {
             abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
         );
 
-        CDEPO.reclaimRate(address(iReserveTokenTwo));
+        CDEPO.reclaimRate(address(iReserveToken));
     }
 
     function test_supported() public {
-        assertEq(CDEPO.reclaimRate(address(iReserveToken)), reclaimRate, "reclaimRate");
+        assertEq(CDEPO.reclaimRate(address(cdToken)), reclaimRate, "reclaimRate");
     }
 }

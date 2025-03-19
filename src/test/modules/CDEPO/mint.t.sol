@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract MintCDEPOTest is CDEPOTest {
     // when the input token is not supported
@@ -27,7 +28,7 @@ contract MintCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.mint(iReserveTokenTwo, 10e18);
+        CDEPO.mint(IConvertibleDepositERC20(address(iReserveToken)), 10e18);
     }
 
     function test_zeroAmount_reverts() public {

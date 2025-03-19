@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {stdError} from "forge-std/StdError.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract BurnCDEPOTest is CDEPOTest {
     // when the input token is not supported
@@ -25,7 +26,7 @@ contract BurnCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.burn(iReserveTokenTwo, 10e18);
+        CDEPO.burn(IConvertibleDepositERC20(address(iReserveToken)), 10e18);
     }
 
     function test_insufficientBalance_reverts() public {
@@ -33,7 +34,7 @@ contract BurnCDEPOTest is CDEPOTest {
         vm.expectRevert(stdError.arithmeticError);
 
         // Call function
-        CDEPO.burn(iReserveToken, 10e18);
+        CDEPO.burn(cdToken, 10e18);
     }
 
     function test_spendingNotApproved_reverts()
@@ -47,7 +48,7 @@ contract BurnCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.burn(iReserveToken, 10e18);
+        CDEPO.burn(cdToken, 10e18);
     }
 
     function test_success(
@@ -63,20 +64,20 @@ contract BurnCDEPOTest is CDEPOTest {
 
         uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO));
         uint256 expectedTotalShares = _getTotalShares() - vault.previewWithdraw(amount);
-        uint256 expectedTotalSupply = _getCDToken().totalSupply() - amount;
+        uint256 expectedTotalSupply = cdToken.totalSupply() - amount;
 
         // Call function
         vm.prank(recipient);
-        CDEPO.burn(iReserveToken, amount);
+        CDEPO.burn(cdToken, amount);
 
         // Assert balances
-        assertEq(_getCDToken().balanceOf(recipient), 10e18 - amount, "CDEPO: recipient balance");
+        assertEq(cdToken.balanceOf(recipient), 10e18 - amount, "CDEPO: recipient balance");
         assertEq(vault.balanceOf(recipient), 0, "vault: recipient balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "vault: CDEPO balance");
 
         // Assert total shares
         assertEq(_getTotalShares(), expectedTotalShares, "total shares");
-        assertEq(_getCDToken().totalSupply(), expectedTotalSupply, "total supply");
+        assertEq(cdToken.totalSupply(), expectedTotalSupply, "total supply");
     }
 
     function test_lastToken()
@@ -91,16 +92,16 @@ contract BurnCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.burn(iReserveToken, 10e18);
+        CDEPO.burn(cdToken, 10e18);
 
         // Assert balances
-        assertEq(_getCDToken().balanceOf(recipient), 0, "CDEPO: recipient balance");
+        assertEq(cdToken.balanceOf(recipient), 0, "CDEPO: recipient balance");
         assertEq(vault.balanceOf(recipient), 0, "vault: recipient balance");
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "vault: CDEPO balance");
 
         // Assert total shares
         assertEq(_getTotalShares(), expectedTotalShares, "total shares");
-        assertEq(_getCDToken().totalSupply(), 0, "total supply");
+        assertEq(cdToken.totalSupply(), 0, "total supply");
 
         // Sweeping yield should bring total shares to 0
         vm.prank(address(godmode));

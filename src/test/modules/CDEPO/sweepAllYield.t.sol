@@ -88,13 +88,13 @@ contract SweepAllYieldCDEPOTest is CDEPOTest {
         reserveTokenTwo.mint(recipient, tokenTwoDeposit);
         vm.startPrank(recipient);
         iReserveTokenTwo.approve(address(CDEPO), tokenTwoDeposit);
-        CDEPO.mint(iReserveTokenTwo, tokenTwoDeposit);
+        CDEPO.mint(cdTokenTwo, tokenTwoDeposit);
         vm.stopPrank();
 
         // Reclaim the second token, so there is yield to sweep
         vm.startPrank(recipient);
         cdTokenTwo.approve(address(CDEPO), tokenTwoDeposit);
-        CDEPO.reclaim(iReserveTokenTwo, tokenTwoDeposit);
+        CDEPO.reclaim(cdTokenTwo, tokenTwoDeposit);
         vm.stopPrank();
 
         uint256 expectedSReserveYield = vault.previewWithdraw(INITIAL_VAULT_BALANCE);

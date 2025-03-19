@@ -7,6 +7,7 @@ import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
@@ -33,6 +34,8 @@ contract ConvertibleDepositFacilityTest is Test {
     MockERC20 public reserveToken;
     MockERC4626 public vault;
     IERC20 internal iReserveToken;
+    IConvertibleDepositERC20 internal cdToken;
+
     address public recipient = address(0x1);
     address public auctioneer = address(0x2);
     address public recipientTwo = address(0x3);
@@ -81,6 +84,11 @@ contract ConvertibleDepositFacilityTest is Test {
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
+
+        // Create a CD token
+        vm.startPrank(admin);
+        cdToken = convertibleDepository.create(IERC4626(address(vault)), 90e2);
+        vm.stopPrank();
     }
 
     // ========== MODIFIERS ========== //
@@ -110,7 +118,7 @@ contract ConvertibleDepositFacilityTest is Test {
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
         positionId = facility.mint(
-            IERC20(address(reserveToken)),
+            cdToken,
             account_,
             amount_,
             conversionPrice_,
@@ -120,13 +128,9 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
-    function _getCDToken() internal view returns (IConvertibleDepositERC20) {
-        return convertibleDepository.getConvertibleToken(address(iReserveToken));
-    }
-
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        convertibleDepository.mint(iReserveToken, amount_);
+        convertibleDepository.mint(cdToken, amount_);
         _;
     }
 
@@ -148,7 +152,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        _getCDToken().approve(spender_, amount_);
+        cdToken.approve(spender_, amount_);
         _;
     }
 

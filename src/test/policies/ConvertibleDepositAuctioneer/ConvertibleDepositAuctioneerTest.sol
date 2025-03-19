@@ -6,6 +6,8 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
@@ -35,6 +37,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     MockERC20 public ohm;
     MockERC20 public reserveToken;
     MockERC4626 public vault;
+    IConvertibleDepositERC20 public cdToken;
 
     address public recipient = address(0x1);
     address public emissionManager = address(0x3);
@@ -96,8 +99,13 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
-        kernel.executeAction(Actions.ActivatePolicy, address(auctioneer));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+
+        // Create a CD token
+        // Required at the time of activation of the auctioneer policy
+        vm.startPrank(admin);
+        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        vm.stopPrank();
 
         // Grant roles
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
@@ -108,6 +116,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Activate policy dependencies
         vm.prank(admin);
         facility.enable("");
+
+        kernel.executeAction(Actions.ActivatePolicy, address(auctioneer));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {
@@ -269,10 +279,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         reserveToken.approve(spender_, amount_);
     }
 
-    function _getCDToken() internal view returns (IERC20) {
-        return IERC20(address(convertibleDepository));
-    }
-
     modifier givenReserveTokenSpendingIsApproved(
         address owner_,
         address spender_,
@@ -288,7 +294,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        _getCDToken().approve(spender_, amount_);
+        cdToken.approve(spender_, amount_);
         _;
     }
 

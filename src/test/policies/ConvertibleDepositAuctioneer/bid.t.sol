@@ -23,7 +23,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert that the CD tokens were transferred to the recipient
         assertEq(
-            _getCDToken().balanceOf(recipient),
+            cdToken.balanceOf(recipient),
             previousConvertibleDepositBalance_ + bidAmount_,
             "CD token balance"
         );

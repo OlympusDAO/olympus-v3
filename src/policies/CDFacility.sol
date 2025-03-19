@@ -93,7 +93,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The contract is not active
     ///             - The deposit token is not supported
     function mint(
-        IERC20 depositToken_,
+        IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
@@ -102,15 +102,13 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         bool wrap_
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
-        // This will also transfer the deposit token
-        CDEPO.mintFor(depositToken_, account_, amount_);
-
-        IConvertibleDepositERC20 cdToken = CDEPO.getConvertibleToken(address(depositToken_));
+        // This will validate that the deposit token is supported, and transfer the deposit token
+        CDEPO.mintFor(cdToken_, account_, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
             account_,
-            address(cdToken),
+            address(cdToken_),
             amount_,
             conversionPrice_,
             conversionExpiry_,
@@ -119,13 +117,14 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         );
 
         // Calculate the expected OHM amount
-        uint256 expectedOhmAmount = (amount_ * (10 ** cdToken.decimals())) / conversionPrice_;
+        // The deposit and CD token have the same decimals, so either can be used
+        uint256 expectedOhmAmount = (amount_ * (10 ** cdToken_.decimals())) / conversionPrice_;
 
         // Pre-emptively increase the OHM mint approval
         MINTR.increaseMintApproval(address(this), expectedOhmAmount);
 
         // Emit an event
-        emit CreatedDeposit(account_, positionId, amount_);
+        emit CreatedDeposit(address(cdToken_.asset()), account_, positionId, amount_);
     }
 
     function _previewConvert(
@@ -150,10 +149,11 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
-        IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
-            position.convertibleDepositToken
-        );
-        convertedTokenOut = (amount_ * (10 ** cdToken.decimals())) / position.conversionPrice;
+        // The deposit and CD token have the same decimals, so either can be used
+        convertedTokenOut =
+            (amount_ *
+                (10 ** IConvertibleDepositERC20(position.convertibleDepositToken).decimals())) /
+            position.conversionPrice;
 
         return convertedTokenOut;
     }
@@ -181,6 +181,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
+
+        // TODO check that the positions are for the given CD token
 
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
@@ -216,7 +218,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
-        // TODO remove cdTokenIn
+        // TODO check that the positions are for the given CD token
 
         // Iterate over all positions
         for (uint256 i; i < positionIds_.length; ++i) {
@@ -249,7 +251,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         MINTR.mintOhm(msg.sender, convertedTokenOut);
 
         // Emit event
-        emit ConvertedDeposit(msg.sender, cdTokenIn, convertedTokenOut);
+        emit ConvertedDeposit(address(0), msg.sender, cdTokenIn, convertedTokenOut);
 
         return (cdTokenIn, convertedTokenOut);
     }
@@ -384,7 +386,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         MINTR.decreaseMintApproval(address(this), unconverted);
 
         // Emit event
-        emit RedeemedDeposit(msg.sender, redeemed);
+        emit RedeemedDeposit(address(0), msg.sender, redeemed);
 
         return redeemed;
     }
@@ -456,7 +458,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // }
 
         // Emit event
-        emit ReclaimedDeposit(msg.sender, reclaimed, amount_ - reclaimed);
+        emit ReclaimedDeposit(address(0), msg.sender, reclaimed, amount_ - reclaimed);
 
         return reclaimed;
     }

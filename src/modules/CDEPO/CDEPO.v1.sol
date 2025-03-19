@@ -13,27 +13,27 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when the reclaim rate is updated
-    event ReclaimRateUpdated(address indexed inputToken, uint16 newReclaimRate);
+    event ReclaimRateUpdated(address indexed cdToken, uint16 newReclaimRate);
 
     /// @notice Emitted when the yield is swept
     event YieldSwept(
-        address indexed inputToken,
+        address indexed depositToken,
         address indexed receiver,
         uint256 reserveAmount,
         uint256 sReserveAmount
     );
 
     /// @notice Emitted when the caller borrows the underlying asset
-    event DebtIncurred(address indexed inputToken, address indexed borrower, uint256 amount);
+    event DebtIncurred(address indexed depositToken, address indexed borrower, uint256 amount);
 
     /// @notice Emitted when the caller repays a borrowed amount of the underlying asset
-    event DebtRepaid(address indexed inputToken, address indexed borrower, uint256 amount);
+    event DebtRepaid(address indexed depositToken, address indexed borrower, uint256 amount);
 
     /// @notice Emitted when the debt is reduced for a borrower
-    event DebtReduced(address indexed inputToken, address indexed borrower, uint256 amount);
+    event DebtReduced(address indexed depositToken, address indexed borrower, uint256 amount);
 
     /// @notice Emitted when a new token is supported
-    event TokenAdded(address indexed inputToken, address indexed cdToken);
+    event TokenAdded(address indexed depositToken, address indexed cdToken);
 
     // ========== CONSTANTS ========== //
 
@@ -49,9 +49,9 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     ///         - Transfers the vault asset from the contract to the caller
     ///         - Emits a `DebtIncurred` event
     ///
-    /// @param  inputToken_  The input token to borrow
-    /// @param  amount_     The amount of vault asset to borrow
-    function incurDebt(IERC20 inputToken_, uint256 amount_) external virtual;
+    /// @param  depositToken_   The deposit token to borrow
+    /// @param  amount_         The amount of vault asset to borrow
+    function incurDebt(IERC20 depositToken_, uint256 amount_) external virtual;
 
     /// @notice Allows the permissioned caller to repay an amount of the vault asset
     /// @dev    The implementing function should perform the following:
@@ -60,10 +60,10 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     ///         - Transfers the vault asset from the caller to the contract
     ///         - Emits a `DebtRepaid` event
     ///
-    /// @param  inputToken_  The input token to repay
-    /// @param  amount_     The amount of vault asset to repay
-    /// @return repaidAmount The amount of vault asset that was repaid
-    function repayDebt(IERC20 inputToken_, uint256 amount_) external virtual returns (uint256);
+    /// @param  depositToken_  The deposit token to repay
+    /// @param  amount_        The amount of vault asset to repay
+    /// @return repaidAmount   The amount of vault asset that was repaid
+    function repayDebt(IERC20 depositToken_, uint256 amount_) external virtual returns (uint256);
 
     /// @notice Allows the permissioned caller to reduce the debt of a borrower
     ///         This can be used to forgive debt, e.g. in the case of a liquidation.
@@ -73,73 +73,76 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     ///         - Updates the debt of the borrower
     ///         - Emits a `DebtReduced` event
     ///
-    /// @param  inputToken_  The input token to reduce debt for
-    /// @param  amount_     The amount to reduce the debt by
-    /// @return debtAmount  The remaining debt amount
-    function reduceDebt(IERC20 inputToken_, uint256 amount_) external virtual returns (uint256);
+    /// @param  depositToken_  The deposit token to reduce debt for
+    /// @param  amount_        The amount to reduce the debt by
+    /// @return debtAmount     The remaining debt amount
+    function reduceDebt(IERC20 depositToken_, uint256 amount_) external virtual returns (uint256);
 
     // ========== YIELD MANAGEMENT ========== //
 
     /// @notice Claim the yield accrued on all supported tokens
     function sweepAllYield(address to_) external virtual;
 
-    /// @notice Claim the yield accrued on the input token
+    /// @notice Claim the yield accrued on the deposit token
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the input token is supported
+    ///         - Validates that the deposit token is supported
     ///         - Validates that the caller is permissioned
     ///         - Withdrawing the yield from the sReserve token
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
-    /// @param  inputToken_     The input token to sweep yield for
+    /// @param  depositToken_   The deposit token to sweep yield for
     /// @param  to_             The address to sweep the yield to
     /// @return yieldReserve    The amount of reserve token swept
     /// @return yieldSReserve   The amount of sReserve token swept
     function sweepYield(
-        IERC20 inputToken_,
+        IERC20 depositToken_,
         address to_
     ) external virtual returns (uint256, uint256);
 
     /// @notice Preview the amount of yield that would be swept
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the input token is supported
+    ///         - Validates that the deposit token is supported
     ///         - Computes the amount of yield that would be swept
     ///         - Returns the computed amount
     ///
-    /// @param  inputToken_  The input token to check
-    /// @return yieldReserve  The amount of reserve token that would be swept
-    /// @return yieldSReserve The amount of sReserve token that would be swept
+    /// @param  depositToken_  The deposit token to check
+    /// @return yieldReserve   The amount of reserve token that would be swept
+    /// @return yieldSReserve  The amount of sReserve token that would be swept
     function previewSweepYield(
-        IERC20 inputToken_
+        IERC20 depositToken_
     ) external view virtual returns (uint256 yieldReserve, uint256 yieldSReserve);
 
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Get the debt amount for a token and borrower
-    function debt(IERC20 inputToken_, address borrower_) external view virtual returns (uint256);
+    function debt(IERC20 depositToken_, address borrower_) external view virtual returns (uint256);
 
     /// @notice Get the amount of vault shares managed by the contract
     ///
-    /// @param  inputToken_  The input token to get vault shares for
-    /// @return shares       The amount of vault shares managed by the contract
-    function getVaultShares(IERC20 inputToken_) external view virtual returns (uint256 shares);
+    /// @param  depositToken_   The deposit token to get vault shares for
+    /// @return shares          The amount of vault shares managed by the contract
+    function getVaultShares(IERC20 depositToken_) external view virtual returns (uint256 shares);
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice Set the reclaim rate for a token
+    /// @notice Set the reclaim rate for a convertible deposit token
     /// @dev    The implementing function should perform the following:
-    ///         - Validate that the input token is supported
+    ///         - Validate that the convertible deposit token is supported
     ///         - Validating that the caller has the correct role
     ///         - Validating that the new rate is within bounds
     ///         - Setting the new reclaim rate
     ///         - Emitting an event
     ///
-    /// @param  inputToken_      The input token to set rate for
-    /// @param  newReclaimRate_  The new reclaim rate
-    function setReclaimRate(IERC20 inputToken_, uint16 newReclaimRate_) external virtual;
+    /// @param  cdToken_        The convertible deposit token to set rate for
+    /// @param  newReclaimRate_ The new reclaim rate
+    function setReclaimRate(
+        IConvertibleDepositERC20 cdToken_,
+        uint16 newReclaimRate_
+    ) external virtual;
 
-    /// @notice Create support for a new input token based on its vault
-    /// @param  vault_          The ERC4626 vault for the input token
+    /// @notice Create support for a new deposit token based on its vault
+    /// @param  vault_          The ERC4626 vault for the deposit token
     /// @param  reclaimRate_    The initial reclaim rate
     /// @return cdToken         The address of the deployed cdToken
     function create(

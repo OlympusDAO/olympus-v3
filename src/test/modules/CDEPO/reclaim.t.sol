@@ -6,6 +6,7 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract ReclaimCDEPOTest is CDEPOTest {
     // when the input token is not supported
@@ -34,7 +35,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.reclaim(iReserveTokenTwo, 10e18);
+        CDEPO.reclaim(IConvertibleDepositERC20(address(iReserveToken)), 10e18);
     }
 
     function test_amountIsZero_reverts() public {
@@ -45,7 +46,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, 0);
+        CDEPO.reclaim(cdToken, 0);
     }
 
     function test_discountedAmountIsZero_reverts()
@@ -67,7 +68,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, amount);
+        CDEPO.reclaim(cdToken, amount);
     }
 
     function test_insufficientAllowance_reverts()
@@ -81,7 +82,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, 10e18);
+        CDEPO.reclaim(cdToken, 10e18);
     }
 
     function test_insufficientBalance_reverts()
@@ -96,7 +97,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, 10e18);
+        CDEPO.reclaim(cdToken, 10e18);
     }
 
     function test_success()
@@ -112,7 +113,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, 10e18);
+        CDEPO.reclaim(cdToken, 10e18);
 
         // Assert balances
         _assertReserveTokenBalance(expectedReserveTokenAmount, 0);
@@ -139,7 +140,7 @@ contract ReclaimCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.reclaim(iReserveToken, amount);
+        CDEPO.reclaim(cdToken, amount);
 
         // Assert balances
         _assertReserveTokenBalance(expectedReserveTokenAmount, 0);

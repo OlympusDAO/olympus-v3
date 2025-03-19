@@ -28,22 +28,25 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     address private immutable _TOKEN_IMPLEMENTATION;
 
-    /// @notice List of supported input tokens
-    IERC20[] private _tokens;
+    /// @notice List of supported deposit tokens
+    IERC20[] private _depositTokens;
 
-    /// @notice Mapping of input token to clone address
-    mapping(address => address) private _tokenToClone;
+    /// @notice List of supported CD tokens
+    IConvertibleDepositERC20[] private _cdTokens;
 
-    /// @notice Mapping of clone address to input token
-    mapping(address => address) private _cloneToToken;
+    /// @notice Mapping of deposit token to CD token
+    mapping(address => address) private _depositToConvertible;
 
-    /// @notice Mapping of input token to reclaim rate
+    /// @notice Mapping of CD token to deposit token
+    mapping(address => address) private _convertibleToDeposit;
+
+    /// @notice Mapping of CD token to reclaim rate
     mapping(address => uint16) private _reclaimRates;
 
-    /// @notice Mapping of input token to borrower to debt
+    /// @notice Mapping of deposit token to borrower to debt
     mapping(address => mapping(address => uint256)) private _debt;
 
-    /// @notice Mapping of input token to total shares
+    /// @notice Mapping of deposit token to total shares
     mapping(address => uint256) private _totalShares;
 
     // ========== CONSTRUCTOR ========== //
@@ -67,9 +70,16 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Ensures the input token has been created
-    modifier onlyCreatedToken(IERC20 inputToken_) {
-        if (_tokenToClone[address(inputToken_)] == address(0)) revert CDEPO_UnsupportedToken();
+    /// @notice Ensures the deposit token has been created
+    modifier onlyDepositToken(IERC20 depositToken_) {
+        if (_depositToConvertible[address(depositToken_)] == address(0))
+            revert CDEPO_UnsupportedToken();
+        _;
+    }
+
+    /// @notice Ensures the CD token has been created
+    modifier onlyCDToken(IConvertibleDepositERC20 cdToken_) {
+        if (_convertibleToDeposit[address(cdToken_)] == address(0)) revert CDEPO_UnsupportedToken();
         _;
     }
 
@@ -78,50 +88,52 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
     ///             - Calls `mintFor` with the caller as the recipient
-    function mint(IERC20 inputToken_, uint256 amount_) external override {
-        mintFor(inputToken_, msg.sender, amount_);
+    function mint(IConvertibleDepositERC20 cdToken_, uint256 amount_) external override {
+        mintFor(cdToken_, msg.sender, amount_);
     }
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
-    ///             - Transfers the input token from the `account_` address to the contract
-    ///             - Deposits the input token into the ERC4626 vault
+    ///             - Transfers the deposit token from the `account_` address to the contract
+    ///             - Deposits the deposit token into the ERC4626 vault
     ///             - Mints the corresponding amount of convertible deposit tokens to `account_`
     ///             - Emits a `Transfer` event
     ///
     ///             This function reverts if:
-    ///             - The input token is not supported
+    ///             - The CD token is not supported
     ///             - The amount is zero
-    ///             - The `account_` address has not approved this contract to spend `asset`
+    ///             - The `account_` address has not approved this contract to spend the deposit token
     function mintFor(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_
-    ) public override onlyCreatedToken(inputToken_) {
+    ) public override onlyCDToken(cdToken_) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        address cdToken = _tokenToClone[address(inputToken_)];
-        ERC20 asset = ERC20(address(inputToken_));
-        IERC4626 vault = ConvertibleDepositTokenClone(cdToken).vault();
+        ERC20 asset = ERC20(address(cdToken_.asset()));
+        IERC4626 vault = cdToken_.vault();
 
         // Transfer asset from account
         asset.safeTransferFrom(account_, address(this), amount_);
 
         // Deposit the underlying asset into the vault and update the total shares
         asset.safeApprove(address(vault), amount_);
-        _totalShares[address(inputToken_)] += vault.deposit(amount_, address(this));
+        _totalShares[_convertibleToDeposit[address(cdToken_)]] += vault.deposit(
+            amount_,
+            address(this)
+        );
 
         // Mint cdTokens to account
-        ConvertibleDepositTokenClone(cdToken).mintFor(account_, amount_);
+        cdToken_.mintFor(account_, amount_);
     }
 
     /// @inheritdoc IConvertibleDepository
-    /// @dev        CD tokens are minted 1:1 with input token, so this function returns the amount of input token
+    /// @dev        CD tokens are minted 1:1 with deposit token, so this function returns the amount of deposit token
     function previewMint(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external view override onlyCreatedToken(inputToken_) returns (uint256 tokensOut) {
+    ) external view override onlyCDToken(cdToken_) returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
@@ -131,21 +143,19 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
-    ///             - Validates that the input token is supported
-    ///             - Burns the corresponding amount of convertible deposit tokens from the caller
+    ///             - Validates that the CD token token is supported
+    ///             - Burns the corresponding amount of CD tokens from the caller
     function burn(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external override onlyCreatedToken(inputToken_) {
-        ConvertibleDepositTokenClone cdToken = ConvertibleDepositTokenClone(
-            _tokenToClone[address(inputToken_)]
-        );
+    ) external override onlyCDToken(cdToken_) {
+        address depositToken = _convertibleToDeposit[address(cdToken_)];
 
         // Decrease the total shares
-        _totalShares[address(inputToken_)] -= cdToken.vault().previewWithdraw(amount_);
+        _totalShares[address(depositToken)] -= cdToken_.vault().previewWithdraw(amount_);
 
         // Burn the CD tokens from the caller
-        cdToken.burnFrom(msg.sender, amount_);
+        cdToken_.burnFrom(msg.sender, amount_);
     }
 
     // ========== RECLAIM/REDEEM ========== //
@@ -154,41 +164,40 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @dev        This function performs the following:
     ///             - Calls `reclaimFor` with the caller as the address to reclaim the tokens to
     function reclaim(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external override returns (uint256 tokensOut) {
-        return reclaimFor(inputToken_, msg.sender, amount_);
+        return reclaimFor(cdToken_, msg.sender, amount_);
     }
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
-    ///             - Validates that the input token is supported
+    ///             - Validates that the CD token is supported
     ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
     ///             - Burns the CD tokens from the `account_` address
     ///             - Calculates the quantity of underlying asset to withdraw and return
     ///             - Returns the underlying asset to the caller
     ///
     ///             This function reverts if:
-    ///             - The input token is not supported
+    ///             - The CD token is not supported
     ///             - The amount is zero
     ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
     ///             - The quantity of vault shares for the amount is zero
     function reclaimFor(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_
-    ) public override onlyCreatedToken(inputToken_) returns (uint256 tokensOut) {
+    ) public override onlyCDToken(cdToken_) returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        address cdToken = _tokenToClone[address(inputToken_)];
-        IERC4626 vault = ConvertibleDepositTokenClone(cdToken).vault();
+        IERC4626 vault = cdToken_.vault();
 
-        // Calculate the quantity of input token to withdraw and return
-        // This will create a difference between the quantity of input tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(inputToken_, amount_);
+        // Calculate the quantity of deposit token to withdraw and return
+        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
+        uint256 discountedAssetsOut = previewReclaim(cdToken_, amount_);
         uint256 sharesOut = vault.previewWithdraw(discountedAssetsOut);
-        _totalShares[address(inputToken_)] -= sharesOut;
+        _totalShares[_convertibleToDeposit[address(cdToken_)]] -= sharesOut;
 
         // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
         // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `discountedAssetsOut` is low enough, it will round down to 0 and `sharesOut` will be 0
@@ -196,7 +205,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
         // Burn the CD tokens from `account_`
         // It will revert if the caller does not have enough CD tokens
-        ConvertibleDepositTokenClone(cdToken).burnFrom(account_, amount_);
+        cdToken_.burnFrom(account_, amount_);
 
         // Return the underlying asset to the caller
         vault.withdraw(discountedAssetsOut, msg.sender, address(this));
@@ -206,15 +215,15 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function reverts if:
-    ///             - The input token is not supported
+    ///             - The CD token is not supported
     ///             - The amount is zero
     function previewReclaim(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) public view override onlyCreatedToken(inputToken_) returns (uint256 assetsOut) {
+    ) public view override onlyCDToken(cdToken_) returns (uint256 assetsOut) {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        uint16 tokenReclaimRate = _reclaimRates[address(inputToken_)];
+        uint16 tokenReclaimRate = _reclaimRates[address(cdToken_)];
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
@@ -228,7 +237,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
-    ///             - Validates that the input token is supported
+    ///             - Validates that the CD token is supported
     ///             - Validates that the caller is permissioned
     ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
     ///             - Burns the CD tokens from the `account_` address
@@ -236,24 +245,23 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Returns the underlying asset to the caller
     ///
     ///             This function reverts if:
-    ///             - The input token is not supported
+    ///             - The CD token is not supported
     ///             - The amount is zero
     ///             - The quantity of vault shares for the amount is zero
     ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
     function redeemFor(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_
-    ) public override onlyCreatedToken(inputToken_) permissioned returns (uint256 tokensOut) {
+    ) public override onlyCDToken(cdToken_) permissioned returns (uint256 tokensOut) {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        address cdToken = _tokenToClone[address(inputToken_)];
-        IERC4626 vault = ConvertibleDepositTokenClone(cdToken).vault();
+        IERC4626 vault = cdToken_.vault();
 
         // Calculate the quantity of shares to transfer
         uint256 sharesOut = vault.previewWithdraw(amount_);
-        _totalShares[address(inputToken_)] -= sharesOut;
+        _totalShares[_convertibleToDeposit[address(cdToken_)]] -= sharesOut;
 
         // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
         // This is unlikely to happen, as the vault will typically round up the number of shares withdrawn
@@ -261,7 +269,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
 
         // Burn the CD tokens from the `account_` address
-        ConvertibleDepositTokenClone(cdToken).burnFrom(account_, amount_);
+        cdToken_.burnFrom(account_, amount_);
 
         // Return the underlying asset to the caller
         vault.withdraw(amount_, msg.sender, address(this));
@@ -275,9 +283,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     ///             This function returns the same amount of underlying asset that would be redeemed, as the redeem function does not apply a discount.
     function previewRedeem(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external view override onlyCreatedToken(inputToken_) returns (uint256 tokensOut) {
+    ) external view override onlyCDToken(cdToken_) returns (uint256 tokensOut) {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         tokensOut = amount_;
@@ -288,33 +296,30 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     function incurDebt(
-        IERC20 inputToken_,
+        IERC20 depositToken_,
         uint256 amount_
-    ) external override onlyCreatedToken(inputToken_) permissioned {
+    ) external override onlyDepositToken(depositToken_) permissioned {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        address cdToken = _tokenToClone[address(inputToken_)];
-
         // Validate that the amount is within the vault balance
-        if (_totalShares[address(inputToken_)] < amount_) revert CDEPO_InsufficientBalance();
+        if (_totalShares[address(depositToken_)] < amount_) revert CDEPO_InsufficientBalance();
 
         // Update the debt
-        _debt[address(inputToken_)][msg.sender] += amount_;
+        _debt[address(depositToken_)][msg.sender] += amount_;
 
         // Transfer the vault asset to the caller
-        ERC4626(address(ConvertibleDepositTokenClone(cdToken).vault())).safeTransfer(
-            msg.sender,
-            amount_
-        );
+        ERC4626(
+            address(IConvertibleDepositERC20(_depositToConvertible[address(depositToken_)]).vault())
+        ).safeTransfer(msg.sender, amount_);
 
         // Emit the event
-        emit DebtIncurred(address(inputToken_), msg.sender, amount_);
+        emit DebtIncurred(address(depositToken_), msg.sender, amount_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Validates that the input token is supported
+    ///             - Validates that the deposit token is supported
     ///             - Validates that the caller is permissioned
     ///             - Validates that the amount is greater than zero
     ///             - Cap the repaid amount to the borrowed amount
@@ -323,42 +328,38 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Returns the amount of vault asset that was repaid
     ///
     ///             This function reverts if:
-    ///             - The input token is not supported
+    ///             - The deposit token is not supported
     ///             - The amount is zero
     ///             - The caller is not permissioned
     function repayDebt(
-        IERC20 inputToken_,
+        IERC20 depositToken_,
         uint256 amount_
     )
         external
         virtual
         override
-        onlyCreatedToken(inputToken_)
+        onlyDepositToken(depositToken_)
         permissioned
         returns (uint256 repaidAmount)
     {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
-        address cdToken = _tokenToClone[address(inputToken_)];
-
         // Cap the repaid amount to the borrowed amount
-        repaidAmount = _debt[address(inputToken_)][msg.sender] < amount_
-            ? _debt[address(inputToken_)][msg.sender]
+        repaidAmount = _debt[address(depositToken_)][msg.sender] < amount_
+            ? _debt[address(depositToken_)][msg.sender]
             : amount_;
 
         // Update the borrowed amount
-        _debt[address(inputToken_)][msg.sender] -= repaidAmount;
+        _debt[address(depositToken_)][msg.sender] -= repaidAmount;
 
         // Transfer the vault asset from the caller to the contract
-        ERC4626(address(ConvertibleDepositTokenClone(cdToken).vault())).safeTransferFrom(
-            msg.sender,
-            address(this),
-            repaidAmount
-        );
+        ERC4626(
+            address(IConvertibleDepositERC20(_depositToConvertible[address(depositToken_)]).vault())
+        ).safeTransferFrom(msg.sender, address(this), repaidAmount);
 
         // Emit the event
-        emit DebtRepaid(address(inputToken_), msg.sender, repaidAmount);
+        emit DebtRepaid(address(depositToken_), msg.sender, repaidAmount);
 
         return repaidAmount;
     }
@@ -371,13 +372,13 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Emits an event
     ///             - Returns the amount of vault asset that was reduced
     function reduceDebt(
-        IERC20 inputToken_,
+        IERC20 depositToken_,
         uint256 amount_
     )
         external
         virtual
         override
-        onlyCreatedToken(inputToken_)
+        onlyDepositToken(depositToken_)
         permissioned
         returns (uint256 actualAmount)
     {
@@ -385,15 +386,15 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Cap the reduced amount to the borrowed amount
-        actualAmount = _debt[address(inputToken_)][msg.sender] < amount_
-            ? _debt[address(inputToken_)][msg.sender]
+        actualAmount = _debt[address(depositToken_)][msg.sender] < amount_
+            ? _debt[address(depositToken_)][msg.sender]
             : amount_;
 
         // Update the debt
-        _debt[address(inputToken_)][msg.sender] -= actualAmount;
+        _debt[address(depositToken_)][msg.sender] -= actualAmount;
 
         // Emit the event
-        emit DebtReduced(address(inputToken_), msg.sender, actualAmount);
+        emit DebtReduced(address(depositToken_), msg.sender, actualAmount);
 
         // Return the amount of vault asset that was reduced
         return actualAmount;
@@ -404,7 +405,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     function sweepAllYield(address recipient_) external override permissioned {
         // Iterate over all supported tokens
-        IERC20[] memory tokens = _tokens;
+        IERC20[] memory tokens = _depositTokens;
         for (uint256 i; i < tokens.length; ++i) {
             sweepYield(tokens[i], recipient_);
         }
@@ -422,54 +423,54 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - The caller is not permissioned
     ///             - The recipient_ address is the zero address
     function sweepYield(
-        IERC20 inputToken_,
+        IERC20 depositToken_,
         address recipient_
     )
         public
         override
         permissioned
-        onlyCreatedToken(inputToken_)
+        onlyDepositToken(depositToken_)
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
         // Validate that the recipient_ address is not the zero address
         if (recipient_ == address(0)) revert CDEPO_InvalidArgs("recipient");
 
-        address cdToken = _tokenToClone[address(inputToken_)];
+        address cdToken = _depositToConvertible[address(depositToken_)];
 
         // Get vault from CDToken
         ERC4626 vault = ERC4626(address(ConvertibleDepositTokenClone(cdToken).vault()));
 
-        (yieldReserve, yieldSReserve) = previewSweepYield(inputToken_);
+        (yieldReserve, yieldSReserve) = previewSweepYield(depositToken_);
 
         // Skip if there is no yield to sweep
         if (yieldSReserve == 0) return (0, 0);
 
         // Reduce the shares tracked by the contract
-        _totalShares[address(inputToken_)] -= yieldSReserve;
+        _totalShares[address(depositToken_)] -= yieldSReserve;
 
         // Transfer the yield to the recipient
         vault.safeTransfer(recipient_, yieldSReserve);
 
         // Emit the event
-        emit YieldSwept(address(inputToken_), recipient_, yieldReserve, yieldSReserve);
+        emit YieldSwept(address(depositToken_), recipient_, yieldReserve, yieldSReserve);
 
         return (yieldReserve, yieldSReserve);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function reverts if:
-    ///             - The input token is not supported
+    ///             - The deposit token is not supported
     function previewSweepYield(
-        IERC20 inputToken_
+        IERC20 depositToken_
     )
         public
         view
         override
-        onlyCreatedToken(inputToken_)
+        onlyDepositToken(depositToken_)
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
-        ConvertibleDepositTokenClone cdToken = ConvertibleDepositTokenClone(
-            _tokenToClone[address(inputToken_)]
+        IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
+            _depositToConvertible[address(depositToken_)]
         );
 
         // Get vault from CDToken
@@ -477,7 +478,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
         // The yield is the difference between the quantity of underlying assets in the vault and the quantity of CD tokens issued
         yieldReserve =
-            vault.previewRedeem(_totalShares[address(inputToken_)]) -
+            vault.previewRedeem(_totalShares[address(depositToken_)]) -
             cdToken.totalSupply();
 
         // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed
@@ -490,60 +491,62 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== ADMIN ========== //
 
-    function _setReclaimRate(IERC20 inputToken_, uint16 newReclaimRate_) internal {
+    function _setReclaimRate(IConvertibleDepositERC20 cdToken_, uint16 newReclaimRate_) internal {
         if (newReclaimRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("Greater than 100%");
 
-        _reclaimRates[address(inputToken_)] = newReclaimRate_;
-        emit ReclaimRateUpdated(address(inputToken_), newReclaimRate_);
+        _reclaimRates[address(cdToken_)] = newReclaimRate_;
+        emit ReclaimRateUpdated(address(cdToken_), newReclaimRate_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function reverts if:
     ///             - The new reclaim rate is not within bounds
-    ///             - The input token is not supported
+    ///             - The CD token is not supported
     ///             - The caller is not permissioned
     function setReclaimRate(
-        IERC20 inputToken_,
+        IConvertibleDepositERC20 cdToken_,
         uint16 newReclaimRate_
-    ) external override permissioned onlyCreatedToken(inputToken_) {
-        _setReclaimRate(inputToken_, newReclaimRate_);
+    ) external override permissioned onlyCDToken(cdToken_) {
+        _setReclaimRate(cdToken_, newReclaimRate_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function reverts if:
     ///             - The reclaim rate is not within bounds
-    ///             - The input token is already supported
+    ///             - The deposit token is already supported
     ///             - The caller is not permissioned
     function create(
         IERC4626 vault_,
         uint16 reclaimRate_
     ) external override permissioned returns (IConvertibleDepositERC20) {
-        // Get the input token from the vault
-        address inputToken = vault_.asset();
+        // Get the deposit token from the vault
+        address depositToken = vault_.asset();
 
-        if (_tokenToClone[inputToken] != address(0)) revert CDEPO_InvalidArgs("exists");
+        if (_depositToConvertible[depositToken] != address(0)) revert CDEPO_InvalidArgs("exists");
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert CDEPO_InvalidArgs("reclaimRate");
 
         // Get token name and symbol
-        IERC20 inputTokenContract = IERC20(inputToken);
+        IERC20 depositTokenContract = IERC20(depositToken);
 
         // Deploy clone with immutable args
         bytes memory data = abi.encodePacked(
-            _concatenateAndTruncate("Convertible ", inputTokenContract.name()), // Name
-            _concatenateAndTruncate("cd", inputTokenContract.symbol()), // Symbol
-            inputTokenContract.decimals(), // Decimals
+            _concatenateAndTruncate("Convertible ", depositTokenContract.name()), // Name
+            _concatenateAndTruncate("cd", depositTokenContract.symbol()), // Symbol
+            depositTokenContract.decimals(), // Decimals
             address(this), // Owner
-            inputToken, // Asset
+            depositToken, // Asset
             address(vault_) // Vault
         );
 
         address cdToken = _TOKEN_IMPLEMENTATION.clone(data);
 
-        _tokenToClone[inputToken] = cdToken;
-        _tokens.push(inputTokenContract);
-        emit TokenAdded(inputToken, cdToken);
+        _depositToConvertible[depositToken] = cdToken;
+        _convertibleToDeposit[cdToken] = depositToken;
+        _depositTokens.push(depositTokenContract);
+        _cdTokens.push(IConvertibleDepositERC20(cdToken));
+        emit TokenAdded(depositToken, cdToken);
 
-        _setReclaimRate(inputTokenContract, reclaimRate_);
+        _setReclaimRate(IConvertibleDepositERC20(cdToken), reclaimRate_);
 
         return IConvertibleDepositERC20(cdToken);
     }
@@ -560,17 +563,27 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepository
-    function getTokens() external view override returns (IERC20[] memory) {
-        return _tokens;
+    function getDepositTokens() external view override returns (IERC20[] memory) {
+        return _depositTokens;
+    }
+
+    /// @inheritdoc IConvertibleDepository
+    function getConvertibleDepositTokens()
+        external
+        view
+        override
+        returns (IConvertibleDepositERC20[] memory)
+    {
+        return _cdTokens;
     }
 
     /// @inheritdoc IConvertibleDepository
     ///
-    /// @return     cdToken The address of the clone for the input token, or the zero address
-    function getConvertibleToken(
-        address inputToken_
+    /// @return     cdToken The address of the convertible deposit token for the deposit token, or the zero address
+    function getConvertibleDepositToken(
+        address depositToken_
     ) external view override returns (IConvertibleDepositERC20 cdToken) {
-        cdToken = IConvertibleDepositERC20(_tokenToClone[inputToken_]);
+        cdToken = IConvertibleDepositERC20(_depositToConvertible[depositToken_]);
 
         return cdToken;
     }
@@ -581,33 +594,33 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     function getDepositToken(
         address cdToken_
     ) external view override returns (IERC20 depositToken) {
-        depositToken = IERC20(_cloneToToken[cdToken_]);
+        depositToken = IERC20(_convertibleToDeposit[cdToken_]);
 
         return depositToken;
     }
 
     /// @inheritdoc IConvertibleDepository
-    function isDepositToken(address inputToken_) external view override returns (bool) {
-        return _tokenToClone[inputToken_] != address(0);
+    function isDepositToken(address depositToken_) external view override returns (bool) {
+        return _depositToConvertible[depositToken_] != address(0);
     }
 
-    function isConvertibleDepositToken(address inputToken_) external view override returns (bool) {
-        return _cloneToToken[inputToken_] != address(0);
+    function isConvertibleDepositToken(address cdToken_) external view override returns (bool) {
+        return _convertibleToDeposit[cdToken_] != address(0);
     }
 
     /// @inheritdoc IConvertibleDepository
     ///
     /// @return     tokenReclaimRate The reclaim rate for the input token, or 0
     function reclaimRate(
-        address inputToken_
+        address cdToken_
     )
         external
         view
         override
-        onlyCreatedToken(IERC20(inputToken_))
+        onlyCDToken(IConvertibleDepositERC20(cdToken_))
         returns (uint16 tokenReclaimRate)
     {
-        tokenReclaimRate = _reclaimRates[inputToken_];
+        tokenReclaimRate = _reclaimRates[cdToken_];
 
         return tokenReclaimRate;
     }
@@ -616,17 +629,17 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///
     /// @return     tokenDebt The amount of debt owed by the borrower, or 0
     function debt(
-        IERC20 inputToken_,
+        IERC20 depositToken_,
         address borrower_
-    ) external view override onlyCreatedToken(IERC20(inputToken_)) returns (uint256 tokenDebt) {
-        tokenDebt = _debt[address(inputToken_)][borrower_];
+    ) external view override onlyDepositToken(depositToken_) returns (uint256 tokenDebt) {
+        tokenDebt = _debt[address(depositToken_)][borrower_];
 
         return tokenDebt;
     }
 
     /// @inheritdoc CDEPOv1
-    function getVaultShares(IERC20 inputToken_) external view override returns (uint256 shares) {
-        shares = _totalShares[address(inputToken_)];
+    function getVaultShares(IERC20 depositToken_) external view override returns (uint256 shares) {
+        shares = _totalShares[address(depositToken_)];
 
         return shares;
     }

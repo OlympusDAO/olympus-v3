@@ -5,6 +5,7 @@ import {stdError} from "forge-std/Test.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract RedeemForCDEPOTest is CDEPOTest {
     // when the input token is not supported
@@ -31,7 +32,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.redeemFor(iReserveTokenTwo, recipient, 10e18);
+        CDEPO.redeemFor(IConvertibleDepositERC20(address(iReserveToken)), recipient, 10e18);
     }
 
     function test_amountIsZero_reverts() public {
@@ -42,7 +43,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(iReserveToken, recipient, 0);
+        CDEPO.redeemFor(cdToken, recipient, 0);
     }
 
     function test_spendingNotApproved_reverts()
@@ -56,7 +57,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(iReserveToken, recipient, 10e18);
+        CDEPO.redeemFor(cdToken, recipient, 10e18);
     }
 
     function test_insufficientBalance_reverts()
@@ -71,7 +72,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(iReserveToken, recipient, 10e18);
+        CDEPO.redeemFor(cdToken, recipient, 10e18);
     }
 
     function test_callerIsNotPermissioned_reverts() public {
@@ -80,7 +81,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.redeemFor(iReserveToken, recipient, 10e18);
+        CDEPO.redeemFor(cdToken, recipient, 10e18);
     }
 
     function test_success(
@@ -99,16 +100,12 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(iReserveToken, recipient, amount);
+        CDEPO.redeemFor(cdToken, recipient, amount);
 
         // Assert CD token balance
-        assertEq(
-            _getCDToken().balanceOf(recipient),
-            10e18 - amount,
-            "_getCDToken().balanceOf(recipient)"
-        );
-        assertEq(_getCDToken().balanceOf(godmode), 0, "_getCDToken().balanceOf(godmode)");
-        assertEq(_getCDToken().totalSupply(), 10e18 - amount, "_getCDToken().totalSupply()");
+        assertEq(cdToken.balanceOf(recipient), 10e18 - amount, "cdToken.balanceOf(recipient)");
+        assertEq(cdToken.balanceOf(godmode), 0, "cdToken.balanceOf(godmode)");
+        assertEq(cdToken.totalSupply(), 10e18 - amount, "cdToken.totalSupply()");
 
         // Assert reserve token balance
         // No reclaim rate is applied
@@ -152,16 +149,12 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(iReserveToken, godmode, amount);
+        CDEPO.redeemFor(cdToken, godmode, amount);
 
         // Assert CD token balance
-        assertEq(_getCDToken().balanceOf(recipient), 0, "_getCDToken().balanceOf(recipient)");
-        assertEq(
-            _getCDToken().balanceOf(godmode),
-            10e18 - amount,
-            "_getCDToken().balanceOf(godmode)"
-        );
-        assertEq(_getCDToken().totalSupply(), 10e18 - amount, "_getCDToken().totalSupply()");
+        assertEq(cdToken.balanceOf(recipient), 0, "cdToken.balanceOf(recipient)");
+        assertEq(cdToken.balanceOf(godmode), 10e18 - amount, "cdToken.balanceOf(godmode)");
+        assertEq(cdToken.totalSupply(), 10e18 - amount, "cdToken.totalSupply()");
 
         // Assert reserve token balance
         // No reclaim rate is applied

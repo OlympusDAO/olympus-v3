@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract ReduceDebtCDEPOTest is CDEPOTest {
     event DebtReduced(address indexed inputToken, address indexed borrower, uint256 amount);
@@ -11,6 +12,8 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
     // when the caller is not permissioned
     //  [X] it reverts
     // when the input token is not supported
+    //  [X] it reverts
+    // when the input token is a convertible deposit token
     //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
@@ -40,6 +43,17 @@ contract ReduceDebtCDEPOTest is CDEPOTest {
         // Call function
         vm.prank(godmode);
         CDEPO.reduceDebt(iReserveTokenTwo, 10e18);
+    }
+
+    function test_convertibleDepositToken_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
+
+        // Call function
+        vm.prank(address(godmode));
+        CDEPO.reduceDebt(IERC20(address(cdToken)), 10e18);
     }
 
     function test_amountIsZero_reverts()

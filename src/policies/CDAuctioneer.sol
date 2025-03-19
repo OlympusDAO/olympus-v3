@@ -7,6 +7,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 // Bophades dependencies
@@ -44,6 +45,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice Address of the token that is being bid
     // solhint-disable-next-line immutable-vars-naming
     IERC20 public immutable bidToken;
+
+    /// @notice Address of the CD token
+    IConvertibleDepositERC20 public cdToken;
 
     /// @notice Scale of the bid token
     // TODO required?
@@ -118,8 +122,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
         // Validate that the bid token is supported by the CDEPO module
-        if (!CDEPO.isDepositToken(address(bidToken)))
-            revert CDAuctioneer_InvalidParams("bid token");
+        cdToken = CDEPO.getConvertibleDepositToken(address(bidToken));
+        if (address(cdToken) == address(0)) revert CDAuctioneer_InvalidParams("bid token");
     }
 
     /// @inheritdoc Policy
@@ -186,7 +190,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // Create the CD tokens and position
         positionId = cdFacility.mint(
-            bidToken,
+            cdToken,
             msg.sender,
             depositIn,
             conversionPrice,

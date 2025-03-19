@@ -10,10 +10,29 @@ import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC
 interface IConvertibleDepositFacility {
     // ========== EVENTS ========== //
 
-    event CreatedDeposit(address indexed user, uint256 indexed termId, uint256 amount);
-    event ConvertedDeposit(address indexed user, uint256 depositAmount, uint256 convertedAmount);
-    event RedeemedDeposit(address indexed user, uint256 redeemedAmount);
-    event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount, uint256 forfeitedAmount);
+    event CreatedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 indexed positionId,
+        uint256 depositAmount
+    );
+    event ConvertedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 depositAmount,
+        uint256 convertedAmount
+    );
+    event RedeemedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 redeemedAmount
+    );
+    event ReclaimedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 reclaimedAmount,
+        uint256 forfeitedAmount
+    );
 
     // ========== ERRORS ========== //
 
@@ -41,7 +60,7 @@ interface IConvertibleDepositFacility {
     ///         - Pre-emptively increasing the OHM mint approval
     ///         - Emitting an event
     ///
-    /// @param  depositToken_       The address of the token to deposit
+    /// @param  cdToken_            The address of the CD token
     /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of reserve token to deposit
     /// @param  conversionPrice_    The amount of convertible deposit tokens per OHM token
@@ -50,7 +69,7 @@ interface IConvertibleDepositFacility {
     /// @param  wrap_               Whether the position should be wrapped
     /// @return termId              The ID of the new term
     function mint(
-        IERC20 depositToken_,
+        IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,

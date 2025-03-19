@@ -10,6 +10,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -198,7 +199,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
         // Mint CDEPO to USER
         vm.startPrank(USER);
         asset.approve(address(CDEPO), amount_);
-        CDEPO.mint(iAsset, amount_);
+        CDEPO.mint(IConvertibleDepositERC20(address(cdToken)), amount_);
         vm.stopPrank();
         _;
     }

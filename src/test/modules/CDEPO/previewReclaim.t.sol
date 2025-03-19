@@ -5,6 +5,7 @@ import {CDEPOTest} from "./CDEPOTest.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract PreviewReclaimCDEPOTest is CDEPOTest {
     // when the input token is not supported
@@ -23,7 +24,7 @@ contract PreviewReclaimCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.previewReclaim(iReserveTokenTwo, 10e18);
+        CDEPO.previewReclaim(IConvertibleDepositERC20(address(iReserveTokenTwo)), 10e18);
     }
 
     function test_amountIsZero_reverts() public {
@@ -33,7 +34,7 @@ contract PreviewReclaimCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.previewReclaim(iReserveToken, 0);
+        CDEPO.previewReclaim(cdToken, 0);
     }
 
     function test_reclaimedAmountIsZero_reverts() public {
@@ -46,14 +47,14 @@ contract PreviewReclaimCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.previewReclaim(iReserveToken, 1);
+        CDEPO.previewReclaim(cdToken, 1);
     }
 
     function test_amountGreaterThanZero(uint256 amount_) public {
         uint256 amount = bound(amount_, 2, type(uint256).max);
 
         // Call function
-        uint256 reclaimAmount = CDEPO.previewReclaim(iReserveToken, amount);
+        uint256 reclaimAmount = CDEPO.previewReclaim(cdToken, amount);
 
         // Calculate the expected reclaim amount
         uint256 expectedReclaimAmount = FullMath.mulDiv(amount, reclaimRate, 100e2);

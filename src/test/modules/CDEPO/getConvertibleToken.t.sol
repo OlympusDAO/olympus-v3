@@ -15,17 +15,45 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
     // [X] isSupported returns true
 
     function test_notSupported() public {
-        assertEq(address(CDEPO.getConvertibleToken(address(vault))), address(0), "getToken: vault");
-        assertEq(CDEPO.isDepositToken(address(vault)), false, "isSupported: vault");
+        assertEq(
+            address(CDEPO.getConvertibleDepositToken(address(vault))),
+            address(0),
+            "getConvertibleDepositToken: vault"
+        );
+        assertEq(
+            address(CDEPO.getDepositToken(address(vault))),
+            address(0),
+            "getDepositToken: vault"
+        );
+        assertEq(CDEPO.isDepositToken(address(vault)), false, "isDepositToken: vault");
+        assertEq(
+            CDEPO.isConvertibleDepositToken(address(vault)),
+            false,
+            "isConvertibleDepositToken: vault"
+        );
     }
 
     function test_supported() public {
         assertEq(
-            address(CDEPO.getConvertibleToken(address(iReserveToken))),
+            address(CDEPO.getConvertibleDepositToken(address(iReserveToken))),
             address(cdToken),
-            "getToken: iReserveToken"
+            "getConvertibleDepositToken: iReserveToken"
         );
-        assertEq(CDEPO.isDepositToken(address(iReserveToken)), true, "isSupported: iReserveToken");
+        assertEq(
+            address(CDEPO.getDepositToken(address(cdToken))),
+            address(iReserveToken),
+            "getDepositToken: cdToken"
+        );
+        assertEq(
+            CDEPO.isDepositToken(address(iReserveToken)),
+            true,
+            "isDepositToken: iReserveToken"
+        );
+        assertEq(
+            CDEPO.isConvertibleDepositToken(address(cdToken)),
+            true,
+            "isConvertibleDepositToken: cdToken"
+        );
     }
 
     function test_multipleTokens() public {
@@ -33,21 +61,45 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
         IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(iReserveTokenTwoVault, 99e2);
 
         assertEq(
-            address(CDEPO.getConvertibleToken(address(iReserveToken))),
+            address(CDEPO.getConvertibleDepositToken(address(iReserveToken))),
             address(cdToken),
-            "getToken: iReserveToken"
+            "getConvertibleDepositToken: iReserveToken"
         );
-        assertEq(CDEPO.isDepositToken(address(iReserveToken)), true, "isSupported: iReserveToken");
+        assertEq(
+            address(CDEPO.getDepositToken(address(cdToken))),
+            address(iReserveToken),
+            "getDepositToken: cdToken"
+        );
+        assertEq(
+            CDEPO.isDepositToken(address(iReserveToken)),
+            true,
+            "isDepositToken: iReserveToken"
+        );
+        assertEq(
+            CDEPO.isConvertibleDepositToken(address(cdToken)),
+            true,
+            "isConvertibleDepositToken: cdToken"
+        );
 
         assertEq(
-            address(CDEPO.getConvertibleToken(address(iReserveTokenTwo))),
+            address(CDEPO.getConvertibleDepositToken(address(iReserveTokenTwo))),
             address(cdTokenTwo),
-            "getToken: iReserveTokenTwo"
+            "getConvertibleDepositToken: iReserveTokenTwo"
+        );
+        assertEq(
+            address(CDEPO.getDepositToken(address(cdTokenTwo))),
+            address(iReserveTokenTwo),
+            "getDepositToken: cdTokenTwo"
         );
         assertEq(
             CDEPO.isDepositToken(address(iReserveTokenTwo)),
             true,
-            "isSupported: iReserveTokenTwo"
+            "isDepositToken: iReserveTokenTwo"
+        );
+        assertEq(
+            CDEPO.isConvertibleDepositToken(address(cdTokenTwo)),
+            true,
+            "isConvertibleDepositToken: cdTokenTwo"
         );
     }
 }

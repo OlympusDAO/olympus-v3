@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract PreviewRedeemCDEPOTest is CDEPOTest {
     // when the input token is not supported
@@ -19,7 +20,7 @@ contract PreviewRedeemCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.previewRedeem(iReserveTokenTwo, 10e18);
+        CDEPO.previewRedeem(IConvertibleDepositERC20(address(iReserveToken)), 10e18);
     }
 
     function test_amountIsZero_reverts() public {
@@ -29,14 +30,14 @@ contract PreviewRedeemCDEPOTest is CDEPOTest {
         );
 
         // Call function
-        CDEPO.previewRedeem(iReserveToken, 0);
+        CDEPO.previewRedeem(cdToken, 0);
     }
 
     function test_amountGreaterThanZero(uint256 amount_) public {
         uint256 amount = bound(amount_, 1, type(uint256).max);
 
         // Call function
-        uint256 redeemAmount = CDEPO.previewRedeem(iReserveToken, amount);
+        uint256 redeemAmount = CDEPO.previewRedeem(cdToken, amount);
 
         // Assert
         assertEq(redeemAmount, amount, "redeemAmount");

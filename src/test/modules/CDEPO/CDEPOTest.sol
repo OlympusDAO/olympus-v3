@@ -40,12 +40,16 @@ abstract contract CDEPOTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RST", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
+        vm.label(address(iReserveToken), "RST");
+        vm.label(address(vault), "sRST");
 
         reserveTokenTwo = new MockERC20("USDS", "USDS", 18);
         iReserveTokenTwo = IERC20(address(reserveTokenTwo));
         iReserveTokenTwoVault = IERC4626(
             address(new MockERC4626(reserveTokenTwo, "Savings USDS", "sUSDS"))
         );
+        vm.label(address(iReserveTokenTwo), "USDS");
+        vm.label(address(iReserveTokenTwoVault), "sUSDS");
 
         // Mint reserve tokens to the vault without depositing, so that the conversion is not 1
         reserveToken.mint(address(vault), INITIAL_VAULT_BALANCE);
@@ -63,13 +67,10 @@ abstract contract CDEPOTest is Test {
         // Create a CD token
         vm.prank(godmode);
         cdToken = CDEPO.create(IERC4626(address(vault)), reclaimRate);
+        vm.label(address(cdToken), "cdToken");
     }
 
     // ========== ASSERTIONS ========== //
-
-    function _getCDToken() internal view returns (IERC20) {
-        return IERC20(address(cdToken));
-    }
 
     function _getTotalShares() internal view returns (uint256) {
         return CDEPO.getVaultShares(iReserveToken);
@@ -205,12 +206,12 @@ abstract contract CDEPOTest is Test {
 
     function _mint(uint256 amount_) internal {
         vm.prank(recipient);
-        CDEPO.mint(iReserveToken, amount_);
+        CDEPO.mint(cdToken, amount_);
     }
 
     function _mintFor(address owner_, address to_, uint256 amount_) internal {
         vm.prank(owner_);
-        CDEPO.mintFor(iReserveToken, to_, amount_);
+        CDEPO.mintFor(cdToken, to_, amount_);
     }
 
     modifier givenRecipientHasCDToken(uint256 amount_) {
@@ -225,7 +226,7 @@ abstract contract CDEPOTest is Test {
 
     modifier givenReclaimRateIsSet(uint16 reclaimRate_) {
         vm.prank(godmode);
-        CDEPO.setReclaimRate(iReserveToken, reclaimRate_);
+        CDEPO.setReclaimRate(cdToken, reclaimRate_);
 
         reclaimRate = reclaimRate_;
         _;

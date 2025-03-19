@@ -34,7 +34,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
         // Call function
         vm.prank(auctioneer);
         facility.mint(
-            IERC20(address(reserveToken)),
+            cdToken,
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
@@ -56,7 +56,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         facility.mint(
-            IERC20(address(reserveToken)),
+            cdToken,
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
@@ -118,7 +118,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
 
         // Assert that the CDEPO token was minted to the recipient
-        assertEq(_getCDToken().balanceOf(recipient), 10e6, "_getCDToken().balanceOf(recipient)");
+        assertEq(cdToken.balanceOf(recipient), 10e6, "cdToken.balanceOf(recipient)");
 
         // Assert that the recipient has a CDPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
@@ -168,9 +168,9 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
 
         // Assert that the CDEPO token was minted to the recipient
         assertEq(
-            _getCDToken().balanceOf(recipient),
+            cdToken.balanceOf(recipient),
             RESERVE_TOKEN_AMOUNT,
-            "_getCDToken().balanceOf(recipient)"
+            "cdToken.balanceOf(recipient)"
         );
 
         // Assert that the recipient has a CDPOS position
@@ -227,9 +227,9 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
 
         // Assert that the CDEPO token was minted to the recipient
         assertEq(
-            _getCDToken().balanceOf(recipient),
+            cdToken.balanceOf(recipient),
             RESERVE_TOKEN_AMOUNT,
-            "_getCDToken().balanceOf(recipient)"
+            "cdToken.balanceOf(recipient)"
         );
 
         // Assert that the recipient has two CDPOS positions

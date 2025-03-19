@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract SetReclaimRateCDEPOTest is CDEPOTest {
     event ReclaimRateUpdated(address indexed inputToken, uint16 newReclaimRate);
@@ -23,7 +24,7 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
         _expectRevertPolicyNotPermitted(address(this));
 
         // Call function
-        CDEPO.setReclaimRate(iReserveToken, 100e2);
+        CDEPO.setReclaimRate(cdToken, 100e2);
     }
 
     function test_notSupported_reverts() public {
@@ -34,7 +35,7 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.setReclaimRate(iReserveTokenTwo, 100e2);
+        CDEPO.setReclaimRate(IConvertibleDepositERC20(address(iReserveToken)), 100e2);
     }
 
     function test_aboveMax_reverts() public {
@@ -48,7 +49,7 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.setReclaimRate(iReserveToken, 100e2 + 1);
+        CDEPO.setReclaimRate(cdToken, 100e2 + 1);
     }
 
     function test_success(uint16 newReclaimRate_) public {
@@ -56,13 +57,13 @@ contract SetReclaimRateCDEPOTest is CDEPOTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimRateUpdated(address(iReserveToken), reclaimRate);
+        emit ReclaimRateUpdated(address(cdToken), reclaimRate);
 
         // Call function
         vm.prank(godmode);
-        CDEPO.setReclaimRate(iReserveToken, reclaimRate);
+        CDEPO.setReclaimRate(cdToken, reclaimRate);
 
         // Assert
-        assertEq(CDEPO.reclaimRate(address(iReserveToken)), reclaimRate, "reclaimRate");
+        assertEq(CDEPO.reclaimRate(address(cdToken)), reclaimRate, "reclaimRate");
     }
 }
