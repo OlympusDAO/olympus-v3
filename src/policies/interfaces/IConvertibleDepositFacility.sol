@@ -204,11 +204,14 @@ interface IConvertibleDepositFacility {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice The address of token accepted by the facility
-    function depositToken() external view returns (address);
+    /// @notice The addresses of deposit tokens accepted by the facility
+    function getDepositTokens() external view returns (IERC20[] memory);
 
-    /// @notice The address of the convertible deposit token that is minted by the facility
-    function convertibleDepositToken() external view returns (address);
+    /// @notice The addresses of the convertible deposit tokens that are minted by the facility
+    function getConvertibleDepositTokens()
+        external
+        view
+        returns (IConvertibleDepositERC20[] memory);
 
     /// @notice The address of the token that is converted to by the facility
     function convertedToken() external view returns (address);

@@ -8,6 +8,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 // Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
@@ -511,14 +512,21 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
     // ========== VIEW FUNCTIONS ========== //
 
-    function depositToken() external view returns (address) {
-        // return address(CDEPO.ASSET());
+    /// @inheritdoc IConvertibleDepositFacility
+    function getDepositTokens() external view returns (IERC20[] memory) {
+        return CDEPO.getDepositTokens();
     }
 
-    function convertibleDepositToken() external view returns (address) {
-        // return address(CDEPO);
+    /// @inheritdoc IConvertibleDepositFacility
+    function getConvertibleDepositTokens()
+        external
+        view
+        returns (IConvertibleDepositERC20[] memory)
+    {
+        return CDEPO.getConvertibleDepositTokens();
     }
 
+    /// @inheritdoc IConvertibleDepositFacility
     function convertedToken() external view returns (address) {
         return address(MINTR.ohm());
     }
