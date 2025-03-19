@@ -147,9 +147,10 @@ contract ConvertibleDepositClearinghouseTest is Test {
         // Labels
         vm.label(USER, "USER");
         vm.label(OTHERS, "OTHERS");
-        vm.label(address(vault), "VAULT");
         vm.label(address(asset), "ASSET");
+        vm.label(address(vault), "sASSET");
         vm.label(address(cooler), "COOLER");
+        vm.label(address(cdToken), "cdToken");
     }
 
     modifier givenDisabled() {
