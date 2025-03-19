@@ -74,6 +74,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        vm.label(address(reserveToken), "RES");
+        vm.label(address(vault), "sRES");
 
         _createStack();
     }
@@ -101,22 +103,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
-        // Create a CD token
-        // Required at the time of activation of the auctioneer policy
-        vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), 90e2);
-        vm.stopPrank();
-
         // Grant roles
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
 
-        // Activate policy dependencies
+        // Enable the facility
         vm.prank(admin);
         facility.enable("");
 
+        // Create a CD token
+        // Required at the time of activation of the auctioneer policy
+        vm.startPrank(admin);
+        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        vm.stopPrank();
+
+        // Activate the auctioneer policy
         kernel.executeAction(Actions.ActivatePolicy, address(auctioneer));
     }
 
