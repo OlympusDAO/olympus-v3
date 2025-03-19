@@ -427,28 +427,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         return redeemed;
     }
 
-    function _previewReclaim(
-        address account_,
-        uint256 positionId_,
-        uint256 amount_
-    ) internal view returns (uint256 reclaimed) {
-        // Validate that the position is valid
-        // This will revert if the position is not valid
-        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
-
-        // Validate that the caller is the owner of the position
-        if (position.owner != account_) revert CDF_NotOwner(positionId_);
-
-        // Validate that the position has not expired
-        if (block.timestamp >= position.conversionExpiry) revert CDF_PositionExpired(positionId_);
-
-        // Validate that the deposit amount is not greater than the remaining deposit
-        if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
-
-        // reclaimed = CDEPO.previewReclaim(amount_);
-        return reclaimed;
-    }
-
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
