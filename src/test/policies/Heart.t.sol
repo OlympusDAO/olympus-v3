@@ -217,7 +217,7 @@ contract HeartTest is Test {
         expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
         expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
-        expectedPerms[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepYield.selector);
+        expectedPerms[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepAllYield.selector);
 
         Permissions[] memory perms = heart.requestPermissions();
         // Check: permission storage
