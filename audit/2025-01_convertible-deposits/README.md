@@ -292,6 +292,7 @@ This release contains an updated EmissionManager policy with the following chang
 - In every third epoch, it:
     - Tunes the auction run by CDAuctioneer
     - Launches an auction for the quantity of OHM unsold through auction over the configured tracking period
+- Uses the PolicyEnabler mix-in for enabling/disabling the functionality and role validation
 
 ### CDAuctioneer (Policy)
 
