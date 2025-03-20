@@ -28,6 +28,7 @@ import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRe
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
 import {PolicyAdmin} from "policies/utils/PolicyAdmin.sol";
+import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 
 // solhint-disable-next-line max-states-count
 contract EmissionManagerTest is Test {
@@ -352,15 +353,17 @@ contract EmissionManagerTest is Test {
         // Set principal receivables for the clearinghouse to $50M
         clearinghouse.setPrincipalReceivables(uint256(50 * testReserve));
 
-        // Initialize the emissions manager
+        // Enable the emissions manager
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate,
-            minimumPremium,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                baseEmissionRate,
+                minimumPremium,
+                backing,
+                tickSizeScalar,
+                minPriceScalar,
+                restartTimeframe
+            )
         );
 
         // Approve the emission manager to use a bond callback on the bondAuctioneer
@@ -2352,13 +2355,17 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
-        emissionManager.initialize(
-            baseEmissionRate,
-            minimumPremium,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
         );
     }
 
@@ -2367,13 +2374,17 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate,
-            minimumPremium,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
         );
     }
 
@@ -2399,13 +2410,17 @@ contract EmissionManagerTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate,
-            minimumPremium,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
         );
     }
 
@@ -2420,13 +2435,17 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "baseEmissionRate");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(
-            0,
-            minimumPremium,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: 0,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
         );
     }
 
@@ -2441,13 +2460,17 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "minimumPremium");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate,
-            0,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: 0,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
         );
     }
 
@@ -2462,13 +2485,17 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "backing");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate,
-            minimumPremium,
-            0,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: 0,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
         );
     }
 
@@ -2483,13 +2510,17 @@ contract EmissionManagerTest is Test {
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "restartTimeframe");
         vm.expectRevert(err);
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate,
-            minimumPremium,
-            backing,
-            tickSizeScalar,
-            minPriceScalar,
-            0
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: 0
+                })
+            )
         );
     }
 
@@ -2500,13 +2531,17 @@ contract EmissionManagerTest is Test {
 
         // Initialize the emissions manager with guardian using new values
         vm.prank(guardian);
-        emissionManager.initialize(
-            baseEmissionRate + 1,
-            minimumPremium + 1,
-            backing + 1,
-            tickSizeScalar,
-            minPriceScalar,
-            restartTimeframe + 1
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate + 1,
+                    minimumPremium: minimumPremium + 1,
+                    backing: backing + 1,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    restartTimeframe: restartTimeframe + 1
+                })
+            )
         );
 
         // Check that the contract is enabled

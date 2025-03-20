@@ -49,6 +49,23 @@ interface IEmissionManager {
         bool addition;
     }
 
+    /// @notice Parameters for the `enable` function
+    ///
+    /// @param baseEmissionsRate    percent of OHM supply to issue per day at the minimum premium, in OHM scale, i.e. 1e9 = 100%
+    /// @param minimumPremium       minimum premium at which to issue OHM, a percentage where 1e18 is 100%
+    /// @param backing              backing price of OHM in reserve token, in reserve scale
+    /// @param tickSizeScalar       scalar for tick size
+    /// @param minPriceScalar       scalar for min price
+    /// @param restartTimeframe     time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
+    struct EnableParams {
+        uint256 baseEmissionsRate;
+        uint256 minimumPremium;
+        uint256 backing;
+        uint256 tickSizeScalar;
+        uint256 minPriceScalar;
+        uint48 restartTimeframe;
+    }
+
     // ========== EXECUTE ========== //
 
     /// @notice calculate and execute sale, if applicable, once per day (every 3 beats)

@@ -212,54 +212,40 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
 
     // ========== INITIALIZE ========== //
 
-    /// @notice allow governance to initialize the emission manager
-    ///
-    /// @param baseEmissionsRate_ percent of OHM supply to issue per day at the minimum premium, in OHM scale, i.e. 1e9 = 100%
-    /// @param minimumPremium_ minimum premium at which to issue OHM, a percentage where 1e18 is 100%
-    /// @param backing_ backing price of OHM in reserve token, in reserve scale
-    /// @param tickSizeScalar_ scalar for tick size
-    /// @param minPriceScalar_ scalar for min price
-    /// @param restartTimeframe_ time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
-    function initialize(
-        uint256 baseEmissionsRate_,
-        uint256 minimumPremium_,
-        uint256 backing_,
-        uint256 tickSizeScalar_,
-        uint256 minPriceScalar_,
-        uint48 restartTimeframe_
-    ) external onlyAdminRole onlyDisabled {
+    /// @inheritdoc PolicyEnabler
+    /// @dev        This function expects the parameters to be an abi-encoded `EnableParams` struct
+    function _enable(bytes calldata params_) internal override {
         // Cannot initialize if the restart timeframe hasn't passed since the shutdown timestamp
         // This is specific to re-initializing after a shutdown
         // It will not revert on the first initialization since both values will be zero
         if (shutdownTimestamp + restartTimeframe > uint48(block.timestamp))
             revert CannotRestartYet(shutdownTimestamp + restartTimeframe);
 
+        EnableParams memory params = abi.decode(params_, (EnableParams));
+
         // Validate inputs
-        if (baseEmissionsRate_ == 0) revert InvalidParam("baseEmissionRate");
-        if (minimumPremium_ == 0) revert InvalidParam("minimumPremium");
-        if (backing_ == 0) revert InvalidParam("backing");
-        if (restartTimeframe_ == 0) revert InvalidParam("restartTimeframe");
-        if (tickSizeScalar_ == 0 || tickSizeScalar_ > ONE_HUNDRED_PERCENT)
+        if (params.baseEmissionsRate == 0) revert InvalidParam("baseEmissionRate");
+        if (params.minimumPremium == 0) revert InvalidParam("minimumPremium");
+        if (params.backing == 0) revert InvalidParam("backing");
+        if (params.restartTimeframe == 0) revert InvalidParam("restartTimeframe");
+        if (params.tickSizeScalar == 0 || params.tickSizeScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Tick Size Scalar");
-        if (minPriceScalar_ == 0 || minPriceScalar_ > ONE_HUNDRED_PERCENT)
+        if (params.minPriceScalar == 0 || params.minPriceScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Min Price Scalar");
 
         // Assign
-        baseEmissionRate = baseEmissionsRate_;
-        minimumPremium = minimumPremium_;
-        backing = backing_;
-        restartTimeframe = restartTimeframe_;
-        tickSizeScalar = tickSizeScalar_;
-        minPriceScalar = minPriceScalar_;
+        baseEmissionRate = params.baseEmissionsRate;
+        minimumPremium = params.minimumPremium;
+        backing = params.backing;
+        restartTimeframe = params.restartTimeframe;
+        tickSizeScalar = params.tickSizeScalar;
+        minPriceScalar = params.minPriceScalar;
 
-        isEnabled = true;
-        emit Enabled();
-
-        emit MinimumPremiumChanged(minimumPremium_);
-        emit BackingChanged(backing_);
-        emit RestartTimeframeChanged(restartTimeframe_);
-        emit TickSizeScalarChanged(tickSizeScalar_);
-        emit MinPriceScalarChanged(minPriceScalar_);
+        emit MinimumPremiumChanged(params.minimumPremium);
+        emit BackingChanged(params.backing);
+        emit RestartTimeframeChanged(params.restartTimeframe);
+        emit TickSizeScalarChanged(params.tickSizeScalar);
+        emit MinPriceScalarChanged(params.minPriceScalar);
     }
 
     // ========== BOND CALLBACK ========== //
