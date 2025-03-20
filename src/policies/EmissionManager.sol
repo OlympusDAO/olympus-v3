@@ -1,29 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-
+// Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
-
 import {FullMath} from "libraries/FullMath.sol";
 
+// Interfaces
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
+import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IGenericClearinghouse} from "policies/interfaces/IGenericClearinghouse.sol";
 
+// Bophades
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
-
-import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-
-interface Clearinghouse {
-    function principalReceivables() external view returns (uint256);
-}
 
 // solhint-disable max-states-count
 contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
@@ -518,7 +515,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     function getReserves() public view returns (uint256 reserves) {
         uint256 chCount = CHREG.registryCount();
         for (uint256 i; i < chCount; i++) {
-            reserves += Clearinghouse(CHREG.registry(i)).principalReceivables();
+            reserves += IGenericClearinghouse(CHREG.registry(i)).principalReceivables();
             uint256 bal = sReserve.balanceOf(CHREG.registry(i));
             if (bal > 0) reserves += sReserve.previewRedeem(bal);
         }
