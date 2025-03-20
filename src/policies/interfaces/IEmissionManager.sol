@@ -10,8 +10,6 @@ interface IEmissionManager {
     error InvalidParam(string parameter);
     error CannotRestartYet(uint48 availableAt);
     error RestartTimeframePassed();
-    error NotActive();
-    error AlreadyActive();
 
     // ========== EVENTS ========== //
 
@@ -42,12 +40,6 @@ interface IEmissionManager {
 
     /// @notice Emitted when the minimum price scalar is changed
     event MinPriceScalarChanged(uint256 newMinPriceScalar);
-
-    /// @notice Emitted when the contract is activated
-    event Activated();
-
-    /// @notice Emitted when the contract is deactivated
-    event Deactivated();
 
     // ========== DATA STRUCTURES ========== //
 

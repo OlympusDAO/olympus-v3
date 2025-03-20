@@ -27,6 +27,7 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
+import {PolicyAdmin} from "policies/utils/PolicyAdmin.sol";
 
 // solhint-disable-next-line max-states-count
 contract EmissionManagerTest is Test {
@@ -77,9 +78,9 @@ contract EmissionManagerTest is Test {
     //
     // core functionality
     // [X] execute
-    //   [X] when not locally active
+    //   [X] when not enabled
     //     [X] it returns without doing anything
-    //   [X] when locally active
+    //   [X] when enabled
     //     [X] given the caller does not have the "cd_emissionmanager" role
     //       [X] it reverts
     //     [X] it increments the beat counter modulo 3
@@ -166,7 +167,7 @@ contract EmissionManagerTest is Test {
     //    [X] when the caller doesn't have emissions_admin role
     //       [X] it reverts
     //    [X] when the caller has emissions_admin role
-    //       [X] when the contract is locally active
+    //       [X] when the contract is enabled
     //          [X] it reverts
     //       [X] when the restart timeframe has not passed since the last shutdown
     //          [X] it reverts
@@ -322,11 +323,10 @@ contract EmissionManagerTest is Test {
 
             // Emission manager roles
             rolesAdmin.grantRole("heart", heart);
-            rolesAdmin.grantRole("emissions_admin", guardian);
+            rolesAdmin.grantRole("admin", guardian);
 
             // Emergency roles
-            rolesAdmin.grantRole("emergency_shutdown", guardian);
-            rolesAdmin.grantRole("emergency_restart", guardian);
+            rolesAdmin.grantRole("emergency", guardian);
         }
 
         // Mint gOHM supply to test against
@@ -466,7 +466,7 @@ contract EmissionManagerTest is Test {
 
     modifier givenShutdown() {
         vm.prank(guardian);
-        emissionManager.shutdown();
+        emissionManager.disable("");
         _;
     }
 
@@ -497,15 +497,15 @@ contract EmissionManagerTest is Test {
             "Market counter should not increment"
         );
 
-        // Check that the contract is locally active
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
 
         // Deactivate the emission manager
         vm.prank(guardian);
-        emissionManager.shutdown();
+        emissionManager.disable("");
 
-        // Check that the contract is not locally active
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        // Check that the contract is not enabled
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Execute the emission manager
         vm.startPrank(heart);
@@ -2211,18 +2211,15 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the shutdown function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emergency_shutdown")
-        );
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
+
         vm.prank(rando_);
-        emissionManager.shutdown();
+        emissionManager.disable("");
     }
 
     function test_shutdown_success() public {
-        // Check that the contract is locally active
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
 
         // Check that the shutdown timestamp is 0
         assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
@@ -2232,10 +2229,10 @@ contract EmissionManagerTest is Test {
 
         // Call the shutdown function as guardian (which has the emergency_shutdown role)
         vm.prank(guardian);
-        emissionManager.shutdown();
+        emissionManager.disable("");
 
-        // Check that the contract is not locally active
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        // Check that the contract is not enabled
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Check that the shutdown timestamp is set to the current block timestamp
         assertEq(
@@ -2255,8 +2252,8 @@ contract EmissionManagerTest is Test {
         uint256 id = emissionManager.activeMarketId();
         assertTrue(bondAuctioneer.isLive(id), "Market should be active");
 
-        // Check that the contract is locally active
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
 
         // Check that the shutdown timestamp is 0
         assertEq(emissionManager.shutdownTimestamp(), 0, "Shutdown timestamp should be 0");
@@ -2266,10 +2263,10 @@ contract EmissionManagerTest is Test {
 
         // Call the shutdown function as guardian (which has the emergency_shutdown role)
         vm.prank(guardian);
-        emissionManager.shutdown();
+        emissionManager.disable("");
 
-        // Check that the contract is not locally active
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        // Check that the contract is not enabled
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Check that the shutdown timestamp is set to the current block timestamp
         assertEq(
@@ -2287,19 +2284,16 @@ contract EmissionManagerTest is Test {
     function test_restart_whenCallerNotEmergencyRestartRole_reverts(address rando_) public {
         vm.assume(rando_ != guardian);
 
-        // Emissions Manager is currently locally active
+        // Emissions Manager is currently enabled
         // Call the restart function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emergency_restart")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.restart();
 
         // Shutdown the emissions manager with the guardian
         vm.prank(guardian);
-        emissionManager.shutdown();
+        emissionManager.disable("");
 
         // Emissions Manager is currently locally inactive
         // Try to call restart again with the wrong caller
@@ -2309,7 +2303,7 @@ contract EmissionManagerTest is Test {
     }
 
     function test_restart_whenRestartTimeElapsed_reverts(uint48 elapsed_) public givenShutdown {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Get the restart timeframe and the last shutdown timestamp
         uint48 shutdownTimestamp = emissionManager.shutdownTimestamp();
@@ -2330,7 +2324,7 @@ contract EmissionManagerTest is Test {
     function test_restart_whenRestartTimeFrameNotElapsed_success(
         uint48 elapsed_
     ) public givenShutdown {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Get the restart timeframe and the last shutdown timestamp
         uint48 shutdownTimestamp = emissionManager.shutdownTimestamp();
@@ -2346,7 +2340,7 @@ contract EmissionManagerTest is Test {
         vm.prank(guardian);
         emissionManager.restart();
 
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
     }
 
     // initialize tests
@@ -2355,10 +2349,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the initialize function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emissions_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.initialize(
@@ -2373,7 +2364,7 @@ contract EmissionManagerTest is Test {
 
     function test_initialize_whenAlreadyActive_reverts() public {
         // Call the initialize function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("AlreadyActive()");
+        bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
         vm.prank(guardian);
         emissionManager.initialize(
@@ -2389,7 +2380,7 @@ contract EmissionManagerTest is Test {
     function test_initialize_whenRestartTimeframeNotElapsed_reverts(
         uint48 elapsed_
     ) public givenShutdown {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Get the restart timeframe and the last shutdown timestamp
         uint48 shutdownTimestamp = emissionManager.shutdownTimestamp();
@@ -2423,7 +2414,7 @@ contract EmissionManagerTest is Test {
         givenShutdown
         givenRestartTimeframeElapsed
     {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Try to initialize the emissions manager with guardian, expect revert
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "baseEmissionRate");
@@ -2444,7 +2435,7 @@ contract EmissionManagerTest is Test {
         givenShutdown
         givenRestartTimeframeElapsed
     {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Try to initialize the emissions manager with guardian, expect revert
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "minimumPremium");
@@ -2465,7 +2456,7 @@ contract EmissionManagerTest is Test {
         givenShutdown
         givenRestartTimeframeElapsed
     {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Try to initialize the emissions manager with guardian, expect revert
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "backing");
@@ -2486,7 +2477,7 @@ contract EmissionManagerTest is Test {
         givenShutdown
         givenRestartTimeframeElapsed
     {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Try to initialize the emissions manager with guardian, expect revert
         bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "restartTimeframe");
@@ -2503,7 +2494,7 @@ contract EmissionManagerTest is Test {
     }
 
     function test_initialize_success() public givenShutdown givenRestartTimeframeElapsed {
-        assertFalse(emissionManager.locallyActive(), "Contract should not be locally active");
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Values are currently as setup
 
@@ -2518,8 +2509,8 @@ contract EmissionManagerTest is Test {
             restartTimeframe + 1
         );
 
-        // Check that the contract is locally active
-        assertTrue(emissionManager.locallyActive(), "Contract should be locally active");
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
         assertEq(
             emissionManager.baseEmissionRate(),
             baseEmissionRate + 1,
@@ -2544,10 +2535,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the changeBaseRate function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emissions_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.changeBaseRate(1e18, 1, true);
@@ -2629,10 +2617,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setMinimumPremium function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emissions_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.setMinimumPremium(1e18);
@@ -2670,10 +2655,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBacking function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emissions_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.setBacking(11e18);
@@ -2708,10 +2690,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setRestartTimeframe function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emissions_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.setRestartTimeframe(1);
@@ -2746,10 +2725,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBondContracts function with the wrong caller
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("emissions_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
         emissionManager.setBondContracts(address(1), address(1));

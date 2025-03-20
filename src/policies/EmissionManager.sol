@@ -16,16 +16,25 @@ import {IGenericClearinghouse} from "policies/interfaces/IGenericClearinghouse.s
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // solhint-disable max-states-count
-contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
+contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
     using FullMath for uint256;
     using TransferHelper for ERC20;
+
+    // ========== CONSTANTS ========== //
+
+    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
+
+    /// @notice The role assigned to the Heart contract.
+    ///         This enables the Heart contract to call specific functions on this contract.
+    bytes32 public constant ROLE_HEART = "heart";
 
     // ========== STATE VARIABLES ========== //
 
@@ -58,7 +67,6 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     uint48 public vestingPeriod; // initialized at 0
     uint256 public backing;
     uint8 public beatCounter;
-    bool public locallyActive;
     uint256 public activeMarketId;
     uint256 public tickSizeScalar;
     uint256 public minPriceScalar;
@@ -74,8 +82,6 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     uint48 public shutdownTimestamp;
     /// @notice time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     uint48 public restartTimeframe;
-
-    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
 
     // ========== SETUP ========== //
 
@@ -114,6 +120,8 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         reserve.safeApprove(address(sReserve), type(uint256).max);
 
         // TODO does reserve need to be the same as the CDAuctioneer bid token?
+
+        // PolicyEnabler disables the policy by default
     }
 
     /// @inheritdoc Policy
@@ -162,8 +170,9 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     // ========== HEARTBEAT ========== //
 
     /// @inheritdoc IEmissionManager
-    function execute() external onlyRole("heart") {
-        if (!locallyActive) return;
+    function execute() external onlyRole(ROLE_HEART) {
+        // Don't do anything if disabled
+        if (!isEnabled) return;
 
         beatCounter = ++beatCounter % 3;
         if (beatCounter != 0) return;
@@ -218,10 +227,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         uint256 tickSizeScalar_,
         uint256 minPriceScalar_,
         uint48 restartTimeframe_
-    ) external onlyRole("emissions_admin") {
-        // Cannot initialize if currently active
-        if (locallyActive) revert AlreadyActive();
-
+    ) external onlyAdminRole onlyDisabled {
         // Cannot initialize if the restart timeframe hasn't passed since the shutdown timestamp
         // This is specific to re-initializing after a shutdown
         // It will not revert on the first initialization since both values will be zero
@@ -246,10 +252,9 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         tickSizeScalar = tickSizeScalar_;
         minPriceScalar = minPriceScalar_;
 
-        // Activate
-        locallyActive = true;
+        isEnabled = true;
+        emit Enabled();
 
-        emit Activated();
         emit MinimumPremiumChanged(minimumPremium_);
         emit BackingChanged(backing_);
         emit RestartTimeframeChanged(restartTimeframe_);
@@ -366,35 +371,34 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice shutdown the emission manager locally and close the active bond market
-    function shutdown() external onlyRole("emergency_shutdown") {
-        locallyActive = false;
+    /// @inheritdoc PolicyEnabler
+    /// @dev        This function performs the following:
+    ///             - Sets the shutdown timestamp
+    ///             - Closes the active bond market (if it is active)
+    function _disable(bytes calldata) internal override {
         shutdownTimestamp = uint48(block.timestamp);
 
         // Shutdown the bond market, if it is active
         if (bondAuctioneer.isLive(activeMarketId)) {
             bondAuctioneer.closeMarket(activeMarketId);
         }
-
-        emit Deactivated();
     }
 
-    /// @notice restart the emission manager locally
-    function restart() external onlyRole("emergency_restart") {
+    /// @notice Restart the emission manager
+    function restart() external onlyAdminRole {
         // Restart can be activated only within the specified timeframe since shutdown
-        // Outside of this span of time, emissions_admin must reinitialize
+        // Outside of this span of time, admin must reinitialize
         if (uint48(block.timestamp) >= shutdownTimestamp + restartTimeframe)
             revert RestartTimeframePassed();
 
-        locallyActive = true;
-
-        emit Activated();
+        isEnabled = true;
+        emit Enabled();
     }
 
     /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
     /// @dev This function is restricted to the emissions_admin role
     /// @param token_ The address of the ERC20 token to rescue
-    function rescue(address token_) external onlyRole("emissions_admin") {
+    function rescue(address token_) external onlyAdminRole {
         ERC20 token = ERC20(token_);
         token.safeTransfer(address(TRSRY), token.balanceOf(address(this)));
     }
@@ -407,7 +411,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         uint256 changeBy_,
         uint48 forNumBeats_,
         bool add
-    ) external onlyRole("emissions_admin") {
+    ) external onlyAdminRole {
         // Prevent underflow on negative adjustments
         if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
@@ -423,7 +427,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice set the minimum premium for emissions
     /// @param newMinimumPremium_ uint256
-    function setMinimumPremium(uint256 newMinimumPremium_) external onlyRole("emissions_admin") {
+    function setMinimumPremium(uint256 newMinimumPremium_) external onlyAdminRole {
         if (newMinimumPremium_ == 0) revert InvalidParam("newMinimumPremium");
 
         minimumPremium = newMinimumPremium_;
@@ -433,7 +437,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice set the new vesting period in seconds
     /// @param newVestingPeriod_ uint48
-    function setVestingPeriod(uint48 newVestingPeriod_) external onlyRole("emissions_admin") {
+    function setVestingPeriod(uint48 newVestingPeriod_) external onlyAdminRole {
         // Verify that the vesting period isn't more than a year
         // This check helps ensure a timestamp isn't input instead of a duration
         if (newVestingPeriod_ > uint48(31536000)) revert InvalidParam("newVestingPeriod");
@@ -446,7 +450,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     /// @dev note if adjustment is more than 33% down, contract should be redeployed
     /// @param newBacking to adjust to
     /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
-    function setBacking(uint256 newBacking) external onlyRole("emissions_admin") {
+    function setBacking(uint256 newBacking) external onlyAdminRole {
         // Backing cannot be reduced by more than 10% at a time
         if (newBacking == 0 || newBacking < (backing * 9) / 10) revert InvalidParam("newBacking");
         backing = newBacking;
@@ -456,7 +460,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice allow governance to adjust the timeframe for restart after shutdown
     /// @param newTimeframe to adjust it to
-    function setRestartTimeframe(uint48 newTimeframe) external onlyRole("emissions_admin") {
+    function setRestartTimeframe(uint48 newTimeframe) external onlyAdminRole {
         // Restart timeframe must be greater than 0
         if (newTimeframe == 0) revert InvalidParam("newRestartTimeframe");
 
@@ -468,10 +472,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
     /// @notice allow governance to set the bond contracts used by the emission manager
     /// @param bondAuctioneer_ address of the bond auctioneer contract
     /// @param teller_ address of the bond teller contract
-    function setBondContracts(
-        address bondAuctioneer_,
-        address teller_
-    ) external onlyRole("emissions_admin") {
+    function setBondContracts(address bondAuctioneer_, address teller_) external onlyAdminRole {
         // Bond contracts cannot be set to the zero address
         if (bondAuctioneer_ == address(0)) revert InvalidParam("bondAuctioneer");
         if (teller_ == address(0)) revert InvalidParam("teller");
@@ -484,7 +485,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice allow governance to set the CD contract used by the emission manager
     /// @param cdAuctioneer_ address of the cd auctioneer contract
-    function setCDAuctionContract(address cdAuctioneer_) external onlyRole("emissions_admin") {
+    function setCDAuctionContract(address cdAuctioneer_) external onlyAdminRole {
         // Auction contract cannot be set to the zero address
         if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
 
@@ -493,7 +494,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice allow governance to set the CD tick size scalar
     /// @param newScalar as a percentage in 18 decimals
-    function setTickSizeScalar(uint256 newScalar) external onlyRole("emissions_admin") {
+    function setTickSizeScalar(uint256 newScalar) external onlyAdminRole {
         if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Tick Size Scalar");
         tickSizeScalar = newScalar;
@@ -503,7 +504,7 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
 
     /// @notice allow governance to set the CD minimum price scalar
     /// @param newScalar as a percentage in 18 decimals
-    function setMinPriceScalar(uint256 newScalar) external onlyRole("emissions_admin") {
+    function setMinPriceScalar(uint256 newScalar) external onlyAdminRole {
         if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Min Price Scalar");
         minPriceScalar = newScalar;
