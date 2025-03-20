@@ -56,9 +56,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     CDFacility public immutable CD_FACILITY;
 
     /// @notice Address of the CDEPO module
+    /// @dev    This is set in `configureDependencies()`
     CDEPOv1 public CDEPO;
 
     /// @notice Address of the CD token
+    /// @dev    This is set in `configureDependencies()`
+    ///         In effect, it is an immutable variable, but it cannot be declared immutable as it can only be set in `configureDependencies()`
     IConvertibleDepositERC20 public convertibleDebtToken;
 
     /// @notice Previous tick of the auction

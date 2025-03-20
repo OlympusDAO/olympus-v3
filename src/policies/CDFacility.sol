@@ -26,15 +26,25 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     using FullMath for uint256;
     using SafeTransferLib for ERC20;
 
+    // ========== CONSTANTS ========== //
+
+    bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
+
     // ========== STATE VARIABLES ========== //
 
     // Modules
-    TRSRYv1 public TRSRY;
-    MINTRv1 public MINTR;
-    CDEPOv1 public CDEPO;
-    CDPOSv1 public CDPOS;
 
-    bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
+    /// @notice The TRSRY module.
+    TRSRYv1 public TRSRY;
+
+    /// @notice The MINTR module.
+    MINTRv1 public MINTR;
+
+    /// @notice The CDEPO module.
+    CDEPOv1 public CDEPO;
+
+    /// @notice The CDPOS module.
+    CDPOSv1 public CDPOS;
 
     // ========== SETUP ========== //
 
