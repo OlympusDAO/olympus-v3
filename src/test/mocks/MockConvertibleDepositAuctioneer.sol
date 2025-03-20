@@ -5,7 +5,6 @@ import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler {
     uint48 internal _initTimestamp;
@@ -51,8 +50,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     {}
 
     function getDayState() external view override returns (Day memory day) {}
-
-    function bidToken() external view override returns (IERC20 token) {}
 
     function previewBid(
         uint256 deposit

@@ -34,25 +34,32 @@ import {CDFacility} from "./CDFacility.sol";
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
 
-    // ========== STATE VARIABLES ========== //
+    // ========== CONSTANTS ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
     bytes32 public constant ROLE_HEART = "cd_emissionmanager";
 
+    /// @notice Scale of the OHM token
+    uint256 internal constant _ohmScale = 1e9;
+
+    uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
+
+    /// @notice The length of the enable parameters
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 224;
+
+    // ========== STATE VARIABLES ========== //
+
+    /// @notice Address of the token that is being bid
+    IERC20 public immutable BID_TOKEN;
+
+    /// @notice Address of the Convertible Deposit Facility
+    CDFacility public immutable CD_FACILITY;
+
     /// @notice Address of the CDEPO module
     CDEPOv1 public CDEPO;
 
-    /// @notice Address of the token that is being bid
-    // solhint-disable-next-line immutable-vars-naming
-    IERC20 public immutable bidToken;
-
     /// @notice Address of the CD token
-    IConvertibleDepositERC20 public cdToken;
-
-    /// @notice Scale of the bid token
-    // TODO required?
-    // solhint-disable-next-line immutable-vars-naming
-    uint256 public immutable bidTokenScale;
+    IConvertibleDepositERC20 public convertibleDebtToken;
 
     /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -65,17 +72,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice Auction state for the day
     Day internal _dayState;
 
-    /// @notice Scale of the OHM token
-    uint256 internal constant _ohmScale = 1e9;
-
-    /// @notice Address of the Convertible Deposit Facility
-    CDFacility public cdFacility;
-
     /// @notice The tick step
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
-
-    uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     /// @notice The number of seconds between creation and expiry of convertible deposits
     /// @dev    See `getTimeToExpiry()` for more information
@@ -95,19 +94,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @dev    The length of this array is equal to the auction tracking period
     int256[] internal _auctionResults;
 
-    /// @notice The length of the enable parameters
-    uint256 internal constant _ENABLE_PARAMS_LENGTH = 224;
-
     // ========== SETUP ========== //
 
     constructor(address kernel_, address cdFacility_, address bidToken_) Policy(Kernel(kernel_)) {
-        if (cdFacility_ == address(0))
-            revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
+        if (cdFacility_ == address(0)) revert CDAuctioneer_InvalidParams("cd facility");
+        if (bidToken_ == address(0)) revert CDAuctioneer_InvalidParams("bid token");
 
-        cdFacility = CDFacility(cdFacility_);
-
-        bidToken = IERC20(bidToken_);
-        bidTokenScale = 10 ** bidToken.decimals();
+        CD_FACILITY = CDFacility(cdFacility_);
+        BID_TOKEN = IERC20(bidToken_);
 
         // PolicyEnabler makes this disabled until enabled
     }
@@ -122,8 +116,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
         // Validate that the bid token is supported by the CDEPO module
-        cdToken = CDEPO.getConvertibleDepositToken(address(bidToken));
-        if (address(cdToken) == address(0)) revert CDAuctioneer_InvalidParams("bid token");
+        convertibleDebtToken = CDEPO.getConvertibleDepositToken(address(BID_TOKEN));
+        if (address(convertibleDebtToken) == address(0))
+            revert CDAuctioneer_InvalidParams("bid token");
     }
 
     /// @inheritdoc Policy
@@ -189,8 +184,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
-        positionId = cdFacility.mint(
-            cdToken,
+        positionId = CD_FACILITY.mint(
+            convertibleDebtToken,
             msg.sender,
             depositIn,
             conversionPrice,
