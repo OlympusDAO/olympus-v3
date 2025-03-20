@@ -60,6 +60,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             "position redemption expiry"
         );
         assertEq(position.wrapped, false, "position wrapped");
+        assertEq(position.convertibleDepositToken, address(cdToken), "position cd token");
     }
 
     // when the contract is disabled
