@@ -44,39 +44,39 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
 
     /// @notice Allows the permissioned caller to borrow the vault asset
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the input token is supported
+    ///         - Validates that the vault token's underlying asset is supported
     ///         - Validates that the caller is permissioned
     ///         - Transfers the vault asset from the contract to the caller
     ///         - Emits a `DebtIncurred` event
     ///
-    /// @param  depositToken_   The deposit token to borrow
-    /// @param  amount_         The amount of vault asset to borrow
-    function incurDebt(IERC20 depositToken_, uint256 amount_) external virtual;
+    /// @param  vaultToken_ The vault token to borrow
+    /// @param  amount_     The amount of vault asset to borrow
+    function incurDebt(IERC4626 vaultToken_, uint256 amount_) external virtual;
 
     /// @notice Allows the permissioned caller to repay an amount of the vault asset
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the input token is supported
+    ///         - Validates that the vault token's underlying asset is supported
     ///         - Validates that the caller is permissioned
     ///         - Transfers the vault asset from the caller to the contract
     ///         - Emits a `DebtRepaid` event
     ///
-    /// @param  depositToken_  The deposit token to repay
-    /// @param  amount_        The amount of vault asset to repay
-    /// @return repaidAmount   The amount of vault asset that was repaid
-    function repayDebt(IERC20 depositToken_, uint256 amount_) external virtual returns (uint256);
+    /// @param  vaultToken_     The vault token to repay
+    /// @param  amount_         The amount of vault asset to repay
+    /// @return repaidAmount    The amount of vault asset that was repaid
+    function repayDebt(IERC4626 vaultToken_, uint256 amount_) external virtual returns (uint256);
 
     /// @notice Allows the permissioned caller to reduce the debt of a borrower
     ///         This can be used to forgive debt, e.g. in the case of a liquidation.
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the input token is supported
+    ///         - Validates that the vault token's underlying asset is supported
     ///         - Validates that the caller is permissioned
     ///         - Updates the debt of the borrower
     ///         - Emits a `DebtReduced` event
     ///
-    /// @param  depositToken_  The deposit token to reduce debt for
-    /// @param  amount_        The amount to reduce the debt by
-    /// @return debtAmount     The remaining debt amount
-    function reduceDebt(IERC20 depositToken_, uint256 amount_) external virtual returns (uint256);
+    /// @param  vaultToken_ The vault token to reduce debt for
+    /// @param  amount_     The amount to reduce the debt by
+    /// @return debtAmount  The remaining debt amount
+    function reduceDebt(IERC4626 vaultToken_, uint256 amount_) external virtual returns (uint256);
 
     // ========== YIELD MANAGEMENT ========== //
 
@@ -115,8 +115,15 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice Get the debt amount for a token and borrower
-    function debt(IERC20 depositToken_, address borrower_) external view virtual returns (uint256);
+    /// @notice Get the debt amount for a vault token and borrower
+    ///
+    /// @param  vaultToken_ The vault token to get debt for
+    /// @param  borrower_   The borrower to get debt for
+    /// @return debt        The amount of debt owed
+    function getDebt(
+        IERC4626 vaultToken_,
+        address borrower_
+    ) external view virtual returns (uint256);
 
     /// @notice Get the amount of vault shares managed by the contract
     ///

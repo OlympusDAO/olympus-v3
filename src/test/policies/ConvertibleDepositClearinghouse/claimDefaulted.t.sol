@@ -194,7 +194,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 
     function test_elapsedLessThan7Days(
@@ -266,7 +266,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 
     function test_exceedsMaxReward()
@@ -339,7 +339,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 
     function test_givenDisabled()
@@ -408,6 +408,6 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 }

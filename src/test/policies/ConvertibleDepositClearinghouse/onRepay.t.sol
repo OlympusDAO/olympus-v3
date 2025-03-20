@@ -108,7 +108,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
 
         // CDEPO debt
         // No principal repaid, so it remains the same
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 1e18, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 1e18, "CDEPO debt");
 
         // Receivables
         assertEq(
@@ -172,7 +172,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
         );
 
         // CDEPO debt
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), totalDue - amount, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), totalDue - amount, "CDEPO debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), 0, "interest receivables");
@@ -237,7 +237,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
         );
 
         // CDEPO debt
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), totalDue - amount, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), totalDue - amount, "CDEPO debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), 0, "interest receivables");

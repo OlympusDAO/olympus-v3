@@ -117,7 +117,7 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
         assertEq(vault.balanceOf(address(clearinghouse)), 0, "clearinghouse vault");
 
         // Debt on CDEPO
-        assertEq(CDEPO.debt(iAsset, address(clearinghouse)), 1e18, "debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 1e18, "debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), interest, "interest receivables");

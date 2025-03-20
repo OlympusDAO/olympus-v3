@@ -43,7 +43,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @notice Mapping of CD token to reclaim rate
     mapping(address => uint16) private _reclaimRates;
 
-    /// @notice Mapping of deposit token to borrower to debt
+    /// @notice Mapping of vault token to borrower to debt
     mapping(address => mapping(address => uint256)) private _debt;
 
     /// @notice Mapping of deposit token to total shares
@@ -72,6 +72,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @notice Ensures the deposit token has been created
     modifier onlyDepositToken(IERC20 depositToken_) {
+        // Checks that the ERC20 deposit token has had a CD token created
         if (_depositToConvertible[address(depositToken_)] == address(0))
             revert CDEPO_UnsupportedToken();
         _;
@@ -79,7 +80,21 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @notice Ensures the CD token has been created
     modifier onlyCDToken(IConvertibleDepositERC20 cdToken_) {
+        /// Checks that the given CD token has been created
         if (_convertibleToDeposit[address(cdToken_)] == address(0)) revert CDEPO_UnsupportedToken();
+        _;
+    }
+
+    /// @notice Ensures the vault token is supported
+    modifier onlyVaultToken(IERC4626 vaultToken_) {
+        // Check that the vault token's underlying asset has a CD token
+        address cdToken = _depositToConvertible[address(vaultToken_.asset())];
+        if (cdToken == address(0)) revert CDEPO_UnsupportedToken();
+
+        // Checks that the given token is the vault token of a CD token
+        // This is necessary as the vault token could spoof the underlying asset
+        if (address(IConvertibleDepositERC20(cdToken).vault()) != address(vaultToken_))
+            revert CDEPO_UnsupportedToken();
         _;
     }
 
@@ -296,30 +311,29 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     function incurDebt(
-        IERC20 depositToken_,
+        IERC4626 vaultToken_,
         uint256 amount_
-    ) external override onlyDepositToken(depositToken_) permissioned {
+    ) external override onlyVaultToken(vaultToken_) permissioned {
         // Validate that the amount is greater than zero
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Validate that the amount is within the vault balance
-        if (_totalShares[address(depositToken_)] < amount_) revert CDEPO_InsufficientBalance();
+        if (_totalShares[address(vaultToken_.asset())] < amount_)
+            revert CDEPO_InsufficientBalance();
 
         // Update the debt
-        _debt[address(depositToken_)][msg.sender] += amount_;
+        _debt[address(vaultToken_)][msg.sender] += amount_;
 
         // Transfer the vault asset to the caller
-        ERC4626(
-            address(IConvertibleDepositERC20(_depositToConvertible[address(depositToken_)]).vault())
-        ).safeTransfer(msg.sender, amount_);
+        ERC4626(address(vaultToken_)).safeTransfer(msg.sender, amount_);
 
         // Emit the event
-        emit DebtIncurred(address(depositToken_), msg.sender, amount_);
+        emit DebtIncurred(address(vaultToken_), msg.sender, amount_);
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Validates that the deposit token is supported
+    ///             - Validates that the vault token is supported
     ///             - Validates that the caller is permissioned
     ///             - Validates that the amount is greater than zero
     ///             - Cap the repaid amount to the borrowed amount
@@ -328,17 +342,17 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Returns the amount of vault asset that was repaid
     ///
     ///             This function reverts if:
-    ///             - The deposit token is not supported
+    ///             - The vault token is not supported
     ///             - The amount is zero
     ///             - The caller is not permissioned
     function repayDebt(
-        IERC20 depositToken_,
+        IERC4626 vaultToken_,
         uint256 amount_
     )
         external
         virtual
         override
-        onlyDepositToken(depositToken_)
+        onlyVaultToken(vaultToken_)
         permissioned
         returns (uint256 repaidAmount)
     {
@@ -346,39 +360,38 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Cap the repaid amount to the borrowed amount
-        repaidAmount = _debt[address(depositToken_)][msg.sender] < amount_
-            ? _debt[address(depositToken_)][msg.sender]
+        repaidAmount = _debt[address(vaultToken_)][msg.sender] < amount_
+            ? _debt[address(vaultToken_)][msg.sender]
             : amount_;
 
         // Update the borrowed amount
-        _debt[address(depositToken_)][msg.sender] -= repaidAmount;
+        _debt[address(vaultToken_)][msg.sender] -= repaidAmount;
 
         // Transfer the vault asset from the caller to the contract
-        ERC4626(
-            address(IConvertibleDepositERC20(_depositToConvertible[address(depositToken_)]).vault())
-        ).safeTransferFrom(msg.sender, address(this), repaidAmount);
+        ERC4626(address(vaultToken_)).safeTransferFrom(msg.sender, address(this), repaidAmount);
 
         // Emit the event
-        emit DebtRepaid(address(depositToken_), msg.sender, repaidAmount);
+        emit DebtRepaid(address(vaultToken_), msg.sender, repaidAmount);
 
         return repaidAmount;
     }
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
+    ///             - Validates that the vault token is supported
     ///             - Validates that the amount is greater than zero
     ///             - Cap the reduced amount to the borrowed amount
     ///             - Reduces the debt
     ///             - Emits an event
     ///             - Returns the amount of vault asset that was reduced
     function reduceDebt(
-        IERC20 depositToken_,
+        IERC4626 vaultToken_,
         uint256 amount_
     )
         external
         virtual
         override
-        onlyDepositToken(depositToken_)
+        onlyVaultToken(vaultToken_)
         permissioned
         returns (uint256 actualAmount)
     {
@@ -386,15 +399,15 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
 
         // Cap the reduced amount to the borrowed amount
-        actualAmount = _debt[address(depositToken_)][msg.sender] < amount_
-            ? _debt[address(depositToken_)][msg.sender]
+        actualAmount = _debt[address(vaultToken_)][msg.sender] < amount_
+            ? _debt[address(vaultToken_)][msg.sender]
             : amount_;
 
         // Update the debt
-        _debt[address(depositToken_)][msg.sender] -= actualAmount;
+        _debt[address(vaultToken_)][msg.sender] -= actualAmount;
 
         // Emit the event
-        emit DebtReduced(address(depositToken_), msg.sender, actualAmount);
+        emit DebtReduced(address(vaultToken_), msg.sender, actualAmount);
 
         // Return the amount of vault asset that was reduced
         return actualAmount;
@@ -628,16 +641,18 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc CDEPOv1
     ///
     /// @return     tokenDebt The amount of debt owed by the borrower, or 0
-    function debt(
-        IERC20 depositToken_,
+    function getDebt(
+        IERC4626 vaultToken_,
         address borrower_
-    ) external view override onlyDepositToken(depositToken_) returns (uint256 tokenDebt) {
-        tokenDebt = _debt[address(depositToken_)][borrower_];
+    ) external view override returns (uint256 tokenDebt) {
+        tokenDebt = _debt[address(vaultToken_)][borrower_];
 
         return tokenDebt;
     }
 
     /// @inheritdoc CDEPOv1
+    ///
+    /// @return     shares The amount of shares, or 0
     function getVaultShares(IERC20 depositToken_) external view override returns (uint256 shares) {
         shares = _totalShares[address(depositToken_)];
 

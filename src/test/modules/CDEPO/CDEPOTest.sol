@@ -29,6 +29,7 @@ abstract contract CDEPOTest is Test {
     uint48 public constant INITIAL_BLOCK = 100000000;
 
     IERC20 public iReserveToken;
+    IERC4626 public iReserveTokenVault;
     IERC20 public iReserveTokenTwo;
     IERC4626 public iReserveTokenTwoVault;
 
@@ -40,6 +41,7 @@ abstract contract CDEPOTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RST", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
+        iReserveTokenVault = IERC4626(address(vault));
         vm.label(address(iReserveToken), "RST");
         vm.label(address(vault), "sRST");
 
@@ -238,7 +240,7 @@ abstract contract CDEPOTest is Test {
 
     modifier givenAddressHasBorrowed(uint256 amount_) {
         vm.prank(address(godmode));
-        CDEPO.incurDebt(iReserveToken, amount_);
+        CDEPO.incurDebt(iReserveTokenVault, amount_);
         _;
     }
 }

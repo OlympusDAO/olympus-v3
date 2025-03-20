@@ -9,6 +9,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
@@ -202,7 +203,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Borrow from CDEPO
         // This will transfer the debt token from CDEPO to this contract
-        CDEPO.incurDebt(IERC20(address(_DEBT_TOKEN.asset())), amount_);
+        CDEPO.incurDebt(IERC4626(address(_DEBT_TOKEN)), amount_);
 
         // Clear the created loan request by providing enough reserve.
         _DEBT_TOKEN.safeApprove(address(cooler_), amount_);
@@ -284,7 +285,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Reduce the debt owed to CDEPO
         // CDEPO will cap the reduction to the amount owed
-        CDEPO.reduceDebt(IERC20(address(_DEBT_TOKEN.asset())), totalPrincipal);
+        CDEPO.reduceDebt(IERC4626(address(_DEBT_TOKEN)), totalPrincipal);
 
         // Reward keeper.
         _collateralToken.transfer(msg.sender, keeperRewards);
@@ -330,7 +331,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         // Repay the debt token to CDEPO
         if (principalPaid_ > 0) {
             _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
-            CDEPO.repayDebt(IERC20(address(_DEBT_TOKEN.asset())), principalPaid_);
+            CDEPO.repayDebt(IERC4626(address(_DEBT_TOKEN)), principalPaid_);
         }
 
         // Sweep the yield

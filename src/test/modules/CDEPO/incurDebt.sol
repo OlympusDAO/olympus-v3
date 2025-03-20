@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {CDEPOTest} from "./CDEPOTest.sol";
 
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract IncurDebtCDEPOTest is CDEPOTest {
     event DebtIncurred(address indexed inputToken, address indexed borrower, uint256 amount);
@@ -31,7 +31,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(caller_);
-        CDEPO.incurDebt(iReserveToken, 10e18);
+        CDEPO.incurDebt(iReserveTokenVault, 10e18);
     }
 
     function test_notSupported_reverts() public {
@@ -42,7 +42,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.incurDebt(iReserveTokenTwo, 10e18);
+        CDEPO.incurDebt(iReserveTokenTwoVault, 10e18);
     }
 
     function test_convertibleDepositToken_reverts() public {
@@ -53,7 +53,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.incurDebt(IERC20(address(cdToken)), 10e18);
+        CDEPO.incurDebt(IERC4626(address(cdToken)), 10e18);
     }
 
     function test_amountIsZero_reverts()
@@ -69,7 +69,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.incurDebt(iReserveToken, 0);
+        CDEPO.incurDebt(iReserveTokenVault, 0);
     }
 
     function test_amountIsGreaterThanBalance_reverts()
@@ -85,7 +85,7 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.incurDebt(iReserveToken, 100e18 + 1);
+        CDEPO.incurDebt(iReserveTokenVault, 100e18 + 1);
     }
 
     function test_success(
@@ -102,11 +102,11 @@ contract IncurDebtCDEPOTest is CDEPOTest {
 
         // Expect event
         vm.expectEmit();
-        emit DebtIncurred(address(iReserveToken), address(godmode), amount);
+        emit DebtIncurred(address(iReserveTokenVault), address(godmode), amount);
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.incurDebt(iReserveToken, amount);
+        CDEPO.incurDebt(iReserveTokenVault, amount);
 
         // Assert balances
         assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
@@ -115,6 +115,6 @@ contract IncurDebtCDEPOTest is CDEPOTest {
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert borrowed amount
-        assertEq(CDEPO.debt(iReserveToken, address(godmode)), amount, "debt");
+        assertEq(CDEPO.getDebt(iReserveTokenVault, address(godmode)), amount, "debt");
     }
 }

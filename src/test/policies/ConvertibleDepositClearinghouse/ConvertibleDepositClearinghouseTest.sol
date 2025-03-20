@@ -46,6 +46,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
     MockERC4626 internal vault;
     MockERC20 internal asset;
     IERC20 internal iAsset;
+    IERC4626 internal iVault;
 
     Kernel internal kernel;
     OlympusTreasury internal TRSRY;
@@ -66,6 +67,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
         asset = new MockERC20("Asset", "ASSET", 18);
         iAsset = IERC20(address(asset));
         vault = new MockERC4626(asset, "Vault", "VAULT");
+        iVault = IERC4626(address(vault));
 
         coolerFactory = new CoolerFactory();
 
