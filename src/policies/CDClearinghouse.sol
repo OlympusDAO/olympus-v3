@@ -288,11 +288,12 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         CDEPO.reduceDebt(IERC4626(address(_DEBT_TOKEN)), totalPrincipal);
 
         // Reward keeper.
-        _collateralToken.transfer(msg.sender, keeperRewards);
+        ERC20(address(_collateralToken)).safeTransfer(msg.sender, keeperRewards);
 
         // Burn the collateral token
-        // TODO this needs to be performed without approval
-        CDEPO.burn(_collateralToken, _collateralToken.balanceOf(address(this)));
+        uint256 collateralBalance = _collateralToken.balanceOf(address(this));
+        ERC20(address(_collateralToken)).safeApprove(address(CDEPO), collateralBalance);
+        CDEPO.burn(_collateralToken, collateralBalance);
 
         // Sweep yield
         _sweepYield();
