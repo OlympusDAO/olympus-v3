@@ -111,7 +111,9 @@ contract EmissionManager is IEmissionManager, Policy, RolesConsumer {
         _reserveDecimals = reserve.decimals();
 
         // Max approve sReserve contract for reserve for deposits
-        reserve.approve(address(sReserve), type(uint256).max);
+        reserve.safeApprove(address(sReserve), type(uint256).max);
+
+        // TODO does reserve need to be the same as the CDAuctioneer bid token?
     }
 
     /// @inheritdoc Policy
