@@ -96,7 +96,7 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
         uint256 susdsAmount = SUSDS.previewWithdraw(amountInWad);
         TRSRY.increaseWithdrawApproval(address(this), SUSDS, susdsAmount);
         TRSRY.withdrawReserves(address(this), SUSDS, susdsAmount);
-        SUSDS.redeem(susdsAmount, recipient, address(this));
+        SUSDS.withdraw(amountInWad, recipient, address(this));
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
