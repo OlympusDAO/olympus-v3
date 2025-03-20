@@ -29,6 +29,10 @@ interface ICoolerTreasuryBorrower {
     /// @dev Cooler is expected to transfer the amount to this contract prior to calling
     function repay() external;
 
+    /// @notice Cooler may write off debt in the case of liquidations.
+    /// @dev This reduces the policies debt to TRSRY
+    function writeOffDebt(uint256 debtTokenAmount) external;
+
     /// @notice In the case of a Cooler debt token change (eg USDS => USDC), the
     /// debt may be manually net settled from the old debt token (in the old cooler treasury borrower)
     /// to the new debt token (in the new cooler treasury borrower)

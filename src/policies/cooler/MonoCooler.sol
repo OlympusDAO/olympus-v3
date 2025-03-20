@@ -613,9 +613,10 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             totalCollateral -= totalCollateralClaimed;
         }
 
-        // Remove debt from the totals
+        // Remove debt from the totals and from TRSRY
         if (totalDebtWiped > 0) {
             _reduceTotalDebt(gState, totalDebtWiped);
+            treasuryBorrower.writeOffDebt(totalDebtWiped);
         }
 
         // The liquidator receives the total incentives across all accounts
