@@ -69,6 +69,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         coolerFactory = new CoolerFactory();
 
+        // Labels
+        vm.label(USER, "USER");
+        vm.label(OTHERS, "OTHERS");
+        vm.label(address(asset), "ASSET");
+        vm.label(address(vault), "sASSET");
+
         // Kernel
         vm.startPrank(EXECUTOR);
         kernel = new Kernel();
@@ -104,7 +110,6 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        kernel.executeAction(Actions.ActivatePolicy, address(clearinghouse));
         kernel.executeAction(Actions.ActivatePolicy, godmode);
         vm.stopPrank();
 
@@ -125,6 +130,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
         vm.startPrank(godmode);
         cdToken = ERC20(address(CDEPO.create(IERC4626(address(vault)), 90e2)));
         vm.stopPrank();
+        vm.label(address(cdToken), "cdToken");
+
+        // Clearinghouse policy can be activated only after the CD token is created
+        vm.startPrank(EXECUTOR);
+        kernel.executeAction(Actions.ActivatePolicy, address(clearinghouse));
+        vm.stopPrank();
 
         // Activate
         vm.prank(ADMIN);
@@ -133,6 +144,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
         // Create a cooler for USER
         vm.prank(USER);
         cooler = ICooler(coolerFactory.generateCooler(cdToken, vault));
+        vm.label(address(cooler), "COOLER");
 
         // Fund others so that TRSRY is not the only with vault shares
         asset.mint(OTHERS, 100e18);
@@ -143,14 +155,6 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Deposit 200e18 assets into the vault so the conversion is not 1:1
         asset.mint(address(vault), 200e18);
-
-        // Labels
-        vm.label(USER, "USER");
-        vm.label(OTHERS, "OTHERS");
-        vm.label(address(asset), "ASSET");
-        vm.label(address(vault), "sASSET");
-        vm.label(address(cooler), "COOLER");
-        vm.label(address(cdToken), "cdToken");
     }
 
     modifier givenDisabled() {

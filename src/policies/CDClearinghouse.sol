@@ -2,6 +2,7 @@
 pragma solidity ^0.8.15;
 
 // Libraries
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -24,7 +25,7 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 /// @title  Convertible Deposit Clearinghouse
 /// @notice Enables holders of a specific CD token to borrow against their position
 contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, CoolerCallback {
-    using SafeTransferLib for CDEPOv1;
+    using SafeTransferLib for ERC20;
     using SafeTransferLib for ERC4626;
     using FixedPointMathLib for uint256;
 
@@ -171,7 +172,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Validate cooler collateral and debt tokens.
         if (
-            address(cooler_.collateral()) != address(CDEPO) ||
+            address(cooler_.collateral()) != address(_collateralToken) ||
             address(cooler_.debt()) != address(_DEBT_TOKEN)
         ) revert BadEscrow();
 
@@ -183,7 +184,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, loanToCollateralShares);
-        // CDEPO.safeTransferFrom(msg.sender, address(this), collateral);
+        ERC20(address(_collateralToken)).safeTransferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
         (, uint256 interest) = getLoanForCollateral(collateral);
@@ -191,7 +192,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         principalReceivables += amount_;
 
         // Create a new loan request.
-        // CDEPO.safeApprove(address(cooler_), collateral);
+        ERC20(address(_collateralToken)).safeApprove(address(cooler_), collateral);
         uint256 reqID = cooler_.requestLoan(
             amount_,
             interestRate,
@@ -200,8 +201,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         );
 
         // Borrow from CDEPO
-        // This will transfer `_DEBT_TOKEN` from CDEPO to this contract
-        // CDEPO.incurDebt(amount_);
+        // This will transfer the debt token from CDEPO to this contract
+        CDEPO.incurDebt(IERC20(address(_DEBT_TOKEN.asset())), amount_);
 
         // Clear the created loan request by providing enough reserve.
         _DEBT_TOKEN.safeApprove(address(cooler_), amount_);
@@ -283,13 +284,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Reduce the debt owed to CDEPO
         // CDEPO will cap the reduction to the amount owed
-        // CDEPO.reduceDebt(totalPrincipal);
+        CDEPO.reduceDebt(IERC20(address(_DEBT_TOKEN.asset())), totalPrincipal);
 
         // Reward keeper.
-        // CDEPO.transfer(msg.sender, keeperRewards);
+        _collateralToken.transfer(msg.sender, keeperRewards);
 
         // Burn the collateral token
-        // CDEPO.burn(CDEPO.balanceOf(address(this)));
+        // TODO this needs to be performed without approval
+        CDEPO.burn(_collateralToken, _collateralToken.balanceOf(address(this)));
 
         // Sweep yield
         _sweepYield();
@@ -328,7 +330,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         // Repay the debt token to CDEPO
         if (principalPaid_ > 0) {
             _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
-            // CDEPO.repayDebt(principalPaid_);
+            CDEPO.repayDebt(IERC20(address(_DEBT_TOKEN.asset())), principalPaid_);
         }
 
         // Sweep the yield
