@@ -252,4 +252,12 @@ contract ConvertibleDepositFacilityTest is Test {
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
+
+    function _assertMintApproval(uint256 expected_) internal {
+        assertEq(
+            minter.mintApproval(address(facility)),
+            expected_,
+            "minter.mintApproval(address(facility))"
+        );
+    }
 }

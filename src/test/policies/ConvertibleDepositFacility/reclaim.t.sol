@@ -132,8 +132,6 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             convertibleDepository.reclaimRate(address(cdToken))) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
-        uint256 beforeMintApproval = minter.mintApproval(address(facility));
-
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit ReclaimedDeposit(
@@ -157,11 +155,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
         // No dangling mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            beforeMintApproval,
-            "minter.mintApproval(address(facility))"
-        );
+        _assertMintApproval(0);
 
         // Deposit token is transferred to the recipient
         assertEq(
@@ -211,8 +205,6 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
             convertibleDepository.reclaimRate(address(cdToken))) / 100e2;
         uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
 
-        uint256 beforeMintApproval = minter.mintApproval(address(facility));
-
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit ReclaimedDeposit(
@@ -239,8 +231,8 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
-        // Assert the remaining mint approval
-        assertEq(minter.mintApproval(address(facility)), beforeMintApproval, "mintApproval");
+        // No dangling mint approval
+        _assertMintApproval(0);
 
         // Deposit token is transferred to the recipient
         assertEq(

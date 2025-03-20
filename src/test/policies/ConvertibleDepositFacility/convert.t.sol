@@ -460,11 +460,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         assertEq(ohm.balanceOf(recipient), expectedConvertedAmount, "ohm.balanceOf(recipient)");
 
         // No dangling mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            0,
-            "minter.mintApproval(address(facility))"
-        );
+        _assertMintApproval(0);
 
         // Assert remaining deposit
         assertEq(
@@ -590,11 +586,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         assertEq(ohm.balanceOf(recipient), expectedConvertedAmount, "ohm.balanceOf(recipient)");
 
         // No dangling mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            0,
-            "minter.mintApproval(address(facility))"
-        );
+        _assertMintApproval(0);
 
         // Assert remaining deposit
         assertEq(
@@ -663,7 +655,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         positionIds_[1] = 1;
         amounts_[1] = amountTwo;
 
-        uint256 originalMintApproval = minter.mintApproval(address(facility));
         uint256 expectedConvertedAmount = (amountOne * 1e18) /
             CONVERSION_PRICE +
             (amountTwo * 1e18) /
@@ -690,12 +681,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         // Assert OHM minted to the recipient
         assertEq(ohm.balanceOf(recipient), expectedConvertedAmount, "ohm.balanceOf(recipient)");
 
-        // Assert the remaining mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            originalMintApproval - expectedConvertedAmount,
-            "mintApproval"
-        );
+        // No dangling mint approval
+        _assertMintApproval(0);
 
         // Assert the remaining deposit of each position
         assertEq(

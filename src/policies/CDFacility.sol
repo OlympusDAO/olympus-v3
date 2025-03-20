@@ -129,13 +129,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
             wrap_
         );
 
-        // Calculate the expected OHM amount
-        // The deposit and CD token have the same decimals, so either can be used
-        uint256 expectedOhmAmount = (amount_ * (10 ** cdToken_.decimals())) / conversionPrice_;
-
-        // Pre-emptively increase the OHM mint approval
-        MINTR.increaseMintApproval(address(this), expectedOhmAmount);
-
         // Emit an event
         emit CreatedDeposit(address(cdToken_.asset()), account_, positionId, amount_);
     }
@@ -276,6 +269,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert
+        MINTR.increaseMintApproval(address(this), convertedTokenOut);
         MINTR.mintOhm(msg.sender, convertedTokenOut);
 
         // Emit event
@@ -379,7 +373,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
-        uint256 unconverted;
         uint256 totalDeposit;
 
         // Iterate over all positions
@@ -405,9 +398,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
                 revert CDF_InvalidArgs("multiple CD tokens");
             }
 
-            // Unconverted must be calculated for each position, as the conversion price can differ
-            unconverted += (depositAmount * (10 ** cdToken.decimals())) / position.conversionPrice;
-
             // Update the position
             CDPOS.update(positionId, position.remainingDeposit - depositAmount);
         }
@@ -427,9 +417,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
             depositToken.safeApprove(address(vault), remainingTokens);
             vault.deposit(remainingTokens, address(TRSRY));
         }
-
-        // Decrease the mint approval
-        MINTR.decreaseMintApproval(address(this), unconverted);
 
         // Emit event
         emit RedeemedDeposit(address(depositToken), msg.sender, redeemed);

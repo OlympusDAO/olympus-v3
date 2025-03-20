@@ -98,9 +98,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
     {
         uint256 conversionPrice = 2e6;
 
-        // Calculate the expected OHM amount
-        uint256 expectedOhmAmount = (10e6 * 1e6) / conversionPrice;
-
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit CreatedDeposit(address(reserveToken), recipient, 0, 10e6);
@@ -129,12 +126,8 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
 
-        // Assert that the mint approval was increased
-        assertEq(
-            minter.mintApproval(address(facility)),
-            expectedOhmAmount,
-            "minter.mintApproval(address(facility))"
-        );
+        // Assert that the mint approval was NOT increased
+        _assertMintApproval(0);
     }
 
     function test_success()
@@ -147,9 +140,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        // Calculate the expected OHM amount
-        uint256 expectedOhmAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
-
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit CreatedDeposit(address(reserveToken), recipient, 0, RESERVE_TOKEN_AMOUNT);
@@ -182,12 +172,8 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
 
-        // Assert that the mint approval was increased
-        assertEq(
-            minter.mintApproval(address(facility)),
-            expectedOhmAmount,
-            "minter.mintApproval(address(facility))"
-        );
+        // Assert that the mint approval was NOT increased
+        _assertMintApproval(0);
     }
 
     function test_success_multiple()
@@ -200,9 +186,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        // Calculate the expected OHM amount
-        uint256 expectedOhmAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
-
         // Call function
         _createPosition(
             recipient,
@@ -242,11 +225,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
         assertEq(positionIds[0], 0, "positionIds[0]");
         assertEq(positionIds[1], 1, "positionIds[1]");
 
-        // Assert that the mint approval was increased
-        assertEq(
-            minter.mintApproval(address(facility)),
-            expectedOhmAmount,
-            "minter.mintApproval(address(facility))"
-        );
+        // Assert that the mint approval was NOT increased
+        _assertMintApproval(0);
     }
 }

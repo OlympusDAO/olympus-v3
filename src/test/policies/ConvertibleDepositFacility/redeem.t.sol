@@ -439,11 +439,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
         // No dangling mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            0,
-            "minter.mintApproval(address(facility))"
-        );
+        _assertMintApproval(0);
 
         // Assertion that the remaining deposit of each position is updated
         assertEq(
@@ -545,12 +541,6 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         positionIds_[1] = 1;
         amounts_[1] = amountTwo;
 
-        uint256 originalMintApproval = minter.mintApproval(address(facility));
-        uint256 expectedConvertedAmount = (amountOne * 1e18) /
-            CONVERSION_PRICE +
-            (amountTwo * 1e18) /
-            CONVERSION_PRICE;
-
         // Warp to the normal expiry
         vm.warp(CONVERSION_EXPIRY);
 
@@ -571,12 +561,8 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
-        // Assert the remaining mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            originalMintApproval - expectedConvertedAmount,
-            "mintApproval"
-        );
+        // No dangling mint approval
+        _assertMintApproval(0);
 
         // Assertion that the remaining deposit of each position is updated
         assertEq(
