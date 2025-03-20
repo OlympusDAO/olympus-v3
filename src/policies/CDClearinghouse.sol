@@ -10,6 +10,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -20,8 +21,8 @@ import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
 import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
-/// @title  Convertible Depository Clearinghouse
-/// @notice Enables CD token holders to borrow against their position
+/// @title  Convertible Deposit Clearinghouse
+/// @notice Enables holders of a specific CD token to borrow against their position
 contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, CoolerCallback {
     using SafeTransferLib for CDEPOv1;
     using SafeTransferLib for ERC4626;
@@ -29,9 +30,16 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     // ===== STATE VARIABLES ===== //
 
+    /// @notice The debt token of the clearinghouse.
     ERC4626 internal immutable _DEBT_TOKEN;
 
-    uint256 internal _COLLATERAL_TOKEN_SCALE;
+    /// @notice The collateral token of the clearinghouse.
+    /// @dev    This is set in `configureDependencies()`
+    IConvertibleDepositERC20 internal _collateralToken;
+
+    /// @notice The scale of the collateral token.
+    /// @dev    This is the number of decimals of the collateral token.
+    uint256 internal immutable _COLLATERAL_TOKEN_SCALE;
 
     /// @inheritdoc IGenericClearinghouse
     uint256 public principalReceivables;
@@ -59,7 +67,6 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     CHREGv1 public CHREG;
 
     /// @notice Convertible Depository Module
-    /// @dev    The value for this module cannot be changed after it is initially set through `configureDependencies()`.
     CDEPOv1 public CDEPO;
 
     /// @notice Treasury Module
@@ -76,10 +83,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         uint256 loanToCollateral_,
         uint256 interestRate_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
-        // Validate that the debt token is an ERC4626
-        if (address(ERC4626(debtToken_).asset()) == address(0)) revert InvalidParams("debt token");
-
         _DEBT_TOKEN = ERC4626(debtToken_);
+
+        // Validate that the debt token is an ERC4626 and not the zero address
+        if (address(_DEBT_TOKEN.asset()) == address(0)) revert InvalidParams("debt token");
+
+        // Set the collateral token scale
+        // This is possible, since the ERC4626 vault and underlying asset have the same number of decimals, and the corresponding CD token from CDEPO (see `configureDependencies()`) has the same number of decimals as the ERC4626 underlying asset
+        _COLLATERAL_TOKEN_SCALE = 10 ** _DEBT_TOKEN.decimals();
 
         maxRewardPerLoan = maxRewardPerLoan_;
         duration = duration_;
@@ -103,12 +114,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         dependencies[2] = toKeycode("ROLES");
         dependencies[3] = toKeycode("TRSRY");
 
-        // Validate that CDEPO is not being changed
-        address newCDEPO = getModuleAddress(dependencies[0]);
-        if (address(CDEPO) != address(0) && address(CDEPO) != address(newCDEPO))
-            revert InvalidParams("CDEPO");
-
-        CDEPO = CDEPOv1(newCDEPO);
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[0]));
         CHREG = CHREGv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
@@ -124,11 +130,13 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
         if (CDEPO_MAJOR != 1 || CHREG_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
 
-        // Ensure that the tokens match with CDEPO's
-        // if (address(CDEPO.VAULT()) != address(_DEBT_TOKEN)) revert InvalidParams("CDEPO vault");
+        // Validate that the debt token's underlying asset is supported by the CDEPO module
+        _collateralToken = CDEPO.getConvertibleDepositToken(address(_DEBT_TOKEN.asset()));
+        if (address(_collateralToken) == address(0)) revert InvalidParams("debt token");
 
-        // Set the collateral token scale
-        // _COLLATERAL_TOKEN_SCALE = 10 ** CDEPO.decimals();
+        // Validate that the decimals are the same
+        if (_COLLATERAL_TOKEN_SCALE != 10 ** _collateralToken.decimals())
+            revert InvalidParams("decimals");
     }
 
     /// @inheritdoc Policy
@@ -382,9 +390,9 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     }
 
     /// @inheritdoc IGenericClearinghouse
-    /// @dev        In this implementation, the collateral token is the CDEPO token
+    /// @dev        In this implementation, the collateral token is the convertible deposit token corresponding to the debt token
     function collateralToken() external view override returns (IERC20) {
-        return IERC20(address(CDEPO));
+        return IERC20(address(_collateralToken));
     }
 
     /// @dev    This implementation activates the Clearinghouse in CHREG
