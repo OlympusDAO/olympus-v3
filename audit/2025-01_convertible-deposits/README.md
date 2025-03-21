@@ -196,7 +196,6 @@ sequenceDiagram
     cdReserve-->>caller: cdReserve tokens
     CDFacility->>CDPOS: mint(caller, cdToken, depositAmount, conversionPrice, expiry, wrapNft)
     CDPOS-->>caller: CDPOS ERC721 token
-    CDFacility->>MINTR: increaseMintApproval(CDFacility, convertedAmount)
 ```
 
 #### Deposit Conversion
@@ -282,7 +281,6 @@ sequenceDiagram
     ReserveToken-->>CDFacility: reserve tokens
     CDFacility->>ReserveToken: transfer(amount, caller)
     ReserveToken-->>caller: reserve tokens
-    CDFacility->>MINTR: decreaseMintApproval(CDFacility, unconverted amount)
 ```
 
 ### EmissionManager (Policy)
