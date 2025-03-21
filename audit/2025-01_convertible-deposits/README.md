@@ -384,7 +384,7 @@ Unpermissioned callers are able to perform the following actions:
 - Wrap the caller's existing position into an ERC721
 - Unwrap the caller's existing position from an ERC721, which burns the token
 
-Permissions policies are able to perform the following actions:
+Permissioned policies are able to perform the following actions:
 
 - Mint new positions
 - Update the remaining deposit for an existing position
