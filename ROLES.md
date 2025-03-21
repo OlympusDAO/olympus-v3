@@ -10,6 +10,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | CDClearinghouse | Activate the policy |
 | admin | CDFacility | Create CD tokens, update reclaim rate, activate the policy |
 | admin | EmissionManager | Set configuration parameters, activate the policy |
+| admin | EmissionManager | Adjust yield, activate the policy |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
@@ -33,7 +34,6 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
 | heart_admin | Heart | Allows configuring heart parameters and activation/deactivation |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
-| loop_daddy | YieldRepurchaseFacility | Activate/deactivate the functionality |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |
