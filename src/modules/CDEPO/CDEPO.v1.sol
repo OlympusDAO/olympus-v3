@@ -81,6 +81,11 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     // ========== YIELD MANAGEMENT ========== //
 
     /// @notice Claim the yield accrued on all supported tokens
+    /// @dev    The implementing function should perform the following:
+    ///         - Iterate over all supported tokens
+    ///         - Calls `sweepYield` for each token
+    ///
+    /// @param  to_ The address to sweep the yield to
     function sweepAllYield(address to_) external virtual;
 
     /// @notice Claim the yield accrued on the deposit token
@@ -149,6 +154,7 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     ) external virtual;
 
     /// @notice Create support for a new deposit token based on its vault
+    ///
     /// @param  vault_          The ERC4626 vault for the deposit token
     /// @param  reclaimRate_    The initial reclaim rate
     /// @return cdToken         The address of the deployed cdToken

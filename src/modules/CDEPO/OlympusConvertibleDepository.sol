@@ -19,6 +19,9 @@ import {CDEPOv1} from "./CDEPO.v1.sol";
 import {ConvertibleDepositTokenClone} from "./ConvertibleDepositTokenClone.sol";
 import {IConvertibleDepositERC20} from "./IConvertibleDepositERC20.sol";
 
+/// @title  Olympus Convertible Depository
+/// @notice Implementation of the {IConvertibleDepository} interface
+///         This contract provides the backend management of CD tokens
 contract OlympusConvertibleDepository is CDEPOv1 {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for ERC4626;
@@ -26,6 +29,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice The address of the implementation of the {ConvertibleDepositTokenClone} contract
     address private immutable _TOKEN_IMPLEMENTATION;
 
     /// @notice List of supported deposit tokens
@@ -70,7 +74,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Ensures the deposit token has been created
+    /// @notice Ensures the deposit token has had a CD token created
     modifier onlyDepositToken(IERC20 depositToken_) {
         // Checks that the ERC20 deposit token has had a CD token created
         if (_depositToConvertible[address(depositToken_)] == address(0))
@@ -85,7 +89,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         _;
     }
 
-    /// @notice Ensures the vault token is supported
+    /// @notice Ensures the vault token has had a CD token created for its underlying asset
     modifier onlyVaultToken(IERC4626 vaultToken_) {
         // Check that the vault token's underlying asset has a CD token
         address cdToken = _depositToConvertible[address(vaultToken_.asset())];
@@ -103,6 +107,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
     ///             - Calls `mintFor` with the caller as the recipient
+    ///
+    ///             This function is public, and allows any address to mint CD tokens 1:1 with the deposit token
     function mint(IConvertibleDepositERC20 cdToken_, uint256 amount_) external override {
         mintFor(cdToken_, msg.sender, amount_);
     }
@@ -118,6 +124,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - The CD token is not supported
     ///             - The amount is zero
     ///             - The `account_` address has not approved this contract to spend the deposit token
+    ///
+    ///             This function is public, and allows any address to mint CD tokens 1:1 with the deposit token
     function mintFor(
         IConvertibleDepositERC20 cdToken_,
         address account_,
@@ -160,6 +168,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @dev        This function performs the following:
     ///             - Validates that the CD token token is supported
     ///             - Burns the corresponding amount of CD tokens from the caller
+    ///
+    ///             This function is public, and allows any address to burn CD tokens
     function burn(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
@@ -178,6 +188,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
     ///             - Calls `reclaimFor` with the caller as the address to reclaim the tokens to
+    ///
+    ///             This function is public, and allows any address to reclaim the underlying asset of a CD token
     function reclaim(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
@@ -198,6 +210,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - The amount is zero
     ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
     ///             - The quantity of vault shares for the amount is zero
+    ///
+    ///             This function is public, and allows any address to reclaim the underlying asset of a CD token
     function reclaimFor(
         IConvertibleDepositERC20 cdToken_,
         address account_,
@@ -264,6 +278,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - The amount is zero
     ///             - The quantity of vault shares for the amount is zero
     ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
+    ///
+    ///             This function is permissioned, and allows only approved policies to redeem CD tokens
     function redeemFor(
         IConvertibleDepositERC20 cdToken_,
         address account_,
@@ -310,6 +326,19 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== LENDING ========== //
 
     /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Validates that the vault token is supported
+    ///             - Validates that the caller is permissioned
+    ///             - Validates that the amount is greater than zero
+    ///             - Validates that the amount is within the vault balance
+    ///             - Updates the debt
+    ///             - Transfers the vault asset to the caller
+    ///             - Emits an event
+    ///
+    ///             This function reverts if:
+    ///             - The vault token is not supported
+    ///             - The amount is zero
+    ///             - The caller is not permissioned
     function incurDebt(
         IERC4626 vaultToken_,
         uint256 amount_
@@ -336,7 +365,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Validates that the vault token is supported
     ///             - Validates that the caller is permissioned
     ///             - Validates that the amount is greater than zero
-    ///             - Cap the repaid amount to the borrowed amount
+    ///             - Caps the repaid amount to the borrowed amount
     ///             - Reduces the debt
     ///             - Emits an event
     ///             - Returns the amount of vault asset that was repaid
@@ -384,6 +413,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Reduces the debt
     ///             - Emits an event
     ///             - Returns the amount of vault asset that was reduced
+    ///
+    ///             This function reverts if:
+    ///             - The vault token is not supported
+    ///             - The amount is zero
     function reduceDebt(
         IERC4626 vaultToken_,
         uint256 amount_
@@ -426,10 +459,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc CDEPOv1
     /// @dev        This function performs the following:
-    ///             - Validates that the caller has the correct role
+    ///             - Validates that the caller is permissioned
     ///             - Computes the amount of yield that would be swept
     ///             - Reduces the shares tracked by the contract
-    ///             - Transfers the yield to the caller
+    ///             - Transfers the yield to the recipient
     ///             - Emits an event
     ///
     ///             This function reverts if:
@@ -617,6 +650,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return _depositToConvertible[depositToken_] != address(0);
     }
 
+    /// @inheritdoc IConvertibleDepository
     function isConvertibleDepositToken(address cdToken_) external view override returns (bool) {
         return _convertibleToDeposit[cdToken_] != address(0);
     }

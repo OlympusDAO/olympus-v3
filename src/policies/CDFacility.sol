@@ -22,6 +22,9 @@ import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
+/// @title  Convertible Deposit Facility
+/// @notice Implementation of the {IConvertibleDepositFacility} interface
+///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
 contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, ReentrancyGuard {
     using FullMath for uint256;
     using SafeTransferLib for ERC20;
@@ -309,7 +312,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - Any position is not valid
-    ///             - Any position is not CDEPO
+    ///             - Any position is not a supported CD token
+    ///             - Any position has a different CD token
     ///             - Any position has not reached the conversion expiry
     ///             - Any position has reached the redemption expiry
     ///             - Any redemption amount is greater than the remaining deposit
@@ -361,7 +365,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - Any position is not valid
-    ///             - Any position is not CDEPO
+    ///             - Any position is not a supported CD token
+    ///             - Any position has a different CD token
     ///             - Any position has not reached the conversion expiry
     ///             - Any position has reached the redemption expiry
     ///             - Any redemption amount is greater than the remaining deposit
@@ -475,6 +480,10 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller is not an admin
+    ///             - CDEPO reverts
     function create(
         IERC4626 vault_,
         uint16 reclaimRate_
@@ -508,7 +517,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
     /// @notice Set the reclaim rate for CDEPO
     /// @dev    This function will revert if:
-    ///         - The caller is not permissioned
+    ///         - The caller is not an admin
     ///         - CDEPO reverts
     ///
     /// @param  cdToken_      The address of the CD token

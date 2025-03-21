@@ -18,13 +18,12 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CDFacility} from "./CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
-/// @notice Implementation of the IConvertibleDepositAuctioneer interface
+/// @notice Implementation of the {IConvertibleDepositAuctioneer} interface
 /// @dev    This contract implements an auction for convertible deposit tokens. It runs these auctions according to the following principles:
 ///         - Auctions are of infinite duration
 ///         - Auctions are of infinite capacity
-///         - Users place bids by supplying an amount of the quote token
-///         - The quote token is the deposit token from the CDEPO module
-///         - The payout token is the CDEPO token, which can be converted to OHM at the conversion price that was set at the time of the bid
+///         - Users place bids by supplying an amount of the configured bid token
+///         - The payout token is a CD token (managed by {CDEPO}), which can be converted to OHM at the price that was set at the time of the bid
 ///         - During periods of greater demand, the conversion price will increase
 ///         - During periods of lower demand, the conversion price will decrease
 ///         - The auction has a minimum price, below which the conversion price will not decrease
@@ -37,7 +36,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     // ========== CONSTANTS ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
-    bytes32 public constant ROLE_HEART = "cd_emissionmanager";
+    bytes32 public constant ROLE_EMISSION_MANAGER = "cd_emissionmanager";
 
     /// @notice Scale of the OHM token
     uint256 internal constant _ohmScale = 1e9;
@@ -484,7 +483,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - Stores the auction results for the period
     ///
     ///             This function reverts if:
-    ///             - The caller does not have the ROLE_HEART role
+    ///             - The caller does not have the ROLE_EMISSION_MANAGER role
     ///             - The new tick size is 0
     ///             - The new min price is 0
     ///             - The new target is 0
@@ -492,7 +491,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_
-    ) external override onlyRole(ROLE_HEART) {
+    ) external override onlyRole(ROLE_EMISSION_MANAGER) {
         uint256 previousTarget = _auctionParameters.target;
 
         _setAuctionParameters(target_, tickSize_, minPrice_);
