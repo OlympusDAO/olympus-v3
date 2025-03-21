@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
@@ -11,22 +10,20 @@ import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
-import {IBondSDA} from "interfaces/IBondSDA.sol";
-import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-
 import {FullMath} from "libraries/FullMath.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
@@ -58,16 +55,17 @@ contract YieldRepurchaseFacilityTest is Test {
     OlympusMinter internal MINTR;
     OlympusRoles internal ROLES;
     OlympusClearinghouseRegistry internal CHREG;
+    OlympusConvertibleDepository internal CDEPO;
     address internal godmode;
 
     MockClearinghouse internal clearinghouse;
     YieldRepurchaseFacility internal yieldRepo;
     RolesAdmin internal rolesAdmin;
 
-    uint256 initialReserves = 105_000_000e18;
-    uint256 initialConversionRate = 1_05e16;
-    uint256 initialPrincipalReceivables = 100_000_000e18;
-    uint256 initialYield = 50_000e18 + ((initialPrincipalReceivables * 5) / 1000) / 52;
+    uint256 internal initialReserves = 105_000_000e18;
+    uint256 internal initialConversionRate = 1_05e16;
+    uint256 internal initialPrincipalReceivables = 100_000_000e18;
+    uint256 internal initialYield = 50_000e18 + ((initialPrincipalReceivables * 5) / 1000) / 52;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -109,6 +107,7 @@ contract YieldRepurchaseFacilityTest is Test {
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
             ROLES = new OlympusRoles(kernel);
+            CDEPO = new OlympusConvertibleDepository(kernel);
 
             // Deploy mock clearinghouse and registry
             clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
@@ -148,6 +147,7 @@ contract YieldRepurchaseFacilityTest is Test {
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, address(CHREG));
+            kernel.executeAction(Actions.InstallModule, address(CDEPO));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
@@ -575,7 +575,7 @@ contract YieldRepurchaseFacilityTest is Test {
         // Expect it to fail
         uint256 newNextYield = (nextYield * 12) / 10;
 
-        vm.expectRevert(abi.encodePacked("Too much increase"));
+        vm.expectRevert(abi.encodeWithSignature("TooMuchIncrease()"));
         vm.prank(guardian);
         yieldRepo.adjustNextYield(newNextYield);
 

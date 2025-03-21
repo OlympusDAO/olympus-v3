@@ -76,6 +76,7 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
         - [CDFacility.sol](../../src/policies/CDFacility.sol)
         - [EmissionManager.sol](../../src/policies/EmissionManager.sol)
         - [Heart.sol](../../src/policies/Heart.sol)
+        - [YieldRepurchaseFacility.sol](../../src/policies/YieldRepurchaseFacility.sol)
 
 The following pull requests can be referred to for the in-scope contracts:
 
@@ -353,6 +354,14 @@ CD token holders can perform the following actions:
 - `convert()`: convert their deposit position into OHM before conversion expiry.
 - `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a CDPOS position ID.
 - `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
+
+### YieldRepurchaseFacility (Policy)
+
+The YieldRepurchaseFacility tracks yield earned from different protocol features and uses that yield to buy back and burn OHM.
+
+The changes to this policy are:
+
+- Includes the vault token balance in CDEPO in yield calculations
 
 ### CDEPO (Module)
 
