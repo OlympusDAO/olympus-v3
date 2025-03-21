@@ -130,14 +130,18 @@ Callers with the appropriate permissions can activate and deactivate the functio
 ```mermaid
 flowchart TD
   admin((admin)) -- enable --> CDAuctioneer
-  emergency_restart((emergency_restart)) -- restart --> EmissionManager
-  emergency((emergency)) -- activate/deactivate --> CDAuctioneer
-  emergency((emergency)) -- activate/deactivate --> CDFacility
-  emergency_shutdown((emergency_shutdown)) -- deactivate --> EmissionManager
-  emissions_admin((emissions_admin)) -- initialize --> EmissionManager
+  admin((admin)) -- enable --> CDClearinghouse
+  admin((admin)) -- enable --> CDFacility
+  admin((admin)) -- enable --> EmissionManager
+  admin((admin)) -- restart --> EmissionManager
+  emergency((emergency)) -- disable --> CDAuctioneer
+  emergency((emergency)) -- disable --> CDClearinghouse
+  emergency((emergency)) -- disable --> CDFacility
+  emergency((emergency)) -- disable --> EmissionManager
 
   subgraph Policies
     CDAuctioneer
+    CDClearinghouse
     CDFacility
     EmissionManager
   end
@@ -283,6 +287,26 @@ sequenceDiagram
     ReserveToken-->>caller: reserve tokens
 ```
 
+#### Borrow Against CD Tokens
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant CDClearinghouse
+    participant CDEPO
+    participant VaultToken as Vault (ERC4626)
+    participant cdReserve
+    participant Cooler
+
+    caller->>CDClearinghouse: lendToCooler(principalAmount)
+    CDClearinghouse->>cdReserve: transferFrom(caller, collateralAmount)
+    caller-->>CDClearinghouse: cdReserve tokens
+    CDClearinghouse->>CDEPO: incurDebt(VaultToken, principalAmount)
+    CDEPO-->>CDClearinghouse: vault tokens
+    CDClearinghouse->>Cooler: cdReserve tokens
+    CDClearinghouse-->>caller: vault tokens
+```
+
 ### EmissionManager (Policy)
 
 This release contains an updated EmissionManager policy with the following changes:
@@ -302,6 +326,16 @@ There are two main functions in this policy:
 - `bid()` is ungated and enables the caller to bid in the auction. The function determines the amount of OHM that is convertible for the given deposit amount, and uses CDFacility to issue the CD tokens and position.
 
 Each CDAuctioneer is deployed with a single, immutable bid token. The CDEPO module must have a CD token created for that bid token at the time of activating the policy.
+
+### CDClearinghouse (Policy)
+
+The CDClearinghouse policy enables CD token holders to borrow the underlying asset against their CD token. The purpose is to enable users with CD positions to utilise the paired asset before conversion or redemption.
+
+The policy is a modified version of the existing [Clearinghouse policy](../../src/policies/Clearinghouse.sol). It adheres to the interface (extracted into [IGenericClearinghouse](../../src/policies/interfaces/IGenericClearinghouse.sol)), but makes the following changes:
+
+- Users borrow the associated ERC4626 vault token (e.g. sUSDS) against the quantity of CD tokens
+- The loan-to-collateral ratio is in terms of the underlying asset (e.g. USDS), and converted to vault token (e.g. sUSDS) terms at the time of loan origination.
+- Does not store funding in the CDClearinghouse contract (unlike the original Clearinghouse), and instead incurs debt from CDEPO.
 
 ### CDFacility (Policy)
 
