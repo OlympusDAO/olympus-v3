@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.15;
 
-import {console2} from "forge-std/console2.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
-import "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
 // Bophades policies
-import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
+import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 
 /// @notice     Installs the YieldRepo contract and the new Heart which calls it
 contract YieldRepoInstall is OlyBatch {
-    address kernel;
-    address rolesAdmin;
-    address newHeart;
-    address yieldRepo;
-    address oldHeart;
+    address public kernel;
+    address public rolesAdmin;
+    address public newHeart;
+    address public yieldRepo;
+    address public oldHeart;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
@@ -105,10 +104,14 @@ contract YieldRepoInstall is OlyBatch {
         addToBatch(
             yieldRepo,
             abi.encodeWithSelector(
-                YieldRepurchaseFacility.initialize.selector,
-                initialYieldEarningReserves,
-                initialConversionRate,
-                initialYield
+                PolicyEnabler.enable.selector,
+                abi.encode(
+                    IYieldRepo.EnableParams({
+                        initialReserveBalance: initialYieldEarningReserves,
+                        initialConversionRate: initialConversionRate,
+                        initialYield: initialYield
+                    })
+                )
             )
         );
     }
