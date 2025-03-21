@@ -2424,6 +2424,19 @@ contract EmissionManagerTest is Test {
         );
     }
 
+    function test_initialize_whenParamsLengthInvalid_reverts()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "params length");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.enable(abi.encode(uint256(20)));
+    }
+
     function test_initialize_whenBaseEmissionRateZero_reverts()
         public
         givenShutdown

@@ -36,6 +36,9 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
     ///         This enables the Heart contract to call specific functions on this contract.
     bytes32 public constant ROLE_HEART = "heart";
 
+    /// @notice The length of the `EnableParams` struct in bytes
+    uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice active base emissions rate change information
@@ -221,6 +224,10 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
         if (shutdownTimestamp + restartTimeframe > uint48(block.timestamp))
             revert CannotRestartYet(shutdownTimestamp + restartTimeframe);
 
+        // Validate that the params are of the correct length
+        if (params_.length != ENABLE_PARAMS_LENGTH) revert InvalidParam("params length");
+
+        // Decode the params
         EnableParams memory params = abi.decode(params_, (EnableParams));
 
         // Validate inputs
