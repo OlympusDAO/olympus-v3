@@ -616,7 +616,7 @@ contract YieldRepurchaseFacilityTest is Test {
     function test_shutdown() public {
         // Try to call shutdown as an invalid caller
         // Expect it to fail
-        vm.expectRevert(abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin")));
+        vm.expectRevert(abi.encodeWithSignature("NotAuthorised()"));
         vm.prank(alice);
         yieldRepo.disable(abi.encode(new address[](0)));
 
@@ -642,7 +642,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Call shutdown with an invalid caller
         // Expect it to fail
-        vm.expectRevert(abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin")));
+        vm.expectRevert(abi.encodeWithSignature("NotAuthorised()"));
         vm.prank(bob);
         yieldRepo.disable(abi.encode(tokens));
 
