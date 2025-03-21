@@ -195,11 +195,15 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Initialize the yield repo facility
         vm.prank(guardian);
-        yieldRepo.enable(abi.encode(IYieldRepo.EnableParams({
-            initialReserveBalance: initialReserves,
-            initialConversionRate: initialConversionRate,
-            initialYield: initialYield
-        })));
+        yieldRepo.enable(
+            abi.encode(
+                IYieldRepo.EnableParams({
+                    initialReserveBalance: initialReserves,
+                    initialConversionRate: initialConversionRate,
+                    initialYield: initialYield
+                })
+            )
+        );
     }
 
     function _mintYield() internal {
@@ -570,9 +574,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Try to call adjustNextYield with an invalid caller
         // Expect it to fail
-        vm.expectRevert(
-            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"))
-        );
+        vm.expectRevert(abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin")));
         vm.prank(alice);
         yieldRepo.adjustNextYield(nextYield);
 
@@ -614,9 +616,7 @@ contract YieldRepurchaseFacilityTest is Test {
     function test_shutdown() public {
         // Try to call shutdown as an invalid caller
         // Expect it to fail
-        vm.expectRevert(
-            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"))
-        );
+        vm.expectRevert(abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin")));
         vm.prank(alice);
         yieldRepo.disable(abi.encode(new address[](0)));
 
@@ -642,9 +642,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Call shutdown with an invalid caller
         // Expect it to fail
-        vm.expectRevert(
-            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"))
-        );
+        vm.expectRevert(abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin")));
         vm.prank(bob);
         yieldRepo.disable(abi.encode(tokens));
 
