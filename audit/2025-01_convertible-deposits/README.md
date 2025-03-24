@@ -25,9 +25,14 @@ The `EmissionManager` is responsible for periodically tuning these auction param
 
 There are a few additional behaviours:
 
-- As tick capacity is depleted, the auctioneer will increase the price of the subsequent tick.
+- As tick capacity is depleted, the auctioneer will increase the price of the subsequent tick by the configured tick step percentage.
+- Auction capacity (up to the target) is added proportionally throughout each day period.
+- In the absence of any bids, the active tick price will decay over time.
+    - Remaining capacity is adjusted by the tick size and the price reduced by the configured tick step until within the tick size.
+    - A floor of the configured minimum price also applies.
 - With each multiple of the day target being reached, the auctioneer will progressively halve the size of each tick.
-- The active tick price will decay over time, in the absence of any bids.
+- At the end of each period, when `setAuctionParameters()` is called, the day's auction results will be stored on a rolling basis for the configured auction tracking period.
+    - If there is an under-selling of OHM capacity at the end of the tracking period, EmissionManager will create a bond market for the remaining OHM capacity. This ensures that the emission target per period is reached.
 
 ### Convertible Deposit Design
 
@@ -76,6 +81,7 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
         - [CDFacility.sol](../../src/policies/CDFacility.sol)
         - [EmissionManager.sol](../../src/policies/EmissionManager.sol)
         - [Heart.sol](../../src/policies/Heart.sol)
+        - [YieldRepurchaseFacility.sol](../../src/policies/YieldRepurchaseFacility.sol)
 
 The following pull requests can be referred to for the in-scope contracts:
 
@@ -323,10 +329,16 @@ This release contains an updated EmissionManager policy with the following chang
 
 CDAuctioneer is a policy that runs the aforementioned infinite duration and infinite capacity auction of deposits in exchange for future conversion to OHM.
 
-There are two main functions in this policy:
+There are two main state-changing functions in this policy:
 
 - `setAuctionParameters()` is gated to a role held by the EmissionManager, which enables it to periodically tune the auction parameters
 - `bid()` is ungated and enables the caller to bid in the auction. The function determines the amount of OHM that is convertible for the given deposit amount, and uses CDFacility to issue the CD tokens and position.
+
+Other relevant functions are:
+
+- `getCurrentTick()` gets the details of the current tick, accounting for capacity added since the last successful bid.
+- `previewBid()` indicates the amount of OHM that a given deposit could be converted to, given current tick capacity and pricing.
+    - This function implements the logic of moving up ticks and prices until the bid amount is fulfilled, and adjusting the tick size after reaching multiples of the period target.
 
 Each CDAuctioneer is deployed with a single, immutable bid token. The CDEPO module must have a CD token created for that bid token at the time of activating the policy.
 
@@ -353,6 +365,14 @@ CD token holders can perform the following actions:
 - `convert()`: convert their deposit position into OHM before conversion expiry.
 - `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a CDPOS position ID.
 - `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
+
+### YieldRepurchaseFacility (Policy)
+
+The YieldRepurchaseFacility tracks yield earned from different protocol features and uses that yield to buy back and burn OHM.
+
+The changes to this policy are:
+
+- Includes the vault token balance in CDEPO in yield calculations
 
 ### CDEPO (Module)
 

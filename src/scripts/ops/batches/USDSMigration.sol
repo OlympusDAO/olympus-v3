@@ -4,20 +4,20 @@ pragma solidity 0.8.15;
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
-import "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
 // Bophades policies
-import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {Operator} from "policies/Operator.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 import {BondCallback} from "policies/BondCallback.sol";
-
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
+import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 
 /// @notice
 /// @dev Deactivates old heart, operator, yield repo, and clearinghouse contracts.
 ///      Installs new versions that references USDS instead of DAI. Also, adds the ReserveMigrator contract.
+// solhint-disable max-states-count
 contract USDSMigration is OlyBatch {
     // 1. Deactivate existing contracts that are being replaced locally (i.e. on the contract itself) - DAO MS
     //    + Clearinghouse v2
@@ -51,24 +51,24 @@ contract USDSMigration is OlyBatch {
     //    + Initialize YieldRepurchaseFacility v1.1
 
     // Initial YRF values
-    uint256 initialReserveBalance = 63056043132270355364383714;
-    uint256 initialConversionRate = 1011853995861235596;
-    uint256 initialYield = 121674750000000000000000;
+    uint256 public initialReserveBalance = 63056043132270355364383714;
+    uint256 public initialConversionRate = 1011853995861235596;
+    uint256 public initialYield = 121674750000000000000000;
 
-    address kernel;
-    address oldHeart;
-    address oldOperator;
-    address oldYieldRepo;
-    address oldClearinghouse;
-    address newHeart;
-    address newOperator;
-    address newYieldRepo;
-    address newClearinghouse;
-    address reserveMigrator;
-    address emissionManager;
-    address bondCallback;
-    address usds;
-    address susds;
+    address public kernel;
+    address public oldHeart;
+    address public oldOperator;
+    address public oldYieldRepo;
+    address public oldClearinghouse;
+    address public newHeart;
+    address public newOperator;
+    address public newYieldRepo;
+    address public newClearinghouse;
+    address public reserveMigrator;
+    address public emissionManager;
+    address public bondCallback;
+    address public usds;
+    address public susds;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
@@ -96,12 +96,12 @@ contract USDSMigration is OlyBatch {
         // 1b. Deactivate Operator
         addToBatch(oldOperator, abi.encodeWithSelector(Operator.deactivate.selector));
         // 1c. Shutdown YieldRepurchaseFacility
-        ERC20[] memory tokensToTransfer = new ERC20[](2);
-        tokensToTransfer[0] = ERC20(envAddress("current", "external.tokens.DAI"));
-        tokensToTransfer[1] = ERC20(envAddress("current", "external.tokens.sDAI"));
+        address[] memory tokensToTransfer = new address[](2);
+        tokensToTransfer[0] = envAddress("current", "external.tokens.DAI");
+        tokensToTransfer[1] = envAddress("current", "external.tokens.sDAI");
         addToBatch(
             oldYieldRepo,
-            abi.encodeWithSelector(YieldRepurchaseFacility.shutdown.selector, tokensToTransfer)
+            abi.encodeWithSelector(PolicyEnabler.disable.selector, abi.encode(tokensToTransfer))
         );
         // 1d. Shutdown the old Clearinghouse
         addToBatch(
@@ -201,10 +201,14 @@ contract USDSMigration is OlyBatch {
         addToBatch(
             newYieldRepo,
             abi.encodeWithSelector(
-                YieldRepurchaseFacility.initialize.selector,
-                initialReserveBalance,
-                initialConversionRate,
-                initialYield
+                PolicyEnabler.enable.selector,
+                abi.encode(
+                    IYieldRepo.EnableParams({
+                        initialReserveBalance: initialReserveBalance,
+                        initialConversionRate: initialConversionRate,
+                        initialYield: initialYield
+                    })
+                )
             )
         );
 
