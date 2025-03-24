@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
@@ -13,6 +13,8 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
     // when the length of the positionIds_ array does not match the length of the amounts_ array
     //  [X] it reverts
     // when the account_ is not the owner of all of the positions
+    //  [X] it reverts
+    // when any position has a different CD token
     //  [X] it reverts
     // when any position is not valid
     //  [X] it reverts
@@ -335,7 +337,41 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
+
+        // Call function
+        facility.previewRedeem(recipient, positionIds_, amounts_);
+    }
+
+    function test_anyPositionHasDifferentCDToken_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 1; // cdTokenTwo
+
+        amounts_[0] = 3e18;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT;
+
+        // Warp to the normal expiry
+        vm.warp(CONVERSION_EXPIRY);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "multiple CD tokens"
+            )
+        );
 
         // Call function
         facility.previewRedeem(recipient, positionIds_, amounts_);

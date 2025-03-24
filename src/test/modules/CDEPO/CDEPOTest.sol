@@ -5,9 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions, Module} from "src/Kernel.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 abstract contract CDEPOTest is Test {
     using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
@@ -15,6 +18,7 @@ abstract contract CDEPOTest is Test {
     Kernel public kernel;
     OlympusConvertibleDepository public CDEPO;
     MockERC20 public reserveToken;
+    MockERC20 public reserveTokenTwo;
     MockERC4626 public vault;
     address public godmode;
     address public recipient = address(0x1);
@@ -24,17 +28,36 @@ abstract contract CDEPOTest is Test {
 
     uint48 public constant INITIAL_BLOCK = 100000000;
 
+    IERC20 public iReserveToken;
+    IERC4626 public iReserveTokenVault;
+    IERC20 public iReserveTokenTwo;
+    IERC4626 public iReserveTokenTwoVault;
+
+    IConvertibleDepositERC20 public cdToken;
+
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
 
         reserveToken = new MockERC20("Reserve Token", "RST", 18);
+        iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
+        iReserveTokenVault = IERC4626(address(vault));
+        vm.label(address(iReserveToken), "RST");
+        vm.label(address(vault), "sRST");
+
+        reserveTokenTwo = new MockERC20("USDS", "USDS", 18);
+        iReserveTokenTwo = IERC20(address(reserveTokenTwo));
+        iReserveTokenTwoVault = IERC4626(
+            address(new MockERC4626(reserveTokenTwo, "Savings USDS", "sUSDS"))
+        );
+        vm.label(address(iReserveTokenTwo), "USDS");
+        vm.label(address(iReserveTokenTwoVault), "sUSDS");
 
         // Mint reserve tokens to the vault without depositing, so that the conversion is not 1
         reserveToken.mint(address(vault), INITIAL_VAULT_BALANCE);
 
         kernel = new Kernel();
-        CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault), reclaimRate);
+        CDEPO = new OlympusConvertibleDepository(kernel);
 
         // Generate fixtures
         godmode = CDEPO.generateGodmodeFixture(type(OlympusConvertibleDepository).name);
@@ -42,9 +65,18 @@ abstract contract CDEPOTest is Test {
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(CDEPO));
         kernel.executeAction(Actions.ActivatePolicy, godmode);
+
+        // Create a CD token
+        vm.prank(godmode);
+        cdToken = CDEPO.create(IERC4626(address(vault)), reclaimRate);
+        vm.label(address(cdToken), "cdToken");
     }
 
     // ========== ASSERTIONS ========== //
+
+    function _getTotalShares() internal view returns (uint256) {
+        return CDEPO.getVaultShares(iReserveToken);
+    }
 
     function _assertReserveTokenBalance(
         uint256 recipientAmount_,
@@ -63,17 +95,21 @@ abstract contract CDEPOTest is Test {
 
         assertEq(
             reserveToken.totalSupply(),
-            reserveToken.balanceOf(address(CDEPO.VAULT())) + recipientAmount_ + recipientTwoAmount_,
+            reserveToken.balanceOf(address(vault)) + recipientAmount_ + recipientTwoAmount_,
             "reserve token balance: total supply"
         );
     }
 
     function _assertCDEPOBalance(uint256 recipientAmount_, uint256 recipientTwoAmount_) internal {
-        assertEq(CDEPO.balanceOf(recipient), recipientAmount_, "recipient: CDEPO balance");
-        assertEq(CDEPO.balanceOf(recipientTwo), recipientTwoAmount_, "recipientTwo: CDEPO balance");
+        assertEq(cdToken.balanceOf(recipient), recipientAmount_, "recipient: CDEPO balance");
+        assertEq(
+            cdToken.balanceOf(recipientTwo),
+            recipientTwoAmount_,
+            "recipientTwo: CDEPO balance"
+        );
 
         assertEq(
-            CDEPO.totalSupply(),
+            cdToken.totalSupply(),
             recipientAmount_ + recipientTwoAmount_,
             "CDEPO balance: total supply"
         );
@@ -102,7 +138,7 @@ abstract contract CDEPOTest is Test {
         // Convert to shares
         uint256 expectedShares = vault.previewWithdraw(vaultLockedReserveTokens);
 
-        assertEq(CDEPO.totalShares(), expectedShares, "total shares");
+        assertEq(CDEPO.getVaultShares(iReserveToken), expectedShares, "total shares");
     }
 
     // ========== MODIFIERS ========== //
@@ -158,7 +194,7 @@ abstract contract CDEPOTest is Test {
         uint256 amount_
     ) internal {
         vm.prank(owner_);
-        CDEPO.approve(spender_, amount_);
+        cdToken.approve(spender_, amount_);
     }
 
     modifier givenConvertibleDepositTokenSpendingIsApproved(
@@ -172,27 +208,27 @@ abstract contract CDEPOTest is Test {
 
     function _mint(uint256 amount_) internal {
         vm.prank(recipient);
-        CDEPO.mint(amount_);
+        CDEPO.mint(cdToken, amount_);
     }
 
     function _mintFor(address owner_, address to_, uint256 amount_) internal {
         vm.prank(owner_);
-        CDEPO.mintFor(to_, amount_);
+        CDEPO.mintFor(cdToken, to_, amount_);
     }
 
-    modifier givenRecipientHasCDEPO(uint256 amount_) {
+    modifier givenRecipientHasCDToken(uint256 amount_) {
         _mint(amount_);
         _;
     }
 
-    modifier givenAddressHasCDEPO(address to_, uint256 amount_) {
+    modifier givenAddressHasCDToken(address to_, uint256 amount_) {
         _mintFor(to_, to_, amount_);
         _;
     }
 
     modifier givenReclaimRateIsSet(uint16 reclaimRate_) {
         vm.prank(godmode);
-        CDEPO.setReclaimRate(reclaimRate_);
+        CDEPO.setReclaimRate(cdToken, reclaimRate_);
 
         reclaimRate = reclaimRate_;
         _;
@@ -204,7 +240,7 @@ abstract contract CDEPOTest is Test {
 
     modifier givenAddressHasBorrowed(uint256 amount_) {
         vm.prank(address(godmode));
-        CDEPO.incurDebt(amount_);
+        CDEPO.incurDebt(iReserveTokenVault, amount_);
         _;
     }
 }

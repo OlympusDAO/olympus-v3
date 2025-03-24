@@ -59,7 +59,7 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         vm.prank(address(this));
-        CDPOS.create(
+        CDPOS.mint(
             address(this),
             convertibleDepositToken,
             REMAINING_DEPOSIT,
@@ -96,7 +96,7 @@ contract CreateCDPOSTest is CDPOSTest {
 
         // Call function
         vm.prank(godmode);
-        CDPOS.create(
+        CDPOS.mint(
             address(this),
             address(0),
             REMAINING_DEPOSIT,

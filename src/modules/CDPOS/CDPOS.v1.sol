@@ -138,7 +138,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  redemptionExpiry_           The timestamp when the position can no longer be redeemed
     /// @param  wrap_                       Whether the position should be wrapped
     /// @return positionId                  The ID of the new position
-    function create(
+    function mint(
         address owner_,
         address convertibleDepositToken_,
         uint256 remainingDeposit_,

@@ -4,11 +4,16 @@ pragma solidity 0.8.15;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 contract RedeemCDFTest is ConvertibleDepositFacilityTest {
-    event RedeemedDeposit(address indexed user, uint256 redeemedAmount);
+    event RedeemedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 redeemedAmount
+    );
 
     // given the contract is inactive
     //  [X] it reverts
@@ -17,6 +22,8 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
     // when any position is not valid
     //  [X] it reverts
     // when any position has an owner that is not the caller
+    //  [X] it reverts
+    // when any position has a different CD token
     //  [X] it reverts
     // when any position has not reached the conversion expiry
     //  [X] it reverts
@@ -349,7 +356,9 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         vm.prank(recipient);
@@ -377,7 +386,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         vm.warp(CONVERSION_EXPIRY);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "allowance"));
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
@@ -414,7 +423,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit RedeemedDeposit(recipient, RESERVE_TOKEN_AMOUNT);
+        emit RedeemedDeposit(address(reserveToken), recipient, RESERVE_TOKEN_AMOUNT);
 
         // Call function
         vm.prank(recipient);
@@ -424,21 +433,13 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         assertEq(redeemed, RESERVE_TOKEN_AMOUNT, "redeemed");
 
         // Assert convertible deposit tokens are transferred from the recipient
-        assertEq(
-            convertibleDepository.balanceOf(recipient),
-            0,
-            "convertibleDepository.balanceOf(recipient)"
-        );
+        assertEq(cdToken.balanceOf(recipient), 0, "cdToken.balanceOf(recipient)");
 
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
         // No dangling mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            0,
-            "minter.mintApproval(address(facility))"
-        );
+        _assertMintApproval(0);
 
         // Assertion that the remaining deposit of each position is updated
         assertEq(
@@ -475,6 +476,39 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
     }
 
+    function test_anyPositionHasDifferentCDToken_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 1; // cdTokenTwo
+
+        amounts_[0] = 3e18;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT;
+
+        // Warp to the normal expiry
+        vm.warp(CONVERSION_EXPIRY);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "multiple CD tokens"
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        facility.redeem(positionIds_, amounts_);
+    }
+
     function test_success_fuzz(
         uint256 amountOne_,
         uint256 amountTwo_
@@ -507,12 +541,6 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         positionIds_[1] = 1;
         amounts_[1] = amountTwo;
 
-        uint256 originalMintApproval = minter.mintApproval(address(facility));
-        uint256 expectedConvertedAmount = (amountOne * 1e18) /
-            CONVERSION_PRICE +
-            (amountTwo * 1e18) /
-            CONVERSION_PRICE;
-
         // Warp to the normal expiry
         vm.warp(CONVERSION_EXPIRY);
 
@@ -525,20 +553,16 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
 
         // Assert convertible deposit tokens are transferred from the recipient
         assertEq(
-            convertibleDepository.balanceOf(recipient),
+            cdToken.balanceOf(recipient),
             RESERVE_TOKEN_AMOUNT - amountOne - amountTwo,
-            "convertibleDepository.balanceOf(recipient)"
+            "cdToken.balanceOf(recipient)"
         );
 
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
-        // Assert the remaining mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            originalMintApproval - expectedConvertedAmount,
-            "mintApproval"
-        );
+        // No dangling mint approval
+        _assertMintApproval(0);
 
         // Assertion that the remaining deposit of each position is updated
         assertEq(

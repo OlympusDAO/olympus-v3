@@ -143,7 +143,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepYield.selector);
+        permissions[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepAllYield.selector);
     }
 
     /// @notice Returns the version of the policy.
@@ -183,7 +183,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         emissionManager.execute();
 
         // Sweep yield from CDEPO into TRSRY
-        CDEPO.sweepYield(address(TRSRY));
+        CDEPO.sweepAllYield(address(TRSRY));
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();

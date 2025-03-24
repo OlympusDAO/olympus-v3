@@ -28,7 +28,7 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
     function test_notFromFactory_reverts() public {
         CoolerFactory maliciousFactory = new CoolerFactory();
         vm.prank(USER);
-        ICooler maliciousCooler = ICooler(maliciousFactory.generateCooler(CDEPO, vault));
+        ICooler maliciousCooler = ICooler(maliciousFactory.generateCooler(cdToken, vault));
 
         // Expect revert
         vm.expectRevert(CoolerCallback.OnlyFromFactory.selector);
@@ -52,7 +52,7 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
 
     function test_debtNotVault_reverts() public {
         // Create a Cooler with a different debt token
-        ICooler cooler = ICooler(coolerFactory.generateCooler(CDEPO, asset));
+        ICooler cooler = ICooler(coolerFactory.generateCooler(cdToken, asset));
 
         // Expect revert
         vm.expectRevert(IGenericClearinghouse.BadEscrow.selector);
@@ -98,7 +98,7 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
         givenUserHasCollateral(4e18)
     {
         uint256 expectedCollateralUsed = clearinghouse.getCollateralForLoan(1e18);
-        uint256 expectedCollateralBalance = CDEPO.balanceOf(USER) - expectedCollateralUsed;
+        uint256 expectedCollateralBalance = cdToken.balanceOf(USER) - expectedCollateralUsed;
 
         (uint256 principal, uint256 interest) = clearinghouse.getLoanForCollateral(
             expectedCollateralUsed
@@ -109,15 +109,15 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
         clearinghouse.lendToCooler(cooler, 1e18);
 
         // Token balances
-        assertEq(CDEPO.balanceOf(USER), expectedCollateralBalance, "USER collateral");
-        assertEq(CDEPO.balanceOf(address(cooler)), expectedCollateralUsed, "cooler collateral");
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
+        assertEq(cdToken.balanceOf(USER), expectedCollateralBalance, "USER collateral");
+        assertEq(cdToken.balanceOf(address(cooler)), expectedCollateralUsed, "cooler collateral");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
         assertEq(vault.balanceOf(USER), 1e18, "USER vault");
         assertEq(vault.balanceOf(address(cooler)), 0, "cooler vault");
         assertEq(vault.balanceOf(address(clearinghouse)), 0, "clearinghouse vault");
 
         // Debt on CDEPO
-        assertEq(CDEPO.debt(address(clearinghouse)), 1e18, "debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 1e18, "debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), interest, "interest receivables");

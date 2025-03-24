@@ -3,7 +3,11 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+
 contract PreviewSweepYieldCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when there are no deposits
     //  when the vault has assets
     //   [X] it returns zero
@@ -13,8 +17,18 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
     //   [X] the forfeited amount is included in the yield
     //  [X] it returns the difference between the total deposits and the total assets in the vault
 
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
+
+        // Call function
+        CDEPO.previewSweepYield(iReserveTokenTwo);
+    }
+
     function test_noDeposits() public {
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
 
         // Assert values
         assertEq(yieldReserve, 0, "yieldReserve");
@@ -26,7 +40,7 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         reserveToken.mint(address(vault), 10e18);
 
         // Call function
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
 
         // Assert values
         assertEq(yieldReserve, 0, "yieldReserve");
@@ -43,7 +57,7 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         vault.deposit(10e18, address(recipient));
 
         // Call function
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
 
         // Assert values
         assertEq(yieldReserve, 0, "yieldReserve");
@@ -54,10 +68,11 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Call function
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
 
         // Assert values
         assertEq(yieldReserve, INITIAL_VAULT_BALANCE, "yieldReserve");
@@ -68,18 +83,19 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Recipient has reclaimed all of their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield
         vm.prank(recipient);
-        CDEPO.reclaim(10e18);
+        CDEPO.reclaim(cdToken, 10e18);
 
-        uint256 reclaimedAmount = CDEPO.previewReclaim(10e18);
+        uint256 reclaimedAmount = CDEPO.previewReclaim(cdToken, 10e18);
         uint256 forfeitedAmount = 10e18 - reclaimedAmount;
 
         // Call function
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
 
         // Assert values
         assertEq(yieldReserve, INITIAL_VAULT_BALANCE + forfeitedAmount, "yieldReserve");
@@ -96,7 +112,8 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Start from 2 as it will revert due to 0 shares if amount is 1
         uint256 amount = bound(amount_, 2, 10e18);
@@ -104,13 +121,13 @@ contract PreviewSweepYieldCDEPOTest is CDEPOTest {
         // Recipient has reclaimed their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield
         vm.prank(recipient);
-        CDEPO.reclaim(amount);
+        CDEPO.reclaim(cdToken, amount);
 
-        uint256 reclaimedAmount = CDEPO.previewReclaim(amount);
+        uint256 reclaimedAmount = CDEPO.previewReclaim(cdToken, amount);
         uint256 forfeitedAmount = amount - reclaimedAmount;
 
         // Call function
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield();
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.previewSweepYield(iReserveToken);
 
         // Assert values
         assertEq(yieldReserve, INITIAL_VAULT_BALANCE + forfeitedAmount, "yieldReserve");

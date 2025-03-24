@@ -23,7 +23,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert that the CD tokens were transferred to the recipient
         assertEq(
-            convertibleDepository.balanceOf(recipient),
+            cdToken.balanceOf(recipient),
             previousConvertibleDepositBalance_ + bidAmount_,
             "CD token balance"
         );
@@ -60,6 +60,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             "position redemption expiry"
         );
         assertEq(position.wrapped, false, "position wrapped");
+        assertEq(position.convertibleDepositToken, address(cdToken), "position cd token");
     }
 
     // when the contract is disabled

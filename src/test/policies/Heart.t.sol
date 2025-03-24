@@ -97,7 +97,7 @@ contract HeartTest is Test {
             PRICE = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             ROLES = new OlympusRoles(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            CDEPO = new OlympusConvertibleDepository(address(kernel), address(vault), 90e2);
+            CDEPO = new OlympusConvertibleDepository(kernel);
             TRSRY = new OlympusTreasury(kernel);
 
             // Configure mocks
@@ -217,7 +217,7 @@ contract HeartTest is Test {
         expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
         expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
-        expectedPerms[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepYield.selector);
+        expectedPerms[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepAllYield.selector);
 
         Permissions[] memory perms = heart.requestPermissions();
         // Check: permission storage

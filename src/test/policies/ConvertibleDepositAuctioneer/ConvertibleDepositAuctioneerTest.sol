@@ -5,6 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
 import {CDAuctioneer} from "src/policies/CDAuctioneer.sol";
@@ -33,6 +36,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     MockERC20 public ohm;
     MockERC20 public reserveToken;
     MockERC4626 public vault;
+    IConvertibleDepositERC20 public cdToken;
 
     address public recipient = address(0x1);
     address public emissionManager = address(0x3);
@@ -69,6 +73,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        vm.label(address(reserveToken), "RES");
+        vm.label(address(vault), "sRES");
 
         _createStack();
     }
@@ -81,14 +87,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(
-            address(kernel),
-            address(vault),
-            RECLAIM_RATE
-        );
+        convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
         facility = new CDFacility(address(kernel));
-        auctioneer = new CDAuctioneer(address(kernel), address(facility));
+        auctioneer = new CDAuctioneer(address(kernel), address(facility), address(reserveToken));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -98,7 +100,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
-        kernel.executeAction(Actions.ActivatePolicy, address(auctioneer));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
@@ -107,9 +108,18 @@ contract ConvertibleDepositAuctioneerTest is Test {
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
 
-        // Activate policy dependencies
+        // Enable the facility
         vm.prank(admin);
         facility.enable("");
+
+        // Create a CD token
+        // Required at the time of activation of the auctioneer policy
+        vm.startPrank(admin);
+        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        vm.stopPrank();
+
+        // Activate the auctioneer policy
+        kernel.executeAction(Actions.ActivatePolicy, address(auctioneer));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {
@@ -286,7 +296,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        convertibleDepository.approve(spender_, amount_);
+        cdToken.approve(spender_, amount_);
         _;
     }
 

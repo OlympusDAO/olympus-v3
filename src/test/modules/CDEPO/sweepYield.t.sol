@@ -3,13 +3,19 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
-import {Module} from "src/Kernel.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 contract SweepYieldCDEPOTest is CDEPOTest {
-    event YieldSwept(address indexed receiver, uint256 reserveAmount, uint256 sReserveAmount);
+    event YieldSwept(
+        address indexed inputToken,
+        address indexed receiver,
+        uint256 reserveAmount,
+        uint256 sReserveAmount
+    );
 
     // when the caller is not permissioned
+    //  [X] it reverts
+    // when the input token is not supported
     //  [X] it reverts
     // when the recipient_ address is the zero address
     //  [X] it reverts
@@ -32,22 +38,35 @@ contract SweepYieldCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.sweepYield(recipient);
+        CDEPO.sweepYield(iReserveToken, recipient);
+    }
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
+
+        // Call function
+        vm.prank(godmode);
+        CDEPO.sweepYield(iReserveTokenTwo, recipient);
     }
 
     function test_recipientZeroAddress_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "recipient"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "recipient")
+        );
 
         // Call function
         vm.prank(godmode);
-        CDEPO.sweepYield(address(0));
+        CDEPO.sweepYield(iReserveToken, address(0));
     }
 
     function test_noDeposits() public {
         // Call function
         vm.prank(godmode);
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.sweepYield(recipient);
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.sweepYield(iReserveToken, recipient);
 
         // Assert values
         assertEq(yieldReserve, 0, "yieldReserve");
@@ -58,7 +77,7 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
     {
         address yieldRecipient = address(0xB);
 
@@ -67,11 +86,19 @@ contract SweepYieldCDEPOTest is CDEPOTest {
 
         // Emit event
         vm.expectEmit(true, true, true, true);
-        emit YieldSwept(yieldRecipient, INITIAL_VAULT_BALANCE, expectedSReserveYield);
+        emit YieldSwept(
+            address(iReserveToken),
+            yieldRecipient,
+            INITIAL_VAULT_BALANCE,
+            expectedSReserveYield
+        );
 
         // Call function
         vm.prank(godmode);
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.sweepYield(yieldRecipient);
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.sweepYield(
+            iReserveToken,
+            yieldRecipient
+        );
 
         // Assert values
         assertEq(yieldReserve, INITIAL_VAULT_BALANCE, "yieldReserve");
@@ -108,7 +135,7 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
     {
         address yieldRecipient = address(0xB);
 
@@ -117,11 +144,14 @@ contract SweepYieldCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.sweepYield(yieldRecipient);
+        CDEPO.sweepYield(iReserveToken, yieldRecipient);
 
         // Call function again
         vm.prank(godmode);
-        (uint256 yieldReserve2, uint256 yieldSReserve2) = CDEPO.sweepYield(yieldRecipient);
+        (uint256 yieldReserve2, uint256 yieldSReserve2) = CDEPO.sweepYield(
+            iReserveToken,
+            yieldRecipient
+        );
 
         // Assert values
         assertEq(yieldReserve2, 0, "yieldReserve2");
@@ -158,14 +188,15 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Recipient has reclaimed all of their deposit, leaving behind a forfeited amount
         // The forfeited amount is included in the yield
         vm.prank(recipient);
-        CDEPO.reclaim(10e18);
+        CDEPO.reclaim(cdToken, 10e18);
 
-        uint256 reclaimedAmount = CDEPO.previewReclaim(10e18);
+        uint256 reclaimedAmount = CDEPO.previewReclaim(cdToken, 10e18);
         uint256 forfeitedAmount = 10e18 - reclaimedAmount;
 
         address yieldRecipient = address(0xB);
@@ -178,6 +209,7 @@ contract SweepYieldCDEPOTest is CDEPOTest {
         // Emit event
         vm.expectEmit(true, true, true, true);
         emit YieldSwept(
+            address(iReserveToken),
             yieldRecipient,
             INITIAL_VAULT_BALANCE + forfeitedAmount,
             expectedSReserveYield
@@ -185,7 +217,10 @@ contract SweepYieldCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.sweepYield(yieldRecipient);
+        (uint256 yieldReserve, uint256 yieldSReserve) = CDEPO.sweepYield(
+            iReserveToken,
+            yieldRecipient
+        );
 
         // Assert values
         assertEq(yieldReserve, INITIAL_VAULT_BALANCE + forfeitedAmount, "yieldReserve");

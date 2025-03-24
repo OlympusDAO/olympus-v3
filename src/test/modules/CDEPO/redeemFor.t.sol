@@ -4,10 +4,12 @@ pragma solidity 0.8.15;
 import {stdError} from "forge-std/Test.sol";
 import {CDEPOTest} from "./CDEPOTest.sol";
 
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
-import {Module} from "src/Kernel.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 contract RedeemForCDEPOTest is CDEPOTest {
+    // when the input token is not supported
+    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the shares for the amount is zero
@@ -23,34 +25,46 @@ contract RedeemForCDEPOTest is CDEPOTest {
     //  [X] it withdraws the underlying asset from the vault
     //  [X] it transfers the underlying asset to the caller and does not apply the reclaim rate
 
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
+
+        // Call function
+        CDEPO.redeemFor(IConvertibleDepositERC20(address(iReserveToken)), recipient, 10e18);
+    }
+
     function test_amountIsZero_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(recipient, 0);
+        CDEPO.redeemFor(cdToken, recipient, 0);
     }
 
     function test_spendingNotApproved_reverts()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "allowance"));
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(recipient, 10e18);
+        CDEPO.redeemFor(cdToken, recipient, 10e18);
     }
 
     function test_insufficientBalance_reverts()
         public
         givenAddressHasReserveToken(recipient, 5e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 5e18)
-        givenAddressHasCDEPO(recipient, 5e18)
+        givenAddressHasCDToken(recipient, 5e18)
         givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         // Expect revert
@@ -58,7 +72,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(recipient, 10e18);
+        CDEPO.redeemFor(cdToken, recipient, 10e18);
     }
 
     function test_callerIsNotPermissioned_reverts() public {
@@ -67,7 +81,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(recipient);
-        CDEPO.redeemFor(recipient, 10e18);
+        CDEPO.redeemFor(cdToken, recipient, 10e18);
     }
 
     function test_success(
@@ -76,7 +90,7 @@ contract RedeemForCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
         givenConvertibleDepositTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
     {
         uint256 amount = bound(amount_, 1, 10e18);
@@ -86,12 +100,12 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(recipient, amount);
+        CDEPO.redeemFor(cdToken, recipient, amount);
 
         // Assert CD token balance
-        assertEq(CDEPO.balanceOf(recipient), 10e18 - amount, "CDEPO.balanceOf(recipient)");
-        assertEq(CDEPO.balanceOf(godmode), 0, "CDEPO.balanceOf(godmode)");
-        assertEq(CDEPO.totalSupply(), 10e18 - amount, "CDEPO.totalSupply()");
+        assertEq(cdToken.balanceOf(recipient), 10e18 - amount, "cdToken.balanceOf(recipient)");
+        assertEq(cdToken.balanceOf(godmode), 0, "cdToken.balanceOf(godmode)");
+        assertEq(cdToken.totalSupply(), 10e18 - amount, "cdToken.totalSupply()");
 
         // Assert reserve token balance
         // No reclaim rate is applied
@@ -125,7 +139,8 @@ contract RedeemForCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(godmode, 10e18)
         givenReserveTokenSpendingIsApproved(godmode, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(godmode, 10e18)
+        givenAddressHasCDToken(godmode, 10e18)
+        givenConvertibleDepositTokenSpendingIsApproved(godmode, address(CDEPO), 10e18)
     {
         uint256 amount = 5e18;
 
@@ -134,12 +149,12 @@ contract RedeemForCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(godmode);
-        CDEPO.redeemFor(godmode, amount);
+        CDEPO.redeemFor(cdToken, godmode, amount);
 
         // Assert CD token balance
-        assertEq(CDEPO.balanceOf(recipient), 0, "CDEPO.balanceOf(recipient)");
-        assertEq(CDEPO.balanceOf(godmode), 10e18 - amount, "CDEPO.balanceOf(godmode)");
-        assertEq(CDEPO.totalSupply(), 10e18 - amount, "CDEPO.totalSupply()");
+        assertEq(cdToken.balanceOf(recipient), 0, "cdToken.balanceOf(recipient)");
+        assertEq(cdToken.balanceOf(godmode), 10e18 - amount, "cdToken.balanceOf(godmode)");
+        assertEq(cdToken.totalSupply(), 10e18 - amount, "cdToken.totalSupply()");
 
         // Assert reserve token balance
         // No reclaim rate is applied

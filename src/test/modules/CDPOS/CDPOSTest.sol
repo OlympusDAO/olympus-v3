@@ -162,7 +162,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         bool wrap_
     ) internal {
         vm.prank(godmode);
-        CDPOS.create(
+        CDPOS.mint(
             owner_,
             convertibleDepositToken,
             remainingDeposit_,

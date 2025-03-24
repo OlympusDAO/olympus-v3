@@ -6,8 +6,10 @@ This document describes the roles that are used in the Olympus protocol.
 
 | Role | Policy | Actions |
 |------|----------|-------------|
-| admin | CDAuctioneer | Allows updating the parameters |
-| admin | CDFacility | Allows updating the reclaim rate |
+| admin | CDAuctioneer | Update parameters, activate the policy |
+| admin | CDClearinghouse | Activate the policy |
+| admin | CDFacility | Create CD tokens, update reclaim rate, activate the policy |
+| admin | EmissionManager | Set configuration parameters, activate the policy |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
@@ -18,14 +20,13 @@ This document describes the roles that are used in the Olympus protocol.
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
-| emergency | CDAuctioneer | Activate/deactivate the CDAuctioneer |
-| emergency | CDFacility | Activate/deactivate the CDFacility |
+| emergency | CDAuctioneer | Deactivate the policy |
+| emergency | CDClearinghouse | Deactivate the policy |
+| emergency | CDFacility | Deactivate the policy |
+| emergency | EmissionManager | Deactivate the EmissionManager |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
-| emergency_restart | EmissionManager | Reactivates the EmissionManager |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
-| emergency_shutdown | EmissionManager | Deactivates the EmissionManager |
-| emissions_admin | EmissionManager | Set configuration parameters |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |

@@ -1281,18 +1281,13 @@ contract OlympusDeploy is Script {
     function _deployConvertibleDepository(bytes calldata) public returns (address) {
         // No additional arguments for ConvertibleDepository
 
-        // Constructor arguments
-        uint16 reclaimRate = 90e2; // TODO finalise
-
         // Log dependencies
         console2.log("ConvertibleDepository parameters:");
         console2.log("   kernel", address(kernel));
-        console2.log("   vault", address(sReserve));
-        console2.log("   reclaimRate", reclaimRate);
 
         // Deploy ConvertibleDepository
         vm.broadcast();
-        CDEPO = new OlympusConvertibleDepository(address(kernel), address(sReserve), reclaimRate);
+        CDEPO = new OlympusConvertibleDepository(kernel);
         console2.log("ConvertibleDepository deployed at:", address(CDEPO));
 
         return address(CDEPO);
@@ -1320,10 +1315,11 @@ contract OlympusDeploy is Script {
         console2.log("ConvertibleDepositAuctioneer parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   cdFacility", address(cdFacility));
+        console2.log("   reserveToken", address(reserve));
 
         // Deploy ConvertibleDepositAuctioneer
         vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility));
+        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility), address(reserve));
         console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);

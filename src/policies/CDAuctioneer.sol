@@ -3,25 +3,27 @@ pragma solidity 0.8.15;
 
 // Libraries
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+
+// Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {CDFacility} from "./CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
-/// @notice Implementation of the IConvertibleDepositAuctioneer interface
+/// @notice Implementation of the {IConvertibleDepositAuctioneer} interface
 /// @dev    This contract implements an auction for convertible deposit tokens. It runs these auctions according to the following principles:
 ///         - Auctions are of infinite duration
 ///         - Auctions are of infinite capacity
-///         - Users place bids by supplying an amount of the quote token
-///         - The quote token is the deposit token from the CDEPO module
-///         - The payout token is the CDEPO token, which can be converted to OHM at the conversion price that was set at the time of the bid
+///         - Users place bids by supplying an amount of the configured bid token
+///         - The payout token is a CD token (managed by {CDEPO}), which can be converted to OHM at the price that was set at the time of the bid
 ///         - During periods of greater demand, the conversion price will increase
 ///         - During periods of lower demand, the conversion price will decrease
 ///         - The auction has a minimum price, below which the conversion price will not decrease
@@ -31,21 +33,35 @@ import {CDFacility} from "./CDFacility.sol";
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
 
-    // ========== STATE VARIABLES ========== //
+    // ========== CONSTANTS ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
-    bytes32 public constant ROLE_HEART = "cd_emissionmanager";
+    bytes32 public constant ROLE_EMISSION_MANAGER = "cd_emissionmanager";
 
-    /// @notice Address of the CDEPO module
-    CDEPOv1 public CDEPO;
+    /// @notice Scale of the OHM token
+    uint256 internal constant _ohmScale = 1e9;
+
+    uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
+
+    /// @notice The length of the enable parameters
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 224;
+
+    // ========== STATE VARIABLES ========== //
 
     /// @notice Address of the token that is being bid
-    /// @dev    This is populated by the `configureDependencies()` function
-    address public bidToken;
+    IERC20 public immutable BID_TOKEN;
 
-    /// @notice Scale of the bid token
-    /// @dev    This is populated by the `configureDependencies()` function
-    uint256 public bidTokenScale;
+    /// @notice Address of the Convertible Deposit Facility
+    CDFacility public immutable CD_FACILITY;
+
+    /// @notice Address of the CDEPO module
+    /// @dev    This is set in `configureDependencies()`
+    CDEPOv1 public CDEPO;
+
+    /// @notice Address of the CD token
+    /// @dev    This is set in `configureDependencies()`
+    ///         In effect, it is an immutable variable, but it cannot be declared immutable as it can only be set in `configureDependencies()`
+    IConvertibleDepositERC20 public convertibleDebtToken;
 
     /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -58,17 +74,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice Auction state for the day
     Day internal _dayState;
 
-    /// @notice Scale of the OHM token
-    uint256 internal constant _ohmScale = 1e9;
-
-    /// @notice Address of the Convertible Deposit Facility
-    CDFacility public cdFacility;
-
     /// @notice The tick step
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
-
-    uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     /// @notice The number of seconds between creation and expiry of convertible deposits
     /// @dev    See `getTimeToExpiry()` for more information
@@ -88,16 +96,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @dev    The length of this array is equal to the auction tracking period
     int256[] internal _auctionResults;
 
-    /// @notice The length of the enable parameters
-    uint256 internal constant _ENABLE_PARAMS_LENGTH = 224;
-
     // ========== SETUP ========== //
 
-    constructor(address kernel_, address cdFacility_) Policy(Kernel(kernel_)) {
-        if (cdFacility_ == address(0))
-            revert CDAuctioneer_InvalidParams("CD Facility address cannot be 0");
+    constructor(address kernel_, address cdFacility_, address bidToken_) Policy(Kernel(kernel_)) {
+        if (cdFacility_ == address(0)) revert CDAuctioneer_InvalidParams("cd facility");
+        if (bidToken_ == address(0)) revert CDAuctioneer_InvalidParams("bid token");
 
-        cdFacility = CDFacility(cdFacility_);
+        CD_FACILITY = CDFacility(cdFacility_);
+        BID_TOKEN = IERC20(bidToken_);
 
         // PolicyEnabler makes this disabled until enabled
     }
@@ -108,16 +114,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("CDEPO");
 
-        // Validate that CDEPO is not being changed
-        address newCDEPO = getModuleAddress(dependencies[1]);
-        if (address(CDEPO) != address(0) && address(CDEPO) != address(newCDEPO))
-            revert CDAuctioneer_InvalidParams("CDEPO");
-
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        CDEPO = CDEPOv1(newCDEPO);
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
-        bidToken = address(CDEPO.ASSET());
-        bidTokenScale = 10 ** ERC20(bidToken).decimals();
+        // Validate that the bid token is supported by the CDEPO module
+        convertibleDebtToken = CDEPO.getConvertibleDepositToken(address(BID_TOKEN));
+        if (address(convertibleDebtToken) == address(0))
+            revert CDAuctioneer_InvalidParams("bid token");
     }
 
     /// @inheritdoc Policy
@@ -183,7 +186,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
-        positionId = cdFacility.create(
+        positionId = CD_FACILITY.mint(
+            convertibleDebtToken,
             msg.sender,
             depositIn,
             conversionPrice,
@@ -479,7 +483,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - Stores the auction results for the period
     ///
     ///             This function reverts if:
-    ///             - The caller does not have the ROLE_HEART role
+    ///             - The caller does not have the ROLE_EMISSION_MANAGER role
     ///             - The new tick size is 0
     ///             - The new min price is 0
     ///             - The new target is 0
@@ -487,7 +491,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_
-    ) external override onlyRole(ROLE_HEART) {
+    ) external override onlyRole(ROLE_EMISSION_MANAGER) {
         uint256 previousTarget = _auctionParameters.target;
 
         _setAuctionParameters(target_, tickSize_, minPrice_);

@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 /// @title  IConvertibleDepositAuctioneer
-/// @notice Interface for a contract that runs auctions for convertible deposit tokens
+/// @notice Interface for a contract that runs auctions for a single deposit token to convert to a convertible deposit token
 interface IConvertibleDepositAuctioneer {
     // ========== EVENTS ========== //
 
@@ -115,18 +115,18 @@ interface IConvertibleDepositAuctioneer {
 
     // ========== AUCTION ========== //
 
-    /// @notice Deposit reserve tokens to bid for convertible deposit tokens
+    /// @notice Deposit bid tokens to bid for convertible deposit tokens
     ///
-    /// @param  deposit_        Amount of reserve tokens to deposit
+    /// @param  deposit_        Amount of bid tokens to deposit
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
     /// @return positionId      The ID of the position created by the CDPOS module to represent the convertible deposit terms
     function bid(uint256 deposit_) external returns (uint256 ohmOut, uint256 positionId);
 
     /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///
-    /// @param  bidAmount_      Amount of reserve tokens
+    /// @param  bidAmount_      Amount of bid tokens
     /// @return ohmOut          Amount of OHM tokens that the bid amount could be converted to
-    /// @return depositSpender  The address of the contract that would spend the reserve tokens
+    /// @return depositSpender  The address of the contract that would spend the bid tokens
     function previewBid(
         uint256 bidAmount_
     ) external view returns (uint256 ohmOut, address depositSpender);
@@ -175,11 +175,6 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @return redemptionPeriod The redemption period
     function getRedemptionPeriod() external view returns (uint48 redemptionPeriod);
-
-    /// @notice The token that is being bid
-    ///
-    /// @return token The token that is being bid
-    function bidToken() external view returns (address token);
 
     /// @notice Get the number of days that auction results are tracked for
     ///

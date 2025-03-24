@@ -48,7 +48,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
     function test_coolerNotFromFactory_reverts() public givenUserHasCollateral(4e18) {
         CoolerFactory maliciousFactory = new CoolerFactory();
         vm.prank(USER);
-        ICooler newCooler = ICooler(maliciousFactory.generateCooler(CDEPO, vault));
+        ICooler newCooler = ICooler(maliciousFactory.generateCooler(cdToken, vault));
 
         // Set up a new Clearinghouse
         CDClearinghouse newClearinghouse = new CDClearinghouse(
@@ -68,7 +68,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
 
         // Take a loan from the new Clearinghouse
         vm.startPrank(USER);
-        CDEPO.approve(address(newClearinghouse), 2e18);
+        cdToken.approve(address(newClearinghouse), 2e18);
         newClearinghouse.lendToCooler(newCooler, 1e18);
         vm.stopPrank();
 
@@ -109,7 +109,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
 
         // Take a loan from the new Clearinghouse
         vm.startPrank(USER);
-        CDEPO.approve(address(newClearinghouse), 2e18);
+        cdToken.approve(address(newClearinghouse), 2e18);
         newClearinghouse.lendToCooler(cooler, 1e18);
         vm.stopPrank();
 
@@ -152,8 +152,8 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         loans[0] = 0;
         loans[1] = 1;
 
-        uint256 cdepoTotalSupply = CDEPO.totalSupply();
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 cdepoTotalSupply = cdToken.totalSupply();
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
 
         uint256 keeperRewardZero = (loanZero.collateral * 5e16) / 1e18;
         uint256 keeperRewardOne = (loanOne.collateral * 5e16) / 1e18;
@@ -173,18 +173,18 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         assertEq(clearinghouse.principalReceivables(), 0, "principalReceivables");
 
         // Collateral
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
-        assertEq(CDEPO.balanceOf(address(cooler)), 0, "cooler collateral");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
+        assertEq(cdToken.balanceOf(address(cooler)), 0, "cooler collateral");
         assertEq(
-            CDEPO.balanceOf(address(this)),
+            cdToken.balanceOf(address(this)),
             keeperRewardZero + keeperRewardOne,
             "keeper collateral"
         );
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
 
         // CDEPO
         assertEq(
-            CDEPO.totalSupply(),
+            cdToken.totalSupply(),
             cdepoTotalSupply -
                 loanZero.collateral -
                 loanOne.collateral +
@@ -194,7 +194,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 
     function test_elapsedLessThan7Days(
@@ -222,8 +222,8 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         loans[0] = 0;
         loans[1] = 1;
 
-        uint256 cdepoTotalSupply = CDEPO.totalSupply();
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 cdepoTotalSupply = cdToken.totalSupply();
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
 
         uint256 keeperRewardZero = (((loanZero.collateral * 5e16) / 1e18) * (elapsed - expiry)) /
             7 days;
@@ -245,18 +245,18 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         assertEq(clearinghouse.principalReceivables(), 0, "principalReceivables");
 
         // Collateral
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
-        assertEq(CDEPO.balanceOf(address(cooler)), 0, "cooler collateral");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
+        assertEq(cdToken.balanceOf(address(cooler)), 0, "cooler collateral");
         assertEq(
-            CDEPO.balanceOf(address(this)),
+            cdToken.balanceOf(address(this)),
             keeperRewardZero + keeperRewardOne,
             "keeper collateral"
         );
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
 
         // CDEPO
         assertEq(
-            CDEPO.totalSupply(),
+            cdToken.totalSupply(),
             cdepoTotalSupply -
                 loanZero.collateral -
                 loanOne.collateral +
@@ -266,7 +266,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 
     function test_exceedsMaxReward()
@@ -297,8 +297,8 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         loans[0] = 0;
         loans[1] = 1;
 
-        uint256 cdepoTotalSupply = CDEPO.totalSupply();
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 cdepoTotalSupply = cdToken.totalSupply();
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
 
         uint256 keeperRewardZero = 1e17;
         uint256 keeperRewardOne = 1e17;
@@ -318,18 +318,18 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         assertEq(clearinghouse.principalReceivables(), 0, "principalReceivables");
 
         // Collateral
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
-        assertEq(CDEPO.balanceOf(address(cooler)), 0, "cooler collateral");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
+        assertEq(cdToken.balanceOf(address(cooler)), 0, "cooler collateral");
         assertEq(
-            CDEPO.balanceOf(address(this)),
+            cdToken.balanceOf(address(this)),
             keeperRewardZero + keeperRewardOne,
             "keeper collateral"
         );
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
 
         // CDEPO
         assertEq(
-            CDEPO.totalSupply(),
+            cdToken.totalSupply(),
             cdepoTotalSupply -
                 loanZero.collateral -
                 loanOne.collateral +
@@ -339,7 +339,7 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 
     function test_givenDisabled()
@@ -366,8 +366,8 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         loans[0] = 0;
         loans[1] = 1;
 
-        uint256 cdepoTotalSupply = CDEPO.totalSupply();
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 cdepoTotalSupply = cdToken.totalSupply();
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
 
         uint256 keeperRewardZero = ((loanZero.collateral * 5e16) / 1e18);
         uint256 keeperRewardOne = ((loanOne.collateral * 5e16) / 1e18);
@@ -387,18 +387,18 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         assertEq(clearinghouse.principalReceivables(), 0, "principalReceivables");
 
         // Collateral
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
-        assertEq(CDEPO.balanceOf(address(cooler)), 0, "cooler collateral");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral");
+        assertEq(cdToken.balanceOf(address(cooler)), 0, "cooler collateral");
         assertEq(
-            CDEPO.balanceOf(address(this)),
+            cdToken.balanceOf(address(this)),
             keeperRewardZero + keeperRewardOne,
             "keeper collateral"
         );
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral");
 
         // CDEPO
         assertEq(
-            CDEPO.totalSupply(),
+            cdToken.totalSupply(),
             cdepoTotalSupply -
                 loanZero.collateral -
                 loanOne.collateral +
@@ -408,6 +408,6 @@ contract ClaimDefaultedCDClearinghouseTest is ConvertibleDepositClearinghouseTes
         );
 
         // Debt
-        assertEq(CDEPO.debt(address(clearinghouse)), 0, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 0, "CDEPO debt");
     }
 }

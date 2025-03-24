@@ -8,7 +8,7 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 ## Design
 
-The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`CDEPO`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
 
 ### Auction Design
 
@@ -33,20 +33,23 @@ There are a few additional behaviours:
 
 A successful bidder will receive a convertible deposit that can be converted into OHM or redeemed for the deposited reserve token. The deposit is composed of:
 
-- A quantity of `CDEPO` tokens, which is a fungible ERC20 token across all deposits and terms.
-- A `CDPOS` ERC721 token, which represents the non-fungible position of the bidder. This includes terms such as the expiry date, conversion price and size of the convertible deposit.
+- A quantity of CD tokens, which is a fungible ERC20 token across all deposits and terms.
+- A `CDPOS` ERC721 token, which represents the non-fungible position of the bidder. This includes terms such as the conversion expiry date, redemption expiry date, conversion price and size of the convertible deposit.
 
 Using the `CDFacility` policy, convertible deposit holders are able to:
 
-- Convert their deposit into OHM before expiry, at the conversion price of the deposit terms.
-- Redeem the deposited reserve tokens after expiry.
-- Reclaim the deposited reserve tokens before expiry, with a discount.
+- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms.
+- Redeem the deposited reserve tokens after conversion expiry and before redemption expiry.
+- Reclaim the deposited reserve tokens at any time, with a discount.
 
 ## Scope
 
 ### In-Scope Contracts
 
 - [src/](../../src)
+    - [external/](../../src/external/)
+        - [clones/](../../src/external/clones/)
+            - [CloneERC20.sol](../../src/external/clones/CloneERC20.sol)
     - [libraries/](../../src/libraries)
         - [DecimalString.sol](../../src/libraries/DecimalString.sol)
         - [Timestamp.sol](../../src/libraries/Timestamp.sol)
@@ -54,6 +57,10 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
     - [modules/](../../src/modules)
         - [CDEPO/](../../src/modules/CDEPO)
             - [CDEPO.v1.sol](../../src/modules/CDEPO/CDEPO.v1.sol)
+            - [ConvertibleDepositTokenClone.sol](../../src/modules/CDEPO/ConvertibleDepositTokenClone.sol)
+            - [IConvertibleDeposit.sol](../../src/modules/CDEPO/IConvertibleDeposit.sol)
+            - [IConvertibleDepositERC20.sol](../../src/modules/CDEPO/IConvertibleDepositERC20.sol)
+            - [IConvertibleDepository.sol](../../src/modules/CDEPO/IConvertibleDepository.sol)
             - [OlympusConvertibleDepository.sol](../../src/modules/CDEPO/OlympusConvertibleDepository.sol)
         - [CDPOS/](../../src/modules/CDPOS)
             - [CDPOS.v1.sol](../../src/modules/CDPOS/CDPOS.v1.sol)
@@ -63,7 +70,9 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
             - [IConvertibleDepositAuctioneer.sol](../../src/policies/interfaces/IConvertibleDepositAuctioneer.sol)
             - [IConvertibleDepositFacility.sol](../../src/policies/interfaces/IConvertibleDepositFacility.sol)
             - [IEmissionManager.sol](../../src/policies/interfaces/IEmissionManager.sol)
+            - [IGenericClearinghouse.sol](../../src/policies/interfaces/IGenericClearinghouse.sol)
         - [CDAuctioneer.sol](../../src/policies/CDAuctioneer.sol)
+        - [CDClearinghouse.sol](../../src/policies/CDClearinghouse.sol)
         - [CDFacility.sol](../../src/policies/CDFacility.sol)
         - [EmissionManager.sol](../../src/policies/EmissionManager.sol)
         - [Heart.sol](../../src/policies/Heart.sol)
@@ -107,6 +116,9 @@ You can review previous audits here:
     - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2024_10_LoanConsolidator_Audit.pdf)
     - [Pre-Audit Commit](https://github.com/OlympusDAO/bophades/tree/95479d5d4a9bb941c60c7a8347709d9fc895b819)
     - [Post-Remediations Commit](https://github.com/OlympusDAO/bophades/tree/d2d5b63dee16a259400628df4cf6ce2d3df02558)
+- Cooler V2 by Electisec (03/2025)
+    - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_CoolerV2-Electisec_report.pdf)
+    - The PolicyEnabler and PolicyAdmin mix-ins are audited here
 
 ## Architecture
 
@@ -121,14 +133,18 @@ Callers with the appropriate permissions can activate and deactivate the functio
 ```mermaid
 flowchart TD
   admin((admin)) -- enable --> CDAuctioneer
-  emergency_restart((emergency_restart)) -- restart --> EmissionManager
-  emergency((emergency)) -- activate/deactivate --> CDAuctioneer
-  emergency((emergency)) -- activate/deactivate --> CDFacility
-  emergency_shutdown((emergency_shutdown)) -- deactivate --> EmissionManager
-  emissions_admin((emissions_admin)) -- initialize --> EmissionManager
+  admin((admin)) -- enable --> CDClearinghouse
+  admin((admin)) -- enable --> CDFacility
+  admin((admin)) -- enable --> EmissionManager
+  admin((admin)) -- restart --> EmissionManager
+  emergency((emergency)) -- disable --> CDAuctioneer
+  emergency((emergency)) -- disable --> CDClearinghouse
+  emergency((emergency)) -- disable --> CDFacility
+  emergency((emergency)) -- disable --> EmissionManager
 
   subgraph Policies
     CDAuctioneer
+    CDClearinghouse
     CDFacility
     EmissionManager
   end
@@ -154,14 +170,14 @@ sequenceDiagram
     Heart->>EmissionManager: execute
     note over EmissionManager, CDAuctioneer: Once per day
     EmissionManager->>CDAuctioneer: setAuctionParameters
-    Heart->>CDEPO: sweepYield
+    Heart->>CDEPO: sweepAllYield
     CDEPO->>VaultToken: transfer(TRSRY, amount)
     VaultToken-->>TRSRY: vault tokens
 ```
 
 #### Deposit Creation
 
-A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CDEPO tokens and a CDPOS position.
+A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CD tokens and a CDPOS position.
 
 ```mermaid
 sequenceDiagram
@@ -173,19 +189,20 @@ sequenceDiagram
     participant MINTR
     participant ReserveToken as Reserve (ERC20)
     participant VaultToken as Vault (ERC4626)
+    participant cdReserve
 
     caller->>CDAuctioneer: bid(depositAmount)
     CDAuctioneer->>CDAuctioneer: determine conversion price
-    CDAuctioneer->>CDFacility: create(caller, depositAmount, conversionPrice, expiry, wrapNft)
+    CDAuctioneer->>CDFacility: mint(cdToken, caller, depositAmount, conversionPrice, expiry, wrapNft)
     CDFacility->>CDEPO: mintFor(caller, depositAmount)
     CDEPO->>ReserveToken: transferFrom(caller, depositAmount)
     caller-->>CDEPO: reserve tokens
     CDEPO->>VaultToken: deposit(depositAmount, caller)
     VaultToken-->>CDEPO: vault tokens
-    CDEPO-->>caller: CDEPO tokens
-    CDFacility->>CDPOS: create(caller, CDEPO, depositAmount, conversionPrice, expiry, wrapNft)
+    CDEPO->>cdReserve: mintFor(caller, depositAmount)
+    cdReserve-->>caller: cdReserve tokens
+    CDFacility->>CDPOS: mint(caller, cdToken, depositAmount, conversionPrice, expiry, wrapNft)
     CDPOS-->>caller: CDPOS ERC721 token
-    CDFacility->>MINTR: increaseMintApproval(CDFacility, convertedAmount)
 ```
 
 #### Deposit Conversion
@@ -203,14 +220,15 @@ sequenceDiagram
     participant ReserveToken
     participant VaultToken
     participant OHM
+    participant cdReserve
 
     caller->>CDFacility: convert(positionIds, amounts)
     loop For each position
         CDFacility->>CDPOS: update(positionId, remainingAmount)
     end
     CDFacility->>CDEPO: redeemFor(caller, amount)
-    caller-->>CDEPO: CD tokens
-    CDEPO->>CDEPO: burns tokens
+    caller-->>CDEPO: cdReserve tokens
+    CDEPO->>cdReserve: burns tokens
     CDEPO->>VaultToken: withdraw(amount, CDFacility, CDEPO)
     ReserveToken-->>CDEPO: reserve tokens
     CDFacility->>VaultToken: deposit(amount, TRSRY)
@@ -222,7 +240,7 @@ sequenceDiagram
 
 #### Reclaim Deposit
 
-The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`reclaimRate()` on the CDFacility contract) is applied on the deposit that is returned. The forfeited asset quantity will be swept into the TRSRY module during the next heartbeat.
+The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`reclaimRate()` on the CDEPO contract) is applied on the deposit that is returned. The forfeited asset quantity will be swept into the TRSRY module during the next heartbeat.
 
 ```mermaid
 sequenceDiagram
@@ -232,11 +250,12 @@ sequenceDiagram
     participant MINTR
     participant ReserveToken
     participant VaultToken
+    participant cdReserve
 
     caller->>CDFacility: reclaim(amount)
     CDFacility->>CDEPO: reclaimFor(caller, amount)
-    caller-->>CDEPO: CD tokens
-    CDEPO->>CDEPO: burns tokens
+    caller-->>CDEPO: cdReserve tokens
+    CDEPO->>cdReserve: burns tokens
     CDEPO->>VaultToken: withdraw(discounted amount, CDFacility, CDEPO)
     ReserveToken-->>CDFacility: reserve tokens
     CDFacility->>ReserveToken: transfer(discounted amount, caller)
@@ -256,19 +275,39 @@ sequenceDiagram
     participant MINTR
     participant ReserveToken
     participant VaultToken
+    participant cdReserve
 
     caller->>CDFacility: redeem(positionIds, amounts)
     loop For each position
         CDFacility->>CDPOS: update(positionId, remainingAmount)
     end
     CDFacility->>CDEPO: redeemFor(caller, amount)
-    caller-->>CDEPO: CD tokens
-    CDEPO->>CDEPO: burns tokens
+    caller-->>CDEPO: cdReserve tokens
+    CDEPO->>cdReserve: burns tokens
     CDEPO->>VaultToken: withdraw(amount, CDFacility, CDEPO)
     ReserveToken-->>CDFacility: reserve tokens
     CDFacility->>ReserveToken: transfer(amount, caller)
     ReserveToken-->>caller: reserve tokens
-    CDFacility->>MINTR: decreaseMintApproval(CDFacility, unconverted amount)
+```
+
+#### Borrow Against CD Tokens
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant CDClearinghouse
+    participant CDEPO
+    participant VaultToken as Vault (ERC4626)
+    participant cdReserve
+    participant Cooler
+
+    caller->>CDClearinghouse: lendToCooler(principalAmount)
+    CDClearinghouse->>cdReserve: transferFrom(caller, collateralAmount)
+    caller-->>CDClearinghouse: cdReserve tokens
+    CDClearinghouse->>CDEPO: incurDebt(VaultToken, principalAmount)
+    CDEPO-->>CDClearinghouse: vault tokens
+    CDClearinghouse->>Cooler: cdReserve tokens
+    CDClearinghouse-->>caller: vault tokens
 ```
 
 ### EmissionManager (Policy)
@@ -278,6 +317,7 @@ This release contains an updated EmissionManager policy with the following chang
 - In every third epoch, it:
     - Tunes the auction run by CDAuctioneer
     - Launches an auction for the quantity of OHM unsold through auction over the configured tracking period
+- Uses the PolicyEnabler mix-in for enabling/disabling the functionality and role validation
 
 ### CDAuctioneer (Policy)
 
@@ -288,33 +328,50 @@ There are two main functions in this policy:
 - `setAuctionParameters()` is gated to a role held by the EmissionManager, which enables it to periodically tune the auction parameters
 - `bid()` is ungated and enables the caller to bid in the auction. The function determines the amount of OHM that is convertible for the given deposit amount, and uses CDFacility to issue the CD tokens and position.
 
+Each CDAuctioneer is deployed with a single, immutable bid token. The CDEPO module must have a CD token created for that bid token at the time of activating the policy.
+
+### CDClearinghouse (Policy)
+
+The CDClearinghouse policy enables CD token holders to borrow the underlying asset against their CD token. The purpose is to enable users with CD positions to utilise the paired asset before conversion or redemption.
+
+The policy is a modified version of the existing [Clearinghouse policy](../../src/policies/Clearinghouse.sol). It adheres to the interface (extracted into [IGenericClearinghouse](../../src/policies/interfaces/IGenericClearinghouse.sol)), but makes the following changes:
+
+- Users borrow the associated ERC4626 vault token (e.g. sUSDS) against the quantity of CD tokens
+- The loan-to-collateral ratio is in terms of the underlying asset (e.g. USDS), and converted to vault token (e.g. sUSDS) terms at the time of loan origination.
+- Does not store funding in the CDClearinghouse contract (unlike the original Clearinghouse), and instead incurs debt from CDEPO.
+
 ### CDFacility (Policy)
 
 CDFacility is a policy that is responsible for issuing CD tokens and handling subsequent interactions with CD token holders.
 
 The CDAuctioneer is able to call the following function:
 
-- `create()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position.
+- `mint()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
 
 CD token holders can perform the following actions:
 
-- `convert()`: convert their deposit position into OHM before conversion expiry
-- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a CDPOS position id.
-- `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry
+- `convert()`: convert their deposit position into OHM before conversion expiry.
+- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a CDPOS position ID.
+- `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
 
 ### CDEPO (Module)
 
-CDEPO is an ERC20 token and a Module representing the deposit of an underlying asset in a 1:1 ratio. The token is used with convertible deposits facilitated by the CDFacility, and so is typically shortened to "CD token" or "cd" + underlying token name, e.g. "cdUSDS".
+CDEPO is a Module that owns and manages the CD tokens that have been created.
+
+Each CD token is an ERC20 contract managed by the CDEPO module, and the token represents the deposit of the underlying asset in a 1:1 ratio. The token is used with convertible deposits facilitated by the CDFacility, and so is typically shortened to "CD token" or "cd" + underlying token name, e.g. "cdUSDS".
 
 Unpermissioned callers are able to perform the following actions:
 
-- Mint cd tokens in exchange for the underlying asset
-- Reclaim the underlying asset in exchange for the cd tokens (after applying a discount)
+- Mint CD tokens by providing the underlying asset
+- Burn CD tokens (without obtaining the underlying asset)
+- Reclaim the underlying asset in exchange for the CD tokens (after applying a discount)
 
 Bophades policies with the correct permissions are able to perform the additional following actions:
 
-- Redeem the underlying asset in exchange for the cd tokens (without applying a discount)
+- Convert CD tokens into the conversion token (OHM)
+- Redeem CD tokens in exchange for the underlying asset (without applying a discount)
 - Sweep any forfeited yield and assets into the caller's address
+- Manage debt (in terms of ERC4626 vault tokens)
 
 ### CDPOS (Module)
 
@@ -327,7 +384,7 @@ Unpermissioned callers are able to perform the following actions:
 - Wrap the caller's existing position into an ERC721
 - Unwrap the caller's existing position from an ERC721, which burns the token
 
-Permissions policies are able to perform the following actions:
+Permissioned policies are able to perform the following actions:
 
-- Create new positions
+- Mint new positions
 - Update the remaining deposit for an existing position

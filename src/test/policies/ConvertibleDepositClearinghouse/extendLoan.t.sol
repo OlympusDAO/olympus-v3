@@ -27,7 +27,7 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
     function test_notFromFactory_reverts() public givenUserHasCollateral(4e18) {
         CoolerFactory maliciousFactory = new CoolerFactory();
         vm.prank(USER);
-        ICooler newCooler = ICooler(maliciousFactory.generateCooler(CDEPO, vault));
+        ICooler newCooler = ICooler(maliciousFactory.generateCooler(cdToken, vault));
 
         // Set up a new Clearinghouse
         CDClearinghouse newClearinghouse = new CDClearinghouse(
@@ -47,7 +47,7 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
 
         // Take a loan from the new Clearinghouse
         vm.startPrank(USER);
-        CDEPO.approve(address(newClearinghouse), 2e18);
+        cdToken.approve(address(newClearinghouse), 2e18);
         newClearinghouse.lendToCooler(newCooler, 1e18);
         vm.stopPrank();
 
@@ -82,7 +82,7 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
 
         // Take a loan from the new Clearinghouse
         vm.startPrank(USER);
-        CDEPO.approve(address(newClearinghouse), 2e18);
+        cdToken.approve(address(newClearinghouse), 2e18);
         newClearinghouse.lendToCooler(cooler, 1e18);
         vm.stopPrank();
 
@@ -140,7 +140,7 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
 
         uint256 expectedFees = loan.interestDue * 1;
 
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
         uint256 expectedUserDebtTokenBalance = vault.balanceOf(USER) - expectedFees;
         uint256 expectedCDEPODebtTokenBalance = vault.balanceOf(address(CDEPO));
         uint256 expectedTRSRYDebtTokenBalance = vault.balanceOf(address(TRSRY)) + expectedFees;
@@ -164,13 +164,13 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "TRSRY debt token balance"
         );
 
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
-        assertEq(CDEPO.balanceOf(address(cooler)), loan.collateral, "cooler collateral balance");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
+        assertEq(cdToken.balanceOf(address(cooler)), loan.collateral, "cooler collateral balance");
 
         // CDEPO debt
         // No principal repaid, so it remains the same
-        assertEq(CDEPO.debt(address(clearinghouse)), 1e18, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 1e18, "CDEPO debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), loan.interestDue, "interest receivables");
@@ -195,7 +195,7 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
 
         uint256 expectedFees = loan.interestDue * times;
 
-        uint256 expectedUserCDEPOBalance = CDEPO.balanceOf(USER);
+        uint256 expectedUserCDEPOBalance = cdToken.balanceOf(USER);
         uint256 expectedUserDebtTokenBalance = vault.balanceOf(USER) - expectedFees;
         uint256 expectedCDEPODebtTokenBalance = vault.balanceOf(address(CDEPO));
         uint256 expectedTRSRYDebtTokenBalance = vault.balanceOf(address(TRSRY)) + expectedFees;
@@ -219,13 +219,13 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "TRSRY debt token balance"
         );
 
-        assertEq(CDEPO.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
-        assertEq(CDEPO.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
-        assertEq(CDEPO.balanceOf(address(cooler)), loan.collateral, "cooler collateral balance");
+        assertEq(cdToken.balanceOf(USER), expectedUserCDEPOBalance, "USER collateral balance");
+        assertEq(cdToken.balanceOf(address(clearinghouse)), 0, "clearinghouse collateral balance");
+        assertEq(cdToken.balanceOf(address(cooler)), loan.collateral, "cooler collateral balance");
 
         // CDEPO debt
         // No principal repaid, so it remains the same
-        assertEq(CDEPO.debt(address(clearinghouse)), 1e18, "CDEPO debt");
+        assertEq(CDEPO.getDebt(iVault, address(clearinghouse)), 1e18, "CDEPO debt");
 
         // Receivables
         assertEq(clearinghouse.interestReceivables(), loan.interestDue, "interest receivables");

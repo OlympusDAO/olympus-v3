@@ -2,11 +2,17 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
-    event ReclaimedDeposit(address indexed user, uint256 reclaimedAmount, uint256 forfeitedAmount);
+    event ReclaimedDeposit(
+        address indexed depositToken,
+        address indexed user,
+        uint256 reclaimedAmount,
+        uint256 forfeitedAmount
+    );
 
     // given the contract is inactive
     //  [X] it reverts
@@ -26,7 +32,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
 
         // Call function
-        facility.reclaim(1e18);
+        facility.reclaim(cdToken, 1e18);
     }
 
     function test_amountToReclaimIsZero_reverts()
@@ -46,11 +52,13 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(0);
+        facility.reclaim(cdToken, 0);
     }
 
     function test_spendingIsNotApproved_reverts()
@@ -65,11 +73,11 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "allowance"));
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(RESERVE_TOKEN_AMOUNT);
+        facility.reclaim(cdToken, RESERVE_TOKEN_AMOUNT);
     }
 
     function test_reclaimedAmountIsZero_reverts()
@@ -93,12 +101,15 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "reclaimed amount")
+            abi.encodeWithSelector(
+                IConvertibleDepository.CDEPO_InvalidArgs.selector,
+                "reclaimed amount"
+            )
         );
 
         // Call function
         vm.prank(recipient);
-        facility.reclaim(amount);
+        facility.reclaim(cdToken, amount);
     }
 
     function test_success()
@@ -118,38 +129,33 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         )
     {
         uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
-            convertibleDepository.reclaimRate()) / 100e2;
+            convertibleDepository.reclaimRate(address(cdToken))) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
-
-        uint256 beforeMintApproval = minter.mintApproval(address(facility));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(recipient, expectedReclaimedAmount, expectedForfeitedAmount);
+        emit ReclaimedDeposit(
+            address(reserveToken),
+            recipient,
+            expectedReclaimedAmount,
+            expectedForfeitedAmount
+        );
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(RESERVE_TOKEN_AMOUNT);
+        uint256 reclaimed = facility.reclaim(cdToken, RESERVE_TOKEN_AMOUNT);
 
         // Assertion that the reclaimed amount is the sum of the amounts adjusted by the reclaim rate
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
 
         // Assert convertible deposit tokens are transferred from the recipient
-        assertEq(
-            convertibleDepository.balanceOf(recipient),
-            0,
-            "convertibleDepository.balanceOf(recipient)"
-        );
+        assertEq(cdToken.balanceOf(recipient), 0, "cdToken.balanceOf(recipient)");
 
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
         // No dangling mint approval
-        assertEq(
-            minter.mintApproval(address(facility)),
-            beforeMintApproval,
-            "minter.mintApproval(address(facility))"
-        );
+        _assertMintApproval(0);
 
         // Deposit token is transferred to the recipient
         assertEq(
@@ -195,34 +201,38 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
         uint256 amountOne = bound(amount_, 3, RESERVE_TOKEN_AMOUNT);
 
         // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimedAmount = (amountOne * convertibleDepository.reclaimRate()) / 100e2;
+        uint256 expectedReclaimedAmount = (amountOne *
+            convertibleDepository.reclaimRate(address(cdToken))) / 100e2;
         uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
-
-        uint256 beforeMintApproval = minter.mintApproval(address(facility));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(recipient, expectedReclaimedAmount, expectedForfeitedAmount);
+        emit ReclaimedDeposit(
+            address(reserveToken),
+            recipient,
+            expectedReclaimedAmount,
+            expectedForfeitedAmount
+        );
 
         // Call function
         vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(amountOne);
+        uint256 reclaimed = facility.reclaim(cdToken, amountOne);
 
         // Assert reclaimed amount
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
 
         // Assert convertible deposit tokens are transferred from the recipient
         assertEq(
-            convertibleDepository.balanceOf(recipient),
+            cdToken.balanceOf(recipient),
             RESERVE_TOKEN_AMOUNT - amountOne,
-            "convertibleDepository.balanceOf(recipient)"
+            "cdToken.balanceOf(recipient)"
         );
 
         // Assert OHM not minted to the recipient
         assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
 
-        // Assert the remaining mint approval
-        assertEq(minter.mintApproval(address(facility)), beforeMintApproval, "mintApproval");
+        // No dangling mint approval
+        _assertMintApproval(0);
 
         // Deposit token is transferred to the recipient
         assertEq(

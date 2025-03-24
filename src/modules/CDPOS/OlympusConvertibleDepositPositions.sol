@@ -10,10 +10,11 @@ import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
 
+/// @title  Olympus Convertible Deposit Positions
+/// @notice Implementation of the {CDPOSv1} interface
+///         This contract is used to create, manage, and wrap/unwrap convertible deposit positions
 contract OlympusConvertibleDepositPositions is CDPOSv1 {
     // ========== STATE VARIABLES ========== //
-
-    uint256 public constant DECIMALS = 1e18;
 
     /// @notice The number of decimal places to display when rendering values as decimal strings.
     /// @dev    This affects the display of the remaining deposit and conversion price in the SVG and JSON metadata.
@@ -46,6 +47,8 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ///             - The position ID is invalid
     ///             - The caller is not the owner of the position
     ///             - The position is already wrapped
+    ///
+    ///             This is a public function that can be called by any address holding a position
     function wrap(
         uint256 positionId_
     ) external virtual override onlyValidPosition(positionId_) onlyPositionOwner(positionId_) {
@@ -69,6 +72,8 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ///             - The position ID is invalid
     ///             - The caller is not the owner of the position
     ///             - The position is not wrapped
+    ///
+    ///             This is a public function that can be called by any address holding a position
     function unwrap(
         uint256 positionId_
     ) external virtual override onlyValidPosition(positionId_) onlyPositionOwner(positionId_) {
@@ -140,7 +145,9 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ///             - The conversion price is 0
     ///             - The conversion expiry is in the past
     ///             - The redemption expiry is before the conversion expiry
-    function create(
+    ///
+    ///             This is a permissioned function that can only be called by approved policies
+    function mint(
         address owner_,
         address convertibleDepositToken_,
         uint256 remainingDeposit_,
@@ -184,6 +191,8 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The position ID is invalid
+    ///
+    ///             This is a permissioned function that can only be called by approved policies
     function update(
         uint256 positionId_,
         uint256 amount_
@@ -202,6 +211,8 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ///             - The amount is 0
     ///             - The amount is greater than the remaining deposit
     ///             - `to_` is the zero address
+    ///
+    ///             This is a public function that can be called by any address holding a position
     function split(
         uint256 positionId_,
         uint256 amount_,
@@ -426,7 +437,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
 
     function _getPosition(uint256 positionId_) internal view returns (Position memory) {
         Position memory position = _positions[positionId_];
-        // `create()` blocks a 0 conversion price, so this should never happen on a valid position
+        // `mint()` blocks a 0 conversion price, so this should never happen on a valid position
         if (position.conversionPrice == 0) revert CDPOS_InvalidPositionId(positionId_);
 
         return position;

@@ -3,12 +3,17 @@ pragma solidity 0.8.15;
 
 import {CDEPOTest} from "./CDEPOTest.sol";
 
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract RepayDebtCDEPOTest is CDEPOTest {
-    event DebtRepaid(address indexed borrower, uint256 amount);
+    event DebtRepaid(address indexed inputToken, address indexed borrower, uint256 amount);
 
     // when the caller is not permissioned
+    //  [X] it reverts
+    // when the input token is not supported
+    //  [X] it reverts
+    // when the input token is a convertible deposit token
     //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
@@ -30,29 +35,53 @@ contract RepayDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(caller_);
-        CDEPO.repayDebt(10e18);
+        CDEPO.repayDebt(iReserveTokenVault, 10e18);
+    }
+
+    function test_notSupported_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
+
+        // Call function
+        vm.prank(godmode);
+        CDEPO.repayDebt(iReserveTokenTwoVault, 10e18);
+    }
+
+    function test_convertibleDepositToken_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_UnsupportedToken.selector)
+        );
+
+        // Call function
+        vm.prank(address(godmode));
+        CDEPO.repayDebt(IERC4626(address(cdToken)), 10e18);
     }
 
     function test_amountIsZero_reverts()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
         givenAddressHasBorrowed(10e18)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDEPOv1.CDEPO_InvalidArgs.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepository.CDEPO_InvalidArgs.selector, "amount")
+        );
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.repayDebt(0);
+        CDEPO.repayDebt(iReserveTokenVault, 0);
     }
 
     function test_spendingNotApproved_reverts()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
         givenAddressHasBorrowed(10e18)
     {
         // Expect revert
@@ -60,14 +89,14 @@ contract RepayDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        CDEPO.repayDebt(10e18);
+        CDEPO.repayDebt(iReserveTokenVault, 10e18);
     }
 
     function test_amountIsGreaterThanBorrowed()
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
         givenAddressHasBorrowed(10e18)
         givenVaultTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
     {
@@ -75,7 +104,7 @@ contract RepayDebtCDEPOTest is CDEPOTest {
 
         // Call function
         vm.prank(address(godmode));
-        uint256 repaidAmount = CDEPO.repayDebt(10e18 + 1);
+        uint256 repaidAmount = CDEPO.repayDebt(iReserveTokenVault, 10e18 + 1);
 
         // Assert balances
         assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
@@ -84,7 +113,7 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert debt
-        assertEq(CDEPO.debt(address(godmode)), 0, "debt");
+        assertEq(CDEPO.getDebt(iReserveTokenVault, address(godmode)), 0, "debt");
 
         // Assert repaid amount
         assertEq(repaidAmount, 10e18, "repaid amount");
@@ -96,7 +125,7 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         public
         givenAddressHasReserveToken(recipient, 10e18)
         givenReserveTokenSpendingIsApproved(recipient, address(CDEPO), 10e18)
-        givenAddressHasCDEPO(recipient, 10e18)
+        givenAddressHasCDToken(recipient, 10e18)
         givenAddressHasBorrowed(10e18)
         givenVaultTokenSpendingIsApproved(address(godmode), address(CDEPO), 10e18)
     {
@@ -104,9 +133,13 @@ contract RepayDebtCDEPOTest is CDEPOTest {
 
         uint256 expectedVaultBalance = vault.balanceOf(address(CDEPO)) + amount;
 
+        // Expect event
+        vm.expectEmit();
+        emit DebtRepaid(address(iReserveTokenVault), address(godmode), amount);
+
         // Call function
         vm.prank(address(godmode));
-        uint256 repaidAmount = CDEPO.repayDebt(amount);
+        uint256 repaidAmount = CDEPO.repayDebt(iReserveTokenVault, amount);
 
         // Assert balances
         assertEq(reserveToken.balanceOf(address(godmode)), 0, "godmode: reserve token balance");
@@ -115,7 +148,7 @@ contract RepayDebtCDEPOTest is CDEPOTest {
         assertEq(vault.balanceOf(address(CDEPO)), expectedVaultBalance, "CDEPO: vault balance");
 
         // Assert debt
-        assertEq(CDEPO.debt(address(godmode)), 10e18 - amount, "debt");
+        assertEq(CDEPO.getDebt(iReserveTokenVault, address(godmode)), 10e18 - amount, "debt");
 
         // Assert repaid amount
         assertEq(repaidAmount, amount, "repaid amount");
