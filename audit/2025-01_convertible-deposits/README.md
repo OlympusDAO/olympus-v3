@@ -28,11 +28,11 @@ There are a few additional behaviours:
 - As tick capacity is depleted, the auctioneer will increase the price of the subsequent tick by the configured tick step percentage.
 - Auction capacity (up to the target) is added proportionally throughout each day period.
 - In the absence of any bids, the active tick price will decay over time.
-  - Remaining capacity is adjusted by the tick size and the price reduced by the configured tick step until within the tick size.
-  - A floor of the configured minimum price also applies.
+    - Remaining capacity is adjusted by the tick size and the price reduced by the configured tick step until within the tick size.
+    - A floor of the configured minimum price also applies.
 - With each multiple of the day target being reached, the auctioneer will progressively halve the size of each tick.
 - At the end of each period, when `setAuctionParameters()` is called, the day's auction results will be stored on a rolling basis for the configured auction tracking period.
-  - If there is an under-selling of OHM capacity at the end of the tracking period, EmissionManager will create a bond market for the remaining OHM capacity. This ensures that the emission target per period is reached.
+    - If there is an under-selling of OHM capacity at the end of the tracking period, EmissionManager will create a bond market for the remaining OHM capacity. This ensures that the emission target per period is reached.
 
 ### Convertible Deposit Design
 
@@ -338,7 +338,7 @@ Other relevant functions are:
 
 - `getCurrentTick()` gets the details of the current tick, accounting for capacity added since the last successful bid.
 - `previewBid()` indicates the amount of OHM that a given deposit could be converted to, given current tick capacity and pricing.
-  - This function implements the logic of moving up ticks and prices until the bid amount is fulfilled, and adjusting the tick size after reaching multiples of the period target.
+    - This function implements the logic of moving up ticks and prices until the bid amount is fulfilled, and adjusting the tick size after reaching multiples of the period target.
 
 Each CDAuctioneer is deployed with a single, immutable bid token. The CDEPO module must have a CD token created for that bid token at the time of activating the policy.
 
