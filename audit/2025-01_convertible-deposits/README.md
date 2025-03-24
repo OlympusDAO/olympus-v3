@@ -8,11 +8,33 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 ## Design
 
-The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+The Convertible Deposits system in the Olympus protocol seeks to incentivise deposits of reserve tokens, upon which the protocol earns yield, and provide opportunities for speculation around yield and the price of OHM.
 
-### Auction Design
+For a given reserve token, e.g. `USDS`, and deposit period, e.g. 3 months, there exists a convertible deposit (CD) token, e.g. `cdUSDS-3m`.
 
-The auction is designed to be infinite duration and infinite capacity. The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
+The system offers two mutually-exclusive mechanisms to mint and use CD tokens:
+
+- Deposit with the option to convert to OHM before an expiry date
+- Deposit with the ability to earn fixed or variable yield
+    - Tokens that are floating earn variable yield
+    - Tokens that are locked in the redemption queue earn fixed yield
+
+| Mechanism         | Conversion to OHM | Floating Yield    | Queue Yield   |
+|-------------------|-------------------|-------------------|---------------|
+| OHM Call Option   | Yes               | No                | No            |
+| Yield-Bearing     | No                | Variable          | Fixed         |
+
+### OHM Call Option
+
+This mechanism longs OHM, with the expectation that the issued conversion price will be lower than the market price at the time of conversion.
+
+The conversion price is determined through an infinite duration and infinite capacity auction.
+
+#### Auction Design
+
+Bidders are required to deposit the configured reserve token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+
+The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
 
 The auction has a number of parameters that affect its behaviour:
 
@@ -34,17 +56,41 @@ There are a few additional behaviours:
 - At the end of each period, when `setAuctionParameters()` is called, the day's auction results will be stored on a rolling basis for the configured auction tracking period.
     - If there is an under-selling of OHM capacity at the end of the tracking period, EmissionManager will create a bond market for the remaining OHM capacity. This ensures that the emission target per period is reached.
 
-### Convertible Deposit Design
+### Yield-Bearing Deposits
 
-A successful bidder will receive a convertible deposit that can be converted into OHM or redeemed for the deposited reserve token. The deposit is composed of:
+The second approach enables depositors to earn field or variable yield over a specified period.
 
-- A quantity of CD tokens, which is a fungible ERC20 token across all deposits and terms.
-- A `CDPOS` ERC721 token, which represents the non-fungible position of the bidder. This includes terms such as the conversion expiry date, redemption expiry date, conversion price and size of the convertible deposit.
+#### Variable Yield
+
+By default, holders will short fixed yield and long variable yield by accruing yield based on the market rate. Holders will be able to claim accrued yield at any time.
+
+The holder will be able to perform whatever actions they want, including selling the CD token, and yield will still be accrued (since it remains deposited). The exception to this is reclaiming the underlying deposit token, which would reduce the base upon which yield is being earnt.
+
+#### Fixed Yield
+
+However, holders can alternatively short variable yield and long fixed yield by depositing their CD token into a redemption queue.
+
+- Locking the CD tokens for the full period will enable the depositor to redeem their CD token for the underlying asset (e.g. receive back their `USDS` deposit).
+- The CD tokens can be withdrawn from the queue at any time, but the progress towards redemption will be reset.
+- For the period that the CD tokens are locked, they will earn a fixed yield that can be claimed at any time.
+
+### Convertible Deposit Token Design
+
+Across both mechanisms (call option and yield), depositors will receive the following:
+
+- A quantity of CD tokens, which is a fungible ERC20 token across all deposits of the same deposit token and deposit period.
+    - e.g. `USDS` deposits with periods of 1, 3 and 6 months are distinct tokens: `cdUSDS-1m`, `cdUSDS-3m`, `cdUSDS-6m`
+- The deposit position will be recorded and can be optionally wrapped to an ERC721 NFT. The position includes terms, such as:
+    - deposit date
+    - deposit period
+    - conversion price (call option only)
+    - size of the convertible deposit
 
 Using the `CDFacility` policy, convertible deposit holders are able to:
 
-- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms.
-- Redeem the deposited reserve tokens after conversion expiry and before redemption expiry.
+- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms. (Call option only)
+- Lock their CD tokens into the redemption queue
+    - Locked CD tokens also enable the holder to borrow against the underlying deposit
 - Reclaim the deposited reserve tokens at any time, with a discount.
 
 ## Scope
@@ -356,9 +402,13 @@ The policy is a modified version of the existing [Clearinghouse policy](../../sr
 
 CDFacility is a policy that is responsible for issuing CD tokens and handling subsequent interactions with CD token holders.
 
-The CDAuctioneer is able to call the following function:
+The CDAuctioneer is able to mint a call option:
 
-- `mint()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `mintCallOption()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+
+The public can mint a yield-bearing deposit:
+
+- `mintYieldDeposit()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
 
 CD token holders can perform the following actions:
 
@@ -388,7 +438,6 @@ Unpermissioned callers are able to perform the following actions:
 
 Bophades policies with the correct permissions are able to perform the additional following actions:
 
-- Convert CD tokens into the conversion token (OHM)
 - Redeem CD tokens in exchange for the underlying asset (without applying a discount)
 - Sweep any forfeited yield and assets into the caller's address
 - Manage debt (in terms of ERC4626 vault tokens)
