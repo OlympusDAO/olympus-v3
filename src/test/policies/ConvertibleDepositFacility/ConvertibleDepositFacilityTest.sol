@@ -53,6 +53,7 @@ contract ConvertibleDepositFacilityTest is Test {
     uint48 public constant REDEMPTION_EXPIRY = INITIAL_BLOCK + 2 days;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
     uint16 public constant RECLAIM_RATE = 90e2;
+    uint8 public constant PERIOD_MONTHS = 6;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -104,13 +105,13 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Create a CD token
         vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        cdToken = facility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
         vm.label(address(cdToken), "cdToken");
 
         // Create a CD token
         vm.startPrank(admin);
-        cdTokenTwo = facility.create(IERC4626(address(vaultTwo)), 90e2);
+        cdTokenTwo = facility.create(IERC4626(address(vaultTwo)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
         vm.label(address(cdTokenTwo), "cdTokenTwo");
 

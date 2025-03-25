@@ -118,7 +118,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
         // Validate that the bid token is supported by the CDEPO module
-        convertibleDebtToken = CDEPO.getConvertibleDepositToken(address(BID_TOKEN));
+        // TODO configure period months
+        convertibleDebtToken = CDEPO.getConvertibleDepositToken(address(BID_TOKEN), 6);
         if (address(convertibleDebtToken) == address(0))
             revert CDAuctioneer_InvalidParams("bid token");
     }

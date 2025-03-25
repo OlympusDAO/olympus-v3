@@ -20,6 +20,7 @@ contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
     // 0x41 - owner, 20 bytes
     // 0x55 - asset, 20 bytes
     // 0x69 - vault, 20 bytes
+    // 0x7D - periodMonths, 1 byte
 
     /// @notice The owner of the clone
     /// @return _owner The owner address stored in immutable args
@@ -37,6 +38,12 @@ contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
     /// @return _vault The vault address stored in immutable args
     function vault() public pure returns (IERC4626 _vault) {
         _vault = IERC4626(_getArgAddress(0x69));
+    }
+
+    /// @notice The period of the deposit token (in months)
+    /// @return _periodMonths The period months stored in immutable args
+    function periodMonths() public pure returns (uint8 _periodMonths) {
+        _periodMonths = _getArgUint8(0x7D);
     }
 
     // ========== OWNER-ONLY FUNCTIONS ========== //

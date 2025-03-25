@@ -35,6 +35,8 @@ contract ConvertibleDepositClearinghouseTest is Test {
     address internal constant USER = address(0xBBBB);
     address internal constant OTHERS = address(0xDDDD);
 
+    uint8 internal constant PERIOD_MONTHS = 6;
+
     uint256 internal constant MAX_REWARD_PER_LOAN = 5e18;
     uint48 internal constant DURATION = 121 days;
     uint256 internal constant LOAN_TO_COLLATERAL = 75e16; // 75%
@@ -130,7 +132,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Create a CD token
         vm.startPrank(godmode);
-        cdToken = ERC20(address(CDEPO.create(IERC4626(address(vault)), 90e2)));
+        cdToken = ERC20(address(CDEPO.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2)));
         vm.stopPrank();
         vm.label(address(cdToken), "cdToken");
 

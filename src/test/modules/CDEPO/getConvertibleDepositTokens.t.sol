@@ -22,7 +22,7 @@ contract GetConvertibleDepositTokensCDEPOTest is CDEPOTest {
 
     function test_multipleTokens() public {
         vm.prank(address(godmode));
-        address cdTokenTwo = address(CDEPO.create(iReserveTokenTwoVault, 99e2));
+        address cdTokenTwo = address(CDEPO.create(iReserveTokenTwoVault, PERIOD_MONTHS, 99e2));
 
         assertEq(CDEPO.getConvertibleDepositTokens().length, 2, "getTokens: length");
         assertEq(

@@ -8,9 +8,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 // Interfaces
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 
 // Bophades
@@ -486,10 +486,11 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - CDEPO reverts
     function create(
         IERC4626 vault_,
+        uint8 periodMonths_,
         uint16 reclaimRate_
     ) external onlyEnabled onlyAdminRole returns (IConvertibleDepositERC20 cdToken) {
         // Create a new convertible deposit token
-        cdToken = CDEPO.create(vault_, reclaimRate_);
+        cdToken = CDEPO.create(vault_, periodMonths_, reclaimRate_);
 
         return cdToken;
     }
@@ -497,7 +498,11 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
-    function getDepositTokens() external view returns (IERC20[] memory) {
+    function getDepositTokens()
+        external
+        view
+        returns (IConvertibleDepository.DepositToken[] memory)
+    {
         return CDEPO.getDepositTokens();
     }
 

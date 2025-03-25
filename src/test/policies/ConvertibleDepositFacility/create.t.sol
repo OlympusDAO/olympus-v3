@@ -25,7 +25,7 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(admin);
-        facility.create(IERC4626(address(newVault)), 90e2);
+        facility.create(IERC4626(address(newVault)), PERIOD_MONTHS, 90e2);
     }
 
     function test_callerIsNotAdmin_reverts() public givenLocallyActive {
@@ -37,7 +37,7 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
         _expectRoleRevert(bytes32("admin"));
 
         // Call function
-        facility.create(IERC4626(address(newVault)), 90e2);
+        facility.create(IERC4626(address(newVault)), PERIOD_MONTHS, 90e2);
     }
 
     function test_success() public givenLocallyActive {
@@ -47,7 +47,11 @@ contract CreateCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(admin);
-        IConvertibleDepositERC20 newCdToken = facility.create(IERC4626(address(newVault)), 90e2);
+        IConvertibleDepositERC20 newCdToken = facility.create(
+            IERC4626(address(newVault)),
+            PERIOD_MONTHS,
+            90e2
+        );
 
         // Assert the new CD token was created
         assertEq(

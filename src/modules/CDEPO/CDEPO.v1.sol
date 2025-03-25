@@ -3,12 +3,12 @@ pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
 import {IConvertibleDepository} from "./IConvertibleDepository.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "./IConvertibleDepositERC20.sol";
 
 /// @title  CDEPOv1
 /// @notice This is a base contract for a custodial convertible deposit token. It is designed to be used in conjunction with an ERC4626 vault.
+/// @dev    This abstract contract contains admin- and protocol-related functions. For user-facing functions, see {IConvertibleDepository}.
 abstract contract CDEPOv1 is Module, IConvertibleDepository {
     // ========== EVENTS ========== //
 
@@ -17,23 +17,23 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
 
     /// @notice Emitted when the yield is swept
     event YieldSwept(
-        address indexed depositToken,
+        address indexed vaultToken,
         address indexed receiver,
         uint256 reserveAmount,
         uint256 sReserveAmount
     );
 
     /// @notice Emitted when the caller borrows the underlying asset
-    event DebtIncurred(address indexed depositToken, address indexed borrower, uint256 amount);
+    event DebtIncurred(address indexed vaultToken, address indexed borrower, uint256 amount);
 
     /// @notice Emitted when the caller repays a borrowed amount of the underlying asset
-    event DebtRepaid(address indexed depositToken, address indexed borrower, uint256 amount);
+    event DebtRepaid(address indexed vaultToken, address indexed borrower, uint256 amount);
 
     /// @notice Emitted when the debt is reduced for a borrower
-    event DebtReduced(address indexed depositToken, address indexed borrower, uint256 amount);
+    event DebtReduced(address indexed vaultToken, address indexed borrower, uint256 amount);
 
     /// @notice Emitted when a new token is supported
-    event TokenAdded(address indexed depositToken, address indexed cdToken);
+    event TokenCreated(address indexed depositToken, uint8 periodMonths, address indexed cdToken);
 
     // ========== CONSTANTS ========== //
 
@@ -88,34 +88,34 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @param  to_ The address to sweep the yield to
     function sweepAllYield(address to_) external virtual;
 
-    /// @notice Claim the yield accrued on the deposit token
+    /// @notice Claim the yield accrued  for a CD token
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the deposit token is supported
+    ///         - Validates that the CD token is supported
     ///         - Validates that the caller is permissioned
     ///         - Withdrawing the yield from the sReserve token
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
-    /// @param  depositToken_   The deposit token to sweep yield for
+    /// @param  cdToken_        The CD token to sweep yield for
     /// @param  to_             The address to sweep the yield to
     /// @return yieldReserve    The amount of reserve token swept
     /// @return yieldSReserve   The amount of sReserve token swept
     function sweepYield(
-        IERC20 depositToken_,
+        IConvertibleDepositERC20 cdToken_,
         address to_
     ) external virtual returns (uint256, uint256);
 
     /// @notice Preview the amount of yield that would be swept
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the deposit token is supported
+    ///         - Validates that the CD token is supported
     ///         - Computes the amount of yield that would be swept
     ///         - Returns the computed amount
     ///
-    /// @param  depositToken_  The deposit token to check
-    /// @return yieldReserve   The amount of reserve token that would be swept
-    /// @return yieldSReserve  The amount of sReserve token that would be swept
+    /// @param  cdToken_        The CD token to check
+    /// @return yieldReserve    The amount of reserve token that would be swept
+    /// @return yieldSReserve   The amount of sReserve token that would be swept
     function previewSweepYield(
-        IERC20 depositToken_
+        IConvertibleDepositERC20 cdToken_
     ) external view virtual returns (uint256 yieldReserve, uint256 yieldSReserve);
 
     // ========== VIEW FUNCTIONS ========== //
@@ -130,11 +130,16 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
         address borrower_
     ) external view virtual returns (uint256);
 
+    /// @notice Get the list of supported vault tokens
+    ///
+    /// @return vaultTokens The list of supported vault tokens
+    function getVaultTokens() external view virtual returns (IERC4626[] memory vaultTokens);
+
     /// @notice Get the amount of vault shares managed by the contract
     ///
-    /// @param  depositToken_   The deposit token to get vault shares for
+    /// @param  vaultToken_     The vault token to get shares for
     /// @return shares          The amount of vault shares managed by the contract
-    function getVaultShares(IERC20 depositToken_) external view virtual returns (uint256 shares);
+    function getVaultShares(IERC4626 vaultToken_) external view virtual returns (uint256 shares);
 
     // ========== ADMIN FUNCTIONS ========== //
 
@@ -156,10 +161,12 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @notice Create support for a new deposit token based on its vault
     ///
     /// @param  vault_          The ERC4626 vault for the deposit token
+    /// @param  periodMonths_   The period of the deposit token (months)
     /// @param  reclaimRate_    The initial reclaim rate
     /// @return cdToken         The address of the deployed cdToken
     function create(
         IERC4626 vault_,
+        uint8 periodMonths_,
         uint16 reclaimRate_
     ) external virtual returns (IConvertibleDepositERC20 cdToken);
 }

@@ -56,6 +56,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint48 public constant REDEMPTION_PERIOD = 2 days;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
+    uint8 public constant PERIOD_MONTHS = 6;
 
     // Events
     event Enabled();
@@ -115,7 +116,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Create a CD token
         // Required at the time of activation of the auctioneer policy
         vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        cdToken = facility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 
         // Activate the auctioneer policy

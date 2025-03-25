@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 /// @title  IConvertibleDepositFacility
 /// @notice Interface for a contract that can perform functions related to convertible deposit (CD) tokens
@@ -194,17 +194,22 @@ interface IConvertibleDepositFacility {
     ///         - Emitting an event
     ///
     /// @param  vault_          The address of the vault to use for the CD token
+    /// @param  periodMonths_   The period of the CD token
     /// @param  reclaimRate_    The reclaim rate to set for the CD token
     /// @return cdToken         The address of the new CD token
     function create(
         IERC4626 vault_,
+        uint8 periodMonths_,
         uint16 reclaimRate_
     ) external returns (IConvertibleDepositERC20 cdToken);
 
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice The addresses of deposit tokens accepted by the facility
-    function getDepositTokens() external view returns (IERC20[] memory);
+    function getDepositTokens()
+        external
+        view
+        returns (IConvertibleDepository.DepositToken[] memory);
 
     /// @notice The addresses of the CD tokens that are minted by the facility
     function getConvertibleDepositTokens()

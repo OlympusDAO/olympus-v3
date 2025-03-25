@@ -25,6 +25,7 @@ abstract contract CDEPOTest is Test {
     address public recipientTwo = address(0x2);
     uint256 public constant INITIAL_VAULT_BALANCE = 10e18;
     uint16 public reclaimRate = 99e2;
+    uint8 public PERIOD_MONTHS = 6;
 
     uint48 public constant INITIAL_BLOCK = 100000000;
 
@@ -38,9 +39,9 @@ abstract contract CDEPOTest is Test {
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
 
-        reserveToken = new MockERC20("Reserve Token", "RST", 18);
+        reserveToken = new MockERC20("Reserve", "RST", 18);
         iReserveToken = IERC20(address(reserveToken));
-        vault = new MockERC4626(reserveToken, "sReserve Token", "sRST");
+        vault = new MockERC4626(reserveToken, "sReserve", "sRST");
         iReserveTokenVault = IERC4626(address(vault));
         vm.label(address(iReserveToken), "RST");
         vm.label(address(vault), "sRST");
@@ -68,14 +69,14 @@ abstract contract CDEPOTest is Test {
 
         // Create a CD token
         vm.prank(godmode);
-        cdToken = CDEPO.create(IERC4626(address(vault)), reclaimRate);
+        cdToken = CDEPO.create(IERC4626(address(vault)), PERIOD_MONTHS, reclaimRate);
         vm.label(address(cdToken), "cdToken");
     }
 
     // ========== ASSERTIONS ========== //
 
     function _getTotalShares() internal view returns (uint256) {
-        return CDEPO.getVaultShares(iReserveToken);
+        return CDEPO.getVaultShares(iReserveTokenVault);
     }
 
     function _assertReserveTokenBalance(
@@ -138,7 +139,7 @@ abstract contract CDEPOTest is Test {
         // Convert to shares
         uint256 expectedShares = vault.previewWithdraw(vaultLockedReserveTokens);
 
-        assertEq(CDEPO.getVaultShares(iReserveToken), expectedShares, "total shares");
+        assertEq(CDEPO.getVaultShares(iReserveTokenVault), expectedShares, "total shares");
     }
 
     // ========== MODIFIERS ========== //
