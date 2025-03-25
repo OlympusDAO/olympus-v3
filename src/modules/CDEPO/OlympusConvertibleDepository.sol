@@ -33,8 +33,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @notice The address of the implementation of the {ConvertibleDepositTokenClone} contract
     address private immutable _TOKEN_IMPLEMENTATION;
 
-    // TODO look at whether mappings can be simplified
-
     /// @notice List of supported deposit tokens
     IERC20[] private _depositTokens;
 

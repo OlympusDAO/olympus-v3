@@ -54,11 +54,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             uint48(block.timestamp) + TIME_TO_EXPIRY,
             "position expiry"
         );
-        assertEq(
-            position.redemptionExpiry,
-            uint48(block.timestamp) + TIME_TO_EXPIRY + REDEMPTION_PERIOD,
-            "position redemption expiry"
-        );
         assertEq(position.wrapped, false, "position wrapped");
         assertEq(position.convertibleDepositToken, address(cdToken), "position cd token");
     }

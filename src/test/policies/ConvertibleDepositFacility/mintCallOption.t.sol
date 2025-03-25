@@ -6,7 +6,7 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-contract MintCDFTest is ConvertibleDepositFacilityTest {
+contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(
         address indexed depositToken,
         address indexed user,
@@ -28,6 +28,7 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
     // [X] it mints the CD tokens to account_
     // [X] it creates a new position in the CDPOS module
     // [X] it pre-emptively increases the mint approval equivalent to the converted amount of OHM
+    // [ ] the position conversion price matches
     // [X] it returns the position ID
     // [X] it emits a CreatedDeposit event
 
@@ -42,8 +43,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
     }
@@ -59,13 +58,11 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.mint(
+        facility.mintCallOption(
             cdToken,
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
     }
@@ -83,8 +80,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
     }
@@ -107,8 +102,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             10e6,
             conversionPrice,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -149,8 +142,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -191,8 +182,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             RESERVE_TOKEN_AMOUNT / 2,
             CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -201,8 +190,6 @@ contract MintCDFTest is ConvertibleDepositFacilityTest {
             recipient,
             RESERVE_TOKEN_AMOUNT / 2,
             CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 

@@ -33,7 +33,6 @@ contract TransferFromCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -52,7 +51,6 @@ contract TransferFromCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -71,7 +69,6 @@ contract TransferFromCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -90,7 +87,6 @@ contract TransferFromCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -109,7 +105,6 @@ contract TransferFromCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         );
 

@@ -51,7 +51,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -69,7 +68,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -87,7 +85,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -107,7 +104,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -127,7 +123,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -147,7 +142,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -167,7 +161,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -178,7 +171,6 @@ contract SplitCDPOSTest is CDPOSTest {
             amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -202,7 +194,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -222,7 +213,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -233,7 +223,6 @@ contract SplitCDPOSTest is CDPOSTest {
             amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -256,7 +245,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -276,7 +264,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         );
 
@@ -287,7 +274,6 @@ contract SplitCDPOSTest is CDPOSTest {
             amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -311,7 +297,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -331,7 +316,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -342,7 +326,6 @@ contract SplitCDPOSTest is CDPOSTest {
             amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         );
 

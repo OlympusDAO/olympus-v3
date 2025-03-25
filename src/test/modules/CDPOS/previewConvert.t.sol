@@ -43,7 +43,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -68,7 +67,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -88,7 +86,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -110,7 +107,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             10e17,
             2e17,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -132,7 +128,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             10e19,
             2e19,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -149,7 +144,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
     function test_convertibleDepositTokenDecimalsSame()
         public
         givenConvertibleDepositTokenDecimals(9)
-        givenPositionCreated(address(this), 10e9, 2e9, CONVERSION_EXPIRY, REDEMPTION_EXPIRY, false)
+        givenPositionCreated(address(this), 10e9, 2e9, CONVERSION_EXPIRY, false)
     {
         // Call function
         uint256 ohmOut = CDPOS.previewConvert(0, 10e9);
@@ -168,7 +163,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             1,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -190,7 +184,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             1e36,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -212,7 +205,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -234,7 +226,6 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
             1000e18,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {

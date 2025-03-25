@@ -33,6 +33,8 @@ import {CDFacility} from "./CDFacility.sol";
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
 
+    // TODO multi-token/multi-period support
+
     // ========== CONSTANTS ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
@@ -81,10 +83,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice The number of seconds between creation and expiry of convertible deposits
     /// @dev    See `getTimeToExpiry()` for more information
     uint48 internal _timeToExpiry;
+    // TODO remove time to expiry
 
     /// @notice The number of seconds that redemption is allowed
     /// @dev    See `getRedemptionPeriod()` for more information
     uint48 internal _redemptionPeriod;
+    // TODO remove redemption period
 
     /// @notice The index of the next auction result
     uint8 internal _auctionResultsNextIndex;
@@ -187,13 +191,12 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
-        positionId = CD_FACILITY.mint(
+        // TODO enable wrap
+        positionId = CD_FACILITY.mintCallOption(
             convertibleDebtToken,
             msg.sender,
             depositIn,
             conversionPrice,
-            uint48(block.timestamp + _timeToExpiry),
-            uint48(block.timestamp + _timeToExpiry + _redemptionPeriod),
             false
         );
 

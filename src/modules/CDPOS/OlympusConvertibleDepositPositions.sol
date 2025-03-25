@@ -100,7 +100,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) internal returns (uint256 positionId) {
         // Create the position record
@@ -111,7 +110,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             remainingDeposit: remainingDeposit_,
             conversionPrice: conversionPrice_,
             conversionExpiry: conversionExpiry_,
-            redemptionExpiry: redemptionExpiry_,
             wrapped: wrap_
         });
 
@@ -129,7 +127,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             remainingDeposit_,
             conversionPrice_,
             conversionExpiry_,
-            redemptionExpiry_,
             wrap_
         );
 
@@ -144,7 +141,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     ///             - The remaining deposit is 0
     ///             - The conversion price is 0
     ///             - The conversion expiry is in the past
-    ///             - The redemption expiry is before the conversion expiry
     ///
     ///             This is a permissioned function that can only be called by approved policies
     function mint(
@@ -153,7 +149,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) external virtual override permissioned returns (uint256 positionId) {
         // Validate that the owner is not the zero address
@@ -172,9 +167,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         // Validate that the conversion expiry is in the future
         if (conversionExpiry_ <= block.timestamp) revert CDPOS_InvalidParams("conversion expiry");
 
-        // Validate that the redemption expiry is after the conversion expiry
-        if (redemptionExpiry_ <= conversionExpiry_) revert CDPOS_InvalidParams("redemption expiry");
-
         return
             _create(
                 owner_,
@@ -182,7 +174,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                 remainingDeposit_,
                 conversionPrice_,
                 conversionExpiry_,
-                redemptionExpiry_,
                 wrap_
             );
     }
@@ -250,7 +241,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             amount_,
             position.conversionPrice,
             position.conversionExpiry,
-            position.redemptionExpiry,
             wrap_
         );
 
@@ -338,6 +328,8 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         // Get the decimals of the deposit token
         uint8 depositDecimals = ERC20(position.convertibleDepositToken).decimals();
 
+        // TODO yield bearing or not
+
         // solhint-disable-next-line quotes
         string memory jsonContent = string.concat(
             "{",
@@ -353,11 +345,6 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             string.concat(
                 '{"trait_type": "Conversion Expiry", "display_type": "date", "value": ',
                 Strings.toString(position.conversionExpiry),
-                "},"
-            ),
-            string.concat(
-                '{"trait_type": "Redemption Expiry", "display_type": "date", "value": ',
-                Strings.toString(position.redemptionExpiry),
                 "},"
             ),
             string.concat(

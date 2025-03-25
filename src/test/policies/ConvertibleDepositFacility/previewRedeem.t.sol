@@ -76,7 +76,6 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
                     5e18,
                     CONVERSION_PRICE,
                     CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
                     false
                 );
             } else {
@@ -85,7 +84,6 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
                     5e18,
                     CONVERSION_PRICE,
                     CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
                     false
                 );
             }
@@ -204,7 +202,6 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
                 3e18,
                 CONVERSION_PRICE,
                 expiry,
-                REDEMPTION_EXPIRY,
                 false
             );
 
@@ -241,18 +238,12 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         uint256[] memory amounts_ = new uint256[](3);
 
         for (uint256 i; i < 3; i++) {
-            uint48 redemptionExpiry = REDEMPTION_EXPIRY;
-            if (positionIndex == i) {
-                redemptionExpiry = REDEMPTION_EXPIRY - 1;
-            }
-
             // Create position
             uint256 positionId = _createPosition(
                 recipient,
                 3e18,
                 CONVERSION_PRICE,
                 CONVERSION_EXPIRY,
-                redemptionExpiry,
                 false
             );
 
@@ -261,7 +252,7 @@ contract PreviewRedeemCDFTest is ConvertibleDepositFacilityTest {
         }
 
         // Warp to before the normal redemption expiry
-        vm.warp(REDEMPTION_EXPIRY - 1);
+        // vm.warp(REDEMPTION_EXPIRY - 1);
 
         // Expect revert
         vm.expectRevert(

@@ -30,7 +30,6 @@ function substringFrom(string memory str, uint256 startIndex) pure returns (stri
 contract TokenURICDPOSTest is CDPOSTest {
     uint48 public constant SAMPLE_DATE = 1737014593;
     uint48 public constant SAMPLE_CONVERSION_EXPIRY_DATE = 1737014593 + 1 days;
-    uint48 public constant SAMPLE_REDEMPTION_EXPIRY_DATE = 1737014593 + 2 days;
     string public constant CONVERSION_EXPIRY_DATE_STRING = "2025-01-17";
 
     // when the position does not exist
@@ -65,7 +64,6 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_CONVERSION_EXPIRY_DATE,
-            SAMPLE_REDEMPTION_EXPIRY_DATE,
             false
         )
     {
@@ -118,13 +116,6 @@ contract TokenURICDPOSTest is CDPOSTest {
         );
         assertEq(tokenUriConversionExpiry, SAMPLE_CONVERSION_EXPIRY_DATE, "conversion expiry");
 
-        // Redemption Expiry
-        uint256 tokenUriRedemptionExpiry = vm.parseJsonUint(
-            decodedTokenURI,
-            '.attributes[?(@.trait_type=="Redemption Expiry")].value'
-        );
-        assertEq(tokenUriRedemptionExpiry, SAMPLE_REDEMPTION_EXPIRY_DATE, "redemption expiry");
-
         // Remaining Deposit
         string memory tokenUriRemainingDeposit = vm.parseJsonString(
             decodedTokenURI,
@@ -171,7 +162,6 @@ contract TokenURICDPOSTest is CDPOSTest {
             25123456e14,
             CONVERSION_PRICE,
             SAMPLE_CONVERSION_EXPIRY_DATE,
-            SAMPLE_REDEMPTION_EXPIRY_DATE,
             false
         )
     {
@@ -206,7 +196,6 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_CONVERSION_EXPIRY_DATE,
-            SAMPLE_REDEMPTION_EXPIRY_DATE,
             false
         )
     {
@@ -244,7 +233,6 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             20123456e14,
             SAMPLE_CONVERSION_EXPIRY_DATE,
-            SAMPLE_REDEMPTION_EXPIRY_DATE,
             false
         )
     {
@@ -279,7 +267,6 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_CONVERSION_EXPIRY_DATE,
-            SAMPLE_REDEMPTION_EXPIRY_DATE,
             false
         )
         givenPositionCreated(
@@ -287,7 +274,6 @@ contract TokenURICDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             SAMPLE_CONVERSION_EXPIRY_DATE,
-            SAMPLE_REDEMPTION_EXPIRY_DATE,
             false
         )
     {

@@ -132,8 +132,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
                     recipientTwo,
                     5e18,
                     CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
                     false
                 );
             } else {
@@ -141,8 +139,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
                     recipient,
                     5e18,
                     CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
                     false
                 );
             }
@@ -215,7 +211,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
                 3e18,
                 CONVERSION_PRICE,
                 expiry,
-                REDEMPTION_EXPIRY,
                 false
             );
 
@@ -254,10 +249,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
 
         for (uint256 i; i < 3; i++) {
             uint48 expiry = uint48(block.timestamp + 1 days);
-            uint48 redemptionExpiry = uint48(block.timestamp + 2 days);
             if (positionIndex == i) {
                 expiry = uint48(block.timestamp + 1);
-                redemptionExpiry = uint48(block.timestamp + 2);
             }
 
             // Create position
@@ -266,7 +259,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
                 3e18,
                 CONVERSION_PRICE,
                 expiry,
-                redemptionExpiry,
                 false
             );
 
@@ -427,7 +419,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
             10e6 / 2,
             conversionPrice,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
         _createPosition(
@@ -435,7 +426,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
             10e6 / 2,
             conversionPrice,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 

@@ -108,13 +108,11 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The caller does not have the ROLE_AUCTIONEER role
     ///             - The contract is not enabled
     ///             - The CD token is not supported
-    function mint(
+    function mintCallOption(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
@@ -127,8 +125,34 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
             address(cdToken_),
             amount_,
             conversionPrice_,
-            conversionExpiry_,
-            redemptionExpiry_,
+            uint48(block.timestamp + cdToken_.periodMonths() * 30 days),
+            wrap_
+        );
+
+        // Emit an event
+        emit CreatedDeposit(address(cdToken_.asset()), account_, positionId, amount_);
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The CD token is not supported
+    function mintDeposit(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_,
+        bool wrap_
+    ) external nonReentrant onlyEnabled returns (uint256 positionId) {
+        // Mint the CD token to the account
+        CDEPO.mintFor(cdToken_, account_, amount_);
+
+        // Create a new term record in the CDPOS module
+        positionId = CDPOS.mint(
+            account_,
+            address(cdToken_),
+            amount_,
+            0,
+            uint48(block.timestamp + cdToken_.periodMonths() * 30 days),
             wrap_
         );
 
@@ -296,9 +320,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Validate that the position has expired
         if (block.timestamp < position.conversionExpiry) revert CDF_PositionNotExpired(positionId_);
 
-        // Validate that the position has not reached the redemption expiry
-        if (block.timestamp >= position.redemptionExpiry) revert CDF_PositionExpired(positionId_);
-
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
@@ -358,6 +379,8 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
         return (redeemed, address(CDEPO));
     }
+
+    // TODO replace redeem with redemptionQueue
 
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:

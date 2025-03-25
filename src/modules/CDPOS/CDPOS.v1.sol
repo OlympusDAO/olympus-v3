@@ -17,7 +17,6 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
     /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token
     /// @param  conversionExpiry        Timestamp when the deposit can no longer be converted
-    /// @param  redemptionExpiry        Timestamp when the deposit can no longer be redeemed
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
         address owner;
@@ -25,7 +24,6 @@ abstract contract CDPOSv1 is Module, ERC721 {
         uint256 remainingDeposit;
         uint256 conversionPrice;
         uint48 conversionExpiry;
-        uint48 redemptionExpiry;
         bool wrapped;
     }
 
@@ -39,7 +37,6 @@ abstract contract CDPOSv1 is Module, ERC721 {
         uint256 remainingDeposit,
         uint256 conversionPrice,
         uint48 conversionExpiry,
-        uint48 redemptionExpiry,
         bool wrapped
     );
 
@@ -135,7 +132,6 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  remainingDeposit_           The amount of reserve tokens remaining to be converted
     /// @param  conversionPrice_            The price of the reserve token in USD
     /// @param  conversionExpiry_           The timestamp when the position can no longer be converted
-    /// @param  redemptionExpiry_           The timestamp when the position can no longer be redeemed
     /// @param  wrap_                       Whether the position should be wrapped
     /// @return positionId                  The ID of the new position
     function mint(
@@ -144,7 +140,6 @@ abstract contract CDPOSv1 is Module, ERC721 {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) external virtual returns (uint256 positionId);
 

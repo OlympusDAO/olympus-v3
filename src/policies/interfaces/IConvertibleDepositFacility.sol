@@ -50,10 +50,9 @@ interface IConvertibleDepositFacility {
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
-    /// @notice Mints a new CD position
-    ///
+    /// @notice Mints a position for a call option
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the deposit token is supported
+    ///         - Validating that the CD token is supported
     ///         - Validating that the caller has the correct role
     ///         - Depositing the token into the CDEPO module and minting the CD token
     ///         - Creating a new position in the CDPOS module
@@ -63,19 +62,33 @@ interface IConvertibleDepositFacility {
     /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of token to deposit
     /// @param  conversionPrice_    The amount of CD tokens per OHM token
-    /// @param  conversionExpiry_   The timestamp when the position can no longer be converted
-    /// @param  redemptionExpiry_   The timestamp when the position can no longer be redeemed
     /// @param  wrap_               Whether the position should be wrapped
-    /// @return termId              The ID of the new term
-    function mint(
+    /// @return positionId          The ID of the new position
+    function mintCallOption(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
-    ) external returns (uint256 termId);
+    ) external returns (uint256 positionId);
+
+    /// @notice Mints a position for a yield-bearing deposit
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the CD token is supported
+    ///         - Depositing the token into the CDEPO module and minting the CD token
+    ///         - Creating a new position in the CDPOS module
+    ///
+    /// @param  cdToken_            The address of the CD token
+    /// @param  account_            The address to create the position for
+    /// @param  amount_             The amount of token to deposit
+    /// @param  wrap_               Whether the position should be wrapped
+    /// @return positionId          The ID of the new position
+    function mintDeposit(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_,
+        bool wrap_
+    ) external returns (uint256 positionId);
 
     /// @notice Converts CD tokens to OHM before conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
