@@ -174,13 +174,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         bool wrap_
     ) {
         // Create a new position
-        _createPosition(
-            owner_,
-            remainingDeposit_,
-            conversionPrice_,
-            conversionExpiry_,
-            wrap_
-        );
+        _createPosition(owner_, remainingDeposit_, conversionPrice_, conversionExpiry_, wrap_);
         _;
     }
 

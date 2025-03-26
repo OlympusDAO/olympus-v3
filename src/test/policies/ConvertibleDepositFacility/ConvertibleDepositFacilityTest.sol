@@ -49,10 +49,10 @@ contract ConvertibleDepositFacilityTest is Test {
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
-    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + 1 days;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
     uint16 public constant RECLAIM_RATE = 90e2;
     uint8 public constant PERIOD_MONTHS = 6;
+    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -142,14 +142,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 conversionPrice_,
         bool wrap_
     ) internal returns (uint256 positionId) {
-        return
-            _createPosition(
-                cdToken,
-                account_,
-                amount_,
-                conversionPrice_,
-                wrap_
-            );
+        return _createPosition(cdToken, account_, amount_, conversionPrice_, wrap_);
     }
 
     function _createPosition(
@@ -160,13 +153,7 @@ contract ConvertibleDepositFacilityTest is Test {
         bool wrap_
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        positionId = facility.mintCallOption(
-            cdToken_,
-            account_,
-            amount_,
-            conversionPrice_,
-            wrap_
-        );
+        positionId = facility.mintCallOption(cdToken_, account_, amount_, conversionPrice_, wrap_);
     }
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
@@ -176,12 +163,7 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
-        _createPosition(
-            account_,
-            amount_,
-            CONVERSION_PRICE,
-            false
-        );
+        _createPosition(account_, amount_, CONVERSION_PRICE, false);
         _;
     }
 
@@ -194,13 +176,7 @@ contract ConvertibleDepositFacilityTest is Test {
         reserveTokenTwo.approve(address(convertibleDepository), amount_);
 
         // Create position
-        _createPosition(
-            cdTokenTwo,
-            account_,
-            amount_,
-            CONVERSION_PRICE,
-            false
-        );
+        _createPosition(cdTokenTwo, account_, amount_, CONVERSION_PRICE, false);
         _;
     }
 

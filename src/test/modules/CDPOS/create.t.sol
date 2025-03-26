@@ -71,13 +71,7 @@ contract CreateCDPOSTest is CDPOSTest {
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "owner"));
 
         // Call function
-        _createPosition(
-            address(0),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        );
+        _createPosition(address(0), REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
     }
 
     function test_convertibleDepositTokenIsZeroAddress_reverts() public {
@@ -106,13 +100,7 @@ contract CreateCDPOSTest is CDPOSTest {
         vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "deposit"));
 
         // Call function
-        _createPosition(
-            address(this),
-            0,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        );
+        _createPosition(address(this), 0, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
     }
 
     function test_conversionPriceIsZero_reverts() public {
@@ -122,13 +110,7 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         // Call function
-        _createPosition(
-            address(this),
-            REMAINING_DEPOSIT,
-            0,
-            CONVERSION_EXPIRY,
-            false
-        );
+        _createPosition(address(this), REMAINING_DEPOSIT, 0, CONVERSION_EXPIRY, false);
     }
 
     function test_conversionExpiryIsInPastOrNow_reverts(uint48 expiry_) public {
@@ -140,13 +122,7 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         // Call function
-        _createPosition(
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            expiry,
-            false
-        );
+        _createPosition(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
     }
 
     function test_singlePosition() public {
@@ -290,24 +266,12 @@ contract CreateCDPOSTest is CDPOSTest {
 
         // Create 5 positions for owner1
         for (uint256 i = 0; i < 5; i++) {
-            _createPosition(
-                owner1,
-                REMAINING_DEPOSIT,
-                CONVERSION_PRICE,
-                CONVERSION_EXPIRY,
-                false
-            );
+            _createPosition(owner1, REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
         }
 
         // Create 5 positions for owner2
         for (uint256 i = 0; i < 5; i++) {
-            _createPosition(
-                owner2,
-                REMAINING_DEPOSIT,
-                CONVERSION_PRICE,
-                CONVERSION_EXPIRY,
-                false
-            );
+            _createPosition(owner2, REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
         }
 
         // Assert that the position count is correct
@@ -345,9 +309,7 @@ contract CreateCDPOSTest is CDPOSTest {
     }
 
     function test_conversionExpiryInFuture(uint48 expiry_) public {
-        uint48 conversionExpiry = uint48(
-            bound(expiry_, block.timestamp + 1, type(uint48).max)
-        );
+        uint48 conversionExpiry = uint48(bound(expiry_, block.timestamp + 1, type(uint48).max));
 
         // Expect event
         vm.expectEmit(true, true, true, true);

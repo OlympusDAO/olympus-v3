@@ -48,6 +48,8 @@ interface IConvertibleDepositFacility {
 
     error CDF_InvalidToken(uint256 positionId_, address token_);
 
+    error CDF_PositionNotConvertible(uint256 positionId_);
+
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
     /// @notice Mints a position for a call option

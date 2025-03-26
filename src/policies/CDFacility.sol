@@ -148,12 +148,12 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
-            account_,
-            address(cdToken_),
-            amount_,
-            0,
-            uint48(block.timestamp + cdToken_.periodMonths() * 30 days),
-            wrap_
+            account_, // owner
+            address(cdToken_), // CD token
+            amount_, // amount
+            type(uint256).max, // conversion price of max to indicate no conversion price
+            uint48(block.timestamp + cdToken_.periodMonths() * 30 days), // conversion expiry
+            wrap_ // wrap
         );
 
         // Emit an event
@@ -163,8 +163,9 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     function _previewConvert(
         address account_,
         uint256 positionId_,
-        uint256 amount_
-    ) internal view returns (uint256 convertedTokenOut) {
+        uint256 amount_,
+        address previousCDToken_
+    ) internal view returns (uint256 convertedTokenOut, address currentCDToken) {
         // Validate that the position is valid
         // This will revert if the position is not valid
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
@@ -178,13 +179,26 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
+        // Validate that the position supports conversion
+        if (position.conversionPrice == type(uint256).max)
+            revert CDF_PositionNotConvertible(positionId_);
+
+        // Set the CD token, or validate
+        currentCDToken = position.convertibleDepositToken;
+        if (previousCDToken_ == address(0)) {
+            // Validate that the CD token is supported
+            if (!CDEPO.isConvertibleDepositToken(currentCDToken))
+                revert CDF_InvalidToken(positionId_, currentCDToken);
+        } else if (previousCDToken_ != currentCDToken) {
+            revert CDF_InvalidArgs("multiple CD tokens");
+        }
+
         // The deposit and CD token have the same decimals, so either can be used
         convertedTokenOut =
-            (amount_ *
-                (10 ** IConvertibleDepositERC20(position.convertibleDepositToken).decimals())) /
+            (amount_ * (10 ** IConvertibleDepositERC20(currentCDToken).decimals())) /
             position.conversionPrice;
 
-        return convertedTokenOut;
+        return (convertedTokenOut, currentCDToken);
     }
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -212,24 +226,21 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
-        IConvertibleDepositERC20 cdToken;
+        address cdToken;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
             uint256 amount = amounts_[i];
+
             cdTokenIn += amount;
-            convertedTokenOut += _previewConvert(account_, positionId, amount);
 
-            // Set the CD token, or validate
-            address positionCDToken = CDPOS.getPosition(positionId).convertibleDepositToken;
-            if (address(cdToken) == address(0)) {
-                cdToken = IConvertibleDepositERC20(positionCDToken);
-
-                // Validate that the CD token is supported
-                if (!CDEPO.isConvertibleDepositToken(positionCDToken))
-                    revert CDF_InvalidToken(positionId, positionCDToken);
-            } else if (address(cdToken) != positionCDToken) {
-                revert CDF_InvalidArgs("multiple CD tokens");
-            }
+            (uint256 previewConvertOut, address currentCDToken) = _previewConvert(
+                account_,
+                positionId,
+                amount,
+                cdToken
+            );
+            convertedTokenOut += previewConvertOut;
+            cdToken = currentCDToken;
         }
 
         // If the amount is 0, revert
@@ -266,23 +277,21 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
             uint256 depositAmount = amounts_[i];
 
             cdTokenIn += depositAmount;
-            convertedTokenOut += _previewConvert(msg.sender, positionId, depositAmount);
 
-            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
-
-            // Set the CD token, or validate
-            if (address(cdToken) == address(0)) {
-                cdToken = IConvertibleDepositERC20(position.convertibleDepositToken);
-
-                // Validate that the CD token is supported
-                if (!CDEPO.isConvertibleDepositToken(position.convertibleDepositToken))
-                    revert CDF_InvalidToken(positionId, position.convertibleDepositToken);
-            } else if (address(cdToken) != position.convertibleDepositToken) {
-                revert CDF_InvalidArgs("multiple CD tokens");
-            }
+            (uint256 previewConvertOut, address currentCDToken) = _previewConvert(
+                msg.sender,
+                positionId,
+                depositAmount,
+                address(cdToken)
+            );
+            convertedTokenOut += previewConvertOut;
+            cdToken = IConvertibleDepositERC20(currentCDToken);
 
             // Update the position
-            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
+            CDPOS.update(
+                positionId,
+                CDPOS.getPosition(positionId).remainingDeposit - depositAmount
+            );
         }
 
         // Redeem the CD deposit

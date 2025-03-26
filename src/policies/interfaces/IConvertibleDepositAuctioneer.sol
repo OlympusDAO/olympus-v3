@@ -112,6 +112,7 @@ interface IConvertibleDepositAuctioneer {
         uint48 redemptionPeriod;
         uint8 auctionTrackingPeriod;
     }
+    // TODO remove timeToExpiry
 
     // ========== AUCTION ========== //
 

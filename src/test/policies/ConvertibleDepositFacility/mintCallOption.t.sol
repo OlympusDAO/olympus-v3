@@ -38,13 +38,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(auctioneer);
-        facility.mint(
-            cdToken,
-            recipient,
-            RESERVE_TOKEN_AMOUNT,
-            CONVERSION_PRICE,
-            false
-        );
+        facility.mintCallOption(cdToken, recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
     }
 
     function test_callerNotAuctioneer_reverts()
@@ -58,13 +52,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.mintCallOption(
-            cdToken,
-            recipient,
-            RESERVE_TOKEN_AMOUNT,
-            CONVERSION_PRICE,
-            false
-        );
+        facility.mintCallOption(cdToken, recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
     }
 
     function test_spendingNotApproved_reverts()
@@ -76,12 +64,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
-        _createPosition(
-            recipient,
-            RESERVE_TOKEN_AMOUNT,
-            CONVERSION_PRICE,
-            false
-        );
+        _createPosition(recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
     }
 
     function test_reserveTokenHasSmallerDecimals()
@@ -98,12 +81,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
         emit CreatedDeposit(address(reserveToken), recipient, 0, 10e6);
 
         // Call function
-        uint256 positionId = _createPosition(
-            recipient,
-            10e6,
-            conversionPrice,
-            false
-        );
+        uint256 positionId = _createPosition(recipient, 10e6, conversionPrice, false);
 
         // Assert that the position ID is 0
         assertEq(positionId, 0, "positionId");
@@ -178,12 +156,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
         )
     {
         // Call function
-        _createPosition(
-            recipient,
-            RESERVE_TOKEN_AMOUNT / 2,
-            CONVERSION_PRICE,
-            false
-        );
+        _createPosition(recipient, RESERVE_TOKEN_AMOUNT / 2, CONVERSION_PRICE, false);
 
         // Call function again
         uint256 positionId2 = _createPosition(

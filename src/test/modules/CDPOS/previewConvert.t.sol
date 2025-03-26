@@ -102,13 +102,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
     function test_convertibleDepositTokenDecimalsLower()
         public
         givenConvertibleDepositTokenDecimals(17)
-        givenPositionCreated(
-            address(this),
-            10e17,
-            2e17,
-            CONVERSION_EXPIRY,
-            false
-        )
+        givenPositionCreated(address(this), 10e17, 2e17, CONVERSION_EXPIRY, false)
     {
         // Call function
         uint256 ohmOut = CDPOS.previewConvert(0, 10e17);
@@ -123,13 +117,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
     function test_convertibleDepositTokenDecimalsHigher()
         public
         givenConvertibleDepositTokenDecimals(19)
-        givenPositionCreated(
-            address(this),
-            10e19,
-            2e19,
-            CONVERSION_EXPIRY,
-            false
-        )
+        givenPositionCreated(address(this), 10e19, 2e19, CONVERSION_EXPIRY, false)
     {
         // Call function
         uint256 ohmOut = CDPOS.previewConvert(0, 10e19);
@@ -158,13 +146,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
 
     function test_conversionPriceVerySmall()
         public
-        givenPositionCreated(
-            address(this),
-            REMAINING_DEPOSIT,
-            1,
-            CONVERSION_EXPIRY,
-            false
-        )
+        givenPositionCreated(address(this), REMAINING_DEPOSIT, 1, CONVERSION_EXPIRY, false)
     {
         // Call function
         uint256 ohmOut = CDPOS.previewConvert(0, REMAINING_DEPOSIT);
@@ -179,13 +161,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
 
     function test_conversionPriceVeryLarge()
         public
-        givenPositionCreated(
-            address(this),
-            REMAINING_DEPOSIT,
-            1e36,
-            CONVERSION_EXPIRY,
-            false
-        )
+        givenPositionCreated(address(this), REMAINING_DEPOSIT, 1e36, CONVERSION_EXPIRY, false)
     {
         // Call function
         uint256 ohmOut = CDPOS.previewConvert(0, REMAINING_DEPOSIT);
@@ -221,13 +197,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
 
     function test_amountVeryLarge()
         public
-        givenPositionCreated(
-            address(this),
-            1000e18,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        )
+        givenPositionCreated(address(this), 1000e18, CONVERSION_PRICE, CONVERSION_EXPIRY, false)
     {
         // Call function
         uint256 ohmOut = CDPOS.previewConvert(0, 1000e18);
