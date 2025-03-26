@@ -66,6 +66,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it reverts
     // when the bid amount converted is 0
     //  [X] it reverts
+    // when the deposit period is not supported
+    //  [X] it reverts
     // given the deposit asset has 6 decimals
     //  [X] the conversion price is correct
     // when the bid is the first bid
@@ -150,7 +152,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectNotEnabledRevert();
 
         // Call function
-        auctioneer.bid(1e18);
+        auctioneer.bid(1e18, PERIOD_MONTHS);
     }
 
     function test_givenSpendingNotApproved_reverts()
@@ -163,7 +165,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(1e18);
+        auctioneer.bid(1e18, PERIOD_MONTHS);
     }
 
     function test_givenAuctioneerRoleNotGranted_reverts()
@@ -180,7 +182,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(1e18);
+        auctioneer.bid(1e18, PERIOD_MONTHS);
     }
 
     function test_givenBidAmountConvertedIsZero_reverts(
@@ -206,7 +208,30 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(bidAmount);
+        auctioneer.bid(bidAmount, PERIOD_MONTHS);
+    }
+
+    function test_givenDepositPeriodNotSupported_reverts(
+        uint8 periodMonths_
+    )
+        public
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 1e18)
+    {
+        vm.assume(periodMonths_ != PERIOD_MONTHS);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "period"
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(1e18, periodMonths_);
     }
 
     function test_givenBidAmountConvertedIsAboveZero(
@@ -233,7 +258,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -267,7 +292,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -315,7 +340,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -374,7 +399,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -429,7 +454,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -487,7 +512,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -542,7 +567,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -595,7 +620,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -650,7 +675,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -705,7 +730,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -775,7 +800,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -852,7 +877,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -908,7 +933,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount, PERIOD_MONTHS);
 
         // Assert returned values
         _assertConvertibleDepositPosition(

@@ -33,7 +33,8 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     {}
 
     function bid(
-        uint256 deposit
+        uint256 deposit,
+        uint8
     ) external pure override returns (uint256 convertable, uint256 positionId) {
         return (deposit, 0);
     }
