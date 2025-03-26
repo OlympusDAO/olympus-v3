@@ -12,6 +12,8 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
     //  [X] it returns 0
     // when the amount is greater than the position's balance
     //  [X] it reverts
+    // when the position does not support conversion
+    //  [X] it reverts
     // when the convertible deposit token has different decimals
     //  [X] it returns the correct value
     // when the convertible deposit token has 9 decimals
@@ -77,6 +79,23 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
 
         // Call function
         CDPOS.previewConvert(0, amount);
+    }
+
+    function test_givenNotConvertible_reverts()
+        public
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            type(uint256).max,
+            type(uint48).max,
+            false
+        )
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotConvertible.selector, 0));
+
+        // Call function
+        CDPOS.previewConvert(0, REMAINING_DEPOSIT);
     }
 
     function test_success()

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
-import {MockERC20} from "forge-std/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC721ReceiverMock} from "@openzeppelin/contracts/mocks/ERC721ReceiverMock.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/interfaces/IERC721Receiver.sol";
 
@@ -41,8 +41,11 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         );
 
         // Set up the convertible deposit token
-        MockERC20 mockERC20 = new MockERC20();
-        mockERC20.initialize("Convertible Deposit Token", "CDT", convertibleDepositTokenDecimals);
+        MockERC20 mockERC20 = new MockERC20(
+            "Convertible Deposit Token",
+            "CDT",
+            convertibleDepositTokenDecimals
+        );
         convertibleDepositToken = address(mockERC20);
 
         // Generate fixtures
@@ -73,7 +76,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
         bool wrap_
-    ) internal {
+    ) internal view {
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
         assertEq(position.owner, owner_, "position.owner");
         assertEq(
@@ -87,7 +90,11 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         assertEq(position.wrapped, wrap_, "position.wrapped");
     }
 
-    function _assertUserPosition(address owner_, uint256 positionId_, uint256 total_) internal {
+    function _assertUserPosition(
+        address owner_,
+        uint256 positionId_,
+        uint256 total_
+    ) internal view {
         uint256[] memory userPositions = CDPOS.getUserPositionIds(owner_);
         assertEq(userPositions.length, total_, "userPositions.length");
 
@@ -111,7 +118,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         }
     }
 
-    function _assertERC721Balance(address owner_, uint256 balance_) internal {
+    function _assertERC721Balance(address owner_, uint256 balance_) internal view {
         assertEq(CDPOS.balanceOf(owner_), balance_, "balanceOf");
     }
 
@@ -119,7 +126,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 positionId_,
         uint256 total_,
         bool received_
-    ) internal {
+    ) internal view {
         assertEq(positions.length, total_, "positions.length");
 
         // Iterate over the positions and assert that the positionId_ is in the array
@@ -142,8 +149,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
     modifier givenConvertibleDepositTokenDecimals(uint8 decimals_) {
         // Create a new token with the given decimals
-        MockERC20 mockERC20 = new MockERC20();
-        mockERC20.initialize("Convertible Deposit Token", "CDT", decimals_);
+        MockERC20 mockERC20 = new MockERC20("Convertible Deposit Token", "CDT", decimals_);
         convertibleDepositToken = address(mockERC20);
         _;
     }

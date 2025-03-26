@@ -15,8 +15,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  owner                   Address of the owner of the position
     /// @param  convertibleDepositToken Address of the convertible deposit token
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token
-    /// @param  conversionExpiry        Timestamp when the deposit can no longer be converted
+    /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token (only for convertible positions)
+    /// @param  conversionExpiry        Timestamp when the deposit can no longer be converted (only for convertible positions)
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
         address owner;
@@ -59,6 +59,14 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @notice Emitted when a position is unwrapped
     event PositionUnwrapped(uint256 indexed positionId);
 
+    // ========== CONSTANTS ========== //
+
+    /// @notice The value used for the conversion price if conversion is not supported
+    uint256 public constant NON_CONVERSION_PRICE = type(uint256).max;
+
+    /// @notice The value used for the conversion expiry if conversion is not supported
+    uint48 public constant NON_CONVERSION_EXPIRY = type(uint48).max;
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice The number of positions created
@@ -88,6 +96,9 @@ abstract contract CDPOSv1 is Module, ERC721 {
 
     /// @notice Error thrown when an invalid parameter is provided
     error CDPOS_InvalidParams(string reason_);
+
+    /// @notice Error thrown when a position does not support conversion
+    error CDPOS_NotConvertible(uint256 positionId_);
 
     // ========== WRAPPING ========== //
 
