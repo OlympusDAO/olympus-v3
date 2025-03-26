@@ -139,16 +139,15 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The CD token is not supported
     function mintDeposit(
         IConvertibleDepositERC20 cdToken_,
-        address account_,
         uint256 amount_,
         bool wrap_
     ) external nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
-        CDEPO.mintFor(cdToken_, account_, amount_);
+        CDEPO.mintFor(cdToken_, msg.sender, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
-            account_, // owner
+            msg.sender, // owner
             address(cdToken_), // CD token
             amount_, // amount
             type(uint256).max, // conversion price of max to indicate no conversion price
@@ -157,7 +156,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         );
 
         // Emit an event
-        emit CreatedDeposit(address(cdToken_.asset()), account_, positionId, amount_);
+        emit CreatedDeposit(address(cdToken_.asset()), msg.sender, positionId, amount_);
     }
 
     function _previewConvert(

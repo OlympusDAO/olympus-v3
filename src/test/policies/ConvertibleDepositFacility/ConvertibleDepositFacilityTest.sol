@@ -167,6 +167,19 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    function _createYieldDepositPosition(
+        address account_,
+        uint256 amount_
+    ) internal returns (uint256 positionId) {
+        vm.prank(account_);
+        positionId = facility.mintDeposit(cdToken, amount_, false);
+    }
+
+    modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
+        _createYieldDepositPosition(account_, amount_);
+        _;
+    }
+
     modifier givenAddressHasDifferentTokenAndPosition(address account_, uint256 amount_) {
         // Mint
         reserveTokenTwo.mint(account_, amount_);

@@ -450,9 +450,22 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///
-    /// @return     Returns true if the conversion expiry timestamp is now or in the past
-    function isExpired(uint256 positionId_) external view virtual override returns (bool) {
-        return _getPosition(positionId_).conversionExpiry <= block.timestamp;
+    /// @return     isExpired_  Returns true if the conversion expiry timestamp is now or in the past
+    function isExpired(
+        uint256 positionId_
+    ) external view virtual override returns (bool isExpired_) {
+        isExpired_ = _getPosition(positionId_).conversionExpiry <= block.timestamp;
+    }
+
+    /// @inheritdoc CDPOSv1
+    /// @dev        This function reverts if:
+    ///             - The position ID is invalid
+    ///
+    /// @return     isConvertible_  Returns true if the conversion price is not the maximum value
+    function isConvertible(
+        uint256 positionId_
+    ) external view virtual override returns (bool isConvertible_) {
+        isConvertible_ = _getPosition(positionId_).conversionPrice != type(uint256).max;
     }
 
     function _previewConvert(

@@ -81,13 +81,11 @@ interface IConvertibleDepositFacility {
     ///         - Creating a new position in the CDPOS module
     ///
     /// @param  cdToken_            The address of the CD token
-    /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of token to deposit
     /// @param  wrap_               Whether the position should be wrapped
     /// @return positionId          The ID of the new position
     function mintDeposit(
         IConvertibleDepositERC20 cdToken_,
-        address account_,
         uint256 amount_,
         bool wrap_
     ) external returns (uint256 positionId);

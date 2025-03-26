@@ -35,7 +35,7 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     // when the converted amount is 0
     //  [X] it reverts
     // when the position does not support conversion
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the deposit asset has 6 decimals
     //  [X] the amount of CD tokens converted is correct
     //  [X] the amount of OHM minted is correct
@@ -430,6 +430,40 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
             abi.encodeWithSelector(
                 IConvertibleDepositFacility.CDF_InvalidArgs.selector,
                 "multiple CD tokens"
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        facility.convert(positionIds_, amounts_);
+    }
+
+    function test_anyPositionDoesNotSupportConversion_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 1; // cdToken yield deposit
+
+        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_PositionNotConvertible.selector,
+                1
             )
         );
 

@@ -198,6 +198,12 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @return expired_    Whether the position is expired
     function isExpired(uint256 positionId_) external view virtual returns (bool);
 
+    /// @notice Check if a position is convertible
+    ///
+    /// @param  positionId_     The ID of the position
+    /// @return convertible_    Whether the position is convertible
+    function isConvertible(uint256 positionId_) external view virtual returns (bool);
+
     /// @notice Preview the amount of OHM that would be received for a given amount of convertible deposit tokens
     ///
     /// @param  positionId_ The ID of the position

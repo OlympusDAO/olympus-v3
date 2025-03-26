@@ -22,13 +22,13 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // given the deposit asset has 6 decimals
     //  [X] the amount of CD tokens minted is correct
-    //  [X] the mint approval is increased by the correct amount of OHM
+    //  [X] mint approval is not changed
     // when multiple positions are created
     //  [X] it succeeds
     // [X] it mints the CD tokens to account_
     // [X] it creates a new position in the CDPOS module
-    // [X] it pre-emptively increases the mint approval equivalent to the converted amount of OHM
-    // [ ] the position conversion price matches
+    // [X] mint approval is not changed
+    // [X] the position conversion price matches
     // [X] it returns the position ID
     // [X] it emits a CreatedDeposit event
 
@@ -86,6 +86,13 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
         // Assert that the position ID is 0
         assertEq(positionId, 0, "positionId");
 
+        // Assert that the conversion price is correct
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).conversionPrice,
+            conversionPrice,
+            "conversionPrice"
+        );
+
         // Assert that the reserve token was transferred from the recipient
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
 
@@ -125,6 +132,16 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
 
         // Assert that the position ID is 0
         assertEq(positionId, 0, "positionId");
+
+        // Assert that the conversion price is correct
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).conversionPrice,
+            CONVERSION_PRICE,
+            "conversionPrice"
+        );
+
+        // Assert that the position is convertible
+        assertEq(convertibleDepositPositions.isConvertible(positionId), true, "isConvertible");
 
         // Assert that the reserve token was transferred from the recipient
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
@@ -168,6 +185,16 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
 
         // Assert that the position ID is 1
         assertEq(positionId2, 1, "positionId2");
+
+        // Assert that the conversion price is correct
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId2).conversionPrice,
+            CONVERSION_PRICE,
+            "conversionPrice"
+        );
+
+        // Assert that the position is convertible
+        assertEq(convertibleDepositPositions.isConvertible(positionId2), true, "isConvertible");
 
         // Assert that the reserve token was transferred from the recipient
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
