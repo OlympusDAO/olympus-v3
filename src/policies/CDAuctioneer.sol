@@ -46,7 +46,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     /// @notice The length of the enable parameters
-    uint256 internal constant _ENABLE_PARAMS_LENGTH = 224;
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 160;
 
     // ========== STATE VARIABLES ========== //
 
@@ -79,16 +79,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice The tick step
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
-
-    /// @notice The number of seconds between creation and expiry of convertible deposits
-    /// @dev    See `getTimeToExpiry()` for more information
-    uint48 internal _timeToExpiry;
-    // TODO remove time to expiry
-
-    /// @notice The number of seconds that redemption is allowed
-    /// @dev    See `getRedemptionPeriod()` for more information
-    uint48 internal _redemptionPeriod;
-    // TODO remove redemption period
 
     /// @notice The index of the next auction result
     uint8 internal _auctionResultsNextIndex;
@@ -150,7 +140,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - Updates the current tick based on the current state
     ///             - Determines the amount of OHM that can be purchased for the deposit amount, and the updated tick capacity and price
     ///             - Updates the day state, if necessary
-    ///             - Creates a convertible deposit position using the deposit amount, the average conversion price and the configured time to expiry
+    ///             - Creates a convertible deposit position using the deposit amount, the average conversion price and the CD token period
     ///
     ///             This function reverts if:
     ///             - The contract is not active
@@ -404,16 +394,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function getTimeToExpiry() external view override returns (uint48) {
-        return _timeToExpiry;
-    }
-
-    /// @inheritdoc IConvertibleDepositAuctioneer
-    function getRedemptionPeriod() external view override returns (uint48) {
-        return _redemptionPeriod;
-    }
-
-    /// @inheritdoc IConvertibleDepositAuctioneer
     function getAuctionTrackingPeriod() external view override returns (uint8) {
         return _auctionTrackingPeriod;
     }
@@ -526,38 +506,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
-    ///             - The new time to expiry is 0
-    ///
-    /// @param  newTime_ The new time to expiry
-    function setTimeToExpiry(uint48 newTime_) public override onlyAdminRole {
-        // Value must be non-zero
-        if (newTime_ == 0) revert CDAuctioneer_InvalidParams("time to expiry");
-
-        _timeToExpiry = newTime_;
-
-        // Emit event
-        emit TimeToExpiryUpdated(newTime_);
-    }
-
-    /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
-    ///             - The caller does not have the ROLE_ADMIN role
-    ///             - The new redemption period is 0
-    ///
-    /// @param  newRedemptionPeriod_ The new redemption period
-    function setRedemptionPeriod(uint48 newRedemptionPeriod_) public override onlyAdminRole {
-        // Value must be non-zero
-        if (newRedemptionPeriod_ == 0) revert CDAuctioneer_InvalidParams("redemption period");
-
-        _redemptionPeriod = newRedemptionPeriod_;
-
-        // Emit event
-        emit RedemptionPeriodUpdated(newRedemptionPeriod_);
-    }
-
-    /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
-    ///             - The caller does not have the ROLE_ADMIN role
     ///             - The new tick step is < 100e2
     ///
     /// @param      newStep_    The new tick step
@@ -599,8 +547,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - The enable data is not an encoded `EnableParams` struct
     ///             - The auction parameters are invalid
     ///             - The tick step is invalid
-    ///             - The time to expiry is invalid
-    ///             - The redemption period is invalid
     ///             - The auction tracking period is invalid
     function _enable(bytes calldata enableData_) internal override {
         if (enableData_.length != _ENABLE_PARAMS_LENGTH)
@@ -614,12 +560,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // Set the tick step
         setTickStep(params.tickStep);
-
-        // Set the time to expiry
-        setTimeToExpiry(params.timeToExpiry);
-
-        // Set the redemption period
-        setRedemptionPeriod(params.redemptionPeriod);
 
         // Set the auction tracking period
         setAuctionTrackingPeriod(params.auctionTrackingPeriod);

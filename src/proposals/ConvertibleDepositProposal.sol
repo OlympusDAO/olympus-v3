@@ -226,8 +226,6 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                         tickSize: INITIAL_TICK_SIZE,
                         minPrice: INITIAL_MIN_PRICE,
                         tickStep: INITIAL_TICK_STEP,
-                        timeToExpiry: INITIAL_TIME_TO_EXPIRY,
-                        redemptionPeriod: INITIAL_REDEMPTION_PERIOD,
                         auctionTrackingPeriod: INITIAL_AUCTION_TRACKING_PERIOD
                     })
                 )

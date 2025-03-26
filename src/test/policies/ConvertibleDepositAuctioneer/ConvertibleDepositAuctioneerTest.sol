@@ -52,8 +52,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint24 public constant TICK_STEP = 110e2; // 110%
     uint256 public constant MIN_PRICE = 15e18;
     uint256 public constant TARGET = 20e9;
-    uint48 public constant TIME_TO_EXPIRY = 1 days;
-    uint48 public constant REDEMPTION_PERIOD = 2 days;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
     uint8 public constant PERIOD_MONTHS = 6;
@@ -228,8 +226,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
                     tickStep: TICK_STEP,
-                    timeToExpiry: TIME_TO_EXPIRY,
-                    redemptionPeriod: REDEMPTION_PERIOD,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
             )
@@ -250,8 +246,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     tickSize: tickSize_,
                     minPrice: minPrice_,
                     tickStep: TICK_STEP,
-                    timeToExpiry: TIME_TO_EXPIRY,
-                    redemptionPeriod: REDEMPTION_PERIOD,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
             )
@@ -299,12 +293,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
     ) {
         vm.prank(owner_);
         cdToken.approve(spender_, amount_);
-        _;
-    }
-
-    modifier givenTimeToExpiry(uint48 timeToExpiry_) {
-        vm.prank(admin);
-        auctioneer.setTimeToExpiry(timeToExpiry_);
         _;
     }
 
