@@ -76,6 +76,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it deducts the converted amount from the tick capacity
     //  [X] it sets the current tick size to the standard tick size
     //  [X] it does not update the tick price
+    //  [X] the position is not wrapped as an ERC721
     // when the bid is the first bid of the day
     //  [X] the day state is not reset
     //  [X] it updates the day's deposit balance
