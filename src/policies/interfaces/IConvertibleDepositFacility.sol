@@ -33,6 +33,14 @@ interface IConvertibleDepositFacility {
         uint256 reclaimedAmount,
         uint256 forfeitedAmount
     );
+    event ClaimedYield(
+        address indexed vaultToken,
+        address indexed user,
+        uint256 yield
+    );
+    event YieldFeeSet(
+        uint16 yieldFee
+    );
 
     // ========== ERRORS ========== //
 
@@ -48,7 +56,7 @@ interface IConvertibleDepositFacility {
 
     error CDF_InvalidToken(uint256 positionId_, address token_);
 
-    error CDF_PositionNotConvertible(uint256 positionId_);
+    error CDF_Unsupported(uint256 positionId_);
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
@@ -198,6 +206,39 @@ interface IConvertibleDepositFacility {
         uint256 amount_
     ) external view returns (uint256 reclaimed, address cdTokenSpender);
 
+    // ========== YIELD FUNCTIONS ========== //
+
+    /// @notice Preview the amount of yield that would be claimed for the given positions
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that `account_` is the owner of all of the positions
+    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that all of the positions are valid
+    ///         - Returning the total amount of yield that would be claimed
+    ///
+    /// @param  account_        The address to preview the yield for
+    /// @param  positionIds_    An array of position ids that will be claimed
+    /// @return yield           The amount of yield that would be claimed
+    /// @return vault           The address of the vault token the will be received
+    function previewClaimYield(
+        address account_,
+        uint256[] memory positionIds_
+    ) external view returns (uint256 yield, IERC4626 vault);
+
+    /// @notice Claims the yield for the given positions
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller is the owner of all of the positions
+    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that all of the positions are valid
+    ///         - Burning the CD tokens
+    ///         - Transferring the yield to the caller
+    ///         - Emitting an event
+    ///
+    /// @param  positionIds_    An array of position ids that will be claimed
+    /// @return yield           The amount of yield that was claimed
+    function claimYield(
+        uint256[] memory positionIds_
+    ) external returns (uint256 yield);
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice Creates a new CD token
@@ -215,6 +256,21 @@ interface IConvertibleDepositFacility {
         uint8 periodMonths_,
         uint16 reclaimRate_
     ) external returns (IConvertibleDepositERC20 cdToken);
+
+    /// @notice Sets the percentage of yield that will be taken as a fee
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Setting the yield fee
+    ///
+    /// @param  yieldFee_       The percentage of yield that will be taken as a fee, in terms of 100e2
+    function setYieldFee(
+        uint16 yieldFee_
+    ) external;
+
+    /// @notice Returns the percentage of yield that will be taken as a fee
+    ///
+    /// @return yieldFee The percentage of yield that will be taken as a fee, in terms of 100e2
+    function getYieldFee() external view returns (uint16 yieldFee);
 
     // ========== VIEW FUNCTIONS ========== //
 

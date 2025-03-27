@@ -49,6 +49,9 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     /// @notice The CDPOS module.
     CDPOSv1 public CDPOS;
 
+    /// @notice The yield fee
+    uint16 internal _yieldFee;
+
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {
@@ -180,7 +183,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
         // Validate that the position supports conversion
         if (position.conversionPrice == type(uint256).max)
-            revert CDF_PositionNotConvertible(positionId_);
+            revert CDF_Unsupported(positionId_);
 
         // Set the CD token, or validate
         currentCDToken = position.convertibleDepositToken;
@@ -508,6 +511,100 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         return reclaimed;
     }
 
+    // ========== YIELD FUNCTIONS ========== //
+
+    function _previewClaimYield(
+        address account_,
+        uint256 positionId_,
+        address previousCDToken_
+    ) internal view returns (uint256 yieldMinusFee, uint256 yieldFee, address currentCDToken) {
+        // Validate that the position is valid
+        // This will revert if the position is not valid
+        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
+
+        // Validate that the caller is the owner of the position
+        if (position.owner != account_) revert CDF_NotOwner(positionId_);
+
+        // TODO Validate that the position is within the deposit period or return 0
+
+        // TODO Validate that the position has not been redeemed
+
+        // TODO Validate that the position is not convertible
+
+        // Set the CD token, or validate
+        currentCDToken = position.convertibleDepositToken;
+        if (previousCDToken_ == address(0)) {
+            // Validate that the CD token is supported
+            if (!CDEPO.isConvertibleDepositToken(currentCDToken))
+                revert CDF_InvalidToken(positionId_, currentCDToken);
+        } else if (previousCDToken_ != currentCDToken) {
+            revert CDF_InvalidArgs("multiple CD tokens");
+        }
+
+        // TODO Determine the payable yield since the last claim
+
+        return (yieldMinusFee, yieldFee, currentCDToken);
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - account_ is not the owner of all of the positions
+    ///             - Any position is not valid
+    ///             - Any position is not a supported CD token
+    ///             - Any position has a different CD token
+    function previewClaimYield(
+        address account_,
+        uint256[] memory positionIds_
+    ) external view onlyEnabled() returns (uint256 yieldMinusFee, IERC20 asset) {
+        address cdToken;
+        for (uint256 i; i < positionIds_.length; ++i) {
+            uint256 positionId = positionIds_[i];
+
+            (uint256 previewYieldMinusFee, uint256 previewYieldFee, address currentCDToken) = _previewClaimYield(
+                account_,
+                positionId,
+                cdToken
+            );
+            yieldMinusFee += previewYieldMinusFee;
+            cdToken = currentCDToken;
+        }
+
+        return (yieldMinusFee, IConvertibleDepositERC20(cdToken).asset());
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function claimYield(
+        uint256[] memory positionIds_
+    ) external returns (uint256 yieldMinusFee) {
+        IConvertibleDepositERC20 cdToken;
+        uint256 yieldFee;
+        for (uint256 i; i < positionIds_.length; ++i) {
+            uint256 positionId = positionIds_[i];
+
+            (uint256 previewYieldMinusFee, uint256 previewYieldFee, address currentCDToken) = _previewClaimYield(
+                msg.sender,
+                positionId,
+                address(cdToken)
+            );
+            yieldMinusFee += previewYieldMinusFee;
+            yieldFee += previewYieldFee;
+            cdToken = IConvertibleDepositERC20(currentCDToken);
+
+            // TODO Update the claim timestamp
+        }
+
+        // Redeem the vault tokens
+
+        // TODO transfer the yield to the caller
+
+        // Transfer the yield fee to the treasury
+
+        // Emit event
+
+        return yield;
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -524,6 +621,29 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         cdToken = CDEPO.create(vault_, periodMonths_, reclaimRate_);
 
         return cdToken;
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller is not an admin
+    ///             - The yield fee is greater than 100e2
+    function setYieldFee(
+        uint16 yieldFee_
+    ) external onlyEnabled onlyAdminRole {
+        // Validate that the yield fee is not greater than 100e2
+        if (yieldFee_ > 100e2) revert CDF_InvalidArgs("yield fee");
+
+        // Set the yield fee
+        _yieldFee = yieldFee_;
+
+        // Emit event
+        emit YieldFeeSet(yieldFee_);
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function getYieldFee() external view returns (uint16) {
+        return _yieldFee;
     }
 
     // ========== VIEW FUNCTIONS ========== //

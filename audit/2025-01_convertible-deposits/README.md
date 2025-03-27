@@ -408,7 +408,8 @@ The CDAuctioneer is able to mint a call option:
 
 The public can mint a yield-bearing deposit:
 
-- `mintYieldDeposit()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `mintYieldDeposit()`: results in the deposit of the configured deposit token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `claimYield()`: transfers the variable yield accrued from the vault token (e.g. sUSDS) after deducting the yield fee. However, when the deposit is in the redemption queue, the yield is fixed.
 
 CD token holders can perform the following actions:
 
