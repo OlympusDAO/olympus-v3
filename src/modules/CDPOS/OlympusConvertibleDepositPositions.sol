@@ -480,7 +480,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         isExpired_ = _getPosition(positionId_).conversionExpiry <= block.timestamp;
     }
 
-    function _isConvertible(Position memory position_) internal view returns (bool) {
+    function _isConvertible(Position memory position_) internal pure returns (bool) {
         return
             position_.conversionPrice != NON_CONVERSION_PRICE &&
             position_.conversionExpiry != NON_CONVERSION_EXPIRY;
