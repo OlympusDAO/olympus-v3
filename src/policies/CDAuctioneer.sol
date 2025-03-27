@@ -18,7 +18,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CDFacility} from "./CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
-/// @notice Implementation of the {IConvertibleDepositAuctioneer} interface
+/// @notice Implementation of the {IConvertibleDepositAuctioneer} interface for a specific bid token and deposit period
 /// @dev    This contract implements an auction for convertible deposit tokens. It runs these auctions according to the following principles:
 ///         - Auctions are of infinite duration
 ///         - Auctions are of infinite capacity
@@ -32,8 +32,6 @@ import {CDFacility} from "./CDFacility.sol";
 ///         - The auction parameters are able to be updated in order to tweak the auction's behaviour
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
-
-    // TODO multi-token/multi-period support
 
     // ========== CONSTANTS ========== //
 
@@ -52,6 +50,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     /// @notice Address of the token that is being bid
     IERC20 public immutable BID_TOKEN;
+
+    /// @notice The period of the deposit in months
+    uint8 public immutable DEPOSIT_PERIOD_MONTHS;
 
     /// @notice Address of the Convertible Deposit Facility
     CDFacility public immutable CD_FACILITY;
@@ -92,12 +93,19 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     // ========== SETUP ========== //
 
-    constructor(address kernel_, address cdFacility_, address bidToken_) Policy(Kernel(kernel_)) {
+    constructor(
+        address kernel_,
+        address cdFacility_,
+        address bidToken_,
+        uint8 depositPeriodMonths_
+    ) Policy(Kernel(kernel_)) {
         if (cdFacility_ == address(0)) revert CDAuctioneer_InvalidParams("cd facility");
         if (bidToken_ == address(0)) revert CDAuctioneer_InvalidParams("bid token");
+        if (depositPeriodMonths_ == 0) revert CDAuctioneer_InvalidParams("deposit period months");
 
         CD_FACILITY = CDFacility(cdFacility_);
         BID_TOKEN = IERC20(bidToken_);
+        DEPOSIT_PERIOD_MONTHS = depositPeriodMonths_;
 
         // PolicyEnabler makes this disabled until enabled
     }
@@ -112,8 +120,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
         // Validate that the bid token is supported by the CDEPO module
-        // TODO configure period months
-        convertibleDebtToken = CDEPO.getConvertibleDepositToken(address(BID_TOKEN), 6);
+        convertibleDebtToken = CDEPO.getConvertibleDepositToken(
+            address(BID_TOKEN),
+            DEPOSIT_PERIOD_MONTHS
+        );
         if (address(convertibleDebtToken) == address(0))
             revert CDAuctioneer_InvalidParams("bid token");
     }

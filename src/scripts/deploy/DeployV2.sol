@@ -1308,18 +1308,25 @@ contract OlympusDeploy is Script {
         return address(CDPOS);
     }
 
-    function _deployConvertibleDepositAuctioneer(bytes calldata) public returns (address) {
+    function _deployConvertibleDepositAuctioneer(bytes calldata args_) public returns (address) {
         // No additional arguments for ConvertibleDepositAuctioneer
+        uint8 depositPeriodMonths = abi.decode(args_, (uint8));
 
         // Log dependencies
         console2.log("ConvertibleDepositAuctioneer parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   cdFacility", address(cdFacility));
         console2.log("   reserveToken", address(reserve));
+        console2.log("   depositPeriodMonths", depositPeriodMonths);
 
         // Deploy ConvertibleDepositAuctioneer
         vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility), address(reserve));
+        cdAuctioneer = new CDAuctioneer(
+            address(kernel),
+            address(cdFacility),
+            address(reserve),
+            depositPeriodMonths
+        );
         console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);
