@@ -674,15 +674,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return depositTokens_;
     }
 
-    /// @inheritdoc IConvertibleDepository
-    function getDepositTokenPeriods(
-        address depositToken_
-    ) external view override returns (uint8[] memory periods) {
-        periods = _depositTokenPeriods[IERC20(depositToken_)];
-
-        return periods;
-    }
-
     /// @inheritdoc CDEPOv1
     function getVaultTokens() external view override returns (IERC4626[] memory) {
         return _vaultTokens;

@@ -173,13 +173,6 @@ interface IConvertibleDepository {
     /// @return tokens  Array of supported token addresses and periods
     function getDepositTokens() external view returns (DepositToken[] memory tokens);
 
-    /// @notice Get all supported deposit periods
-    ///
-    /// @return periods  Array of supported period months, or an empty array if no periods are supported
-    function getDepositTokenPeriods(
-        address depositToken_
-    ) external view returns (uint8[] memory periods);
-
     /// @notice Get all supported convertible deposit tokens
     ///
     /// @return tokens  Array of supported token addresses

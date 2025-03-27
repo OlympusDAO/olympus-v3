@@ -104,13 +104,9 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Deposit bid tokens to bid for convertible deposit tokens
     ///
     /// @param  deposit_        Amount of bid tokens to deposit
-    /// @param  periodMonths_   The period of the deposit token (months)
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
     /// @return positionId      The ID of the position created by the CDPOS module to represent the convertible deposit terms
-    function bid(
-        uint256 deposit_,
-        uint8 periodMonths_
-    ) external returns (uint256 ohmOut, uint256 positionId);
+    function bid(uint256 deposit_) external returns (uint256 ohmOut, uint256 positionId);
 
     /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///

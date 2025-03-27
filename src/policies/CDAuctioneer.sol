@@ -33,6 +33,8 @@ import {CDFacility} from "./CDFacility.sol";
 contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
 
+    // TODO multi-token/multi-period support
+
     // ========== CONSTANTS ========== //
 
     /// @notice The role that can perform periodic actions, such as updating the auction parameters
@@ -57,6 +59,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice Address of the CDEPO module
     /// @dev    This is set in `configureDependencies()`
     CDEPOv1 public CDEPO;
+
+    /// @notice Address of the CD token
+    /// @dev    This is set in `configureDependencies()`
+    ///         In effect, it is an immutable variable, but it cannot be declared immutable as it can only be set in `configureDependencies()`
+    IConvertibleDepositERC20 public convertibleDebtToken;
 
     /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -105,8 +112,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
 
         // Validate that the bid token is supported by the CDEPO module
-        uint8[] memory depositPeriods = CDEPO.getDepositTokenPeriods(address(BID_TOKEN));
-        if (depositPeriods.length == 0) revert CDAuctioneer_InvalidParams("bid token");
+        // TODO configure period months
+        convertibleDebtToken = CDEPO.getConvertibleDepositToken(address(BID_TOKEN), 6);
+        if (address(convertibleDebtToken) == address(0))
+            revert CDAuctioneer_InvalidParams("bid token");
     }
 
     /// @inheritdoc Policy
@@ -136,18 +145,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             This function reverts if:
     ///             - The contract is not active
     ///             - The calculated converted amount is 0
-    ///             - The deposit period is not supported
     function bid(
-        uint256 deposit_,
-        uint8 periodMonths_
+        uint256 deposit_
     ) external override nonReentrant onlyEnabled returns (uint256 ohmOut, uint256 positionId) {
-        // Validate that the deposit period is supported
-        IConvertibleDepositERC20 cdToken = CDEPO.getConvertibleDepositToken(
-            address(BID_TOKEN),
-            periodMonths_
-        );
-        if (address(cdToken) == address(0)) revert CDAuctioneer_InvalidParams("period");
-
         // Update the current tick based on the current state
         // lastUpdate is updated after this, otherwise time calculations will be incorrect
         _previousTick = getCurrentTick();
@@ -182,7 +182,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // Create the CD tokens and position
         positionId = CD_FACILITY.mintCallOption(
-            cdToken,
+            convertibleDebtToken,
             msg.sender,
             depositIn,
             conversionPrice,

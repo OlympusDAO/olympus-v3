@@ -324,7 +324,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function _bid(address owner_, uint256 deposit_) internal {
         vm.prank(owner_);
-        auctioneer.bid(deposit_, PERIOD_MONTHS);
+        auctioneer.bid(deposit_);
     }
 
     function _mintAndBid(address owner_, uint256 deposit_) internal {
