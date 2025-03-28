@@ -35,6 +35,9 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @notice Emitted when a new token is supported
     event TokenCreated(address indexed depositToken, uint8 periodMonths, address indexed cdToken);
 
+    /// @notice Emitted when the underlying asset is withdrawn
+    event TokenWithdrawn(address indexed token, address indexed recipient, uint256 amount);
+
     // ========== CONSTANTS ========== //
 
     /// @notice Equivalent to 100%
@@ -88,7 +91,7 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @param  to_ The address to sweep the yield to
     function sweepAllYield(address to_) external virtual;
 
-    /// @notice Claim the yield accrued  for a CD token
+    /// @notice Claim the yield accrued for a CD token
     /// @dev    The implementing function should perform the following:
     ///         - Validates that the CD token is supported
     ///         - Validates that the caller is permissioned
@@ -169,4 +172,15 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
         uint8 periodMonths_,
         uint16 reclaimRate_
     ) external virtual returns (IConvertibleDepositERC20 cdToken);
+
+    /// @notice Withdraws the underlying asset for the given CD token
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the CD token is supported
+    ///         - Validates that the caller is permissioned
+    ///         - Transfers the token from the contract to the caller
+    ///         - Emits a `TokenWithdrawn` event
+    ///
+    /// @param  cdToken_      The CD token to withdraw the underlying asset for
+    /// @param  amount_       The amount of underlying asset to withdraw
+    function withdraw(IConvertibleDepositERC20 cdToken_, uint256 amount_) external virtual;
 }

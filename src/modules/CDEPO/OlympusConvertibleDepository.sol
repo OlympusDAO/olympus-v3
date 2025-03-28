@@ -651,6 +651,24 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return string(abi.encodePacked(nameBytes));
     }
 
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function reverts if:
+    ///             - The caller is not permissioned
+    ///             - The CD token is not supported
+    function withdraw(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external override permissioned onlyCDToken(cdToken_) {
+        // Transfer the token from the contract to the caller
+        uint256 amountInShares = cdToken_.vault().withdraw(amount_, msg.sender, address(this));
+
+        // Update the total shares
+        _totalShares[cdToken_.vault()] -= amountInShares;
+
+        // Emit the event
+        emit TokenWithdrawn(address(cdToken_.asset()), msg.sender, amount_);
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepository
