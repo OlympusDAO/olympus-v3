@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
+import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-contract MintDepositCDFTest is ConvertibleDepositFacilityTest {
+contract MintDepositYDFTest is YieldDepositFacilityTest {
     event CreatedDeposit(
         address indexed depositToken,
         address indexed user,
@@ -21,7 +21,6 @@ contract MintDepositCDFTest is ConvertibleDepositFacilityTest {
     //  [X] the amount of CD tokens minted is correct
     // [X] it mints the CD tokens to account_
     // [X] it creates a new position in the CDPOS module
-    // [X] mint approval is not changed
     // [X] the position does not have a conversion price
     // [X] it returns the position ID
     // [X] it emits a CreatedDeposit event
@@ -32,7 +31,7 @@ contract MintDepositCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.mintDeposit(cdToken, RESERVE_TOKEN_AMOUNT, false);
+        yieldDepositFacility.mint(cdToken, RESERVE_TOKEN_AMOUNT, false);
     }
 
     function test_spendingNotApproved_reverts()
@@ -81,9 +80,6 @@ contract MintDepositCDFTest is ConvertibleDepositFacilityTest {
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
-
-        // Assert that the mint approval was NOT increased
-        _assertMintApproval(0);
     }
 
     function test_success()
@@ -130,8 +126,5 @@ contract MintDepositCDFTest is ConvertibleDepositFacilityTest {
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
-
-        // Assert that the mint approval was NOT increased
-        _assertMintApproval(0);
     }
 }

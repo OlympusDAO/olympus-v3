@@ -11,22 +11,17 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
-import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
-import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
 
 // solhint-disable max-states-count
-contract ConvertibleDepositFacilityTest is Test {
+contract YieldDepositFacilityTest is Test {
     Kernel public kernel;
-    CDFacility public facility;
     YieldDepositFacility public yieldDepositFacility;
-    OlympusTreasury public treasury;
-    OlympusMinter public minter;
     OlympusRoles public roles;
     OlympusConvertibleDepository public convertibleDepository;
     OlympusConvertibleDepositPositions public convertibleDepositPositions;
@@ -50,9 +45,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public admin = address(0xEEEEEE);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
-    uint256 public constant CONVERSION_PRICE = 2e18;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
-    uint16 public constant RECLAIM_RATE = 90e2;
     uint8 public constant PERIOD_MONTHS = 6;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
@@ -78,53 +71,42 @@ contract ConvertibleDepositFacilityTest is Test {
 
     function _createStack() internal {
         kernel = new Kernel();
-        treasury = new OlympusTreasury(kernel);
-        minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
-        facility = new CDFacility(address(kernel));
         yieldDepositFacility = new YieldDepositFacility(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
-        kernel.executeAction(Actions.InstallModule, address(treasury));
-        kernel.executeAction(Actions.InstallModule, address(minter));
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
-        kernel.executeAction(Actions.ActivatePolicy, address(facility));
         kernel.executeAction(Actions.ActivatePolicy, address(yieldDepositFacility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
-        rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
 
         // Enable the facility
         vm.prank(admin);
-        facility.enable("");
+        yieldDepositFacility.enable("");
 
         // Create a CD token
         vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
+        cdToken = yieldDepositFacility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
         vm.label(address(cdToken), "cdToken");
 
         // Create a CD token
         vm.startPrank(admin);
-        cdTokenTwo = facility.create(IERC4626(address(vaultTwo)), PERIOD_MONTHS, 90e2);
+        cdTokenTwo = yieldDepositFacility.create(IERC4626(address(vaultTwo)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
         vm.label(address(cdTokenTwo), "cdTokenTwo");
 
         // Disable the facility
         vm.prank(emergency);
-        facility.disable("");
-
-        // Enable the yield deposit facility
-        vm.prank(admin);
-        yieldDepositFacility.enable("");
+        yieldDepositFacility.disable("");
     }
 
     // ========== MODIFIERS ========== //
@@ -144,34 +126,9 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
-    function _createPosition(
-        address account_,
-        uint256 amount_,
-        uint256 conversionPrice_,
-        bool wrap_
-    ) internal returns (uint256 positionId) {
-        return _createPosition(cdToken, account_, amount_, conversionPrice_, wrap_);
-    }
-
-    function _createPosition(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
-        uint256 amount_,
-        uint256 conversionPrice_,
-        bool wrap_
-    ) internal returns (uint256 positionId) {
-        vm.prank(auctioneer);
-        positionId = facility.mintCallOption(cdToken_, account_, amount_, conversionPrice_, wrap_);
-    }
-
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
         convertibleDepository.mint(cdToken, amount_);
-        _;
-    }
-
-    modifier givenAddressHasPosition(address account_, uint256 amount_) {
-        _createPosition(account_, amount_, CONVERSION_PRICE, false);
         _;
     }
 
@@ -188,38 +145,15 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
-    modifier givenAddressHasDifferentTokenAndPosition(address account_, uint256 amount_) {
-        // Mint
-        reserveTokenTwo.mint(account_, amount_);
-
-        // Approve
-        vm.prank(account_);
-        reserveTokenTwo.approve(address(convertibleDepository), amount_);
-
-        // Create position
-        _createPosition(cdTokenTwo, account_, amount_, CONVERSION_PRICE, false);
-        _;
-    }
-
-    modifier givenConvertibleDepositTokenSpendingIsApproved(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) {
-        vm.prank(owner_);
-        cdToken.approve(spender_, amount_);
-        _;
-    }
-
     modifier givenLocallyActive() {
         vm.prank(admin);
-        facility.enable("");
+        yieldDepositFacility.enable("");
         _;
     }
 
     modifier givenLocallyInactive() {
         vm.prank(emergency);
-        facility.disable("");
+        yieldDepositFacility.disable("");
         _;
     }
 
@@ -236,13 +170,5 @@ contract ConvertibleDepositFacilityTest is Test {
 
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
-    }
-
-    function _assertMintApproval(uint256 expected_) internal {
-        assertEq(
-            minter.mintApproval(address(facility)),
-            expected_,
-            "minter.mintApproval(address(facility))"
-        );
     }
 }
