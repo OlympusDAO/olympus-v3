@@ -33,14 +33,8 @@ interface IConvertibleDepositFacility {
         uint256 reclaimedAmount,
         uint256 forfeitedAmount
     );
-    event ClaimedYield(
-        address indexed vaultToken,
-        address indexed user,
-        uint256 yield
-    );
-    event YieldFeeSet(
-        uint16 yieldFee
-    );
+    event ClaimedYield(address indexed vaultToken, address indexed user, uint256 yield);
+    event YieldFeeSet(uint16 yieldFee);
 
     // ========== ERRORS ========== //
 
@@ -235,9 +229,7 @@ interface IConvertibleDepositFacility {
     ///
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that was claimed
-    function claimYield(
-        uint256[] memory positionIds_
-    ) external returns (uint256 yield);
+    function claimYield(uint256[] memory positionIds_) external returns (uint256 yield);
 
     // ========== ADMIN FUNCTIONS ========== //
 
@@ -263,9 +255,7 @@ interface IConvertibleDepositFacility {
     ///         - Setting the yield fee
     ///
     /// @param  yieldFee_       The percentage of yield that will be taken as a fee, in terms of 100e2
-    function setYieldFee(
-        uint16 yieldFee_
-    ) external;
+    function setYieldFee(uint16 yieldFee_) external;
 
     /// @notice Returns the percentage of yield that will be taken as a fee
     ///

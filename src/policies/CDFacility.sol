@@ -182,8 +182,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
         // Validate that the position supports conversion
-        if (position.conversionPrice == type(uint256).max)
-            revert CDF_Unsupported(positionId_);
+        if (position.conversionPrice == type(uint256).max) revert CDF_Unsupported(positionId_);
 
         // Set the CD token, or validate
         currentCDToken = position.convertibleDepositToken;
@@ -556,16 +555,16 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     function previewClaimYield(
         address account_,
         uint256[] memory positionIds_
-    ) external view onlyEnabled() returns (uint256 yieldMinusFee, IERC20 asset) {
+    ) external view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
         address cdToken;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (uint256 previewYieldMinusFee, uint256 previewYieldFee, address currentCDToken) = _previewClaimYield(
-                account_,
-                positionId,
-                cdToken
-            );
+            (
+                uint256 previewYieldMinusFee,
+                uint256 previewYieldFee,
+                address currentCDToken
+            ) = _previewClaimYield(account_, positionId, cdToken);
             yieldMinusFee += previewYieldMinusFee;
             cdToken = currentCDToken;
         }
@@ -574,19 +573,17 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     }
 
     /// @inheritdoc IConvertibleDepositFacility
-    function claimYield(
-        uint256[] memory positionIds_
-    ) external returns (uint256 yieldMinusFee) {
+    function claimYield(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
         IConvertibleDepositERC20 cdToken;
         uint256 yieldFee;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (uint256 previewYieldMinusFee, uint256 previewYieldFee, address currentCDToken) = _previewClaimYield(
-                msg.sender,
-                positionId,
-                address(cdToken)
-            );
+            (
+                uint256 previewYieldMinusFee,
+                uint256 previewYieldFee,
+                address currentCDToken
+            ) = _previewClaimYield(msg.sender, positionId, address(cdToken));
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
             cdToken = IConvertibleDepositERC20(currentCDToken);
@@ -628,9 +625,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The contract is not enabled
     ///             - The caller is not an admin
     ///             - The yield fee is greater than 100e2
-    function setYieldFee(
-        uint16 yieldFee_
-    ) external onlyEnabled onlyAdminRole {
+    function setYieldFee(uint16 yieldFee_) external onlyEnabled onlyAdminRole {
         // Validate that the yield fee is not greater than 100e2
         if (yieldFee_ > 100e2) revert CDF_InvalidArgs("yield fee");
 
