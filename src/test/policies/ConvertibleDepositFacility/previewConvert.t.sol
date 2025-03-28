@@ -398,10 +398,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_Unsupported.selector,
-                1
-            )
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_Unsupported.selector, 1)
         );
 
         // Call function
