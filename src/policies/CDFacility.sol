@@ -108,7 +108,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
     ///             - The caller does not have the ROLE_AUCTIONEER role
     ///             - The contract is not enabled
     ///             - The CD token is not supported
-    function mintCallOption(
+    function mint(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,

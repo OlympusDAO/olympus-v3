@@ -6,7 +6,7 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
+contract MintCDFTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(
         address indexed depositToken,
         address indexed user,
@@ -38,7 +38,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(auctioneer);
-        facility.mintCallOption(cdToken, recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
+        facility.mint(cdToken, recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
     }
 
     function test_callerNotAuctioneer_reverts()
@@ -52,7 +52,7 @@ contract MintCallOptionCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Call function
-        facility.mintCallOption(cdToken, recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
+        facility.mint(cdToken, recipient, RESERVE_TOKEN_AMOUNT, CONVERSION_PRICE, false);
     }
 
     function test_spendingNotApproved_reverts()

@@ -66,7 +66,7 @@ interface IConvertibleDepositFacility {
     /// @param  conversionPrice_    The amount of CD tokens per OHM token
     /// @param  wrap_               Whether the position should be wrapped
     /// @return positionId          The ID of the new position
-    function mintCallOption(
+    function mint(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,

@@ -191,7 +191,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the CD tokens and position
-        positionId = CD_FACILITY.mintCallOption(
+        positionId = CD_FACILITY.mint(
             convertibleDebtToken,
             msg.sender,
             depositIn,

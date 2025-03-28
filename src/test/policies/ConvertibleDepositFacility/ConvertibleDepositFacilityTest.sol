@@ -161,7 +161,7 @@ contract ConvertibleDepositFacilityTest is Test {
         bool wrap_
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        positionId = facility.mintCallOption(cdToken_, account_, amount_, conversionPrice_, wrap_);
+        positionId = facility.mint(cdToken_, account_, amount_, conversionPrice_, wrap_);
     }
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {

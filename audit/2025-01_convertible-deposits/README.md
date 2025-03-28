@@ -403,7 +403,7 @@ CDFacility is a policy that is responsible for issuing CD tokens and handling su
 
 The CDAuctioneer is able to mint a call option:
 
-- `mintCallOption()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `mint()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
 
 The public can mint a yield-bearing deposit:
 
