@@ -76,9 +76,10 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](2);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(cdepoKeycode, CDEPO.create.selector);
-        permissions[1] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions[1] = Permissions(cdepoKeycode, CDEPO.withdraw.selector);
+        permissions[2] = Permissions(cdposKeycode, CDPOS.mint.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -217,7 +218,8 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             }
         }
 
-        // TODO Withdraw the yield from the CDEPO module
+        // Withdraw the yield from the CDEPO module in the form of the underlying asset
+        CDEPO.withdraw(cdToken, yieldMinusFee + yieldFee);
 
         // Transfer the yield to the caller
         // msg.sender is ok here as _previewClaimYield validates that the caller is the owner of the position
