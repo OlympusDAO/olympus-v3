@@ -15,14 +15,20 @@ import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title YieldDepositFacility
 contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldDepositFacility {
+    using SafeTransferLib for ERC20;
+
     // ========== STATE VARIABLES ========== //
+
+    /// @notice The treasury module.
+    TRSRYv1 public TRSRY;
 
     /// @notice The CDEPO module.
     CDEPOv1 public CDEPO;
@@ -33,6 +39,13 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     /// @notice The yield fee
     uint16 internal _yieldFee;
 
+    /// @notice The yield fee denominator
+    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
+
+    /// @notice Mapping between a position id and the last conversion rate between a CD token's vault and underlying asset
+    /// @dev    This is used to calculate the yield since the last claim. The initial value should be set at the time of minting.
+    mapping(uint256 => uint256) public positionLastYieldConversionRate;
+
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {
@@ -41,14 +54,16 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("CDEPO");
         dependencies[2] = toKeycode("CDPOS");
+        dependencies[3] = toKeycode("TRSRY");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
         CDPOS = CDPOSv1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
     }
 
     /// @inheritdoc Policy
@@ -93,9 +108,12 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             address(cdToken_), // CD token
             amount_, // amount
             type(uint256).max, // conversion price of max to indicate no conversion price
-            uint48(block.timestamp + cdToken_.periodMonths() * 30 days), // conversion expiry
+            uint48(block.timestamp + cdToken_.periodMonths() * 30 days), // expiry
             wrap_ // wrap
         );
+
+        // Set the initial yield conversion rate
+        positionLastYieldConversionRate[positionId] = _getConversionRate(cdToken_.vault());
 
         // Emit an event
         emit CreatedDeposit(address(cdToken_.asset()), msg.sender, positionId, amount_);
@@ -115,11 +133,8 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         // Validate that the caller is the owner of the position
         if (position.owner != account_) revert YDF_NotOwner(positionId_);
 
-        // TODO Validate that the position is within the deposit period or return 0
-
-        // TODO Validate that the position has not been redeemed
-
-        // TODO Validate that the position is not convertible
+        // Validate that the position is not convertible
+        if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
         // Set the CD token, or validate
         currentCDToken = position.convertibleDepositToken;
@@ -131,7 +146,23 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             revert YDF_InvalidArgs("multiple CD tokens");
         }
 
-        // TODO Determine the payable yield since the last claim
+        // Calculate the yield since the last claim
+        // Yield is calculated as:
+        // (current conversion rate - last yield conversion rate) * deposit / token scale
+        IERC4626 vault = IConvertibleDepositERC20(currentCDToken).vault();
+        uint256 yield = FullMath.mulDiv(
+            _getConversionRate(vault) - positionLastYieldConversionRate[positionId_],
+            position.remainingDeposit,
+            10 ** vault.decimals()
+        );
+
+        // TODO cap at the conversion rate before the expiry
+
+        // Calculate the yield fee
+        yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
+
+        // Calculate the yield minus fee
+        yieldMinusFee = yield - yieldFee;
 
         return (yieldMinusFee, yieldFee, currentCDToken);
     }
@@ -179,16 +210,25 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             yieldFee += previewYieldFee;
             cdToken = IConvertibleDepositERC20(currentCDToken);
 
-            // TODO Update the claim timestamp
+            // If there is yield, update the last yield conversion rate
+            // Otherwise an expired position will have the last conversion rate updated to the current conversion rate
+            if (previewYieldMinusFee > 0) {
+                positionLastYieldConversionRate[positionId] = _getConversionRate(cdToken.vault());
+            }
         }
 
-        // Redeem the vault tokens
+        // TODO Withdraw the yield from the CDEPO module
 
-        // TODO transfer the yield to the caller
+        // Transfer the yield to the caller
+        // msg.sender is ok here as _previewClaimYield validates that the caller is the owner of the position
+        ERC20 asset = ERC20(address(cdToken.asset()));
+        asset.safeTransfer(msg.sender, yieldMinusFee);
 
         // Transfer the yield fee to the treasury
+        asset.safeTransfer(address(TRSRY), yieldFee);
 
         // Emit event
+        emit ClaimedYield(address(cdToken.asset()), msg.sender, yieldMinusFee);
 
         return yieldMinusFee;
     }
@@ -230,5 +270,12 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     /// @inheritdoc IYieldDepositFacility
     function getYieldFee() external view returns (uint16) {
         return _yieldFee;
+    }
+
+    // ========== HELPER FUNCTIONS ========== //
+
+    /// @notice Get the conversion rate between a vault and underlying asset
+    function _getConversionRate(IERC4626 vault_) internal view returns (uint256) {
+        return vault_.convertToAssets(1e18);
     }
 }

@@ -23,6 +23,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
         address convertibleDepositToken;
         uint256 remainingDeposit;
         uint256 conversionPrice;
+        // TODO rename to expiry
         uint48 conversionExpiry;
         bool wrapped;
     }

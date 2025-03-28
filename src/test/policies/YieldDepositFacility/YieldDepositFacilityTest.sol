@@ -12,6 +12,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
@@ -25,9 +26,9 @@ contract YieldDepositFacilityTest is Test {
     OlympusRoles public roles;
     OlympusConvertibleDepository public convertibleDepository;
     OlympusConvertibleDepositPositions public convertibleDepositPositions;
+    OlympusTreasury public treasury;
     RolesAdmin public rolesAdmin;
 
-    MockERC20 public ohm;
     MockERC20 public reserveToken;
     MockERC4626 public vault;
     IERC20 internal iReserveToken;
@@ -52,7 +53,6 @@ contract YieldDepositFacilityTest is Test {
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
 
-        ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
@@ -67,6 +67,13 @@ contract YieldDepositFacilityTest is Test {
 
         // Instantiate bophades
         _createStack();
+
+        // Deposit into the vault to create a non-equal conversion rate
+        reserveToken.mint(address(this), 10e18);
+        reserveToken.approve(address(vault), 10e18);
+        vault.deposit(10e18, address(this));
+        reserveToken.mint(address(vault), 1e18);
+        require(vault.convertToAssets(1e18) != 1e18, "Vault conversion rate is equal to 1");
     }
 
     function _createStack() internal {
@@ -74,13 +81,16 @@ contract YieldDepositFacilityTest is Test {
         roles = new OlympusRoles(kernel);
         convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
+        treasury = new OlympusTreasury(kernel);
         yieldDepositFacility = new YieldDepositFacility(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
         kernel.executeAction(Actions.InstallModule, address(roles));
+
         kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
+        kernel.executeAction(Actions.InstallModule, address(treasury));
         kernel.executeAction(Actions.ActivatePolicy, address(yieldDepositFacility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 

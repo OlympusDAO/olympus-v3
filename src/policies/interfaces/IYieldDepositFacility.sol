@@ -17,7 +17,7 @@ interface IYieldDepositFacility {
         uint256 depositAmount
     );
 
-    event ClaimedYield(address indexed vaultToken, address indexed user, uint256 yield);
+    event ClaimedYield(address indexed depositToken, address indexed user, uint256 yield);
 
     event YieldFeeSet(uint16 yieldFee);
 
@@ -28,6 +28,8 @@ interface IYieldDepositFacility {
     error YDF_NotOwner(uint256 positionId_);
 
     error YDF_InvalidToken(uint256 positionId_, address token_);
+
+    error YDF_Unsupported(uint256 positionId_);
 
     // ========== MINT ========== //
 

@@ -24,6 +24,7 @@ contract MintDepositYDFTest is YieldDepositFacilityTest {
     // [X] the position does not have a conversion price
     // [X] it returns the position ID
     // [X] it emits a CreatedDeposit event
+    // [X] it sets the last yield conversion rate
 
     function test_contractInactive_reverts() public {
         // Expect revert
@@ -92,6 +93,8 @@ contract MintDepositYDFTest is YieldDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
+        uint256 lastYieldConversionRate = vault.convertToAssets(1e18);
+
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit CreatedDeposit(address(reserveToken), recipient, 0, RESERVE_TOKEN_AMOUNT);
@@ -126,5 +129,12 @@ contract MintDepositYDFTest is YieldDepositFacilityTest {
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
+
+        // Assert that the last yield conversion rate is set
+        assertEq(
+            yieldDepositFacility.positionLastYieldConversionRate(positionId),
+            lastYieldConversionRate,
+            "positionLastYieldConversionRate"
+        );
     }
 }
