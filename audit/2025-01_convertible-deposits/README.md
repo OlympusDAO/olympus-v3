@@ -15,14 +15,12 @@ For a given reserve token, e.g. `USDS`, and deposit period, e.g. 3 months, there
 The system offers two mutually-exclusive mechanisms to mint and use CD tokens:
 
 - Deposit with the option to convert to OHM before an expiry date
-- Deposit with the ability to earn fixed or variable yield
-    - Tokens that are floating earn variable yield
-    - Tokens that are locked in the redemption queue earn fixed yield
+- Deposit with the ability to earn yield from the ERC4626 vault strategy
 
-| Mechanism         | Conversion to OHM | Floating Yield    | Queue Yield   |
-|-------------------|-------------------|-------------------|---------------|
-| OHM Call Option   | Yes               | No                | No            |
-| Yield-Bearing     | No                | Variable          | Fixed         |
+| Mechanism         | Conversion to OHM | Yield    |
+|-------------------|-------------------|----------|
+| OHM Call Option   | Yes               | No       |
+| Yield Deposit     | No                | Yes      |
 
 ### OHM Call Option
 
@@ -32,7 +30,7 @@ The conversion price is determined through an infinite duration and infinite cap
 
 #### Auction Design
 
-Bidders are required to deposit the configured reserve token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+Bidders are required to deposit the configured token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
 
 The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
 
@@ -58,25 +56,18 @@ There are a few additional behaviours:
 
 ### Yield-Bearing Deposits
 
-The second approach enables depositors to earn field or variable yield over a specified period.
+The second approach enables depositors to claim the yield from the ERC4626 vault strategy, without a call option on OHM.
 
-#### Variable Yield
+A user can deposit the configured token (e.g. USDS) into the facility (`CDFacility`), and in return receive:
 
-By default, holders will short fixed yield and long variable yield by accruing yield based on the market rate. Holders will be able to claim accrued yield at any time.
-
-The holder will be able to perform whatever actions they want, including selling the CD token, and yield will still be accrued (since it remains deposited). The exception to this is reclaiming the underlying deposit token, which would reduce the base upon which yield is being earnt.
-
-#### Fixed Yield
-
-However, holders can alternatively short variable yield and long fixed yield by depositing their CD token into a redemption queue.
-
-- Locking the CD tokens for the full period will enable the depositor to redeem their CD token for the underlying asset (e.g. receive back their `USDS` deposit).
-- The CD tokens can be withdrawn from the queue at any time, but the progress towards redemption will be reset.
-- For the period that the CD tokens are locked, they will earn a fixed yield that can be claimed at any time.
+- An equivalent amount of a convertible deposit token (`cdUSDS-3m`)
+- A position record (optionally wrapped to a ERC721 token) with the deposit period
+    - The holder of this record/token can claim the vault token (e.g. `cdUSDS`) yield, after a protocol fee is applied.
+    - The holder is free to do what they wish with the CD token - it does not affect claiming yield.
 
 ### Convertible Deposit Token Design
 
-Across both mechanisms (call option and yield), depositors will receive the following:
+Across both mechanisms (call option and yield deposits), depositors will receive the following:
 
 - A quantity of CD tokens, which is a fungible ERC20 token across all deposits of the same deposit token and deposit period.
     - e.g. `USDS` deposits with periods of 1, 3 and 6 months are distinct tokens: `cdUSDS-1m`, `cdUSDS-3m`, `cdUSDS-6m`
@@ -90,8 +81,16 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
 
 - Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms. (Call option only)
 - Lock their CD tokens into the redemption queue
-    - Locked CD tokens also enable the holder to borrow against the underlying deposit
-- Reclaim the deposited reserve tokens at any time, with a discount.
+- Reclaim the deposited tokens at any time, with a discount.
+
+### Redemption Queue
+
+CD token holders can redeem the underlying token quantity in full by locking their CD tokens in the redemption queue.
+
+- The CD tokens must remain in the queue for the deposit period in order to be redeemed.
+- A user can borrow against the CD tokens while they are in the queue.
+- Withdrawing CD tokens from the queue will reset the counter.
+- After the CD tokens have been in the queue for the deposit period, they can be reclaimed 1:1 for the underlying tokens.
 
 ## Scope
 
