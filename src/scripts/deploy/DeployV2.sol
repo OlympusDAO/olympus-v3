@@ -912,8 +912,11 @@ contract OlympusDeploy is Script {
         return address(lusdVaultManager);
     }
 
-    function _deployCrossChainBridge(bytes memory args) public returns (address) {
-        address lzEndpoint = abi.decode(args, (address));
+    function _deployCrossChainBridge(bytes memory) public returns (address) {
+        address lzEndpoint = envAddress("external.layerzero.endpoint");
+
+        console2.log("  kernel", address(kernel));
+        console2.log("  lzEndpoint", lzEndpoint);
 
         // Deploy CrossChainBridge policy
         vm.broadcast();
