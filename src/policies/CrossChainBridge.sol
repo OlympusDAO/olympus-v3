@@ -126,21 +126,47 @@ contract CrossChainBridge is
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 1);
+    }
+
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @notice Send OHM to an eligible chain
-    function sendOhm(uint16 dstChainId_, address to_, uint256 amount_) external payable {
+    function _sendOhm(uint16 dstChainId_, bytes memory payload_, uint256 amount_) internal {
         if (!bridgeActive) revert Bridge_Deactivated();
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
 
-        bytes memory payload = abi.encode(to_, amount_);
-
         MINTR.burnOhm(msg.sender, amount_);
-        _sendMessage(dstChainId_, payload, payable(msg.sender), address(0x0), bytes(""), msg.value);
+        _sendMessage(
+            dstChainId_, // dstChainId
+            payload_, // payload
+            payable(msg.sender), // refundAddress
+            address(0x0), // zroPaymentAddress
+            bytes(""), // adapterParams
+            msg.value // nativeFee
+        );
 
         emit BridgeTransferred(msg.sender, amount_, dstChainId_);
+    }
+
+    /// @notice Send OHM to an eligible EVM chain
+    ///
+    /// @param  dstChainId_ The LayerZero ID for the destination chain
+    /// @param  to_ The address to send the OHM to on the destination chain
+    /// @param  amount_ The amount of OHM to send
+    function sendOhm(uint16 dstChainId_, address to_, uint256 amount_) external payable {
+        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_);
+    }
+
+    /// @notice Send OHM to an eligible chain
+    ///
+    /// @param  dstChainId_ The LayerZero ID for the destination chain
+    /// @param  to_         The address to send the OHM to on the destination chain. This can be an EVM or other type of address (e.g. Solana).
+    /// @param  amount_     The amount of OHM to send
+    function sendOhm(uint16 dstChainId_, bytes memory to_, uint256 amount_) external payable {
+        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_);
     }
 
     /// @notice Implementation of receiving an LZ message
