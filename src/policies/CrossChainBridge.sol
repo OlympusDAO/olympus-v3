@@ -3,10 +3,10 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {ILayerZeroUserApplicationConfig} from "layer-zero/interfaces/ILayerZeroUserApplicationConfig.sol";
-import {ILayerZeroEndpoint} from "layer-zero/interfaces/ILayerZeroEndpoint.sol";
-import {ILayerZeroReceiver} from "layer-zero/interfaces/ILayerZeroReceiver.sol";
-import {BytesLib} from "layer-zero/util/BytesLib.sol";
+import {ILayerZeroUserApplicationConfig} from "layer-zero-endpoint-v1-0.0.6/interfaces/ILayerZeroUserApplicationConfig.sol";
+import {ILayerZeroEndpoint} from "layer-zero-endpoint-v1-0.0.6/interfaces/ILayerZeroEndpoint.sol";
+import {ILayerZeroReceiver} from "layer-zero-endpoint-v1-0.0.6/interfaces/ILayerZeroReceiver.sol";
+import {BytesLib} from "layer-zero-endpoint-v1-0.0.6/util/BytesLib.sol";
 
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";

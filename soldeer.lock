@@ -1,4 +1,10 @@
 [[dependencies]]
+name = "layer-zero-endpoint-v1"
+version = "0.0.6"
+git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
+rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
+
+[[dependencies]]
 name = "surl"
 version = "1.0.0"
 git = "https://github.com/memester-xyz/surl.git"

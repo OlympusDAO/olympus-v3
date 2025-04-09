@@ -8,9 +8,6 @@
 	path = lib/solmate
 	url = https://github.com/transmissions11/solmate
 	branch = main
-[submodule "lib/solidity-examples"]
-	path = lib/solidity-examples
-	url = https://github.com/LayerZero-Labs/solidity-examples
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts

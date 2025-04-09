@@ -10,7 +10,6 @@ remappings = [
     'libraries/=src/libraries',
     'solmate/=lib/solmate/src/',
     'balancer-v2/=lib/balancer-v2/',
-    'layer-zero/=lib/solidity-examples/contracts/',
     '@openzeppelin/=lib/openzeppelin-contracts/',
     'bonds/=lib/bonds/src/',
     'clones/=lib/clones-with-immutable-args/src/',
@@ -35,3 +34,4 @@ remappings_generate = false
 
 [dependencies]
 surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", rev = "034c912ae9b5e707a5afd21f145b452ad8e800df" }
+layer-zero-endpoint-v1 = { version = "0.0.6", git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git", rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f" }
