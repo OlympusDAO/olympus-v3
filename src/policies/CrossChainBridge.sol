@@ -8,11 +8,11 @@ import {ILayerZeroEndpoint} from "layer-zero/interfaces/ILayerZeroEndpoint.sol";
 import {ILayerZeroReceiver} from "layer-zero/interfaces/ILayerZeroReceiver.sol";
 import {BytesLib} from "layer-zero/util/BytesLib.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 /// @notice Message bridge for cross-chain OHM transfers.
 /// @dev Uses LayerZero as communication protocol.
