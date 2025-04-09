@@ -55,6 +55,14 @@ abstract contract WithLayerZeroConstants {
             return 109;
         }
 
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("solana-devnet"))) {
+            return 40168;
+        }
+
+        if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("solana"))) {
+            return 30168;
+        }
+
         // solhint-disable-next-line custom-errors
         revert(string.concat("Unsupported chain: ", chain_));
     }
