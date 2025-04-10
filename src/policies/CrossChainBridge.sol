@@ -165,7 +165,7 @@ contract CrossChainBridge is
     /// @param  dstChainId_ The LayerZero ID for the destination chain
     /// @param  to_         The address to send the OHM to on the destination chain. This can be an EVM or other type of address (e.g. Solana).
     /// @param  amount_     The amount of OHM to send
-    function sendOhm(uint16 dstChainId_, bytes memory to_, uint256 amount_) external payable {
+    function sendOhm(uint16 dstChainId_, bytes32 to_, uint256 amount_) external payable {
         _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_);
     }
 
@@ -292,6 +292,21 @@ contract CrossChainBridge is
     function estimateSendFee(
         uint16 dstChainId_,
         address to_,
+        uint256 amount_,
+        bytes calldata adapterParams_
+    ) external view returns (uint256 nativeFee, uint256 zroFee) {
+        // Mock the payload for sendOhm()
+        bytes memory payload = abi.encode(to_, amount_);
+        return lzEndpoint.estimateFees(dstChainId_, address(this), payload, false, adapterParams_);
+    }
+
+    /// @notice Function to estimate how much gas is needed to send OHM
+    /// @dev    Should be called by frontend before making sendOhm call.
+    /// @return nativeFee - Native token amount to send to sendOhm
+    /// @return zroFee - Fee paid in ZRO token. Unused.
+    function estimateSendFee(
+        uint16 dstChainId_,
+        bytes32 to_,
         uint256 amount_,
         bytes calldata adapterParams_
     ) external view returns (uint256 nativeFee, uint256 zroFee) {
