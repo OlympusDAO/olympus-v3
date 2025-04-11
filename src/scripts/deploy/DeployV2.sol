@@ -1323,6 +1323,13 @@ contract OlympusDeploy is Script {
         );
         console2.log("CoolerV2 deployed at:", address(coolerV2));
 
+        // Set the treasury borrower
+        // The first time the borrower is set, it can be done permissionlessly
+        address treasuryBorrower = envAddress("olympus.policies.CoolerV2TreasuryBorrower");
+        require(treasuryBorrower != address(0), "treasuryBorrower is not set");
+        vm.broadcast();
+        coolerV2.setTreasuryBorrower(treasuryBorrower);
+
         return address(coolerV2);
     }
 
@@ -1350,6 +1357,9 @@ contract OlympusDeploy is Script {
 
         address daoMS = envAddress("olympus.multisig.dao");
         address flashLender = envAddress("external.maker.flash");
+        CHREG = OlympusClearinghouseRegistry(
+            envAddress("olympus.modules.OlympusClearinghouseRegistry")
+        );
 
         // Dependencies
         require(address(daoMS) != address(0), "daoMS is not set");
