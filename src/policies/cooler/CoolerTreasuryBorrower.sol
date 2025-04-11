@@ -109,7 +109,9 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
-    function writeOffDebt(uint256 debtTokenAmount) external override onlyEnabled onlyRole(COOLER_ROLE) {
+    function writeOffDebt(
+        uint256 debtTokenAmount
+    ) external override onlyEnabled onlyRole(COOLER_ROLE) {
         _reduceDebtToTreasury(debtTokenAmount);
     }
 
