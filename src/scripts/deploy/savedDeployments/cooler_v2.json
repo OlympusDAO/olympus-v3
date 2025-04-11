@@ -26,14 +26,6 @@
                 "interestRateWad": 5000000000000000,
                 "minDebtRequired": 1000000000000000000000
             }
-        },
-        {
-            "name": "CoolerV2Migrator",
-            "args": {}
-        },
-        {
-            "name": "CoolerComposites",
-            "args": {}
         }
     ]
 }
