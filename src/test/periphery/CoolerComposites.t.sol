@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 // Interfaces
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Libraries
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -21,6 +22,8 @@ abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
 
     address internal accountOwner;
     uint256 internal accountOwnerPk;
+
+    address internal constant OWNER = address(0xDDDD);
 
     IDLGTEv1.DelegationRequest[] internal delegationRequests;
     IMonoCooler.Authorization internal authorization;
@@ -42,9 +45,13 @@ abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
 
         super.setUp();
 
-        composites = new CoolerComposites(cooler);
+        composites = new CoolerComposites(cooler, OWNER);
 
         (accountOwner, accountOwnerPk) = makeAddrAndKey("ACCOUNT_OWNER");
+
+        // Activate the composites contract
+        vm.prank(OWNER);
+        composites.enable("");
     }
 
     function signedAuth(
@@ -135,6 +142,12 @@ abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
         _;
     }
 
+    modifier givenDisabled() {
+        vm.prank(OWNER);
+        composites.disable("");
+        _;
+    }
+
     function _assertTokenBalances(
         uint256 accountOwnerCollateralTokenBalance_,
         uint256 accountOwnerDebtTokenBalance_
@@ -180,6 +193,8 @@ abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
 }
 
 contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
+    // given the contract is disabled
+    //  [X] it reverts
     // given authorization has not been provided
     //  given an authorization signature has not been provided
     //   [X] it reverts
@@ -198,6 +213,15 @@ contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
     //   [X] it adds collateral and borrows
     //   [X] it executes the delegation requests
     //  [X] it adds collateral and borrows
+
+    function test_givenDisabled_reverts() public givenDisabled {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+
+        // Call function
+        vm.prank(accountOwner);
+        composites.addCollateralAndBorrow(authorization, signature, 2e18, 1e21, delegationRequests);
+    }
 
     function test_givenNoAuthorization_givenNoSignature_reverts()
         public
@@ -309,6 +333,8 @@ contract CoolerCompositesAddAndBorrowTest is CoolerCompositesTest {
 }
 
 contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
+    // given the contract is disabled
+    //  [X] it reverts
     // given authorization has not been provided
     //  given an authorization signature has not been provided
     //   [X] it reverts
@@ -330,6 +356,21 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
     //   [X] it repays and removes collateral
     //   [X] it executes the delegation requests
     //  [X] it repays and removes collateral
+
+    function test_givenDisabled_reverts() public givenDisabled {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+
+        // Call function
+        vm.prank(accountOwner);
+        composites.repayAndRemoveCollateral(
+            authorization,
+            signature,
+            1e21,
+            2e18,
+            delegationRequests
+        );
+    }
 
     function test_givenNoAuthorization_givenNoSignature_reverts()
         public
@@ -533,5 +574,79 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
 
         // Assert delegation requests
         expectNoDelegations(accountOwner);
+    }
+}
+
+contract CoolerCompositesEnableTest is CoolerCompositesTest {
+    // given the contract is enabled
+    //  [X] it reverts
+    // given the caller is not the owner
+    //  [X] it reverts
+    // [X] it enables the contract
+
+    function test_givenEnabled_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
+
+        // Call function
+        vm.prank(OWNER);
+        composites.enable("");
+    }
+
+    function test_givenNotOwner_reverts(address caller_) public givenDisabled {
+        vm.assume(caller_ != OWNER);
+
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(caller_);
+        composites.enable("");
+    }
+
+    function test_givenOwner() public givenDisabled {
+        // Call function
+        vm.prank(OWNER);
+        composites.enable("");
+
+        // Assert contract is enabled
+        assertEq(composites.isEnabled(), true, "contract should be enabled");
+    }
+}
+
+contract CoolerCompositesDisableTest is CoolerCompositesTest {
+    // given the contract is disabled
+    //  [X] it reverts
+    // given the caller is not the owner
+    //  [X] it reverts
+    // [X] it disables the contract
+
+    function test_givenDisabled_reverts() public givenDisabled {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+
+        // Call function
+        vm.prank(OWNER);
+        composites.disable("");
+    }
+
+    function test_givenNotOwner_reverts(address caller_) public {
+        vm.assume(caller_ != OWNER);
+
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(caller_);
+        composites.disable("");
+    }
+
+    function test_givenOwner() public {
+        // Call function
+        vm.prank(OWNER);
+        composites.disable("");
+
+        // Assert contract is disabled
+        assertEq(composites.isEnabled(), false, "contract should be disabled");
     }
 }

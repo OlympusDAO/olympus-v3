@@ -6,21 +6,30 @@ import {IERC20} from "../interfaces/IERC20.sol";
 import {IMonoCooler} from "../policies/interfaces/cooler/IMonoCooler.sol";
 import {ICoolerComposites} from "./interfaces/ICoolerComposites.sol";
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
+import {IEnabler} from "./interfaces/IEnabler.sol";
 
 // Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {Owned} from "solmate/auth/Owned.sol";
 
 /// @title  Cooler Composites
 /// @notice The CoolerComposites contract enables users to combine multiple operations into a single call
-contract CoolerComposites is ICoolerComposites {
+contract CoolerComposites is ICoolerComposites, Owned, IEnabler {
     using SafeTransferLib for ERC20;
 
+    // ========= STATE ========= //
+
+    /// @notice Whether the contract is enabled
+    bool public isEnabled;
+
     IMonoCooler public immutable COOLER;
+
     ERC20 internal immutable _COLLATERAL_TOKEN;
+
     ERC20 internal immutable _DEBT_TOKEN;
 
-    constructor(IMonoCooler cooler_) {
+    constructor(IMonoCooler cooler_, address owner_) Owned(owner_) {
         COOLER = cooler_;
 
         _COLLATERAL_TOKEN = ERC20(address(cooler_.collateralToken()));
@@ -28,6 +37,8 @@ contract CoolerComposites is ICoolerComposites {
 
         _DEBT_TOKEN = ERC20(address(cooler_.debtToken()));
         _DEBT_TOKEN.approve(address(cooler_), type(uint256).max);
+
+        // Disabled by default
     }
 
     // ===== Composite Functions ===== //
@@ -39,7 +50,7 @@ contract CoolerComposites is ICoolerComposites {
         uint128 collateralAmount,
         uint128 borrowAmount,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external {
+    ) external onlyEnabled {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
         }
@@ -56,7 +67,7 @@ contract CoolerComposites is ICoolerComposites {
         uint128 repayAmount,
         uint128 collateralAmount,
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external {
+    ) external onlyEnabled {
         if (authorization.account != address(0)) {
             COOLER.setAuthorizationWithSig(authorization, signature);
         }
@@ -84,5 +95,33 @@ contract CoolerComposites is ICoolerComposites {
     /// @inheritdoc ICoolerComposites
     function debtToken() external view returns (IERC20) {
         return IERC20(address(_DEBT_TOKEN));
+    }
+
+    // ============ ENABLER FUNCTIONS ============ //
+
+    modifier onlyEnabled() {
+        if (!isEnabled) revert NotEnabled();
+        _;
+    }
+
+    /// @inheritdoc IEnabler
+    function enable(bytes calldata) external onlyOwner {
+        // Validate that the contract is disabled
+        if (isEnabled) revert NotDisabled();
+
+        // Enable the contract
+        isEnabled = true;
+
+        // Emit the enabled event
+        emit Enabled();
+    }
+
+    /// @inheritdoc IEnabler
+    function disable(bytes calldata) external onlyEnabled onlyOwner {
+        // Disable the contract
+        isEnabled = false;
+
+        // Emit the disabled event
+        emit Disabled();
     }
 }
