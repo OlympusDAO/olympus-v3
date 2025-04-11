@@ -64,7 +64,7 @@ contract PolicyEnablerTest is Test {
     }
 
     modifier givenEnabled() {
-        vm.prank(EMERGENCY);
+        vm.prank(ADMIN);
         policyEnabler.enable(enableData);
         _;
     }

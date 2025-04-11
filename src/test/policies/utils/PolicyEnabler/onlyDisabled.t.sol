@@ -17,7 +17,7 @@ contract PolicyEnablerOnlyDisabledTest is PolicyEnablerTest {
         policyEnabler.requiresDisabled();
     }
 
-    function test_policyDisabled() public view {
+    function test_policyDisabled() public {
         // Call function
         assertEq(policyEnabler.requiresDisabled(), true, "Policy should be disabled");
     }

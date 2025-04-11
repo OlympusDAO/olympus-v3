@@ -2,8 +2,8 @@
 pragma solidity 0.8.15;
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {PolicyEnablerTest} from "./PolicyEnablerTest.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract PolicyEnablerEnableTest is PolicyEnablerTest {
     event Enabled();
@@ -16,8 +16,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
     //  [X] it sets the enabled flag to true
     //  [X] it emits the Enabled event
     // given the caller has the emergency role
-    //  [X] it sets the enabled flag to true
-    //  [X] it emits the Enabled event
+    //  [X] it reverts
     // given the policy has custom enable logic
     //  given the custom enable logic reverts
     //   [X] it reverts
@@ -29,7 +28,9 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
         vm.assume(caller_ != EMERGENCY && caller_ != ADMIN);
 
         // Expect revert
-        vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
+        );
 
         // Call function
         vm.prank(caller_);
@@ -41,7 +42,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
         vm.expectRevert(PolicyEnabler.NotDisabled.selector);
 
         // Call function
-        vm.prank(EMERGENCY);
+        vm.prank(ADMIN);
         policyEnabler.enable(enableData);
     }
 
@@ -58,17 +59,15 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
         _assertStateVariables(true, 0, 0, 0);
     }
 
-    function test_callerHasEmergencyRole() public {
-        // Expect event
-        vm.expectEmit();
-        emit Enabled();
+    function test_callerHasEmergencyRole_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
+        );
 
         // Call function
         vm.prank(EMERGENCY);
         policyEnabler.enable(enableData);
-
-        // Assert state
-        _assertStateVariables(true, 0, 0, 0);
     }
 
     function test_customLogic_reverts()
@@ -81,7 +80,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
         vm.expectRevert("Enable should revert");
 
         // Call function
-        vm.prank(EMERGENCY);
+        vm.prank(ADMIN);
         policyEnabler.enable(enableData);
     }
 
@@ -93,7 +92,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
         emit Enabled();
 
         // Call function
-        vm.prank(EMERGENCY);
+        vm.prank(ADMIN);
         policyEnabler.enable(enableData);
 
         // Assert state
