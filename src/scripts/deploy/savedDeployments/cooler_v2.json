@@ -26,6 +26,14 @@
                 "interestRateWad": 0,
                 "minDebtRequired": 0
             }
+        },
+        {
+            "name": "CoolerV2Migrator",
+            "args": {}
+        },
+        {
+            "name": "CoolerComposites",
+            "args": {}
         }
     ]
 }

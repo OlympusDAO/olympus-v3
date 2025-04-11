@@ -70,6 +70,8 @@ import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
+import {CoolerComposites} from "src/policies/cooler/CoolerComposites.sol";
+import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
@@ -83,6 +85,8 @@ import {SafeCast} from "libraries/SafeCast.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
+// solhint-disable max-states-count
+// solhint-disable gas-custom-errors
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;
@@ -127,6 +131,8 @@ contract OlympusDeploy is Script {
     CoolerLtvOracle public coolerV2LtvOracle;
     CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
     MonoCooler public coolerV2;
+    CoolerComposites public coolerComposites;
+    CoolerV2Migrator public coolerV2Migrator;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -254,6 +260,8 @@ contract OlympusDeploy is Script {
         selectorMap["CoolerV2LtvOracle"] = this._deployCoolerV2LtvOracle.selector;
         selectorMap["CoolerV2TreasuryBorrower"] = this._deployCoolerV2TreasuryBorrower.selector;
         selectorMap["CoolerV2"] = this._deployCoolerV2.selector;
+        selectorMap["CoolerComposites"] = this._deployCoolerComposites.selector;
+        selectorMap["CoolerV2Migrator"] = this._deployCoolerV2Migrator.selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -1316,6 +1324,74 @@ contract OlympusDeploy is Script {
         console2.log("CoolerV2 deployed at:", address(coolerV2));
 
         return address(coolerV2);
+    }
+
+    function _deployCoolerComposites(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        // None
+
+        // Dependencies
+        require(address(coolerV2) != address(0), "coolerV2 is not set");
+
+        // Print the arguments
+        console2.log("  CoolerV2:", address(coolerV2));
+
+        // Deploy CoolerComposites
+        vm.broadcast();
+        coolerComposites = new CoolerComposites(coolerV2);
+        console2.log("CoolerComposites deployed at:", address(coolerComposites));
+
+        return address(coolerComposites);
+    }
+
+    function _deployCoolerV2Migrator(bytes calldata) public returns (address) {
+        // Decode arguments from the sequence file
+        // None
+
+        address daoMS = envAddress("olympus.multisig.dao");
+        address flashLender = envAddress("external.maker.flash");
+
+        // Dependencies
+        require(address(daoMS) != address(0), "daoMS is not set");
+        require(address(coolerV2) != address(0), "coolerV2 is not set");
+        require(address(reserve) != address(0), "reserve is not set");
+        require(address(sReserve) != address(0), "sReserve is not set");
+        require(address(gohm) != address(0), "gohm is not set");
+        require(address(externalMigrator) != address(0), "externalMigrator is not set");
+        require(address(flashLender) != address(0), "flashLender is not set");
+        require(address(CHREG) != address(0), "CHREG is not set");
+        require(address(coolerFactory) != address(0), "coolerFactory is not set");
+
+        // Print the arguments
+        console2.log("  DAO MS:", address(daoMS));
+        console2.log("  CoolerV2:", address(coolerV2));
+        console2.log("  Reserve:", address(reserve));
+        console2.log("  sReserve:", address(sReserve));
+        console2.log("  gOHM:", address(gohm));
+        console2.log("  DAI-USDS Migrator:", address(externalMigrator));
+        console2.log("  Flash:", address(flashLender));
+        console2.log("  CHREG:", address(CHREG));
+        console2.log("  CoolerFactory:", address(coolerFactory));
+
+        // Deploy CoolerV2Migrator
+        address[] memory coolerFactories = new address[](1);
+        coolerFactories[0] = address(coolerFactory);
+
+        vm.broadcast();
+        coolerV2Migrator = new CoolerV2Migrator(
+            address(daoMS),
+            address(coolerV2),
+            address(reserve),
+            address(sReserve),
+            address(gohm),
+            address(externalMigrator),
+            address(flashLender),
+            address(CHREG),
+            coolerFactories
+        );
+        console2.log("CoolerV2Migrator deployed at:", address(coolerV2Migrator));
+
+        return address(coolerV2Migrator);
     }
 
     // ========== GOVERNANCE ========== //
