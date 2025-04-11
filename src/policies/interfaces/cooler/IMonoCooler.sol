@@ -263,9 +263,7 @@ interface IMonoCooler {
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply after adding collateral.
      *    - MAY be empty, meaning no delegations are applied.
-     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
-     *    - MUST NOT apply delegations that results in more collateral being undelegated than
-     *      the account has collateral for.
+     *    - MUST ONLY be requests to add delegations, and that total MUST BE less than the `collateralAmount` argument
      *    - If `onBehalfOf` does not equal the caller, the caller must be authorized via
      *      `setAuthorization()` or `setAuthorizationWithSig()`
      */
@@ -289,9 +287,7 @@ interface IMonoCooler {
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply before removing collateral.
      *    - MAY be empty, meaning no delegations are applied.
-     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
-     *    - MUST NOT apply delegations that results in more collateral being undelegated than
-     *      the account has collateral for.
+     *    - MUST ONLY be requests to undelegate, and that total undelegated MUST BE less than the `collateralAmount` argument
      */
     function withdrawCollateral(
         uint128 collateralAmount,
@@ -367,11 +363,12 @@ interface IMonoCooler {
     /**
      * @notice Liquidate one or more accounts which have exceeded the `liquidationLtv`
      * The gOHM collateral is seized (unstaked to OHM and burned), and the accounts debt is wiped.
-     * @dev If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
+     * @dev
+     *    - If one of the provided accounts in the batch hasn't exceeded the max LTV then it is skipped.
+     *    - Delegations are auto-rescinded if required. Ordering of this is not guaranteed.
      */
     function batchLiquidate(
-        address[] calldata accounts,
-        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
+        address[] calldata accounts
     )
         external
         returns (
@@ -387,8 +384,8 @@ interface IMonoCooler {
      */
     function applyUnhealthyDelegations(
         address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint256 totalUndelegated);
+        uint256 autoRescindMaxNumDelegates
+    ) external returns (uint256 totalUndelegated, uint256 undelegatedBalance);
 
     //============================================================================================//
     //                                           ADMIN                                            //
@@ -409,7 +406,9 @@ interface IMonoCooler {
     function setBorrowPaused(bool isPaused) external;
 
     /// @notice Update the interest rate (APR), specified in Wad (18 decimals)
-    /// @dev Interest (approximately) continuously compounds at this rate.
+    /// @dev
+    ///     - Cannot be set higher than 10% APR
+    ///     - Interest (approximately) continuously compounds at this rate.
     function setInterestRateWad(uint96 newInterestRateWad) external;
 
     /// @notice Allow an account to have more or less than the DEFAULT_MAX_DELEGATE_ADDRESSES

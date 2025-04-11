@@ -16,11 +16,17 @@ contract MockDaiUsds is IDaiUsds {
     }
 
     function daiToUsds(address usr, uint256 wad) external override {
+        // Mock ERC20 does not check allowance, so check it here
+        if (dai.allowance(usr, address(this)) < wad) revert("allowance");
+
         dai.burn(usr, wad);
         usds.mint(usr, wad);
     }
 
     function usdsToDai(address usr, uint256 wad) external {
+        // Mock ERC20 does not check allowance, so check it here
+        if (usds.allowance(usr, address(this)) < wad) revert("allowance");
+
         usds.burn(usr, wad);
         dai.mint(usr, wad);
     }

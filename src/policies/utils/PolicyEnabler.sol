@@ -47,14 +47,14 @@ abstract contract PolicyEnabler is PolicyAdmin {
 
     /// @notice Enable the contract
     /// @dev    This function performs the following steps:
-    ///         1. Validates that the caller has `ROLE` ("emergency_shutdown")
+    ///         1. Validates that the caller has the admin role
     ///         2. Validates that the contract is disabled
     ///         3. Calls the implementation-specific `_enable()` function
     ///         4. Changes the state of the contract to enabled
     ///         5. Emits the `Enabled` event
     ///
     /// @param  enableData_ The data to pass to the implementation-specific `_enable()` function
-    function enable(bytes calldata enableData_) public onlyEmergencyOrAdminRole onlyDisabled {
+    function enable(bytes calldata enableData_) public onlyAdminRole onlyDisabled {
         // Call the implementation-specific enable function
         _enable(enableData_);
 
@@ -79,7 +79,7 @@ abstract contract PolicyEnabler is PolicyAdmin {
 
     /// @notice Disable the contract
     /// @dev    This function performs the following steps:
-    ///         1. Validates that the caller has `ROLE` ("emergency_shutdown")
+    ///         1. Validates that the caller has the admin or emergency role
     ///         2. Validates that the contract is enabled
     ///         3. Calls the implementation-specific `_disable()` function
     ///         4. Changes the state of the contract to disabled

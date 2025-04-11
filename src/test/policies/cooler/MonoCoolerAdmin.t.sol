@@ -186,7 +186,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](5);
+        Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
@@ -194,6 +194,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         expectedPerms[2] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
         expectedPerms[3] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
         expectedPerms[4] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        expectedPerms[5] = Permissions(DLGTE_KEYCODE, DLGTE.rescindDelegations.selector);
 
         Permissions[] memory perms = cooler.requestPermissions();
         // Check: permission storage
@@ -308,7 +309,19 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         assertEq(cooler.borrowsPaused(), false);
     }
 
-    function test_setInterestRateWad() public {
+    function test_setInterestRateWad_fail_max() public {
+        vm.startPrank(OVERSEER);
+
+        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidParam.selector));
+        cooler.setInterestRateWad(0.1e18 + 1);
+
+        vm.expectEmit(address(cooler));
+        emit InterestRateSet(0.1e18);
+        cooler.setInterestRateWad(0.1e18);
+        assertEq(cooler.interestRateWad(), 0.1e18);
+    }
+
+    function test_setInterestRateWad_success() public {
         vm.startPrank(OVERSEER);
 
         vm.warp(START_TIMESTAMP + 30 days);

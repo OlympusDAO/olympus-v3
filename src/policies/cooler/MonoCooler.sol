@@ -131,6 +131,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     /// @dev expected decimals for the `_COLLATERAL_TOKEN` and `treasuryBorrower`
     uint8 private constant _EXPECTED_DECIMALS = 18;
 
+    /// @dev Cannot set an interest rate higher than 10%
+    uint96 private constant MAX_INTEREST_RATE = 0.1e18;
+
     //============================================================================================//
     //                                      INITIALIZATION                                        //
     //============================================================================================//
@@ -209,12 +212,13 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
 
-        requests = new Permissions[](5);
+        requests = new Permissions[](6);
         requests[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         requests[1] = Permissions(DLGTE_KEYCODE, DLGTE.depositUndelegatedGohm.selector);
         requests[2] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
         requests[3] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
         requests[4] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        requests[5] = Permissions(DLGTE_KEYCODE, DLGTE.rescindDelegations.selector);
     }
 
     //============================================================================================//
@@ -222,7 +226,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     //============================================================================================//
 
     /// @inheritdoc IMonoCooler
-    function setAuthorization(address authorized, uint96 authorizationDeadline) external {
+    function setAuthorization(address authorized, uint96 authorizationDeadline) external override {
         emit AuthorizationSet(msg.sender, msg.sender, authorized, authorizationDeadline);
         authorizations[msg.sender][authorized] = authorizationDeadline;
     }
@@ -231,7 +235,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     function setAuthorizationWithSig(
         Authorization memory authorization,
         Signature calldata signature
-    ) external {
+    ) external override {
         /// Do not check whether authorization is already set because the nonce increment is a desired side effect.
         if (block.timestamp > authorization.signatureDeadline)
             revert ExpiredSignature(authorization.signatureDeadline);
@@ -258,8 +262,11 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     }
 
     /// @inheritdoc IMonoCooler
-    function isSenderAuthorized(address sender, address onBehalfOf) public view returns (bool) {
-        return sender == onBehalfOf || block.timestamp < authorizations[onBehalfOf][sender];
+    function isSenderAuthorized(
+        address sender,
+        address onBehalfOf
+    ) public view override returns (bool) {
+        return sender == onBehalfOf || block.timestamp <= authorizations[onBehalfOf][sender];
     }
 
     function _requireSenderAuthorized(address sender, address onBehalfOf) internal view {
@@ -294,7 +301,15 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             // While adding collateral on another user's behalf is ok,
             // delegating on behalf of someone else is not allowed unless authorized
             _requireSenderAuthorized(msg.sender, onBehalfOf);
-            DLGTE.applyDelegations(onBehalfOf, delegationRequests);
+
+            // Not allowed to undelegate, and not allowed to delegate more than this collateral amount
+            (uint256 totalDelegated, uint256 totalUndelegated, ) = DLGTE.applyDelegations(
+                onBehalfOf,
+                delegationRequests
+            );
+            if (totalUndelegated > 0 || totalDelegated > collateralAmount) {
+                revert IDLGTEv1.DLGTE_InvalidDelegationRequests();
+            }
         }
 
         // NB: No need to check if the position is healthy when adding collateral as this
@@ -320,14 +335,20 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
         if (delegationRequests.length > 0) {
             // Apply the delegation requests in order to pull the required collateral back into this contract.
-            DLGTE.applyDelegations(onBehalfOf, delegationRequests);
+            // Not allowed to delegate, and not allowed to undelegate more than this collateral amount
+            (uint256 totalDelegated, uint256 totalUndelegated, ) = DLGTE.applyDelegations(
+                onBehalfOf,
+                delegationRequests
+            );
+            if (totalDelegated > 0 || totalUndelegated > collateralAmount) {
+                revert IDLGTEv1.DLGTE_InvalidDelegationRequests();
+            }
         }
 
         uint128 currentDebt = _currentAccountDebt(
             aState.debtCheckpoint,
             aState.interestAccumulatorRay,
-            gStateCache.interestAccumulatorRay,
-            true
+            gStateCache.interestAccumulatorRay
         );
 
         if (collateralAmount == type(uint128).max) {
@@ -336,7 +357,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                 gStateCache.maxOriginationLtv
             );
             if (_accountCollateral > minRequiredCollateral) {
-                collateralWithdrawn = _accountCollateral - minRequiredCollateral;
+                unchecked {
+                    collateralWithdrawn = _accountCollateral - minRequiredCollateral;
+                }
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
@@ -348,10 +371,12 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         } else {
             collateralWithdrawn = collateralAmount;
             if (_accountCollateral < collateralWithdrawn) revert ExceededCollateralBalance();
-            _accountCollateral -= collateralWithdrawn;
+            unchecked {
+                _accountCollateral -= collateralWithdrawn;
+            }
         }
 
-        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn);
+        DLGTE.withdrawUndelegatedGohm(onBehalfOf, collateralWithdrawn, 0);
 
         // Update the collateral balance, and then verify that it doesn't make the debt unsafe.
         aState.collateral = _accountCollateral;
@@ -389,12 +414,10 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         uint128 _accountCollateral = aState.collateral;
         uint128 _accountDebtCheckpoint = aState.debtCheckpoint;
 
-        // don't round up the debt when borrowing.
         uint128 currentDebt = _currentAccountDebt(
             _accountDebtCheckpoint,
             aState.interestAccumulatorRay,
-            gStateCache.interestAccumulatorRay,
-            false
+            gStateCache.interestAccumulatorRay
         );
 
         // Apply the new borrow. If type(uint128).max was specified
@@ -402,7 +425,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (borrowAmount == type(uint128).max) {
             uint128 accountTotalDebt = _maxDebt(_accountCollateral, gStateCache.maxOriginationLtv);
             if (accountTotalDebt > currentDebt) {
-                amountBorrowed = accountTotalDebt - currentDebt;
+                unchecked {
+                    amountBorrowed = accountTotalDebt - currentDebt;
+                }
             } else {
                 // Already at/above the origination LTV
                 revert ExceededMaxOriginationLtv(
@@ -453,8 +478,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         uint128 latestDebt = _currentAccountDebt(
             _accountDebtCheckpoint,
             aState.interestAccumulatorRay,
-            gStateCache.interestAccumulatorRay,
-            true
+            gStateCache.interestAccumulatorRay
         );
         if (latestDebt == 0) revert ExpectedNonZero();
 
@@ -463,7 +487,9 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             amountRepaid = repayAmount;
 
             // Ensure the minimum debt amounts are still maintained
-            aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
+            unchecked {
+                aState.debtCheckpoint = _accountDebtCheckpoint = latestDebt - amountRepaid;
+            }
             if (_accountDebtCheckpoint < _MIN_DEBT_REQUIRED) {
                 revert MinDebtNotMet(_MIN_DEBT_REQUIRED, _accountDebtCheckpoint);
             }
@@ -515,17 +541,14 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     /// @inheritdoc IMonoCooler
     function applyUnhealthyDelegations(
         address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external override returns (uint256 totalUndelegated) {
+        uint256 autoRescindMaxNumDelegates
+    ) external override returns (uint256 totalUndelegated, uint256 undelegatedBalance) {
         if (liquidationsPaused) revert Paused();
         GlobalStateCache memory gState = _globalStateRW();
         LiquidationStatus memory status = _computeLiquidity(allAccountState[account], gState);
         if (!status.exceededLiquidationLtv) revert CannotLiquidate();
-        totalUndelegated = _undelegateForLiquidation(
-            account,
-            delegationRequests,
-            status.collateral
-        );
+
+        return DLGTE.rescindDelegations(account, status.collateral, autoRescindMaxNumDelegates);
     }
 
     //============================================================================================//
@@ -534,8 +557,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function batchLiquidate(
-        address[] calldata accounts,
-        IDLGTEv1.DelegationRequest[][] calldata delegationRequests
+        address[] calldata accounts
     )
         external
         override
@@ -546,7 +568,6 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         )
     {
         if (liquidationsPaused) revert Paused();
-        if (delegationRequests.length != accounts.length) revert InvalidDelegationRequests();
 
         LiquidationStatus memory status;
         GlobalStateCache memory gState = _globalStateRW();
@@ -566,11 +587,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
                     status.currentIncentive
                 );
 
-                // Apply any undelegation requests.
-                _undelegateForLiquidation(account, delegationRequests[i], status.collateral);
-
-                // Withdraw the undelegated gOHM
-                DLGTE.withdrawUndelegatedGohm(account, status.collateral);
+                // Withdraw the undelegated gOHM, auto-rescinding delegations if required
+                DLGTE.withdrawUndelegatedGohm(account, status.collateral, type(uint256).max);
 
                 totalCollateralClaimed += status.collateral;
                 totalDebtWiped += status.currentDebt;
@@ -585,21 +603,20 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         if (totalCollateralClaimed > 0) {
             // Unstake and burn gOHM holdings.
             uint128 gOhmToBurn = totalCollateralClaimed - totalLiquidationIncentive;
-
             if (gOhmToBurn > 0) {
-                _COLLATERAL_TOKEN.safeApprove(address(_STAKING), gOhmToBurn);
-                MINTR.burnOhm(
-                    address(this),
-                    _STAKING.unstake(address(this), gOhmToBurn, false, false)
-                );
+                uint256 ohmAmount = _STAKING.unstake(address(this), gOhmToBurn, false, false);
+                if (ohmAmount > 0) {
+                    MINTR.burnOhm(address(this), ohmAmount);
+                }
             }
 
             totalCollateral -= totalCollateralClaimed;
         }
 
-        // Remove debt from the totals
+        // Remove debt from the totals and from TRSRY
         if (totalDebtWiped > 0) {
             _reduceTotalDebt(gState, totalDebtWiped);
+            treasuryBorrower.writeOffDebt(totalDebtWiped);
         }
 
         // The liquidator receives the total incentives across all accounts
@@ -649,6 +666,8 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
 
     /// @inheritdoc IMonoCooler
     function setInterestRateWad(uint96 newInterestRate) external override onlyAdminRole {
+        if (newInterestRate > MAX_INTEREST_RATE) revert InvalidParam();
+
         // Force an update of state on the old rate first.
         _globalStateRW();
 
@@ -728,8 +747,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         uint128 currentDebt = _currentAccountDebt(
             aState.debtCheckpoint,
             aState.interestAccumulatorRay,
-            gStateCache.interestAccumulatorRay,
-            true
+            gStateCache.interestAccumulatorRay
         );
         debtDelta = int128(maxDebt) - int128(currentDebt);
     }
@@ -811,8 +829,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             _currentAccountDebt(
                 aState.debtCheckpoint,
                 aState.interestAccumulatorRay,
-                gStateCache.interestAccumulatorRay,
-                true
+                gStateCache.interestAccumulatorRay
             );
     }
 
@@ -984,13 +1001,10 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         GlobalStateCache memory gStateCache
     ) private pure returns (LiquidationStatus memory status) {
         status.collateral = aStateCache.collateral;
-
-        // Round the debt up
         status.currentDebt = _currentAccountDebt(
             aStateCache.debtCheckpoint,
             aStateCache.interestAccumulatorRay,
-            gStateCache.interestAccumulatorRay,
-            true
+            gStateCache.interestAccumulatorRay
         );
         status.currentLtv = _calculateCurrentLtv(status.currentDebt, status.collateral);
 
@@ -1015,27 +1029,6 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
         }
     }
 
-    function _undelegateForLiquidation(
-        address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
-        uint256 acctCollateral
-    ) private returns (uint256 totalUndelegated) {
-        if (delegationRequests.length > 0) {
-            uint256 totalDelegated;
-            uint256 undelegatedBalance;
-            (totalDelegated, totalUndelegated, undelegatedBalance) = DLGTE.applyDelegations(
-                account,
-                delegationRequests
-            );
-
-            // Only allowed to undelegate.
-            if (totalDelegated > 0) revert InvalidDelegationRequests();
-
-            // Cannot undelegate more collateral than required in order to fullfill a liquidation.
-            if (undelegatedBalance > acctCollateral) revert InvalidDelegationRequests();
-        }
-    }
-
     //============================================================================================//
     //                                       INTERNAL AUX                                         //
     //============================================================================================//
@@ -1047,8 +1040,7 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
     function _currentAccountDebt(
         uint128 accountDebtCheckpoint_,
         uint256 accountInterestAccumulatorRay_,
-        uint256 globalInterestAccumulatorRay_,
-        bool roundUp
+        uint256 globalInterestAccumulatorRay_
     ) private pure returns (uint128 result) {
         if (accountDebtCheckpoint_ == 0) return 0;
 
@@ -1057,15 +1049,10 @@ contract MonoCooler is IMonoCooler, Policy, PolicyAdmin {
             return accountDebtCheckpoint_;
         }
 
-        uint256 debt = roundUp
-            ? globalInterestAccumulatorRay_.mulDivUp(
-                accountDebtCheckpoint_,
-                accountInterestAccumulatorRay_
-            )
-            : globalInterestAccumulatorRay_.mulDivDown(
-                accountDebtCheckpoint_,
-                accountInterestAccumulatorRay_
-            );
+        uint256 debt = globalInterestAccumulatorRay_.mulDivUp(
+            accountDebtCheckpoint_,
+            accountInterestAccumulatorRay_
+        );
         return debt.encodeUInt128();
     }
 

@@ -133,11 +133,15 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
     function test_delegate() public {
         assertEq(delegate(CALLER1, 10e18, ALICE), 10e18);
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 10e18);
+        assertEq(aliceEscrow.totalDelegated(), 10e18);
         assertEq(delegate(CALLER1, 33e18, ALICE), 43e18);
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 43e18);
+        assertEq(aliceEscrow.totalDelegated(), 43e18);
         assertEq(delegate(CALLER1, 10e18, BOB), 10e18);
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 43e18);
         assertEq(aliceEscrow.delegations(CALLER1, BOB), 10e18);
+        assertEq(aliceEscrow.totalDelegated(), 53e18);
+        assertEq(gohm.balanceOf(address(aliceEscrow)), 53e18);
 
         assertEq(delegate(CALLER2, 10e18, ALICE), 10e18);
         assertEq(delegate(CALLER2, 33e18, ALICE), 43e18);
@@ -147,6 +151,14 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
 
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 43e18);
         assertEq(aliceEscrow.delegations(CALLER1, BOB), 10e18);
+
+        assertEq(aliceEscrow.totalDelegated(), 106e18);
+
+        // Donations count towards this too
+        gohm.mint(address(aliceEscrow), 33e18);
+
+        assertEq(aliceEscrow.totalDelegated(), 139e18);
+        assertEq(gohm.balanceOf(address(aliceEscrow)), 139e18);
     }
 
     function test_rescindDelegation() public {
@@ -154,6 +166,8 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
         delegate(CALLER1, 10e18, BOB);
         delegate(CALLER2, 43e18, ALICE);
         delegate(CALLER2, 10e18, BOB);
+        gohm.mint(address(aliceEscrow), 50e18);
+        assertEq(aliceEscrow.totalDelegated(), 156e18);
 
         vm.startPrank(CALLER1);
         vm.expectRevert(abi.encodeWithSelector(DelegateEscrow.ExceededDelegationBalance.selector));
@@ -161,17 +175,23 @@ contract DelegateEscrowImplTest is DelegateEscrowFactoryTestBase {
 
         assertEq(rescind(CALLER1, ALICE, 5e18), 38e18);
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 38e18);
+        assertEq(aliceEscrow.totalDelegated(), 151e18);
         assertEq(rescind(CALLER1, ALICE, 5e18), 33e18);
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 33e18);
+        assertEq(aliceEscrow.totalDelegated(), 146e18);
         assertEq(rescind(CALLER1, BOB, 5e18), 5e18);
         assertEq(aliceEscrow.delegations(CALLER1, BOB), 5e18);
+        assertEq(aliceEscrow.totalDelegated(), 141e18);
 
         assertEq(rescind(CALLER2, ALICE, 5e18), 38e18);
         assertEq(aliceEscrow.delegations(CALLER2, ALICE), 38e18);
+        assertEq(aliceEscrow.totalDelegated(), 136e18);
         assertEq(rescind(CALLER2, ALICE, 5e18), 33e18);
         assertEq(aliceEscrow.delegations(CALLER2, ALICE), 33e18);
+        assertEq(aliceEscrow.totalDelegated(), 131e18);
         assertEq(rescind(CALLER2, BOB, 5e18), 5e18);
         assertEq(aliceEscrow.delegations(CALLER2, BOB), 5e18);
+        assertEq(aliceEscrow.totalDelegated(), 126e18);
 
         assertEq(aliceEscrow.delegations(CALLER1, ALICE), 33e18);
         assertEq(aliceEscrow.delegations(CALLER1, BOB), 5e18);

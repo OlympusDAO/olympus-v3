@@ -96,25 +96,23 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
         uint256 susdsAmount = SUSDS.previewWithdraw(amountInWad);
         TRSRY.increaseWithdrawApproval(address(this), SUSDS, susdsAmount);
         TRSRY.withdrawReserves(address(this), SUSDS, susdsAmount);
-        SUSDS.redeem(susdsAmount, recipient, address(this));
+        SUSDS.withdraw(amountInWad, recipient, address(this));
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function repay() external override onlyEnabled onlyRole(COOLER_ROLE) {
         uint256 debtTokenAmount = _USDS.balanceOf(address(this));
-        if (debtTokenAmount == 0) revert ExpectedNonZero();
-
-        // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
-        // and any future repayments are just deposited. There are no 'credits' for overpaying
-        uint256 outstandingDebt = TRSRY.reserveDebt(_USDS, address(this));
-        TRSRY.setDebt({
-            debtor_: address(this),
-            token_: _USDS,
-            amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
-        });
+        _reduceDebtToTreasury(debtTokenAmount);
 
         _USDS.safeApprove(address(SUSDS), debtTokenAmount);
         SUSDS.deposit(debtTokenAmount, address(TRSRY));
+    }
+
+    /// @inheritdoc ICoolerTreasuryBorrower
+    function writeOffDebt(
+        uint256 debtTokenAmount
+    ) external override onlyEnabled onlyRole(COOLER_ROLE) {
+        _reduceDebtToTreasury(debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
@@ -133,5 +131,21 @@ contract CoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEnable
     ) external view override returns (IERC20 dToken, uint256 dTokenAmount) {
         dToken = IERC20(address(_USDS));
         dTokenAmount = amountInWad;
+    }
+
+    /// @dev Decrease the debt to TRSRY, floored at zero
+    function _reduceDebtToTreasury(uint256 debtTokenAmount) private {
+        if (debtTokenAmount == 0) revert ExpectedNonZero();
+
+        // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
+        // and any future repayments are just deposited. There are no 'credits' for overpaying
+        uint256 outstandingDebt = TRSRY.reserveDebt(_USDS, address(this));
+        uint256 delta;
+        if (outstandingDebt > debtTokenAmount) {
+            unchecked {
+                delta = outstandingDebt - debtTokenAmount;
+            }
+        }
+        TRSRY.setDebt({debtor_: address(this), token_: _USDS, amount_: delta});
     }
 }
