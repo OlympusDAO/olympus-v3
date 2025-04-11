@@ -66,9 +66,14 @@ abstract contract MonoCoolerBaseTest is Test {
         ohm = new MockOhm("OHM", "OHM", 9);
         gohm = new MockGohm("gOHM", "gOHM", 18);
         staking = new MockStakingReal(address(ohm), address(gohm));
+        vm.label(address(ohm), "OHM");
+        vm.label(address(gohm), "gOHM");
+        vm.label(address(staking), "Staking");
 
         usds = new MockERC20("usds", "USDS", 18);
         susds = new MockERC4626(usds, "sUSDS", "sUSDS");
+        vm.label(address(usds), "USDS");
+        vm.label(address(susds), "sUSDS");
 
         kernel = new Kernel(); // this contract will be the executor
         escrowFactory = new DelegateEscrowFactory(address(gohm));
