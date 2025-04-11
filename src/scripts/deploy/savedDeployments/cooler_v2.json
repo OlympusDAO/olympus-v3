@@ -9,12 +9,12 @@
         {
             "name": "CoolerV2LtvOracle",
             "args": {
-                "initialOriginationLtv": 0,
-                "maxOriginationLtvDelta": 0,
-                "minOriginationLtvTargetTimeDelta": 0,
-                "maxOriginationLtvRateOfChange": 0,
-                "maxLiquidationLtvPremiumBps": 0,
-                "liquidationLtvPremiumBps": 0
+                "initialOriginationLtv": 2961640000000000000000,
+                "maxOriginationLtvDelta": 100000000000000000000,
+                "minOriginationLtvTargetTimeDelta": 604800,
+                "maxOriginationLtvRateOfChange": 8640000000000000000000,
+                "maxLiquidationLtvPremiumBps": 333,
+                "liquidationLtvPremiumBps": 100
             }
         },
         {
@@ -23,8 +23,8 @@
         {
             "name": "CoolerV2",
             "args": {
-                "interestRateWad": 0,
-                "minDebtRequired": 0
+                "interestRateWad": 5000000000000000,
+                "minDebtRequired": 1000000000000000000000
             }
         },
         {
