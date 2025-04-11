@@ -263,9 +263,7 @@ interface IMonoCooler {
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply after adding collateral.
      *    - MAY be empty, meaning no delegations are applied.
-     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
-     *    - MUST NOT apply delegations that results in more collateral being undelegated than
-     *      the account has collateral for.
+     *    - MUST ONLY be requests to add delegations, and that total MUST BE less than the `collateralAmount` argument
      *    - If `onBehalfOf` does not equal the caller, the caller must be authorized via
      *      `setAuthorization()` or `setAuthorizationWithSig()`
      */
@@ -289,9 +287,7 @@ interface IMonoCooler {
      *    - MUST NOT be address(0)
      * @param delegationRequests The set of delegations to apply before removing collateral.
      *    - MAY be empty, meaning no delegations are applied.
-     *    - Total collateral delegated as part of these requests MUST BE less than the account collateral.
-     *    - MUST NOT apply delegations that results in more collateral being undelegated than
-     *      the account has collateral for.
+     *    - MUST ONLY be requests to undelegate, and that total undelegated MUST BE less than the `collateralAmount` argument
      */
     function withdrawCollateral(
         uint128 collateralAmount,
@@ -388,8 +384,8 @@ interface IMonoCooler {
      */
     function applyUnhealthyDelegations(
         address account,
-        IDLGTEv1.DelegationRequest[] calldata delegationRequests
-    ) external returns (uint256 totalUndelegated);
+        uint256 autoRescindMaxNumDelegates
+    ) external returns (uint256 totalUndelegated, uint256 undelegatedBalance);
 
     //============================================================================================//
     //                                           ADMIN                                            //

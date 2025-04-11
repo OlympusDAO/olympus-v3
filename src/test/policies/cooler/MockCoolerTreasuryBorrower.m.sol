@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -89,18 +88,14 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
     /// @inheritdoc ICoolerTreasuryBorrower
     function repay() external override onlyEnabled onlyRole(COOLER_ROLE) {
         uint256 debtTokenAmount = _debtToken.balanceOf(address(this));
-        if (debtTokenAmount == 0) revert ExpectedNonZero();
-
-        // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
-        // and any future repayments are just deposited. There are no 'credits' for overpaying
-        uint256 outstandingDebt = TRSRY.reserveDebt(_debtToken, address(this));
-        TRSRY.setDebt({
-            debtor_: address(this),
-            token_: _debtToken,
-            amount_: (outstandingDebt > debtTokenAmount) ? outstandingDebt - debtTokenAmount : 0
-        });
+        _reduceDebtToTreasury(debtTokenAmount);
 
         _debtToken.safeTransfer(address(TRSRY), debtTokenAmount);
+    }
+
+    /// @inheritdoc ICoolerTreasuryBorrower
+    function writeOffDebt(uint256 debtTokenAmount) external override onlyEnabled onlyRole(COOLER_ROLE) {
+        _reduceDebtToTreasury(debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
@@ -123,5 +118,21 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
 
     function _convertToDebtTokenAmount(uint256 amountInWei) private view returns (uint256) {
         return FixedPointMathLib.mulDivUp(amountInWei, 1, _conversionScalar);
+    }
+
+    /// @dev Decrease the debt to TRSRY, floored at zero
+    function _reduceDebtToTreasury(uint256 debtTokenAmount) private {
+        if (debtTokenAmount == 0) revert ExpectedNonZero();
+
+        // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
+        // and any future repayments are just deposited. There are no 'credits' for overpaying
+        uint256 outstandingDebt = TRSRY.reserveDebt(_debtToken, address(this));
+        uint256 delta;
+        if (outstandingDebt > debtTokenAmount) {
+            unchecked {
+                delta = outstandingDebt - debtTokenAmount;
+            }
+        }
+        TRSRY.setDebt({debtor_: address(this), token_: _debtToken, amount_: delta});
     }
 }
