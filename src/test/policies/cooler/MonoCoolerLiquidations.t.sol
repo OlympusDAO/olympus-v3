@@ -395,43 +395,13 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         cooler.setLiquidationsPaused(true);
 
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.Paused.selector));
-        cooler.applyUnhealthyDelegations(ALICE, noDelegationRequest());
+        cooler.applyUnhealthyDelegations(ALICE, type(uint256).max);
     }
 
     function test_applyUnhealthyDelegations_fail_cannotLiquidate() external {
         addCollateral(ALICE, 10e18);
         vm.expectRevert(abi.encodeWithSelector(IMonoCooler.CannotLiquidate.selector));
-        cooler.applyUnhealthyDelegations(ALICE, noDelegationRequest());
-    }
-
-    function test_applyUnhealthyDelegations_fail_canOnlyUndelegate1() external {
-        uint128 collateralAmount = 10e18;
-        addCollateral(ALICE, collateralAmount);
-        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
-        borrow(ALICE, ALICE, borrowAmount, ALICE);
-
-        skip(2 * 365 days);
-
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.applyUnhealthyDelegations(ALICE, delegationRequest(BOB, 5e18));
-    }
-
-    function test_applyUnhealthyDelegations_fail_canOnlyUndelegate2() external {
-        uint128 collateralAmount = 10e18;
-        addCollateral(ALICE, ALICE, collateralAmount, delegationRequest(BOB, 8e18));
-        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
-        borrow(ALICE, ALICE, borrowAmount, ALICE);
-
-        skip(2 * 365 days);
-
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
-            2
-        );
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -int256(2e18));
-        delegationRequests[1] = IDLGTEv1.DelegationRequest(OTHERS, 1e18);
-
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
+        cooler.applyUnhealthyDelegations(ALICE, type(uint256).max);
     }
 
     function test_applyUnhealthyDelegations_fail_noUndelegations() external {
@@ -442,8 +412,8 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
 
         skip(2 * 365 days);
 
-        uint256 totalUndelegated = cooler.applyUnhealthyDelegations(ALICE, noDelegationRequest());
-        assertEq(totalUndelegated, 0);
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidAmount.selector));
+        cooler.applyUnhealthyDelegations(ALICE, 0);
     }
 
     function test_applyUnhealthyDelegations_success_oneUndelegation() external {
@@ -454,32 +424,15 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
 
         skip(2 * 365 days);
 
-        uint256 totalUndelegated = cooler.applyUnhealthyDelegations(
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
             ALICE,
-            unDelegationRequest(BOB, 5e18)
+            1
         );
-        assertEq(totalUndelegated, 5e18);
+        assertEq(totalUndelegated, 8e18);
+        assertEq(undelegatedBalance, collateralAmount);
 
-        expectOneDelegation(ALICE, BOB, 3e18);
-        expectAccountDelegationSummary(ALICE, 10e18, 3e18, 1, 10);
-    }
-
-    function test_applyUnhealthyDelegations_fail_tooMuch() external {
-        uint128 collateralAmount = 10e18;
-        addCollateral(ALICE, ALICE, collateralAmount, delegationRequest(BOB, 8e18));
-        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
-        borrow(ALICE, ALICE, borrowAmount, ALICE);
-
-        skip(2 * 365 days);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDLGTEv1.DLGTE_ExceededDelegatedBalance.selector,
-                BOB,
-                8e18,
-                8e18 + 1
-            )
-        );
-        cooler.applyUnhealthyDelegations(ALICE, unDelegationRequest(BOB, 8e18 + 1));
+        expectNoDelegations(ALICE);
+        expectAccountDelegationSummary(ALICE, 10e18, 0, 0, 10);
     }
 
     function test_applyUnhealthyDelegations_success_twoUndelegations() external {
@@ -497,13 +450,15 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
 
         skip(2 * 365 days);
 
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -1e18);
-        delegationRequests[1] = IDLGTEv1.DelegationRequest(OTHERS, -5e18);
-        uint256 totalUndelegated = cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-        assertEq(totalUndelegated, 6e18);
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            2
+        );
+        assertEq(totalUndelegated, 3e18 + 6e18);
+        assertEq(undelegatedBalance, collateralAmount);
 
-        expectTwoDelegations(ALICE, BOB, 2e18, OTHERS, 1e18);
-        expectAccountDelegationSummary(ALICE, 10e18, 3e18, 2, 10);
+        expectNoDelegations(ALICE);
+        expectAccountDelegationSummary(ALICE, collateralAmount, 0, 0, 10);
     }
 
     function test_applyUnhealthyDelegations_fromOtherPolicy_empty() external {
@@ -513,11 +468,12 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 delegationAmount = 5e18;
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
-            0
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            10
         );
-        uint256 totalUndelegated = cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
         assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount);
 
         expectOneDelegation(cooler, ALICE, BOB, 2 * delegationAmount);
         expectOneDelegation(cooler2, ALICE, BOB, 2 * delegationAmount);
@@ -531,37 +487,12 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 delegationAmount = 5e18;
         _cooler2Setup(collateralAmount, delegationAmount);
 
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
-            1
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            10
         );
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -1);
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-    }
-
-    function test_applyUnhealthyDelegations_fromOtherPolicy_undelegateJustEnough() external {
-        // 20 total, 2x5=10e18+2 delegated, 10e18-2 undelegated
-        // Only allowed to undelegate 2 in total
-        uint128 collateralAmount = 10e18;
-        uint256 delegationAmount = 5e18 + 1;
-        MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
-
-        // Not allowed to pull 3
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
-            1
-        );
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -3);
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-
-        // Can pull 2
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -2);
-        uint256 totalUndelegated = cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-        assertEq(totalUndelegated, 2);
-
-        expectOneDelegation(cooler, ALICE, BOB, collateralAmount);
-        expectOneDelegation(cooler2, ALICE, BOB, collateralAmount);
-        expectAccountDelegationSummary(ALICE, 20e18, collateralAmount, 1, 10);
+        assertEq(totalUndelegated, 0);
+        assertEq(undelegatedBalance, collateralAmount);
     }
 
     function test_applyUnhealthyDelegations_fromOtherPolicy_lessThanEnough() external {
@@ -571,31 +502,41 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 delegationAmount = 7e18;
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
-        // OK to pull less than the max
-        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
-            1
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            10
         );
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -2e18);
-        uint256 totalUndelegated = cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-        assertEq(totalUndelegated, 2e18);
-
-        expectOneDelegation(cooler, ALICE, BOB, 12e18);
-        expectOneDelegation(cooler2, ALICE, BOB, 12e18);
-        expectAccountDelegationSummary(ALICE, 20e18, 12e18, 1, 10);
-
-        // Can't pull another 2e18+1
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -2e18 - 1);
-        vm.expectRevert(abi.encodeWithSelector(IMonoCooler.InvalidDelegationRequests.selector));
-        cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-
-        // Can pull exactly 2e18
-        delegationRequests[0] = IDLGTEv1.DelegationRequest(BOB, -2e18);
-        totalUndelegated = cooler.applyUnhealthyDelegations(ALICE, delegationRequests);
-        assertEq(totalUndelegated, 2e18);
+        assertEq(totalUndelegated, 4e18);
+        assertEq(undelegatedBalance, collateralAmount);
 
         expectOneDelegation(cooler, ALICE, BOB, collateralAmount);
         expectOneDelegation(cooler2, ALICE, BOB, collateralAmount);
         expectAccountDelegationSummary(ALICE, 20e18, collateralAmount, 1, 10);
+    }
+
+    function test_applyUnhealthyDelegations_onlyOne() external {
+        // 20 total, 2x7=14e18 delegated, 6e18 undelegated
+        // Only allowed to undelegate 4e18 in total
+        uint128 collateralAmount = 10e18;
+        uint256 delegationAmount = 7e18;
+        MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
+
+        address CHARLIE = makeAddr("CHARLIE");
+        addCollateral(cooler, ALICE, ALICE, 33e18, delegationRequest(CHARLIE, 33e18));
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(cooler, ALICE, ALICE, borrowAmount, ALICE);
+        skip(2 * 365 days);
+
+        (uint256 totalUndelegated, uint256 undelegatedBalance) = cooler.applyUnhealthyDelegations(
+            ALICE,
+            1
+        );
+        assertEq(totalUndelegated, 33e18);
+        assertEq(undelegatedBalance, 33e18 + 6e18);
+
+        expectOneDelegation(cooler, ALICE, BOB, 14e18);
+        expectOneDelegation(cooler2, ALICE, BOB, 14e18);
+        expectAccountDelegationSummary(ALICE, 33e18 + 20e18, 14e18, 1, 10);
     }
 }
 
@@ -801,6 +742,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // caller gets the incentive
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_cappedIncentive() external {
@@ -849,6 +799,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             expectedDebt,
             9.998323814584335317e18
         );
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoAccounts_oneLiquidate() external {
@@ -973,6 +932,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // Caller gets the incentive
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                borrowAmount - 10 + borrowAmount - expectedDebt
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoAccounts_bothLiquidate() external {
@@ -1099,6 +1067,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // Caller gets the total incentives
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives * 2);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_emptyDelegationRequests() external {
@@ -1134,6 +1111,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             expectedDebt * 2,
             expectedIncentives * 2
         );
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoAccounts_withUndelegations() external {
@@ -1238,6 +1224,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // Caller gets the total incentives
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives * 2);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoCoolers_withUndelegations() external {
@@ -1247,11 +1242,14 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         uint256 delegationAmount = 7e18;
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
+        uint256 totalExpectedDebt = 2 * 29_616.4e18;
+        uint128 wipedDebt = 29_914.049768431554843335e18;
+
         vm.startPrank(OTHERS);
         checkBatchLiquidate(
             oneAddress(ALICE),
             collateralAmount,
-            29_914.049768431554843335e18,
+            wipedDebt,
             0.000496703803644129e18
         );
 
@@ -1259,5 +1257,14 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         expectOneDelegation(cooler, ALICE, BOB, collateralAmount);
         expectOneDelegation(cooler2, ALICE, BOB, collateralAmount);
         expectAccountDelegationSummary(ALICE, 10e18, collateralAmount, 1, 10);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                totalExpectedDebt - wipedDebt
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 }

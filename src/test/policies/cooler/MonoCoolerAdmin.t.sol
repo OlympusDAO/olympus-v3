@@ -186,7 +186,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](5);
+        Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode DLGTE_KEYCODE = toKeycode("DLGTE");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
@@ -194,6 +194,7 @@ contract MonoCoolerAdminTest is MonoCoolerBaseTest {
         expectedPerms[2] = Permissions(DLGTE_KEYCODE, DLGTE.withdrawUndelegatedGohm.selector);
         expectedPerms[3] = Permissions(DLGTE_KEYCODE, DLGTE.applyDelegations.selector);
         expectedPerms[4] = Permissions(DLGTE_KEYCODE, DLGTE.setMaxDelegateAddresses.selector);
+        expectedPerms[5] = Permissions(DLGTE_KEYCODE, DLGTE.rescindDelegations.selector);
 
         Permissions[] memory perms = cooler.requestPermissions();
         // Check: permission storage
