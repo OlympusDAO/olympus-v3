@@ -572,18 +572,12 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         );
     }
 
-    // Full branch analysis for applying delegations to be done in a separate suite.
-    function test_addCollateral_complexDelegations() public {
-        // Adds and removes delegations
+    function test_addCollateral_fail_cannotUndelegate() public {
         uint128 collateralAmount = 5e18;
         gohm.mint(ALICE, collateralAmount);
         vm.startPrank(ALICE);
         gohm.approve(address(cooler), collateralAmount);
 
-        // undelegated -> BOB: 1
-        // undelegated -> OTHERS: 3
-        // OTHERS -> BOB: 1.5
-        // OTHERS -> undelegated: 0.5
         IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
             5
         );
@@ -593,37 +587,45 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
         delegationRequests[3] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 1.5e18});
         delegationRequests[4] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: -0.5e18});
 
-        address bobEscrow = 0x9914ff9347266f1949C557B717936436402fc636;
-        vm.expectEmit(address(escrowFactory));
-        emit DelegateEscrowCreated(address(DLGTE), BOB, bobEscrow);
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, BOB, 1e18);
-
-        address othersEscrow = 0x6F67DD53F065131901fC8B45f183aD4977F75161;
-        vm.expectEmit(address(escrowFactory));
-        emit DelegateEscrowCreated(address(DLGTE), OTHERS, othersEscrow);
-
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, OTHERS, 3e18);
-
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, OTHERS, -1.5e18);
-
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, BOB, 1.5e18);
-
-        vm.expectEmit(address(DLGTE));
-        emit DelegationApplied(ALICE, OTHERS, -0.5e18);
-
-        vm.expectEmit(address(cooler));
-        emit CollateralAdded(ALICE, ALICE, collateralAmount);
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidDelegationRequests.selector));
         cooler.addCollateral(collateralAmount, ALICE, delegationRequests);
-        assertEq(cooler.totalCollateral(), collateralAmount);
+    }
 
-        assertEq(gohm.balanceOf(ALICE), 0);
-        assertEq(gohm.balanceOf(address(cooler)), 0);
-        assertEq(gohm.balanceOf(address(DLGTE)), collateralAmount - 1e18 - 3e18 + 0.5e18);
-        assertEq(gohm.balanceOf(othersEscrow), 1e18);
+    function test_addCollateral_fail_cannotOverDelegate() public {
+        addCollateral(ALICE, ALICE, 100e18, noDelegationRequest());
+
+        uint128 collateralAmount = 5e18;
+        gohm.mint(ALICE, collateralAmount);
+        vm.startPrank(ALICE);
+        gohm.approve(address(cooler), collateralAmount);
+
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            4
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 1e18});
+        delegationRequests[1] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: 3e18});
+        delegationRequests[2] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: 0.5e18});
+        delegationRequests[3] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 0.5e18 + 1});
+
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidDelegationRequests.selector));
+        cooler.addCollateral(collateralAmount, ALICE, delegationRequests);
+    }
+
+    function test_addCollateral_success_exactDelegationComplex() public {
+        uint128 collateralAmount = 5e18;
+        gohm.mint(ALICE, collateralAmount);
+        vm.startPrank(ALICE);
+        gohm.approve(address(cooler), collateralAmount);
+
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            4
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 1e18});
+        delegationRequests[1] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: 3e18});
+        delegationRequests[2] = IDLGTEv1.DelegationRequest({delegate: OTHERS, amount: 0.5e18});
+        delegationRequests[3] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: 0.5e18});
+
+        cooler.addCollateral(collateralAmount, ALICE, delegationRequests);
 
         checkAccountState(
             ALICE,
@@ -634,37 +636,10 @@ contract MonoCoolerAddCollateralTest is MonoCoolerBaseTest {
             })
         );
 
-        expectTwoDelegations(ALICE, BOB, 2.5e18, OTHERS, 1e18);
-        expectAccountDelegationSummary(ALICE, 5e18, 3.5e18, 2, 10);
+        expectTwoDelegations(ALICE, BOB, 1.5e18, OTHERS, 3.5e18);
+        expectAccountDelegationSummary(ALICE, 5e18, 5e18, 2, 10);
         expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
         expectAccountDelegationSummary(OTHERS, 0, 0, 0, 10);
-
-        checkAccountPosition(
-            ALICE,
-            IMonoCooler.AccountPosition({
-                collateral: collateralAmount,
-                currentDebt: 0,
-                maxOriginationDebtAmount: 14_808.2e18,
-                liquidationDebtAmount: 14_956.282e18,
-                healthFactor: type(uint256).max,
-                currentLtv: 0,
-                totalDelegated: 3.5e18,
-                numDelegateAddresses: 2,
-                maxDelegateAddresses: 10
-            })
-        );
-
-        checkLiquidityStatus(
-            ALICE,
-            IMonoCooler.LiquidationStatus({
-                collateral: collateralAmount,
-                currentDebt: 0,
-                currentLtv: 0,
-                exceededLiquidationLtv: false,
-                exceededMaxOriginationLtv: false,
-                currentIncentive: 0
-            })
-        );
     }
 }
 
@@ -826,6 +801,54 @@ contract MonoCoolerWithdrawCollateralTest is MonoCoolerBaseTest {
             )
         );
         cooler.withdrawCollateral(50e18 + 1, ALICE, BOB, noDelegationRequest());
+    }
+
+    function test_withdrawCollateral_fail_cannotDelegate() public {
+        addCollateral(ALICE, ALICE, 100e18, delegationRequest(BOB, 50e18));
+        vm.startPrank(ALICE);
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidDelegationRequests.selector));
+        cooler.withdrawCollateral(50e18 + 1, ALICE, ALICE, delegationRequest(BOB, 1));
+    }
+
+    function test_withdrawCollateral_fail_undelegateTooMuch() public {
+        addCollateral(ALICE, ALICE, 100e18, delegationRequest(BOB, 55e18));
+        vm.startPrank(ALICE);
+
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            2
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: -1e18});
+        delegationRequests[1] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: -49e18 - 1});
+
+        vm.expectRevert(abi.encodeWithSelector(IDLGTEv1.DLGTE_InvalidDelegationRequests.selector));
+        cooler.withdrawCollateral(50e18, ALICE, ALICE, delegationRequests);
+    }
+
+    function test_withdrawCollateral_success_undelegateExact() public {
+        addCollateral(ALICE, ALICE, 100e18, delegationRequest(BOB, 55e18));
+        vm.startPrank(ALICE);
+
+        IDLGTEv1.DelegationRequest[] memory delegationRequests = new IDLGTEv1.DelegationRequest[](
+            2
+        );
+        delegationRequests[0] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: -1e18});
+        delegationRequests[1] = IDLGTEv1.DelegationRequest({delegate: BOB, amount: -49e18});
+
+        cooler.withdrawCollateral(50e18, ALICE, ALICE, delegationRequests);
+
+        checkAccountState(
+            ALICE,
+            IMonoCooler.AccountState({
+                collateral: 50e18,
+                debtCheckpoint: 0,
+                interestAccumulatorRay: 0
+            })
+        );
+
+        expectOneDelegation(ALICE, BOB, 5e18);
+        expectAccountDelegationSummary(ALICE, 50e18, 5e18, 1, 10);
+        expectAccountDelegationSummary(BOB, 0, 0, 0, 10);
+        expectAccountDelegationSummary(OTHERS, 0, 0, 0, 10);
     }
 
     function test_withdrawCollateral_success_withDelegations() public {

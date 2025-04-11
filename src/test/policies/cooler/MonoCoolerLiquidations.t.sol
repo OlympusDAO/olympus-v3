@@ -742,6 +742,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // caller gets the incentive
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_cappedIncentive() external {
@@ -790,6 +799,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             expectedDebt,
             9.998323814584335317e18
         );
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoAccounts_oneLiquidate() external {
@@ -914,6 +932,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // Caller gets the incentive
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                borrowAmount - 10 + borrowAmount - expectedDebt
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoAccounts_bothLiquidate() external {
@@ -1040,6 +1067,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // Caller gets the total incentives
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives * 2);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_emptyDelegationRequests() external {
@@ -1075,6 +1111,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             expectedDebt * 2,
             expectedIncentives * 2
         );
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoAccounts_withUndelegations() external {
@@ -1179,6 +1224,15 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
 
         // Caller gets the total incentives
         assertEq(gohm.balanceOf(OTHERS), expectedIncentives * 2);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt - expectedDebt)
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 
     function test_batchLiquidate_twoCoolers_withUndelegations() external {
@@ -1188,11 +1242,14 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         uint256 delegationAmount = 7e18;
         MonoCooler cooler2 = _cooler2Setup(collateralAmount, delegationAmount);
 
+        uint256 totalExpectedDebt = 2 * 29_616.4e18;
+        uint128 wipedDebt = 29_914.049768431554843335e18;
+
         vm.startPrank(OTHERS);
         checkBatchLiquidate(
             oneAddress(ALICE),
             collateralAmount,
-            29_914.049768431554843335e18,
+            wipedDebt,
             0.000496703803644129e18
         );
 
@@ -1200,5 +1257,14 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         expectOneDelegation(cooler, ALICE, BOB, collateralAmount);
         expectOneDelegation(cooler2, ALICE, BOB, collateralAmount);
         expectAccountDelegationSummary(ALICE, 10e18, collateralAmount, 1, 10);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                totalExpectedDebt - wipedDebt
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
     }
 }
