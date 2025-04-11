@@ -1323,12 +1323,8 @@ contract OlympusDeploy is Script {
         );
         console2.log("CoolerV2 deployed at:", address(coolerV2));
 
-        // Set the treasury borrower
-        // The first time the borrower is set, it can be done permissionlessly
-        address treasuryBorrower = envAddress("olympus.policies.CoolerV2TreasuryBorrower");
-        require(treasuryBorrower != address(0), "treasuryBorrower is not set");
-        vm.broadcast();
-        coolerV2.setTreasuryBorrower(treasuryBorrower);
+        // Next steps:
+        // - Execute the governance proposal to activate the Cooler V2 contracts. This should also set the treasury borrower.
 
         return address(coolerV2);
     }
