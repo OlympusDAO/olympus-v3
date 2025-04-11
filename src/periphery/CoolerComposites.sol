@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
-import {IMonoCooler} from "../interfaces/cooler/IMonoCooler.sol";
-import {ICoolerComposites} from "../interfaces/cooler/ICoolerComposites.sol";
-import {IERC20} from "../../interfaces/IERC20.sol";
+// Interfaces
+import {IERC20} from "../interfaces/IERC20.sol";
+import {IMonoCooler} from "../policies/interfaces/cooler/IMonoCooler.sol";
+import {ICoolerComposites} from "./interfaces/ICoolerComposites.sol";
+import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
+
+// Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 

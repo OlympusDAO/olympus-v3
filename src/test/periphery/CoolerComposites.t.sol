@@ -2,11 +2,15 @@
 // solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
-import {CoolerComposites} from "src/policies/cooler/CoolerComposites.sol";
+// Interfaces
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
-import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
+
+// Libraries
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
+import {CoolerComposites} from "src/periphery/CoolerComposites.sol";
+import {MonoCoolerBaseTest} from "../policies/cooler/MonoCoolerBase.t.sol";
 
 abstract contract CoolerCompositesTest is MonoCoolerBaseTest {
     CoolerComposites internal composites;
