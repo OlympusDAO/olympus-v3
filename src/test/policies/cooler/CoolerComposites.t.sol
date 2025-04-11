@@ -319,8 +319,11 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
     //   [X] it reverts
     //  given the caller does not have enough debt token
     //   [X] it reverts
+    //  given the repay amount is more than the debt
+    //   [X] it repays and removes collateral
+    //   [X] it returns the excess debt token to the caller
     //  given delegation requests are provided
-    //   [X] it adds collateral and borrows
+    //   [X] it repays and removes collateral
     //   [X] it executes the delegation requests
     //  [X] it repays and removes collateral
 
@@ -447,6 +450,35 @@ contract CoolerCompositesRepayAndRemoveTest is CoolerCompositesTest {
             2e18,
             delegationRequests
         );
+    }
+
+    function test_givenAuthorization_givenRepaymentExcess()
+        public
+        givenAccountHasCollateralToken(2e18)
+        givenAccountHasApprovedCollateralToken(2e18)
+        givenAuthorization
+        givenAccountHasBorrowed(2e18, 1e21)
+        givenAccountHasApprovedDebtToken(1e21 + 1)
+    {
+        // Provide more debt token than is owed
+        deal(address(usds), accountOwner, 1e21 + 1);
+
+        // Call function
+        vm.prank(accountOwner);
+        composites.repayAndRemoveCollateral(
+            authorization,
+            signature,
+            1e21 + 1,
+            2e18,
+            delegationRequests
+        );
+
+        // Assert token balances
+        // Excess debt token of 1 is returned to the caller
+        _assertTokenBalances(2e18, 1);
+
+        // Assert authorization via the contract call
+        _assertAuthorization(0, uint96(START_BLOCK + 1));
     }
 
     function test_givenAuthorization()

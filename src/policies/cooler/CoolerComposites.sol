@@ -61,6 +61,14 @@ contract CoolerComposites is ICoolerComposites {
         _DEBT_TOKEN.safeTransferFrom(msg.sender, address(this), repayAmount);
         COOLER.repay(repayAmount, msg.sender);
         COOLER.withdrawCollateral(collateralAmount, msg.sender, msg.sender, delegationRequests);
+
+        // Return excess debt token to the caller
+        // This can happen if the repayment amount is greater than the debt
+        uint256 debtTokenBalance = _DEBT_TOKEN.balanceOf(address(this));
+        if (debtTokenBalance > 0) {
+            _DEBT_TOKEN.safeTransfer(msg.sender, debtTokenBalance);
+            emit TokenRefunded(address(_DEBT_TOKEN), msg.sender, debtTokenBalance);
+        }
     }
 
     // ===== View Functions ===== //
