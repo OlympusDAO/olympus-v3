@@ -148,5 +148,20 @@
         "addr": "0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5",
         "chainId": 1,
         "name": "olympus-policy-contract-registry-admin"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-cooler-v2"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-cooler-v2-treasury-borrower"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-cooler-v2-ltv-oracle"
     }
 ]
