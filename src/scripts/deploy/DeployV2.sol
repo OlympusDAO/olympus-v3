@@ -1387,8 +1387,8 @@ contract OlympusDeploy is Script {
         coolerV2Migrator = new CoolerV2Migrator(
             address(daoMS),
             address(coolerV2),
+            address(oldReserve),
             address(reserve),
-            address(sReserve),
             address(gohm),
             address(externalMigrator),
             address(flashLender),
