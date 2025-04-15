@@ -328,11 +328,13 @@ contract CrossChainBridge is
     }
 
     /// @notice Set send version of endpoint to be used by LayerZero User Application
+    /// @dev    Version is the index of the desired library address in ILayerZeroEndpoint.libraryLookup()
     function setSendVersion(uint16 version_) external override onlyRole("bridge_admin") {
         lzEndpoint.setSendVersion(version_);
     }
 
     /// @notice Set receive version of endpoint to be used by LayerZero User Application
+    /// @dev    Version is the index of the desired library address in ILayerZeroEndpoint.libraryLookup()
     function setReceiveVersion(uint16 version_) external override onlyRole("bridge_admin") {
         lzEndpoint.setReceiveVersion(version_);
     }
