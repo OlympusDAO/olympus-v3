@@ -37,6 +37,11 @@ contract CrossChainBridge is
     error Bridge_Deactivated();
     error Bridge_TrustedRemoteUninitialized();
 
+    struct AdapterParams {
+        uint16 version;
+        uint256 value;
+    }
+
     // Bridge-specific events
     event BridgeTransferred(address indexed sender_, uint256 amount_, uint16 indexed dstChain_);
     event BridgeReceived(address indexed receiver_, uint256 amount_, uint16 indexed srcChain_);
@@ -58,8 +63,9 @@ contract CrossChainBridge is
     event SetPrecrime(address precrime_);
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
-    event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas);
+    event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas); // TODO remove?
     event BridgeStatusSet(bool isActive_);
+    event DefaultAdapterParamsSet(uint16 version_, uint256 value_);
 
     // Modules
     MINTRv1 public MINTR;
@@ -69,6 +75,10 @@ contract CrossChainBridge is
 
     /// @notice Flag to determine if bridge is allowed to send messages or not
     bool public bridgeActive;
+
+    /// @notice The adapter params that are used when estimating fees and sending messages
+    /// @dev    Some send/receive library versions require non-empty adapter params
+    AdapterParams public defaultAdapterParams;
 
     // LZ app state
 
@@ -89,6 +99,10 @@ contract CrossChainBridge is
     constructor(Kernel kernel_, address endpoint_) Policy(kernel_) {
         lzEndpoint = ILayerZeroEndpoint(endpoint_);
         bridgeActive = true;
+
+        // Sane default values for adapter params
+        defaultAdapterParams = AdapterParams({version: 1, value: 200000});
+        emit DefaultAdapterParamsSet(defaultAdapterParams.version, defaultAdapterParams.value);
     }
 
     /// @inheritdoc Policy
@@ -134,7 +148,12 @@ contract CrossChainBridge is
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    function _sendOhm(uint16 dstChainId_, bytes memory payload_, uint256 amount_) internal {
+    function _sendOhm(
+        uint16 dstChainId_,
+        bytes memory payload_,
+        uint256 amount_,
+        bytes memory adapterParams_
+    ) internal {
         if (!bridgeActive) revert Bridge_Deactivated();
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
 
@@ -144,7 +163,7 @@ contract CrossChainBridge is
             payload_, // payload
             payable(msg.sender), // refundAddress
             address(0x0), // zroPaymentAddress
-            bytes(""), // adapterParams
+            _getAdapterParams(adapterParams_), // adapterParams
             msg.value // nativeFee
         );
 
@@ -157,7 +176,7 @@ contract CrossChainBridge is
     /// @param  to_ The address to send the OHM to on the destination chain
     /// @param  amount_ The amount of OHM to send
     function sendOhm(uint16 dstChainId_, address to_, uint256 amount_) external payable {
-        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_);
+        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_, "");
     }
 
     /// @notice Send OHM to an eligible chain
@@ -165,8 +184,14 @@ contract CrossChainBridge is
     /// @param  dstChainId_ The LayerZero ID for the destination chain
     /// @param  to_         The address to send the OHM to on the destination chain. This can be an EVM or other type of address (e.g. Solana).
     /// @param  amount_     The amount of OHM to send
-    function sendOhm(uint16 dstChainId_, bytes32 to_, uint256 amount_) external payable {
-        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_);
+    /// @param  adapterParams_ The adapter params to use when sending the message. If empty, the default adapter params will be used.
+    function sendOhm(
+        uint16 dstChainId_,
+        bytes32 to_,
+        uint256 amount_,
+        bytes memory adapterParams_
+    ) external payable {
+        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_, adapterParams_);
     }
 
     /// @notice Implementation of receiving an LZ message
@@ -261,6 +286,14 @@ contract CrossChainBridge is
 
     // ========= LZ Send Functions ========= //
 
+    function _getAdapterParams(bytes memory adapterParams_) internal view returns (bytes memory) {
+        // If adapterParams_ is provided, return it
+        if (adapterParams_.length > 0) return adapterParams_;
+
+        // Otherwise return the default adapter params, packed into bytes
+        return abi.encodePacked(defaultAdapterParams.version, defaultAdapterParams.value);
+    }
+
     /// @notice Internal function for sending a message across chains.
     /// @dev    Params defined in ILayerZeroEndpoint `send` function.
     function _sendMessage(
@@ -297,7 +330,14 @@ contract CrossChainBridge is
     ) external view returns (uint256 nativeFee, uint256 zroFee) {
         // Mock the payload for sendOhm()
         bytes memory payload = abi.encode(to_, amount_);
-        return lzEndpoint.estimateFees(dstChainId_, address(this), payload, false, adapterParams_);
+        return
+            lzEndpoint.estimateFees(
+                dstChainId_,
+                address(this),
+                payload,
+                false,
+                _getAdapterParams(adapterParams_)
+            );
     }
 
     /// @notice Function to estimate how much gas is needed to send OHM
@@ -312,7 +352,14 @@ contract CrossChainBridge is
     ) external view returns (uint256 nativeFee, uint256 zroFee) {
         // Mock the payload for sendOhm()
         bytes memory payload = abi.encode(to_, amount_);
-        return lzEndpoint.estimateFees(dstChainId_, address(this), payload, false, adapterParams_);
+        return
+            lzEndpoint.estimateFees(
+                dstChainId_,
+                address(this),
+                payload,
+                false,
+                _getAdapterParams(adapterParams_)
+            );
     }
 
     // ========= LZ UserApplication & Admin config ========= //
@@ -377,6 +424,16 @@ contract CrossChainBridge is
     function setBridgeStatus(bool isActive_) external onlyRole("bridge_admin") {
         bridgeActive = isActive_;
         emit BridgeStatusSet(isActive_);
+    }
+
+    /// @notice Set the default adapter params
+    /// @dev    Some send/receive library versions require non-empty adapter params
+    function setDefaultAdapterParams(
+        uint16 version_,
+        uint256 value_
+    ) external onlyRole("bridge_admin") {
+        defaultAdapterParams = AdapterParams({version: version_, value: value_});
+        emit DefaultAdapterParamsSet(version_, value_);
     }
 
     // ========= View Functions ========= //
