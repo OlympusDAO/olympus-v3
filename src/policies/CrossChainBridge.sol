@@ -70,7 +70,8 @@ contract CrossChainBridge is
     // Modules
     MINTRv1 public MINTR;
 
-    ILayerZeroEndpoint public immutable lzEndpoint;
+    ILayerZeroEndpoint internal immutable _ENDPOINT;
+
     ERC20 public ohm;
 
     /// @notice Flag to determine if bridge is allowed to send messages or not
@@ -97,7 +98,7 @@ contract CrossChainBridge is
     //============================================================================================//
 
     constructor(Kernel kernel_, address endpoint_) Policy(kernel_) {
-        lzEndpoint = ILayerZeroEndpoint(endpoint_);
+        _ENDPOINT = ILayerZeroEndpoint(endpoint_);
         bridgeActive = true;
 
         // Sane default values for adapter params
@@ -220,7 +221,7 @@ contract CrossChainBridge is
         bytes calldata payload_
     ) public virtual override {
         // lzReceive must be called by the endpoint for security
-        if (msg.sender != address(lzEndpoint)) revert Bridge_InvalidCaller();
+        if (msg.sender != address(_ENDPOINT)) revert Bridge_InvalidCaller();
 
         // Will still block the message pathway from (srcChainId, srcAddress).
         // Should not receive messages from untrusted remote.
@@ -308,7 +309,7 @@ contract CrossChainBridge is
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
         // solhint-disable-next-line
-        lzEndpoint.send{value: nativeFee_}(
+        _ENDPOINT.send{value: nativeFee_}(
             dstChainId_,
             trustedRemote,
             payload_,
@@ -331,7 +332,7 @@ contract CrossChainBridge is
         // Mock the payload for sendOhm()
         bytes memory payload = abi.encode(to_, amount_);
         return
-            lzEndpoint.estimateFees(
+            _ENDPOINT.estimateFees(
                 dstChainId_,
                 address(this),
                 payload,
@@ -353,7 +354,7 @@ contract CrossChainBridge is
         // Mock the payload for sendOhm()
         bytes memory payload = abi.encode(to_, amount_);
         return
-            lzEndpoint.estimateFees(
+            _ENDPOINT.estimateFees(
                 dstChainId_,
                 address(this),
                 payload,
@@ -371,19 +372,19 @@ contract CrossChainBridge is
         uint256 configType_,
         bytes calldata config_
     ) external override onlyRole("bridge_admin") {
-        lzEndpoint.setConfig(version_, chainId_, configType_, config_);
+        _ENDPOINT.setConfig(version_, chainId_, configType_, config_);
     }
 
     /// @notice Set send version of endpoint to be used by LayerZero User Application
     /// @dev    Version is the index of the desired library address in ILayerZeroEndpoint.libraryLookup()
     function setSendVersion(uint16 version_) external override onlyRole("bridge_admin") {
-        lzEndpoint.setSendVersion(version_);
+        _ENDPOINT.setSendVersion(version_);
     }
 
     /// @notice Set receive version of endpoint to be used by LayerZero User Application
     /// @dev    Version is the index of the desired library address in ILayerZeroEndpoint.libraryLookup()
     function setReceiveVersion(uint16 version_) external override onlyRole("bridge_admin") {
-        lzEndpoint.setReceiveVersion(version_);
+        _ENDPOINT.setReceiveVersion(version_);
     }
 
     /// @notice Retries a received message. Used as last resort if retryPayload fails.
@@ -392,7 +393,7 @@ contract CrossChainBridge is
         uint16 srcChainId_,
         bytes calldata srcAddress_
     ) external override onlyRole("bridge_admin") {
-        lzEndpoint.forceResumeReceive(srcChainId_, srcAddress_);
+        _ENDPOINT.forceResumeReceive(srcChainId_, srcAddress_);
     }
 
     /// @notice Sets the trusted path for the cross-chain communication
@@ -445,7 +446,7 @@ contract CrossChainBridge is
         address,
         uint256 configType_
     ) external view returns (bytes memory) {
-        return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
+        return _ENDPOINT.getConfig(version_, chainId_, address(this), configType_);
     }
 
     /// @notice Get trusted remote for the given chain as an
