@@ -34,8 +34,8 @@ contract CoolerV2Periphery is OlyBatch {
         // They must be enabled here as the DAO MS is the owner
         // Pre-requisites:
         // - Deployment of Cooler V2 contracts
-        // - Installation of Cooler V2 contracts
-        // - Deployment of Cooler V2 periperhy contracts
+        // - Installation of Cooler V2 contracts (CoolerV2.sol)
+        // - Deployment of Cooler V2 periphery contracts
         console2.log("Activating periphery contracts");
         addToBatch(
             coolerV2Migrator,
