@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 
-contract ClaimYieldYDFTest is YieldDepositFacilityTest {
+contract HarvestYDFTest is YieldDepositFacilityTest {
     // given the contract is disabled
     //  [ ] it reverts
     // given the position does not exist
