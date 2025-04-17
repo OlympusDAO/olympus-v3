@@ -46,6 +46,26 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     /// @dev    This is used to calculate the yield since the last claim. The initial value should be set at the time of minting.
     mapping(uint256 => uint256) public positionLastYieldConversionRate;
 
+    /// @notice Mapping between vault address and timestamp to snapshot data
+    /// @dev    This is used to store periodic snapshots of conversion rates for each vault
+    mapping(IERC4626 => mapping(uint48 => uint256)) public vaultRateSnapshots;
+
+    /// @notice The interval between snapshots in seconds
+    uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
+
+    // ========== EVENTS ========== //
+
+    event SnapshotTaken(address indexed vault, uint48 timestamp, uint256 rate);
+    event FallbackSnapshotUsed(
+        address indexed vault,
+        uint48 requestedTimestamp,
+        uint48 usedTimestamp
+    );
+
+    // ========== ERRORS ========== //
+
+    error YDF_NoSnapshotAvailable(address token, uint48 timestamp);
+
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {
@@ -126,7 +146,18 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         address account_,
         uint256 positionId_,
         address previousCDToken_
-    ) internal view returns (uint256 yieldMinusFee, uint256 yieldFee, address currentCDToken) {
+    )
+        internal
+        view
+        returns (
+            uint256 yieldMinusFee,
+            uint256 yieldFee,
+            address currentCDToken,
+            uint256 endRate,
+            uint48 snapshotTimestamp,
+            bool usedFallback
+        )
+    {
         // Validate that the position is valid
         // This will revert if the position is not valid
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
@@ -147,25 +178,56 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             revert YDF_InvalidArgs("multiple CD tokens");
         }
 
-        // Calculate the yield since the last claim
-        // Yield is calculated as:
-        // (current conversion rate - last yield conversion rate) * deposit / token scale
+        // Get the vault and last snapshot rate
         IERC4626 vault = IConvertibleDepositERC20(currentCDToken).vault();
+        uint256 lastSnapshotRate = positionLastYieldConversionRate[positionId_];
+
+        // Calculate the end rate (either current rate or rate at expiry)
+        if (block.timestamp <= position.conversionExpiry) {
+            // Deposit period hasn't finished, use current rate
+            endRate = _getConversionRate(vault);
+            snapshotTimestamp = uint48(block.timestamp);
+            usedFallback = false;
+        } else {
+            // Deposit period has finished, find the rate at expiry
+            uint48 expirySnapshotKey = _getSnapshotKey(position.conversionExpiry);
+            uint256 expiryRate = vaultRateSnapshots[vault][expirySnapshotKey];
+
+            // If no snapshot exists at exactly expiry, find the most recent one before expiry
+            if (expiryRate == 0) {
+                // Start from expiry and go backwards in 8-hour intervals
+                uint48 searchTime = expirySnapshotKey;
+                while (searchTime > 0 && expiryRate == 0) {
+                    searchTime -= SNAPSHOT_INTERVAL;
+                    expiryRate = vaultRateSnapshots[vault][searchTime];
+                }
+
+                if (expiryRate == 0) {
+                    revert YDF_NoSnapshotAvailable(address(vault), position.conversionExpiry);
+                }
+
+                usedFallback = true;
+                snapshotTimestamp = searchTime;
+            } else {
+                usedFallback = false;
+                snapshotTimestamp = expirySnapshotKey;
+            }
+
+            endRate = expiryRate;
+        }
+
+        // Calculate the yield
         uint256 yield = FullMath.mulDiv(
-            _getConversionRate(vault) - positionLastYieldConversionRate[positionId_],
-            position.remainingDeposit,
+            endRate - lastSnapshotRate,
+            position.remainingDeposit, // TODO should this be the original deposit?
             10 ** vault.decimals()
         );
 
-        // TODO cap at the conversion rate before the expiry
-
-        // Calculate the yield fee
+        // Calculate fees
         yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
-
-        // Calculate the yield minus fee
         yieldMinusFee = yield - yieldFee;
 
-        return (yieldMinusFee, yieldFee, currentCDToken);
+        return (yieldMinusFee, yieldFee, currentCDToken, endRate, snapshotTimestamp, usedFallback);
     }
 
     /// @inheritdoc IYieldDepositFacility
@@ -183,11 +245,11 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (
-                uint256 previewYieldMinusFee,
-                uint256 previewYieldFee,
-                address currentCDToken
-            ) = _previewClaimYield(account_, positionId, cdToken);
+            (uint256 previewYieldMinusFee, , address currentCDToken, , , ) = _previewClaimYield(
+                account_,
+                positionId,
+                cdToken
+            );
             yieldMinusFee += previewYieldMinusFee;
             cdToken = currentCDToken;
         }
@@ -205,16 +267,30 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             (
                 uint256 previewYieldMinusFee,
                 uint256 previewYieldFee,
-                address currentCDToken
+                address currentCDToken,
+                uint256 endRate,
+                uint48 snapshotTimestamp,
+                bool usedFallback
             ) = _previewClaimYield(msg.sender, positionId, address(cdToken));
+
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
             cdToken = IConvertibleDepositERC20(currentCDToken);
 
             // If there is yield, update the last yield conversion rate
-            // Otherwise an expired position will have the last conversion rate updated to the current conversion rate
             if (previewYieldMinusFee > 0) {
-                positionLastYieldConversionRate[positionId] = _getConversionRate(cdToken.vault());
+                positionLastYieldConversionRate[positionId] = endRate;
+
+                // If we used a fallback snapshot, emit the event
+                if (usedFallback) {
+                    CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
+                    IERC4626 vault = cdToken.vault();
+                    emit FallbackSnapshotUsed(
+                        address(vault),
+                        _getSnapshotKey(position.conversionExpiry),
+                        snapshotTimestamp
+                    );
+                }
             }
         }
 
@@ -276,8 +352,37 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
 
     // ========== HELPER FUNCTIONS ========== //
 
+    /// @notice Get the snapshot key for a given timestamp
+    /// @dev    Rounds down to the nearest 8-hour interval
+    function _getSnapshotKey(uint48 timestamp) internal pure returns (uint48) {
+        return (timestamp / SNAPSHOT_INTERVAL) * SNAPSHOT_INTERVAL;
+    }
+
     /// @notice Get the conversion rate between a vault and underlying asset
     function _getConversionRate(IERC4626 vault_) internal view returns (uint256) {
         return vault_.convertToAssets(1e18);
+    }
+
+    /// @notice Stores periodic snapshots of the conversion rate for all supported vaults
+    /// @dev    This function is called by the Heart contract every 8 hours
+    /// @dev    The timestamp is rounded down to the nearest 8-hour interval
+    /// @dev    No cleanup is performed as snapshots are needed for active deposits
+    function execute() external onlyRole("heart") {
+        uint48 snapshotKey = _getSnapshotKey(uint48(block.timestamp));
+
+        // Get all supported vault tokens
+        IERC4626[] memory vaultTokens = CDEPO.getVaultTokens();
+
+        // Store snapshots for each vault
+        for (uint256 i; i < vaultTokens.length; ++i) {
+            IERC4626 vault = vaultTokens[i];
+
+            // Only store if we haven't stored for this interval
+            if (vaultRateSnapshots[vault][snapshotKey] == 0) {
+                uint256 rate = _getConversionRate(vault);
+                vaultRateSnapshots[vault][snapshotKey] = rate;
+                emit SnapshotTaken(address(vault), snapshotKey, rate);
+            }
+        }
     }
 }
