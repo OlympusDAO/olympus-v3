@@ -62,7 +62,7 @@ interface IYieldDepositFacility {
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that would be claimed
     /// @return asset           The address of the asset that will be received
-    function previewClaimYield(
+    function previewHarvest(
         address account_,
         uint256[] memory positionIds_
     ) external view returns (uint256 yield, IERC20 asset);
@@ -78,7 +78,7 @@ interface IYieldDepositFacility {
     ///
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that was claimed
-    function claimYield(uint256[] memory positionIds_) external returns (uint256 yield);
+    function harvest(uint256[] memory positionIds_) external returns (uint256 yield);
 
     // ========== ADMIN FUNCTIONS ========== //
 

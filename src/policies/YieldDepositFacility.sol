@@ -142,7 +142,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
 
     // ========== YIELD FUNCTIONS ========== //
 
-    function _previewClaimYield(
+    function _previewHarvest(
         address account_,
         uint256 positionId_,
         address previousCDToken_
@@ -237,7 +237,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     ///             - Any position is not valid
     ///             - Any position is not a supported CD token
     ///             - Any position has a different CD token
-    function previewClaimYield(
+    function previewHarvest(
         address account_,
         uint256[] memory positionIds_
     ) external view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
@@ -245,7 +245,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (uint256 previewYieldMinusFee, , address currentCDToken, , , ) = _previewClaimYield(
+            (uint256 previewYieldMinusFee, , address currentCDToken, , , ) = _previewHarvest(
                 account_,
                 positionId,
                 cdToken
@@ -258,7 +258,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     }
 
     /// @inheritdoc IYieldDepositFacility
-    function claimYield(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
+    function harvest(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
         IConvertibleDepositERC20 cdToken;
         uint256 yieldFee;
         for (uint256 i; i < positionIds_.length; ++i) {
@@ -271,7 +271,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
                 uint256 endRate,
                 uint48 snapshotTimestamp,
                 bool usedFallback
-            ) = _previewClaimYield(msg.sender, positionId, address(cdToken));
+            ) = _previewHarvest(msg.sender, positionId, address(cdToken));
 
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
@@ -298,7 +298,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         CDEPO.withdraw(cdToken, yieldMinusFee + yieldFee);
 
         // Transfer the yield to the caller
-        // msg.sender is ok here as _previewClaimYield validates that the caller is the owner of the position
+        // msg.sender is ok here as _previewHarvest validates that the caller is the owner of the position
         ERC20 asset = ERC20(address(cdToken.asset()));
         asset.safeTransfer(msg.sender, yieldMinusFee);
 
