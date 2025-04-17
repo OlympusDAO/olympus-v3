@@ -17,10 +17,15 @@ contract PreviewHarvestYDFTest is YieldDepositFacilityTest {
     // given any position has a different CD token
     //  [ ] it reverts
     // given the owner has never claimed yield
-    //  [ ] it returns the yield since minting
+    //  [ ] it returns the yield since minting, with a fee deduction
+    // given the owner has claimed yield
+    //  given a rate snapshot is not available for the current timestamp
+    //   [ ] it uses the rate snapshot from the previous rounded timestamp
+    //  [ ] it returns the yield since the last claim, with a fee deduction
     // given the position has expired
+    //  given a rate snapshot is not available for the expiry timestamp
+    //   [ ] it uses the rate snapshot from the previous rounded timestamp
     //  [ ] it returns the yield up to the conversion rate before expiry
-    // given the yield fee is set
-    //  [ ] it returns the yield minus the yield fee
-    // [ ] it returns the yield since the last claim
+    // given the yield fee is 0
+    //  [ ] it returns the yield without any fee deduction
 }

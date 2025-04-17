@@ -21,27 +21,31 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
     //  [ ] it transfers the yield to the caller
     //  [ ] it transfers the yield fee to the treasury
     //  [ ] it updates the last yield conversion rate
-    //  [ ] it emits a ClaimedYield event
+    //  [ ] it emits a Harvest event
     //  [ ] it withdraws the yield from the CDEPO module
     // given the owner has claimed yield
+    //  given a rate snapshot is not available for the expiry timestamp
+    //   [ ] it uses the rate snapshot from the previous rounded timestamp
     //  [ ] it returns the yield since the last claim
     //  [ ] it transfers the yield to the caller
     //  [ ] it transfers the yield fee to the treasury
     //  [ ] it updates the last yield conversion rate
-    //  [ ] it emits a ClaimedYield event
+    //  [ ] it emits a Harvest event
     //  [ ] it withdraws the yield from the CDEPO module
     // given the position has expired
+    //  given a rate snapshot is not available for the expiry timestamp
+    //   [ ] it uses the rate snapshot from the previous rounded timestamp
     //  [ ] it returns the yield up to the conversion rate before expiry
     //  [ ] it transfers the yield to the caller
     //  [ ] it transfers the yield fee to the treasury
     //  [ ] it updates the last yield conversion rate
-    //  [ ] it emits a ClaimedYield event
+    //  [ ] it emits a Harvest event
     //  [ ] it withdraws the yield from the CDEPO module
-    // given the yield fee is set
-    //  [ ] it returns the yield minus the yield fee
+    // given the yield fee is 0
+    //  [ ] it returns the yield
     //  [ ] it updates the last yield conversion rate
     //  [ ] it transfers the yield to the caller
-    //  [ ] it transfers the yield fee to the treasury
-    //  [ ] it emits a ClaimedYield event
+    //  [ ] it does not transfer the yield fee to the treasury
+    //  [ ] it emits a Harvest event
     //  [ ] it withdraws the yield from the CDEPO module
 }
