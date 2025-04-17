@@ -53,19 +53,6 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     /// @notice The interval between snapshots in seconds
     uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
 
-    // ========== EVENTS ========== //
-
-    event SnapshotTaken(address indexed vault, uint48 timestamp, uint256 rate);
-    event FallbackSnapshotUsed(
-        address indexed vault,
-        uint48 requestedTimestamp,
-        uint48 usedTimestamp
-    );
-
-    // ========== ERRORS ========== //
-
-    error YDF_NoSnapshotAvailable(address token, uint48 timestamp);
-
     // ========== SETUP ========== //
 
     constructor(address kernel_) Policy(Kernel(kernel_)) {

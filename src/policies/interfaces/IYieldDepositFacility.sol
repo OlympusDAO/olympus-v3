@@ -21,6 +21,14 @@ interface IYieldDepositFacility {
 
     event YieldFeeSet(uint16 yieldFee);
 
+    event SnapshotTaken(address indexed vault, uint48 timestamp, uint256 rate);
+
+    event FallbackSnapshotUsed(
+        address indexed vault,
+        uint48 requestedTimestamp,
+        uint48 usedTimestamp
+    );
+
     // ========== ERRORS ========== //
 
     error YDF_InvalidArgs(string reason_);
@@ -30,6 +38,8 @@ interface IYieldDepositFacility {
     error YDF_InvalidToken(uint256 positionId_, address token_);
 
     error YDF_Unsupported(uint256 positionId_);
+
+    error YDF_NoSnapshotAvailable(address token, uint48 timestamp);
 
     // ========== MINT ========== //
 
