@@ -17,7 +17,7 @@ interface IYieldDepositFacility {
         uint256 depositAmount
     );
 
-    event ClaimedYield(address indexed depositToken, address indexed user, uint256 yield);
+    event Harvest(address indexed depositToken, address indexed user, uint256 yield);
 
     event YieldFeeSet(uint16 yieldFee);
 

@@ -293,7 +293,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         asset.safeTransfer(address(TRSRY), yieldFee);
 
         // Emit event
-        emit ClaimedYield(address(cdToken.asset()), msg.sender, yieldMinusFee);
+        emit Harvest(address(cdToken.asset()), msg.sender, yieldMinusFee);
 
         return yieldMinusFee;
     }
