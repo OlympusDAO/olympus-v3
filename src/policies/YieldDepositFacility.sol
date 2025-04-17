@@ -132,18 +132,12 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
     function _previewHarvest(
         address account_,
         uint256 positionId_,
-        address previousCDToken_
+        address previousCDToken_,
+        uint48 timestampHint_
     )
         internal
         view
-        returns (
-            uint256 yieldMinusFee,
-            uint256 yieldFee,
-            address currentCDToken,
-            uint256 endRate,
-            uint48 snapshotTimestamp,
-            bool usedFallback
-        )
+        returns (uint256 yieldMinusFee, uint256 yieldFee, address currentCDToken, uint256 endRate)
     {
         // Validate that the position is valid
         // This will revert if the position is not valid
@@ -173,31 +167,22 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         if (block.timestamp <= position.conversionExpiry) {
             // Deposit period hasn't finished, use current rate
             endRate = _getConversionRate(vault);
-            snapshotTimestamp = uint48(block.timestamp);
-            usedFallback = false;
         } else {
             // Deposit period has finished, find the rate at expiry
-            uint48 expirySnapshotKey = _getSnapshotKey(position.conversionExpiry);
-            uint256 expiryRate = vaultRateSnapshots[vault][expirySnapshotKey];
+            // Validate timestamp hint if provided
+            uint48 snapshotTimestamp = position.conversionExpiry;
+            if (timestampHint_ > 0) {
+                if (timestampHint_ > position.conversionExpiry) {
+                    revert YDF_InvalidArgs("timestamp hint");
+                }
+                snapshotTimestamp = timestampHint_;
+            }
+            uint48 snapshotKey = _getSnapshotKey(snapshotTimestamp);
 
-            // If no snapshot exists at exactly expiry, find the most recent one before expiry
+            // Get the rate at the snapshot key
+            uint256 expiryRate = vaultRateSnapshots[vault][snapshotKey];
             if (expiryRate == 0) {
-                // Start from expiry and go backwards in 8-hour intervals
-                uint48 searchTime = expirySnapshotKey;
-                while (searchTime > 0 && expiryRate == 0) {
-                    searchTime -= SNAPSHOT_INTERVAL;
-                    expiryRate = vaultRateSnapshots[vault][searchTime];
-                }
-
-                if (expiryRate == 0) {
-                    revert YDF_NoSnapshotAvailable(address(vault), position.conversionExpiry);
-                }
-
-                usedFallback = true;
-                snapshotTimestamp = searchTime;
-            } else {
-                usedFallback = false;
-                snapshotTimestamp = expirySnapshotKey;
+                revert YDF_NoSnapshotAvailable(address(vault), snapshotKey);
             }
 
             endRate = expiryRate;
@@ -206,7 +191,7 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         // Calculate the yield
         uint256 yield = FullMath.mulDiv(
             endRate - lastSnapshotRate,
-            position.remainingDeposit, // TODO should this be the original deposit?
+            position.remainingDeposit,
             10 ** vault.decimals()
         );
 
@@ -214,28 +199,36 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
         yieldMinusFee = yield - yieldFee;
 
-        return (yieldMinusFee, yieldFee, currentCDToken, endRate, snapshotTimestamp, usedFallback);
+        return (yieldMinusFee, yieldFee, currentCDToken, endRate);
     }
 
     /// @inheritdoc IYieldDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - account_ is not the owner of all of the positions
-    ///             - Any position is not valid
-    ///             - Any position is not a supported CD token
-    ///             - Any position has a different CD token
     function previewHarvest(
         address account_,
         uint256[] memory positionIds_
     ) external view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
+        return previewHarvest(account_, positionIds_, new uint48[](positionIds_.length));
+    }
+
+    /// @inheritdoc IYieldDepositFacility
+    function previewHarvest(
+        address account_,
+        uint256[] memory positionIds_,
+        uint48[] memory timestampHints_
+    ) public view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
+        if (positionIds_.length != timestampHints_.length) {
+            revert YDF_InvalidArgs("array length mismatch");
+        }
+
         address cdToken;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (uint256 previewYieldMinusFee, , address currentCDToken, , , ) = _previewHarvest(
+            (uint256 previewYieldMinusFee, , address currentCDToken, ) = _previewHarvest(
                 account_,
                 positionId,
-                cdToken
+                cdToken,
+                timestampHints_[i]
             );
             yieldMinusFee += previewYieldMinusFee;
             cdToken = currentCDToken;
@@ -246,6 +239,18 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
 
     /// @inheritdoc IYieldDepositFacility
     function harvest(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
+        return harvest(positionIds_, new uint48[](positionIds_.length));
+    }
+
+    /// @inheritdoc IYieldDepositFacility
+    function harvest(
+        uint256[] memory positionIds_,
+        uint48[] memory timestampHints_
+    ) public returns (uint256 yieldMinusFee) {
+        if (positionIds_.length != timestampHints_.length) {
+            revert YDF_InvalidArgs("array length mismatch");
+        }
+
         IConvertibleDepositERC20 cdToken;
         uint256 yieldFee;
         for (uint256 i; i < positionIds_.length; ++i) {
@@ -255,10 +260,8 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
                 uint256 previewYieldMinusFee,
                 uint256 previewYieldFee,
                 address currentCDToken,
-                uint256 endRate,
-                uint48 snapshotTimestamp,
-                bool usedFallback
-            ) = _previewHarvest(msg.sender, positionId, address(cdToken));
+                uint256 endRate
+            ) = _previewHarvest(msg.sender, positionId, address(cdToken), timestampHints_[i]);
 
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
@@ -267,17 +270,6 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
             // If there is yield, update the last yield conversion rate
             if (previewYieldMinusFee > 0) {
                 positionLastYieldConversionRate[positionId] = endRate;
-
-                // If we used a fallback snapshot, emit the event
-                if (usedFallback) {
-                    CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
-                    IERC4626 vault = cdToken.vault();
-                    emit FallbackSnapshotUsed(
-                        address(vault),
-                        _getSnapshotKey(position.conversionExpiry),
-                        snapshotTimestamp
-                    );
-                }
             }
         }
 
