@@ -21,13 +21,7 @@ interface IYieldDepositFacility {
 
     event YieldFeeSet(uint16 yieldFee);
 
-    event SnapshotTaken(address indexed vault, uint48 timestamp, uint256 rate);
-
-    event FallbackSnapshotUsed(
-        address indexed vault,
-        uint48 requestedTimestamp,
-        uint48 usedTimestamp
-    );
+    event RateSnapshotTaken(address indexed vault, uint48 timestamp, uint256 rate);
 
     // ========== ERRORS ========== //
 

@@ -32,11 +32,13 @@ contract YieldDepositFacilityTest is Test {
     MockERC20 public reserveToken;
     MockERC4626 public vault;
     IERC20 internal iReserveToken;
+    IERC4626 internal iVault;
     IConvertibleDepositERC20 internal cdToken;
 
     MockERC20 public reserveTokenTwo;
     MockERC4626 public vaultTwo;
     IERC20 internal iReserveTokenTwo;
+    IERC4626 internal iVaultTwo;
     IConvertibleDepositERC20 internal cdTokenTwo;
 
     address public recipient = address(0x1);
@@ -44,6 +46,7 @@ contract YieldDepositFacilityTest is Test {
     address public recipientTwo = address(0x3);
     address public emergency = address(0x4);
     address public admin = address(0xEEEEEE);
+    address public heart = address(0x5);
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
@@ -56,12 +59,14 @@ contract YieldDepositFacilityTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        iVault = IERC4626(address(vault));
         vm.label(address(reserveToken), "RES");
         vm.label(address(vault), "sRES");
 
         reserveTokenTwo = new MockERC20("Reserve Token Two", "RES2", 18);
         iReserveTokenTwo = IERC20(address(reserveTokenTwo));
         vaultTwo = new MockERC4626(reserveTokenTwo, "Vault Two", "VAULT2");
+        iVaultTwo = IERC4626(address(vaultTwo));
         vm.label(address(reserveTokenTwo), "RES2");
         vm.label(address(vaultTwo), "sRES2");
 
@@ -74,6 +79,14 @@ contract YieldDepositFacilityTest is Test {
         vault.deposit(10e18, address(this));
         reserveToken.mint(address(vault), 1e18);
         require(vault.convertToAssets(1e18) != 1e18, "Vault conversion rate is equal to 1");
+
+        // Labels
+        vm.label(auctioneer, "auctioneer");
+        vm.label(recipient, "recipient");
+        vm.label(recipientTwo, "recipientTwo");
+        vm.label(emergency, "emergency");
+        vm.label(admin, "admin");
+        vm.label(heart, "heart");
     }
 
     function _createStack() internal {
@@ -97,6 +110,7 @@ contract YieldDepositFacilityTest is Test {
         // Grant roles
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
+        rolesAdmin.grantRole(bytes32("heart"), heart);
 
         // Enable the facility
         vm.prank(admin);
@@ -174,6 +188,10 @@ contract YieldDepositFacilityTest is Test {
 
         _createStack();
         _;
+    }
+
+    function _getRoundedTimestamp() internal view returns (uint48) {
+        return (uint48(block.timestamp) / 8 hours) * 8 hours;
     }
 
     // ========== ASSERTIONS ========== //

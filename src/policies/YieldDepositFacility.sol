@@ -341,8 +341,8 @@ contract YieldDepositFacility is
 
     /// @notice Get the snapshot key for a given timestamp
     /// @dev    Rounds down to the nearest 8-hour interval
-    function _getSnapshotKey(uint48 timestamp) internal pure returns (uint48) {
-        return (timestamp / SNAPSHOT_INTERVAL) * SNAPSHOT_INTERVAL;
+    function _getSnapshotKey(uint48 timestamp_) internal pure returns (uint48) {
+        return (timestamp_ / SNAPSHOT_INTERVAL) * SNAPSHOT_INTERVAL;
     }
 
     /// @notice Get the conversion rate between a vault and underlying asset
@@ -354,10 +354,13 @@ contract YieldDepositFacility is
 
     /// @notice Stores periodic snapshots of the conversion rate for all supported vaults
     /// @dev    This function is called by the Heart contract every 8 hours
-    /// @dev    This function will perform its actions even if the contract is disabled, to avoid gaps in the rate snapshot history.
     /// @dev    The timestamp is rounded down to the nearest 8-hour interval
     /// @dev    No cleanup is performed as snapshots are needed for active deposits
     function execute() external override onlyRole(HEART_ROLE) {
+        // If the contract is disabled, do not take any snapshots
+        if (!isEnabled) return;
+
+        // Get the rounded timestamp
         uint48 snapshotKey = _getSnapshotKey(uint48(block.timestamp));
 
         // Get all supported vault tokens
@@ -371,7 +374,7 @@ contract YieldDepositFacility is
             if (vaultRateSnapshots[vault][snapshotKey] == 0) {
                 uint256 rate = _getConversionRate(vault);
                 vaultRateSnapshots[vault][snapshotKey] = rate;
-                emit SnapshotTaken(address(vault), snapshotKey, rate);
+                emit RateSnapshotTaken(address(vault), snapshotKey, rate);
             }
         }
     }
