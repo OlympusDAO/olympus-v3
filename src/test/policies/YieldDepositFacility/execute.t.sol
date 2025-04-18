@@ -56,7 +56,7 @@ contract ExecuteYDFTest is YieldDepositFacilityTest {
 
         // Mint more reserve tokens to the vault, so the conversion rate changes
         reserveToken.mint(address(vault), 1e18);
-        require(
+        assertTrue(
             vault.convertToAssets(1e18) != currentRate,
             "Vault conversion rate is not different"
         );

@@ -10,7 +10,6 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
@@ -78,7 +77,7 @@ contract YieldDepositFacilityTest is Test {
         reserveToken.approve(address(vault), 10e18);
         vault.deposit(10e18, address(this));
         reserveToken.mint(address(vault), 1e18);
-        require(vault.convertToAssets(1e18) != 1e18, "Vault conversion rate is equal to 1");
+        assertTrue(vault.convertToAssets(1e18) != 1e18, "Vault conversion rate is equal to 1");
 
         // Labels
         vm.label(auctioneer, "auctioneer");
