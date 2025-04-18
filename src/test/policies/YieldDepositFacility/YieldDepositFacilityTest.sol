@@ -50,7 +50,10 @@ contract YieldDepositFacilityTest is Test {
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
     uint8 public constant PERIOD_MONTHS = 6;
-    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
+    uint48 public constant YIELD_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
+
+    uint256 public treasuryReserveBalanceBefore;
+    uint256 public cdepoVaultBalanceBefore;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -86,6 +89,10 @@ contract YieldDepositFacilityTest is Test {
         vm.label(emergency, "emergency");
         vm.label(admin, "admin");
         vm.label(heart, "heart");
+
+        // Store the treasury balance before
+        _updateTreasuryReserveBalance();
+        _updateCdepoVaultBalance();
     }
 
     function _createStack() internal {
@@ -134,6 +141,14 @@ contract YieldDepositFacilityTest is Test {
 
     // ========== MODIFIERS ========== //
 
+    function _updateTreasuryReserveBalance() internal {
+        treasuryReserveBalanceBefore = reserveToken.balanceOf(address(treasury));
+    }
+
+    function _updateCdepoVaultBalance() internal {
+        cdepoVaultBalanceBefore = vault.balanceOf(address(convertibleDepository));
+    }
+
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
         reserveToken.mint(to_, amount_);
         _;
@@ -152,6 +167,9 @@ contract YieldDepositFacilityTest is Test {
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
         convertibleDepository.mint(cdToken, amount_);
+
+        _updateTreasuryReserveBalance();
+        _updateCdepoVaultBalance();
         _;
     }
 
@@ -159,8 +177,19 @@ contract YieldDepositFacilityTest is Test {
         address account_,
         uint256 amount_
     ) internal returns (uint256 positionId) {
+        // Mint the reserve token to the account
+        reserveToken.mint(account_, amount_);
+
+        // Approve the reserve token spending
+        vm.prank(account_);
+        reserveToken.approve(address(convertibleDepository), amount_);
+
+        // Mint the CD token
         vm.prank(account_);
         positionId = yieldDepositFacility.mint(cdToken, amount_, false);
+
+        _updateTreasuryReserveBalance();
+        _updateCdepoVaultBalance();
     }
 
     modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
@@ -189,13 +218,107 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
+    function _getRoundedTimestamp(uint48 timestamp_) internal pure returns (uint48) {
+        return (uint48(timestamp_) / 8 hours) * 8 hours;
+    }
+
     function _getRoundedTimestamp() internal view returns (uint48) {
-        return (uint48(block.timestamp) / 8 hours) * 8 hours;
+        return _getRoundedTimestamp(uint48(block.timestamp));
+    }
+
+    modifier givenWarpForward(uint48 warp_) {
+        vm.warp(block.timestamp + warp_);
+        _;
+    }
+
+    modifier givenBeforeDepositPeriodEnd(uint48 before_) {
+        vm.warp(INITIAL_BLOCK + (PERIOD_MONTHS * 30 days) - before_);
+        _;
+    }
+
+    modifier givenDepositPeriodEnded(uint48 elapsed_) {
+        vm.warp(INITIAL_BLOCK + (PERIOD_MONTHS * 30 days) + elapsed_);
+        _;
+    }
+
+    modifier givenRateSnapshotTaken() {
+        // Force a snapshot to be taken at the given timestamp
+        vm.prank(heart);
+        yieldDepositFacility.execute();
+        _;
+    }
+
+    modifier givenVaultAccruesYield(IERC4626 vault_, uint256 amount_) {
+        // Get the vault asset
+        MockERC20 asset = MockERC20(vault_.asset());
+
+        // Deposit more of the asset into the given vault
+        asset.mint(address(this), amount_);
+        asset.approve(address(vault_), amount_);
+        vault_.deposit(amount_, address(this));
+
+        // Update the treasury and CDEPO balances
+        _updateTreasuryReserveBalance();
+        _updateCdepoVaultBalance();
+        _;
+    }
+
+    modifier givenYieldFee(uint16 yieldFee_) {
+        vm.prank(admin);
+        yieldDepositFacility.setYieldFee(yieldFee_);
+        _;
+    }
+
+    modifier givenHarvest(address account_, uint256 positionId_) {
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId_;
+
+        vm.prank(account_);
+        yieldDepositFacility.harvest(positionIds);
+        _;
     }
 
     // ========== ASSERTIONS ========== //
 
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
+    }
+
+    function _assertHarvestBalances(
+        address caller_,
+        uint256 positionId_,
+        uint256 expectedYield_,
+        uint256 expectedFee_,
+        uint256 expectedTreasuryBalance_,
+        uint256 expectedVaultSharesReduction_,
+        uint256 expectedConversionRate_
+    ) internal {
+        // Assert caller received yield minus fee
+        assertEq(
+            reserveToken.balanceOf(caller_),
+            expectedYield_ - expectedFee_,
+            "Caller received incorrect yield"
+        );
+
+        // Assert treasury received fee
+        assertEq(
+            reserveToken.balanceOf(address(treasury)),
+            expectedTreasuryBalance_,
+            "Treasury received incorrect fee"
+        );
+
+        // Assert convertibleDepository's vault shares are reduced by the yield amount
+        assertEq(
+            cdepoVaultBalanceBefore - vault.balanceOf(address(convertibleDepository)),
+            expectedVaultSharesReduction_,
+            "ConvertibleDepository's vault shares are not reduced by the yield amount"
+        );
+
+        // Assert conversion rate is updated
+        assertEq(
+            yieldDepositFacility.positionLastYieldConversionRate(positionId_),
+            expectedConversionRate_,
+            "Conversion rate is not updated"
+        );
     }
 }
