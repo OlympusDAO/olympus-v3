@@ -254,7 +254,7 @@ contract YieldDepositFacility is
     function harvest(
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
-    ) public returns (uint256 yieldMinusFee) {
+    ) public onlyEnabled returns (uint256 yieldMinusFee) {
         if (positionIds_.length != timestampHints_.length) {
             revert YDF_InvalidArgs("array length mismatch");
         }
