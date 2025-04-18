@@ -12,6 +12,7 @@ import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacili
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -20,9 +21,16 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title YieldDepositFacility
-contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldDepositFacility {
+contract YieldDepositFacility is
+    Policy,
+    PolicyEnabler,
+    ReentrancyGuard,
+    IYieldDepositFacility,
+    IPeriodicTask
+{
     using SafeTransferLib for ERC20;
 
     // ========== STATE VARIABLES ========== //
@@ -342,11 +350,14 @@ contract YieldDepositFacility is Policy, PolicyEnabler, ReentrancyGuard, IYieldD
         return vault_.convertToAssets(1e18);
     }
 
+    // ========== PERIODIC TASK ========== //
+
     /// @notice Stores periodic snapshots of the conversion rate for all supported vaults
     /// @dev    This function is called by the Heart contract every 8 hours
+    /// @dev    This function will perform its actions even if the contract is disabled, to avoid gaps in the rate snapshot history.
     /// @dev    The timestamp is rounded down to the nearest 8-hour interval
     /// @dev    No cleanup is performed as snapshots are needed for active deposits
-    function execute() external onlyRole("heart") {
+    function execute() external override onlyRole(HEART_ROLE) {
         uint48 snapshotKey = _getSnapshotKey(uint48(block.timestamp));
 
         // Get all supported vault tokens
