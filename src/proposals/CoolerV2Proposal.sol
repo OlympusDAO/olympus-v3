@@ -51,6 +51,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
         address timelock = addresses.getAddress("olympus-timelock");
         address emergencyMS = addresses.getAddress("olympus-multisig-emergency");
+        address coolerV2 = addresses.getAddress("olympus-policy-cooler-v2");
         address coolerV2TreasuryBorrower = addresses.getAddress(
             "olympus-policy-cooler-v2-treasury-borrower"
         );
@@ -95,10 +96,25 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             console2.log("Timelock already has the emergency role");
         }
 
+        // STEP 3: Grant the "treasuryborrower_cooler" role to the MonoCooler policy
+        if (!roles.hasRole(coolerV2, bytes32("treasuryborrower_cooler"))) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("treasuryborrower_cooler"),
+                    coolerV2
+                ),
+                "Grant treasuryborrower_cooler to MonoCooler"
+            );
+        } else {
+            console2.log("MonoCooler already has the treasuryborrower_cooler role");
+        }
+
         // Cooler V2 MonoCooler policy does not needed to be enabled
         // Will not function until the treasury borrower policy is enabled
 
-        // STEP 3: Enable the Cooler V2 Treasury Borrower policy
+        // STEP 4: Enable the Cooler V2 Treasury Borrower policy
         _pushAction(
             coolerV2TreasuryBorrower,
             abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode("")),
