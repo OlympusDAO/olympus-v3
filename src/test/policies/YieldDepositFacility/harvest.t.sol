@@ -185,7 +185,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
             POSITION_ID
         );
         uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 expectedYield = ((lastConversionRate - currentConversionRate) * DEPOSIT_AMOUNT) /
+        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * DEPOSIT_AMOUNT) /
             1e18;
         assertTrue(expectedYield > 0, "Expected yield is not non-zero");
         uint256 expectedFee = (expectedYield * 1000) / 10000;
@@ -193,7 +193,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Harvest(address(reserveToken), recipient, expectedYield);
+        emit Harvest(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Harvest yield
         vm.prank(recipient);
@@ -214,7 +214,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
     function test_whenClaimed()
         public
         givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, 1e18)
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000)
         givenHarvest(recipient, POSITION_ID)
@@ -230,7 +230,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
             POSITION_ID
         );
         uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 expectedYield = ((lastConversionRate - currentConversionRate) * DEPOSIT_AMOUNT) /
+        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * DEPOSIT_AMOUNT) /
             1e18;
         assertTrue(expectedYield > 0, "Expected yield is not non-zero");
         uint256 expectedFee = (expectedYield * 1000) / 10000;
@@ -238,7 +238,53 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Harvest(address(reserveToken), recipient, expectedYield);
+        emit Harvest(address(reserveToken), recipient, expectedYield - expectedFee);
+
+        // Harvest yield
+        vm.prank(recipient);
+        yieldDepositFacility.harvest(positionIds);
+
+        // Assert balances
+        _assertHarvestBalances(
+            recipient,
+            POSITION_ID,
+            expectedYield,
+            expectedFee,
+            expectedFee,
+            expectedYieldShares,
+            currentConversionRate
+        );
+    }
+
+    function test_onExpiry()
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000)
+        givenDepositPeriodEnded(0)
+        givenRateSnapshotTaken
+        givenVaultAccruesYield(iVault, 1e18)
+    {
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = POSITION_ID;
+
+        // Calculate expected yield and fee
+        // This will take the current rate as the end rate
+        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
+            POSITION_ID
+        );
+        uint256 currentConversionRate = iVault.convertToAssets(1e18);
+        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * DEPOSIT_AMOUNT) /
+            1e18;
+        assertTrue(expectedYield > 0, "Expected yield is not non-zero");
+        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Harvest(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Harvest yield
         vm.prank(recipient);
@@ -261,7 +307,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
     )
         public
         givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, 1e18)
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000)
         givenDepositPeriodEnded(0)
@@ -269,7 +315,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
         givenVaultAccruesYield(iVault, 1e18)
     {
         // Move beyond the end of the deposit period
-        elapsed_ = uint48(bound(elapsed_, 0, 1 days));
+        elapsed_ = uint48(bound(elapsed_, 1, 1 days));
         vm.warp(YIELD_EXPIRY + elapsed_);
 
         // Prepare position IDs
@@ -277,6 +323,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
+        // As the expiry is in the past, this will take the last rate snapshot
         uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
             POSITION_ID
         );
@@ -284,7 +331,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
             iVault,
             _getRoundedTimestamp(YIELD_EXPIRY)
         );
-        uint256 expectedYield = ((lastConversionRate - rateSnapshotConversionRate) *
+        uint256 expectedYield = ((rateSnapshotConversionRate - lastConversionRate) *
             DEPOSIT_AMOUNT) / 1e18;
         assertTrue(expectedYield > 0, "Expected yield is not non-zero");
         uint256 expectedFee = (expectedYield * 1000) / 10000;
@@ -292,7 +339,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Harvest(address(reserveToken), recipient, expectedYield);
+        emit Harvest(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Harvest yield
         vm.prank(recipient);
@@ -326,7 +373,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
             POSITION_ID
         );
         uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 expectedYield = ((lastConversionRate - currentConversionRate) * DEPOSIT_AMOUNT) /
+        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * DEPOSIT_AMOUNT) /
             1e18;
         assertTrue(expectedYield > 0, "Expected yield is not non-zero");
         uint256 expectedFee = 0;
@@ -334,7 +381,7 @@ contract HarvestYDFTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Harvest(address(reserveToken), recipient, expectedYield);
+        emit Harvest(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Harvest yield
         vm.prank(recipient);

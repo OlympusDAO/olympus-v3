@@ -54,6 +54,7 @@ contract YieldDepositFacilityTest is Test {
 
     uint256 public treasuryReserveBalanceBefore;
     uint256 public cdepoVaultBalanceBefore;
+    uint256 public recipientReserveTokenBalanceBefore;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -91,7 +92,7 @@ contract YieldDepositFacilityTest is Test {
         vm.label(heart, "heart");
 
         // Store the treasury balance before
-        _updateTreasuryReserveBalance();
+        _updateReserveBalances();
         _updateCdepoVaultBalance();
     }
 
@@ -141,8 +142,9 @@ contract YieldDepositFacilityTest is Test {
 
     // ========== MODIFIERS ========== //
 
-    function _updateTreasuryReserveBalance() internal {
+    function _updateReserveBalances() internal {
         treasuryReserveBalanceBefore = reserveToken.balanceOf(address(treasury));
+        recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
     }
 
     function _updateCdepoVaultBalance() internal {
@@ -168,7 +170,7 @@ contract YieldDepositFacilityTest is Test {
         vm.prank(account_);
         convertibleDepository.mint(cdToken, amount_);
 
-        _updateTreasuryReserveBalance();
+        _updateReserveBalances();
         _updateCdepoVaultBalance();
         _;
     }
@@ -188,7 +190,7 @@ contract YieldDepositFacilityTest is Test {
         vm.prank(account_);
         positionId = yieldDepositFacility.mint(cdToken, amount_, false);
 
-        _updateTreasuryReserveBalance();
+        _updateReserveBalances();
         _updateCdepoVaultBalance();
     }
 
@@ -232,12 +234,12 @@ contract YieldDepositFacilityTest is Test {
     }
 
     modifier givenBeforeDepositPeriodEnd(uint48 before_) {
-        vm.warp(INITIAL_BLOCK + (PERIOD_MONTHS * 30 days) - before_);
+        vm.warp(YIELD_EXPIRY - before_);
         _;
     }
 
     modifier givenDepositPeriodEnded(uint48 elapsed_) {
-        vm.warp(INITIAL_BLOCK + (PERIOD_MONTHS * 30 days) + elapsed_);
+        vm.warp(YIELD_EXPIRY + elapsed_);
         _;
     }
 
@@ -252,13 +254,12 @@ contract YieldDepositFacilityTest is Test {
         // Get the vault asset
         MockERC20 asset = MockERC20(vault_.asset());
 
-        // Deposit more of the asset into the given vault
-        asset.mint(address(this), amount_);
-        asset.approve(address(vault_), amount_);
-        vault_.deposit(amount_, address(this));
+        // Donate more of the asset into the given vault
+        // This is to simulate the yield accrual
+        asset.mint(address(vault_), amount_);
 
         // Update the treasury and CDEPO balances
-        _updateTreasuryReserveBalance();
+        _updateReserveBalances();
         _updateCdepoVaultBalance();
         _;
     }
@@ -296,14 +297,14 @@ contract YieldDepositFacilityTest is Test {
         // Assert caller received yield minus fee
         assertEq(
             reserveToken.balanceOf(caller_),
-            expectedYield_ - expectedFee_,
+            recipientReserveTokenBalanceBefore + expectedYield_ - expectedFee_,
             "Caller received incorrect yield"
         );
 
         // Assert treasury received fee
         assertEq(
             reserveToken.balanceOf(address(treasury)),
-            expectedTreasuryBalance_,
+            treasuryReserveBalanceBefore + expectedTreasuryBalance_,
             "Treasury received incorrect fee"
         );
 
