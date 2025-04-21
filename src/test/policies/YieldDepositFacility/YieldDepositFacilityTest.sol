@@ -175,17 +175,19 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
-    function _createYieldDepositPosition(
-        address account_,
-        uint256 amount_
-    ) internal returns (uint256 positionId) {
+    function _mintAndApproveReserveToken(address account_, uint256 amount_) internal {
         // Mint the reserve token to the account
         reserveToken.mint(account_, amount_);
 
         // Approve the reserve token spending
         vm.prank(account_);
         reserveToken.approve(address(convertibleDepository), amount_);
+    }
 
+    function _createYieldDepositPosition(
+        address account_,
+        uint256 amount_
+    ) internal returns (uint256 positionId) {
         // Mint the CD token
         vm.prank(account_);
         positionId = yieldDepositFacility.mint(cdToken, amount_, false);
@@ -195,6 +197,7 @@ contract YieldDepositFacilityTest is Test {
     }
 
     modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
+        _mintAndApproveReserveToken(account_, amount_);
         _createYieldDepositPosition(account_, amount_);
         _;
     }
