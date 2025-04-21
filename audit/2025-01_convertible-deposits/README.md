@@ -237,7 +237,6 @@ sequenceDiagram
     participant CDFacility
     participant CDPOS
     participant CDEPO
-    participant MINTR
     participant ReserveToken as Reserve (ERC20)
     participant VaultToken as Vault (ERC4626)
     participant cdReserve
