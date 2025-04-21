@@ -243,24 +243,31 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
-    modifier givenRateSnapshotTaken() {
-        // Force a snapshot to be taken at the given timestamp
+    function _takeRateSnapshot() internal {
         vm.prank(heart);
         yieldDepositFacility.execute();
+    }
+
+    modifier givenRateSnapshotTaken() {
+        // Force a snapshot to be taken at the given timestamp
+        _takeRateSnapshot();
         _;
     }
 
-    modifier givenVaultAccruesYield(IERC4626 vault_, uint256 amount_) {
+    function _accrueYield(IERC4626 vault_, uint256 amount_) internal {
         // Get the vault asset
         MockERC20 asset = MockERC20(vault_.asset());
 
         // Donate more of the asset into the given vault
-        // This is to simulate the yield accrual
         asset.mint(address(vault_), amount_);
 
         // Update the treasury and CDEPO balances
         _updateReserveBalances();
         _updateCdepoVaultBalance();
+    }
+
+    modifier givenVaultAccruesYield(IERC4626 vault_, uint256 amount_) {
+        _accrueYield(vault_, amount_);
         _;
     }
 
