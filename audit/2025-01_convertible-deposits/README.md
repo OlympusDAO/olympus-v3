@@ -58,12 +58,21 @@ There are a few additional behaviours:
 
 The second approach enables depositors to claim the yield from the ERC4626 vault strategy, without a call option on OHM.
 
-A user can deposit the configured token (e.g. USDS) into the facility (`CDFacility`), and in return receive:
+A user can deposit the configured token (e.g. USDS) into the facility (`YieldDepositFacility`), and in return receive:
 
 - An equivalent amount of a convertible deposit token (`cdUSDS-3m`)
 - A position record (optionally wrapped to a ERC721 token) with the deposit period
-    - The holder of this record/token can claim the vault token (e.g. `cdUSDS`) yield, after a protocol fee is applied.
+    - The holder of this record/token can claim the vault token (e.g. `cdUSDS`) yield at any time, and in any frequency.
+    - A protocol fee will be deducted upon harveting yield.
     - The holder is free to do what they wish with the CD token - it does not affect claiming yield.
+
+As the time that the yield is harvested is not fixed, flexibility is added to the system in the following manner:
+
+- The conversion rate between each vault shares and its assets is periodically recorded (every 8 hours).
+- When claiming yield, the difference between the current and previous vault conversion rate is used to determine how much yield to transfer to the position owner.
+- If the position has not yet expired, the current conversion rate between the vault shares and assets will be used.
+- If the position has expired in the past, by default the function call will revert. This is because the function has no mechanism to find the conversion rate nearest to the expiry time.
+    - The caller can provide a timestamp hint as a parameter, which is then used to find the conversion rate. Provided there is a stored conversion rate, that will be used.
 
 ### Convertible Deposit Token Design
 
@@ -422,6 +431,10 @@ The YieldRepurchaseFacility tracks yield earned from different protocol features
 The changes to this policy are:
 
 - Includes the vault token balance in CDEPO in yield calculations
+
+### YieldDepositFacility (Policy)
+
+TODO
 
 ### CDEPO (Module)
 
