@@ -92,14 +92,14 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
 - Lock their CD tokens into the redemption queue
 - Reclaim the deposited tokens at any time, with a discount.
 
-### Redemption Queue
+### Redemption Vault
 
-CD token holders can redeem the underlying token quantity in full by locking their CD tokens in the redemption queue.
+CD token holders can redeem the underlying token quantity in full by depositing (committing) their CD tokens to the redemption vault.
 
-- The CD tokens must remain in the queue for the deposit period in order to be redeemed.
-- A user can borrow against the CD tokens while they are in the queue.
-- Withdrawing CD tokens from the queue will reset the counter.
-- After the CD tokens have been in the queue for the deposit period, they can be reclaimed 1:1 for the underlying tokens.
+- The CD tokens must remain in the vault for the deposit period in order to be redeemed.
+- A user can borrow against the CD tokens while they are in the vault.
+- Withdrawing (uncommitting) CD tokens from the vault will reset the counter.
+- After the CD tokens have been in the vault for the deposit period, they can be redeemed 1:1 for the underlying tokens.
 
 ## Scope
 
