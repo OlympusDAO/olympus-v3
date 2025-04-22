@@ -50,7 +50,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(position.remainingDeposit, bidAmount_, "position remaining deposit");
         assertEq(position.conversionPrice, conversionPrice, "position conversion price");
         assertEq(
-            position.conversionExpiry,
+            position.expiry,
             uint48(block.timestamp) + (30 days) * PERIOD_MONTHS,
             "position expiry"
         );

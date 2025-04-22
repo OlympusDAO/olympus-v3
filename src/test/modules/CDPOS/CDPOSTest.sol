@@ -86,7 +86,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         );
         assertEq(position.remainingDeposit, remainingDeposit_, "position.remainingDeposit");
         assertEq(position.conversionPrice, conversionPrice_, "position.conversionPrice");
-        assertEq(position.conversionExpiry, conversionExpiry_, "position.conversionExpiry");
+        assertEq(position.expiry, conversionExpiry_, "position.expiry");
         assertEq(position.wrapped, wrap_, "position.wrapped");
     }
 

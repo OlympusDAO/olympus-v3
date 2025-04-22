@@ -13,7 +13,7 @@ contract CreateCDPOSTest is CDPOSTest {
         address indexed convertibleDepositToken,
         uint256 remainingDeposit,
         uint256 conversionPrice,
-        uint48 conversionExpiry,
+        uint48 expiry,
         bool wrapped
     );
 
@@ -309,7 +309,7 @@ contract CreateCDPOSTest is CDPOSTest {
     }
 
     function test_conversionExpiryInFuture(uint48 expiry_) public {
-        uint48 conversionExpiry = uint48(bound(expiry_, block.timestamp + 1, type(uint48).max));
+        uint48 expiry = uint48(bound(expiry_, block.timestamp + 1, type(uint48).max));
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -319,27 +319,14 @@ contract CreateCDPOSTest is CDPOSTest {
             convertibleDepositToken,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
-            conversionExpiry,
+            expiry,
             false
         );
 
         // Call function
-        _createPosition(
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            conversionExpiry,
-            false
-        );
+        _createPosition(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
 
         // Assert that the position is correct
-        _assertPosition(
-            0,
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            conversionExpiry,
-            false
-        );
+        _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
     }
 }

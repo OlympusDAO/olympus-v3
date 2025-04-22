@@ -109,7 +109,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             convertibleDepositToken: convertibleDepositToken_,
             remainingDeposit: remainingDeposit_,
             conversionPrice: conversionPrice_,
-            conversionExpiry: conversionExpiry_,
+            expiry: conversionExpiry_,
             wrapped: wrap_
         });
 
@@ -240,7 +240,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             position.convertibleDepositToken,
             amount_,
             position.conversionPrice,
-            position.conversionExpiry,
+            position.expiry,
             wrap_
         );
 
@@ -328,7 +328,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
                 positionIsConvertible
                     ? string.concat(
                         '<text xml:space="preserve" class="standard-text"><tspan x="42" y="551.16">Conversion Expiry</tspan><tspan x="457" y="551.003" text-anchor="end">',
-                        _getTimeString(position_.conversionExpiry),
+                        _getTimeString(position_.expiry),
                         "</tspan></text>"
                     )
                     : "",
@@ -364,7 +364,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
             positionIsConvertible
                 ? string.concat(
                     '{"trait_type": "Conversion Expiry", "display_type": "date", "value": ',
-                    Strings.toString(position.conversionExpiry),
+                    Strings.toString(position.expiry),
                     "},"
                 )
                 : "",
@@ -477,13 +477,13 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
     function isExpired(
         uint256 positionId_
     ) external view virtual override returns (bool isExpired_) {
-        isExpired_ = _getPosition(positionId_).conversionExpiry <= block.timestamp;
+        isExpired_ = _getPosition(positionId_).expiry <= block.timestamp;
     }
 
     function _isConvertible(Position memory position_) internal pure returns (bool) {
         return
             position_.conversionPrice != NON_CONVERSION_PRICE &&
-            position_.conversionExpiry != NON_CONVERSION_EXPIRY;
+            position_.expiry != NON_CONVERSION_EXPIRY;
     }
 
     /// @inheritdoc CDPOSv1
@@ -515,7 +515,7 @@ contract OlympusConvertibleDepositPositions is CDPOSv1 {
         Position memory position = _getPosition(positionId_);
 
         // If expired, conversion output is 0
-        if (position.conversionExpiry <= block.timestamp) return 0;
+        if (position.expiry <= block.timestamp) return 0;
 
         // If the amount is greater than the remaining deposit, revert
         if (amount_ > position.remainingDeposit) revert CDPOS_InvalidParams("amount");

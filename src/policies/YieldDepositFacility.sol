@@ -172,15 +172,15 @@ contract YieldDepositFacility is
         uint256 lastSnapshotRate = positionLastYieldConversionRate[positionId_];
 
         // Calculate the end rate (either current rate or rate at expiry)
-        if (block.timestamp <= position.conversionExpiry) {
+        if (block.timestamp <= position.expiry) {
             // Deposit period hasn't finished, use current rate
             endRate = _getConversionRate(vault);
         } else {
             // Deposit period has finished, find the rate at expiry
             // Validate timestamp hint if provided
-            uint48 snapshotTimestamp = position.conversionExpiry;
+            uint48 snapshotTimestamp = position.expiry;
             if (timestampHint_ > 0) {
-                if (timestampHint_ > position.conversionExpiry) {
+                if (timestampHint_ > position.expiry) {
                     revert YDF_InvalidArgs("timestamp hint");
                 }
                 snapshotTimestamp = timestampHint_;

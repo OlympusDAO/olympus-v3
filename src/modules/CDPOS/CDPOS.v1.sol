@@ -16,15 +16,14 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  convertibleDepositToken Address of the convertible deposit token
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
     /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token (only for convertible positions)
-    /// @param  conversionExpiry        Timestamp when the deposit can no longer be converted (only for convertible positions)
+    /// @param  expiry                  Timestamp of the position expiry
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
         address owner;
         address convertibleDepositToken;
         uint256 remainingDeposit;
         uint256 conversionPrice;
-        // TODO rename to expiry
-        uint48 conversionExpiry;
+        uint48 expiry;
         bool wrapped;
     }
 
@@ -37,7 +36,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
         address indexed convertibleDepositToken,
         uint256 remainingDeposit,
         uint256 conversionPrice,
-        uint48 conversionExpiry,
+        uint48 expiry,
         bool wrapped
     );
 

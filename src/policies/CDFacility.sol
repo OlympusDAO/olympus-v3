@@ -147,7 +147,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         if (position.owner != account_) revert CDF_NotOwner(positionId_);
 
         // Validate that the position has not expired
-        if (block.timestamp >= position.conversionExpiry) revert CDF_PositionExpired(positionId_);
+        if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId_);
 
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
@@ -299,7 +299,7 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         if (position.owner != account_) revert CDF_NotOwner(positionId_);
 
         // Validate that the position has expired
-        if (block.timestamp < position.conversionExpiry) revert CDF_PositionNotExpired(positionId_);
+        if (block.timestamp < position.expiry) revert CDF_PositionNotExpired(positionId_);
 
         // Validate that the deposit amount is not greater than the remaining deposit
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
