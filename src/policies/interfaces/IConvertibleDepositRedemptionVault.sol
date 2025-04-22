@@ -14,12 +14,14 @@ interface IConvertibleDepositRedemptionVault {
         address indexed cdToken,
         uint256 amount
     );
+
     event Redeemed(
         address indexed user,
         uint16 indexed commitmentId,
         address indexed cdToken,
         uint256 amount
     );
+
     event Uncommitted(
         address indexed user,
         uint16 indexed commitmentId,
@@ -27,17 +29,27 @@ interface IConvertibleDepositRedemptionVault {
         uint256 amount
     );
 
+    // ========== ERRORS ========== //
+
+    error CDRedemptionVault_InvalidCDToken(address cdToken);
+
+    error CDRedemptionVault_InvalidCommitmentId(address user, uint16 commitmentId);
+
+    error CDRedemptionVault_InvalidAmount(address user, uint16 commitmentId, uint256 amount);
+
+    error CDRedemptionVault_TooEarly(address user, uint16 commitmentId);
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Data structure for a commitment to redeem a CD token
     ///
-    /// @param  cdToken_ The address of the CD token
-    /// @param  amount_  The amount of CD tokens committed
-    /// @param  expiry_  The timestamp at which the commitment expires
+    /// @param  cdToken         The address of the CD token
+    /// @param  amount          The amount of CD tokens committed
+    /// @param  redeemableAt    The timestamp at which the commitment can be redeemed
     struct UserCommitment {
         IConvertibleDepositERC20 cdToken;
         uint256 amount;
-        uint48 expiry;
+        uint48 redeemableAt;
     }
 
     // ========== USER COMMITMENTS ========== //
