@@ -23,7 +23,7 @@ contract ConvertibleDepositInstall is OlyBatch {
         // Load contract addresses from the environment file
         kernel = envAddress("current", "olympus.Kernel");
         cdepo = envAddress("current", "olympus.modules.OlympusConvertibleDepository");
-        cdpos = envAddress("current", "olympus.modules.OlympusConvertibleDepositPositions");
+        cdpos = envAddress("current", "olympus.modules.OlympusConvertibleDepositPositionManager");
         cdAuctioneer = envAddress("current", "olympus.policies.ConvertibleDepositAuctioneer");
         cdFacility = envAddress("current", "olympus.policies.ConvertibleDepositFacility");
         emissionManager = envAddress("current", "olympus.policies.EmissionManager");

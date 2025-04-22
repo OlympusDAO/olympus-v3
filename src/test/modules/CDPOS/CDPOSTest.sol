@@ -9,11 +9,11 @@ import {ERC721ReceiverMock} from "@openzeppelin/contracts/mocks/ERC721ReceiverMo
 import {IERC721Receiver} from "@openzeppelin/contracts/interfaces/IERC721Receiver.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
 abstract contract CDPOSTest is Test, IERC721Receiver {
-    using ModuleTestFixtureGenerator for OlympusConvertibleDepositPositions;
+    using ModuleTestFixtureGenerator for OlympusConvertibleDepositPositionManager;
 
     uint256 public constant REMAINING_DEPOSIT = 25e18;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -22,7 +22,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
     uint48 public constant CONVERSION_EXPIRY = uint48(INITIAL_BLOCK + CONVERSION_EXPIRY_DELAY);
 
     Kernel public kernel;
-    OlympusConvertibleDepositPositions public CDPOS;
+    OlympusConvertibleDepositPositionManager public CDPOS;
     ERC721ReceiverMock public mockERC721Receiver;
     address public godmode;
     address public convertibleDepositToken;
@@ -34,7 +34,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         vm.warp(INITIAL_BLOCK);
 
         kernel = new Kernel();
-        CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
+        CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
         mockERC721Receiver = new ERC721ReceiverMock(
             IERC721Receiver.onERC721Received.selector,
             ERC721ReceiverMock.Error.None
@@ -49,7 +49,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         convertibleDepositToken = address(mockERC20);
 
         // Generate fixtures
-        godmode = CDPOS.generateGodmodeFixture(type(OlympusConvertibleDepositPositions).name);
+        godmode = CDPOS.generateGodmodeFixture(type(OlympusConvertibleDepositPositionManager).name);
 
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(CDPOS));

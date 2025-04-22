@@ -123,7 +123,7 @@ CD token holders can redeem the underlying token quantity in full by locking the
             - [OlympusConvertibleDepository.sol](../../src/modules/CDEPO/OlympusConvertibleDepository.sol)
         - [CDPOS/](../../src/modules/CDPOS)
             - [CDPOS.v1.sol](../../src/modules/CDPOS/CDPOS.v1.sol)
-            - [OlympusConvertibleDepositPositions.sol](../../src/modules/CDPOS/OlympusConvertibleDepositPositions.sol)
+            - [OlympusConvertibleDepositPositionManager.sol](../../src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol)
     - [policies/](../../src/policies)
         - [interfaces/](../../src/policies/interfaces)
             - [IConvertibleDepositAuctioneer.sol](../../src/policies/interfaces/IConvertibleDepositAuctioneer.sol)

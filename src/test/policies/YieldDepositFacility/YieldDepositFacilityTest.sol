@@ -13,7 +13,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
-import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
@@ -24,7 +24,7 @@ contract YieldDepositFacilityTest is Test {
     YieldDepositFacility public yieldDepositFacility;
     OlympusRoles public roles;
     OlympusConvertibleDepository public convertibleDepository;
-    OlympusConvertibleDepositPositions public convertibleDepositPositions;
+    OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
     OlympusTreasury public treasury;
     RolesAdmin public rolesAdmin;
 
@@ -100,7 +100,7 @@ contract YieldDepositFacilityTest is Test {
         kernel = new Kernel();
         roles = new OlympusRoles(kernel);
         convertibleDepository = new OlympusConvertibleDepository(kernel);
-        convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
+        convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
         treasury = new OlympusTreasury(kernel);
         yieldDepositFacility = new YieldDepositFacility(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);

@@ -10,10 +10,10 @@ import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
 
-/// @title  Olympus Convertible Deposit Positions
+/// @title  Olympus Convertible Deposit Position Manager
 /// @notice Implementation of the {CDPOSv1} interface
 ///         This contract is used to create, manage, and wrap/unwrap convertible deposit positions
-contract OlympusConvertibleDepositPositions is CDPOSv1 {
+contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
     // ========== STATE VARIABLES ========== //
 
     /// @notice The number of decimal places to display when rendering values as decimal strings.

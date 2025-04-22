@@ -15,7 +15,7 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
-import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
@@ -30,7 +30,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     OlympusMinter public minter;
     OlympusRoles public roles;
     OlympusConvertibleDepository public convertibleDepository;
-    OlympusConvertibleDepositPositions public convertibleDepositPositions;
+    OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
 
     MockERC20 public ohm;
@@ -88,7 +88,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         convertibleDepository = new OlympusConvertibleDepository(kernel);
-        convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
+        convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
         facility = new CDFacility(address(kernel));
         auctioneer = new CDAuctioneer(
             address(kernel),

@@ -47,7 +47,7 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
-import {OlympusConvertibleDepositPositions} from "modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 
 // Bophades Policies
 import {Operator} from "policies/Operator.sol";
@@ -101,7 +101,7 @@ contract OlympusDeploy is Script {
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
     OlympusConvertibleDepository public CDEPO;
-    OlympusConvertibleDepositPositions public CDPOS;
+    OlympusConvertibleDepositPositionManager public CDPOS;
 
     /// Policies
     Operator public operator;
@@ -217,8 +217,8 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
         selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
-        selectorMap["OlympusConvertibleDepositPositions"] = this
-            ._deployConvertibleDepositPositions
+        selectorMap["OlympusConvertibleDepositPositionManager"] = this
+            ._deployConvertibleDepositPositionManager
             .selector;
         // Policies
         selectorMap["Operator"] = this._deployOperator.selector;
@@ -1293,17 +1293,17 @@ contract OlympusDeploy is Script {
         return address(CDEPO);
     }
 
-    function _deployConvertibleDepositPositions(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDepositPositions
+    function _deployConvertibleDepositPositionManager(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositPositionManager
 
         // Log dependencies
-        console2.log("ConvertibleDepositPositions parameters:");
+        console2.log("ConvertibleDepositPositionManager parameters:");
         console2.log("   kernel", address(kernel));
 
-        // Deploy ConvertibleDepositPositions
+        // Deploy ConvertibleDepositPositionManager
         vm.broadcast();
-        CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
-        console2.log("ConvertibleDepositPositions deployed at:", address(CDPOS));
+        CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
+        console2.log("ConvertibleDepositPositionManager deployed at:", address(CDPOS));
 
         return address(CDPOS);
     }
