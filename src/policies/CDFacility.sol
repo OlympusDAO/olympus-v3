@@ -21,11 +21,18 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
-contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, ReentrancyGuard {
+contract CDFacility is
+    Policy,
+    PolicyEnabler,
+    IConvertibleDepositFacility,
+    ReentrancyGuard,
+    CDRedemptionVault
+{
     using FullMath for uint256;
     using SafeTransferLib for ERC20;
 
@@ -42,9 +49,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
 
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
-
-    /// @notice The CDEPO module.
-    CDEPOv1 public CDEPO;
 
     /// @notice The CDPOS module.
     CDPOSv1 public CDPOS;
@@ -284,153 +288,6 @@ contract CDFacility is Policy, PolicyEnabler, IConvertibleDepositFacility, Reent
         emit ConvertedDeposit(address(cdToken.asset()), msg.sender, cdTokenIn, convertedTokenOut);
 
         return (cdTokenIn, convertedTokenOut);
-    }
-
-    function _previewRedeem(
-        address account_,
-        uint256 positionId_,
-        uint256 amount_
-    ) internal view returns (uint256 redeemed) {
-        // Validate that the position is valid
-        // This will revert if the position is not valid
-        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
-
-        // Validate that the caller is the owner of the position
-        if (position.owner != account_) revert CDF_NotOwner(positionId_);
-
-        // Validate that the position has expired
-        if (block.timestamp < position.expiry) revert CDF_PositionNotExpired(positionId_);
-
-        // Validate that the deposit amount is not greater than the remaining deposit
-        if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
-
-        redeemed = amount_;
-        return redeemed;
-    }
-
-    /// @inheritdoc IConvertibleDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
-    ///             - The caller is not the owner of all of the positions
-    ///             - Any position is not valid
-    ///             - Any position is not a supported CD token
-    ///             - Any position has a different CD token
-    ///             - Any position has not reached the conversion expiry
-    ///             - Any position has reached the redemption expiry
-    ///             - Any redemption amount is greater than the remaining deposit
-    ///             - The amount of CD tokens to redeem is 0
-    function previewRedeem(
-        address account_,
-        uint256[] memory positionIds_,
-        uint256[] memory amounts_
-    ) external view onlyEnabled returns (uint256 redeemed, address cdTokenSpender) {
-        // Make sure the lengths of the arrays are the same
-        if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
-
-        uint256 totalDeposit;
-
-        IConvertibleDepositERC20 cdToken;
-        for (uint256 i; i < positionIds_.length; ++i) {
-            uint256 positionId = positionIds_[i];
-            uint256 amount = amounts_[i];
-            totalDeposit += amount;
-
-            // Validate
-            _previewRedeem(account_, positionId, amount);
-
-            // Set the CD token, or validate
-            address positionCDToken = CDPOS.getPosition(positionId).convertibleDepositToken;
-            if (address(cdToken) == address(0)) {
-                cdToken = IConvertibleDepositERC20(positionCDToken);
-
-                // Validate that the CD token is supported
-                if (!CDEPO.isConvertibleDepositToken(positionCDToken))
-                    revert CDF_InvalidToken(positionId, positionCDToken);
-            } else if (address(cdToken) != positionCDToken) {
-                revert CDF_InvalidArgs("multiple CD tokens");
-            }
-        }
-
-        // Preview redeeming the deposits in bulk
-        redeemed = CDEPO.previewRedeem(cdToken, totalDeposit);
-
-        // If the redeemed amount is 0, revert
-        if (redeemed == 0) revert CDF_InvalidArgs("amount");
-
-        return (redeemed, address(CDEPO));
-    }
-
-    // TODO replace redeem with redemptionQueue
-
-    /// @inheritdoc IConvertibleDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The length of the positionIds_ array does not match the length of the amounts_ array
-    ///             - The caller is not the owner of all of the positions
-    ///             - Any position is not valid
-    ///             - Any position is not a supported CD token
-    ///             - Any position has a different CD token
-    ///             - Any position has not reached the conversion expiry
-    ///             - Any position has reached the redemption expiry
-    ///             - Any redemption amount is greater than the remaining deposit
-    ///             - The amount of CD tokens to redeem is 0
-    function redeem(
-        uint256[] memory positionIds_,
-        uint256[] memory amounts_
-    ) external nonReentrant onlyEnabled returns (uint256 redeemed) {
-        // Make sure the lengths of the arrays are the same
-        if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
-
-        uint256 totalDeposit;
-
-        // Iterate over all positions
-        IConvertibleDepositERC20 cdToken;
-        for (uint256 i; i < positionIds_.length; ++i) {
-            uint256 positionId = positionIds_[i];
-            uint256 depositAmount = amounts_[i];
-            totalDeposit += depositAmount;
-
-            // Validate
-            _previewRedeem(msg.sender, positionId, depositAmount);
-
-            CDPOSv1.Position memory position = CDPOS.getPosition(positionId);
-
-            // Set the CD token, or validate
-            if (address(cdToken) == address(0)) {
-                cdToken = IConvertibleDepositERC20(position.convertibleDepositToken);
-
-                // Validate that the CD token is supported
-                if (!CDEPO.isConvertibleDepositToken(position.convertibleDepositToken))
-                    revert CDF_InvalidToken(positionId, position.convertibleDepositToken);
-            } else if (address(cdToken) != position.convertibleDepositToken) {
-                revert CDF_InvalidArgs("multiple CD tokens");
-            }
-
-            // Update the position
-            CDPOS.update(positionId, position.remainingDeposit - depositAmount);
-        }
-
-        // Redeem the CD deposits in bulk
-        // This will revert if the redeemed amount is 0
-        redeemed = CDEPO.redeemFor(cdToken, msg.sender, totalDeposit);
-
-        // Transfer the tokens to the caller
-        ERC20 depositToken = ERC20(address(cdToken.asset()));
-        depositToken.safeTransfer(msg.sender, redeemed);
-
-        // Wrap any remaining tokens and transfer to the TRSRY
-        uint256 remainingTokens = depositToken.balanceOf(address(this));
-        if (remainingTokens > 0) {
-            IERC4626 vault = cdToken.vault();
-            depositToken.safeApprove(address(vault), remainingTokens);
-            vault.deposit(remainingTokens, address(TRSRY));
-        }
-
-        // Emit event
-        emit RedeemedDeposit(address(depositToken), msg.sender, redeemed);
-
-        return redeemed;
     }
 
     /// @inheritdoc IConvertibleDepositFacility

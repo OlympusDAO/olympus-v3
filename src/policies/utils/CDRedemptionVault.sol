@@ -57,6 +57,8 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
         _;
     }
 
+    // TODO reentrancy, onlyEnabled
+
     /// @inheritdoc IConvertibleDepositRedemptionVault
     /// @dev        This function performs the following:
     ///             - Checks that the CD token is configured in the CDEPO module
