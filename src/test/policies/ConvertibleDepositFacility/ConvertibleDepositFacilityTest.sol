@@ -170,6 +170,26 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenAddressHasConvertibleDepositToken(
+        address account_,
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) {
+        MockERC20 underlyingToken = MockERC20(address(cdToken_.asset()));
+
+        // Mint reserve tokens to the account
+        underlyingToken.mint(account_, amount_);
+
+        // Approve CDEPO to spend the reserve tokens
+        vm.prank(account_);
+        underlyingToken.approve(address(convertibleDepository), amount_);
+
+        // Mint the CD token to the account
+        vm.prank(account_);
+        convertibleDepository.mint(cdToken_, amount_);
+        _;
+    }
+
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
         _createPosition(account_, amount_, CONVERSION_PRICE, false);
         _;
@@ -229,6 +249,39 @@ contract ConvertibleDepositFacilityTest is Test {
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
 
         _createStack();
+        _;
+    }
+
+    modifier givenCommitted(
+        address user_,
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) {
+        // Mint reserve tokens to the user
+        MockERC20 underlyingToken = MockERC20(address(cdToken_.asset()));
+        underlyingToken.mint(user_, amount_);
+
+        // Approve spending of the reserve tokens
+        vm.prank(user_);
+        underlyingToken.approve(address(convertibleDepository), amount_);
+
+        // Mint the CD token to the user
+        vm.prank(user_);
+        convertibleDepository.mint(cdToken_, amount_);
+
+        // Approve spending of the CD token
+        vm.prank(user_);
+        cdToken_.approve(address(facility), amount_);
+
+        // Commit
+        vm.prank(user_);
+        facility.commit(cdToken_, amount_);
+        _;
+    }
+
+    modifier givenRedeemed(address user_, uint16 commitmentId_) {
+        vm.prank(user_);
+        facility.redeem(commitmentId_);
         _;
     }
 

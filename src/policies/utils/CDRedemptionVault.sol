@@ -8,13 +8,19 @@ import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC
 // Libraries
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Bophades
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title  CDRedemptionVault
 /// @notice A contract that manages the redemption of convertible deposit (CD) tokens
-abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
+abstract contract CDRedemptionVault is
+    IConvertibleDepositRedemptionVault,
+    PolicyEnabler,
+    ReentrancyGuard
+{
     using SafeTransferLib for ERC20;
 
     // ========== STATE VARIABLES ========== //
@@ -57,8 +63,6 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
         _;
     }
 
-    // TODO reentrancy, onlyEnabled
-
     /// @inheritdoc IConvertibleDepositRedemptionVault
     /// @dev        This function performs the following:
     ///             - Checks that the CD token is configured in the CDEPO module
@@ -75,7 +79,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
     function commit(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external returns (uint16 commitmentId) {
+    ) external nonReentrant onlyEnabled returns (uint16 commitmentId) {
         // Check that the CD token is valid
         if (!CDEPO.isConvertibleDepositToken(address(cdToken_)))
             revert CDRedemptionVault_InvalidCDToken(address(cdToken_));
@@ -114,7 +118,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
     function uncommit(
         uint16 commitmentId_,
         uint256 amount_
-    ) external onlyValidCommitmentId(msg.sender, commitmentId_) {
+    ) external nonReentrant onlyEnabled onlyValidCommitmentId(msg.sender, commitmentId_) {
         // Get the commitment
         UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
 
@@ -149,9 +153,13 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
     ///             - The commitment is not yet redeemable
     function redeem(
         uint16 commitmentId_
-    ) external onlyValidCommitmentId(msg.sender, commitmentId_) {
+    ) external nonReentrant onlyEnabled onlyValidCommitmentId(msg.sender, commitmentId_) {
         // Get the commitment
         UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
+
+        // Check that the commitment is not already redeemed
+        if (commitment.amount == 0)
+            revert CDRedemptionVault_AlreadyRedeemed(msg.sender, commitmentId_);
 
         // Check that the commitment is redeemable
         if (block.timestamp < commitment.redeemableAt)
@@ -164,7 +172,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
         // Redeem the CD tokens for the underlying asset
         // This also burns the CD tokens
         ERC20(address(commitment.cdToken)).safeApprove(address(CDEPO), commitmentAmount);
-        CDEPO.redeemFor(commitment.cdToken, msg.sender, commitmentAmount);
+        CDEPO.redeemFor(commitment.cdToken, address(this), commitmentAmount);
 
         // Transfer the underlying asset to the caller
         ERC20(address(commitment.cdToken.asset())).safeTransfer(msg.sender, commitmentAmount);

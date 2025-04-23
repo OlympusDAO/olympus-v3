@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
@@ -20,19 +19,12 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
-contract CDFacility is
-    Policy,
-    PolicyEnabler,
-    IConvertibleDepositFacility,
-    ReentrancyGuard,
-    CDRedemptionVault
-{
+contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     using FullMath for uint256;
     using SafeTransferLib for ERC20;
 

@@ -41,6 +41,8 @@ interface IConvertibleDepositRedemptionVault {
 
     error CDRedemptionVault_TooEarly(address user, uint16 commitmentId);
 
+    error CDRedemptionVault_AlreadyRedeemed(address user, uint16 commitmentId);
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Data structure for a commitment to redeem a CD token
