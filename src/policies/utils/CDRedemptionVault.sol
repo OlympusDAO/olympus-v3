@@ -69,6 +69,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
     ///
     ///             The function will revert if:
     ///             - The CD token is not configured in the CDEPO module
+    ///             - The amount is 0
     ///             - The caller has not approved this contract to spend the CD tokens
     ///             - The caller does not have enough CD tokens
     function commit(
@@ -78,6 +79,9 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
         // Check that the CD token is valid
         if (!CDEPO.isConvertibleDepositToken(address(cdToken_)))
             revert CDRedemptionVault_InvalidCDToken(address(cdToken_));
+
+        // Check that the amount is not 0
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
 
         // Create a User Commitment
         commitmentId = _userCommitmentCount[msg.sender]++;
@@ -105,6 +109,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
     ///
     ///             The function will revert if:
     ///             - The commitment ID is invalid
+    ///             - The amount is 0
     ///             - The amount is greater than the committed amount
     function uncommit(
         uint16 commitmentId_,
@@ -112,6 +117,9 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
     ) external onlyValidCommitmentId(msg.sender, commitmentId_) {
         // Get the commitment
         UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
+
+        // Check that the amount is not 0
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
 
         // Check that the amount is not greater than the commitment
         if (amount_ > commitment.amount)

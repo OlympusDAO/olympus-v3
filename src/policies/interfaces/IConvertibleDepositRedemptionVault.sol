@@ -33,6 +33,8 @@ interface IConvertibleDepositRedemptionVault {
 
     error CDRedemptionVault_InvalidCDToken(address cdToken);
 
+    error CDRedemptionVault_ZeroAmount(address user);
+
     error CDRedemptionVault_InvalidCommitmentId(address user, uint16 commitmentId);
 
     error CDRedemptionVault_InvalidAmount(address user, uint16 commitmentId, uint256 amount);
