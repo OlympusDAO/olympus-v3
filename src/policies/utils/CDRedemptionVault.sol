@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+// Interfaces
 import {IConvertibleDepositRedemptionVault} from "../interfaces/IConvertibleDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
-import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
+// Libraries
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+
+// Bophades
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 
 /// @title  CDRedemptionVault
 /// @notice A contract that manages the redemption of convertible deposit (CD) tokens
@@ -23,7 +27,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
 
     /// @notice The address of the CDEPO module
     /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
-    IConvertibleDepository internal _CDEPO;
+    CDEPOv1 public CDEPO;
 
     // ========== USER COMMITMENTS ========== //
 
@@ -70,7 +74,7 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
         uint256 amount_
     ) external returns (uint16 commitmentId) {
         // Check that the CD token is valid
-        if (!_CDEPO.isConvertibleDepositToken(address(cdToken_)))
+        if (!CDEPO.isConvertibleDepositToken(address(cdToken_)))
             revert CDRedemptionVault_InvalidCDToken(address(cdToken_));
 
         // Create a User Commitment
@@ -149,8 +153,8 @@ abstract contract CDRedemptionVault is IConvertibleDepositRedemptionVault {
 
         // Redeem the CD tokens for the underlying asset
         // This also burns the CD tokens
-        ERC20(address(commitment.cdToken)).safeApprove(address(_CDEPO), commitmentAmount);
-        _CDEPO.redeemFor(commitment.cdToken, msg.sender, commitmentAmount);
+        ERC20(address(commitment.cdToken)).safeApprove(address(CDEPO), commitmentAmount);
+        CDEPO.redeemFor(commitment.cdToken, msg.sender, commitmentAmount);
 
         // Transfer the underlying asset to the caller
         ERC20(address(commitment.cdToken.asset())).safeTransfer(msg.sender, commitmentAmount);
