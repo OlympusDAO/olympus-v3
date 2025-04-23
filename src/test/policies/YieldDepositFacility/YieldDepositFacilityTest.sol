@@ -175,6 +175,26 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenAddressHasConvertibleDepositToken(
+        address account_,
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) {
+        MockERC20 underlyingToken = MockERC20(address(cdToken_.asset()));
+
+        // Mint reserve tokens to the account
+        underlyingToken.mint(account_, amount_);
+
+        // Approve CDEPO to spend the reserve tokens
+        vm.prank(account_);
+        underlyingToken.approve(address(convertibleDepository), amount_);
+
+        // Mint the CD token to the account
+        vm.prank(account_);
+        convertibleDepository.mint(cdToken_, amount_);
+        _;
+    }
+
     function _mintAndApproveReserveToken(address account_, uint256 amount_) internal {
         // Mint the reserve token to the account
         reserveToken.mint(account_, amount_);
@@ -286,6 +306,53 @@ contract YieldDepositFacilityTest is Test {
 
         vm.prank(account_);
         yieldDepositFacility.harvest(positionIds);
+        _;
+    }
+
+    modifier givenConvertibleDepositTokenSpendingIsApproved(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) {
+        vm.prank(owner_);
+        cdToken.approve(spender_, amount_);
+        _;
+    }
+
+    modifier givenCommitted(
+        address user_,
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) {
+        // Mint reserve tokens to the user
+        MockERC20 underlyingToken = MockERC20(address(cdToken_.asset()));
+        underlyingToken.mint(user_, amount_);
+
+        // Approve spending of the reserve tokens
+        vm.prank(user_);
+        underlyingToken.approve(address(convertibleDepository), amount_);
+
+        // Mint the CD token to the user
+        vm.prank(user_);
+        convertibleDepository.mint(cdToken_, amount_);
+
+        // Approve spending of the CD token
+        vm.prank(user_);
+        cdToken_.approve(address(yieldDepositFacility), amount_);
+
+        // Commit
+        vm.prank(user_);
+        yieldDepositFacility.commit(cdToken_, amount_);
+        _;
+    }
+
+    modifier givenRedeemed(address user_, uint16 commitmentId_) {
+        // Adjust the amount of yield in the vault to avoid a rounding error
+        // NOTE: This is an issue with how CDEPO tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
+        reserveToken.mint(address(vault), 1e18);
+
+        vm.prank(user_);
+        yieldDepositFacility.redeem(commitmentId_);
         _;
     }
 

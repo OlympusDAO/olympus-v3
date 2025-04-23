@@ -62,6 +62,8 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @dev    This is used to track deposited vault shares for each vault token
     mapping(IERC4626 => uint256) private _totalShares;
 
+    // TODO consider tracking the assets for each vault, rather than the shares. Any remaining shares can be swept as yield. Avoids rounding errors.
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(Kernel kernel_) Module(kernel_) {

@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
@@ -20,26 +19,17 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
 
 /// @title YieldDepositFacility
-contract YieldDepositFacility is
-    Policy,
-    PolicyEnabler,
-    ReentrancyGuard,
-    IYieldDepositFacility,
-    IPeriodicTask
-{
+contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, CDRedemptionVault {
     using SafeTransferLib for ERC20;
 
     // ========== STATE VARIABLES ========== //
 
     /// @notice The treasury module.
     TRSRYv1 public TRSRY;
-
-    /// @notice The CDEPO module.
-    CDEPOv1 public CDEPO;
 
     /// @notice The CDPOS module.
     CDPOSv1 public CDPOS;
@@ -91,10 +81,11 @@ contract YieldDepositFacility is
         Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](4);
         permissions[0] = Permissions(cdepoKeycode, CDEPO.create.selector);
         permissions[1] = Permissions(cdepoKeycode, CDEPO.withdraw.selector);
-        permissions[2] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions[2] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
+        permissions[3] = Permissions(cdposKeycode, CDPOS.mint.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {

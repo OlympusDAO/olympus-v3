@@ -101,6 +101,8 @@ CD token holders can redeem the underlying token quantity in full by depositing 
 - Withdrawing (uncommitting) CD tokens from the vault will reset the counter.
 - After the CD tokens have been in the vault for the deposit period, they can be redeemed 1:1 for the underlying tokens.
 
+CD token holders have enter the redemption vault through the `CDFacility` or `YieldDepositFacility` policies.
+
 ## Scope
 
 ### In-Scope Contracts
