@@ -197,4 +197,85 @@ contract CrossChainBridgeForkTest is Test {
         assertEq(ohm.balanceOf(user2), amount);
     }
     */
+
+    function test_sendOhm_withAdapterParams(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < INITIAL_AMOUNT);
+
+        // L1 transfer
+        vm.selectFork(L1_FORK_ID);
+        vm.recordLogs();
+
+        bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200001));
+
+        // get fee
+        (uint256 fee, ) = bridge.estimateSendFee(L2_ID, user2, amount_, adapterParams);
+
+        // Send ohm to user2 on L2
+        vm.startPrank(user1);
+        ohm1.approve(address(MINTR), amount_);
+        bridge.sendOhm{value: fee}(L2_ID, user2, amount_, adapterParams);
+        vm.stopPrank();
+
+        // pigeon stuff
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        lzHelper.help(L2_lzEndpoint, 1e17, L2_FORK_ID, logs);
+
+        // Verify ohm balance on L2 is correct
+        vm.selectFork(L2_FORK_ID);
+        assertEq(ohm2.balanceOf(user2), amount_);
+    }
+
+    function test_sendOhm_withAdapterParamsIncorrectLength_reverts(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < INITIAL_AMOUNT);
+
+        // L1 transfer
+        vm.selectFork(L1_FORK_ID);
+        vm.recordLogs();
+
+        bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200001));
+
+        // get fee
+        (uint256 fee, ) = bridge.estimateSendFee(L2_ID, user2, amount_, adapterParams);
+
+        // Send ohm to user2 on L2
+        vm.startPrank(user1);
+        ohm1.approve(address(MINTR), amount_);
+
+        // Expect revert
+        vm.expectRevert(CrossChainBridge.Bridge_InvalidAdapterParams.selector);
+
+        bridge.sendOhm{value: fee}(L2_ID, user2, amount_, abi.encodePacked(uint256(200001)));
+        vm.stopPrank();
+    }
+
+    function test_sendOhm_withBytes32Address(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < INITIAL_AMOUNT);
+
+        // L1 transfer
+        vm.selectFork(L1_FORK_ID);
+        vm.recordLogs();
+
+        bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200001));
+        bytes32 to = bytes32(uint256(uint160(user2)));
+
+        // get fee
+        (uint256 fee, ) = bridge.estimateSendFee(L2_ID, to, amount_, adapterParams);
+
+        // Send ohm to user2 on L2
+        vm.startPrank(user1);
+        ohm1.approve(address(MINTR), amount_);
+        bridge.sendOhm{value: fee}(L2_ID, to, amount_, adapterParams);
+        vm.stopPrank();
+
+        // pigeon stuff
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        lzHelper.help(L2_lzEndpoint, 1e17, L2_FORK_ID, logs);
+
+        // Verify ohm balance on L2 is correct
+        vm.selectFork(L2_FORK_ID);
+        assertEq(ohm2.balanceOf(user2), amount_);
+    }
 }
