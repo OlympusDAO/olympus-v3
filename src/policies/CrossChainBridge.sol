@@ -68,6 +68,7 @@ contract CrossChainBridge is
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
     event SetMinDstGas(uint16 dstChainId_, uint16 packetType_, uint256 _minDstGas);
+    event SetDefaultMinDstGas(uint256 minDstGas_);
     event BridgeStatusSet(bool isActive_);
     event DefaultAdapterParamsSet(uint16 version_, uint256 value_);
 
@@ -117,6 +118,7 @@ contract CrossChainBridge is
 
         // Set the default minimum destination gas
         defaultMinDstGas = defaultMinDstGas_;
+        emit SetDefaultMinDstGas(defaultMinDstGas_);
     }
 
     /// @inheritdoc Policy
@@ -519,6 +521,12 @@ contract CrossChainBridge is
     ) external onlyRole("bridge_admin") {
         minDstGasLookup[dstChainId_][packetType_] = minDstGas_;
         emit SetMinDstGas(dstChainId_, packetType_, minDstGas_);
+    }
+
+    /// @notice Set the default minimum destination gas for sending messages
+    function setDefaultMinDstGas(uint256 minDstGas_) external onlyRole("bridge_admin") {
+        defaultMinDstGas = minDstGas_;
+        emit SetDefaultMinDstGas(minDstGas_);
     }
 
     // ========= View Functions ========= //
