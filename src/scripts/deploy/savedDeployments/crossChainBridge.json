@@ -2,7 +2,9 @@
     "sequence": [
         {
             "name": "CrossChainBridge",
-            "args": {}
+            "args": {
+                "defaultMinDstGas": 200000
+            }
         }
     ]
 }

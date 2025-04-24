@@ -14,6 +14,8 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 /// @notice Message bridge for cross-chain OHM transfers.
 /// @dev Uses LayerZero as communication protocol.
 /// @dev Each chain needs to `setTrustedRemoteAddress` for each remote address
@@ -36,6 +38,8 @@ contract CrossChainBridge is
     error Bridge_NoTrustedPath();
     error Bridge_Deactivated();
     error Bridge_TrustedRemoteUninitialized();
+    error Bridge_InvalidAdapterParams();
+    error Bridge_InsufficientGasLimit();
 
     struct AdapterParams {
         uint16 version;
@@ -63,7 +67,7 @@ contract CrossChainBridge is
     event SetPrecrime(address precrime_);
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
-    event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas); // TODO remove?
+    event SetMinDstGas(uint16 dstChainId_, uint16 packetType_, uint256 _minDstGas);
     event BridgeStatusSet(bool isActive_);
     event DefaultAdapterParamsSet(uint16 version_, uint256 value_);
 
@@ -81,6 +85,9 @@ contract CrossChainBridge is
     /// @dev    Some send/receive library versions require non-empty adapter params
     AdapterParams public defaultAdapterParams;
 
+    /// @notice The default minimum destination gas for sending messages
+    uint256 public defaultMinDstGas;
+
     // LZ app state
 
     /// @notice Storage for failed messages on receive.
@@ -90,6 +97,9 @@ contract CrossChainBridge is
     /// @notice Trusted remote paths. Must be set by admin.
     mapping(uint16 => bytes) public trustedRemoteLookup;
 
+    /// @notice Minimum destination gas for each chain.
+    mapping(uint16 => mapping(uint16 => uint256)) public minDstGasLookup;
+
     /// @notice LZ precrime address. Currently unused.
     address public precrime;
 
@@ -97,13 +107,16 @@ contract CrossChainBridge is
     //                                        POLICY SETUP                                        //
     //============================================================================================//
 
-    constructor(Kernel kernel_, address endpoint_) Policy(kernel_) {
+    constructor(Kernel kernel_, address endpoint_, uint256 defaultMinDstGas_) Policy(kernel_) {
         _ENDPOINT = ILayerZeroEndpoint(endpoint_);
         bridgeActive = true;
 
         // Sane default values for adapter params
         defaultAdapterParams = AdapterParams({version: 1, value: 200000});
         emit DefaultAdapterParamsSet(defaultAdapterParams.version, defaultAdapterParams.value);
+
+        // Set the default minimum destination gas
+        defaultMinDstGas = defaultMinDstGas_;
     }
 
     /// @inheritdoc Policy
@@ -151,20 +164,28 @@ contract CrossChainBridge is
 
     function _sendOhm(
         uint16 dstChainId_,
-        bytes memory payload_,
+        bytes32 to_,
         uint256 amount_,
         bytes memory adapterParams_
     ) internal {
         if (!bridgeActive) revert Bridge_Deactivated();
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
 
+        bytes memory adapterParamsOrDefault = _getAdapterParams(adapterParams_);
+
+        // Check the gas limit for the destination chain
+        _checkGasLimit(dstChainId_, 0, adapterParamsOrDefault, 0);
+
+        // Burn the OHM from the sender
         MINTR.burnOhm(msg.sender, amount_);
+
+        // Send the message
         _sendMessage(
             dstChainId_, // dstChainId
-            payload_, // payload
+            abi.encode(to_, amount_), // payload
             payable(msg.sender), // refundAddress
             address(0x0), // zroPaymentAddress
-            _getAdapterParams(adapterParams_), // adapterParams
+            adapterParamsOrDefault, // adapterParams
             msg.value // nativeFee
         );
 
@@ -177,7 +198,22 @@ contract CrossChainBridge is
     /// @param  to_ The address to send the OHM to on the destination chain
     /// @param  amount_ The amount of OHM to send
     function sendOhm(uint16 dstChainId_, address to_, uint256 amount_) external payable {
-        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_, "");
+        _sendOhm(dstChainId_, bytes32(uint256(uint160(to_))), amount_, "");
+    }
+
+    /// @notice Send OHM to an eligible chain
+    ///
+    /// @param  dstChainId_ The LayerZero ID for the destination chain
+    /// @param  to_         The address to send the OHM to on the destination chain.
+    /// @param  amount_     The amount of OHM to send
+    /// @param  adapterParams_ The adapter params to use when sending the message. If empty, the default adapter params will be used. This value should be in the form of `abi.encodePacked(uint16,uint256)`.
+    function sendOhm(
+        uint16 dstChainId_,
+        address to_,
+        uint256 amount_,
+        bytes memory adapterParams_
+    ) external payable {
+        _sendOhm(dstChainId_, bytes32(uint256(uint160(to_))), amount_, adapterParams_);
     }
 
     /// @notice Send OHM to an eligible chain
@@ -185,14 +221,14 @@ contract CrossChainBridge is
     /// @param  dstChainId_ The LayerZero ID for the destination chain
     /// @param  to_         The address to send the OHM to on the destination chain. This can be an EVM or other type of address (e.g. Solana).
     /// @param  amount_     The amount of OHM to send
-    /// @param  adapterParams_ The adapter params to use when sending the message. If empty, the default adapter params will be used.
+    /// @param  adapterParams_ The adapter params to use when sending the message. If empty, the default adapter params will be used. This value should be in the form of `abi.encodePacked(uint16,uint256)`.
     function sendOhm(
         uint16 dstChainId_,
         bytes32 to_,
         uint256 amount_,
         bytes memory adapterParams_
     ) external payable {
-        _sendOhm(dstChainId_, abi.encode(to_, amount_), amount_, adapterParams_);
+        _sendOhm(dstChainId_, to_, amount_, adapterParams_);
     }
 
     /// @notice Implementation of receiving an LZ message
@@ -203,7 +239,8 @@ contract CrossChainBridge is
         uint64,
         bytes memory payload_
     ) internal {
-        (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
+        (bytes32 toBytes32, uint256 amount) = abi.decode(payload_, (bytes32, uint256));
+        address to = address(uint160(uint256(toBytes32)));
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
@@ -295,6 +332,34 @@ contract CrossChainBridge is
         return abi.encodePacked(defaultAdapterParams.version, defaultAdapterParams.value);
     }
 
+    function _getAdapterParamsGasLimit(
+        bytes memory adapterParams_
+    ) internal view returns (uint256 gasLimit) {
+        if (adapterParams_.length < 34) revert Bridge_InvalidAdapterParams();
+
+        assembly {
+            gasLimit := mload(add(adapterParams_, 34))
+        }
+
+        return gasLimit;
+    }
+
+    function _checkGasLimit(
+        uint16 dstChainId_,
+        uint16 packetType_,
+        bytes memory adapterParams_,
+        uint256 extraGas_
+    ) internal view {
+        uint256 adapterParamsGasLimit = _getAdapterParamsGasLimit(adapterParams_);
+
+        // Get the minimum gas limit for the destination chain, or apply the default
+        uint256 minDstGas = minDstGasLookup[dstChainId_][packetType_];
+        if (minDstGas == 0) minDstGas = defaultMinDstGas;
+
+        // Ensure that the gas limit in the adapter params is at least the minimum
+        if (adapterParamsGasLimit < minDstGas + extraGas_) revert Bridge_InsufficientGasLimit();
+    }
+
     /// @notice Internal function for sending a message across chains.
     /// @dev    Params defined in ILayerZeroEndpoint `send` function.
     function _sendMessage(
@@ -343,6 +408,11 @@ contract CrossChainBridge is
 
     /// @notice Function to estimate how much gas is needed to send OHM
     /// @dev    Should be called by frontend before making sendOhm call.
+    ///
+    /// @param  dstChainId_     The LayerZero destination chain ID
+    /// @param  to_             The address to send the OHM to on the destination chain
+    /// @param  amount_         The amount of OHM to send
+    /// @param  adapterParams_  The adapter params to use when sending the message. If empty, the default adapter params will be used. This value should be in the form of `abi.encodePacked(uint16,uint256)`.
     /// @return nativeFee - Native token amount to send to sendOhm
     /// @return zroFee - Fee paid in ZRO token. Unused.
     function estimateSendFee(
@@ -437,9 +507,28 @@ contract CrossChainBridge is
         emit DefaultAdapterParamsSet(version_, value_);
     }
 
+    /// @notice Set the minimum destination gas for a given chain and type
+    ///
+    /// @param dstChainId_  The destination LayerZero chain ID
+    /// @param packetType_  0 = send, 1 = send_and_call
+    /// @param minDstGas_   The minimum destination gas to set
+    function setMinDstGas(
+        uint16 dstChainId_,
+        uint16 packetType_,
+        uint256 minDstGas_
+    ) external onlyRole("bridge_admin") {
+        minDstGasLookup[dstChainId_][packetType_] = minDstGas_;
+        emit SetMinDstGas(dstChainId_, packetType_, minDstGas_);
+    }
+
     // ========= View Functions ========= //
 
     /// @notice Gets endpoint config for this contract
+    ///
+    /// @param version_     The version of the endpoint config
+    /// @param chainId_     The LayerZero chain ID of the endpoint config
+    /// @param configType_  The type of endpoint config
+    /// @return config      The endpoint config
     function getConfig(
         uint16 version_,
         uint16 chainId_,
@@ -450,6 +539,8 @@ contract CrossChainBridge is
     }
 
     /// @notice Get trusted remote for the given chain as an
+    ///
+    /// @param remoteChainId_ The LayerZero chain ID of the remote chain
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath();
@@ -458,14 +549,19 @@ contract CrossChainBridge is
         return path.slice(0, path.length - 20);
     }
 
+    /// @notice Check if a remote address is trusted for a given chain
+    ///
+    /// @param srcChainId_  The LayerZero chain ID of the source chain
+    /// @param srcAddress_  The address of the source chain
+    /// @return isTrusted   True if the address is trusted, false otherwise
     function isTrustedRemote(
         uint16 srcChainId_,
         bytes calldata srcAddress_
-    ) external view returns (bool) {
+    ) external view returns (bool isTrusted) {
         bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
         if (srcAddress_.length == 0 || trustedSource.length == 0)
             revert Bridge_TrustedRemoteUninitialized();
-        return (srcAddress_.length == trustedSource.length &&
+        isTrusted = (srcAddress_.length == trustedSource.length &&
             keccak256(srcAddress_) == keccak256(trustedSource));
     }
 }

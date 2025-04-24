@@ -912,15 +912,17 @@ contract OlympusDeploy is Script {
         return address(lusdVaultManager);
     }
 
-    function _deployCrossChainBridge(bytes memory) public returns (address) {
+    function _deployCrossChainBridge(bytes memory args_) public returns (address) {
         address lzEndpoint = envAddress("external.layerzero.endpoint");
+        uint256 defaultMinDstGas = abi.decode(args_, (uint256));
 
         console2.log("  kernel", address(kernel));
         console2.log("  lzEndpoint", lzEndpoint);
+        console2.log("  defaultMinDstGas", defaultMinDstGas);
 
         // Deploy CrossChainBridge policy
         vm.broadcast();
-        bridge = new CrossChainBridge(kernel, lzEndpoint);
+        bridge = new CrossChainBridge(kernel, lzEndpoint, defaultMinDstGas);
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);

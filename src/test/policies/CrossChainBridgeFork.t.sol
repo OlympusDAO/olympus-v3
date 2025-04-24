@@ -46,6 +46,8 @@ contract CrossChainBridgeForkTest is Test {
 
     uint256 internal constant INITIAL_AMOUNT = 100000e9;
 
+    uint256 internal constant DEFAULT_MIN_DST_GAS = 200000;
+
     string RPC_ETH_MAINNET = vm.envString("ETH_MAINNET_RPC_URL");
     string RPC_POLYGON_MAINNET = vm.envString("POLYGON_MAINNET_RPC_URL");
 
@@ -84,7 +86,7 @@ contract CrossChainBridgeForkTest is Test {
             ROLES = new OlympusRoles(kernel);
 
             // Enable counter
-            bridge = new CrossChainBridge(kernel, L1_lzEndpoint);
+            bridge = new CrossChainBridge(kernel, L1_lzEndpoint, DEFAULT_MIN_DST_GAS);
             rolesAdmin = new RolesAdmin(kernel);
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
@@ -113,7 +115,7 @@ contract CrossChainBridgeForkTest is Test {
             ROLES_l2 = new OlympusRoles(kernel_l2);
 
             // No counter necessary since this is L2
-            bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint);
+            bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint, DEFAULT_MIN_DST_GAS);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));

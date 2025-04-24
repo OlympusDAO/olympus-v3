@@ -21,6 +21,8 @@ import {Minter} from "src/policies/Minter.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
 contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
+    uint256 public constant DEFAULT_MIN_DST_GAS = 200000;
+
     function _getLzEndpoint() internal view returns (address) {
         return _envAddressNotZero("external.layerzero.endpoint");
     }
@@ -195,7 +197,11 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         OlympusTreasury TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury deployed at:", address(TRSRY));
 
-        CrossChainBridge bridge = new CrossChainBridge(kernel, _getLzEndpoint());
+        CrossChainBridge bridge = new CrossChainBridge(
+            kernel,
+            _getLzEndpoint(),
+            DEFAULT_MIN_DST_GAS
+        );
         console2.log("Bridge deployed at:", address(bridge));
 
         RolesAdmin rolesAdmin = new RolesAdmin(kernel);
@@ -249,9 +255,14 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         console2.log("Deploying bridge to", chain_);
         console2.log("Kernel:", kernel);
         console2.log("LZ Endpoint:", lzEndpoint);
+        console2.log("Default min dst gas:", DEFAULT_MIN_DST_GAS);
 
         vm.startBroadcast();
-        CrossChainBridge bridge = new CrossChainBridge(Kernel(kernel), lzEndpoint);
+        CrossChainBridge bridge = new CrossChainBridge(
+            Kernel(kernel),
+            lzEndpoint,
+            DEFAULT_MIN_DST_GAS
+        );
         vm.stopBroadcast();
         console2.log("Bridge deployed at:", address(bridge));
     }

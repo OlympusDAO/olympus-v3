@@ -38,6 +38,8 @@ contract CrossChainBridgeTest is Test {
 
     uint256 internal constant INITIAL_AMOUNT = 100000e9;
 
+    uint256 internal constant DEFAULT_MIN_DST_GAS = 200000;
+
     // Mainnet contracts
     Kernel internal kernel;
     OlympusMinter internal MINTR;
@@ -78,7 +80,7 @@ contract CrossChainBridgeTest is Test {
             ROLES = new OlympusRoles(kernel);
 
             // Enable counter
-            bridge = new CrossChainBridge(kernel, address(endpoint));
+            bridge = new CrossChainBridge(kernel, address(endpoint), DEFAULT_MIN_DST_GAS);
             rolesAdmin = new RolesAdmin(kernel);
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
@@ -96,7 +98,7 @@ contract CrossChainBridgeTest is Test {
             ROLES_l2 = new OlympusRoles(kernel_l2);
 
             // No counter necessary since this is L2
-            bridge_l2 = new CrossChainBridge(kernel_l2, address(endpoint_l2));
+            bridge_l2 = new CrossChainBridge(kernel_l2, address(endpoint_l2), DEFAULT_MIN_DST_GAS);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));
@@ -236,4 +238,58 @@ contract CrossChainBridgeTest is Test {
 
     // TODO Use pigeon to simulate messages between forks
     // https://github.com/exp-table/pigeon
+
+    function test_sendOhm_withAdapterParams(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < ohm.balanceOf(user));
+
+        bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200001));
+
+        (uint256 fee, ) = bridge.estimateSendFee(L2_CHAIN_ID, user2, amount_, adapterParams);
+
+        // Send ohm to user2 on L2
+        vm.startPrank(user);
+        ohm.approve(address(MINTR), amount_);
+        bridge.sendOhm{value: fee}(L2_CHAIN_ID, user2, amount_, adapterParams);
+
+        // Verify ohm balance is correct
+        assertEq(ohm.balanceOf(user2), amount_);
+    }
+
+    function test_sendOhm_withAdapterParamsIncorrectLength_reverts(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < ohm.balanceOf(user));
+
+        bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200001));
+
+        (uint256 fee, ) = bridge.estimateSendFee(L2_CHAIN_ID, user2, amount_, adapterParams);
+
+        // Send ohm to user2 on L2
+        // Pass in adapter params with incorrect length
+        vm.startPrank(user);
+        ohm.approve(address(MINTR), amount_);
+
+        // Expect revert
+        vm.expectRevert(CrossChainBridge.Bridge_InvalidAdapterParams.selector);
+
+        bridge.sendOhm{value: fee}(L2_CHAIN_ID, user2, amount_, abi.encodePacked(uint256(200001)));
+    }
+
+    function test_sendOhm_withBytes32Address(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < ohm.balanceOf(user));
+
+        bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200001));
+        bytes32 to = bytes32(uint256(uint160(user2)));
+
+        (uint256 fee, ) = bridge.estimateSendFee(L2_CHAIN_ID, to, amount_, adapterParams);
+
+        // Send ohm to user2 on L2
+        vm.startPrank(user);
+        ohm.approve(address(MINTR), amount_);
+        bridge.sendOhm{value: fee}(L2_CHAIN_ID, to, amount_, adapterParams);
+
+        // Verify ohm balance is correct
+        assertEq(ohm.balanceOf(user2), amount_);
+    }
 }
