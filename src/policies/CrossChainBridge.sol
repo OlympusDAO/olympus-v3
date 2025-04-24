@@ -336,7 +336,7 @@ contract CrossChainBridge is
 
     function _getAdapterParamsGasLimit(
         bytes memory adapterParams_
-    ) internal view returns (uint256 gasLimit) {
+    ) internal pure returns (uint256 gasLimit) {
         if (adapterParams_.length < 34) revert Bridge_InvalidAdapterParams();
 
         assembly {
