@@ -164,6 +164,9 @@ contract CrossChainBridge is
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice Sends OHM to the specified chain
+    /// @dev    The payload of version 1.1 of the bridge is (bytes32,uint256), while it was previously (address,uint256).
+    ///         As a result, v1.1 cannot interact with v1.0 bridge contracts.
     function _sendOhm(
         uint16 dstChainId_,
         bytes32 to_,
