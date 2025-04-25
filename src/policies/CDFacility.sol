@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-// Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-
 // Interfaces
-import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
@@ -25,9 +19,6 @@ import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
 contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
-    using FullMath for uint256;
-    using SafeTransferLib for ERC20;
-
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
@@ -259,14 +250,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
             );
         }
 
-        // Redeem the CD deposit
+        // Burn the CD tokens from the caller
         // This will revert if cdTokenIn is 0
-        uint256 tokensOut = CDEPO.redeemFor(cdToken, msg.sender, cdTokenIn);
+        burnFrom(cdToken, msg.sender, cdTokenIn);
 
-        // Wrap the tokens and transfer to the TRSRY
-        IERC4626 vault = cdToken.vault();
-        cdToken.asset().approve(address(vault), tokensOut);
-        vault.deposit(tokensOut, address(TRSRY));
+        // Transfer the vault shares to the TRSRY
+        cdToken.vault().transfer(address(TRSRY), cdToken.vault().previewWithdraw(cdTokenIn));
 
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert

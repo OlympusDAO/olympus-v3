@@ -96,8 +96,15 @@ abstract contract CDRedemptionVault is
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
     function burnFrom(IConvertibleDepositERC20 cdToken_, address account_, uint256 amount_) public {
+        IERC4626 vault = cdToken_.vault();
+
         // Decrease the total shares
-        _totalShares[cdToken_.vault()] -= cdToken_.vault().previewWithdraw(amount_);
+        uint256 sharesOut = vault.previewWithdraw(amount_);
+        _totalShares[vault] -= sharesOut;
+
+        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
+        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `amount_` is low enough, it will round down to 0 and `sharesOut` will be 0
+        if (sharesOut == 0) revert CDRedemptionVault_ZeroAmount(account_);
 
         // Burn the CD tokens (via CDEPO)
         // This will also validate that the CD token is supported
@@ -326,18 +333,10 @@ abstract contract CDRedemptionVault is
         address account_,
         uint256 amount_
     ) internal {
-        IERC4626 vault = cdToken_.vault();
-        uint256 sharesOut = vault.previewWithdraw(amount_);
-        _totalShares[vault] -= sharesOut;
-
-        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
-        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `amount_` is low enough, it will round down to 0 and `sharesOut` will be 0
-        if (sharesOut == 0) revert CDRedemptionVault_ZeroAmount(account_);
-
         // Burn the CD tokens from `account_`
-        CDEPO.burnFrom(cdToken_, account_, amount_);
+        burnFrom(cdToken_, account_, amount_);
 
-        // Withdraw the underlying asset to the account
+        // Withdraw the underlying asset to the recipient
         _withdraw(cdToken_, account_, amount_);
     }
 }
