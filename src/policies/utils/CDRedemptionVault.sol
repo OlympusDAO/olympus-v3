@@ -10,6 +10,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -24,6 +25,7 @@ abstract contract CDRedemptionVault is
     ReentrancyGuard
 {
     using SafeTransferLib for ERC20;
+    using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
 
@@ -44,6 +46,18 @@ abstract contract CDRedemptionVault is
     ///         - `CDEPO.reclaimFor()`
     ///         - `CDEPO.setReclaimRate()`
     CDEPOv1 public CDEPO;
+
+    /// @notice Mapping of vault token to total shares
+    /// @dev    This is used to track deposited vault shares for each vault token
+    mapping(IERC4626 => uint256) private _totalShares;
+
+    // ========== MODIFIERS ========== //
+
+    modifier onlyCDToken(IConvertibleDepositERC20 cdToken_) {
+        if (!CDEPO.isConvertibleDepositToken(address(cdToken_)))
+            revert CDRedemptionVault_InvalidCDToken(address(cdToken_));
+        _;
+    }
 
     // ========== MINT/BURN ========== //
 
@@ -242,10 +256,22 @@ abstract contract CDRedemptionVault is
     function previewReclaim(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external view onlyEnabled returns (uint256 reclaimed, address cdTokenSpender) {
-        // Preview reclaiming the amount
-        // This will revert if the amount or reclaimed amount is 0
-        reclaimed = CDEPO.previewReclaim(cdToken_, amount_);
+    )
+        external
+        view
+        onlyEnabled
+        onlyCDToken(cdToken_)
+        returns (uint256 reclaimed, address cdTokenSpender)
+    {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
+
+        // This is rounded down to keep assets in the vault, otherwise the contract may end up
+        // in a state where there are not enough of the assets in the vault to redeem/reclaim
+        reclaimed = amount_.mulDiv(CDEPO.reclaimRate(address(cdToken_)), ONE_HUNDRED_PERCENT);
+
+        // If the reclaimed amount is 0, revert
+        if (reclaimed == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
 
         return (reclaimed, address(CDEPO));
     }
@@ -253,33 +279,49 @@ abstract contract CDRedemptionVault is
     /// @inheritdoc IConvertibleDepositRedemptionVault
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
+    ///             - The CD token is not supported
     ///             - The amount of CD tokens to reclaim is 0
     ///             - The reclaimed amount is 0
+    function reclaimFor(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_
+    ) public nonReentrant onlyEnabled onlyCDToken(cdToken_) returns (uint256 reclaimed) {
+        // Calculate the quantity of deposit token to withdraw and return
+        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
+        (uint256 discountedAssetsOut, ) = previewReclaim(cdToken_, amount_);
+
+        IERC4626 vault = cdToken_.vault();
+        uint256 sharesOut = vault.previewWithdraw(discountedAssetsOut);
+        _totalShares[vault] -= sharesOut;
+
+        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
+        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `discountedAssetsOut` is low enough, it will round down to 0 and `sharesOut` will be 0
+        if (sharesOut == 0) revert CDRedemptionVault_ZeroAmount(account_);
+
+        // Burn the CD tokens from `account_`
+        CDEPO.burnFrom(cdToken_, account_, amount_);
+
+        // Withdraw the underlying asset to the account
+        vault.withdraw(discountedAssetsOut, account_, address(this));
+
+        // Emit event
+        emit Reclaimed(
+            account_,
+            address(cdToken_.asset()),
+            discountedAssetsOut,
+            amount_ - discountedAssetsOut
+        );
+
+        return discountedAssetsOut;
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
     function reclaim(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
-        // Reclaim the CD deposit
-        // This will revert if the amount or reclaimed amount is 0
-        // It will return the discount quantity of underlying asset to this contract
-        reclaimed = CDEPO.reclaimFor(cdToken_, msg.sender, amount_);
-
-        // Transfer the tokens to the caller
-        ERC20 depositToken = ERC20(address(cdToken_.asset()));
-        depositToken.safeTransfer(msg.sender, reclaimed);
-
-        // Wrap any remaining tokens and transfer to the TRSRY
-        uint256 remainingTokens = depositToken.balanceOf(address(this));
-        if (remainingTokens > 0) {
-            IERC4626 vault = cdToken_.vault();
-            depositToken.safeApprove(address(vault), remainingTokens);
-            vault.deposit(remainingTokens, address(TRSRY));
-        }
-
-        // Emit event
-        emit Reclaimed(msg.sender, address(depositToken), reclaimed, amount_ - reclaimed);
-
-        return reclaimed;
+    ) external returns (uint256 reclaimed) {
+        reclaimed = reclaimFor(cdToken_, msg.sender, amount_);
     }
 
     /// @inheritdoc IConvertibleDepositRedemptionVault

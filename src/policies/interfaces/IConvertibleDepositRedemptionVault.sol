@@ -148,8 +148,17 @@ interface IConvertibleDepositRedemptionVault {
     ///         - Emitting an event
     ///
     /// @param  cdToken_        The address of the CD token
+    /// @param  account_        The address to reclaim the deposit token to
     /// @param  amount_         The amount of CD tokens to reclaim
     /// @return reclaimed       The amount of deposit token returned to the caller
+    function reclaimFor(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_
+    ) external returns (uint256 reclaimed);
+
+    /// @notice Reclaims CD tokens, after applying a discount
+    /// @dev    This variant reclaims the underlying asset to the caller
     function reclaim(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_

@@ -52,9 +52,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @dev    This mapping is required to validate that the CD token is created by the contract
     mapping(IConvertibleDepositERC20 => IERC20) private _convertibleToDeposit;
 
-    /// @notice Mapping of CD token to reclaim rate
-    mapping(IConvertibleDepositERC20 => uint16) private _reclaimRates;
-
     /// @notice Mapping of vault token to borrower to debt
     mapping(IERC4626 => mapping(address => uint256)) private _debt;
 
@@ -144,85 +141,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     }
 
     // ========== RECLAIM/REDEEM ========== //
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function performs the following:
-    ///             - Calls `reclaimFor` with the caller as the address to reclaim the tokens to
-    ///
-    ///             This function is public, and allows any address to reclaim the underlying asset of a CD token
-    function reclaim(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external override returns (uint256 tokensOut) {
-        return reclaimFor(cdToken_, msg.sender, amount_);
-    }
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function performs the following:
-    ///             - Validates that the CD token is supported
-    ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
-    ///             - Burns the CD tokens from the `account_` address
-    ///             - Calculates the quantity of underlying asset to withdraw and return
-    ///             - Returns the underlying asset to the caller
-    ///
-    ///             This function reverts if:
-    ///             - The CD token is not supported
-    ///             - The amount is zero
-    ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
-    ///             - The quantity of vault shares for the amount is zero
-    ///
-    ///             This function is public, and allows any address to reclaim the underlying asset of a CD token
-    function reclaimFor(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
-        uint256 amount_
-    ) public override onlyCDToken(cdToken_) returns (uint256 tokensOut) {
-        // Validate that the amount is greater than zero
-        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
-
-        IERC4626 vault = cdToken_.vault();
-
-        // Calculate the quantity of deposit token to withdraw and return
-        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(cdToken_, amount_);
-        uint256 sharesOut = vault.previewWithdraw(discountedAssetsOut);
-        _totalShares[vault] -= sharesOut;
-
-        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
-        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `discountedAssetsOut` is low enough, it will round down to 0 and `sharesOut` will be 0
-        if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
-
-        // Burn the CD tokens from `account_`
-        // It will revert if the caller does not have enough CD tokens
-        cdToken_.burnFrom(account_, amount_);
-
-        // Return the underlying asset to the caller
-        vault.withdraw(discountedAssetsOut, msg.sender, address(this));
-
-        return discountedAssetsOut;
-    }
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function reverts if:
-    ///             - The CD token is not supported
-    ///             - The amount is zero
-    function previewReclaim(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) public view override onlyCDToken(cdToken_) returns (uint256 assetsOut) {
-        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
-
-        uint16 tokenReclaimRate = _reclaimRates[cdToken_];
-
-        // This is rounded down to keep assets in the vault, otherwise the contract may end up
-        // in a state where there are not enough of the assets in the vault to redeem/reclaim
-        assetsOut = FullMath.mulDiv(amount_, tokenReclaimRate, ONE_HUNDRED_PERCENT);
-
-        // If the reclaimed amount is 0, revert
-        if (assetsOut == 0) revert CDEPO_InvalidArgs("reclaimed amount");
-
-        return assetsOut;
-    }
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
