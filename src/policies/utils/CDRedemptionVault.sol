@@ -114,12 +114,12 @@ abstract contract CDRedemptionVault is
     // ========== USER COMMITMENTS ========== //
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
-    function getUserCommitmentCount(address user_) external view returns (uint16 count) {
+    function getRedeemCommitmentCount(address user_) external view returns (uint16 count) {
         return _userCommitmentCount[user_];
     }
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
-    function getUserCommitment(
+    function getRedeemCommitment(
         address user_,
         uint16 commitmentId_
     ) external view returns (UserCommitment memory commitment) {
@@ -152,7 +152,7 @@ abstract contract CDRedemptionVault is
     ///             - The amount is 0
     ///             - The caller has not approved this contract to spend the CD tokens
     ///             - The caller does not have enough CD tokens
-    function commit(
+    function commitRedeem(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external nonReentrant onlyEnabled onlyCDToken(cdToken_) returns (uint16 commitmentId) {
@@ -187,7 +187,7 @@ abstract contract CDRedemptionVault is
     ///             - The commitment ID is invalid
     ///             - The amount is 0
     ///             - The amount is greater than the committed amount
-    function uncommit(
+    function uncommitRedeem(
         uint16 commitmentId_,
         uint256 amount_
     ) external nonReentrant onlyEnabled onlyValidCommitmentId(msg.sender, commitmentId_) {

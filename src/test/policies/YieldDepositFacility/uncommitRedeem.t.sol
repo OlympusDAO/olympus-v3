@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
+import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IConvertibleDepositRedemptionVault} from "src/policies/interfaces/IConvertibleDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-contract UncommitCDFTest is ConvertibleDepositFacilityTest {
+contract UncommitRedeemYDFTest is YieldDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
     event Uncommitted(
@@ -26,8 +26,8 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
         uint256 previousUserCommitmentAmount_
     ) internal {
         // Get commitment
-        IConvertibleDepositRedemptionVault.UserCommitment memory commitment = facility
-            .getUserCommitment(user_, commitmentId_);
+        IConvertibleDepositRedemptionVault.UserCommitment memory commitment = yieldDepositFacility
+            .getRedeemCommitment(user_, commitmentId_);
 
         // Assert commitment values
         assertEq(address(commitment.cdToken), address(cdToken_), "CD token mismatch");
@@ -40,7 +40,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
             "user: CD token balance mismatch"
         );
         assertEq(
-            cdToken_.balanceOf(address(facility)),
+            cdToken_.balanceOf(address(yieldDepositFacility)),
             previousUserCommitmentAmount_ - amount_,
             "CDFacility: CD token balance mismatch"
         );
@@ -68,7 +68,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.uncommit(0, COMMITMENT_AMOUNT);
+        yieldDepositFacility.uncommitRedeem(0, COMMITMENT_AMOUNT);
     }
 
     function test_invalidCommitmentId_reverts()
@@ -87,7 +87,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.uncommit(1, COMMITMENT_AMOUNT);
+        yieldDepositFacility.uncommitRedeem(1, COMMITMENT_AMOUNT);
     }
 
     function test_amountIsZero_reverts()
@@ -105,7 +105,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.uncommit(0, 0);
+        yieldDepositFacility.uncommitRedeem(0, 0);
     }
 
     function test_commitmentIdExistsForDifferentUser_reverts()
@@ -124,7 +124,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipientTwo);
-        facility.uncommit(0, COMMITMENT_AMOUNT);
+        yieldDepositFacility.uncommitRedeem(0, COMMITMENT_AMOUNT);
     }
 
     function test_amountGreaterThanCommitment_reverts(
@@ -145,7 +145,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.uncommit(0, amount_);
+        yieldDepositFacility.uncommitRedeem(0, amount_);
     }
 
     function test_success(
@@ -163,7 +163,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        facility.uncommit(0, amount_);
+        yieldDepositFacility.uncommitRedeem(0, amount_);
 
         // Assertions
         _assertUncommitment(
@@ -176,7 +176,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
         );
     }
 
-    function test_success_partialUncommit(
+    function test_success_partialUncommitRedeem(
         uint256 firstAmount_,
         uint256 secondAmount_
     ) public givenLocallyActive givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT) {
@@ -188,7 +188,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // First uncommit
         vm.prank(recipient);
-        facility.uncommit(0, firstAmount_);
+        yieldDepositFacility.uncommitRedeem(0, firstAmount_);
 
         // Get CD token balance before second uncommit
         uint256 cdTokenBalanceBefore = cdToken.balanceOf(recipient);
@@ -199,7 +199,7 @@ contract UncommitCDFTest is ConvertibleDepositFacilityTest {
 
         // Call function again
         vm.prank(recipient);
-        facility.uncommit(0, secondAmount_);
+        yieldDepositFacility.uncommitRedeem(0, secondAmount_);
 
         // Assertions
         _assertUncommitment(

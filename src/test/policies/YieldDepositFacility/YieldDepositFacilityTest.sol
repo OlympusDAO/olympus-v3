@@ -342,7 +342,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        yieldDepositFacility.commit(cdToken_, amount_);
+        yieldDepositFacility.commitRedeem(cdToken_, amount_);
         _;
     }
 

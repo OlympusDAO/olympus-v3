@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
+import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositRedemptionVault} from "src/policies/interfaces/IConvertibleDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-contract CommitYDFTest is YieldDepositFacilityTest {
+contract CommitRedeemCDFTest is ConvertibleDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
     event Committed(
@@ -27,8 +27,8 @@ contract CommitYDFTest is YieldDepositFacilityTest {
         uint256 previousOtherUserCommitmentAmount_
     ) internal {
         // Get commitment
-        IConvertibleDepositRedemptionVault.UserCommitment memory commitment = yieldDepositFacility
-            .getUserCommitment(user_, commitmentId_);
+        IConvertibleDepositRedemptionVault.UserCommitment memory commitment = facility
+            .getRedeemCommitment(user_, commitmentId_);
 
         // Assert commitment values
         assertEq(address(commitment.cdToken), address(cdToken_), "CD token mismatch");
@@ -41,7 +41,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Assert commitment count
         assertEq(
-            yieldDepositFacility.getUserCommitmentCount(user_),
+            facility.getRedeemCommitmentCount(user_),
             commitmentId_ + 1,
             "Commitment count mismatch"
         );
@@ -53,7 +53,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
             "user: CD token balance mismatch"
         );
         assertEq(
-            cdToken_.balanceOf(address(yieldDepositFacility)),
+            cdToken_.balanceOf(address(facility)),
             amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
             "CDFacility: CD token balance mismatch"
         );
@@ -91,7 +91,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.commit(cdToken, COMMITMENT_AMOUNT);
+        facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
     }
 
     function test_cdTokenNotSupported_reverts() public givenLocallyActive {
@@ -105,10 +105,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.commit(
-            IConvertibleDepositERC20(address(reserveToken)),
-            COMMITMENT_AMOUNT
-        );
+        facility.commitRedeem(IConvertibleDepositERC20(address(reserveToken)), COMMITMENT_AMOUNT);
     }
 
     function test_amountIsZero_reverts() public givenLocallyActive {
@@ -122,7 +119,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.commit(cdToken, 0);
+        facility.commitRedeem(cdToken, 0);
     }
 
     function test_cdTokenNotApproved_reverts()
@@ -135,25 +132,21 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.commit(cdToken, COMMITMENT_AMOUNT);
+        facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
     }
 
     function test_cdTokenInsufficientBalance_reverts()
         public
         givenLocallyActive
         givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenConvertibleDepositTokenSpendingIsApproved(
-            recipient,
-            address(yieldDepositFacility),
-            2e18
-        )
+        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(facility), 2e18)
     {
         // Expect revert
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.commit(cdToken, 2e18);
+        facility.commitRedeem(cdToken, 2e18);
     }
 
     function test_existingCommitment_sameCDToken()
@@ -163,7 +156,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
         givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
         givenConvertibleDepositTokenSpendingIsApproved(
             recipient,
-            address(yieldDepositFacility),
+            address(facility),
             COMMITMENT_AMOUNT
         )
     {
@@ -173,7 +166,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = yieldDepositFacility.commit(cdToken, COMMITMENT_AMOUNT);
+        uint16 commitmentId = facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
 
         // Assertions
         assertEq(commitmentId, 1, "Commitment ID mismatch");
@@ -196,7 +189,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
     {
         // Approve spending of the second CD token
         vm.prank(recipient);
-        cdTokenTwo.approve(address(yieldDepositFacility), COMMITMENT_AMOUNT);
+        cdTokenTwo.approve(address(facility), COMMITMENT_AMOUNT);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -204,7 +197,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = yieldDepositFacility.commit(cdTokenTwo, COMMITMENT_AMOUNT);
+        uint16 commitmentId = facility.commitRedeem(cdTokenTwo, COMMITMENT_AMOUNT);
 
         // Assertions
         assertEq(commitmentId, 1, "Commitment ID mismatch");
@@ -226,7 +219,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
         givenAddressHasConvertibleDepositToken(recipientTwo, cdToken, COMMITMENT_AMOUNT)
         givenConvertibleDepositTokenSpendingIsApproved(
             recipientTwo,
-            address(yieldDepositFacility),
+            address(facility),
             COMMITMENT_AMOUNT
         )
     {
@@ -236,7 +229,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipientTwo);
-        uint16 commitmentId = yieldDepositFacility.commit(cdToken, COMMITMENT_AMOUNT);
+        uint16 commitmentId = facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
 
         // Assertions
         assertEq(commitmentId, 0, "Commitment ID mismatch");
@@ -259,7 +252,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
         givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
         givenConvertibleDepositTokenSpendingIsApproved(
             recipient,
-            address(yieldDepositFacility),
+            address(facility),
             COMMITMENT_AMOUNT
         )
     {
@@ -271,7 +264,7 @@ contract CommitYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = yieldDepositFacility.commit(cdToken, amount_);
+        uint16 commitmentId = facility.commitRedeem(cdToken, amount_);
 
         // Assertions
         assertEq(commitmentId, 0, "Commitment ID mismatch");

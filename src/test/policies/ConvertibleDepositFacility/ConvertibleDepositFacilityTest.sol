@@ -275,7 +275,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        facility.commit(cdToken_, amount_);
+        facility.commitRedeem(cdToken_, amount_);
         _;
     }
 

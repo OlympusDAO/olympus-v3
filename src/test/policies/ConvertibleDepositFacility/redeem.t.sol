@@ -29,7 +29,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
     ) internal {
         // Get commitment
         IConvertibleDepositRedemptionVault.UserCommitment memory commitment = facility
-            .getUserCommitment(user_, commitmentId_);
+            .getRedeemCommitment(user_, commitmentId_);
 
         // Assert commitment values
         assertEq(address(commitment.cdToken), address(cdToken_), "CD token mismatch");
@@ -59,7 +59,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
 
     modifier givenCommitmentPeriodElapsed(uint16 commitmentId_) {
         // Warp to after redeemable timestamp
-        uint48 redeemableAt = facility.getUserCommitment(recipient, commitmentId_).redeemableAt;
+        uint48 redeemableAt = facility.getRedeemCommitment(recipient, commitmentId_).redeemableAt;
         vm.warp(redeemableAt);
         _;
     }
@@ -132,7 +132,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         uint48 timestamp_
     ) public givenLocallyActive givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT) {
         // Warp to before redeemable timestamp
-        uint48 redeemableAt = facility.getUserCommitment(recipient, 0).redeemableAt;
+        uint48 redeemableAt = facility.getRedeemCommitment(recipient, 0).redeemableAt;
         timestamp_ = uint48(bound(timestamp_, block.timestamp, redeemableAt - 1));
         vm.warp(timestamp_);
 
@@ -175,7 +175,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         uint48 timestamp_
     ) public givenLocallyActive givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT) {
         // Warp to after redeemable timestamp
-        uint48 redeemableAt = facility.getUserCommitment(recipient, 0).redeemableAt;
+        uint48 redeemableAt = facility.getRedeemCommitment(recipient, 0).redeemableAt;
         timestamp_ = uint48(bound(timestamp_, redeemableAt, type(uint48).max));
         vm.warp(timestamp_);
 
@@ -217,7 +217,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // The other commitment should not be affected
         uint16 otherCommitmentId = index_ == 0 ? 1 : 0;
         IConvertibleDepositRedemptionVault.UserCommitment memory otherCommitment = facility
-            .getUserCommitment(recipient, otherCommitmentId);
+            .getRedeemCommitment(recipient, otherCommitmentId);
         assertEq(otherCommitment.amount, COMMITMENT_AMOUNT, "Other commitment amount mismatch");
     }
 
@@ -241,7 +241,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
 
         // The other commitment should not be affected
         IConvertibleDepositRedemptionVault.UserCommitment memory otherCommitment = facility
-            .getUserCommitment(recipient, 0);
+            .getRedeemCommitment(recipient, 0);
         assertEq(otherCommitment.amount, COMMITMENT_AMOUNT, "Other commitment amount mismatch");
         assertEq(reserveToken.balanceOf(recipient), 0, "User: reserve token balance mismatch");
     }
@@ -252,10 +252,10 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // Uncommit an amount
         uncommittedAmount_ = bound(uncommittedAmount_, 1, COMMITMENT_AMOUNT - 1);
         vm.prank(recipient);
-        facility.uncommit(0, uncommittedAmount_);
+        facility.uncommitRedeem(0, uncommittedAmount_);
 
         // Warp to after redeemable timestamp
-        uint48 redeemableAt = facility.getUserCommitment(recipient, 0).redeemableAt;
+        uint48 redeemableAt = facility.getRedeemCommitment(recipient, 0).redeemableAt;
         vm.warp(redeemableAt);
 
         // Redeem the commitment
