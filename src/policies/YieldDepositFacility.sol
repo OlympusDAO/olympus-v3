@@ -96,7 +96,8 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         bool wrap_
     ) external nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
-        CDEPO.mintFor(cdToken_, msg.sender, amount_);
+        // This will validate that the CD token is supported, and transfer the deposit token
+        _mintFor(cdToken_, msg.sender, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
