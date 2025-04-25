@@ -87,6 +87,8 @@ contract RedeemYDFTest is YieldDepositFacilityTest {
     // [X] it sets the commitment amount to 0
     // [X] it emits a Redeemed event
 
+    // TODO can redeem after yield harvesting
+
     function test_contractDisabled_reverts() public {
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
