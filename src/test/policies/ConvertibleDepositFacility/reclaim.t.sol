@@ -7,9 +7,9 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {stdError} from "forge-std/StdError.sol";
 
 contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
-    event ReclaimedDeposit(
-        address indexed depositToken,
+    event Reclaimed(
         address indexed user,
+        address indexed depositToken,
         uint256 reclaimedAmount,
         uint256 forfeitedAmount
     );
@@ -24,7 +24,7 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // [X] it transfers the reclaimed reserve tokens to the caller
     // [X] it returns the reclaimed amount
-    // [X] it emits a ReclaimedDeposit event
+    // [X] it emits a Reclaimed event
     // [X] the OHM mint approval is not changed
 
     function test_contractInactive_reverts() public {
@@ -134,9 +134,9 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(
-            address(reserveToken),
+        emit Reclaimed(
             recipient,
+            address(reserveToken),
             expectedReclaimedAmount,
             expectedForfeitedAmount
         );
@@ -207,9 +207,9 @@ contract ReclaimCDFTest is ConvertibleDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimedDeposit(
-            address(reserveToken),
+        emit Reclaimed(
             recipient,
+            address(reserveToken),
             expectedReclaimedAmount,
             expectedForfeitedAmount
         );

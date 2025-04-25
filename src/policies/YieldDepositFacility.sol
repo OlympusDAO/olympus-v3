@@ -28,9 +28,6 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The treasury module.
-    TRSRYv1 public TRSRY;
-
     /// @notice The CDPOS module.
     CDPOSv1 public CDPOS;
 

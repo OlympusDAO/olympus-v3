@@ -29,6 +29,13 @@ interface IConvertibleDepositRedemptionVault {
         uint256 amount
     );
 
+    event Reclaimed(
+        address indexed user,
+        address indexed depositToken,
+        uint256 reclaimedAmount,
+        uint256 forfeitedAmount
+    );
+
     // ========== ERRORS ========== //
 
     error CDRedemptionVault_InvalidCDToken(address cdToken);
@@ -97,4 +104,44 @@ interface IConvertibleDepositRedemptionVault {
     ///
     /// @param  commitmentId_ The ID of the user commitment
     function redeem(uint16 commitmentId_) external;
+
+    // ========== RECLAIM ========== //
+
+    /// @notice Preview the amount of deposit token that would be reclaimed
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Returning the total amount of deposit tokens that would be reclaimed
+    ///
+    /// @param  cdToken_        The address of the CD token
+    /// @param  amount_         The amount of CD tokens to reclaim
+    /// @return reclaimed       The amount of deposit token returned to the caller
+    /// @return cdTokenSpender  The address that will spend the CD tokens. The caller must have approved this address to spend the total amount of CD tokens.
+    function previewReclaim(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external view returns (uint256 reclaimed, address cdTokenSpender);
+
+    /// @notice Reclaims CD tokens, after applying a discount
+    ///         CD tokens can be reclaimed at any time.
+    ///         The caller is not required to have a position in the facility.
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Burning the CD tokens
+    ///         - Transferring the deposit token to `account_`
+    ///         - Emitting an event
+    ///
+    /// @param  cdToken_        The address of the CD token
+    /// @param  amount_         The amount of CD tokens to reclaim
+    /// @return reclaimed       The amount of deposit token returned to the caller
+    function reclaim(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external returns (uint256 reclaimed);
+
+    /// @notice Sets the reclaim rate for a CD token
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Setting the reclaim rate for the CD token
+    ///
+    /// @param  cdToken_      The address of the CD token
+    /// @param  reclaimRate_  The reclaim rate to set
+    function setReclaimRate(IConvertibleDepositERC20 cdToken_, uint16 reclaimRate_) external;
 }

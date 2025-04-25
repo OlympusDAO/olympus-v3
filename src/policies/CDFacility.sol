@@ -36,9 +36,6 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
 
     // Modules
 
-    /// @notice The TRSRY module.
-    TRSRYv1 public TRSRY;
-
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
 
@@ -282,54 +279,6 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         return (cdTokenIn, convertedTokenOut);
     }
 
-    /// @inheritdoc IConvertibleDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The amount of CD tokens to reclaim is 0
-    ///             - The reclaimed amount is 0
-    function previewReclaim(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external view onlyEnabled returns (uint256 reclaimed, address cdTokenSpender) {
-        // Preview reclaiming the amount
-        // This will revert if the amount or reclaimed amount is 0
-        reclaimed = CDEPO.previewReclaim(cdToken_, amount_);
-
-        return (reclaimed, address(CDEPO));
-    }
-
-    /// @inheritdoc IConvertibleDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The amount of CD tokens to reclaim is 0
-    ///             - The reclaimed amount is 0
-    function reclaim(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
-        // Reclaim the CD deposit
-        // This will revert if the amount or reclaimed amount is 0
-        // It will return the discount quantity of underlying asset to this contract
-        reclaimed = CDEPO.reclaimFor(cdToken_, msg.sender, amount_);
-
-        // Transfer the tokens to the caller
-        ERC20 depositToken = ERC20(address(cdToken_.asset()));
-        depositToken.safeTransfer(msg.sender, reclaimed);
-
-        // Wrap any remaining tokens and transfer to the TRSRY
-        uint256 remainingTokens = depositToken.balanceOf(address(this));
-        if (remainingTokens > 0) {
-            IERC4626 vault = cdToken_.vault();
-            depositToken.safeApprove(address(vault), remainingTokens);
-            vault.deposit(remainingTokens, address(TRSRY));
-        }
-
-        // Emit event
-        emit ReclaimedDeposit(address(depositToken), msg.sender, reclaimed, amount_ - reclaimed);
-
-        return reclaimed;
-    }
-
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -371,20 +320,5 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     /// @inheritdoc IConvertibleDepositFacility
     function convertedToken() external view returns (address) {
         return address(MINTR.ohm());
-    }
-
-    /// @notice Set the reclaim rate for CDEPO
-    /// @dev    This function will revert if:
-    ///         - The caller is not an admin
-    ///         - CDEPO reverts
-    ///
-    /// @param  cdToken_      The address of the CD token
-    /// @param  reclaimRate_  The new reclaim rate to set
-    function setReclaimRate(
-        IConvertibleDepositERC20 cdToken_,
-        uint16 reclaimRate_
-    ) external onlyAdminRole {
-        // CDEPO will handle validation
-        CDEPO.setReclaimRate(cdToken_, reclaimRate_);
     }
 }

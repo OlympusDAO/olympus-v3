@@ -22,12 +22,6 @@ interface IConvertibleDepositFacility {
         uint256 depositAmount,
         uint256 convertedAmount
     );
-    event ReclaimedDeposit(
-        address indexed depositToken,
-        address indexed user,
-        uint256 reclaimedAmount,
-        uint256 forfeitedAmount
-    );
 
     // ========== ERRORS ========== //
 
@@ -106,35 +100,6 @@ interface IConvertibleDepositFacility {
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender);
-
-    /// @notice Reclaims CD tokens, after applying a discount
-    ///         CD tokens can be reclaimed at any time.
-    ///         The caller is not required to have a position in the facility.
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Burning the CD tokens
-    ///         - Transferring the deposit token to `account_`
-    ///         - Emitting an event
-    ///
-    /// @param  cdToken_        The address of the CD token
-    /// @param  amount_         The amount of CD tokens to reclaim
-    /// @return reclaimed       The amount of deposit token returned to the caller
-    function reclaim(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external returns (uint256 reclaimed);
-
-    /// @notice Preview the amount of deposit token that would be reclaimed
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Returning the total amount of deposit token that would be reclaimed
-    ///
-    /// @param  cdToken_        The address of the CD token
-    /// @param  amount_         The amount of CD tokens to reclaim
-    /// @return reclaimed       The amount of deposit token returned to the caller
-    /// @return cdTokenSpender  The address that will spend the CD tokens. The caller must have approved this address to spend the total amount of CD tokens.
-    function previewReclaim(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external view returns (uint256 reclaimed, address cdTokenSpender);
 
     // ========== ADMIN FUNCTIONS ========== //
 

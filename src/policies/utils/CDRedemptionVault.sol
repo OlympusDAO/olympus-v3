@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 // Interfaces
 import {IConvertibleDepositRedemptionVault} from "../interfaces/IConvertibleDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
@@ -11,6 +12,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Bophades
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
@@ -31,8 +33,16 @@ abstract contract CDRedemptionVault is
     /// @notice The commitments for each user and commitment ID
     mapping(address => mapping(uint16 => UserCommitment)) internal _userCommitments;
 
+    /// @notice The TRSRY module.
+    /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
+    TRSRYv1 public TRSRY;
+
     /// @notice The address of the CDEPO module
     /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
+    ///         The inheriting contract must also ensure that the following permissions are requested:
+    ///         - `CDEPO.redeemFor()`
+    ///         - `CDEPO.reclaimFor()`
+    ///         - `CDEPO.setReclaimRate()`
     CDEPOv1 public CDEPO;
 
     // ========== USER COMMITMENTS ========== //
@@ -179,5 +189,70 @@ abstract contract CDRedemptionVault is
 
         // Emit the redeemed event
         emit Redeemed(msg.sender, commitmentId_, address(commitment.cdToken), commitmentAmount);
+    }
+
+    // ========== RECLAIM ========== //
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The amount of CD tokens to reclaim is 0
+    ///             - The reclaimed amount is 0
+    function previewReclaim(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external view onlyEnabled returns (uint256 reclaimed, address cdTokenSpender) {
+        // Preview reclaiming the amount
+        // This will revert if the amount or reclaimed amount is 0
+        reclaimed = CDEPO.previewReclaim(cdToken_, amount_);
+
+        return (reclaimed, address(CDEPO));
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The amount of CD tokens to reclaim is 0
+    ///             - The reclaimed amount is 0
+    function reclaim(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
+        // Reclaim the CD deposit
+        // This will revert if the amount or reclaimed amount is 0
+        // It will return the discount quantity of underlying asset to this contract
+        reclaimed = CDEPO.reclaimFor(cdToken_, msg.sender, amount_);
+
+        // Transfer the tokens to the caller
+        ERC20 depositToken = ERC20(address(cdToken_.asset()));
+        depositToken.safeTransfer(msg.sender, reclaimed);
+
+        // Wrap any remaining tokens and transfer to the TRSRY
+        uint256 remainingTokens = depositToken.balanceOf(address(this));
+        if (remainingTokens > 0) {
+            IERC4626 vault = cdToken_.vault();
+            depositToken.safeApprove(address(vault), remainingTokens);
+            vault.deposit(remainingTokens, address(TRSRY));
+        }
+
+        // Emit event
+        emit Reclaimed(msg.sender, address(depositToken), reclaimed, amount_ - reclaimed);
+
+        return reclaimed;
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @dev    This function will revert if:
+    ///         - The caller is not an admin
+    ///         - CDEPO reverts
+    ///
+    /// @param  cdToken_      The address of the CD token
+    /// @param  reclaimRate_  The new reclaim rate to set
+    function setReclaimRate(
+        IConvertibleDepositERC20 cdToken_,
+        uint16 reclaimRate_
+    ) external onlyAdminRole {
+        // CDEPO will handle validation
+        CDEPO.setReclaimRate(cdToken_, reclaimRate_);
     }
 }
