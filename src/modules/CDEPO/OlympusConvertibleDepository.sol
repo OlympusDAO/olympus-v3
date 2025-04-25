@@ -118,59 +118,15 @@ contract OlympusConvertibleDepository is CDEPOv1 {
 
     /// @inheritdoc IConvertibleDepository
     /// @dev        This function performs the following:
-    ///             - Calls `mintFor` with the caller as the recipient
-    ///
-    ///             This function is public, and allows any address to mint CD tokens 1:1 with the deposit token
-    function mint(IConvertibleDepositERC20 cdToken_, uint256 amount_) external override {
-        mintFor(cdToken_, msg.sender, amount_);
-    }
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function performs the following:
-    ///             - Transfers the deposit token from the `account_` address to the contract
-    ///             - Deposits the deposit token into the ERC4626 vault
     ///             - Mints the corresponding amount of convertible deposit tokens to `account_`
-    ///             - Emits a `Transfer` event
     ///
-    ///             This function reverts if:
-    ///             - The CD token is not supported
-    ///             - The amount is zero
-    ///             - The `account_` address has not approved this contract to spend the deposit token
-    ///
-    ///             This function is public, and allows any address to mint CD tokens 1:1 with the deposit token
+    ///             This function is permissioned, and the caller is expected to handle
     function mintFor(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_
-    ) public override onlyCDToken(cdToken_) {
-        // Validate that the amount is greater than zero
-        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
-
-        ERC20 asset = ERC20(address(cdToken_.asset()));
-        IERC4626 vault = cdToken_.vault();
-
-        // Transfer asset from account
-        asset.safeTransferFrom(account_, address(this), amount_);
-
-        // Deposit the underlying asset into the vault and update the total shares
-        asset.safeApprove(address(vault), amount_);
-        _totalShares[vault] += vault.deposit(amount_, address(this));
-
-        // Mint cdTokens to account
+    ) external override permissioned onlyCDToken(cdToken_) {
         cdToken_.mintFor(account_, amount_);
-    }
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        CD tokens are minted 1:1 with deposit token, so this function returns the amount of deposit token
-    function previewMint(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external view override onlyCDToken(cdToken_) returns (uint256 tokensOut) {
-        // Validate that the amount is greater than zero
-        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
-
-        // Return the same amount of CD tokens
-        return amount_;
     }
 
     /// @inheritdoc IConvertibleDepository
@@ -178,16 +134,13 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     ///             - Validates that the CD token token is supported
     ///             - Burns the corresponding amount of CD tokens from the caller
     ///
-    ///             This function is public, and allows any address to burn CD tokens
-    function burn(
+    ///             This function is permissioned, and the caller is expected to handle
+    function burnFrom(
         IConvertibleDepositERC20 cdToken_,
+        address account_,
         uint256 amount_
-    ) external override onlyCDToken(cdToken_) {
-        // Decrease the total shares
-        _totalShares[cdToken_.vault()] -= cdToken_.vault().previewWithdraw(amount_);
-
-        // Burn the CD tokens from the caller
-        cdToken_.burnFrom(msg.sender, amount_);
+    ) external override permissioned onlyCDToken(cdToken_) {
+        cdToken_.burnFrom(account_, amount_);
     }
 
     // ========== RECLAIM/REDEEM ========== //

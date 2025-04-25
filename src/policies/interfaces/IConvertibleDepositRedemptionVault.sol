@@ -63,6 +63,25 @@ interface IConvertibleDepositRedemptionVault {
         uint48 redeemableAt;
     }
 
+    // ========== MINT/BURN ========== //
+
+    /// @notice Burn CD tokens from the caller
+    ///
+    /// @param  cdToken_    The address of the CD token
+    /// @param  amount_     The amount of CD tokens to burn
+    function burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) external;
+
+    /// @notice Burn CD tokens from `account_`
+    ///
+    /// @param  cdToken_    The address of the CD token
+    /// @param  account_    The address of the account to burn the CD tokens from
+    /// @param  amount_     The amount of CD tokens to burn
+    function burnFrom(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_
+    ) external;
+
     // ========== USER COMMITMENTS ========== //
 
     /// @notice Gets the details of a user's commitment

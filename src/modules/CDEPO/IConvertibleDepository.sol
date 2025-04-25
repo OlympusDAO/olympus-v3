@@ -31,51 +31,31 @@ interface IConvertibleDepository {
 
     // ========== MINT/BURN ========== //
 
-    /// @notice Mint convertible deposit tokens to the caller in exchange for the deposit token
-    /// @dev    The implementing function should perform the following:
-    ///         - Validate that the CD token is supported
-    ///         - Transfer the deposit token from the caller to the contract
-    ///         - Mint the corresponding amount of convertible deposit tokens to the caller
-    ///         - Deposit the deposit token into the ERC4626 vault
-    ///
-    /// @param  cdToken_    The CD token to mint
-    /// @param  amount_     The amount of deposit token to transfer
-    function mint(IConvertibleDepositERC20 cdToken_, uint256 amount_) external;
-
     /// @notice Mint convertible deposit tokens to `account_` in exchange for the deposit token
     /// @dev    The implementing function should perform the following:
+    ///         - Validate that the caller is permissioned
     ///         - Validate that the CD token is supported
-    ///         - Transfer the deposit token from the caller to the contract
     ///         - Mint the corresponding amount of convertible deposit tokens to `account_`
-    ///         - Deposit the deposit token into the ERC4626 vault
     ///
     /// @param  cdToken_    The CD token to mint
     /// @param  account_    The address to mint the tokens to and pull the deposit token from
     /// @param  amount_     The amount of deposit token to transfer
     function mintFor(IConvertibleDepositERC20 cdToken_, address account_, uint256 amount_) external;
 
-    /// @notice Preview the amount of convertible deposit tokens that would be minted for a given amount of deposit token
+    /// @notice Burn convertible deposit tokens from `account_`
     /// @dev    The implementing function should perform the following:
-    ///         - Validates that the CD token is supported
-    ///         - Computes the amount of convertible deposit tokens that would be minted for the given amount of deposit token
-    ///         - Returns the computed amount
-    ///
-    /// @param  cdToken_    The CD token to mint
-    /// @param  amount_     The amount of deposit token to transfer
-    /// @return tokensOut   The amount of convertible deposit tokens that would be minted
-    function previewMint(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external view returns (uint256 tokensOut);
-
-    /// @notice Burn convertible deposit tokens from the caller
-    /// @dev    The implementing function should perform the following:
-    ///         - Validates that the convertible deposit token is supported
-    ///         - Burns the corresponding amount of convertible deposit tokens from the caller
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the convertible deposit token is supported
+    ///         - Burns the corresponding amount of convertible deposit tokens from `account_`
     ///
     /// @param  cdToken_ The convertible deposit token to burn
+    /// @param  account_ The address to burn the convertible deposit tokens from
     /// @param  amount_  The amount of convertible deposit tokens to burn
-    function burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) external;
+    function burnFrom(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_
+    ) external;
 
     // ========== RECLAIM/REDEEM ========== //
 

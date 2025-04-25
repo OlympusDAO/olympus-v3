@@ -45,6 +45,47 @@ abstract contract CDRedemptionVault is
     ///         - `CDEPO.setReclaimRate()`
     CDEPOv1 public CDEPO;
 
+    // ========== MINT/BURN ========== //
+
+    /// @notice Mint CD tokens for `account_` in exchange for the deposit token
+    function _mintFor(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_
+    ) internal {
+        // Validate that the amount is greater than 0
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(account_);
+
+        ERC20 asset = ERC20(address(cdToken_.asset()));
+        IERC4626 vault = cdToken_.vault();
+
+        // Transfer asset from account
+        asset.safeTransferFrom(account_, address(this), amount_);
+
+        // Deposit the underlying asset into the vault and update the total shares
+        asset.safeApprove(address(vault), amount_);
+        _totalShares[vault] += vault.deposit(amount_, address(this));
+
+        // Mint the CD tokens (via CDEPO)
+        // This will also validate that the CD token is supported
+        CDEPO.mintFor(cdToken_, account_, amount_);
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    function burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) external {
+        burnFrom(cdToken_, msg.sender, amount_);
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    function burnFrom(IConvertibleDepositERC20 cdToken_, address account_, uint256 amount_) public {
+        // Decrease the total shares
+        _totalShares[cdToken_.vault()] -= cdToken_.vault().previewWithdraw(amount_);
+
+        // Burn the CD tokens (via CDEPO)
+        // This will also validate that the CD token is supported
+        CDEPO.burnFrom(cdToken_, account_, amount_);
+    }
+
     // ========== USER COMMITMENTS ========== //
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
