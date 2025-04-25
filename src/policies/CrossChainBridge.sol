@@ -534,6 +534,11 @@ contract CrossChainBridge is
 
     // ========= View Functions ========= //
 
+    /// @notice Returns the LayerZero endpoint
+    function getEndpoint() external view returns (ILayerZeroEndpoint) {
+        return _ENDPOINT;
+    }
+
     /// @notice Gets endpoint config for this contract
     ///
     /// @param version_     The version of the endpoint config
