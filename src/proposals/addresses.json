@@ -163,5 +163,10 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-cooler-v2-ltv-oracle"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "hohm"
     }
 ]

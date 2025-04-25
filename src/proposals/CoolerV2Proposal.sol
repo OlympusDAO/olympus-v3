@@ -22,6 +22,9 @@ import {console2} from "forge-std/console2.sol";
 contract CoolerV2Proposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
+    // TODO finalise max delegate addresses
+    uint256 public constant MAX_DELEGATE_ADDRESSES = 100;
+
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
         return 8;
@@ -55,6 +58,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         address coolerV2TreasuryBorrower = addresses.getAddress(
             "olympus-policy-cooler-v2-treasury-borrower"
         );
+        address hohm = addresses.getAddress("hohm");
 
         // STEP 1: Grant the "admin" role to the OCG Timelock, if needed
         if (!roles.hasRole(timelock, bytes32("admin"))) {
@@ -120,6 +124,17 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode("")),
             "Enable Cooler V2 Treasury Borrower"
         );
+
+        // STEP 5: Set the maximum delegate addresses for the hOHM account
+        _pushAction(
+            coolerV2,
+            abi.encodeWithSelector(
+                IMonoCooler.setMaxDelegateAddresses.selector,
+                hohm,
+                MAX_DELEGATE_ADDRESSES
+            ),
+            "Set max delegate addresses for hOHM"
+        );
     }
 
     // Executes the proposal actions.
@@ -143,6 +158,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         address coolerV2TreasuryBorrower = addresses.getAddress(
             "olympus-policy-cooler-v2-treasury-borrower"
         );
+        address hohm = addresses.getAddress("hohm");
 
         // Validate that the emergency MS has the emergency role
         require(
@@ -167,6 +183,13 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         require(
             PolicyEnabler(coolerV2TreasuryBorrower).isEnabled(),
             "Cooler V2 Treasury Borrower is not enabled"
+        );
+
+        // Validate that the hOHM account has an updated maximum number of delegate addresses
+        require(
+            IMonoCooler(coolerV2).accountPosition(hohm).maxDelegateAddresses ==
+                MAX_DELEGATE_ADDRESSES,
+            "hOHM does not have the updated maximum number of delegate addresses"
         );
     }
 }
