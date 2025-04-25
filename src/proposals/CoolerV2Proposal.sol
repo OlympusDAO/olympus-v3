@@ -17,6 +17,9 @@ import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {ProposalScript} from "./ProposalScript.sol";
 import {console2} from "forge-std/console2.sol";
 
+// Libraries
+import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
+
 /// @notice Activates Cooler V2.
 // solhint-disable gas-custom-errors
 contract CoolerV2Proposal is GovernorBravoProposal {
@@ -36,9 +39,47 @@ contract CoolerV2Proposal is GovernorBravoProposal {
     }
 
     // Provides a brief description of the proposal.
+    // solhint-disable quotes
     function description() public pure override returns (string memory) {
-        return string.concat("TODO");
+        return
+            string.concat(
+                "# Cooler V2 Activation\n\n",
+                "This proposal activates Cooler Loans v2.\n\n",
+                "## Justification\n\n",
+                "Cooler Loans v2 is a re-architecture of Cooler Loans and allows for the following key improvements to the system:\n\n",
+                "* Conversion to a perpetual interest system that allows interest to be calculated each second vs. every four months. This eliminates end-user friction from accidental defaults and instead, allows a loan's health to deteriorate and ultimately be liquidated much more slowly.\n",
+                "* Allows governance to increase Loan to Backing over time. As the backing value of OHM increases, the amount of stables that can be lent per token logically increases. In Cooler v1, this growth cannot be realized without deploying an entirely new Clearinghouse contract. In Cooler v2, OCG (On-Chain Governance) can define new levels of backing and the associated stables will be released over time at a predefined rate. For example, a user opening their loan might get 10.74 USDS for 1 OHM at the time of origination. They might check back six months later to find that 10.80 is now allowed. The 6 cents difference would be released to them linearly over that predefined time horizon, allowing them to capture the difference against the same amount of collateral.\n",
+                "* Formalises management of the delegation of gOHM voting rights through the DLGTE module. This enables individual borrowers, as well as platforms building on top of Cooler v2, to assign all or a portion of their voting power to addresses.\n",
+                "  * By default, the maximum number of delegates for an account is 10. However, this can be modified on a per-account basis through governance.\n",
+                "* Make Coolers more composable for other smart contracts to build upon. One of the launch products with Cooler v2 will be issued by our partners at Origami Finance called hOHM. hOHM is an OHM derivative that uses Cooler v2 to programmatically leverage OHM to buy more OHM using the aforementioned increase in Loan to Backing. This creates a maximally leveraged position whose health is contractually managed with minimized downside but leveraged upside. It also creates an economy of scale with a perpetual bid on OHM to grow.\n\n",
+                "Additionally, the system includes two periphery contracts:\n\n",
+                "- Composites: allows users to save gas by combining actions (deposit collateral and borrow, repay and withdraw collateral)\n",
+                "- Migrator: allows users to migrate loans from a v1 Cooler to v2\n\n",
+                "## Resources\n\n",
+                "Cooler v2 has been well audited by several discrete parties:\n\n",
+                "- [Electisec Audit Report - Cooler v2](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_CoolerV2-Electisec_report.pdf)\n",
+                "- [Electisec Audit Report - Composites and Migrator](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_Cooler_Composite_Migrator-Electisec_report.pdf)\n",
+                "- [Nethermind Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-04-04%20Cooler%20V2%20-%20Nethermind.pdf)\n",
+                "- [Guardefy Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/audit_cooler_panprog_v2.pdf)\n\n",
+                "The code changes can be viewed at [PR 46](https://github.com/OlympusDAO/olympus-v3/pull/46).\n\n",
+                "## Assumptions\n\n",
+                "- The DLGTE module has been installed into the Kernel\n",
+                "- The LTV Oracle, Treasury Borrower and Mono Cooler policies have been activated in the Kernel\n",
+                "- The Treasury Borrower policy has been set on the Mono Cooler policy\n\n",
+                "## Proposal Steps\n\n",
+                '1. Grant the "admin" role to the OCG timelock\n',
+                '2. Grant the "emergency" role to the Emergency MS and OCG timelock\n',
+                "3. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
+                string.concat(
+                    "4. Set the maximum delegate addresses for hOHM to ",
+                    Strings.toString(MAX_DELEGATE_ADDRESSES),
+                    ".\n\n"
+                ),
+                "The periphery contracts have the owner set to the DAO MS, and will be enabled before or after this proposal."
+            );
     }
+
+    // solhint-enable quotes
 
     // No deploy actions needed
     function _deploy(Addresses addresses, address) internal override {
