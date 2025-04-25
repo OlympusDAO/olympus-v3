@@ -52,6 +52,9 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     /// @dev    This mapping is required to validate that the CD token is created by the contract
     mapping(IConvertibleDepositERC20 => IERC20) private _convertibleToDeposit;
 
+    /// @notice Mapping of CD token to reclaim rate
+    mapping(IConvertibleDepositERC20 => uint16) private _reclaimRates;
+
     /// @notice Mapping of vault token to borrower to debt
     mapping(IERC4626 => mapping(address => uint256)) private _debt;
 
