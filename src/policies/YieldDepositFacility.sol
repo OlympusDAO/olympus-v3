@@ -34,9 +34,6 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     /// @notice The yield fee
     uint16 internal _yieldFee;
 
-    /// @notice The yield fee denominator
-    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
-
     /// @notice Mapping between a position id and the last conversion rate between a CD token's vault and underlying asset
     /// @dev    This is used to calculate the yield since the last claim. The initial value should be set at the time of minting.
     mapping(uint256 => uint256) public positionLastYieldConversionRate;
@@ -78,11 +75,10 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](4);
-        permissions[0] = Permissions(cdepoKeycode, CDEPO.create.selector);
-        permissions[1] = Permissions(cdepoKeycode, CDEPO.withdraw.selector);
-        permissions[2] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
-        permissions[3] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions = new Permissions[](3);
+        permissions[0] = Permissions(cdepoKeycode, CDEPO.mintFor.selector);
+        permissions[1] = Permissions(cdepoKeycode, CDEPO.burnFrom.selector);
+        permissions[2] = Permissions(cdposKeycode, CDPOS.mint.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -269,16 +265,12 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             }
         }
 
-        // Withdraw the yield from the CDEPO module in the form of the underlying asset
-        CDEPO.withdraw(cdToken, yieldMinusFee + yieldFee);
-
-        // Transfer the yield to the caller
+        // Withdraw the yield to the owner
         // msg.sender is ok here as _previewHarvest validates that the caller is the owner of the position
-        ERC20 asset = ERC20(address(cdToken.asset()));
-        asset.safeTransfer(msg.sender, yieldMinusFee);
+        _withdraw(cdToken, msg.sender, yieldMinusFee);
 
-        // Transfer the yield fee to the treasury
-        asset.safeTransfer(address(TRSRY), yieldFee);
+        // Withdraw the yield fee to the treasury
+        _withdraw(cdToken, address(TRSRY), yieldFee);
 
         // Emit event
         emit Harvest(address(cdToken.asset()), msg.sender, yieldMinusFee);
@@ -287,22 +279,6 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     }
 
     // ========== ADMIN FUNCTIONS ========== //
-
-    /// @inheritdoc IYieldDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The caller is not an admin
-    ///             - CDEPO reverts
-    function create(
-        IERC4626 vault_,
-        uint8 periodMonths_,
-        uint16 reclaimRate_
-    ) external onlyEnabled onlyAdminRole returns (IConvertibleDepositERC20 cdToken) {
-        // Create a new convertible deposit token
-        cdToken = CDEPO.create(vault_, periodMonths_, reclaimRate_);
-
-        return cdToken;
-    }
 
     /// @inheritdoc IYieldDepositFacility
     /// @dev        This function reverts if:

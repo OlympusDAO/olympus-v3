@@ -75,16 +75,14 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](9);
+        permissions = new Permissions[](7);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(cdepoKeycode, CDEPO.redeemFor.selector);
-        permissions[4] = Permissions(cdepoKeycode, CDEPO.reclaimFor.selector);
-        permissions[5] = Permissions(cdepoKeycode, CDEPO.setReclaimRate.selector);
-        permissions[6] = Permissions(cdepoKeycode, CDEPO.create.selector);
-        permissions[7] = Permissions(cdposKeycode, CDPOS.mint.selector);
-        permissions[8] = Permissions(cdposKeycode, CDPOS.update.selector);
+        permissions[3] = Permissions(cdepoKeycode, CDEPO.mintFor.selector);
+        permissions[4] = Permissions(cdepoKeycode, CDEPO.burnFrom.selector);
+        permissions[5] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -94,7 +92,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         return (major, minor);
     }
 
-    // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
+    // ========== MINT ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
@@ -110,7 +108,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will validate that the CD token is supported, and transfer the deposit token
-        CDEPO.mintFor(cdToken_, account_, amount_);
+        _mintFor(cdToken_, account_, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
@@ -125,6 +123,8 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         // Emit an event
         emit CreatedDeposit(address(cdToken_.asset()), account_, positionId, amount_);
     }
+
+    // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
     function _previewConvert(
         address account_,
@@ -277,24 +277,6 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         emit ConvertedDeposit(address(cdToken.asset()), msg.sender, cdTokenIn, convertedTokenOut);
 
         return (cdTokenIn, convertedTokenOut);
-    }
-
-    // ========== ADMIN FUNCTIONS ========== //
-
-    /// @inheritdoc IConvertibleDepositFacility
-    /// @dev        This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The caller is not an admin
-    ///             - CDEPO reverts
-    function create(
-        IERC4626 vault_,
-        uint8 periodMonths_,
-        uint16 reclaimRate_
-    ) external onlyEnabled onlyAdminRole returns (IConvertibleDepositERC20 cdToken) {
-        // Create a new convertible deposit token
-        cdToken = CDEPO.create(vault_, periodMonths_, reclaimRate_);
-
-        return cdToken;
     }
 
     // ========== VIEW FUNCTIONS ========== //

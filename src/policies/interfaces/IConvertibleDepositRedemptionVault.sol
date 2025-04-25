@@ -163,13 +163,4 @@ interface IConvertibleDepositRedemptionVault {
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external returns (uint256 reclaimed);
-
-    /// @notice Sets the reclaim rate for a CD token
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Setting the reclaim rate for the CD token
-    ///
-    /// @param  cdToken_      The address of the CD token
-    /// @param  reclaimRate_  The reclaim rate to set
-    function setReclaimRate(IConvertibleDepositERC20 cdToken_, uint16 reclaimRate_) external;
 }

@@ -9,7 +9,6 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 // Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
@@ -141,67 +140,6 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         uint256 amount_
     ) external override permissioned onlyCDToken(cdToken_) {
         cdToken_.burnFrom(account_, amount_);
-    }
-
-    // ========== RECLAIM/REDEEM ========== //
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function performs the following:
-    ///             - Validates that the CD token is supported
-    ///             - Validates that the caller is permissioned
-    ///             - Validates that the `account_` address has approved this contract to spend the convertible deposit tokens
-    ///             - Burns the CD tokens from the `account_` address
-    ///             - Calculates the quantity of underlying asset to withdraw and return
-    ///             - Returns the underlying asset to the caller
-    ///
-    ///             This function reverts if:
-    ///             - The CD token is not supported
-    ///             - The amount is zero
-    ///             - The quantity of vault shares for the amount is zero
-    ///             - The `account_` address has not approved this contract to spend the convertible deposit tokens
-    ///
-    ///             This function is permissioned, and allows only approved policies to redeem CD tokens
-    function redeemFor(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
-        uint256 amount_
-    ) public override onlyCDToken(cdToken_) permissioned returns (uint256 tokensOut) {
-        // Validate that the amount is greater than zero
-        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
-
-        IERC4626 vault = cdToken_.vault();
-
-        // Calculate the quantity of shares to transfer
-        uint256 sharesOut = vault.previewWithdraw(amount_);
-        _totalShares[vault] -= sharesOut;
-
-        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
-        // This is unlikely to happen, as the vault will typically round up the number of shares withdrawn
-        // However a different ERC4626 vault implementation may trigger the condition
-        if (sharesOut == 0) revert CDEPO_InvalidArgs("shares");
-
-        // Burn the CD tokens from the `account_` address
-        cdToken_.burnFrom(account_, amount_);
-
-        // Return the underlying asset to the caller
-        vault.withdraw(amount_, msg.sender, address(this));
-
-        return amount_;
-    }
-
-    /// @inheritdoc IConvertibleDepository
-    /// @dev        This function reverts if:
-    ///             - The amount is zero
-    ///
-    ///             This function returns the same amount of underlying asset that would be redeemed, as the redeem function does not apply a discount.
-    function previewRedeem(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external view override onlyCDToken(cdToken_) returns (uint256 tokensOut) {
-        if (amount_ == 0) revert CDEPO_InvalidArgs("amount");
-
-        tokensOut = amount_;
-        return tokensOut;
     }
 
     // ========== LENDING ========== //

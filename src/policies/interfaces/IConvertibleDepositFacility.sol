@@ -101,24 +101,6 @@ interface IConvertibleDepositFacility {
         uint256[] memory amounts_
     ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut, address cdTokenSpender);
 
-    // ========== ADMIN FUNCTIONS ========== //
-
-    /// @notice Creates a new CD token
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Creating a new CD token
-    ///         - Emitting an event
-    ///
-    /// @param  vault_          The address of the vault to use for the CD token
-    /// @param  periodMonths_   The period of the CD token
-    /// @param  reclaimRate_    The reclaim rate to set for the CD token
-    /// @return cdToken         The address of the new CD token
-    function create(
-        IERC4626 vault_,
-        uint8 periodMonths_,
-        uint16 reclaimRate_
-    ) external returns (IConvertibleDepositERC20 cdToken);
-
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice The addresses of deposit tokens accepted by the facility

@@ -27,13 +27,12 @@ abstract contract CDRedemptionVault is
     using SafeTransferLib for ERC20;
     using FullMath for uint256;
 
+    // ========== CONSTANTS ========== //
+
+    /// @notice The number representing 100%
+    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
+
     // ========== STATE VARIABLES ========== //
-
-    /// @notice The number of commitments per user
-    mapping(address => uint16) internal _userCommitmentCount;
-
-    /// @notice The commitments for each user and commitment ID
-    mapping(address => mapping(uint16 => UserCommitment)) internal _userCommitments;
 
     /// @notice The TRSRY module.
     /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
@@ -42,10 +41,15 @@ abstract contract CDRedemptionVault is
     /// @notice The address of the CDEPO module
     /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
     ///         The inheriting contract must also ensure that the following permissions are requested:
-    ///         - `CDEPO.redeemFor()`
-    ///         - `CDEPO.reclaimFor()`
-    ///         - `CDEPO.setReclaimRate()`
+    ///         - `CDEPO.mintFor()`
+    ///         - `CDEPO.burnFrom()`
     CDEPOv1 public CDEPO;
+
+    /// @notice The number of commitments per user
+    mapping(address => uint16) internal _userCommitmentCount;
+
+    /// @notice The commitments for each user and commitment ID
+    mapping(address => mapping(uint16 => UserCommitment)) internal _userCommitments;
 
     /// @notice Mapping of vault token to total shares
     /// @dev    This is used to track deposited vault shares for each vault token
@@ -144,11 +148,7 @@ abstract contract CDRedemptionVault is
     function commit(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external nonReentrant onlyEnabled returns (uint16 commitmentId) {
-        // Check that the CD token is valid
-        if (!CDEPO.isConvertibleDepositToken(address(cdToken_)))
-            revert CDRedemptionVault_InvalidCDToken(address(cdToken_));
-
+    ) external nonReentrant onlyEnabled onlyCDToken(cdToken_) returns (uint16 commitmentId) {
         // Check that the amount is not 0
         if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
 
@@ -237,10 +237,7 @@ abstract contract CDRedemptionVault is
         // Redeem the CD tokens for the underlying asset
         // This also burns the CD tokens
         ERC20(address(commitment.cdToken)).safeApprove(address(CDEPO), commitmentAmount);
-        CDEPO.redeemFor(commitment.cdToken, address(this), commitmentAmount);
-
-        // Transfer the underlying asset to the caller
-        ERC20(address(commitment.cdToken.asset())).safeTransfer(msg.sender, commitmentAmount);
+        _redeem(commitment.cdToken, msg.sender, commitmentAmount);
 
         // Emit the redeemed event
         emit Redeemed(msg.sender, commitmentId_, address(commitment.cdToken), commitmentAmount);
@@ -257,7 +254,7 @@ abstract contract CDRedemptionVault is
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     )
-        external
+        public
         view
         onlyEnabled
         onlyCDToken(cdToken_)
@@ -291,19 +288,9 @@ abstract contract CDRedemptionVault is
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
         (uint256 discountedAssetsOut, ) = previewReclaim(cdToken_, amount_);
 
-        IERC4626 vault = cdToken_.vault();
-        uint256 sharesOut = vault.previewWithdraw(discountedAssetsOut);
-        _totalShares[vault] -= sharesOut;
-
-        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
-        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `discountedAssetsOut` is low enough, it will round down to 0 and `sharesOut` will be 0
-        if (sharesOut == 0) revert CDRedemptionVault_ZeroAmount(account_);
-
-        // Burn the CD tokens from `account_`
-        CDEPO.burnFrom(cdToken_, account_, amount_);
-
-        // Withdraw the underlying asset to the account
-        vault.withdraw(discountedAssetsOut, account_, address(this));
+        // Redeem the CD tokens and transfer the underlying asset to `account_`
+        // This also burns the CD tokens
+        _redeem(cdToken_, account_, amount_);
 
         // Emit event
         emit Reclaimed(
@@ -324,18 +311,33 @@ abstract contract CDRedemptionVault is
         reclaimed = reclaimFor(cdToken_, msg.sender, amount_);
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
-    /// @dev    This function will revert if:
-    ///         - The caller is not an admin
-    ///         - CDEPO reverts
-    ///
-    /// @param  cdToken_      The address of the CD token
-    /// @param  reclaimRate_  The new reclaim rate to set
-    function setReclaimRate(
+    // ========== HELPER FUNCTIONS ========== //
+
+    function _withdraw(
         IConvertibleDepositERC20 cdToken_,
-        uint16 reclaimRate_
-    ) external onlyAdminRole {
-        // CDEPO will handle validation
-        CDEPO.setReclaimRate(cdToken_, reclaimRate_);
+        address account_,
+        uint256 amount_
+    ) internal {
+        cdToken_.vault().withdraw(amount_, account_, address(this));
+    }
+
+    function _redeem(
+        IConvertibleDepositERC20 cdToken_,
+        address account_,
+        uint256 amount_
+    ) internal {
+        IERC4626 vault = cdToken_.vault();
+        uint256 sharesOut = vault.previewWithdraw(amount_);
+        _totalShares[vault] -= sharesOut;
+
+        // We want to avoid situations where the amount is low enough to be < 1 share, as that would enable users to manipulate the accounting with many small calls
+        // Although the ERC4626 vault will typically round up the number of shares withdrawn, if `amount_` is low enough, it will round down to 0 and `sharesOut` will be 0
+        if (sharesOut == 0) revert CDRedemptionVault_ZeroAmount(account_);
+
+        // Burn the CD tokens from `account_`
+        CDEPO.burnFrom(cdToken_, account_, amount_);
+
+        // Withdraw the underlying asset to the account
+        _withdraw(cdToken_, account_, amount_);
     }
 }
