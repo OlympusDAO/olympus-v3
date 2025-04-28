@@ -29,7 +29,7 @@ Set up a foundry config in foundry.toml.
 Up-to-date addresses of all the deployments can be found in:
 
 - the olymsig repos: [mainnet](https://github.com/OlympusDAO/olymsig) and [testnet](https://github.com/OlympusDAO/olymsig-testnet)
-- [the official docs](https://docs.olympusdao.finance/main/technical/addresses)
+- [the official docs](https://docs.olympusdao.finance/main/technical/)
 
 ### Privileged Testnet Accounts (Multi-sigs)
 
