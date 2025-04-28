@@ -13,19 +13,20 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
+import {CDTokenManager} from "src/policies/CDTokenManager.sol";
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
-contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
+contract CDFacility is Policy, IConvertibleDepositFacility {
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
 
     // ========== STATE VARIABLES ========== //
 
-    // Modules
+    /// @notice The CD token manager
+    CDTokenManager public CD_TOKEN_MANAGER;
 
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
@@ -35,7 +36,13 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
 
     // ========== SETUP ========== //
 
-    constructor(address kernel_) Policy(Kernel(kernel_)) {
+    constructor(address kernel_, address cdTokenManager_) Policy(Kernel(kernel_)) {
+        // Validate that the CD token manager is not the zero address
+        if (cdTokenManager_ == address(0)) revert CDF_InvalidArgs("cdTokenManager");
+
+        // Set the CD token manager
+        CD_TOKEN_MANAGER = CDTokenManager(cdTokenManager_);
+
         // Disabled by default by PolicyEnabler
     }
 
@@ -45,14 +52,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
-        dependencies[3] = toKeycode("CDEPO");
-        dependencies[4] = toKeycode("CDPOS");
+        dependencies[3] = toKeycode("CDPOS");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
-        CDPOS = CDPOSv1(getModuleAddress(dependencies[4]));
+        CDPOS = CDPOSv1(getModuleAddress(dependencies[3]));
     }
 
     /// @inheritdoc Policy
@@ -63,17 +68,14 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = toKeycode("MINTR");
-        Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](7);
+        permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(cdepoKeycode, CDEPO.mintFor.selector);
-        permissions[4] = Permissions(cdepoKeycode, CDEPO.burnFrom.selector);
-        permissions[5] = Permissions(cdposKeycode, CDPOS.mint.selector);
-        permissions[6] = Permissions(cdposKeycode, CDPOS.update.selector);
+        permissions[3] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions[4] = Permissions(cdposKeycode, CDPOS.update.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -99,7 +101,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will validate that the CD token is supported, and transfer the deposit token
-        _mintFor(cdToken_, account_, amount_);
+        CD_TOKEN_MANAGER.mintFor(cdToken_, account_, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
@@ -252,7 +254,9 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
 
         // Burn the CD tokens from the caller
         // This will revert if cdTokenIn is 0
-        burnFrom(cdToken, msg.sender, cdTokenIn);
+        CD_TOKEN_MANAGER.burnFrom(cdToken, msg.sender, cdTokenIn);
+
+        // TODO integrate with CDTokenManager
 
         // Transfer the vault shares to the TRSRY
         cdToken.vault().transfer(address(TRSRY), cdToken.vault().previewWithdraw(cdTokenIn));
@@ -291,5 +295,13 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     /// @inheritdoc IConvertibleDepositFacility
     function convertedToken() external view returns (address) {
         return address(MINTR.ohm());
+    }
+
+    // ========== PERIODIC TASK ========== //
+
+    /// @inheritdoc IPeriodicTask
+    function execute() external override onlyRole(HEART_ROLE) {
+        // Performs enabled check and sweeps yield
+        _execute();
     }
 }

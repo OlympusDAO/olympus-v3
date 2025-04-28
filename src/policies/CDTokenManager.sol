@@ -2,28 +2,27 @@
 pragma solidity 0.8.15;
 
 // Interfaces
-import {IConvertibleDepositRedemptionVault} from "../interfaces/IConvertibleDepositRedemptionVault.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IConvertibleDepositTokenManager} from "src/policies/interfaces/IConvertibleDepositTokenManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
 
 // Libraries
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Bophades
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @title  CDRedemptionVault
-/// @notice A contract that manages the redemption of convertible deposit (CD) tokens
-abstract contract CDRedemptionVault is
-    IConvertibleDepositRedemptionVault,
-    PolicyEnabler,
-    ReentrancyGuard
-{
+/// @title Convertible Deposit Token Manager
+/// @notice This policy is used to manage convertible deposit ("CD") tokens
+contract CDTokenManager is Policy, PolicyEnabler, ReentrancyGuard, IConvertibleDepositTokenManager, IPeriodicTask {
     using SafeTransferLib for ERC20;
     using FullMath for uint256;
 
@@ -34,22 +33,17 @@ abstract contract CDRedemptionVault is
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The TRSRY module.
-    /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
+    /// @notice The TRSRY module
     TRSRYv1 public TRSRY;
 
-    /// @notice The address of the CDEPO module
-    /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
-    ///         The inheriting contract must also ensure that the following permissions are requested:
-    ///         - `CDEPO.mintFor()`
-    ///         - `CDEPO.burnFrom()`
+    /// @notice The CDEPO module
     CDEPOv1 public CDEPO;
 
     /// @notice The number of commitments per user
-    mapping(address => uint16) internal _userCommitmentCount;
+    mapping(address => uint16) internal _userRedeemCommitmentCount;
 
     /// @notice The commitments for each user and commitment ID
-    mapping(address => mapping(uint16 => UserCommitment)) internal _userCommitments;
+    mapping(address => mapping(uint16 => UserRedeemCommitment)) internal _userRedeemCommitments;
 
     /// @notice Mapping of vault token to total shares
     /// @dev    This is used to track deposited vault shares for each vault token
@@ -63,14 +57,60 @@ abstract contract CDRedemptionVault is
         _;
     }
 
+    modifier onlyValidRedeemCommitmentId(address user_, uint16 commitmentId_) {
+        // If the CD token is the zero address, the commitment is invalid
+        if (address(_userCommitments[user_][commitmentId_].cdToken) == address(0))
+            revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
+        _;
+    }
+
+    // ========== CONSTRUCTOR ========== //
+
+    constructor(Kernel kernel_) Policy(kernel_) {
+        // Disabled by default by PolicyEnabler
+    }
+
+    // ========== Policy Configuration ========== //
+
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("CDEPO");
+
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
+    }
+
+    /// @inheritdoc Policy
+    function requestPermissions()
+        external
+        view
+        override
+        returns (Permissions[] memory permissions)
+    {
+        Keycode cdepoKeycode = toKeycode("CDEPO");
+
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(cdepoKeycode, CDEPO.create.selector);
+        permissions[1] = Permissions(cdepoKeycode, CDEPO.setReclaimRate.selector);
+    }
+
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+
+        return (major, minor);
+    }
+
     // ========== MINT/BURN ========== //
 
-    /// @notice Mint CD tokens for `account_` in exchange for the deposit token
-    function _mintFor(
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    function mintFor(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_
-    ) internal {
+    ) external {
         // Validate that the amount is greater than 0
         if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(account_);
 
@@ -111,32 +151,25 @@ abstract contract CDRedemptionVault is
         CDEPO.burnFrom(cdToken_, account_, amount_);
     }
 
-    // ========== USER COMMITMENTS ========== //
+    // TODO mintFor/burnFrom should track amount of CD tokens minted/burned and allow for withdrawal of underlying assets. Should be permissioned?
+
+    // ========== REDEMPTION FLOW ========== //
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
     function getRedeemCommitmentCount(address user_) external view returns (uint16 count) {
-        return _userCommitmentCount[user_];
+        return _userRedeemCommitmentCount[user_];
     }
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
     function getRedeemCommitment(
         address user_,
         uint16 commitmentId_
-    ) external view returns (UserCommitment memory commitment) {
-        commitment = _userCommitments[user_][commitmentId_];
+    ) external view returns (UserRedeemCommitment memory commitment) {
+        commitment = _userRedeemCommitments[user_][commitmentId_];
         if (commitment.cdToken == IConvertibleDepositERC20(address(0)))
             revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
 
         return commitment;
-    }
-
-    // ========== REDEMPTION FLOW ========== //
-
-    modifier onlyValidCommitmentId(address user_, uint16 commitmentId_) {
-        // If the CD token is the zero address, the commitment is invalid
-        if (address(_userCommitments[user_][commitmentId_].cdToken) == address(0))
-            revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
-        _;
     }
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
@@ -316,6 +349,116 @@ abstract contract CDRedemptionVault is
         uint256 amount_
     ) external returns (uint256 reclaimed) {
         reclaimed = reclaimFor(cdToken_, msg.sender, amount_);
+    }
+
+    // ========== YIELD MANAGEMENT ========== //
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    function sweepAllYield() public {
+        // Get all supported CD tokens
+        IConvertibleDepositERC20[] memory cdTokens = CDEPO.getConvertibleDepositTokens();
+
+        // Iterate over all supported CD tokens
+        for (uint256 i; i < cdTokens.length; ++i) {
+            sweepYield(cdTokens[i]);
+        }
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @dev        This function performs the following:
+    ///             - Validates that the CD token is supported
+    ///             - Validates that the caller is permissioned
+    ///             - Computes the amount of yield that would be swept
+    ///             - Reduces the shares tracked by the contract
+    ///             - Transfers the yield to the recipient
+    ///             - Emits an event
+    ///
+    ///             This function reverts if:
+    ///             - The CD token is not supported
+    ///             - The caller is not permissioned
+    ///             - The recipient_ address is the zero address
+    function sweepYield(
+        IConvertibleDepositERC20 cdToken_
+    ) public onlyCDToken(cdToken_) returns (uint256 yieldReserve, uint256 yieldSReserve) {
+        (yieldReserve, yieldSReserve) = previewSweepYield(cdToken_);
+
+        // Skip if there is no yield to sweep
+        if (yieldSReserve == 0) return (0, 0);
+
+        // Reduce the shares tracked by the contract
+        IERC4626 vaultToken = cdToken_.vault();
+        _totalShares[vaultToken] -= yieldSReserve;
+
+        // Transfer the yield to the TRSRY
+        address recipient = address(TRSRY);
+        ERC20(address(vaultToken)).safeTransfer(recipient, yieldSReserve);
+
+        // Emit the event
+        emit YieldSwept(address(vaultToken), recipient, yieldReserve, yieldSReserve);
+
+        return (yieldReserve, yieldSReserve);
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @dev        This function reverts if:
+    ///             - The CD token is not supported
+    function previewSweepYield(
+        IConvertibleDepositERC20 cdToken_
+    ) public view onlyCDToken(cdToken_) returns (uint256 yieldReserve, uint256 yieldSReserve) {
+        IERC4626 vaultToken = cdToken_.vault();
+
+        // The yield is the difference between the quantity of underlying assets in the vault and the quantity of CD tokens issued
+        yieldReserve = vaultToken.previewRedeem(_totalShares[vaultToken]) - cdToken_.totalSupply();
+
+        // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed
+        if (yieldReserve > 0) {
+            yieldSReserve = vaultToken.previewWithdraw(yieldReserve);
+        }
+
+        return (yieldReserve, yieldSReserve);
+    }
+
+    // ========== PERIODIC TASK ========== //
+
+    /// @notice Performs periodic tasks relevant to the redemption vault
+    /// @dev    This function performs the following:
+    ///         - Sweeps all yield from the CD tokens to the TRSRY module
+    ///
+    ///         This function has the following assumptions:
+    ///         - The calling function has already checked that the caller has the HEART_ROLE
+    function _execute() internal {
+        // If the contract is disabled, do nothing
+        if (!isEnabled) return;
+
+        sweepAllYield();
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @inheritdoc IConvertibleDepositTokenConfig
+    function create(
+        IERC4626 vault_,
+        uint8 periodMonths_,
+        uint16 reclaimRate_
+    ) external onlyEnabled onlyAdminRole returns (IConvertibleDepositERC20 cdToken) {
+        cdToken = CDEPO.create(vault_, periodMonths_, reclaimRate_);
+    }
+
+    /// @inheritdoc IConvertibleDepositTokenConfig
+    function setReclaimRate(
+        IConvertibleDepositERC20 cdToken_,
+        uint16 reclaimRate_
+    ) external onlyEnabled onlyAdminRole {
+        CDEPO.setReclaimRate(cdToken_, reclaimRate_);
+    }
+
+    /// @inheritdoc IConvertibleDepositRedemptionVault
+    ///
+    /// @return     shares The amount of vault shares deposited for the CD token, or 0
+    function getVaultShares(
+        IConvertibleDepositERC20 cdToken_
+    ) public view returns (uint256 shares) {
+        return _totalShares[cdToken_.vault()];
     }
 
     // ========== HELPER FUNCTIONS ========== //
