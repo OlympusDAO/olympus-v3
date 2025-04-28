@@ -92,16 +92,34 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
 - Lock their CD tokens into the redemption queue
 - Reclaim the deposited tokens at any time, with a discount.
 
-### Redemption Vault
+### Convertible Deposit Token Manager
 
-CD token holders can redeem the underlying token quantity in full by depositing (committing) their CD tokens to the redemption vault.
+The CD token manager provides lifecycle management for CD tokens:
+
+- Creating CD tokens
+- Minting CD tokens
+- Custodying of deposited funds
+- Redemption of deposited funds
+- Reclaiming of deposited funds (with a haircut)
+- Burning CD tokens
+- Sweeping protocol yield
+
+#### Redemption
+
+CD token holders can redeem the underlying token quantity in full by depositing (committing) their CD tokens to the token manager vault.
 
 - The CD tokens must remain in the vault for the deposit period in order to be redeemed.
 - A user can borrow against the CD tokens while they are in the vault.
 - Withdrawing (uncommitting) CD tokens from the vault will reset the counter.
 - After the CD tokens have been in the vault for the deposit period, they can be redeemed 1:1 for the underlying tokens.
 
-CD token holders have enter the redemption vault through the `CDFacility` or `YieldDepositFacility` policies.
+#### Handling of Deposited Funds
+
+Funds deposited are custodied in the CD token manager, and attributed to the dependent contract (e.g. CDFacility and YieldDepositFacility). This results in the following:
+
+- The deposited funds are separated from the protocol treasury
+- The deposited funds cannot be accessed by other components in the protocol
+- Dependent contracts cannot access funds deposited by other contracts
 
 ## Scope
 
@@ -197,17 +215,20 @@ flowchart TD
   admin((admin)) -- enable --> CDAuctioneer
   admin((admin)) -- enable --> CDClearinghouse
   admin((admin)) -- enable --> CDFacility
+  admin((admin)) -- enable --> CDTokenManager
   admin((admin)) -- enable --> EmissionManager
   admin((admin)) -- restart --> EmissionManager
   emergency((emergency)) -- disable --> CDAuctioneer
   emergency((emergency)) -- disable --> CDClearinghouse
   emergency((emergency)) -- disable --> CDFacility
+  emergency((emergency)) -- disable --> CDTokenManager
   emergency((emergency)) -- disable --> EmissionManager
 
   subgraph Policies
     CDAuctioneer
     CDClearinghouse
     CDFacility
+    CDTokenManager
     EmissionManager
   end
 ```
@@ -224,17 +245,11 @@ sequenceDiagram
     participant Heart
     participant EmissionManager
     participant CDAuctioneer
-    participant CDEPO
-    participant TRSRY
-    participant VaultToken as Vault (ERC4626)
 
     caller->>Heart: beat
     Heart->>EmissionManager: execute
     note over EmissionManager, CDAuctioneer: Once per day
     EmissionManager->>CDAuctioneer: setAuctionParameters
-    Heart->>CDEPO: sweepAllYield
-    CDEPO->>VaultToken: transfer(TRSRY, amount)
-    VaultToken-->>TRSRY: vault tokens
 ```
 
 #### Deposit Creation
@@ -246,6 +261,7 @@ sequenceDiagram
     participant caller
     participant CDAuctioneer
     participant CDFacility
+    participant CDTokenManager
     participant CDPOS
     participant CDEPO
     participant ReserveToken as Reserve (ERC20)
@@ -255,11 +271,12 @@ sequenceDiagram
     caller->>CDAuctioneer: bid(depositAmount)
     CDAuctioneer->>CDAuctioneer: determine conversion price
     CDAuctioneer->>CDFacility: mint(cdToken, caller, depositAmount, conversionPrice, expiry, wrapNft)
-    CDFacility->>CDEPO: mintFor(caller, depositAmount)
-    CDEPO->>ReserveToken: transferFrom(caller, depositAmount)
-    caller-->>CDEPO: reserve tokens
-    CDEPO->>VaultToken: deposit(depositAmount, caller)
-    VaultToken-->>CDEPO: vault tokens
+    CDFacility->>CDTokenManager: mintFor(caller, depositAmount)
+    CDTokenManager->>ReserveToken: transferFrom(caller, depositAmount)
+    caller-->>CDTokenManager: reserve tokens
+    CDTokenManager->>VaultToken: deposit the amount reserve tokens in the vault
+    VaultToken-->>CDTokenManager: vault tokens
+    CDTokenManager->>CDEPO: mintFor(caller, depositAmount)
     CDEPO->>cdReserve: mintFor(caller, depositAmount)
     cdReserve-->>caller: cdReserve tokens
     CDFacility->>CDPOS: mint(caller, cdToken, depositAmount, conversionPrice, expiry, wrapNft)
@@ -274,6 +291,7 @@ Prior to the expiry of the convertible deposit, a deposit owner can convert thei
 sequenceDiagram
     participant caller
     participant CDFacility
+    participant CDTokenManager
     participant CDPOS
     participant CDEPO
     participant TRSRY
@@ -287,12 +305,13 @@ sequenceDiagram
     loop For each position
         CDFacility->>CDPOS: update(positionId, remainingAmount)
     end
-    CDFacility->>CDEPO: redeemFor(caller, amount)
-    caller-->>CDEPO: cdReserve tokens
-    CDEPO->>cdReserve: burns tokens
-    CDEPO->>VaultToken: withdraw(amount, CDFacility, CDEPO)
-    ReserveToken-->>CDEPO: reserve tokens
-    CDFacility->>VaultToken: deposit(amount, TRSRY)
+    CDFacility->>CDTokenManager: redeemFor(caller, amount)
+    CDTokenManager->>CDEPO: burnFrom(caller, amount)
+    CDEPO->>cdReserve: burnFrom(caller, amount)
+    caller-->>cdReserve: burns tokens
+    CDTokenManager->>VaultToken: withdraw amount of reserve tokens to CDFacility
+    ReserveToken-->>CDFacility: reserve tokens
+    CDFacility->>VaultToken: deposit amount of reserve tokens to TRSRY
     VaultToken-->>TRSRY: vault tokens
     CDFacility->>MINTR: mintOhm(caller, convertedAmount)
     MINTR->>OHM: mint(caller, convertedAmount)
@@ -306,24 +325,26 @@ The holder of convertible deposit tokens can reclaim their underlying deposit at
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDFacility
+    participant CDTokenManager
     participant CDEPO
     participant MINTR
     participant ReserveToken
     participant VaultToken
     participant cdReserve
 
-    caller->>CDFacility: reclaim(amount)
-    CDFacility->>CDEPO: reclaimFor(caller, amount)
-    caller-->>CDEPO: cdReserve tokens
+    caller->>CDTokenManager: reclaim(amount)
+    CDTokenManager->>CDEPO: burnFrom(caller, amount)
     CDEPO->>cdReserve: burns tokens
-    CDEPO->>VaultToken: withdraw(discounted amount, CDFacility, CDEPO)
-    ReserveToken-->>CDFacility: reserve tokens
-    CDFacility->>ReserveToken: transfer(discounted amount, caller)
+    caller-->>cdReserve: cdReserve tokens
+    CDTokenManager->>VaultToken: withdraw discounted amount to the CDTokenManager
+    ReserveToken-->>CDTokenManager: reserve tokens
+    CDTokenManager->>ReserveToken: transfer(caller, discountedAmount)
     ReserveToken-->>caller: reserve tokens
 ```
 
 #### Redeem Deposit
+
+TODO commit, uncommit, redeem
 
 After the convertible deposit conversion expiry and before the redemption expiry, a deposit owner can redeem their underlying deposit. The full underlying deposit is returned.
 
@@ -352,6 +373,8 @@ sequenceDiagram
 ```
 
 #### Borrow Against CD Tokens
+
+TODO update
 
 ```mermaid
 sequenceDiagram
