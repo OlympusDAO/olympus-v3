@@ -20,6 +20,7 @@ import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import {Minter} from "src/policies/Minter.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
+// solhint-disable gas-custom-errors
 contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     function _getLzEndpoint() internal view returns (address) {
         return _envAddressNotZero("external.layerzero.endpoint");
