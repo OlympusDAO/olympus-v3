@@ -158,7 +158,7 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     ///         - Emergency
     ///         - TreasuryCustodian
     ///         - Minter (testnet only)
-    function deploy(string calldata chain_) external {
+    function deploy(string calldata chain_, bool shouldDeployOhm_) external {
         _loadEnv(chain_);
 
         bool isTestnet_ = isTestnet(chain_);
@@ -170,17 +170,24 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         vm.startBroadcast();
 
-        // Keep deployer as vault in order to transfer minter role after OHM
-        // token is deployed
-        OlympusAuthority auth = new OlympusAuthority(
-            msg.sender, // governor/owner, will be set to daoMultisig in grantRoles()
-            msg.sender, // guardian, will be set to daoMultisig in grantRoles()
-            msg.sender, // policy, will be set to daoMultisig in grantRoles()
-            msg.sender // vault, will be set to MINTR in grantRoles()
-        );
-        OlympusERC20Token ohm = new OlympusERC20Token(address(auth));
-        console2.log("OlympusAuthority deployed at:", address(auth));
-        console2.log("OlympusERC20Token deployed at:", address(ohm));
+        OlympusAuthority auth;
+        OlympusERC20Token ohm;
+        if (shouldDeployOhm_) {
+            // Keep deployer as vault in order to transfer minter role after OHM
+            // token is deployed
+            auth = new OlympusAuthority(
+                msg.sender, // governor/owner, will be set to daoMultisig in grantRoles()
+                msg.sender, // guardian, will be set to daoMultisig in grantRoles()
+                msg.sender, // policy, will be set to daoMultisig in grantRoles()
+                msg.sender // vault, will be set to MINTR in grantRoles()
+            );
+            ohm = new OlympusERC20Token(address(auth));
+            console2.log("OlympusAuthority deployed at:", address(auth));
+            console2.log("OlympusERC20Token deployed at:", address(ohm));
+        } else {
+            auth = OlympusAuthority(_envAddressNotZero("olympus.legacy.OlympusAuthority"));
+            ohm = OlympusERC20Token(_envAddressNotZero("olympus.legacy.OHM"));
+        }
 
         // Set addresses for dependencies
         Kernel kernel = new Kernel();
