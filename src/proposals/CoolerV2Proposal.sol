@@ -13,6 +13,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
+import {ICoolerLtvOracle} from "src/policies/interfaces/cooler/ICoolerLtvOracle.sol";
 
 // Script
 import {ProposalScript} from "./ProposalScript.sol";
@@ -114,6 +115,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         address coolerV2TreasuryBorrower = addresses.getAddress(
             "olympus-policy-cooler-v2-treasury-borrower"
         );
+        address coolerV2LtvOracle = addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle");
         address hohm = addresses.getAddress("hohm");
         address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
