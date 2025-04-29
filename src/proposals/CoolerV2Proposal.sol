@@ -63,6 +63,17 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 "- [Nethermind Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-04-04%20Cooler%20V2%20-%20Nethermind.pdf)\n",
                 "- [Guardefy Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/audit_cooler_panprog_v2.pdf)\n\n",
                 "The code changes can be viewed at [PR 46](https://github.com/OlympusDAO/olympus-v3/pull/46).\n\n",
+                "## Initial Configuration\n\n",
+                "The Cooler V2 contracts have been configured with the following parameters at the time of deployment:\n\n",
+                "- Initial origination LTV: 2961.64 USDS/gOHM (~ 11 USDS/OHM)\n",
+                "- Bounds check: max change to the origination LTV (using `setOriginationLtvAt()`): 150 USDS\n",
+                "- Bounds check: min time delta required when setting the target origination LTV: 604800 seconds (1 week)\n",
+                "- Bounds check: max (positive) rate of change of Origination LTV allowed: 0.0000042824 USDS/second (0.37 USDS/day)\n",
+                "- Bounds check: max liquidation LTV premium: 333 bps (3.33%)\n",
+                "- Bounds check: min liquidation LTV premium: 100 bps (1%)\n",
+                "- Interest Rate APR: 0.005 (0.5%) per year\n",
+                "- Min debt required to open a loan: 1000 USDS\n",
+                "- Target origination LTV (on 15th May 2026): 3096.375 USDS/gOHM (~ 11.5 USDS/OHM)\n",
                 "## Assumptions\n\n",
                 "- The DLGTE module has been installed into the Kernel\n",
                 "- The LTV Oracle, Treasury Borrower and Mono Cooler policies have been activated in the Kernel\n",
@@ -71,13 +82,14 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 '1. Grant the "admin" role to the OCG timelock\n',
                 '2. Grant the "emergency" role to the Emergency MS and OCG timelock\n',
                 '3. Grant the "treasuryborrower_cooler" role to the Cooler V2 policy\n',
-                "4. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
+                "4. Disable the Cooler V1 Clearinghouse policy\n",
+                "5. Set the target origination LTV for the Cooler V2 policy\n",
+                "6. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
                 string.concat(
-                    "5. Set the maximum delegate addresses for hOHM to ",
+                    "7. Set the maximum delegate addresses for hOHM to ",
                     Strings.toString(MAX_DELEGATE_ADDRESSES),
                     ".\n\n"
                 ),
-                "6. Disable the Cooler V1 Clearinghouse policy\n",
                 "The periphery contracts have the owner set to the DAO MS, and will be enabled before or after this proposal."
             );
     }
@@ -160,17 +172,35 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             console2.log("MonoCooler already has the treasuryborrower_cooler role");
         }
 
+        // STEP 4: Disable the Cooler V1 Clearinghouse policy
+        _pushAction(
+            coolerV1Clearinghouse,
+            abi.encodeWithSelector(Clearinghouse.emergencyShutdown.selector),
+            "Disable Cooler V1 Clearinghouse"
+        );
+
         // Cooler V2 MonoCooler policy does not needed to be enabled
         // Will not function until the treasury borrower policy is enabled
 
-        // STEP 4: Enable the Cooler V2 Treasury Borrower policy
+        // STEP 5: Set the target origination LTV for the Cooler V2 policy
+        _pushAction(
+            coolerV2LtvOracle,
+            abi.encodeWithSelector(
+                ICoolerLtvOracle.setOriginationLtvAt.selector,
+                uint96(3096375000000000000000),
+                uint40(1778803200) // 15th May 2026
+            ),
+            "Set target origination LTV for Cooler V2"
+        );
+
+        // STEP 6: Enable the Cooler V2 Treasury Borrower policy
         _pushAction(
             coolerV2TreasuryBorrower,
             abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode("")),
             "Enable Cooler V2 Treasury Borrower"
         );
 
-        // STEP 5: Set the maximum delegate addresses for the hOHM account
+        // STEP 7: Set the maximum delegate addresses for the hOHM account
         _pushAction(
             coolerV2,
             abi.encodeWithSelector(
@@ -179,13 +209,6 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 MAX_DELEGATE_ADDRESSES
             ),
             "Set max delegate addresses for hOHM"
-        );
-
-        // STEP 6: Disable the Cooler V1 Clearinghouse policy
-        _pushAction(
-            coolerV1Clearinghouse,
-            abi.encodeWithSelector(Clearinghouse.emergencyShutdown.selector),
-            "Disable Cooler V1 Clearinghouse"
         );
     }
 
