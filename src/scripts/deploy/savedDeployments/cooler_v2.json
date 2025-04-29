@@ -12,7 +12,7 @@
                 "initialOriginationLtv": 2961640000000000000000,
                 "maxOriginationLtvDelta": 100000000000000000000,
                 "minOriginationLtvTargetTimeDelta": 604800,
-                "maxOriginationLtvRateOfChange": 8640000000000000000000,
+                "maxOriginationLtvRateOfChange": 1157407407407,
                 "maxLiquidationLtvPremiumBps": 333,
                 "liquidationLtvPremiumBps": 100
             }
