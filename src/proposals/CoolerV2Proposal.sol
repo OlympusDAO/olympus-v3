@@ -12,6 +12,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
+import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 
 // Script
 import {ProposalScript} from "./ProposalScript.sol";
@@ -69,12 +70,14 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 "## Proposal Steps\n\n",
                 '1. Grant the "admin" role to the OCG timelock\n',
                 '2. Grant the "emergency" role to the Emergency MS and OCG timelock\n',
-                "3. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
+                '3. Grant the "treasuryborrower_cooler" role to the Cooler V2 policy\n',
+                "4. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
                 string.concat(
-                    "4. Set the maximum delegate addresses for hOHM to ",
+                    "5. Set the maximum delegate addresses for hOHM to ",
                     Strings.toString(MAX_DELEGATE_ADDRESSES),
                     ".\n\n"
                 ),
+                "6. Disable the Cooler V1 Clearinghouse policy\n",
                 "The periphery contracts have the owner set to the DAO MS, and will be enabled before or after this proposal."
             );
     }
@@ -100,6 +103,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             "olympus-policy-cooler-v2-treasury-borrower"
         );
         address hohm = addresses.getAddress("hohm");
+        address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // STEP 1: Grant the "admin" role to the OCG Timelock, if needed
         if (!roles.hasRole(timelock, bytes32("admin"))) {
@@ -176,6 +180,13 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             ),
             "Set max delegate addresses for hOHM"
         );
+
+        // STEP 6: Disable the Cooler V1 Clearinghouse policy
+        _pushAction(
+            coolerV1Clearinghouse,
+            abi.encodeWithSelector(Clearinghouse.emergencyShutdown.selector),
+            "Disable Cooler V1 Clearinghouse"
+        );
     }
 
     // Executes the proposal actions.
@@ -200,6 +211,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             "olympus-policy-cooler-v2-treasury-borrower"
         );
         address hohm = addresses.getAddress("hohm");
+        address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // Validate that the emergency MS has the emergency role
         require(
@@ -231,6 +243,12 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             IMonoCooler(coolerV2).accountPosition(hohm).maxDelegateAddresses ==
                 MAX_DELEGATE_ADDRESSES,
             "hOHM does not have the updated maximum number of delegate addresses"
+        );
+
+        // Validate that the Cooler V1 Clearinghouse policy is disabled
+        require(
+            Clearinghouse(coolerV1Clearinghouse).active() == false,
+            "Cooler V1 Clearinghouse is not disabled"
         );
     }
 }
