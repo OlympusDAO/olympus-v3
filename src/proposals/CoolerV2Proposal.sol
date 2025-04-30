@@ -213,7 +213,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             "Set max delegate addresses for hOHM"
         );
 
-        // TODO enable migrator?
+        // CoolerV2Migrator is owned by the DAO MS, so does not need to be enabled here
     }
 
     // Executes the proposal actions.
