@@ -722,13 +722,16 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployZeroDistributor(bytes memory args) public returns (address) {
+    function _deployZeroDistributor(bytes memory) public returns (address) {
+        // Validate that staking is deployed
+        require(address(staking) != address(0), "Staking not deployed");
+
         // Deploy ZeroDistributor policy
         vm.broadcast();
         zeroDistributor = new ZeroDistributor(staking);
-        console2.log("ZeroDistributor deployed at:", address(distributor));
+        console2.log("ZeroDistributor deployed at:", address(zeroDistributor));
 
-        return address(distributor);
+        return address(zeroDistributor);
     }
 
     function _deployEmergency(bytes memory args) public returns (address) {
