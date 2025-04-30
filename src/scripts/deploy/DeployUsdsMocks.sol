@@ -67,30 +67,30 @@ contract DeployUsdsMocks is WithEnvironment {
         }
 
         // Mint DAI to the deployer
-        dai.mint(deployer, 2000000e18);
+        dai.mint(deployer, 200000000e18);
 
         // Mint USDS to the deployer
-        usds.mint(deployer, 2000000e18);
+        usds.mint(deployer, 200000000e18);
 
         // Mint sDAI to the deployer
-        dai.approve(address(sDai), 1000000e18);
-        sDai.deposit(1000000e18, deployer);
-        console2.log("Deposited 1000000 DAI for sDAI");
+        dai.approve(address(sDai), 20000000e18);
+        sDai.deposit(20000000e18, deployer);
+        console2.log("Deposited 20000000 DAI for sDAI");
 
         // Mint sDAI to the treasury
-        dai.approve(address(sDai), 1000000e18);
-        sDai.deposit(1000000e18, treasury);
-        console2.log("Deposited 1000000 DAI for sDAI to treasury");
+        dai.approve(address(sDai), 20000000e18);
+        sDai.deposit(20000000e18, treasury);
+        console2.log("Deposited 20000000 DAI for sDAI to treasury");
 
         // Mint sUSDS to the deployer
-        usds.approve(address(sUsds), 1000000e18);
-        sUsds.deposit(1000000e18, deployer);
-        console2.log("Deposited 1000000 USDS for sUSDS");
+        usds.approve(address(sUsds), 20000000e18);
+        sUsds.deposit(20000000e18, deployer);
+        console2.log("Deposited 20000000 USDS for sUSDS");
 
         // Mint sUSDS to the treasury
-        usds.approve(address(sUsds), 1000000e18);
-        sUsds.deposit(1000000e18, treasury);
-        console2.log("Deposited 1000000 USDS for sUSDS to treasury");
+        usds.approve(address(sUsds), 20000000e18);
+        sUsds.deposit(20000000e18, treasury);
+        console2.log("Deposited 20000000 USDS for sUSDS to treasury");
 
         vm.stopBroadcast();
     }
