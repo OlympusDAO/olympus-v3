@@ -8,6 +8,7 @@ import {MockDaiUsds} from "src/test/mocks/MockDaiUsds.sol";
 import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 import {console2} from "forge-std/console2.sol";
 
+//solhint-disable gas-custom-errors
 contract DeployUsdsMocks is WithEnvironment {
     function deploy(string calldata chain_) public {
         _loadEnv(chain_);
