@@ -212,6 +212,8 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             ),
             "Set max delegate addresses for hOHM"
         );
+
+        // TODO enable migrator?
     }
 
     // Executes the proposal actions.
