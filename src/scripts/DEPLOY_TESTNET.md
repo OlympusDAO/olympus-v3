@@ -11,7 +11,8 @@ OHM (and associated contracts) may need to be deployed on testnets. If so, this 
     2. Compile contracts: `yarn run compile`
     3. Set up the environment (using `.env.sample`)
     4. Ensure that `hardhat.config.ts` has the testnet defined
-    5. Run `yarn run deploy:<network>`
+    5. Run `yarn run deploy:<network>` to deploy
+    6. Run `yarn run etherscan:<network>` to verify on Etherscan
 
 3. Record the addresses in `scripts/env.json`
 
@@ -26,3 +27,7 @@ Then run `./shell/L2/grantRoles.sh`.
 Run `./shell/roles/grantRole.sh --role "minter_admin"`.
 
 Run `./shell/mint/mint.sh --category test`.
+
+## Wrapping OHM to gOHM
+
+Run `./shell/mint/stakeToGOhm.sh`.
