@@ -20,11 +20,24 @@ OHM (and associated contracts) may need to be deployed on testnets. If so, this 
 
 After this, the Bophades stack can be deployed (e.g. using `shell/L2/deploy.sh`).
 
+Update env.json with the addresses.
+
 Then run `./shell/L2/grantRoles.sh`.
+
+The following are also likely to be required (deployment and installation):
+
+- Clearinghouse Registry
+- Clearinghouse
+
+## Minting Reserve Tokens
+
+Run `mint()` in `DeployUsdsMocks.sol`
 
 ## Minting OHM
 
 Run `./shell/roles/grantRole.sh --role "minter_admin"`.
+
+Run `./shell/mint/addCategory.sh --category test`.
 
 Run `./shell/mint/mint.sh --category test`.
 
