@@ -15,7 +15,6 @@ import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
@@ -43,7 +42,10 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
 
     // ========== SETUP ========== //
 
-    constructor(address kernel_) Policy(Kernel(kernel_)) {
+    constructor(
+        address kernel_,
+        address tokenManager_
+    ) Policy(Kernel(kernel_)) CDRedemptionVault(tokenManager_) {
         // Disabled by default by PolicyEnabler
     }
 
@@ -51,14 +53,12 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("ROLES");
-        dependencies[1] = toKeycode("CDEPO");
-        dependencies[2] = toKeycode("CDPOS");
-        dependencies[3] = toKeycode("TRSRY");
+        dependencies[1] = toKeycode("CDPOS");
+        dependencies[2] = toKeycode("TRSRY");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
-        CDPOS = CDPOSv1(getModuleAddress(dependencies[2]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
+        CDPOS = CDPOSv1(getModuleAddress(dependencies[1]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
     }
 
     /// @inheritdoc Policy
@@ -68,13 +68,10 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](3);
-        permissions[0] = Permissions(cdepoKeycode, CDEPO.mintFor.selector);
-        permissions[1] = Permissions(cdepoKeycode, CDEPO.burnFrom.selector);
-        permissions[2] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions = new Permissions[](1);
+        permissions[0] = Permissions(cdposKeycode, CDPOS.mint.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -97,7 +94,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     ) external nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will validate that the CD token is supported, and transfer the deposit token
-        _mintFor(cdToken_, msg.sender, amount_);
+        _depositFor(cdToken_, msg.sender, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
@@ -142,7 +139,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         currentCDToken = position.convertibleDepositToken;
         if (previousCDToken_ == address(0)) {
             // Validate that the CD token is supported
-            if (!CDEPO.isConvertibleDepositToken(currentCDToken))
+            if (!TOKEN_MANAGER.isConvertibleDepositToken(currentCDToken))
                 revert YDF_InvalidToken(positionId_, currentCDToken);
         } else if (previousCDToken_ != currentCDToken) {
             revert YDF_InvalidArgs("multiple CD tokens");
@@ -262,12 +259,16 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             }
         }
 
-        // Withdraw the yield to the owner
-        // msg.sender is ok here as _previewHarvest validates that the caller is the owner of the position
-        _withdraw(cdToken, msg.sender, yieldMinusFee);
+        // Withdraw the yield from the token manager
+        // TODO this will burn CD tokens, we need another approach
+        _withdrawFor(cdToken, msg.sender, yieldMinusFee + yieldFee);
 
-        // Withdraw the yield fee to the treasury
-        _withdraw(cdToken, address(TRSRY), yieldFee);
+        // Transfer the yield to the owner
+        // msg.sender is ok here as _previewHarvest validates that the caller is the owner of the position
+        _transferUnderlyingTo(cdToken, msg.sender, yieldMinusFee);
+
+        // Deposit the yield fee into the vault on behalf of the TRSRY
+        _depositIntoVaultFor(cdToken, address(TRSRY), yieldFee);
 
         // Emit event
         emit Harvest(address(cdToken.asset()), msg.sender, yieldMinusFee);
@@ -325,11 +326,11 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         uint48 snapshotKey = _getSnapshotKey(uint48(block.timestamp));
 
         // Get all supported vault tokens
-        IERC4626[] memory vaultTokens = CDEPO.getVaultTokens();
+        IConvertibleDepositERC20[] memory cdTokens = TOKEN_MANAGER.getConvertibleDepositTokens();
 
         // Store snapshots for each vault
-        for (uint256 i; i < vaultTokens.length; ++i) {
-            IERC4626 vault = vaultTokens[i];
+        for (uint256 i; i < cdTokens.length; ++i) {
+            IERC4626 vault = cdTokens[i].vault();
 
             // Only store if we haven't stored for this interval
             if (vaultRateSnapshots[vault][snapshotKey] == 0) {

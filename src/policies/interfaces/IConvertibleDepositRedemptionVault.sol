@@ -71,17 +71,6 @@ interface IConvertibleDepositRedemptionVault {
     /// @param  amount_     The amount of CD tokens to burn
     function burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) external;
 
-    /// @notice Burn CD tokens from `account_`
-    ///
-    /// @param  cdToken_    The address of the CD token
-    /// @param  account_    The address of the account to burn the CD tokens from
-    /// @param  amount_     The amount of CD tokens to burn
-    function burnFrom(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
-        uint256 amount_
-    ) external;
-
     // ========== REDEMPTION FLOW ========== //
 
     /// @notice Gets the details of a user's redeem commitment
@@ -131,11 +120,10 @@ interface IConvertibleDepositRedemptionVault {
     /// @param  cdToken_        The address of the CD token
     /// @param  amount_         The amount of CD tokens to reclaim
     /// @return reclaimed       The amount of deposit token returned to the caller
-    /// @return cdTokenSpender  The address that will spend the CD tokens. The caller must have approved this address to spend the total amount of CD tokens.
     function previewReclaim(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
-    ) external view returns (uint256 reclaimed, address cdTokenSpender);
+    ) external view returns (uint256 reclaimed);
 
     /// @notice Reclaims CD tokens, after applying a discount
     ///         CD tokens can be reclaimed at any time.

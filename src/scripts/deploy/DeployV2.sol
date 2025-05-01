@@ -77,6 +77,7 @@ import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol
 import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
+import {CDTokenManager} from "policies/CDTokenManager.sol";
 import {CDAuctioneer} from "policies/CDAuctioneer.sol";
 import {CDFacility} from "policies/CDFacility.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
@@ -128,6 +129,7 @@ contract OlympusDeploy is Script {
     EmissionManager public emissionManager;
     CDAuctioneer public cdAuctioneer;
     CDFacility public cdFacility;
+    CDTokenManager public cdTokenManager;
 
     /// Other Olympus contracts
     OlympusAuthority public burnerReplacementAuthority;
@@ -251,6 +253,9 @@ contract OlympusDeploy is Script {
             ._deployConvertibleDepositAuctioneer
             .selector;
         selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
+        selectorMap["ConvertibleDepositTokenManager"] = this
+            ._deployConvertibleDepositTokenManager
+            .selector;
 
         // Governance
         selectorMap["Timelock"] = this._deployTimelock.selector;
@@ -349,6 +354,9 @@ contract OlympusDeploy is Script {
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
         cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
         cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
+        cdTokenManager = CDTokenManager(
+            envAddress("olympus.policies.ConvertibleDepositTokenManager")
+        );
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -1308,6 +1316,21 @@ contract OlympusDeploy is Script {
         return address(CDPOS);
     }
 
+    function _deployConvertibleDepositTokenManager(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositTokenManager
+
+        // Log dependencies
+        console2.log("ConvertibleDepositTokenManager parameters:");
+        console2.log("   kernel", address(kernel));
+
+        // Deploy ConvertibleDepositTokenManager
+        vm.broadcast();
+        cdTokenManager = new CDTokenManager(address(kernel));
+        console2.log("ConvertibleDepositTokenManager deployed at:", address(cdTokenManager));
+
+        return address(cdTokenManager);
+    }
+
     function _deployConvertibleDepositAuctioneer(bytes calldata args_) public returns (address) {
         // No additional arguments for ConvertibleDepositAuctioneer
         uint8 depositPeriodMonths = abi.decode(args_, (uint8));
@@ -1338,10 +1361,11 @@ contract OlympusDeploy is Script {
         // Log dependencies
         console2.log("ConvertibleDepositFacility parameters:");
         console2.log("   kernel", address(kernel));
+        console2.log("   cdTokenManager", address(cdTokenManager));
 
         // Deploy ConvertibleDepositFacility
         vm.broadcast();
-        cdFacility = new CDFacility(address(kernel));
+        cdFacility = new CDFacility(address(kernel), address(cdTokenManager));
         console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
 
         return address(cdFacility);
