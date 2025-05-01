@@ -10,21 +10,19 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
-import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {IConvertibleDepositTokenManager} from "src/policies/interfaces/IConvertibleDepositTokenManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
 
 /// @title YieldDepositFacility
-contract YieldDepositFacility is Policy, IPeriodicTask, IYieldDepositFacility {
+contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, CDRedemptionVault {
     // ========== STATE VARIABLES ========== //
-
-    /// @notice The CD token manager
-    IConvertibleDepositTokenManager public immutable CD_TOKEN_MANAGER;
 
     /// @notice The CDPOS module.
     CDPOSv1 public CDPOS;
@@ -45,26 +43,22 @@ contract YieldDepositFacility is Policy, IPeriodicTask, IYieldDepositFacility {
 
     // ========== SETUP ========== //
 
-    constructor(address kernel_, address cdTokenManager_) Policy(Kernel(kernel_)) {
-        // Validate that the CD token manager is not the zero address
-        if (cdTokenManager_ == address(0)) revert YDF_InvalidArgs("cdTokenManager");
-
-        // Set the CD token manager
-        CD_TOKEN_MANAGER = IConvertibleDepositTokenManager(cdTokenManager_);
-
+    constructor(address kernel_) Policy(Kernel(kernel_)) {
         // Disabled by default by PolicyEnabler
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("CDEPO");
         dependencies[2] = toKeycode("CDPOS");
         dependencies[3] = toKeycode("TRSRY");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        CDPOS = CDPOSv1(getModuleAddress(dependencies[1]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
+        CDPOS = CDPOSv1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
     }
 
     /// @inheritdoc Policy
@@ -74,10 +68,13 @@ contract YieldDepositFacility is Policy, IPeriodicTask, IYieldDepositFacility {
         override
         returns (Permissions[] memory permissions)
     {
+        Keycode cdepoKeycode = toKeycode("CDEPO");
         Keycode cdposKeycode = toKeycode("CDPOS");
 
-        permissions = new Permissions[](1);
-        permissions[1] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions = new Permissions[](3);
+        permissions[0] = Permissions(cdepoKeycode, CDEPO.mintFor.selector);
+        permissions[1] = Permissions(cdepoKeycode, CDEPO.burnFrom.selector);
+        permissions[2] = Permissions(cdposKeycode, CDPOS.mint.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -100,7 +97,7 @@ contract YieldDepositFacility is Policy, IPeriodicTask, IYieldDepositFacility {
     ) external nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will validate that the CD token is supported, and transfer the deposit token
-        CD_TOKEN_MANAGER.mintFor(cdToken_, msg.sender, amount_);
+        _mintFor(cdToken_, msg.sender, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
@@ -120,8 +117,6 @@ contract YieldDepositFacility is Policy, IPeriodicTask, IYieldDepositFacility {
     }
 
     // ========== YIELD FUNCTIONS ========== //
-
-    // TODO shift yield functions to use CDTokenManager
 
     function _previewHarvest(
         address account_,
@@ -318,8 +313,7 @@ contract YieldDepositFacility is Policy, IPeriodicTask, IYieldDepositFacility {
 
     // ========== PERIODIC TASK ========== //
 
-    /// @inheritdoc IPeriodicTask
-    /// @dev    Stores periodic snapshots of the conversion rate for all supported vaults
+    /// @notice Stores periodic snapshots of the conversion rate for all supported vaults
     /// @dev    This function is called by the Heart contract every 8 hours
     /// @dev    The timestamp is rounded down to the nearest 8-hour interval
     /// @dev    No cleanup is performed as snapshots are needed for active deposits

@@ -266,6 +266,86 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         return actualAmount;
     }
 
+    // ========== YIELD MANAGER ========== //
+
+    /// @inheritdoc CDEPOv1
+    function sweepAllYield(address recipient_) external override permissioned {
+        // Iterate over all supported CD tokens
+        IConvertibleDepositERC20[] memory cdTokens = _cdTokens;
+        for (uint256 i; i < cdTokens.length; ++i) {
+            sweepYield(cdTokens[i], recipient_);
+        }
+    }
+
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function performs the following:
+    ///             - Validates that the CD token is supported
+    ///             - Validates that the caller is permissioned
+    ///             - Computes the amount of yield that would be swept
+    ///             - Reduces the shares tracked by the contract
+    ///             - Transfers the yield to the recipient
+    ///             - Emits an event
+    ///
+    ///             This function reverts if:
+    ///             - The CD token is not supported
+    ///             - The caller is not permissioned
+    ///             - The recipient_ address is the zero address
+    function sweepYield(
+        IConvertibleDepositERC20 cdToken_,
+        address recipient_
+    )
+        public
+        override
+        permissioned
+        onlyCDToken(cdToken_)
+        returns (uint256 yieldReserve, uint256 yieldSReserve)
+    {
+        // TODO shift to CDRedemptionVault
+        // Validate that the recipient_ address is not the zero address
+        if (recipient_ == address(0)) revert CDEPO_InvalidArgs("recipient");
+
+        (yieldReserve, yieldSReserve) = previewSweepYield(cdToken_);
+
+        // Skip if there is no yield to sweep
+        if (yieldSReserve == 0) return (0, 0);
+
+        // Reduce the shares tracked by the contract
+        _totalShares[cdToken_.vault()] -= yieldSReserve;
+
+        // Transfer the yield to the recipient
+        ERC4626(address(cdToken_.vault())).safeTransfer(recipient_, yieldSReserve);
+
+        // Emit the event
+        emit YieldSwept(address(cdToken_.vault()), recipient_, yieldReserve, yieldSReserve);
+
+        return (yieldReserve, yieldSReserve);
+    }
+
+    /// @inheritdoc CDEPOv1
+    /// @dev        This function reverts if:
+    ///             - The CD token is not supported
+    function previewSweepYield(
+        IConvertibleDepositERC20 cdToken_
+    )
+        public
+        view
+        override
+        onlyCDToken(cdToken_)
+        returns (uint256 yieldReserve, uint256 yieldSReserve)
+    {
+        IERC4626 vaultToken = cdToken_.vault();
+
+        // The yield is the difference between the quantity of underlying assets in the vault and the quantity of CD tokens issued
+        yieldReserve = vaultToken.previewRedeem(_totalShares[vaultToken]) - cdToken_.totalSupply();
+
+        // The yield in sReserve terms is the quantity of vault shares that would be burnt if yieldReserve was redeemed
+        if (yieldReserve > 0) {
+            yieldSReserve = vaultToken.previewWithdraw(yieldReserve);
+        }
+
+        return (yieldReserve, yieldSReserve);
+    }
+
     // ========== ADMIN ========== //
 
     function _setReclaimRate(IConvertibleDepositERC20 cdToken_, uint16 newReclaimRate_) internal {
@@ -516,5 +596,14 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         tokenDebt = _debt[vaultToken_][borrower_];
 
         return tokenDebt;
+    }
+
+    /// @inheritdoc CDEPOv1
+    ///
+    /// @return     shares The amount of shares, or 0
+    function getVaultShares(IERC4626 vaultToken_) external view override returns (uint256 shares) {
+        shares = _totalShares[vaultToken_];
+
+        return shares;
     }
 }

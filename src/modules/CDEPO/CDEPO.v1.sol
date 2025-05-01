@@ -15,6 +15,14 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @notice Emitted when the reclaim rate is updated
     event ReclaimRateUpdated(address indexed cdToken, uint16 newReclaimRate);
 
+    /// @notice Emitted when the yield is swept
+    event YieldSwept(
+        address indexed vaultToken,
+        address indexed receiver,
+        uint256 reserveAmount,
+        uint256 sReserveAmount
+    );
+
     /// @notice Emitted when the caller borrows the underlying asset
     event DebtIncurred(address indexed vaultToken, address indexed borrower, uint256 amount);
 
@@ -73,6 +81,46 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     /// @return debtAmount  The remaining debt amount
     function reduceDebt(IERC4626 vaultToken_, uint256 amount_) external virtual returns (uint256);
 
+    // ========== YIELD MANAGEMENT ========== //
+
+    /// @notice Claim the yield accrued on all supported tokens
+    /// @dev    The implementing function should perform the following:
+    ///         - Iterate over all supported tokens
+    ///         - Calls `sweepYield` for each token
+    ///
+    /// @param  to_ The address to sweep the yield to
+    function sweepAllYield(address to_) external virtual;
+
+    /// @notice Claim the yield accrued for a CD token
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the CD token is supported
+    ///         - Validates that the caller is permissioned
+    ///         - Withdrawing the yield from the sReserve token
+    ///         - Transferring the yield to the caller
+    ///         - Emitting an event
+    ///
+    /// @param  cdToken_        The CD token to sweep yield for
+    /// @param  to_             The address to sweep the yield to
+    /// @return yieldReserve    The amount of reserve token swept
+    /// @return yieldSReserve   The amount of sReserve token swept
+    function sweepYield(
+        IConvertibleDepositERC20 cdToken_,
+        address to_
+    ) external virtual returns (uint256, uint256);
+
+    /// @notice Preview the amount of yield that would be swept
+    /// @dev    The implementing function should perform the following:
+    ///         - Validates that the CD token is supported
+    ///         - Computes the amount of yield that would be swept
+    ///         - Returns the computed amount
+    ///
+    /// @param  cdToken_        The CD token to check
+    /// @return yieldReserve    The amount of reserve token that would be swept
+    /// @return yieldSReserve   The amount of sReserve token that would be swept
+    function previewSweepYield(
+        IConvertibleDepositERC20 cdToken_
+    ) external view virtual returns (uint256 yieldReserve, uint256 yieldSReserve);
+
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Get the debt amount for a vault token and borrower
@@ -89,6 +137,12 @@ abstract contract CDEPOv1 is Module, IConvertibleDepository {
     ///
     /// @return vaultTokens The list of supported vault tokens
     function getVaultTokens() external view virtual returns (IERC4626[] memory vaultTokens);
+
+    /// @notice Get the amount of vault shares managed by the contract
+    ///
+    /// @param  vaultToken_     The vault token to get shares for
+    /// @return shares          The amount of vault shares managed by the contract
+    function getVaultShares(IERC4626 vaultToken_) external view virtual returns (uint256 shares);
 
     // ========== ADMIN FUNCTIONS ========== //
 

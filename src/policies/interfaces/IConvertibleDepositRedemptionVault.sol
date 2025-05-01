@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
-/// @title Convertible Deposit Token Manager
-/// @notice Defines an interface for a policy that manages convertible deposit tokens and their lifecycle
-interface IConvertibleDepositTokenManager {
+/// @title  IConvertibleDepositRedemptionVault
+/// @notice Interface for a contract that can manage the redemption of convertible deposit (CD) tokens
+interface IConvertibleDepositRedemptionVault {
     // ========== EVENTS ========== //
 
     event Committed(
@@ -37,13 +36,6 @@ interface IConvertibleDepositTokenManager {
         uint256 forfeitedAmount
     );
 
-    event YieldSwept(
-        address indexed vaultToken,
-        address indexed receiver,
-        uint256 reserveAmount,
-        uint256 sReserveAmount
-    );
-
     // ========== ERRORS ========== //
 
     error CDRedemptionVault_InvalidCDToken(address cdToken);
@@ -60,38 +52,18 @@ interface IConvertibleDepositTokenManager {
 
     // ========== DATA STRUCTURES ========== //
 
-    /// @notice Data structure for a user commitment to redeem a CD token
+    /// @notice Data structure for a commitment to redeem a CD token
     ///
     /// @param  cdToken         The address of the CD token
     /// @param  amount          The amount of CD tokens committed
     /// @param  redeemableAt    The timestamp at which the commitment can be redeemed
-    struct UserRedeemCommitment {
+    struct UserCommitment {
         IConvertibleDepositERC20 cdToken;
         uint256 amount;
         uint48 redeemableAt;
     }
 
     // ========== MINT/BURN ========== //
-
-    /// @notice Mint CD tokens for the caller
-    ///
-    /// @param  cdToken_    The address of the CD token
-    /// @param  amount_     The amount of CD tokens to mint
-    function mint(
-        IConvertibleDepositERC20 cdToken_,
-        uint256 amount_
-    ) external;
-
-    /// @notice Mint CD tokens for `account_`
-    ///
-    /// @param  cdToken_    The address of the CD token
-    /// @param  account_    The address of the account to mint the CD tokens to
-    /// @param  amount_     The amount of CD tokens to mint
-    function mintFor(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
-        uint256 amount_
-    ) external;
 
     /// @notice Burn CD tokens from the caller
     ///
@@ -189,75 +161,4 @@ interface IConvertibleDepositTokenManager {
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external returns (uint256 reclaimed);
-
-    // ========== YIELD MANAGEMENT ========== //
-
-    /// @notice Claim the yield accrued on all supported tokens
-    /// @dev    The implementing function should perform the following:
-    ///         - Iterate over all supported tokens
-    ///         - Calls `sweepYield` for each token
-    function sweepAllYield() external;
-
-    /// @notice Claim the yield accrued for a CD token
-    /// @dev    The implementing function should perform the following:
-    ///         - Validates that the CD token is supported
-    ///         - Validates that the caller is permissioned
-    ///         - Withdrawing the yield from the sReserve token
-    ///         - Transferring the yield to the caller
-    ///         - Emitting an event
-    ///
-    /// @param  cdToken_        The CD token to sweep yield for
-    /// @return yieldReserve    The amount of reserve token swept
-    /// @return yieldSReserve   The amount of sReserve token swept
-    function sweepYield(
-        IConvertibleDepositERC20 cdToken_
-    ) external returns (uint256 yieldReserve, uint256 yieldSReserve);
-
-    /// @notice Preview the amount of yield that would be swept
-    /// @dev    The implementing function should perform the following:
-    ///         - Validates that the CD token is supported
-    ///         - Computes the amount of yield that would be swept
-    ///         - Returns the computed amount
-    ///
-    /// @param  cdToken_        The CD token to check
-    /// @return yieldReserve    The amount of reserve token that would be swept
-    /// @return yieldSReserve   The amount of sReserve token that would be swept
-    function previewSweepYield(
-        IConvertibleDepositERC20 cdToken_
-    ) external view returns (uint256 yieldReserve, uint256 yieldSReserve);
-
-    // ========== ADMIN ========== //
-
-    /// @notice Creates a new CD token
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Creating a new CD token
-    ///         - Emitting an event
-    ///
-    /// @param  vault_          The address of the vault to use for the CD token
-    /// @param  periodMonths_   The period of the CD token
-    /// @param  reclaimRate_    The reclaim rate to set for the CD token
-    /// @return cdToken         The address of the new CD token
-    function create(
-        IERC4626 vault_,
-        uint8 periodMonths_,
-        uint16 reclaimRate_
-    ) external returns (IConvertibleDepositERC20 cdToken);
-
-    /// @notice Sets the reclaim rate for a CD token
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Setting the reclaim rate for the CD token
-    ///
-    /// @param  cdToken_      The address of the CD token
-    /// @param  reclaimRate_  The reclaim rate to set
-    function setReclaimRate(IConvertibleDepositERC20 cdToken_, uint16 reclaimRate_) external;
-
-    /// @notice Gets the amount of vault shares deposited for a convertible deposit token
-    ///
-    /// @param  cdToken_ The address of the CD token
-    /// @return shares   The amount of shares
-    function getVaultShares(
-        IConvertibleDepositERC20 cdToken_
-    ) external view returns (uint256 shares);
 }

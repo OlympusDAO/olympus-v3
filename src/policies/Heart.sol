@@ -20,6 +20,7 @@ import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
 // Kernel
@@ -52,6 +53,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Modules
     PRICEv1 internal PRICE;
     MINTRv1 internal MINTR;
+    CDEPOv1 internal CDEPO;
     TRSRYv1 internal TRSRY;
 
     // Policies
@@ -96,23 +98,31 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
-        dependencies[3] = toKeycode("TRSRY");
+        dependencies[3] = toKeycode("CDEPO");
+        dependencies[4] = toKeycode("TRSRY");
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
+        CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[4]));
 
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 CDEPO_MAJOR, ) = CDEPO.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1, 1]);
-        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
-            revert Policy_WrongModuleVersion(expected);
+        bytes memory expected = abi.encode([1, 1, 1, 1, 1]);
+        if (
+            MINTR_MAJOR != 1 ||
+            PRICE_MAJOR != 1 ||
+            ROLES_MAJOR != 1 ||
+            CDEPO_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
 
         // Sync beat with distributor if called from kernel
         if (msg.sender == address(kernel)) {
@@ -133,6 +143,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepAllYield.selector);
     }
 
     /// @notice Returns the version of the policy.
@@ -171,7 +182,8 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger emission manager
         emissionManager.execute();
 
-        // TODO add in IPeriodicTask.execute()
+        // Sweep yield from CDEPO into TRSRY
+        CDEPO.sweepAllYield(address(TRSRY));
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
