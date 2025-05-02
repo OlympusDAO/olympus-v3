@@ -93,7 +93,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will validate that the CD token is supported, and transfer the deposit token
-        _depositFor(cdToken_, account_, amount_);
+        _mintFor(cdToken_, account_, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
@@ -243,7 +243,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         _pullCDToken(cdToken, cdTokenIn);
 
         // Withdraw the underlying asset from the token manager to this contract
-        _withdrawFor(cdToken, msg.sender, cdTokenIn);
+        _burn(cdToken, cdTokenIn);
 
         // Deposit the underlying asset into the vault on behalf of the TRSRY
         _depositIntoVaultFor(cdToken, address(TRSRY), cdTokenIn);

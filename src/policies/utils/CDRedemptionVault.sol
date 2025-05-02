@@ -59,14 +59,14 @@ abstract contract CDRedemptionVault is
 
     // ========== MINT/BURN ========== //
 
-    /// @notice Deposit the deposit token for `account_` in exchange for CD tokens
-    function _depositFor(
+    /// @notice Mint the CD token in exchange for the deposit token on behalf of `account_`
+    function _mintFor(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_
     ) internal {
         // Validate that the amount is greater than 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(account_);
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
         // Transfer asset from account
         ERC20 asset = ERC20(address(cdToken_.asset()));
@@ -105,20 +105,25 @@ abstract contract CDRedemptionVault is
         cdToken_.vault().deposit(amount_, to_);
     }
 
-    /// @notice Withdraw the deposit token for `account_` in exchange for CD tokens
+    function _withdraw(IConvertibleDepositERC20 cdToken_, uint256 amount_) internal {
+        // Validate that the amount is greater than 0
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
+
+        // Withdraw the underlying asset from the token manager
+        // It will validate that the CD token is supported and solvent
+        TOKEN_MANAGER.withdraw(cdToken_, amount_);
+    }
+
+    /// @notice Burns the CD tokens and recieves the deposit token
     /// @dev    This function will result in `amount_` worth of the deposit token being present in this contract.
     ///
     ///         Assumptions:
     ///         - `amount_` worth of the CD token has already been transferred to this contract
-    function _withdrawFor(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
-        uint256 amount_
-    ) internal {
+    function _burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) internal {
         // Validate that the amount is greater than 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(account_);
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
-        // Withdraw the underlying asset from the token manager
+        // Burn the CD tokens and recieve the deposit token
         ERC20(address(cdToken_)).safeApprove(address(TOKEN_MANAGER), amount_);
         TOKEN_MANAGER.burn(cdToken_, amount_);
     }
@@ -129,7 +134,7 @@ abstract contract CDRedemptionVault is
         _pullCDToken(cdToken_, amount_);
 
         // Withdraw the underlying asset from the token manager
-        _withdrawFor(cdToken_, msg.sender, amount_);
+        _burn(cdToken_, amount_);
 
         // Deposit the underlying asset into the vault on behalf of the TRSRY
         _depositIntoVaultFor(cdToken_, address(TRSRY), amount_);
@@ -181,7 +186,7 @@ abstract contract CDRedemptionVault is
         uint256 amount_
     ) external nonReentrant onlyEnabled returns (uint16 commitmentId) {
         // Check that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
         // Create a User Commitment
         commitmentId = _userCommitmentCount[msg.sender]++;
@@ -220,7 +225,7 @@ abstract contract CDRedemptionVault is
         UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
 
         // Check that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
         // Check that the amount is not greater than the commitment
         if (amount_ > commitment.amount)
@@ -267,7 +272,7 @@ abstract contract CDRedemptionVault is
         commitment.amount = 0;
 
         // Withdraw the underlying asset from the token manager
-        _withdrawFor(commitment.cdToken, msg.sender, commitmentAmount);
+        _burn(commitment.cdToken, commitmentAmount);
 
         // Transfer the underlying asset to the caller
         _transferUnderlyingTo(commitment.cdToken, msg.sender, commitmentAmount);
@@ -288,7 +293,7 @@ abstract contract CDRedemptionVault is
         uint256 amount_
     ) public view onlyEnabled returns (uint256 reclaimed) {
         // Validate that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
+        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
@@ -298,7 +303,7 @@ abstract contract CDRedemptionVault is
         );
 
         // If the reclaimed amount is 0, revert
-        if (reclaimed == 0) revert CDRedemptionVault_ZeroAmount(msg.sender);
+        if (reclaimed == 0) revert CDRedemptionVault_ZeroAmount();
 
         return reclaimed;
     }
@@ -323,7 +328,7 @@ abstract contract CDRedemptionVault is
         _pullCDToken(cdToken_, amount_);
 
         // Withdraw all of the underlying asset from the token manager
-        _withdrawFor(cdToken_, account_, amount_);
+        _burn(cdToken_, amount_);
 
         // Transfer discounted amount of the underlying asset to the caller
         _transferUnderlyingTo(cdToken_, account_, discountedAssetsOut);

@@ -94,7 +94,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     ) external nonReentrant onlyEnabled returns (uint256 positionId) {
         // Mint the CD token to the account
         // This will validate that the CD token is supported, and transfer the deposit token
-        _depositFor(cdToken_, msg.sender, amount_);
+        _mintFor(cdToken_, msg.sender, amount_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
@@ -260,8 +260,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         }
 
         // Withdraw the yield from the token manager
-        // TODO this will burn CD tokens, we need another approach
-        _withdrawFor(cdToken, msg.sender, yieldMinusFee + yieldFee);
+        _withdraw(cdToken, yieldMinusFee + yieldFee);
 
         // Transfer the yield to the owner
         // msg.sender is ok here as _previewHarvest validates that the caller is the owner of the position

@@ -14,6 +14,21 @@ interface IConvertibleDepositTokenManager {
 
     event Burn(address indexed account, address indexed cdToken, uint256 amount, uint256 shares);
 
+    event Withdraw(
+        address indexed account,
+        address indexed cdToken,
+        uint256 amount,
+        uint256 shares
+    );
+
+    // ========== ERRORS ========== //
+
+    error ConvertibleDepositTokenManager_Insolvent(
+        address cdToken,
+        uint256 sharesRequired,
+        uint256 sharesDeposited
+    );
+
     // ========== MINT/BURN FUNCTIONS ========== //
 
     /// @notice Mints the given amount of the CD token in exchange for the underlying asset
@@ -27,6 +42,21 @@ interface IConvertibleDepositTokenManager {
     /// @param  amount_       The amount to mint
     /// @return shares        The number of vault shares equivalent to the deposited amount
     function mint(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external returns (uint256 shares);
+
+    /// @notice Withdraws the given amount of the underlying asset
+    ///         This does not burn CD tokens, but should reduce the amount of shares the caller has in the vault.
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Transferring the underlying asset from the contract to the caller
+    ///         - Updating the amount of deposited funds
+    ///
+    /// @param  cdToken_      The CD token to withdraw from
+    /// @param  amount_       The amount to withdraw
+    /// @return shares        The number of vault shares equivalent to the withdrawn amount
+    function withdraw(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external returns (uint256 shares);

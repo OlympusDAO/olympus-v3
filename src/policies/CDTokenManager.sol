@@ -32,8 +32,12 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     /// @notice The CDEPO module
     CDEPOv1 public CDEPO;
 
-    /// @notice The mapping of depositors and vaults to the number of shares they have deposited
+    /// @notice Maps depositors and vaults to the number of shares they have deposited
     mapping(address => mapping(IERC4626 => uint256)) internal _depositedShares;
+
+    /// @notice Maps depositors and CD tokens to the number of CD tokens they have minted
+    /// @dev    This is used to ensure that the CD token is redeemable/solvent
+    mapping(address => mapping(IConvertibleDepositERC20 => uint256)) internal _cdTokenSupply;
 
     /// @notice The list of depositors
     address[] internal _depositors;
@@ -115,6 +119,9 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         // Update the shares deposited for the caller
         _depositedShares[msg.sender][vault] += shares;
 
+        // Update the CD token supply for the caller
+        _cdTokenSupply[msg.sender][cdToken_] += amount_;
+
         // Add the caller to the list of depositors if they are not already in it
         _addDepositor(msg.sender);
 
@@ -127,6 +134,35 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     }
 
     /// @inheritdoc IConvertibleDepositTokenManager
+    /// @dev        Care must be taken to ensure that
+    function withdraw(
+        IConvertibleDepositERC20 cdToken_,
+        uint256 amount_
+    ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
+        // Withdraw the funds from the vault
+        IERC4626 vault = cdToken_.vault();
+        shares = vault.withdraw(amount_, msg.sender, address(this));
+
+        // Update the shares deposited for the caller
+        _depositedShares[msg.sender][vault] -= shares;
+
+        // The CD token supply is not adjusted here, as there is no minting/burning of CD tokens
+
+        // Post-withdrawal, there should be at least as many underlying asset tokens as there are CD tokens, otherwise the CD token is not redeemable
+        uint256 sharesRequired = vault.previewDeposit(_cdTokenSupply[msg.sender][cdToken_]);
+        if (sharesRequired > _depositedShares[msg.sender][vault]) {
+            revert ConvertibleDepositTokenManager_Insolvent(
+                address(cdToken_),
+                sharesRequired,
+                _depositedShares[msg.sender][vault]
+            );
+        }
+
+        // Emit an event
+        emit Withdraw(msg.sender, address(cdToken_), amount_, shares);
+    }
+
+    /// @inheritdoc IConvertibleDepositTokenManager
     function burn(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
@@ -134,14 +170,15 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         // Burn the CD token from the caller
         CDEPO.burnFrom(cdToken_, msg.sender, amount_);
 
-        // TODO split this into withdraw and burn? Allows for claiming yield.
-
         // Withdraw the funds from the vault
         IERC4626 vault = cdToken_.vault();
         shares = vault.withdraw(amount_, msg.sender, address(this));
 
         // Update the shares deposited for the caller
         _depositedShares[msg.sender][vault] -= shares;
+
+        // Update the CD token supply for the caller
+        _cdTokenSupply[msg.sender][cdToken_] -= amount_;
 
         // Emit an event
         emit Burn(msg.sender, address(cdToken_), amount_, shares);
