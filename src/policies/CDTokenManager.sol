@@ -99,7 +99,7 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     }
 
     /// @inheritdoc IConvertibleDepositTokenManager
-    function deposit(
+    function mint(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
@@ -123,11 +123,11 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         CDEPO.mintFor(cdToken_, msg.sender, amount_);
 
         // Emit an event
-        emit Deposit(msg.sender, address(cdToken_), amount_, shares);
+        emit Mint(msg.sender, address(cdToken_), amount_, shares);
     }
 
     /// @inheritdoc IConvertibleDepositTokenManager
-    function withdraw(
+    function burn(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
@@ -144,7 +144,7 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         _depositedShares[msg.sender][vault] -= shares;
 
         // Emit an event
-        emit Withdrawal(msg.sender, address(cdToken_), amount_, shares);
+        emit Burn(msg.sender, address(cdToken_), amount_, shares);
     }
 
     /// @inheritdoc IConvertibleDepositTokenManager

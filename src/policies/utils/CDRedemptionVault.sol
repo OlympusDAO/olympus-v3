@@ -75,7 +75,7 @@ abstract contract CDRedemptionVault is
         // Deposit into the token manager
         // This will perform validation of the CD token, and mint the CD tokens
         asset.safeApprove(address(TOKEN_MANAGER), amount_);
-        TOKEN_MANAGER.deposit(cdToken_, amount_);
+        TOKEN_MANAGER.mint(cdToken_, amount_);
 
         // Transfer the minted CD tokens to the account
         ERC20(address(cdToken_)).safeTransfer(account_, amount_);
@@ -120,7 +120,7 @@ abstract contract CDRedemptionVault is
 
         // Withdraw the underlying asset from the token manager
         ERC20(address(cdToken_)).safeApprove(address(TOKEN_MANAGER), amount_);
-        TOKEN_MANAGER.withdraw(cdToken_, amount_);
+        TOKEN_MANAGER.burn(cdToken_, amount_);
     }
 
     /// @inheritdoc IConvertibleDepositRedemptionVault

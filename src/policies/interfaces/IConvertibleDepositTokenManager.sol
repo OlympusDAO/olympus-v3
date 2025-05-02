@@ -10,23 +10,23 @@ import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.s
 interface IConvertibleDepositTokenManager {
     // ========== EVENTS ========== //
 
-    event Deposit(
-        address indexed depositor,
+    event Mint(
+        address indexed account,
         address indexed cdToken,
         uint256 amount,
         uint256 shares
     );
 
-    event Withdrawal(
-        address indexed depositor,
+    event Burn(
+        address indexed account,
         address indexed cdToken,
         uint256 amount,
         uint256 shares
     );
 
-    // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
+    // ========== MINT/BURN FUNCTIONS ========== //
 
-    /// @notice Deposits the given amount of the deposit token in return for CD tokens
+    /// @notice Mints the given amount of the CD token in exchange for the underlying asset
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Transferring the deposit token from the caller to the contract
@@ -34,14 +34,14 @@ interface IConvertibleDepositTokenManager {
     ///         - Updating the amount of deposited funds
     ///
     /// @param  cdToken_      The CD token to mint
-    /// @param  amount_       The amount to deposit
+    /// @param  amount_       The amount to mint
     /// @return shares        The number of vault shares equivalent to the deposited amount
-    function deposit(
+    function mint(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external returns (uint256 shares);
 
-    /// @notice Withdraws the given amount of the deposit token in return for CD tokens
+    /// @notice Burns the given amount of the CD token and returns the underlying asset
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Transferring the CD tokens from the caller to the contract
@@ -50,9 +50,9 @@ interface IConvertibleDepositTokenManager {
     ///         - Updating the amount of deposited funds
     ///
     /// @param  cdToken_      The CD token to burn
-    /// @param  amount_       The amount to withdraw
-    /// @return shares        The number of vault shares equivalent to the withdrawn amount
-    function withdraw(
+    /// @param  amount_       The amount to burn
+    /// @return shares        The number of vault shares equivalent to the burnt amount
+    function burn(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external returns (uint256 shares);
