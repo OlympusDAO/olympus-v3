@@ -193,6 +193,14 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     }
 
     /// @inheritdoc IConvertibleDepositTokenManager
+    function getTokenSupply(
+        address depositor_,
+        IConvertibleDepositERC20 cdToken_
+    ) external view returns (uint256 supply) {
+        supply = _cdTokenSupply[depositor_][cdToken_];
+    }
+
+    /// @inheritdoc IConvertibleDepositTokenManager
     function getDepositors() external view returns (address[] memory depositors) {
         depositors = _depositors;
     }

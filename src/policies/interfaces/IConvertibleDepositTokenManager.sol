@@ -87,6 +87,16 @@ interface IConvertibleDepositTokenManager {
         IERC4626 vault_
     ) external view returns (uint256 shares);
 
+    /// @notice Returns the number of CD tokens that the given address has minted for given CD token
+    ///
+    /// @param  depositor_      The address of the depositor
+    /// @param  cdToken_        The address of the CD token
+    /// @return supply          The number of CD tokens that the depositor has minted for the given CD token
+    function getTokenSupply(
+        address depositor_,
+        IConvertibleDepositERC20 cdToken_
+    ) external view returns (uint256 supply);
+
     /// @notice Returns the depositors of funds
     ///
     /// @return depositors      The addresses of the depositors
