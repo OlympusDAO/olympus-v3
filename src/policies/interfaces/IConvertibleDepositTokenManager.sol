@@ -6,23 +6,13 @@ import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 /// @title Convertible Deposit Token Manager
-/// @notice Defines an interface for a policy that manages convertible deposit ("CD") tokens on behalf of deposit facilities. It is meant to be used by the facilities, and is not an end-user policy.
+/// @notice Defines an interface for a policy that manages convertible deposit ("CD") tokens on behalf of deposit facilities. It is meant to be used by the facilities, and is not an end-user policy. It also assumes that deposited tokens are ERC20 tokens belonging to an ERC4626 vault.
 interface IConvertibleDepositTokenManager {
     // ========== EVENTS ========== //
 
-    event Mint(
-        address indexed account,
-        address indexed cdToken,
-        uint256 amount,
-        uint256 shares
-    );
+    event Mint(address indexed account, address indexed cdToken, uint256 amount, uint256 shares);
 
-    event Burn(
-        address indexed account,
-        address indexed cdToken,
-        uint256 amount,
-        uint256 shares
-    );
+    event Burn(address indexed account, address indexed cdToken, uint256 amount, uint256 shares);
 
     // ========== MINT/BURN FUNCTIONS ========== //
 
