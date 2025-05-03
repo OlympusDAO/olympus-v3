@@ -40,6 +40,20 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         return "Cooler V2 Activation";
     }
 
+    // Initial LTV:
+    // 11 USDS/OHM = 11 * 269.24 = 2961.64 USDS/gOHM
+    // 2961.64 × 1e18 = 2961640000000000000000
+    //
+    // Target LTV:
+    // 11.11 USDS/OHM = 11.11 * 269.24 = 2991.2564 USDS/gOHM
+    // 2991.2564 × 1e18 = 2991256400000000000000
+    //
+    // Target LTV change per second:
+    // (2991256400000000000000 - 2961640000000000000000) / (365 * 24 * 60 * 60)
+    // = 939129883307
+    // Target LTV change per day:
+    // = 939129883307 * 86400 = 81139840000000000 = 0.0811408219 USDS/day
+
     // Provides a brief description of the proposal.
     // solhint-disable quotes
     function description() public pure override returns (string memory) {
@@ -66,15 +80,14 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 "The code changes can be viewed at [PR 46](https://github.com/OlympusDAO/olympus-v3/pull/46).\n\n",
                 "## Initial Configuration\n\n",
                 "The Cooler V2 contracts have been configured with the following parameters at the time of deployment:\n\n",
-                "- Initial origination LTV: 2961.64 USDS/gOHM (~ 11 USDS/OHM)\n",
-                "- Bounds check: max change to the origination LTV (using `setOriginationLtvAt()`): 150 USDS\n",
+                "- Bounds check: max change to the origination LTV (using `setOriginationLtvAt()`): 500 USDS\n",
                 "- Bounds check: min time delta required when setting the target origination LTV: 604800 seconds (1 week)\n",
-                "- Bounds check: max (positive) rate of change of Origination LTV allowed: 0.0000042824 USDS/second (0.37 USDS/day)\n",
+                "- Bounds check: max (positive) rate of change of Origination LTV allowed: 0.0000011574 USDS/second (0.1 USDS/day)\n",
                 "- Bounds check: max liquidation LTV premium: 333 bps (3.33%)\n",
-                "- Bounds check: min liquidation LTV premium: 100 bps (1%)\n",
+                "- Initial origination LTV: 2961.64 USDS/gOHM (~ 11 USDS/OHM)\n",
+                "- Liquidation LTV premium: 100 bps (1%)\n",
                 "- Interest Rate APR: 0.005 (0.5%) per year\n",
                 "- Min debt required to open a loan: 1000 USDS\n",
-                "- Target origination LTV (on 15th May 2026): 3096.375 USDS/gOHM (~ 11.5 USDS/OHM)\n",
                 "## Assumptions\n\n",
                 "- The DLGTE module has been installed into the Kernel\n",
                 "- The LTV Oracle, Treasury Borrower and Mono Cooler policies have been activated in the Kernel\n",
@@ -84,7 +97,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 '2. Grant the "emergency" role to the Emergency MS and OCG timelock\n',
                 '3. Grant the "treasuryborrower_cooler" role to the Cooler V2 policy\n',
                 "4. Disable the Cooler V1 Clearinghouse policy\n",
-                "5. Set the target origination LTV for the Cooler V2 policy\n",
+                "5. Set the target origination LTV for the Cooler V2 policy to be 2991.2564 USDS/gOHM (~ 11.11 USDS/OHM) on 15th May 2026\n",
                 "6. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
                 string.concat(
                     "7. Set the maximum delegate addresses for hOHM to ",
@@ -189,7 +202,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             coolerV2LtvOracle,
             abi.encodeWithSelector(
                 ICoolerLtvOracle.setOriginationLtvAt.selector,
-                uint96(3096375000000000000000),
+                uint96(2991256400000000000000),
                 uint40(1778803200) // 15th May 2026
             ),
             "Set target origination LTV for Cooler V2"
