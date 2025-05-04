@@ -86,7 +86,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 "- Bounds check: max liquidation LTV premium: 333 bps (3.33%)\n",
                 "- Initial origination LTV: 2961.64 USDS/gOHM (~ 11 USDS/OHM)\n",
                 "- Liquidation LTV premium: 100 bps (1%)\n",
-                "- Interest Rate APR: 0.005 (0.5%) per year\n",
+                "- Interest Rate APR: 0.49875415% per year (0.5% APY)\n",
                 "- Min debt required to open a loan: 1000 USDS\n",
                 "## Assumptions\n\n",
                 "- The DLGTE module has been installed into the Kernel\n",

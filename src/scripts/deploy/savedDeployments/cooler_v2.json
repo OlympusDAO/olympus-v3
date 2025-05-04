@@ -23,7 +23,7 @@
         {
             "name": "CoolerV2",
             "args": {
-                "interestRateWad": 5000000000000000,
+                "interestRateWad": 4987541500000000,
                 "minDebtRequired": 1000000000000000000000
             }
         }
