@@ -29,6 +29,8 @@ interface IConvertibleDepositTokenManager {
         uint256 sharesDeposited
     );
 
+    error ConvertibleDepositTokenManager_ZeroAmount();
+
     // ========== MINT/BURN FUNCTIONS ========== //
 
     /// @notice Mints the given amount of the CD token in exchange for the underlying asset

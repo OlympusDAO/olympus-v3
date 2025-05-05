@@ -149,7 +149,7 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         // The CD token supply is not adjusted here, as there is no minting/burning of CD tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are CD tokens, otherwise the CD token is not redeemable
-        uint256 sharesRequired = vault.previewDeposit(_cdTokenSupply[msg.sender][cdToken_]);
+        uint256 sharesRequired = vault.previewWithdraw(_cdTokenSupply[msg.sender][cdToken_]);
         if (sharesRequired > _depositedShares[msg.sender][vault]) {
             revert ConvertibleDepositTokenManager_Insolvent(
                 address(cdToken_),
