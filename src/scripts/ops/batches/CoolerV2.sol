@@ -88,7 +88,7 @@ contract CoolerV2 is OlyBatch {
 
         // 3. Set the treasury borrower on the MonoCooler contract
         // The first time, this can be done by anyone
-        if (IMonoCooler(coolerV2).treasuryBorrower() != coolerV2TreasuryBorrower) {
+        if (address(IMonoCooler(coolerV2).treasuryBorrower()) != coolerV2TreasuryBorrower) {
             console2.log("Setting treasury borrower");
             addToBatch(
                 coolerV2,
