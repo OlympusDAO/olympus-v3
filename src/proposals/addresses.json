@@ -150,17 +150,17 @@
         "name": "olympus-policy-contract-registry-admin"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC",
         "chainId": 1,
         "name": "olympus-policy-cooler-v2"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0xD58d7406E9CE34c90cf849Fc3eed3764EB3779B0",
         "chainId": 1,
         "name": "olympus-policy-cooler-v2-treasury-borrower"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0x9ee9f0c2e91E4f6B195B988a9e6e19efcf91e8dc",
         "chainId": 1,
         "name": "olympus-policy-cooler-v2-ltv-oracle"
     },
