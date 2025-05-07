@@ -28,7 +28,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // TODO finalise max delegate addresses
-    uint256 public constant MAX_DELEGATE_ADDRESSES = 100;
+    uint32 public constant MAX_DELEGATE_ADDRESSES = 100;
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
