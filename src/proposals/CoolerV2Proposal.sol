@@ -129,7 +129,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             "olympus-policy-cooler-v2-treasury-borrower"
         );
         address coolerV2LtvOracle = addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle");
-        address hohm = addresses.getAddress("hohm");
+        address hohm = addresses.getAddress("origami-finance-hohm-manager");
         address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // STEP 1: Grant the "admin" role to the OCG Timelock, if needed
@@ -250,7 +250,7 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         address coolerV2TreasuryBorrower = addresses.getAddress(
             "olympus-policy-cooler-v2-treasury-borrower"
         );
-        address hohm = addresses.getAddress("hohm");
+        address hohm = addresses.getAddress("origami-finance-hohm-manager");
         address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // Validate that the emergency MS has the emergency role

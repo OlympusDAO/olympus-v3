@@ -165,8 +165,8 @@
         "name": "olympus-policy-cooler-v2-ltv-oracle"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0xe6C5dc8508939B1c417f83B7fed3149ef22cF3Ff",
         "chainId": 1,
-        "name": "hohm"
+        "name": "origami-finance-hohm-manager"
     }
 ]
