@@ -1,4 +1,10 @@
 [[dependencies]]
+name = "chainlink-ccip"
+version = "1.6.0"
+git = "https://github.com/smartcontractkit/chainlink.git"
+rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69"
+
+[[dependencies]]
 name = "surl"
 version = "1.0.0"
 git = "https://github.com/memester-xyz/surl.git"
