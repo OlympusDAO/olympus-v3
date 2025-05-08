@@ -31,6 +31,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
     // [ ] _ccipReceive: validate router address
     // [ ] immutable extraArgs
     // [ ] failure handling
+    // [ ] extract interface
 
     // =========  ERRORS ========= //
 
@@ -149,6 +150,12 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         return (1, 0);
     }
 
+    // ========= SENDING OHM ========= //
+
+    function sendOhm(uint64 dstChainSelector, address to, uint256 amount) external {
+        // TODO Implement
+    }
+
     // ========= MINT/BURN FUNCTIONS ========= //
 
     /// @inheritdoc TokenPool
@@ -164,6 +171,8 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         Pool.LockOrBurnInV1 calldata lockOrBurnIn
     ) external virtual override returns (Pool.LockOrBurnOutV1 memory) {
         _validateLockOrBurn(lockOrBurnIn);
+
+        // We should ideally check that the destination token pool is on the whitelist, but it is not provided in `Pool.LockOrBurnInV1`
 
         // Tracking of bridged amounts
         if (_IS_MAINNET) {
@@ -204,7 +213,10 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
     ) public virtual override returns (Pool.ReleaseOrMintOutV1 memory) {
         _validateReleaseOrMint(releaseOrMintIn);
 
+        // No need to check that the sending token pool is on the whitelist, as it is already validated in `_validateReleaseOrMint`
+
         // Calculate the local amount
+        // Not strictly necessary, as we keep OHM to 9 decimals on all chains, but done for consistency
         uint256 localAmount = _calculateLocalAmount(
             releaseOrMintIn.amount,
             _parseRemoteDecimals(releaseOrMintIn.sourcePoolData)
