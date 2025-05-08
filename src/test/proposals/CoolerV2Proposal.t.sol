@@ -7,11 +7,12 @@ import {ProposalTest} from "./ProposalTest.sol";
 import {CoolerV2Proposal} from "src/proposals/CoolerV2Proposal.sol";
 
 contract CoolerV2ProposalTest is ProposalTest {
+    uint48 public constant TREASURY_BORROWER_BLOCK = 22430380;
+
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail)
-        // TODO update block
-        vm.createSelectFork(RPC_URL, 22245264);
+        vm.createSelectFork(RPC_URL, TREASURY_BORROWER_BLOCK + 1);
 
         /// @dev Deploy your proposal
         CoolerV2Proposal proposal = new CoolerV2Proposal();
