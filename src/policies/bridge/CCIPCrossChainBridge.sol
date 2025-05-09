@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {ICCIPCrossChainBridge} from "src/policies/interfaces/ICCIPCrossChainBridge.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -19,7 +20,7 @@ import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
 /// @notice Bophades policy to bridge OHM using Chainlink CCIP
 /// @dev    This is a modified version of the `BurnMintTokenPoolAbstract` contract from Chainlink CCIP
 ///         As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
-contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
+contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool, ICCIPCrossChainBridge {
     // Tasks
     // [X] Add PolicyEnabler
     // [X] Add compiler configuration for 0.8.24
@@ -34,13 +35,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
     // [ ] _ccipReceive: validate router address
     // [ ] immutable extraArgs
     // [ ] failure handling
-    // [ ] extract interface
-
-    // =========  ERRORS ========= //
-
-    error CrossChainBridge_MintApprovalOutOfSync(uint256 expected, uint256 actual);
-
-    error CrossChainBridge_InvalidToken(address expected, address actual);
+    // [X] extract interface
 
     // =========  STATE VARIABLES ========= //
 
@@ -52,7 +47,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
 
     /// @notice Quantity of OHM bridged
     /// @dev    This will only be set on mainnet
-    uint256 public bridgedSupply;
+    uint256 internal _bridgedSupply;
 
     /// @notice Initial bridged supply
     /// @dev    This is used in `configureDependencies` to set the initial value for `bridgedSupply`
@@ -98,31 +93,41 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
 
         // Check that OHM is the same as the token passed in to the constructor
         if (address(i_token) != address(MINTR.ohm()))
-            revert CrossChainBridge_InvalidToken(address(MINTR.ohm()), address(i_token));
+            revert Bridge_InvalidToken(address(MINTR.ohm()), address(i_token));
+
+        // Also confirm that OHM has 9 decimals (hard-coded in the constructor)
+        if (MINTR.ohm().decimals() != 9)
+            revert Bridge_InvalidTokenDecimals(9, MINTR.ohm().decimals());
 
         // === Mint approvals ===
 
-        // If the bridged supply has been initialized (policy re-installation)
-        if (_bridgeSupplyInitialized) {
-            // Ensure that the mint approval is in sync
-            // If not in sync, it will need to be manually adjusted
-            uint256 mintApproval = MINTR.mintApproval(address(this));
-            if (mintApproval != bridgedSupply)
-                revert CrossChainBridge_MintApprovalOutOfSync(bridgedSupply, mintApproval);
+        // Stringency of mint approvals is only required on mainnet
+        if (_IS_MAINNET) {
+            // If the bridged supply has been initialized (policy re-installation)
+            if (_bridgeSupplyInitialized) {
+                // Ensure that the mint approval is in sync
+                // If not in sync, it will need to be manually adjusted
+                uint256 mintApproval = MINTR.mintApproval(address(this));
+                if (mintApproval != _bridgedSupply)
+                    revert Bridge_MintApprovalOutOfSync(_bridgedSupply, mintApproval);
 
-            // No need to adjust the mint approval
-        }
-        // Otherwise the initial bridged supply needs to be set
-        else {
-            // Ensure that the mint approval has not been set
-            uint256 mintApproval = MINTR.mintApproval(address(this));
-            if (mintApproval != 0) revert CrossChainBridge_MintApprovalOutOfSync(0, mintApproval);
+                // No need to adjust the mint approval
+            }
+            // Otherwise the initial bridged supply needs to be set
+            else {
+                // Ensure that the mint approval has not been set
+                uint256 mintApproval = MINTR.mintApproval(address(this));
+                if (mintApproval != 0) revert Bridge_MintApprovalOutOfSync(0, mintApproval);
 
-            // Set the initial bridged supply
-            MINTR.increaseMintApproval(address(this), _INITIAL_BRIDGED_SUPPLY);
+                // Set the initial bridged supply
+                MINTR.increaseMintApproval(address(this), _INITIAL_BRIDGED_SUPPLY);
 
-            // Mark that the bridged supply has been initialized
-            _bridgeSupplyInitialized = true;
+                // Update the bridged supply
+                _bridgedSupply = _INITIAL_BRIDGED_SUPPLY;
+
+                // Mark that the bridged supply has been initialized
+                _bridgeSupplyInitialized = true;
+            }
         }
     }
 
@@ -152,8 +157,41 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
 
     // ========= SENDING OHM ========= //
 
-    function sendOhm(uint64 dstChainSelector, address to, uint256 amount) external {
-        // TODO Implement
+    function _sendOhm(
+        uint64 dstChainSelector_,
+        bytes32 to_,
+        uint256 amount_
+    ) internal {
+        // Validate the amount
+        if (amount_ == 0) revert Bridge_ZeroAmount();
+
+        // Check that the required amount is available
+        if (i_token.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount(amount_, i_token.balanceOf(msg.sender));
+
+        // Validate that the destination chain is allowed
+
+        // Set up the Router client
+
+        // Determine the fees
+
+        // Pull in the token from the sender
+
+        // Approve the Router to spend the token
+
+        // Send the message to the router
+    }
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function sendOhm(uint64 dstChainSelector_, bytes32 to_, uint256 amount_) external onlyEnabled {
+        _sendOhm(dstChainSelector_, to_, amount_);
+    }
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function sendOhm(uint64 dstChainSelector_, address to_, uint256 amount_) external onlyEnabled {
+        // Validate the recipient EVM address
+        if (to_ == address(0)) revert Bridge_InvalidRecipient(to_);
+
+        _sendOhm(dstChainSelector_, bytes32(uint256(uint160(to_))), amount_);
     }
 
     // ========= MINT/BURN FUNCTIONS ========= //
@@ -178,16 +216,14 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         if (_IS_MAINNET) {
             // If the contract is on mainnet, increment the bridged supply
             // This is used to track the total supply of OHM that has been bridged, and hence the amount that can be minted on mainnet when bridged back
-            bridgedSupply += lockOrBurnIn.amount;
+            _bridgedSupply += lockOrBurnIn.amount;
 
             // In step, adjust the mint approval for the contract, so that it can mint the OHM when bridged back
             // The mint approval should be consistent with the bridgedSupply
             MINTR.increaseMintApproval(address(this), lockOrBurnIn.amount);
         }
 
-        // Pull the OHM from the sender
-        // We know that it is OHM, as it was checked in `configureDependencies`
-        i_token.transferFrom(lockOrBurnIn.originalSender, address(this), lockOrBurnIn.amount);
+        // The Router will have sent the OHM to this contract already
 
         // Burn the OHM
         MINTR.burnOhm(address(this), lockOrBurnIn.amount);
@@ -227,7 +263,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         if (_IS_MAINNET) {
             // If the contract is on mainnet, decrement the bridged supply
             // This puts a hard cap on the amount of OHM that can be bridged back to mainnet
-            bridgedSupply -= releaseOrMintIn.amount;
+            _bridgedSupply -= releaseOrMintIn.amount;
 
             // Mint approval would have already been granted in `lockOrBurn` when bridging from mainnet
         } else {
@@ -242,5 +278,12 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         emit Minted(msg.sender, releaseOrMintIn.receiver, localAmount);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: localAmount});
+    }
+
+    // ========= VIEW FUNCTIONS ========= //
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function getBridgedSupply() external view returns (uint256) {
+        return _bridgedSupply;
     }
 }
