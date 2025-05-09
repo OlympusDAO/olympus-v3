@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -13,6 +13,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 // CCIP
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
+import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
 
 /// @title CCIPCrossChainBridge
 /// @notice Bophades policy to bridge OHM using Chainlink CCIP
@@ -68,10 +69,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         address ohm_,
         address rmnProxy_,
         address ccipRouter_
-    )
-        Policy(Kernel(kernel_))
-        TokenPool(IERC20(ohm_), IERC20(ohm_).decimals(), new address[](0), rmnProxy_, ccipRouter_)
-    {
+    ) Policy(Kernel(kernel_)) TokenPool(IERC20(ohm_), 9, new address[](0), rmnProxy_, ccipRouter_) {
         // Check if the contract is on mainnet
         _IS_MAINNET = block.chainid == 1;
 
@@ -160,7 +158,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
 
     // ========= MINT/BURN FUNCTIONS ========= //
 
-    /// @inheritdoc TokenPool
+    /// @inheritdoc IPoolV1
     /// @dev        This is based on the {BurnMintTokenPoolAbstract.lockOrBurn} function, with customisations for the Olympus protocol stack.
     ///
     ///             This function performs the following:
@@ -188,7 +186,8 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
         }
 
         // Pull the OHM from the sender
-        ohm.transferFrom(lockOrBurnIn.originalSender, address(this), lockOrBurnIn.amount);
+        // We know that it is OHM, as it was checked in `configureDependencies`
+        i_token.transferFrom(lockOrBurnIn.originalSender, address(this), lockOrBurnIn.amount);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), lockOrBurnIn.amount);
@@ -202,7 +201,7 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
             });
     }
 
-    /// @inheritdoc TokenPool
+    /// @inheritdoc IPoolV1
     /// @dev        This is based on the {BurnMintTokenPoolAbstract.releaseOrMint} function, with customisations for the Olympus protocol stack.
     ///
     ///             This function performs the following:
