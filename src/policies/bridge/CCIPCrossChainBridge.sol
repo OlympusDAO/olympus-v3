@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.24;
+pragma solidity ^0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -16,10 +16,12 @@ import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
 
 /// @title CCIPCrossChainBridge
 /// @notice Bophades policy to bridge OHM using Chainlink CCIP
+/// @dev    This is a modified version of the `BurnMintTokenPoolAbstract` contract from Chainlink CCIP
+///         As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
 contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool {
     // Tasks
     // [X] Add PolicyEnabler
-    // [ ] Add compiler configuration for 0.8.24
+    // [X] Add compiler configuration for 0.8.24
     // [ ] Add function for user to send OHM
     // [X] Import TokenPool abstract
     // [X] Implement minting of OHM
