@@ -16,11 +16,11 @@ import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
 import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
 
-/// @title CCIPCrossChainBridge
-/// @notice Bophades policy to bridge OHM using Chainlink CCIP
+/// @title  CCIPMintBurnTokenPool
+/// @notice Bophades policy to handling minting and burning of OHM using Chainlink CCIP
 /// @dev    This is a modified version of the `BurnMintTokenPoolAbstract` contract from Chainlink CCIP
 ///         As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
-contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool, ICCIPCrossChainBridge {
+contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     // Tasks
     // [X] Add PolicyEnabler
     // [X] Add compiler configuration for 0.8.24
@@ -36,6 +36,20 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool, ICCIPCrossCha
     // [ ] immutable extraArgs
     // [ ] failure handling
     // [X] extract interface
+
+    // =========  ERRORS ========= //
+
+    error Bridge_MintApprovalOutOfSync(uint256 expected, uint256 actual);
+
+    error Bridge_InvalidToken(address expected, address actual);
+
+    error Bridge_InvalidTokenDecimals(uint8 expected, uint8 actual);
+
+    error Bridge_ZeroAmount();
+
+    error Bridge_InvalidRecipient(address recipient);
+
+    error Bridge_InsufficientAmount(uint256 expected, uint256 actual);
 
     // =========  STATE VARIABLES ========= //
 
@@ -157,16 +171,13 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool, ICCIPCrossCha
 
     // ========= SENDING OHM ========= //
 
-    function _sendOhm(
-        uint64 dstChainSelector_,
-        bytes32 to_,
-        uint256 amount_
-    ) internal {
+    function _sendOhm(uint64 dstChainSelector_, bytes32 to_, uint256 amount_) internal {
         // Validate the amount
         if (amount_ == 0) revert Bridge_ZeroAmount();
 
         // Check that the required amount is available
-        if (i_token.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount(amount_, i_token.balanceOf(msg.sender));
+        if (i_token.balanceOf(msg.sender) < amount_)
+            revert Bridge_InsufficientAmount(amount_, i_token.balanceOf(msg.sender));
 
         // Validate that the destination chain is allowed
 
@@ -181,12 +192,12 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool, ICCIPCrossCha
         // Send the message to the router
     }
 
-    /// @inheritdoc ICCIPCrossChainBridge
+    //    /// @inheritdoc ICCIPCrossChainBridge
     function sendOhm(uint64 dstChainSelector_, bytes32 to_, uint256 amount_) external onlyEnabled {
         _sendOhm(dstChainSelector_, to_, amount_);
     }
 
-    /// @inheritdoc ICCIPCrossChainBridge
+    //    /// @inheritdoc ICCIPCrossChainBridge
     function sendOhm(uint64 dstChainSelector_, address to_, uint256 amount_) external onlyEnabled {
         // Validate the recipient EVM address
         if (to_ == address(0)) revert Bridge_InvalidRecipient(to_);
@@ -282,7 +293,8 @@ contract CCIPCrossChainBridge is Policy, PolicyEnabler, TokenPool, ICCIPCrossCha
 
     // ========= VIEW FUNCTIONS ========= //
 
-    /// @inheritdoc ICCIPCrossChainBridge
+    /// @notice Returns the amount of OHM that has been bridged from mainnet
+    /// @dev    This will only return a value on mainnet
     function getBridgedSupply() external view returns (uint256) {
         return _bridgedSupply;
     }
