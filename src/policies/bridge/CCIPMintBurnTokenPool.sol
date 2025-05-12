@@ -26,10 +26,9 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     // [X] Import TokenPool abstract
     // [X] Implement minting of OHM
     // [X] Implement burning of OHM
-    // [ ] Implement support for rate-limiting
+    // [X] Implement support for rate-limiting
     // [X] Implement tracking of bridged supply from mainnet
-    // [ ] immutable extraArgs
-    // [ ] failure handling
+    // [X] failure handling
     // [X] extract interface
 
     // =========  ERRORS ========= //
@@ -228,6 +227,11 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     ///             - Calculates the local amount
     ///             - Mints the OHM to the receiver
     ///             - Emits the Minted event
+    ///
+    ///             In the situation where this function reverts,
+    ///             the CCIP infrastructure will not retry, and it
+    ///             will be marked as a failure. It will need to be
+    ///             manually executed (after resolving the issue that caused the revert).
     function releaseOrMint(
         Pool.ReleaseOrMintInV1 calldata releaseOrMintIn
     ) public virtual override returns (Pool.ReleaseOrMintOutV1 memory) {
