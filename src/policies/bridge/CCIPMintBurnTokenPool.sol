@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
-import {ICCIPCrossChainBridge} from "src/policies/interfaces/ICCIPCrossChainBridge.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -24,32 +23,32 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     // Tasks
     // [X] Add PolicyEnabler
     // [X] Add compiler configuration for 0.8.24
-    // [ ] Add function for user to send OHM
     // [X] Import TokenPool abstract
     // [X] Implement minting of OHM
     // [X] Implement burning of OHM
     // [ ] Implement support for rate-limiting
     // [X] Implement tracking of bridged supply from mainnet
-    // [ ] _ccipReceive: validate source chain and sender against allowlist
-    // [ ] _ccipSend: validate destination chain against allowlist
-    // [ ] _ccipReceive: validate router address
     // [ ] immutable extraArgs
     // [ ] failure handling
     // [X] extract interface
 
     // =========  ERRORS ========= //
 
-    error Bridge_MintApprovalOutOfSync(uint256 expected, uint256 actual);
+    error TokenPool_MintApprovalOutOfSync(uint256 expected, uint256 actual);
 
-    error Bridge_InvalidToken(address expected, address actual);
+    error TokenPool_InvalidToken(address expected, address actual);
 
-    error Bridge_InvalidTokenDecimals(uint8 expected, uint8 actual);
+    error TokenPool_InvalidTokenDecimals(uint8 expected, uint8 actual);
 
-    error Bridge_ZeroAmount();
+    error TokenPool_ZeroAmount();
 
-    error Bridge_InvalidRecipient(address recipient);
+    error TokenPool_InvalidAddress(string param);
 
-    error Bridge_InsufficientAmount(uint256 expected, uint256 actual);
+    error TokenPool_ZeroAddress();
+
+    error TokenPool_InvalidRecipient(address recipient);
+
+    error TokenPool_InsufficientAmount(uint256 expected, uint256 actual);
 
     // =========  STATE VARIABLES ========= //
 
@@ -86,6 +85,9 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         _INITIAL_BRIDGED_SUPPLY = initialBridgedSupply_;
 
         // Disabled by default
+
+        // Owner is set to msg.sender
+        // The current owner must call `transferOwnership` to transfer ownership to the desired address
     }
 
     /// @inheritdoc Policy
@@ -107,11 +109,11 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
 
         // Check that OHM is the same as the token passed in to the constructor
         if (address(i_token) != address(MINTR.ohm()))
-            revert Bridge_InvalidToken(address(MINTR.ohm()), address(i_token));
+            revert TokenPool_InvalidToken(address(MINTR.ohm()), address(i_token));
 
         // Also confirm that OHM has 9 decimals (hard-coded in the constructor)
         if (MINTR.ohm().decimals() != 9)
-            revert Bridge_InvalidTokenDecimals(9, MINTR.ohm().decimals());
+            revert TokenPool_InvalidTokenDecimals(9, MINTR.ohm().decimals());
 
         // === Mint approvals ===
 
@@ -123,7 +125,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
                 // If not in sync, it will need to be manually adjusted
                 uint256 mintApproval = MINTR.mintApproval(address(this));
                 if (mintApproval != _bridgedSupply)
-                    revert Bridge_MintApprovalOutOfSync(_bridgedSupply, mintApproval);
+                    revert TokenPool_MintApprovalOutOfSync(_bridgedSupply, mintApproval);
 
                 // No need to adjust the mint approval
             }
@@ -131,7 +133,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
             else {
                 // Ensure that the mint approval has not been set
                 uint256 mintApproval = MINTR.mintApproval(address(this));
-                if (mintApproval != 0) revert Bridge_MintApprovalOutOfSync(0, mintApproval);
+                if (mintApproval != 0) revert TokenPool_MintApprovalOutOfSync(0, mintApproval);
 
                 // Set the initial bridged supply
                 MINTR.increaseMintApproval(address(this), _INITIAL_BRIDGED_SUPPLY);
@@ -169,42 +171,6 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         return (1, 0);
     }
 
-    // ========= SENDING OHM ========= //
-
-    function _sendOhm(uint64 dstChainSelector_, bytes32 to_, uint256 amount_) internal {
-        // Validate the amount
-        if (amount_ == 0) revert Bridge_ZeroAmount();
-
-        // Check that the required amount is available
-        if (i_token.balanceOf(msg.sender) < amount_)
-            revert Bridge_InsufficientAmount(amount_, i_token.balanceOf(msg.sender));
-
-        // Validate that the destination chain is allowed
-
-        // Set up the Router client
-
-        // Determine the fees
-
-        // Pull in the token from the sender
-
-        // Approve the Router to spend the token
-
-        // Send the message to the router
-    }
-
-    //    /// @inheritdoc ICCIPCrossChainBridge
-    function sendOhm(uint64 dstChainSelector_, bytes32 to_, uint256 amount_) external onlyEnabled {
-        _sendOhm(dstChainSelector_, to_, amount_);
-    }
-
-    //    /// @inheritdoc ICCIPCrossChainBridge
-    function sendOhm(uint64 dstChainSelector_, address to_, uint256 amount_) external onlyEnabled {
-        // Validate the recipient EVM address
-        if (to_ == address(0)) revert Bridge_InvalidRecipient(to_);
-
-        _sendOhm(dstChainSelector_, bytes32(uint256(uint160(to_))), amount_);
-    }
-
     // ========= MINT/BURN FUNCTIONS ========= //
 
     /// @inheritdoc IPoolV1
@@ -213,12 +179,18 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     ///             This function performs the following:
     ///             - Validates the lockOrBurnIn data
     ///             - On mainnet: increments the bridged supply
-    ///             - Pulls the OHM from the sender
     ///             - Burns the OHM
     ///             - Emits the Burned event
     function lockOrBurn(
         Pool.LockOrBurnInV1 calldata lockOrBurnIn
     ) external virtual override returns (Pool.LockOrBurnOutV1 memory) {
+        // CCIP-provided validation:
+        // - Supported token
+        // - RMN curse status
+        // - Allowlist status (unused)
+        // - Caller is the OnRamp configured in the Router for the destination chain
+        //
+        // Also consumes the outbound rate limit for the destination chain
         _validateLockOrBurn(lockOrBurnIn);
 
         // We should ideally check that the destination token pool is on the whitelist, but it is not provided in `Pool.LockOrBurnInV1`
@@ -254,14 +226,19 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     ///             This function performs the following:
     ///             - Validates the releaseOrMintIn data
     ///             - Calculates the local amount
-    ///             - Mints the OHM
+    ///             - Mints the OHM to the receiver
     ///             - Emits the Minted event
     function releaseOrMint(
         Pool.ReleaseOrMintInV1 calldata releaseOrMintIn
     ) public virtual override returns (Pool.ReleaseOrMintOutV1 memory) {
+        // CCIP-provided validation:
+        // - Supported token
+        // - RMN curse status
+        // - Caller is the OffRamp configured in the Router for the source chain
+        // - Source pool is configured on the destination pool
+        //
+        // Also consumes the inbound rate limit for the source chain
         _validateReleaseOrMint(releaseOrMintIn);
-
-        // No need to check that the sending token pool is on the whitelist, as it is already validated in `_validateReleaseOrMint`
 
         // Calculate the local amount
         // Not strictly necessary, as we keep OHM to 9 decimals on all chains, but done for consistency
