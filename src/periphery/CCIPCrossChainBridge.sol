@@ -98,7 +98,10 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
 
         // Send the message to the router
         // The TokenPool will perform validation on the routing
-        CCIP_ROUTER.ccipSend{value: fees}(dstChainSelector_, ccipMessage);
+        bytes32 ccipMessageId = CCIP_ROUTER.ccipSend{value: fees}(dstChainSelector_, ccipMessage);
+
+        // Emit the event
+        emit Bridged(ccipMessageId, dstChainSelector_, msg.sender, amount_, fees);
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
@@ -150,7 +153,6 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
     // ========= TOKEN WITHDRAWAL ========= //
 
     /// @inheritdoc ICCIPCrossChainBridge
-    /// @dev        This is needed as senders may provide more native token than needed to cover fees
     function withdraw(address recipient_) external onlyOwner {
         // Get the balance of the contract
         uint256 balance = address(this).balance;

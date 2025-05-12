@@ -22,6 +22,14 @@ interface ICCIPCrossChainBridge {
 
     // ========= EVENTS ========= //
 
+    event Bridged(
+        bytes32 messageId,
+        uint64 destinationChainSelector,
+        address indexed sender,
+        uint256 amount,
+        uint256 fees
+    );
+
     event BridgeEnabled();
 
     event BridgeDisabled();
