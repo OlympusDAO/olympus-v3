@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
