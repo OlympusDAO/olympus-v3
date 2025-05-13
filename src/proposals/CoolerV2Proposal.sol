@@ -19,16 +19,10 @@ import {ICoolerLtvOracle} from "src/policies/interfaces/cooler/ICoolerLtvOracle.
 import {ProposalScript} from "./ProposalScript.sol";
 import {console2} from "forge-std/console2.sol";
 
-// Libraries
-import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
-
 /// @notice Activates Cooler V2.
 // solhint-disable gas-custom-errors
 contract CoolerV2Proposal is GovernorBravoProposal {
     Kernel internal _kernel;
-
-    // TODO finalise max delegate addresses
-    uint32 public constant MAX_DELEGATE_ADDRESSES = 100;
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
@@ -99,11 +93,6 @@ contract CoolerV2Proposal is GovernorBravoProposal {
                 "4. Disable the Cooler V1 Clearinghouse policy\n",
                 "5. Set the target origination LTV for the Cooler V2 policy to be 2991.2564 USDS/gOHM (~ 11.11 USDS/OHM) on 15th May 2026\n",
                 "6. Enable the Cooler V2 Treasury Borrower policy. This enables the main Cooler V2 policy (MonoCooler) to operate.\n",
-                string.concat(
-                    "7. Set the maximum delegate addresses for hOHM to ",
-                    Strings.toString(MAX_DELEGATE_ADDRESSES),
-                    ".\n\n"
-                ),
                 "The periphery contracts have the owner set to the DAO MS, and will be enabled before or after this proposal."
             );
     }
@@ -129,7 +118,6 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             "olympus-policy-cooler-v2-treasury-borrower"
         );
         address coolerV2LtvOracle = addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle");
-        address hohm = addresses.getAddress("origami-finance-hohm-manager");
         address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // STEP 1: Grant the "admin" role to the OCG Timelock, if needed
@@ -215,17 +203,6 @@ contract CoolerV2Proposal is GovernorBravoProposal {
             "Enable Cooler V2 Treasury Borrower"
         );
 
-        // STEP 7: Set the maximum delegate addresses for the hOHM account
-        _pushAction(
-            coolerV2,
-            abi.encodeWithSelector(
-                IMonoCooler.setMaxDelegateAddresses.selector,
-                hohm,
-                MAX_DELEGATE_ADDRESSES
-            ),
-            "Set max delegate addresses for hOHM"
-        );
-
         // CoolerV2Migrator is owned by the DAO MS, so does not need to be enabled here
     }
 
@@ -250,7 +227,6 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         address coolerV2TreasuryBorrower = addresses.getAddress(
             "olympus-policy-cooler-v2-treasury-borrower"
         );
-        address hohm = addresses.getAddress("origami-finance-hohm-manager");
         address coolerV1Clearinghouse = addresses.getAddress("olympus-policy-clearinghouse-1_2");
 
         // Validate that the emergency MS has the emergency role
@@ -276,13 +252,6 @@ contract CoolerV2Proposal is GovernorBravoProposal {
         require(
             PolicyEnabler(coolerV2TreasuryBorrower).isEnabled(),
             "Cooler V2 Treasury Borrower is not enabled"
-        );
-
-        // Validate that the hOHM account has an updated maximum number of delegate addresses
-        require(
-            IMonoCooler(coolerV2).accountPosition(hohm).maxDelegateAddresses ==
-                MAX_DELEGATE_ADDRESSES,
-            "hOHM does not have the updated maximum number of delegate addresses"
         );
 
         // Validate that the Cooler V1 Clearinghouse policy is disabled
