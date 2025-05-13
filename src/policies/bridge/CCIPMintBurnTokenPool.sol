@@ -116,36 +116,11 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         if (MINTR.ohm().decimals() != 9)
             revert TokenPool_InvalidTokenDecimals(9, MINTR.ohm().decimals());
 
-        // === Mint approvals ===
-
-        // Stringency of mint approvals is only required on mainnet
-        if (isChainMainnet) {
-            // If the bridged supply has been initialized (policy re-installation)
-            if (isBridgeSupplyInitialized) {
-                // Ensure that the mint approval is in sync
-                // If not in sync, it will need to be manually adjusted
-                uint256 mintApproval = MINTR.mintApproval(address(this));
-                if (mintApproval != _bridgedSupply)
-                    revert TokenPool_MintApprovalOutOfSync(_bridgedSupply, mintApproval);
-
-                // No need to adjust the mint approval
-            }
-            // Otherwise the initial bridged supply needs to be set
-            else {
-                // Ensure that the mint approval has not been set
-                uint256 mintApproval = MINTR.mintApproval(address(this));
-                if (mintApproval != 0) revert TokenPool_MintApprovalOutOfSync(0, mintApproval);
-
-                // Set the initial bridged supply
-                MINTR.increaseMintApproval(address(this), _INITIAL_BRIDGED_SUPPLY);
-
-                // Update the bridged supply
-                _bridgedSupply = _INITIAL_BRIDGED_SUPPLY;
-
-                // Mark that the bridged supply has been initialized
-                isBridgeSupplyInitialized = true;
-            }
-        }
+        // Validate bridged supply
+        // This is done in both enable() and configureDependencies()
+        // as the contract could be re-installed in the kernel or
+        // re-enabled [locally]
+        _validateBridgedSupply();
     }
 
     /// @inheritdoc Policy
@@ -157,7 +132,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](4);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
@@ -271,6 +246,47 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         emit Minted(msg.sender, releaseOrMintIn.receiver, localAmount);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: localAmount});
+    }
+
+    // ========= ENABLE FUNCTIONS ========= //
+
+    function _enable(bytes calldata) internal override {
+        // Validate the bridged supply
+        _validateBridgedSupply();
+
+        // If the contract is not on mainnet, nothing more to do
+        if (!isChainMainnet) return;
+
+        // If the bridged supply has been initialized, nothing more to do
+        // Since the bridged supply and mint approval are in sync
+        if (isBridgeSupplyInitialized) return;
+
+        // Otherwise, set the initial bridged supply
+        MINTR.increaseMintApproval(address(this), _INITIAL_BRIDGED_SUPPLY);
+
+        // Update the bridged supply
+        _bridgedSupply = _INITIAL_BRIDGED_SUPPLY;
+
+        // Mark that the bridged supply has been initialized
+        isBridgeSupplyInitialized = true;
+    }
+
+    /// @notice Validates that the bridged supply and mint approval are in sync, where appropriate
+    function _validateBridgedSupply() internal view {
+        // Not needed on non-mainnet chains
+        if (!isChainMainnet) return;
+
+        // If the contract has previously been enabled, ensure that the bridged supply and mint approval are in sync
+        uint256 mintApproval = MINTR.mintApproval(address(this));
+        if (isBridgeSupplyInitialized) {
+            if (mintApproval != _bridgedSupply)
+                revert TokenPool_MintApprovalOutOfSync(_bridgedSupply, mintApproval);
+
+            return;
+        }
+
+        // Otherwise it is the first time, and the mint approval should be zero
+        if (mintApproval != 0) revert TokenPool_MintApprovalOutOfSync(0, mintApproval);
     }
 
     // ========= VIEW FUNCTIONS ========= //
