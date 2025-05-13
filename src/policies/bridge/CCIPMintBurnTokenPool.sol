@@ -55,7 +55,8 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     MINTRv1 public MINTR;
 
     /// @notice Whether the contract is on mainnet
-    bool internal immutable _IS_MAINNET;
+    // solhint-disable-next-line immutable-vars-naming
+    bool public immutable isChainMainnet;
 
     /// @notice Quantity of OHM bridged
     /// @dev    This will only be set on mainnet
@@ -66,7 +67,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     uint256 internal immutable _INITIAL_BRIDGED_SUPPLY;
 
     /// @notice Whether the bridged supply has been initialized
-    bool internal _bridgeSupplyInitialized;
+    bool public isBridgeSupplyInitialized;
 
     // =========  CONSTRUCTOR ========= //
 
@@ -75,10 +76,11 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         uint256 initialBridgedSupply_,
         address ohm_,
         address rmnProxy_,
-        address ccipRouter_
+        address ccipRouter_,
+        uint256 mainnetChainId_
     ) Policy(Kernel(kernel_)) TokenPool(IERC20(ohm_), 9, new address[](0), rmnProxy_, ccipRouter_) {
         // Check if the contract is on mainnet
-        _IS_MAINNET = block.chainid == 1;
+        isChainMainnet = block.chainid == mainnetChainId_;
 
         // Set the initial bridged supply
         _INITIAL_BRIDGED_SUPPLY = initialBridgedSupply_;
@@ -117,9 +119,9 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         // === Mint approvals ===
 
         // Stringency of mint approvals is only required on mainnet
-        if (_IS_MAINNET) {
+        if (isChainMainnet) {
             // If the bridged supply has been initialized (policy re-installation)
-            if (_bridgeSupplyInitialized) {
+            if (isBridgeSupplyInitialized) {
                 // Ensure that the mint approval is in sync
                 // If not in sync, it will need to be manually adjusted
                 uint256 mintApproval = MINTR.mintApproval(address(this));
@@ -141,7 +143,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
                 _bridgedSupply = _INITIAL_BRIDGED_SUPPLY;
 
                 // Mark that the bridged supply has been initialized
-                _bridgeSupplyInitialized = true;
+                isBridgeSupplyInitialized = true;
             }
         }
     }
@@ -159,7 +161,6 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     /// @notice Returns the version of the policy
@@ -195,7 +196,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         // We should ideally check that the destination token pool is on the whitelist, but it is not provided in `Pool.LockOrBurnInV1`
 
         // Tracking of bridged amounts
-        if (_IS_MAINNET) {
+        if (isChainMainnet) {
             // If the contract is on mainnet, increment the bridged supply
             // This is used to track the total supply of OHM that has been bridged, and hence the amount that can be minted on mainnet when bridged back
             _bridgedSupply += lockOrBurnIn.amount;
@@ -252,7 +253,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         );
 
         // Tracking of bridged amounts
-        if (_IS_MAINNET) {
+        if (isChainMainnet) {
             // If the contract is on mainnet, decrement the bridged supply
             // This puts a hard cap on the amount of OHM that can be bridged back to mainnet
             _bridgedSupply -= releaseOrMintIn.amount;
