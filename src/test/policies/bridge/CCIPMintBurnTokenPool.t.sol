@@ -18,6 +18,10 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 
+import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
+import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
+import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
+
 // solhint-disable max-states-count
 contract CCIPMintBurnTokenPoolTest is Test {
     using ModuleTestFixtureGenerator for OlympusMinter;
@@ -27,6 +31,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     MockRMNProxy public RMNProxy;
 
     MockOhm public OHM;
+    MockOhm public remoteOHM;
     OlympusMinter public MINTR;
     OlympusRoles public ROLES;
     Kernel public kernel;
@@ -38,22 +43,46 @@ contract CCIPMintBurnTokenPoolTest is Test {
     address public SENDER;
     address public RECEIVER;
     address public ADMIN;
+    address public ONRAMP;
+    address public OFFRAMP;
 
     address public mintrGodmode;
+
+    address public REMOTE_POOL;
+
+    uint256 public constant AMOUNT = 1e9;
+    uint64 public constant REMOTE_CHAIN = 111;
+
+    event Burned(address indexed sender, uint256 amount);
+    event Minted(address indexed sender, address indexed recipient, uint256 amount);
 
     function setUp() public {
         // Addresses
         SENDER = makeAddr("SENDER");
         RECEIVER = makeAddr("RECEIVER");
         ADMIN = makeAddr("ADMIN");
+        ONRAMP = makeAddr("ONRAMP");
+        OFFRAMP = makeAddr("OFFRAMP");
+        REMOTE_POOL = makeAddr("REMOTE_POOL");
 
         // Ensure the chain id is set to mainnet
         vm.chainId(1);
 
+        // Create the OHM token
         OHM = new MockOhm("Olympus", "OHM", 9);
+        remoteOHM = new MockOhm("OlympusRemote", "OHMR", 9);
 
+        // Create the stack
+        _createStack();
+    }
+
+    function _createStack() internal {
         router = new MockCCIPRouter();
         RMNProxy = new MockRMNProxy();
+
+        router.setOffRamp(OFFRAMP);
+        router.setOnRamp(ONRAMP);
+        RMNProxy.setIsCursed(bytes16(uint128(REMOTE_CHAIN)), false);
 
         kernel = new Kernel();
         MINTR = new OlympusMinter(kernel, address(OHM));
@@ -73,7 +102,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
 
     // ========= HELPERS ========= //
 
-    function _installTokenPool() internal {
+    function _createTokenPool() internal {
         tokenPool = new CCIPMintBurnTokenPool(
             address(kernel),
             INITIAL_BRIDGED_SUPPLY,
@@ -82,7 +111,9 @@ contract CCIPMintBurnTokenPoolTest is Test {
             address(router),
             1
         );
+    }
 
+    function _installTokenPool() internal {
         kernel.executeAction(Actions.ActivatePolicy, address(tokenPool));
     }
 
@@ -91,6 +122,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     }
 
     modifier givenTokenPoolIsInstalled() {
+        _createTokenPool();
         _installTokenPool();
         _;
     }
@@ -105,15 +137,61 @@ contract CCIPMintBurnTokenPoolTest is Test {
         _;
     }
 
-    modifier givenPolicyIsEnabled() {
+    modifier givenIsEnabled() {
         vm.prank(ADMIN);
         tokenPool.enable("");
         _;
     }
 
-    modifier givenPolicyIsDisabled() {
+    modifier givenIsDisabled() {
         vm.prank(ADMIN);
         tokenPool.disable("");
+        _;
+    }
+
+    modifier givenPolicyIsDeactivated() {
+        kernel.executeAction(Actions.DeactivatePolicy, address(tokenPool));
+        _;
+    }
+
+    modifier givenRemoteChainIsSupported(
+        uint64 remoteChainSelector_,
+        address remotePool_,
+        address remoteTokenAddress_
+    ) {
+        bytes[] memory remotePoolAddresses = new bytes[](1);
+        remotePoolAddresses[0] = abi.encode(remotePool_);
+
+        RateLimiter.Config memory outboundRateLimiterConfig = RateLimiter.Config({
+            isEnabled: false,
+            capacity: 0,
+            rate: 0
+        });
+        RateLimiter.Config memory inboundRateLimiterConfig = RateLimiter.Config({
+            isEnabled: false,
+            capacity: 0,
+            rate: 0
+        });
+
+        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
+        chainUpdates[0] = TokenPool.ChainUpdate({
+            remoteChainSelector: remoteChainSelector_,
+            remotePoolAddresses: remotePoolAddresses,
+            remoteTokenAddress: abi.encode(remoteTokenAddress_),
+            outboundRateLimiterConfig: outboundRateLimiterConfig,
+            inboundRateLimiterConfig: inboundRateLimiterConfig
+        });
+
+        tokenPool.applyChainUpdates(new uint64[](0), chainUpdates);
+        _;
+    }
+
+    modifier givenTokenPoolHasOHM(uint256 amount_) {
+        // Mint OHM to the sender
+        vm.startPrank(mintrGodmode);
+        MINTR.increaseMintApproval(mintrGodmode, amount_);
+        MINTR.mintOhm(address(tokenPool), amount_);
+        vm.stopPrank();
         _;
     }
 
@@ -134,6 +212,18 @@ contract CCIPMintBurnTokenPoolTest is Test {
         assertEq(tokenPool.isBridgeSupplyInitialized(), expected, "isBridgeSupplyInitialized");
     }
 
+    function _assertIsChainMainnet(bool expected) internal view {
+        assertEq(tokenPool.isChainMainnet(), expected, "isChainMainnet");
+    }
+
+    function _assertIsEnabled(bool expected) internal view {
+        assertEq(tokenPool.isEnabled(), expected, "isEnabled");
+    }
+
+    function _assertIsPolicyActive(bool expected) internal view {
+        assertEq(tokenPool.isActive(), expected, "isActive");
+    }
+
     function _expectRevertNotEnabled() internal {
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
     }
@@ -146,6 +236,10 @@ contract CCIPMintBurnTokenPoolTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
         );
+    }
+
+    function _assertOhmBalance(uint256 expected_) internal view {
+        assertEq(OHM.balanceOf(address(tokenPool)), expected_, "ohm balance");
     }
 
     // =========  TESTS ========= //
@@ -166,25 +260,18 @@ contract CCIPMintBurnTokenPoolTest is Test {
     // [X] isBridgeSupplyInitialized is false
 
     function test_constructor_mainnet() public {
-        CCIPMintBurnTokenPool newTokenPool = new CCIPMintBurnTokenPool(
-            address(kernel),
-            INITIAL_BRIDGED_SUPPLY,
-            address(OHM),
-            address(RMNProxy),
-            address(router),
-            1
-        );
+        _createTokenPool();
 
-        assertEq(newTokenPool.owner(), address(this), "owner");
-        assertEq(newTokenPool.isEnabled(), false, "isEnabled");
-
-        assertEq(newTokenPool.isChainMainnet(), true, "isChainMainnet");
-        assertEq(newTokenPool.getBridgedSupply(), 0, "bridgedSupply");
-        assertEq(newTokenPool.isBridgeSupplyInitialized(), false, "isBridgeSupplyInitialized");
+        // Assert
+        assertEq(tokenPool.owner(), address(this), "owner");
+        _assertIsEnabled(false);
+        _assertIsChainMainnet(true);
+        _assertBridgedSupply(0);
+        _assertBridgedSupplyInitialized(false);
     }
 
     function test_constructor_notMainnet() public {
-        CCIPMintBurnTokenPool newTokenPool = new CCIPMintBurnTokenPool(
+        tokenPool = new CCIPMintBurnTokenPool(
             address(kernel),
             INITIAL_BRIDGED_SUPPLY,
             address(OHM),
@@ -193,12 +280,12 @@ contract CCIPMintBurnTokenPoolTest is Test {
             2
         );
 
-        assertEq(newTokenPool.owner(), address(this), "owner");
-        assertEq(newTokenPool.isEnabled(), false, "isEnabled");
-
-        assertEq(newTokenPool.isChainMainnet(), false, "isChainMainnet");
-        assertEq(newTokenPool.getBridgedSupply(), 0, "bridgedSupply");
-        assertEq(newTokenPool.isBridgeSupplyInitialized(), false, "isBridgeSupplyInitialized");
+        // Assert
+        assertEq(tokenPool.owner(), address(this), "owner");
+        _assertIsEnabled(false);
+        _assertIsChainMainnet(false);
+        _assertBridgedSupply(0);
+        _assertBridgedSupplyInitialized(false);
     }
 
     // enable
@@ -222,11 +309,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     // [X] the MINTR approval remains 0
     // [X] it enables the contract
 
-    function test_enable_givenEnabled_reverts()
-        public
-        givenTokenPoolIsInstalled
-        givenPolicyIsEnabled
-    {
+    function test_enable_givenEnabled_reverts() public givenTokenPoolIsInstalled givenIsEnabled {
         // Expect revert
         _expectRevertNotDisabled();
 
@@ -249,8 +332,8 @@ contract CCIPMintBurnTokenPoolTest is Test {
     function test_enable_mainnet_previouslyEnabled_differentMinterApproval_reverts()
         public
         givenTokenPoolIsInstalled
-        givenPolicyIsEnabled
-        givenPolicyIsDisabled
+        givenIsEnabled
+        givenIsDisabled
     {
         // Set the MINTR approval to a different value
         _increaseMinterApproval(100);
@@ -273,8 +356,8 @@ contract CCIPMintBurnTokenPoolTest is Test {
     function test_enable_mainnet_previouslyEnabled()
         public
         givenTokenPoolIsInstalled
-        givenPolicyIsEnabled
-        givenPolicyIsDisabled
+        givenIsEnabled
+        givenIsDisabled
     {
         // TODO mimic a bridge so that the bridgedSupply is different to the initial value
 
@@ -286,7 +369,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY);
         _assertBridgedSupplyInitialized(true);
         _assertMinterApproval(INITIAL_BRIDGED_SUPPLY);
-        assertEq(tokenPool.isEnabled(), true, "isEnabled");
+        _assertIsEnabled(true);
     }
 
     function test_enable_mainnet_nonZeroMinterApproval_reverts() public givenTokenPoolIsInstalled {
@@ -316,7 +399,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY);
         _assertBridgedSupplyInitialized(true);
         _assertMinterApproval(INITIAL_BRIDGED_SUPPLY);
-        assertEq(tokenPool.isEnabled(), true, "isEnabled");
+        _assertIsEnabled(true);
     }
 
     function test_enable_notMainnet() public givenChainIsNotMainnet givenTokenPoolIsInstalled {
@@ -328,7 +411,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         _assertBridgedSupply(0);
         _assertBridgedSupplyInitialized(false);
         _assertMinterApproval(0);
-        assertEq(tokenPool.isEnabled(), true, "isEnabled");
+        _assertIsEnabled(true);
     }
 
     // disable
@@ -349,7 +432,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
 
     function test_disable_callerNotAdmin_reverts(
         address caller_
-    ) public givenTokenPoolIsInstalled givenPolicyIsEnabled {
+    ) public givenTokenPoolIsInstalled givenIsEnabled {
         vm.assume(caller_ != ADMIN);
 
         // Expect revert
@@ -360,73 +443,358 @@ contract CCIPMintBurnTokenPoolTest is Test {
         tokenPool.disable("");
     }
 
-    function test_disable() public givenTokenPoolIsInstalled givenPolicyIsEnabled {
+    function test_disable() public givenTokenPoolIsInstalled givenIsEnabled {
         // Call function
         vm.prank(ADMIN);
         tokenPool.disable("");
 
         // Assert
-        assertEq(tokenPool.isEnabled(), false, "isEnabled");
+        _assertIsEnabled(false);
     }
 
     // configureDependencies
     // given the provided token is not the OHM registered in the MINTR module
-    //  [ ] it reverts
-    // given the provided token does not have 9 decimals
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the chain is mainnet
     //  given bridgedSupplyInitialized is true
     //   given the MINTR approval is different to the bridgedSupply value
-    //    [ ] it reverts
-    //   [ ] the bridgedSupply is unchanged
-    //   [ ] the MINTR approval is unchanged
-    //   [ ] it activates the policy
+    //    [X] it reverts
+    //   [X] the bridgedSupply is unchanged
+    //   [X] the MINTR approval is unchanged
+    //   [X] it activates the policy
     //  given the MINTR approval is non-zero
-    //   [ ] it reverts
-    //  [ ] the bridgedSupply is unchanged
-    //  [ ] the MINTR approval is unchanged
-    //  [ ] it activates the policy
-    // [ ] the bridgedSupply is unchanged
-    // [ ] the MINTR approval is unchanged
-    // [ ] it activates the policy
+    //   [X] it reverts
+    //  [X] the bridgedSupply is unchanged
+    //  [X] the MINTR approval is unchanged
+    //  [X] it activates the policy
+    // [X] the bridgedSupply is unchanged
+    // [X] the MINTR approval is unchanged
+    // [X] it activates the policy
+
+    function test_configureDependencies_differentToken_reverts() public {
+        // Create a new OHM token that will be different to OHM in MINTR
+        address oldOHM = address(OHM);
+        OHM = new MockOhm("Olympus", "OHM", 9);
+
+        _createTokenPool();
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CCIPMintBurnTokenPool.TokenPool_InvalidToken.selector,
+                oldOHM,
+                address(OHM)
+            )
+        );
+
+        // Call function
+        _installTokenPool();
+    }
+
+    function test_configureDependencies_notMainnet() public givenChainIsNotMainnet {
+        // Call function
+        _createTokenPool();
+        _installTokenPool();
+
+        // Assert
+        _assertIsChainMainnet(false);
+        _assertBridgedSupply(0);
+        _assertBridgedSupplyInitialized(false);
+        _assertMinterApproval(0);
+        _assertIsEnabled(false);
+        _assertIsPolicyActive(true);
+    }
+
+    function test_configureDependencies_mainnet_previouslyEnabled_differentMinterApproval_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenPolicyIsDeactivated
+    {
+        // Change the MINTR approval to a different value
+        _increaseMinterApproval(100);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
+                INITIAL_BRIDGED_SUPPLY,
+                INITIAL_BRIDGED_SUPPLY + 100
+            )
+        );
+
+        // Call function
+        _installTokenPool();
+    }
+
+    function test_configureDependencies_mainnet_previouslyEnabled()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenPolicyIsDeactivated
+    {
+        // TODO mimic a bridge so that the bridgedSupply is different to the initial value
+
+        // Call function
+        _installTokenPool();
+
+        // Assert
+        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY);
+        _assertBridgedSupplyInitialized(true);
+        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY);
+        _assertIsEnabled(true); // Previously enabled
+        _assertIsPolicyActive(true);
+    }
+
+    function test_configureDependencies_mainnet_nonZeroMinterApproval_reverts() public {
+        _createTokenPool();
+
+        // Set the MINTR approval to a non-zero value
+        _increaseMinterApproval(100);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
+                0,
+                100
+            )
+        );
+
+        // Call function
+        _installTokenPool();
+    }
+
+    function test_configureDependencies_mainnet() public {
+        // Call function
+        _createTokenPool();
+        _installTokenPool();
+
+        // Assert
+        _assertBridgedSupply(0); // Not yet enabled
+        _assertBridgedSupplyInitialized(false); // Not yet enabled
+        _assertMinterApproval(0); // Not yet enabled
+        _assertIsEnabled(false); // Not yet enabled
+        _assertIsPolicyActive(true); // Policy is active
+    }
 
     // lockOrBurn
     // given the policy is disabled
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the provided token is not the configured token of the token pool
-    //  [ ] it reverts
+    //  [X] it reverts
+    // given the destination chain is not supported
+    //  [X] it reverts
     // given the destination chain is cursed by the RMN
-    //  [ ] it reverts
-    // given the caller is not the configured OffRamp for the destination chain
-    //  [ ] it reverts
-    // given the sender has not approved the router to spend the OHM tokens
-    //  [ ] it reverts
-    // given the sender has an insufficient balance of OHM tokens
-    //  [ ] it reverts
+    //  [X] it reverts
+    // given the caller is not the configured OnRamp for the destination chain
+    //  [X] it reverts
+    // given the router has sent an insufficient balance of OHM tokens
+    //  [X] it reverts
     // given the amount of tokens to be bridged is 0
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the current chain is mainnet or sepolia
-    //  [ ] the bridgedSupply is incremented by the amount of tokens to be bridged
-    //  [ ] the MINTR approval is increased by the amount of tokens to be bridged
-    //  [ ] the OHM tokens are burned from the token pool
-    //  [ ] a Burned event is emitted
-    //  [ ] it returns the destination token address
-    //  [ ] it returns the pool data as encoded local decimals
-    // [ ] the bridgedSupply is not incremented
-    // [ ] the MINTR approval is not incremented
-    // [ ] the OHM tokens are burned from the token pool
-    // [ ] a Burned event is emitted
-    // [ ] it returns the destination token address
-    // [ ] it returns the pool data as encoded local decimals
+    //  [X] the bridgedSupply is incremented by the amount of tokens to be bridged
+    //  [X] the MINTR approval is increased by the amount of tokens to be bridged
+    //  [X] the OHM tokens are burned from the token pool
+    //  [X] a Burned event is emitted
+    //  [X] it returns the destination token address
+    //  [X] it returns the pool data as encoded local decimals
+    // [X] the bridgedSupply is not incremented
+    // [X] the MINTR approval is not incremented
+    // [X] the OHM tokens are burned from the token pool
+    // [X] a Burned event is emitted
+    // [X] it returns the destination token address
+    // [X] it returns the pool data as encoded local decimals
+
+    function _getLockOrBurnParams(
+        uint256 amount_
+    ) internal view returns (Pool.LockOrBurnInV1 memory) {
+        return
+            Pool.LockOrBurnInV1({
+                receiver: abi.encode(RECEIVER),
+                remoteChainSelector: REMOTE_CHAIN,
+                originalSender: SENDER,
+                amount: amount_,
+                localToken: address(OHM)
+            });
+    }
+
+    function test_lockOrBurn_givenDisabled_reverts() public givenTokenPoolIsInstalled {
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+    }
+
+    function test_lockOrBurn_givenDifferentToken_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Create a new OHM token that will be passed to lockOrBurn
+        MockOhm newOhm = new MockOhm("Olympus2", "OHM2", 9);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(TokenPool.InvalidToken.selector, address(newOhm)));
+
+        // Call function
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(
+            Pool.LockOrBurnInV1({
+                receiver: abi.encode(RECEIVER),
+                remoteChainSelector: REMOTE_CHAIN,
+                originalSender: SENDER,
+                amount: AMOUNT,
+                localToken: address(newOhm)
+            })
+        );
+    }
+
+    function test_lockOrBurn_givenUnsupportedRemoteChain_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(TokenPool.ChainNotAllowed.selector, REMOTE_CHAIN));
+
+        // Call function
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+    }
+
+    function test_lockOrBurn_remoteChainCursed_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Mark the remote chain as cursed
+        RMNProxy.setIsCursed(bytes16(uint128(REMOTE_CHAIN)), true);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(TokenPool.CursedByRMN.selector));
+
+        // Call function
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+    }
+
+    function test_lockOrBurn_callerNotOnRamp_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(TokenPool.CallerIsNotARampOnRouter.selector, SENDER)
+        );
+
+        // Call function
+        vm.prank(SENDER);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+    }
+
+    function test_lockOrBurn_insufficientBalance_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenTokenPoolHasOHM(AMOUNT - 1)
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CCIPMintBurnTokenPool.TokenPool_InsufficientBalance.selector,
+                AMOUNT,
+                AMOUNT - 1
+            )
+        );
+
+        // Call function
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+    }
+
+    function test_lockOrBurn_zeroAmount_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenTokenPoolHasOHM(AMOUNT - 1)
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(CCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
+        );
+
+        // Call function
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(0));
+    }
+
+    function test_lockOrBurn_notMainnet()
+        public
+        givenChainIsNotMainnet
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenTokenPoolHasOHM(AMOUNT)
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Burned(SENDER, AMOUNT);
+
+        // Call function
+        vm.prank(ONRAMP);
+        Pool.LockOrBurnOutV1 memory result = tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+
+        // Assert
+        _assertBridgedSupply(0); // No change
+        _assertMinterApproval(0); // No change
+        _assertOhmBalance(0); // Burned
+        assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
+        assertEq(result.destPoolData, abi.encode(9), "destPoolData");
+    }
+
+    function test_lockOrBurn_mainnet()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenTokenPoolHasOHM(AMOUNT)
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Burned(SENDER, AMOUNT);
+
+        // Call function
+        vm.prank(ONRAMP);
+        Pool.LockOrBurnOutV1 memory result = tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
+
+        // Assert
+        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT); // Incremented
+        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT); // Incremented
+        _assertOhmBalance(0); // Burned
+        assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
+        assertEq(result.destPoolData, abi.encode(9), "destPoolData");
+    }
 
     // releaseOrMint
     // given the policy is disabled
     //  [ ] it reverts
     // given the provided token is not the configured token of the token pool
     //  [ ] it reverts
-    // given the destination chain is cursed by the RMN
+    // given the source chain is not supported
     //  [ ] it reverts
-    // given the caller is not the configured OnRamp for the source chain
+    // given the source chain is cursed by the RMN
+    //  [ ] it reverts
+    // given the caller is not the configured OffRamp for the source chain
     //  [ ] it reverts
     // given the sender has not approved the router to spend the OHM tokens
     //  [ ] it reverts

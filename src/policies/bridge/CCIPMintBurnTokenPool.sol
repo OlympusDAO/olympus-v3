@@ -47,7 +47,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
 
     error TokenPool_InvalidRecipient(address recipient);
 
-    error TokenPool_InsufficientAmount(uint256 expected, uint256 actual);
+    error TokenPool_InsufficientBalance(uint256 expected, uint256 actual);
 
     // =========  STATE VARIABLES ========= //
 
@@ -112,9 +112,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         if (address(i_token) != address(MINTR.ohm()))
             revert TokenPool_InvalidToken(address(MINTR.ohm()), address(i_token));
 
-        // Also confirm that OHM has 9 decimals (hard-coded in the constructor)
-        if (MINTR.ohm().decimals() != 9)
-            revert TokenPool_InvalidTokenDecimals(9, MINTR.ohm().decimals());
+        // No need to check that OHM has 9 decimals, as this is done in the constructor
 
         // Validate bridged supply
         // This is done in both enable() and configureDependencies()
@@ -158,7 +156,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     ///             - Emits the Burned event
     function lockOrBurn(
         Pool.LockOrBurnInV1 calldata lockOrBurnIn
-    ) external virtual override returns (Pool.LockOrBurnOutV1 memory) {
+    ) external virtual override onlyEnabled returns (Pool.LockOrBurnOutV1 memory) {
         // CCIP-provided validation:
         // - Supported token
         // - RMN curse status
@@ -167,6 +165,9 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         //
         // Also consumes the outbound rate limit for the destination chain
         _validateLockOrBurn(lockOrBurnIn);
+
+        // Validate that the amount is not zero
+        if (lockOrBurnIn.amount == 0) revert TokenPool_ZeroAmount();
 
         // We should ideally check that the destination token pool is on the whitelist, but it is not provided in `Pool.LockOrBurnInV1`
 
@@ -183,7 +184,15 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
 
         // The Router will have sent the OHM to this contract already
 
+        // Check that there is sufficient balance
+        {
+            uint256 balance = i_token.balanceOf(address(this));
+            if (balance < lockOrBurnIn.amount)
+                revert TokenPool_InsufficientBalance(lockOrBurnIn.amount, balance);
+        }
+
         // Burn the OHM
+        i_token.approve(address(MINTR), lockOrBurnIn.amount);
         MINTR.burnOhm(address(this), lockOrBurnIn.amount);
 
         emit Burned(lockOrBurnIn.originalSender, lockOrBurnIn.amount);
@@ -210,7 +219,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     ///             manually executed (after resolving the issue that caused the revert).
     function releaseOrMint(
         Pool.ReleaseOrMintInV1 calldata releaseOrMintIn
-    ) public virtual override returns (Pool.ReleaseOrMintOutV1 memory) {
+    ) public virtual override onlyEnabled returns (Pool.ReleaseOrMintOutV1 memory) {
         // CCIP-provided validation:
         // - Supported token
         // - RMN curse status
@@ -296,4 +305,6 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     function getBridgedSupply() external view returns (uint256) {
         return _bridgedSupply;
     }
+
+    // TODO override admin functions to allow for RBAC
 }
