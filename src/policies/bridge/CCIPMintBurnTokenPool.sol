@@ -49,6 +49,8 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
 
     error TokenPool_InsufficientBalance(uint256 expected, uint256 actual);
 
+    error TokenPool_BridgedSupplyExceeded(uint256 bridgedSupply, uint256 amount);
+
     // =========  STATE VARIABLES ========= //
 
     /// @notice Bophades module for minting and burning OHM
@@ -236,22 +238,30 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
             _parseRemoteDecimals(releaseOrMintIn.sourcePoolData)
         );
 
+        // Validate that the amount is not zero
+        if (localAmount == 0) revert TokenPool_ZeroAmount();
+
         // Tracking of bridged amounts
         if (isChainMainnet) {
+            // Validate that the amount is not greater than the bridged supply
+            if (localAmount > _bridgedSupply)
+                revert TokenPool_BridgedSupplyExceeded(_bridgedSupply, localAmount);
+
             // If the contract is on mainnet, decrement the bridged supply
             // This puts a hard cap on the amount of OHM that can be bridged back to mainnet
-            _bridgedSupply -= releaseOrMintIn.amount;
+            _bridgedSupply -= localAmount;
 
             // Mint approval would have already been granted in `lockOrBurn` when bridging from mainnet
         } else {
             // If the contract is not on mainnet, increment the mint approval
             // Although this permits infinite minting on the non-mainnet chain, it would not be possible to bridge back to mainnet due to the hard cap set by `bridgedSupply`
-            MINTR.increaseMintApproval(address(this), releaseOrMintIn.amount);
+            MINTR.increaseMintApproval(address(this), localAmount);
         }
 
         // Mint to the receiver
         MINTR.mintOhm(releaseOrMintIn.receiver, localAmount);
 
+        // TODO see if we can get the original sender if EVM
         emit Minted(msg.sender, releaseOrMintIn.receiver, localAmount);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: localAmount});

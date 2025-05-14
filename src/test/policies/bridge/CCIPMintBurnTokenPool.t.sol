@@ -38,7 +38,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     RolesAdmin public rolesAdmin;
     CCIPMintBurnTokenPool public tokenPool;
 
-    uint256 public constant INITIAL_BRIDGED_SUPPLY = 123_456;
+    uint256 public constant INITIAL_BRIDGED_SUPPLY = 1_234_567_890;
 
     address public SENDER;
     address public RECEIVER;
@@ -238,8 +238,12 @@ contract CCIPMintBurnTokenPoolTest is Test {
         );
     }
 
-    function _assertOhmBalance(uint256 expected_) internal view {
-        assertEq(OHM.balanceOf(address(tokenPool)), expected_, "ohm balance");
+    function _assertTokenPoolOhmBalance(uint256 expected_) internal view {
+        assertEq(OHM.balanceOf(address(tokenPool)), expected_, "token pool ohm balance");
+    }
+
+    function _assertReceiverOhmBalance(uint256 expected_) internal view {
+        assertEq(OHM.balanceOf(RECEIVER), expected_, "receiver ohm balance");
     }
 
     // =========  TESTS ========= //
@@ -757,7 +761,8 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Assert
         _assertBridgedSupply(0); // No change
         _assertMinterApproval(0); // No change
-        _assertOhmBalance(0); // Burned
+        _assertTokenPoolOhmBalance(0); // Burned
+        _assertReceiverOhmBalance(0);
         assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
         assertEq(result.destPoolData, abi.encode(9), "destPoolData");
     }
@@ -780,37 +785,220 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Assert
         _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT); // Incremented
         _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT); // Incremented
-        _assertOhmBalance(0); // Burned
+        _assertTokenPoolOhmBalance(0); // Burned
+        _assertReceiverOhmBalance(0);
         assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
         assertEq(result.destPoolData, abi.encode(9), "destPoolData");
     }
 
     // releaseOrMint
     // given the policy is disabled
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the provided token is not the configured token of the token pool
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the source chain is not supported
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the source chain is cursed by the RMN
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the caller is not the configured OffRamp for the source chain
-    //  [ ] it reverts
-    // given the sender has not approved the router to spend the OHM tokens
-    //  [ ] it reverts
-    // given the sender has an insufficient balance of OHM tokens
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the amount of tokens to be bridged is 0
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the current chain is mainnet or sepolia
-    //  [ ] the bridgedSupply is decremented by the amount of tokens bridged
-    //  [ ] the MINTR approval is decreased by the amount of tokens bridged
-    //  [ ] the OHM tokens are minted to the recipient
-    //  [ ] a Minted event is emitted
-    //  [ ] it returns the amount of tokens minted
-    // [ ] the bridgedSupply is not decremented
-    // [ ] the MINTR approval is not decremented
-    // [ ] the OHM tokens are minted to the recipient
-    // [ ] a Minted event is emitted
-    // [ ] it returns the amount of tokens minted
+    //   when the amount of tokens to be bridged is greater than the bridgedSupply
+    //    [X] it reverts
+    //  [X] the bridgedSupply is decremented by the amount of tokens bridged
+    //  [X] the MINTR approval is decreased by the amount of tokens bridged
+    //  [X] the OHM tokens are minted to the recipient
+    //  [X] a Minted event is emitted
+    //  [X] it returns the amount of tokens minted
+    // [X] the bridgedSupply is not decremented
+    // [X] the MINTR approval is not decremented
+    // [X] the OHM tokens are minted to the recipient
+    // [X] a Minted event is emitted
+    // [X] it returns the amount of tokens minted
+
+    function _getReleaseOrMintParams(
+        uint256 amount_
+    ) internal view returns (Pool.ReleaseOrMintInV1 memory) {
+        return
+            Pool.ReleaseOrMintInV1({
+                originalSender: abi.encode(SENDER),
+                remoteChainSelector: REMOTE_CHAIN,
+                receiver: RECEIVER,
+                amount: amount_,
+                localToken: address(OHM),
+                sourcePoolAddress: abi.encode(REMOTE_POOL),
+                sourcePoolData: abi.encode(9),
+                offchainTokenData: ""
+            });
+    }
+
+    function test_releaseOrMint_givenDisabled_reverts() public givenTokenPoolIsInstalled {
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(OFFRAMP);
+        tokenPool.releaseOrMint(_getReleaseOrMintParams(AMOUNT));
+    }
+
+    function test_releaseOrMint_givenDifferentToken_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Create a new OHM token that will be passed to releaseOrMint
+        MockOhm newOhm = new MockOhm("Olympus2", "OHM2", 9);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(TokenPool.InvalidToken.selector, address(newOhm)));
+
+        // Call function
+        vm.prank(OFFRAMP);
+        tokenPool.releaseOrMint(
+            Pool.ReleaseOrMintInV1({
+                originalSender: abi.encode(SENDER),
+                remoteChainSelector: REMOTE_CHAIN,
+                receiver: RECEIVER,
+                amount: AMOUNT,
+                localToken: address(newOhm),
+                sourcePoolAddress: abi.encode(REMOTE_POOL),
+                sourcePoolData: abi.encode(9),
+                offchainTokenData: ""
+            })
+        );
+    }
+
+    function test_releaseOrMint_givenUnsupportedRemoteChain_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+    {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(TokenPool.ChainNotAllowed.selector, REMOTE_CHAIN));
+
+        // Call function
+        vm.prank(OFFRAMP);
+        tokenPool.releaseOrMint(_getReleaseOrMintParams(AMOUNT));
+    }
+
+    function test_releaseOrMint_sourceChainCursed_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Mark the remote chain as cursed
+        RMNProxy.setIsCursed(bytes16(uint128(REMOTE_CHAIN)), true);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(TokenPool.CursedByRMN.selector));
+
+        // Call function
+        vm.prank(OFFRAMP);
+        tokenPool.releaseOrMint(_getReleaseOrMintParams(AMOUNT));
+    }
+
+    function test_releaseOrMint_callerNotOffRamp_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(TokenPool.CallerIsNotARampOnRouter.selector, SENDER)
+        );
+
+        // Call function
+        vm.prank(SENDER);
+        tokenPool.releaseOrMint(_getReleaseOrMintParams(AMOUNT));
+    }
+
+    function test_releaseOrMint_zeroAmount_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(CCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
+        );
+
+        // Call function
+        vm.prank(OFFRAMP);
+        tokenPool.releaseOrMint(_getReleaseOrMintParams(0));
+    }
+
+    function test_releaseOrMint_notMainnet()
+        public
+        givenChainIsNotMainnet
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Minted(OFFRAMP, RECEIVER, AMOUNT);
+
+        // Call function
+        vm.prank(OFFRAMP);
+        Pool.ReleaseOrMintOutV1 memory result = tokenPool.releaseOrMint(
+            _getReleaseOrMintParams(AMOUNT)
+        );
+
+        // Assert
+        _assertBridgedSupply(0); // No change
+        _assertMinterApproval(0); // Incremented, then minting brings back to 0
+        _assertTokenPoolOhmBalance(0);
+        _assertReceiverOhmBalance(AMOUNT);
+        assertEq(result.destinationAmount, AMOUNT, "destinationAmount");
+    }
+
+    function test_releaseOrMint_mainnet()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Minted(OFFRAMP, RECEIVER, AMOUNT);
+
+        // Call function
+        vm.prank(OFFRAMP);
+        Pool.ReleaseOrMintOutV1 memory result = tokenPool.releaseOrMint(
+            _getReleaseOrMintParams(AMOUNT)
+        );
+
+        // Assert
+        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY - AMOUNT); // Amount deducted
+        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY - AMOUNT); // Amount deducted
+        _assertTokenPoolOhmBalance(0);
+        _assertReceiverOhmBalance(AMOUNT);
+        assertEq(result.destinationAmount, AMOUNT, "destinationAmount");
+    }
+
+    function test_releaseOrMint_greaterThanBridgedSupply_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
+                INITIAL_BRIDGED_SUPPLY,
+                INITIAL_BRIDGED_SUPPLY + 1
+            )
+        );
+
+        // Call function
+        vm.prank(OFFRAMP);
+        tokenPool.releaseOrMint(_getReleaseOrMintParams(INITIAL_BRIDGED_SUPPLY + 1));
+    }
 }
