@@ -2,10 +2,10 @@
 pragma solidity ^0.8.0;
 
 import {ProposalTest} from "./ProposalTest.sol";
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel, toKeycode} from "src/Kernel.sol";
 
 // OIP_XXX imports
-import {OIP_XXX, Clearinghouse, CHREGv1, IERC20, IERC4626} from "src/proposals/OIP_XXX.sol";
+import {OIP_XXX, Clearinghouse, CHREGv1, IERC20} from "src/proposals/OIP_XXX.sol";
 
 contract OIPXXXTest is ProposalTest {
     // Data struct to cache initial balances.
@@ -30,7 +30,8 @@ contract OIPXXXTest is ProposalTest {
         hasBeenSubmitted = false;
 
         // Simulate the proposal
-        _simulateProposal(address(proposal));
+        _setupSuite(address(proposal));
+        _simulateProposal();
     }
 
     /// -- OPTIONAL INTEGRATION TESTS ----------------------------------------------------

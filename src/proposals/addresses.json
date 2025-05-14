@@ -150,6 +150,11 @@
         "name": "olympus-policy-contract-registry-admin"
     },
     {
+        "addr": "0xD3204Ae00d6599Ba6e182c6D640A79d76CdAad74",
+        "chainId": 1,
+        "name": "olympus-module-dlgte"
+    },
+    {
         "addr": "0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC",
         "chainId": 1,
         "name": "olympus-policy-cooler-v2"
