@@ -19,6 +19,8 @@ import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
 /// @notice Bophades policy to handling minting and burning of OHM using Chainlink CCIP
 /// @dev    This is a modified version of the `BurnMintTokenPoolAbstract` contract from Chainlink CCIP
 ///         As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
+///
+///         Despite being a policy, the admin functions inherited from `TokenPool` are not virtual and cannot be overriden, and so remain gated to the owner.
 contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     // Tasks
     // [X] Add PolicyEnabler
@@ -261,10 +263,37 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
         // Mint to the receiver
         MINTR.mintOhm(releaseOrMintIn.receiver, localAmount);
 
-        // TODO see if we can get the original sender if EVM
-        emit Minted(msg.sender, releaseOrMintIn.receiver, localAmount);
+        emit Minted(
+            _tryDecodeAddress(releaseOrMintIn.originalSender),
+            releaseOrMintIn.receiver,
+            localAmount
+        );
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: localAmount});
+    }
+
+    /// @notice Attemps to decode an address from ABI-encoded bytes data
+    /// @dev    This function avoids reverting if the bytes array is not in the correct format, and returns the zero address instead
+    function _tryDecodeAddress(bytes memory data_) internal pure returns (address) {
+        // ABI-encoded address is always 32 bytes
+        if (data_.length != 32) return address(0);
+
+        // ABI-encoded address has 12 leading zeroes
+        bool isAddress = true;
+        for (uint256 i = 0; i < 12; i++) {
+            if (data_[i] != 0) {
+                isAddress = false;
+                break;
+            }
+        }
+        if (!isAddress) return address(0);
+
+        // Decode the address
+        address addr;
+        assembly {
+            addr := mload(add(data_, 32))
+        }
+        return addr;
     }
 
     // ========= ENABLE FUNCTIONS ========= //
@@ -315,6 +344,4 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
     function getBridgedSupply() external view returns (uint256) {
         return _bridgedSupply;
     }
-
-    // TODO override admin functions to allow for RBAC
 }

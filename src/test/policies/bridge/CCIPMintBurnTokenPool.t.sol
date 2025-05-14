@@ -950,12 +950,46 @@ contract CCIPMintBurnTokenPoolTest is Test {
     {
         // Expect event
         vm.expectEmit();
-        emit Minted(OFFRAMP, RECEIVER, AMOUNT);
+        emit Minted(SENDER, RECEIVER, AMOUNT);
 
         // Call function
         vm.prank(OFFRAMP);
         Pool.ReleaseOrMintOutV1 memory result = tokenPool.releaseOrMint(
             _getReleaseOrMintParams(AMOUNT)
+        );
+
+        // Assert
+        _assertBridgedSupply(0); // No change
+        _assertMinterApproval(0); // Incremented, then minting brings back to 0
+        _assertTokenPoolOhmBalance(0);
+        _assertReceiverOhmBalance(AMOUNT);
+        assertEq(result.destinationAmount, AMOUNT, "destinationAmount");
+    }
+
+    function test_releaseOrMint_notMainnet_originalSenderNotEVM()
+        public
+        givenChainIsNotMainnet
+        givenTokenPoolIsInstalled
+        givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Minted(0x0000000000000000000000000000000000000000, RECEIVER, AMOUNT);
+
+        // Call function
+        vm.prank(OFFRAMP);
+        Pool.ReleaseOrMintOutV1 memory result = tokenPool.releaseOrMint(
+            Pool.ReleaseOrMintInV1({
+                originalSender: abi.encode(bytes32("11111111111111111111111111111111")), // Mimic an SVM address
+                remoteChainSelector: REMOTE_CHAIN,
+                receiver: RECEIVER,
+                amount: AMOUNT,
+                localToken: address(OHM),
+                sourcePoolAddress: abi.encode(REMOTE_POOL),
+                sourcePoolData: abi.encode(9),
+                offchainTokenData: ""
+            })
         );
 
         // Assert
@@ -974,7 +1008,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     {
         // Expect event
         vm.expectEmit();
-        emit Minted(OFFRAMP, RECEIVER, AMOUNT);
+        emit Minted(SENDER, RECEIVER, AMOUNT);
 
         // Call function
         vm.prank(OFFRAMP);
