@@ -195,6 +195,12 @@ contract CCIPMintBurnTokenPoolTest is Test {
         _;
     }
 
+    modifier givenBridgedOut(uint256 amount_) {
+        vm.prank(ONRAMP);
+        tokenPool.lockOrBurn(_getLockOrBurnParams(amount_));
+        _;
+    }
+
     function _increaseMinterApproval(uint256 amount) internal {
         vm.prank(mintrGodmode);
         MINTR.increaseMintApproval(address(tokenPool), amount);
@@ -361,18 +367,19 @@ contract CCIPMintBurnTokenPoolTest is Test {
         public
         givenTokenPoolIsInstalled
         givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenTokenPoolHasOHM(AMOUNT)
+        givenBridgedOut(AMOUNT)
         givenIsDisabled
     {
-        // TODO mimic a bridge so that the bridgedSupply is different to the initial value
-
         // Call function
         vm.prank(ADMIN);
         tokenPool.enable("");
 
         // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY);
+        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT);
         _assertBridgedSupplyInitialized(true);
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY);
+        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT);
         _assertIsEnabled(true);
     }
 
@@ -535,17 +542,18 @@ contract CCIPMintBurnTokenPoolTest is Test {
         public
         givenTokenPoolIsInstalled
         givenIsEnabled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenTokenPoolHasOHM(AMOUNT)
+        givenBridgedOut(AMOUNT)
         givenPolicyIsDeactivated
     {
-        // TODO mimic a bridge so that the bridgedSupply is different to the initial value
-
         // Call function
         _installTokenPool();
 
         // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY);
+        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT);
         _assertBridgedSupplyInitialized(true);
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY);
+        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT);
         _assertIsEnabled(true); // Previously enabled
         _assertIsPolicyActive(true);
     }
