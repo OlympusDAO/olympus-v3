@@ -73,10 +73,6 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         // Validate the amount
         if (amount_ == 0) revert Bridge_ZeroAmount();
 
-        // Check that the required amount is available
-        if (OHM.balanceOf(msg.sender) < amount_)
-            revert Bridge_InsufficientAmount(amount_, OHM.balanceOf(msg.sender));
-
         // Build the CCIP message
         Client.EVM2AnyMessage memory ccipMessage = _buildCCIPMessage(to_, amount_, extraArgs_);
 
