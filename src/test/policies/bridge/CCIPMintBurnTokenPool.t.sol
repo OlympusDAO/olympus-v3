@@ -254,8 +254,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
 
     // =========  TESTS ========= //
 
-    // TODO rate limiting
-
     // constructor
     // given the chain is mainnet
     //  [X] isChainMainnet is true
