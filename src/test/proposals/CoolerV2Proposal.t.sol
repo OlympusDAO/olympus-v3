@@ -22,7 +22,7 @@ contract CoolerV2ProposalTest is ProposalTest {
         CoolerV2Proposal proposal = new CoolerV2Proposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         _setupSuite(address(proposal));
         kernel = Kernel(addresses.getAddress("olympus-kernel"));
