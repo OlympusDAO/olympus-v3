@@ -62,7 +62,8 @@ contract CoolerV2DelegatesForHohmProposal is GovernorBravoProposal {
                 "- Cooler V2: Unhealhy positions can have their delegations permisionlessly removed in batches. Once the number of delegations are reduced, the liquidation can proceed as normal.\n",
                 "## Assumptions\n\n",
                 "- The DLGTE module has been installed into the Kernel\n",
-                "- The Mono Cooler policy has been activated in the Kernel\n",
+                "- The LTV Oracle, Treasury Borrower and Mono Cooler policies have been activated in the Kernel\n",
+                "- The Treasury Borrower policy has been set on the Mono Cooler policy\n\n",
                 "## Proposal Steps\n\n",
                 string.concat(
                     "1. Set the maximum delegate addresses for hOHM to ",
