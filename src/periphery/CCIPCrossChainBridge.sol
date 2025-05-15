@@ -83,6 +83,9 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         // Validate that the sender has provided sufficient native token to cover fees
         if (msg.value < fees) revert Bridge_InsufficientNativeToken(fees, msg.value);
 
+        // Sending the excess native token to the sender can create problems if the sender cannot receive it
+        // Any excess can be retrieved by the owner via the `withdraw` function
+
         // Validate that the sender has sufficient OHM
         if (OHM.balanceOf(msg.sender) < amount_)
             revert Bridge_InsufficientAmount(amount_, OHM.balanceOf(msg.sender));
@@ -106,7 +109,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         uint64 dstChainSelector_,
         bytes32 to_,
         uint256 amount_
-    ) external onlyEnabled {
+    ) external payable onlyEnabled {
         // Send the message to the router
         _sendOhm(
             dstChainSelector_,
@@ -129,7 +132,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         uint64 dstChainSelector_,
         address to_,
         uint256 amount_
-    ) external onlyEnabled {
+    ) external payable onlyEnabled {
         // Validate the recipient EVM address
         if (to_ == address(0)) revert Bridge_InvalidAddress("to");
 

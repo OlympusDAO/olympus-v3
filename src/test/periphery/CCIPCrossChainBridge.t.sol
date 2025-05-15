@@ -2,9 +2,11 @@
 pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 import {CCIPCrossChainBridge} from "src/periphery/CCIPCrossChainBridge.sol";
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
+import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
@@ -39,6 +41,7 @@ contract CCIPCrossChainBridgeTest is Test {
         bytes32(0x0000000000000000000000000000000000000000000000000000000000000022);
     uint256 public constant AMOUNT = 1e9;
     uint256 public constant ETH_AMOUNT = 1e18;
+    uint256 public constant FEE = 1e16;
 
     function setUp() public {
         SENDER = makeAddr("SENDER");
@@ -48,6 +51,7 @@ contract CCIPCrossChainBridgeTest is Test {
 
         OHM = new MockERC20("Olympus", "OHM", 9);
         router = new MockCCIPRouter();
+        router.setFee(FEE);
 
         bridge = new CCIPCrossChainBridge(address(OHM), address(router), OWNER);
 
@@ -62,7 +66,7 @@ contract CCIPCrossChainBridgeTest is Test {
 
     modifier givenSenderHasApprovedSpendingOHM(uint256 amount_) {
         vm.prank(SENDER);
-        OHM.approve(address(router), amount_);
+        OHM.approve(address(bridge), amount_);
         _;
     }
 
@@ -219,44 +223,288 @@ contract CCIPCrossChainBridgeTest is Test {
 
     // sendToSVM
     // given the contract is not enabled
-    //  [ ] it reverts
-    // when the sender has not provided enough native token to cover fees
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the amount is zero
-    //  [ ] it reverts
+    //  [X] it reverts
+    // when the sender has not provided enough native token to cover fees
+    //  [X] it reverts
     // given the sender has insufficient OHM
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the sender has not approved the contract to spend OHM
-    //  [ ] it reverts
-    // [ ] the recipient address is the default public key
-    // [ ] the SVM extra args compute units are the default compute units
-    // [ ] the SVM extra args writeable bitmap is 0
-    // [ ] the SVM extra args allow out of order execution is true
-    // [ ] the SVM extra args recipient is the recipient address
-    // [ ] the SVM extra args accounts is an empty array
-    // [ ] the contract transfers the OHM from the sender to itself
-    // [ ] the CCIP router is called with the correct parameters
-    // [ ] the CCIP router transfers the OHM to itself
-    // [ ] a Bridged event is emitted
+    //  [X] it reverts
+    // [X] the recipient address is the default public key
+    // [X] the SVM extra args compute units are the default compute units
+    // [X] the SVM extra args writeable bitmap is 0
+    // [X] the SVM extra args allow out of order execution is true
+    // [X] the SVM extra args recipient is the recipient address
+    // [X] the SVM extra args accounts is an empty array
+    // [X] the bridge transfers the OHM from the sender to itself
+    // [X] the bridge transfers the fee from the sender to itself
+    // [X] the CCIP router is called with the correct parameters
+    // [X] the CCIP router transfers the OHM to itself
+    // [X] the CCIP router transfers the fee to itself
+    // [X] a Bridged event is emitted
+
+    function test_sendToSVM_notEnabled_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotEnabled.selector));
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToSVM_amountZero_reverts() public givenContractIsEnabled {
+        // Expect revert
+        vm.expectRevert(ICCIPCrossChainBridge.Bridge_ZeroAmount.selector);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, 0);
+    }
+
+    function test_sendToSVM_notEnoughNativeToken_reverts(
+        uint256 msgValue_
+    ) public givenContractIsEnabled {
+        // Bound the msg.value to be less than the fee
+        msgValue_ = bound(msgValue_, 0, FEE - 1);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_InsufficientNativeToken.selector,
+                FEE,
+                msgValue_
+            )
+        );
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: msgValue_}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToSVM_insufficientOHM_reverts(
+        uint256 sendAmount_
+    ) public givenContractIsEnabled {
+        // Bound the send amount to be more than the sender's OHM balance
+        sendAmount_ = bound(sendAmount_, AMOUNT + 1, type(uint256).max);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_InsufficientAmount.selector,
+                sendAmount_,
+                AMOUNT
+            )
+        );
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, sendAmount_);
+    }
+
+    function test_sendToSVM_spendingNotApproved_reverts()
+        public
+        givenContractIsEnabled
+        givenSenderHasApprovedSpendingOHM(AMOUNT - 1)
+    {
+        // Expect revert
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToSVM()
+        public
+        givenContractIsEnabled
+        givenSenderHasApprovedSpendingOHM(AMOUNT)
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Bridged(router.DEFAULT_MESSAGE_ID(), DESTINATION_CHAIN_SELECTOR, SENDER, AMOUNT, FEE);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+
+        // Assert message parameters
+        assertEq(
+            router.destinationChainSelector(),
+            DESTINATION_CHAIN_SELECTOR,
+            "destinationChainSelector"
+        );
+        assertEq(router.messageReceiver(), "11111111111111111111111111111111", "messageReceiver");
+        assertEq(router.messageData().length, 0, "messageData");
+        assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
+        address[] memory tokens = router.getMessageTokens();
+        assertEq(tokens.length, 1, "tokens.length");
+        assertEq(tokens[0], address(OHM), "tokens[0]");
+        uint256[] memory amounts = router.getMessageTokenAmounts();
+        assertEq(amounts.length, 1, "amounts.length");
+        assertEq(amounts[0], AMOUNT, "amounts[0]");
+        bytes memory extraArgs = router.messageExtraArgs();
+        assertEq(
+            extraArgs,
+            Client._svmArgsToBytes(
+                Client.SVMExtraArgsV1({
+                    computeUnits: 0,
+                    accountIsWritableBitmap: 0,
+                    allowOutOfOrderExecution: true,
+                    tokenReceiver: SVM_RECIPIENT,
+                    accounts: new bytes32[](0)
+                })
+            ),
+            "extraArgs"
+        );
+
+        // Assert token balances
+        assertEq(OHM.balanceOf(SENDER), 0, "SENDER OHM balance");
+        assertEq(OHM.balanceOf(address(bridge)), 0, "bridge OHM balance");
+        assertEq(OHM.balanceOf(address(router)), AMOUNT, "router OHM balance");
+        assertEq(SENDER.balance, ETH_AMOUNT - FEE, "SENDER ETH balance");
+        assertEq(address(bridge).balance, 0, "bridge ETH balance");
+        assertEq(address(router).balance, FEE, "router ETH balance");
+    }
 
     // sendToEVM
     // given the contract is not enabled
-    //  [ ] it reverts
-    // when the sender has not provided enough native token to cover fees
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the amount is zero
-    //  [ ] it reverts
+    //  [X] it reverts
+    // when the sender has not provided enough native token to cover fees
+    //  [X] it reverts
     // given the sender has insufficient OHM
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the sender has not approved the contract to spend OHM
-    //  [ ] it reverts
-    // [ ] the recipient address is the recipient address
-    // [ ] the EVM extra args gas limit is the default gas limit
-    // [ ] the EVM extra args allow out of order execution is true
-    // [ ] the contract transfers the OHM from the sender to itself
-    // [ ] the CCIP router is called with the correct parameters
-    // [ ] the CCIP router transfers the OHM to itself
-    // [ ] a Bridged event is emitted
+    //  [X] it reverts
+    // [X] the recipient address is the recipient address
+    // [X] the EVM extra args gas limit is the default gas limit
+    // [X] the EVM extra args allow out of order execution is true
+    // [X] the bridge transfers the OHM from the sender to itself
+    // [X] the bridge transfers the fee from the sender to itself
+    // [X] the CCIP router is called with the correct parameters
+    // [X] the CCIP router transfers the OHM to itself
+    // [X] the CCIP router transfers the fee to itself
+    // [X] a Bridged event is emitted
+
+    function test_sendToEVM_notEnabled_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotEnabled.selector));
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToEVM_amountZero_reverts() public givenContractIsEnabled {
+        // Expect revert
+        vm.expectRevert(ICCIPCrossChainBridge.Bridge_ZeroAmount.selector);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, 0);
+    }
+
+    function test_sendToEVM_notEnoughNativeToken_reverts(
+        uint256 msgValue_
+    ) public givenContractIsEnabled {
+        // Bound the msg.value to be less than the fee
+        msgValue_ = bound(msgValue_, 0, FEE - 1);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_InsufficientNativeToken.selector,
+                FEE,
+                msgValue_
+            )
+        );
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: msgValue_}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToEVM_insufficientOHM_reverts(
+        uint256 sendAmount_
+    ) public givenContractIsEnabled {
+        // Bound the send amount to be more than the sender's OHM balance
+        sendAmount_ = bound(sendAmount_, AMOUNT + 1, type(uint256).max);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_InsufficientAmount.selector,
+                sendAmount_,
+                AMOUNT
+            )
+        );
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, sendAmount_);
+    }
+
+    function test_sendToEVM_spendingNotApproved_reverts()
+        public
+        givenContractIsEnabled
+        givenSenderHasApprovedSpendingOHM(AMOUNT - 1)
+    {
+        // Expect revert
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToEVM()
+        public
+        givenContractIsEnabled
+        givenSenderHasApprovedSpendingOHM(AMOUNT)
+    {
+        // Expect event
+        vm.expectEmit();
+        emit Bridged(router.DEFAULT_MESSAGE_ID(), DESTINATION_CHAIN_SELECTOR, SENDER, AMOUNT, FEE);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+
+        // Assert message parameters
+        assertEq(
+            router.destinationChainSelector(),
+            DESTINATION_CHAIN_SELECTOR,
+            "destinationChainSelector"
+        );
+        assertEq(router.messageReceiver(), abi.encode(EVM_RECIPIENT), "messageReceiver");
+        assertEq(router.messageData().length, 0, "messageData");
+        assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
+        address[] memory tokens = router.getMessageTokens();
+        assertEq(tokens.length, 1, "tokens.length");
+        assertEq(tokens[0], address(OHM), "tokens[0]");
+        uint256[] memory amounts = router.getMessageTokenAmounts();
+        assertEq(amounts.length, 1, "amounts.length");
+        assertEq(amounts[0], AMOUNT, "amounts[0]");
+        bytes memory extraArgs = router.messageExtraArgs();
+        assertEq(
+            extraArgs,
+            Client._argsToBytes(
+                Client.GenericExtraArgsV2({gasLimit: 0, allowOutOfOrderExecution: true})
+            ),
+            "extraArgs"
+        );
+
+        // Assert token balances
+        assertEq(OHM.balanceOf(SENDER), 0, "SENDER OHM balance");
+        assertEq(OHM.balanceOf(address(bridge)), 0, "bridge OHM balance");
+        assertEq(OHM.balanceOf(address(router)), AMOUNT, "router OHM balance");
+        assertEq(SENDER.balance, ETH_AMOUNT - FEE, "SENDER ETH balance");
+        assertEq(address(bridge).balance, 0, "bridge ETH balance");
+        assertEq(address(router).balance, FEE, "router ETH balance");
+    }
 
     // withdraw
     // when the caller is not the owner

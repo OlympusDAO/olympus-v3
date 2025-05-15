@@ -73,4 +73,12 @@ contract MockCCIPRouter {
 
         return DEFAULT_MESSAGE_ID;
     }
+
+    function getMessageTokens() external view returns (address[] memory) {
+        return messageTokens;
+    }
+
+    function getMessageTokenAmounts() external view returns (uint256[] memory) {
+        return messageTokenAmounts;
+    }
 }
