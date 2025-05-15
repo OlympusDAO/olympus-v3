@@ -11,8 +11,7 @@ import {CoolerV2Proposal} from "src/proposals/CoolerV2Proposal.sol";
 contract CoolerV2ProposalTest is ProposalTest {
     Kernel public kernel;
 
-    // TODO update block after installation by MS
-    uint48 public constant MS_INSTALLATION_BLOCK = 22430380;
+    uint48 public constant MS_INSTALLATION_BLOCK = 22490036;
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
