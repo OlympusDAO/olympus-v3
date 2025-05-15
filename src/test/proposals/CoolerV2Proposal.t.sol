@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {ProposalTest} from "./ProposalTest.sol";
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, Policy, toKeycode} from "src/Kernel.sol";
 import {console2} from "forge-std/console2.sol";
 
 // CoolerV2Proposal imports
@@ -11,8 +11,7 @@ import {CoolerV2Proposal} from "src/proposals/CoolerV2Proposal.sol";
 contract CoolerV2ProposalTest is ProposalTest {
     Kernel public kernel;
 
-    // TODO update block after installation by MS
-    uint48 public constant MS_INSTALLATION_BLOCK = 22430380;
+    uint48 public constant MS_INSTALLATION_BLOCK = 22490036;
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -23,27 +22,43 @@ contract CoolerV2ProposalTest is ProposalTest {
         CoolerV2Proposal proposal = new CoolerV2Proposal();
 
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         _setupSuite(address(proposal));
         kernel = Kernel(addresses.getAddress("olympus-kernel"));
 
-        // Simulate the LoanConsolidatorInstall batch script having been run
+        // Simulate the CoolerV2 batch script having been run
         // The simulation will revert otherwise
-        // This proposal will also fail until the RGSTY proposal has been executed
-        // Install LoanConsolidator
-        if (!hasBeenSubmitted) {
-            console2.log("Activating LTV Oracle");
-            address ltvOracle = addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle");
-            vm.prank(addresses.getAddress("olympus-multisig-dao"));
-            kernel.executeAction(Actions.ActivatePolicy, ltvOracle);
+        {
+            address dlgte = addresses.getAddress("olympus-module-dlgte");
+            if (address(kernel.getModuleForKeycode(toKeycode("DLGTE"))) == address(0)) {
+                console2.log("Installing DLGTE");
+                vm.prank(addresses.getAddress("olympus-multisig-dao"));
+                kernel.executeAction(Actions.InstallModule, dlgte);
+            }
 
-            console2.log("Activating Treasury Borrower");
+            address ltvOracle = addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle");
+            if (!Policy(ltvOracle).isActive()) {
+                console2.log("Activating LTV Oracle");
+                vm.prank(addresses.getAddress("olympus-multisig-dao"));
+                kernel.executeAction(Actions.ActivatePolicy, ltvOracle);
+            }
+
             address treasuryBorrower = addresses.getAddress(
                 "olympus-policy-cooler-v2-treasury-borrower"
             );
-            vm.prank(addresses.getAddress("olympus-multisig-dao"));
-            kernel.executeAction(Actions.ActivatePolicy, treasuryBorrower);
+            if (!Policy(treasuryBorrower).isActive()) {
+                console2.log("Activating Treasury Borrower");
+                vm.prank(addresses.getAddress("olympus-multisig-dao"));
+                kernel.executeAction(Actions.ActivatePolicy, treasuryBorrower);
+            }
+
+            address coolerV2 = addresses.getAddress("olympus-policy-cooler-v2");
+            if (!Policy(coolerV2).isActive()) {
+                console2.log("Activating CoolerV2");
+                vm.prank(addresses.getAddress("olympus-multisig-dao"));
+                kernel.executeAction(Actions.ActivatePolicy, coolerV2);
+            }
         }
 
         // Simulate the proposal
