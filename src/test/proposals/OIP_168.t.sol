@@ -19,6 +19,7 @@ contract OIP168Test is ProposalTest {
         hasBeenSubmitted = true;
 
         // Simulate the proposal
-        _simulateProposal(address(proposal));
+        _setupSuite(address(proposal));
+        _simulateProposal();
     }
 }
