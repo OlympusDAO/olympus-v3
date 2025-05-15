@@ -36,6 +36,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         // Validate
         if (ohm_ == address(0)) revert Bridge_InvalidAddress("ohm");
         if (ccipRouter_ == address(0)) revert Bridge_InvalidAddress("ccipRouter");
+        if (owner_ == address(0)) revert Bridge_InvalidAddress("owner");
 
         // Set state
         OHM = IERC20(ohm_);
@@ -130,7 +131,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         uint256 amount_
     ) external onlyEnabled {
         // Validate the recipient EVM address
-        if (to_ == address(0)) revert Bridge_InvalidRecipient(to_);
+        if (to_ == address(0)) revert Bridge_InvalidAddress("to");
 
         // Send the message to the router
         _sendOhm(
@@ -150,6 +151,9 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
 
     /// @inheritdoc ICCIPCrossChainBridge
     function withdraw(address recipient_) external onlyOwner {
+        // Validate the recipient address
+        if (recipient_ == address(0)) revert Bridge_InvalidAddress("recipient");
+
         // Get the balance of the contract
         uint256 balance = address(this).balance;
 
@@ -159,6 +163,9 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         // Send the balance to the recipient
         (bool success, ) = recipient_.call{value: balance}("");
         if (!success) revert Bridge_TransferFailed(msg.sender, recipient_, balance);
+
+        // Emit the event
+        emit Withdrawn(recipient_, balance);
     }
 
     // ========= ENABLER FUNCTIONS ========= //

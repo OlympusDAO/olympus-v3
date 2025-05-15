@@ -16,8 +16,6 @@ interface ICCIPCrossChainBridge {
 
     error Bridge_InsufficientNativeToken(uint256 expected, uint256 actual);
 
-    error Bridge_InvalidRecipient(address recipient);
-
     error Bridge_TransferFailed(address caller, address recipient, uint256 amount);
 
     // ========= EVENTS ========= //
@@ -33,6 +31,8 @@ interface ICCIPCrossChainBridge {
     event BridgeEnabled();
 
     event BridgeDisabled();
+
+    event Withdrawn(address indexed recipient, uint256 amount);
 
     // ========= SEND OHM ========= //
 

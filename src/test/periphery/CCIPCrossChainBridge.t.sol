@@ -3,32 +3,220 @@ pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
+import {CCIPCrossChainBridge} from "src/periphery/CCIPCrossChainBridge.sol";
+import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
+
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
+
 contract CCIPCrossChainBridgeTest is Test {
+    event Bridged(
+        bytes32 messageId,
+        uint64 destinationChainSelector,
+        address indexed sender,
+        uint256 amount,
+        uint256 fees
+    );
+
+    event BridgeEnabled();
+
+    event BridgeDisabled();
+
+    event Withdrawn(address indexed recipient, uint256 amount);
+
+    CCIPCrossChainBridge public bridge;
+
+    MockERC20 public OHM;
+    MockCCIPRouter public router;
+
+    address public SENDER;
+    address public OWNER;
+    address public EVM_RECIPIENT;
+    address public TRSRY;
+
+    uint64 public constant DESTINATION_CHAIN_SELECTOR = 111111;
+    bytes32 public constant SVM_RECIPIENT =
+        bytes32(0x0000000000000000000000000000000000000000000000000000000000000022);
+    uint256 public constant AMOUNT = 1e9;
+    uint256 public constant ETH_AMOUNT = 1e18;
+
+    function setUp() public {
+        SENDER = makeAddr("SENDER");
+        OWNER = makeAddr("OWNER");
+        EVM_RECIPIENT = makeAddr("EVM_RECIPIENT");
+        TRSRY = makeAddr("TRSRY");
+
+        OHM = new MockERC20("Olympus", "OHM", 9);
+        router = new MockCCIPRouter();
+
+        bridge = new CCIPCrossChainBridge(address(OHM), address(router), OWNER);
+
+        // Deal ETH to the sender
+        deal(SENDER, ETH_AMOUNT);
+
+        // Mint OHM to the sender
+        OHM.mint(SENDER, AMOUNT);
+    }
+
+    // ============ HELPERS ============ //
+
+    modifier givenSenderHasApprovedSpendingOHM(uint256 amount_) {
+        vm.prank(SENDER);
+        OHM.approve(address(router), amount_);
+        _;
+    }
+
+    modifier givenContractIsEnabled() {
+        vm.prank(OWNER);
+        bridge.enable("");
+        _;
+    }
+
+    modifier givenContractIsDisabled() {
+        vm.prank(OWNER);
+        bridge.disable("");
+        _;
+    }
+
+    modifier givenBridgeHasEthBalance(uint256 amount_) {
+        deal(address(bridge), amount_);
+        _;
+    }
+
     // ============ TESTS ============ //
+
     // constructor
     // when the OHM address is the zero address
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the CCIP router address is the zero address
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the owner address is the zero address
-    //  [ ] it reverts
-    // [ ] it sets the OHM address
-    // [ ] it sets the CCIP router address
-    // [ ] it sets the owner address
+    //  [X] it reverts
+    // [X] it sets the OHM address
+    // [X] it sets the CCIP router address
+    // [X] it sets the owner address
+
+    function test_constructor_ohm_zeroAddress_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_InvalidAddress.selector, "ohm")
+        );
+
+        // Call function
+        new CCIPCrossChainBridge(address(0), address(router), OWNER);
+    }
+
+    function test_constructor_router_zeroAddress_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_InvalidAddress.selector,
+                "ccipRouter"
+            )
+        );
+
+        // Call function
+        new CCIPCrossChainBridge(address(OHM), address(0), OWNER);
+    }
+
+    function test_constructor_owner_zeroAddress_reverts() public {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_InvalidAddress.selector, "owner")
+        );
+
+        // Call function
+        new CCIPCrossChainBridge(address(OHM), address(router), address(0));
+    }
+
+    function test_constructor() public {
+        // Call function
+        bridge = new CCIPCrossChainBridge(address(OHM), address(router), OWNER);
+
+        // Assert state
+        assertEq(address(bridge.OHM()), address(OHM));
+        assertEq(address(bridge.CCIP_ROUTER()), address(router));
+        assertEq(address(bridge.owner()), OWNER);
+    }
+
     // enable
     // given the contract is already enabled
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller is not the owner
-    //  [ ] it reverts
-    // [ ] it emits an Enabled event
-    // [ ] it sets the isEnabled flag to true
+    //  [X] it reverts
+    // [X] it emits an Enabled event
+    // [X] it sets the isEnabled flag to true
+
+    function test_enable_alreadyEnabled_reverts() public givenContractIsEnabled {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotDisabled.selector));
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.enable("");
+    }
+
+    function test_enable_notOwner_reverts() public {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.enable("");
+    }
+
+    function test_enable() public {
+        // Expect event
+        vm.expectEmit();
+        emit BridgeEnabled();
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.enable("");
+
+        // Assert state
+        assertEq(bridge.isEnabled(), true, "isEnabled");
+    }
+
     // disable
     // given the contract is not enabled
-    //  [ ] it reverts
+    //  [X] it reverts
     // when the caller is not the owner
-    //  [ ] it reverts
-    // [ ] it emits a Disabled event
-    // [ ] it sets the isEnabled flag to false
+    //  [X] it reverts
+    // [X] it emits a Disabled event
+    // [X] it sets the isEnabled flag to false
+
+    function test_disable_notEnabled_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotEnabled.selector));
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.disable("");
+    }
+
+    function test_disable_notOwner_reverts() public givenContractIsEnabled {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.disable("");
+    }
+
+    function test_disable() public givenContractIsEnabled {
+        // Expect event
+        vm.expectEmit();
+        emit BridgeDisabled();
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.disable("");
+
+        // Assert state
+        assertEq(bridge.isEnabled(), false, "isEnabled");
+    }
+
     // sendToSVM
     // given the contract is not enabled
     //  [ ] it reverts
@@ -50,6 +238,7 @@ contract CCIPCrossChainBridgeTest is Test {
     // [ ] the CCIP router is called with the correct parameters
     // [ ] the CCIP router transfers the OHM to itself
     // [ ] a Bridged event is emitted
+
     // sendToEVM
     // given the contract is not enabled
     //  [ ] it reverts
@@ -68,16 +257,102 @@ contract CCIPCrossChainBridgeTest is Test {
     // [ ] the CCIP router is called with the correct parameters
     // [ ] the CCIP router transfers the OHM to itself
     // [ ] a Bridged event is emitted
+
     // withdraw
     // when the caller is not the owner
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the balance is zero
-    //  [ ] it reverts
+    //  [X] it reverts
     // given the recipient is the zero address
-    //  [ ] it reverts
+    //  [X] it reverts
+    // given the native token transfer fails
+    //  [X] it reverts
     // given the contract is not enabled
-    //  [ ] the contract transfers the native token to the recipient
-    //  [ ] a Withdrawn event is emitted
-    // [ ] the contract transfers the native token to the recipient
-    // [ ] a Withdrawn event is emitted
+    //  [X] the contract transfers the native token to the recipient
+    //  [X] a Withdrawn event is emitted
+    // [X] the contract transfers the native token to the recipient
+    // [X] a Withdrawn event is emitted
+
+    function test_withdraw_callerNotOwner_reverts() public {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.withdraw(TRSRY);
+    }
+
+    function test_withdraw_balanceZero_reverts() public givenContractIsEnabled {
+        // Expect revert
+        vm.expectRevert(ICCIPCrossChainBridge.Bridge_ZeroAmount.selector);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.withdraw(TRSRY);
+    }
+
+    function test_withdraw_recipientZeroAddress_reverts() public givenContractIsEnabled {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_InvalidAddress.selector,
+                "recipient"
+            )
+        );
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.withdraw(address(0));
+    }
+
+    function test_withdraw_transferFailed_reverts()
+        public
+        givenContractIsEnabled
+        givenBridgeHasEthBalance(1e18)
+    {
+        // Create a contract that is unable to receive ETH
+        MockERC20 newContract = new MockERC20("New Contract", "NC", 18);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.Bridge_TransferFailed.selector,
+                address(OWNER),
+                address(newContract),
+                1e18
+            )
+        );
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.withdraw(address(newContract));
+    }
+
+    function test_withdraw_notEnabled() public givenBridgeHasEthBalance(1e18) {
+        // Expect event
+        vm.expectEmit();
+        emit Withdrawn(TRSRY, 1e18);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.withdraw(TRSRY);
+
+        // Assert state
+        assertEq(address(bridge).balance, 0, "bridge balance");
+        assertEq(TRSRY.balance, 1e18, "TRSRY balance");
+    }
+
+    function test_withdraw() public givenContractIsEnabled givenBridgeHasEthBalance(1e18) {
+        // Expect event
+        vm.expectEmit();
+        emit Withdrawn(TRSRY, 1e18);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.withdraw(TRSRY);
+
+        // Assert state
+        assertEq(address(bridge).balance, 0, "bridge balance");
+        assertEq(TRSRY.balance, 1e18, "TRSRY balance");
+    }
 }
