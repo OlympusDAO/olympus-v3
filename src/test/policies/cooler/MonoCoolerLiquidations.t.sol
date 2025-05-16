@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
@@ -8,6 +9,8 @@ import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol"
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {Actions} from "policies/RolesAdmin.sol";
 import {MockStakingReal} from "test/mocks/MockStakingReal.sol";
+
+import {console2} from "forge-std/console2.sol";
 
 contract MonoCoolerComputeLiquidityBaseTest is MonoCoolerBaseTest {
     function noAddresses() internal pure returns (address[] memory accounts) {
@@ -537,6 +540,50 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         expectOneDelegation(cooler, ALICE, BOB, 14e18);
         expectOneDelegation(cooler2, ALICE, BOB, 14e18);
         expectAccountDelegationSummary(ALICE, 33e18 + 20e18, 14e18, 1, 10);
+    }
+
+    function test_applyUnhealthyDelegations_withMaxUndelegations() external {
+        uint256 delegateAddressCount = 2600;
+        uint128 collateralAmount = 10e18;
+
+        // Set the max delegate addresses to the max possible
+        vm.prank(OVERSEER);
+        cooler.setMaxDelegateAddresses(ALICE, type(uint32).max);
+
+        addCollateral(ALICE, collateralAmount);
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
+
+        // Apply delegations individually, to mimic what would happen in a real scenario and to avoid the gas limit
+        for (uint32 i; i < delegateAddressCount; ++i) {
+            address delegateAddress = address(uint160(i + 1)); // i+1 to avoid 0 address
+            IDLGTEv1.DelegationRequest[]
+                memory delegationRequests = new IDLGTEv1.DelegationRequest[](1);
+            delegationRequests[0] = IDLGTEv1.DelegationRequest(delegateAddress, 1);
+
+            vm.prank(ALICE);
+            cooler.applyDelegations(delegationRequests, ALICE);
+        }
+
+        // Reduce the LLTV to be one less such that it JUST ticks over
+        // to be liquidatable
+        skip(2 * 363.19 days);
+        uint128 expectedCurrentLtv = DEFAULT_OLTV + 29.616639616805159427e18;
+        vm.mockCall(
+            address(ltvOracle),
+            abi.encodeWithSelector(ICoolerLtvOracle.currentLtvs.selector),
+            abi.encode(DEFAULT_OLTV, expectedCurrentLtv - 1)
+        );
+
+        // Apply unhealthy delegations
+        console2.log("Applying unhealthy delegations");
+        vm.startSnapshotGas("applyUnhealthyDelegations");
+        cooler.applyUnhealthyDelegations(ALICE, delegateAddressCount);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
+
+        // Ensure that the gas used is less than the block limit
+        assertLt(gasUsed, 36000000, "Gas used is greater than the block limit");
     }
 }
 
@@ -1263,6 +1310,96 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             assertEq(
                 TRSRY.reserveDebt(usds, address(treasuryBorrower)),
                 totalExpectedDebt - wipedDebt
+            );
+            assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
+        }
+    }
+
+    function test_batchLiquidate_oneAccount_withMaxUndelegations() external {
+        uint32 delegateAddressCount = 2600;
+        uint128 collateralAmount = 10e18;
+
+        // Set the max delegate addresses to the max possible
+        vm.prank(OVERSEER);
+        cooler.setMaxDelegateAddresses(ALICE, type(uint32).max);
+
+        addCollateral(ALICE, collateralAmount);
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
+
+        // Apply delegations individually, to mimic what would happen in a real scenario and to avoid the gas limit
+        for (uint32 i; i < delegateAddressCount; ++i) {
+            address delegateAddress = address(uint160(i + 1)); // i+1 to avoid 0 address
+            IDLGTEv1.DelegationRequest[]
+                memory delegationRequests = new IDLGTEv1.DelegationRequest[](1);
+            delegationRequests[0] = IDLGTEv1.DelegationRequest(delegateAddress, 1);
+
+            vm.prank(ALICE);
+            cooler.applyDelegations(delegationRequests, ALICE);
+        }
+
+        skip(2 * 363.19 days);
+
+        // Reduce the LLTV to be one less such that it JUST ticks over
+        // to be liquidatable
+        uint128 expectedCurrentLtv = DEFAULT_OLTV + 29.616639616805159427e18;
+        vm.mockCall(
+            address(ltvOracle),
+            abi.encodeWithSelector(ICoolerLtvOracle.currentLtvs.selector),
+            abi.encode(DEFAULT_OLTV, expectedCurrentLtv - 1)
+        );
+
+        uint128 expectedDebt = borrowAmount + 296.166396168051594267e18;
+        uint128 expectedIncentives = 1;
+
+        console2.log("starting liquidation");
+        vm.startSnapshotGas("liquidate");
+        vm.startPrank(OTHERS);
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, expectedIncentives);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("gasUsed", gasUsed);
+
+        // Ensure that the gas used is less than the block limit
+        assertLt(gasUsed, 36000000, "Gas used is greater than the block limit");
+
+        // Check position is empty now (debt + collateral)
+        {
+            checkLiquidityStatus(
+                ALICE,
+                IMonoCooler.LiquidationStatus({
+                    collateral: 0,
+                    currentDebt: 0,
+                    currentLtv: type(uint128).max,
+                    exceededLiquidationLtv: false,
+                    exceededMaxOriginationLtv: false,
+                    currentIncentive: 0
+                })
+            );
+
+            checkAccountPosition(
+                ALICE,
+                IMonoCooler.AccountPosition({
+                    collateral: 0,
+                    currentDebt: 0,
+                    maxOriginationDebtAmount: 0,
+                    liquidationDebtAmount: 0,
+                    healthFactor: type(uint256).max,
+                    currentLtv: type(uint128).max,
+                    totalDelegated: 0,
+                    numDelegateAddresses: 0,
+                    maxDelegateAddresses: type(uint32).max
+                })
+            );
+        }
+
+        // Caller gets the total incentives
+        assertEq(gohm.balanceOf(OTHERS), expectedIncentives);
+
+        // Treasury Checks
+        {
+            assertEq(
+                TRSRY.reserveDebt(usds, address(treasuryBorrower)),
+                0 // min(0, borrowAmount + borrowAmount - expectedDebt - expectedDebt)
             );
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
