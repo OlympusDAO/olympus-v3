@@ -1,21 +1,13 @@
 #!/bin/bash
 
-# Deploys an L2 installation of the Olympus protocol.
+# Stakes OHM for gOHM
 #
 # Usage:
-# ./deploy.sh
-#   --account <cast wallet>
-#   --ohm <true|false>
-#   --broadcast <false>
-#   --verify <false>
-#   --resume <false>
-#   --env <env-file>
+# ./stakeToGOhm.sh --to <recipient address> --amount <amount> --account <cast wallet> --broadcast <false> --env <file>
 #
 # Environment variables:
 # RPC_URL
 # CHAIN
-# ETHERSCAN_KEY (only needed if verify is true)
-# VERIFIER_URL (only needed for a custom verifier or on a fork)
 
 # Exit if any error occurs
 set -e
@@ -30,45 +22,41 @@ load_env
 
 # Set sane defaults
 BROADCAST=${broadcast:-false}
-VERIFY=${verify:-false}
-RESUME=${resume:-false}
 
 # Validate named arguments
 echo ""
 echo "Validating arguments"
+validate_address "$to" "No recipient specified or it is not an EVM address. Provide the recipient after the --to flag."
+validate_number "$amount" "No amount specified. Provide the amount after the --amount flag."
 validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
-validate_boolean "$ohm" "No ohm flag specified. Provide true or false after the --ohm flag."
 
 # Validate environment variables
 echo ""
 echo "Validating environment variables"
-validate_text "$CHAIN" "No chain specified. Specify the CHAIN in the $ENV_FILE file."
 validate_text "$RPC_URL" "No RPC URL specified. Specify the RPC_URL in the $ENV_FILE file."
+validate_text "$CHAIN" "No chain specified. Specify the CHAIN in the $ENV_FILE file."
 
 echo ""
 echo "Summary:"
 echo "  Deploying from account: $account"
 echo "  Chain: $CHAIN"
-echo "  Deploying OHM: $ohm"
 echo "  Using RPC at URL: $RPC_URL"
+echo "  To: $to"
+echo "  Amount: $amount"
 
 # Validate and set forge script flags
 source $SCRIPT_DIR/../lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
-set_resume_flag $RESUME
 set_account_address $account
 
 # Deploy using script
 echo ""
 echo "Running forge script"
-forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
-    --sig "deploy(string,bool)()" $CHAIN $ohm \
+forge script ./src/scripts/ops/StakeOhm.s.sol:StakeOhmScript \
+    --sig "stakeOhm(string,address,uint256)()" $CHAIN $to $amount \
     --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
-    $BROADCAST_FLAG \
-    $VERIFY_FLAG \
-    $RESUME_FLAG
+    $BROADCAST_FLAG
 
 echo ""
-echo "Deployment complete"
+echo "Stake complete"

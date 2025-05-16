@@ -3,7 +3,15 @@
 # Run a multisig batch
 #
 # Usage:
-# ./safeBatch.sh --contract <contract-name> --batch <batch-name> --account <cast wallet> --ledger <true|false> --ledgerMnemonicIndex <mnemonic-index> --broadcast <true|false> --testnet <true|false> --env <env-file>
+# ./safeBatch.sh
+# --contract <contract-name>
+# --batch <batch-name>
+# --account <cast wallet>
+# [--ledger <true|false>]
+# [--ledgerMnemonicIndex <mnemonic-index>]
+# [--broadcast <true|false>]
+# [--testnet <true|false>]
+# [--env <env-file>]
 #
 # Environment variables:
 # RPC_URL

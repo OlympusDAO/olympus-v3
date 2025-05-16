@@ -43,6 +43,7 @@ contract OIP166Test is ProposalTest {
         }
 
         // Simulate the proposal
-        _simulateProposal(address(proposal));
+        _setupSuite(address(proposal));
+        _simulateProposal();
     }
 }

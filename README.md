@@ -53,3 +53,10 @@ See [DEPLOY.md](src/scripts/DEPLOY.md) and [DEPLOY_L2.md](src/scripts/DEPLOY_L2.
 - Deploy any dependencies (if on testnet)
 - Deploy BLV contracts
 - Activate BLV contracts with the BLV registry (using an olymsig script)
+
+## Cooler V2
+
+- Deploy the `cooler_v2.json` sequence
+- Set the deployed addresses in `src/scripts/env.json`
+- Run the governance proposal to activate the Cooler V2 contracts. This should also set the treasury borrower.
+- Deploy the `cooler_v2_periphery.json` sequence

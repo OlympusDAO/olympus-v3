@@ -36,8 +36,8 @@ additional_compiler_profiles = [
     { name = "five-thousand-runs", optimizer_runs = 5000 },
 ]
 compilation_restrictions = [
-    { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
-    { paths = "src/policies/cooler/MonoCooler.sol", optimizer_runs = 5000 },
+    { paths = "src/policies/Operator.sol", profile = "ten-runs" },
+    { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
 ]
 
 [fuzz]

@@ -28,4 +28,4 @@ echo "*** Running forge soldeer update"
 forge soldeer update
 
 echo "*** Running forge build"
-forge build
+forge clean && forge build
