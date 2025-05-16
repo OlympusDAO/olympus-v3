@@ -70,7 +70,7 @@ import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
-import {CoolerComposites} from "src/policies/cooler/CoolerComposites.sol";
+import {CoolerComposites} from "src/periphery/CoolerComposites.sol";
 import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
@@ -1338,13 +1338,15 @@ contract OlympusDeploy is Script {
 
         // Dependencies
         require(address(coolerV2) != address(0), "coolerV2 is not set");
+        address owner = envAddress("olympus.multisig.dao");
 
         // Print the arguments
         console2.log("  CoolerV2:", address(coolerV2));
+        console2.log("  Owner:", owner);
 
         // Deploy CoolerComposites
         vm.broadcast();
-        coolerComposites = new CoolerComposites(coolerV2);
+        coolerComposites = new CoolerComposites(coolerV2, owner);
         console2.log("CoolerComposites deployed at:", address(coolerComposites));
 
         return address(coolerComposites);
