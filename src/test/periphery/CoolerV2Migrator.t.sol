@@ -24,6 +24,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
+// solhint-disable max-states-count
 contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     event CoolerFactoryAdded(address indexed coolerFactory);
     event CoolerFactoryRemoved(address indexed coolerFactory);
@@ -910,8 +911,6 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         vm.stopPrank();
 
         // Prepare input data
-        address[] memory coolers = _getCoolerArrays(true, false);
-
         address[] memory coolersWithNew = new address[](1);
         coolersWithNew[0] = newCooler;
 
@@ -1426,7 +1425,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         );
 
         // Call function
-        CoolerV2Migrator migrator = new CoolerV2Migrator(
+        migrator = new CoolerV2Migrator(
             OVERSEER,
             address(cooler),
             address(dai),
@@ -1450,7 +1449,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         );
 
         // Call function
-        CoolerV2Migrator migrator = new CoolerV2Migrator(
+        migrator = new CoolerV2Migrator(
             OVERSEER,
             address(cooler),
             address(dai),
@@ -1472,7 +1471,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
         coolerFactories[1] = address(coolerFactoryTwo);
 
         // Call function
-        CoolerV2Migrator migrator = new CoolerV2Migrator(
+        migrator = new CoolerV2Migrator(
             OVERSEER,
             address(cooler),
             address(dai),
