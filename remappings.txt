@@ -32,3 +32,6 @@ solidity-examples/=lib/solidity-examples/contracts/
 surl-1.0.0/=dependencies/surl-1.0.0/src/
 lib/forge-proposal-simulator:Governors/=lib/forge-proposal-simulator/Governors/
 @chainlink-ccip-1.6.0/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/
+@chainlink-local-0.2.5/=dependencies/chainlink-local-0.2.5/src/
+dependencies/chainlink-local-0.2.5/:@chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
+dependencies/chainlink-local-0.2.5/:@chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
