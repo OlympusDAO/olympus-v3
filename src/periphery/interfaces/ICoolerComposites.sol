@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {IDLGTEv1} from "../../../modules/DLGTE/IDLGTE.v1.sol";
-import {IMonoCooler} from "./IMonoCooler.sol";
-import {IERC20} from "../../../interfaces/IERC20.sol";
+import {IDLGTEv1} from "../../modules/DLGTE/IDLGTE.v1.sol";
+import {IMonoCooler} from "../../policies/interfaces/cooler/IMonoCooler.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
 
 interface ICoolerComposites {
     event TokenRefunded(address indexed token, address indexed caller, uint256 amount);
