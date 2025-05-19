@@ -36,6 +36,34 @@ interface ICCIPCrossChainBridge {
 
     // ========= SEND OHM ========= //
 
+    /// @notice Gets the fee for sending OHM to the specified destination SVM chain
+    /// @dev    This can be used to send to an address on any chain supported by CCIP
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    /// @param to_                  The destination address
+    /// @param amount_              The amount of OHM to send
+    ///
+    /// @return fee_                The fee for sending OHM to the specified destination chain
+    function getFeeSVM(
+        uint64 dstChainSelector_,
+        bytes32 to_,
+        uint256 amount_
+    ) external view returns (uint256 fee_);
+
+    /// @notice Gets the fee for sending OHM to the specified destination EVM chain
+    /// @dev    This can be used to send to an address on any EVM chain supported by CCIP
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    /// @param to_                  The destination address
+    /// @param amount_              The amount of OHM to send
+    ///
+    /// @return fee_                The fee for sending OHM to the specified destination EVM chain
+    function getFeeEVM(
+        uint64 dstChainSelector_,
+        address to_,
+        uint256 amount_
+    ) external view returns (uint256 fee_);
+
     /// @notice Sends OHM to the specified destination SVM chain
     /// @dev    This can be used to send to an address on any chain supported by CCIP
     ///

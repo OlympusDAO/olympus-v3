@@ -65,6 +65,53 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
             });
     }
 
+    function _getSVMExtraArgs(bytes32 to_) internal pure returns (bytes memory) {
+        return
+            Client._svmArgsToBytes(
+                Client.SVMExtraArgsV1({
+                    computeUnits: _SVM_DEFAULT_COMPUTE_UNITS,
+                    accountIsWritableBitmap: 0,
+                    allowOutOfOrderExecution: true,
+                    tokenReceiver: to_,
+                    accounts: new bytes32[](0)
+                })
+            );
+    }
+
+    function _getEVMExtraArgs() internal pure returns (bytes memory) {
+        return
+            Client._argsToBytes(
+                Client.GenericExtraArgsV2({
+                    gasLimit: _DEFAULT_GAS_LIMIT,
+                    allowOutOfOrderExecution: true
+                })
+            );
+    }
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function getFeeSVM(
+        uint64 dstChainSelector_,
+        bytes32 to_,
+        uint256 amount_
+    ) external view returns (uint256 fee_) {
+        fee_ = CCIP_ROUTER.getFee(
+            dstChainSelector_,
+            _buildCCIPMessage(_SVM_DEFAULT_PUBKEY, amount_, _getSVMExtraArgs(to_))
+        );
+    }
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function getFeeEVM(
+        uint64 dstChainSelector_,
+        address to_,
+        uint256 amount_
+    ) external view returns (uint256 fee_) {
+        fee_ = CCIP_ROUTER.getFee(
+            dstChainSelector_,
+            _buildCCIPMessage(abi.encode(to_), amount_, _getEVMExtraArgs())
+        );
+    }
+
     function _sendOhm(
         uint64 dstChainSelector_,
         bytes memory to_,
@@ -111,20 +158,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         uint256 amount_
     ) external payable onlyEnabled {
         // Send the message to the router
-        _sendOhm(
-            dstChainSelector_,
-            _SVM_DEFAULT_PUBKEY,
-            amount_,
-            Client._svmArgsToBytes(
-                Client.SVMExtraArgsV1({
-                    computeUnits: _SVM_DEFAULT_COMPUTE_UNITS,
-                    accountIsWritableBitmap: 0,
-                    allowOutOfOrderExecution: true,
-                    tokenReceiver: to_,
-                    accounts: new bytes32[](0)
-                })
-            )
-        );
+        _sendOhm(dstChainSelector_, _SVM_DEFAULT_PUBKEY, amount_, _getSVMExtraArgs(to_));
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
@@ -137,17 +171,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         if (to_ == address(0)) revert Bridge_InvalidAddress("to");
 
         // Send the message to the router
-        _sendOhm(
-            dstChainSelector_,
-            abi.encode(to_),
-            amount_,
-            Client._argsToBytes(
-                Client.GenericExtraArgsV2({
-                    gasLimit: _DEFAULT_GAS_LIMIT,
-                    allowOutOfOrderExecution: true
-                })
-            )
-        );
+        _sendOhm(dstChainSelector_, abi.encode(to_), amount_, _getEVMExtraArgs());
     }
 
     // ========= TOKEN WITHDRAWAL ========= //

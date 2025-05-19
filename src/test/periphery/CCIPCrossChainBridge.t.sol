@@ -603,4 +603,26 @@ contract CCIPCrossChainBridgeTest is Test {
         assertEq(address(bridge).balance, 0, "bridge balance");
         assertEq(TRSRY.balance, 1e18, "TRSRY balance");
     }
+
+    // getFeeSVM
+    // [X] it returns the mock fee
+
+    function test_getFeeSVM() public view {
+        // Call function
+        uint256 fee = bridge.getFeeSVM(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+
+        // Assert
+        assertEq(fee, FEE, "fee");
+    }
+
+    // getFeeEVM
+    // [X] it returns the mock fee
+
+    function test_getFeeEVM() public view {
+        // Call function
+        uint256 fee = bridge.getFeeEVM(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+
+        // Assert
+        assertEq(fee, FEE, "fee");
+    }
 }
