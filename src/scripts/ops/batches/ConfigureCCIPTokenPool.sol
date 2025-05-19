@@ -27,7 +27,9 @@ contract ConfigureCCIPTokenPool is OlyBatch {
     function loadEnv() internal override {
         // Load contract addresses from the environment file
         kernel = envAddress("current", "olympus.Kernel");
-        tokenPool = CCIPMintBurnTokenPool(envAddress("current", "olympus.policies.CCIPMintBurnTokenPool"));
+        tokenPool = CCIPMintBurnTokenPool(
+            envAddress("current", "olympus.policies.CCIPMintBurnTokenPool")
+        );
     }
 
     function install(bool send_) external isDaoBatch(send_) {
@@ -35,7 +37,11 @@ contract ConfigureCCIPTokenPool is OlyBatch {
         console2.log("Installing CCIPMintBurnTokenPool policy");
         addToBatch(
             kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, address(tokenPool))
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                address(tokenPool)
+            )
         );
 
         console2.log("Completed");
