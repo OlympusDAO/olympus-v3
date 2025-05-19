@@ -131,7 +131,7 @@ contract OlympusDeploy is Script {
     CoolerLtvOracle public coolerV2LtvOracle;
     CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
     MonoCooler public coolerV2;
-    CoolerComposites public coolerComposites;
+    CoolerComposites public coolerV2Composites;
     CoolerV2Migrator public coolerV2Migrator;
 
     /// Other Olympus contracts
@@ -260,7 +260,7 @@ contract OlympusDeploy is Script {
         selectorMap["CoolerV2LtvOracle"] = this._deployCoolerV2LtvOracle.selector;
         selectorMap["CoolerV2TreasuryBorrower"] = this._deployCoolerV2TreasuryBorrower.selector;
         selectorMap["CoolerV2"] = this._deployCoolerV2.selector;
-        selectorMap["CoolerComposites"] = this._deployCoolerComposites.selector;
+        selectorMap["CoolerV2Composites"] = this._deployCoolerV2Composites.selector;
         selectorMap["CoolerV2Migrator"] = this._deployCoolerV2Migrator.selector;
 
         // Governance
@@ -1332,7 +1332,7 @@ contract OlympusDeploy is Script {
         return address(coolerV2);
     }
 
-    function _deployCoolerComposites(bytes calldata) public returns (address) {
+    function _deployCoolerV2Composites(bytes calldata) public returns (address) {
         // Decode arguments from the sequence file
         // None
 
@@ -1344,12 +1344,12 @@ contract OlympusDeploy is Script {
         console2.log("  CoolerV2:", address(coolerV2));
         console2.log("  Owner:", owner);
 
-        // Deploy CoolerComposites
+        // Deploy CoolerV2Composites
         vm.broadcast();
-        coolerComposites = new CoolerComposites(coolerV2, owner);
-        console2.log("CoolerComposites deployed at:", address(coolerComposites));
+        coolerV2Composites = new CoolerComposites(coolerV2, owner);
+        console2.log("CoolerV2Composites deployed at:", address(coolerV2Composites));
 
-        return address(coolerComposites);
+        return address(coolerV2Composites);
     }
 
     function _deployCoolerV2Migrator(bytes calldata) public returns (address) {
