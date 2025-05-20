@@ -70,7 +70,12 @@ interface ICCIPCrossChainBridge {
     /// @param dstChainSelector_    The destination chain selector
     /// @param to_                  The destination address
     /// @param amount_              The amount of OHM to send
-    function sendToSVM(uint64 dstChainSelector_, bytes32 to_, uint256 amount_) external payable;
+    /// @return messageId           The message ID of the sent message
+    function sendToSVM(
+        uint64 dstChainSelector_,
+        bytes32 to_,
+        uint256 amount_
+    ) external payable returns (bytes32 messageId);
 
     /// @notice Sends OHM to the specified destination EVM chain
     /// @dev    This can be used to send to an address on any EVM chain supported by CCIP
@@ -78,7 +83,12 @@ interface ICCIPCrossChainBridge {
     /// @param dstChainSelector_    The destination chain selector
     /// @param to_                  The destination address
     /// @param amount_              The amount of OHM to send
-    function sendToEVM(uint64 dstChainSelector_, address to_, uint256 amount_) external payable;
+    /// @return messageId           The message ID of the sent message
+    function sendToEVM(
+        uint64 dstChainSelector_,
+        address to_,
+        uint256 amount_
+    ) external payable returns (bytes32 messageId);
 
     // ========= TOKEN WITHDRAWAL ========= //
 

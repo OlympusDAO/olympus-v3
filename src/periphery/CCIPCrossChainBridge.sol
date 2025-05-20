@@ -117,7 +117,7 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         bytes memory to_,
         uint256 amount_,
         bytes memory extraArgs_
-    ) internal {
+    ) internal returns (bytes32) {
         // Validate the amount
         if (amount_ == 0) revert Bridge_ZeroAmount();
 
@@ -149,6 +149,9 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
 
         // Emit the event
         emit Bridged(ccipMessageId, dstChainSelector_, msg.sender, amount_, fees);
+
+        // Return the message ID
+        return ccipMessageId;
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
@@ -156,9 +159,9 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         uint64 dstChainSelector_,
         bytes32 to_,
         uint256 amount_
-    ) external payable onlyEnabled {
+    ) external payable onlyEnabled returns (bytes32) {
         // Send the message to the router
-        _sendOhm(dstChainSelector_, _SVM_DEFAULT_PUBKEY, amount_, _getSVMExtraArgs(to_));
+        return _sendOhm(dstChainSelector_, _SVM_DEFAULT_PUBKEY, amount_, _getSVMExtraArgs(to_));
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
@@ -166,12 +169,12 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         uint64 dstChainSelector_,
         address to_,
         uint256 amount_
-    ) external payable onlyEnabled {
+    ) external payable onlyEnabled returns (bytes32) {
         // Validate the recipient EVM address
         if (to_ == address(0)) revert Bridge_InvalidAddress("to");
 
         // Send the message to the router
-        _sendOhm(dstChainSelector_, abi.encode(to_), amount_, _getEVMExtraArgs());
+        return _sendOhm(dstChainSelector_, abi.encode(to_), amount_, _getEVMExtraArgs());
     }
 
     // ========= TOKEN WITHDRAWAL ========= //
