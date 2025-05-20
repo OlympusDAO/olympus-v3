@@ -1,5 +1,5 @@
 ds-test/=lib/ds-test/src/
-forge-std/=lib/forge-std/src/
+forge-std/=dependencies/forge-std-1.9.6/src/
 interfaces/=src/interfaces/
 modules/=src/modules/
 policies/=src/policies/
@@ -35,3 +35,4 @@ lib/forge-proposal-simulator:Governors/=lib/forge-proposal-simulator/Governors/
 @chainlink-local-0.2.5/=dependencies/chainlink-local-0.2.5/src/
 dependencies/chainlink-local-0.2.5/:@chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
 dependencies/chainlink-local-0.2.5/:@chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
+@forge-std-1.9.6/=dependencies/forge-std-1.9.6/src/

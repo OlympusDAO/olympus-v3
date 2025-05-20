@@ -5,7 +5,6 @@ legacy_assertions = true
 assertions_revert = false
 remappings = [
     'ds-test/=lib/ds-test/src/',
-    'forge-std/=lib/forge-std/src/',
     'interfaces/=src/interfaces',
     'modules/=src/modules',
     'policies/=src/policies',
@@ -54,3 +53,4 @@ remappings_generate = false
 surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", rev = "034c912ae9b5e707a5afd21f145b452ad8e800df" }
 chainlink-ccip = { version = "1.6.0", git = "https://github.com/smartcontractkit/chainlink.git", rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69" }
 chainlink-local = { version = "0.2.5", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "b429481536095867f9cd2c6480066c472b9594de" }
+forge-std = "1.9.6"
