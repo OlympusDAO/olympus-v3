@@ -103,7 +103,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
                 address(mainnetOHM),
                 mainnetDetails.rmnProxyAddress,
                 mainnetDetails.routerAddress,
-                1
+                11155111
             );
             mainnetBridge = new CCIPCrossChainBridge(
                 address(mainnetOHM),
@@ -163,7 +163,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
                 address(polygonOHM),
                 polygonDetails.rmnProxyAddress,
                 polygonDetails.routerAddress,
-                1
+                11155111
             );
             polygonBridge = new CCIPCrossChainBridge(
                 address(polygonOHM),
@@ -307,7 +307,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             "mainnet: bridged supply"
         );
         assertEq(
-            mainnetMinter.mintApproval(address(mainnetBridge)),
+            mainnetMinter.mintApproval(address(mainnetTokenPool)),
             INITIAL_BRIDGED_SUPPLY + AMOUNT,
             "mainnet: minter approval"
         );
@@ -319,7 +319,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
         assertEq(polygonOHM.balanceOf(SENDER), 0, "polygon: sender: OHM balance");
         assertEq(polygonOHM.balanceOf(RECIPIENT), AMOUNT, "polygon: recipient: OHM balance");
         assertEq(polygonTokenPool.getBridgedSupply(), 0, "polygon: bridged supply");
-        assertEq(polygonMinter.mintApproval(address(polygonBridge)), 0, "polygon: minter approval");
+        assertEq(polygonMinter.mintApproval(address(polygonTokenPool)), 0, "polygon: minter approval");
     }
 
     // polygon -> mainnet
