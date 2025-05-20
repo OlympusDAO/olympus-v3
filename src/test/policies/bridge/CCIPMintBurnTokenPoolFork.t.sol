@@ -16,6 +16,7 @@ import {CCIPLocalSimulatorFork, Register} from "@chainlink-local-0.2.5/ccip/CCIP
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
+import {OffRamp} from "@chainlink-ccip-1.6.0/ccip/offRamp/OffRamp.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -55,7 +56,8 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
 
     address public mintrGodmode;
 
-    uint256 public constant AMOUNT = 1e9;
+    uint256 public constant MINT_AMOUNT = 1e9;
+    uint256 public constant SEND_AMOUNT = 1e8;
 
     uint256 public mainnetForkId;
     uint256 public polygonForkId;
@@ -136,10 +138,10 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             mainnetBridge.enable("");
 
             // Mint OHM to the sender
-            mainnetOHM.mint(SENDER, AMOUNT);
+            mainnetOHM.mint(SENDER, MINT_AMOUNT);
 
             // Mint ETH to the sender
-            vm.deal(SENDER, 1 ether);
+            vm.deal(SENDER, 100 ether);
         }
 
         // Create the stack on polygon
@@ -195,8 +197,11 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             vm.prank(ADMIN);
             polygonBridge.enable("");
 
+            // Mint OHM to the sender
+            polygonOHM.mint(SENDER, MINT_AMOUNT);
+
             // Mint ETH to the sender
-            vm.deal(SENDER, 1 ether);
+            vm.deal(SENDER, 100 ether);
         }
 
         // Configure the mainnet token pool
@@ -290,45 +295,143 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
     // [X] the MINTR approval on polygon is not updated
 
     function test_mainnetToPolygon() public {
-        uint256 fee = mainnetBridge.getFeeEVM(polygonChainSelector, RECIPIENT, AMOUNT);
+        uint256 fee = mainnetBridge.getFeeEVM(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
 
         // Call the bridge
         vm.startPrank(SENDER);
-        mainnetOHM.approve(address(mainnetBridge), AMOUNT);
-        mainnetBridge.sendToEVM{value: fee}(polygonChainSelector, RECIPIENT, AMOUNT);
+        mainnetOHM.approve(address(mainnetBridge), SEND_AMOUNT);
+        mainnetBridge.sendToEVM{value: fee}(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
         vm.stopPrank();
 
         // Assertions - mainnet
-        assertEq(mainnetOHM.balanceOf(SENDER), 0, "mainnet: sender: OHM balance");
+        assertEq(
+            mainnetOHM.balanceOf(SENDER),
+            MINT_AMOUNT - SEND_AMOUNT,
+            "mainnet: sender: OHM balance"
+        );
         assertEq(mainnetOHM.balanceOf(RECIPIENT), 0, "mainnet: recipient: OHM balance");
         assertEq(
             mainnetTokenPool.getBridgedSupply(),
-            INITIAL_BRIDGED_SUPPLY + AMOUNT,
+            INITIAL_BRIDGED_SUPPLY + SEND_AMOUNT,
             "mainnet: bridged supply"
         );
         assertEq(
             mainnetMinter.mintApproval(address(mainnetTokenPool)),
-            INITIAL_BRIDGED_SUPPLY + AMOUNT,
+            INITIAL_BRIDGED_SUPPLY + SEND_AMOUNT,
             "mainnet: minter approval"
         );
+
+        // The following command runs into an OutOfGas error, so disable gas metering
+        vm.pauseGasMetering();
 
         // Process the bridging transaction
         simulator.switchChainAndRouteMessage(polygonForkId);
 
         // Assertions - polygon
-        assertEq(polygonOHM.balanceOf(SENDER), 0, "polygon: sender: OHM balance");
-        assertEq(polygonOHM.balanceOf(RECIPIENT), AMOUNT, "polygon: recipient: OHM balance");
+        assertEq(polygonOHM.balanceOf(SENDER), MINT_AMOUNT, "polygon: sender: OHM balance");
+        assertEq(polygonOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "polygon: recipient: OHM balance");
         assertEq(polygonTokenPool.getBridgedSupply(), 0, "polygon: bridged supply");
-        assertEq(polygonMinter.mintApproval(address(polygonTokenPool)), 0, "polygon: minter approval");
+        assertEq(
+            polygonMinter.mintApproval(address(polygonTokenPool)),
+            0,
+            "polygon: minter approval"
+        );
     }
 
     // polygon -> mainnet
     // given the bridge amount is greater than the bridged supply
-    //  [ ] it reverts
-    // [ ] the OHM is burned on polygon
-    // [ ] the OHM is minted on mainnet to the recipient
-    // [ ] the bridged supply on polygon is not updated
-    // [ ] the bridged supply on mainnet is decremented
-    // [ ] the MINTR approval on polygon is not updated
-    // [ ] the MINTR approval on mainnet is decremented
+    //  [X] it reverts
+    // [X] the OHM is burned on polygon
+    // [X] the OHM is minted on mainnet to the recipient
+    // [X] the bridged supply on polygon is not updated
+    // [X] the bridged supply on mainnet is decremented
+    // [X] the MINTR approval on polygon is not updated
+    // [X] the MINTR approval on mainnet is decremented
+
+    function test_polygonToMainnet() public {
+        // Start on Polygon
+        vm.selectFork(polygonForkId);
+
+        // Get the fee
+        uint256 fee = polygonBridge.getFeeEVM(mainnetChainSelector, RECIPIENT, SEND_AMOUNT);
+
+        // Call the bridge
+        vm.startPrank(SENDER);
+        polygonOHM.approve(address(polygonBridge), SEND_AMOUNT);
+        polygonBridge.sendToEVM{value: fee}(mainnetChainSelector, RECIPIENT, SEND_AMOUNT);
+        vm.stopPrank();
+
+        // Assertions - polygon
+        assertEq(
+            polygonOHM.balanceOf(SENDER),
+            MINT_AMOUNT - SEND_AMOUNT,
+            "polygon: sender: OHM balance"
+        );
+        assertEq(polygonOHM.balanceOf(RECIPIENT), 0, "polygon: recipient: OHM balance");
+        assertEq(polygonTokenPool.getBridgedSupply(), 0, "polygon: bridged supply");
+        assertEq(
+            polygonMinter.mintApproval(address(polygonTokenPool)),
+            0,
+            "polygon: minter approval"
+        );
+
+        // The following command runs into an OutOfGas error, so disable gas metering
+        vm.pauseGasMetering();
+
+        // Process the bridging transaction
+        simulator.switchChainAndRouteMessage(mainnetForkId);
+
+        // Assertions - mainnet
+        assertEq(mainnetOHM.balanceOf(SENDER), MINT_AMOUNT, "mainnet: sender: OHM balance");
+        assertEq(mainnetOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "mainnet: recipient: OHM balance");
+        assertEq(
+            mainnetTokenPool.getBridgedSupply(),
+            INITIAL_BRIDGED_SUPPLY - SEND_AMOUNT,
+            "mainnet: bridged supply"
+        );
+        assertEq(
+            mainnetMinter.mintApproval(address(mainnetTokenPool)),
+            INITIAL_BRIDGED_SUPPLY - SEND_AMOUNT,
+            "mainnet: minter approval"
+        );
+    }
+
+    function test_polygonToMainnet_exceedsBridgedSupply_reverts() public {
+        // Define an amount larger than the initial bridged supply
+        uint256 amount = INITIAL_BRIDGED_SUPPLY + 1;
+
+        // Start on Polygon
+        vm.selectFork(polygonForkId);
+
+        // Mint the amount to the sender
+        polygonOHM.mint(SENDER, amount);
+
+        // Get the fee
+        uint256 fee = polygonBridge.getFeeEVM(mainnetChainSelector, RECIPIENT, amount);
+
+        // Call the bridge
+        vm.startPrank(SENDER);
+        polygonOHM.approve(address(polygonBridge), amount);
+        polygonBridge.sendToEVM{value: fee}(mainnetChainSelector, RECIPIENT, amount);
+        vm.stopPrank();
+
+        // The following command runs into an OutOfGas error, so disable gas metering
+        vm.pauseGasMetering();
+
+        // Expect the mainnet transaction to revert
+        // There is a mismatch between the error signature in OffRamp.sol and what is actually thrown. This may change in the future.
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "TokenHandlingError(bytes)",
+                abi.encodeWithSelector(
+                    CCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
+                    INITIAL_BRIDGED_SUPPLY,
+                    amount
+                )
+            )
+        );
+
+        // Process the bridging transaction
+        simulator.switchChainAndRouteMessage(mainnetForkId);
+    }
 }
