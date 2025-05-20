@@ -60,20 +60,25 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
     uint256 public mainnetForkId;
     uint256 public polygonForkId;
 
-    uint256 public constant MAINNET_CHAIN_ID = 11155111;
-    uint256 public constant POLYGON_CHAIN_ID = 80002;
+    // Pin the blocks so that RPC responses are cached
+    uint256 public constant MAINNET_BLOCK = 8360176;
+    uint256 public constant POLYGON_BLOCK = 21855529;
 
     function setUp() public {
         // Set up forks
         // Mainnet is active
         // These use Sepolia RPCs, as CCIPLocalSimulatorFork only supports sepolia testnets
-        mainnetForkId = vm.createSelectFork(vm.envString("ETH_SEPOLIA_RPC_URL"));
-        polygonForkId = vm.createFork(vm.envString("POLYGON_SEPOLIA_RPC_URL"));
+        mainnetForkId = vm.createFork(vm.envString("ETH_TESTNET_RPC_URL"), MAINNET_BLOCK);
+        polygonForkId = vm.createFork(vm.envString("POLYGON_TESTNET_RPC_URL"), POLYGON_BLOCK);
+        vm.selectFork(mainnetForkId);
 
         // Addresses
         SENDER = makeAddr("SENDER");
+        vm.makePersistent(SENDER);
         RECIPIENT = makeAddr("RECIPIENT");
+        vm.makePersistent(RECIPIENT);
         ADMIN = makeAddr("ADMIN");
+        vm.makePersistent(ADMIN);
 
         // Create the simulator and make it persistent across forks
         simulator = new CCIPLocalSimulatorFork();
@@ -81,10 +86,6 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
 
         // Create the stack on mainnet
         {
-            // Set the chain id
-            // forge doesn't seem to be setting the chain id correctly, so we need to do it manually
-            vm.chainId(MAINNET_CHAIN_ID);
-
             mainnetOHM = new MockOhm("OHM", "OHM", 9);
 
             Register.NetworkDetails memory mainnetDetails = simulator.getNetworkDetails(
@@ -145,9 +146,6 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
         {
             vm.selectFork(polygonForkId);
 
-            // Set the chain id
-            vm.chainId(POLYGON_CHAIN_ID);
-
             polygonOHM = new MockOhm("OHM", "OHM", 9);
 
             Register.NetworkDetails memory polygonDetails = simulator.getNetworkDetails(
@@ -204,7 +202,6 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
         // Configure the mainnet token pool
         {
             vm.selectFork(mainnetForkId);
-            vm.chainId(MAINNET_CHAIN_ID);
 
             _applyChainUpdates(
                 mainnetTokenPool,
@@ -217,7 +214,6 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
         // Configure the polygon token pool
         {
             vm.selectFork(polygonForkId);
-            vm.chainId(POLYGON_CHAIN_ID);
 
             _applyChainUpdates(
                 polygonTokenPool,
@@ -229,7 +225,6 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
 
         // Set the active chain to mainnet
         vm.selectFork(mainnetForkId);
-        vm.chainId(MAINNET_CHAIN_ID);
     }
 
     function _addTokenAndPool(

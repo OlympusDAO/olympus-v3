@@ -30,7 +30,6 @@ fs_permissions = [
 
 optimizer = true
 optimizer_runs = 10000
-chain_id = 1
 verbosity = 3
 
 # Operator is too large - it needs to only use 10 optimizer runs
