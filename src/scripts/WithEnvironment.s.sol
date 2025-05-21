@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // Scripting libraries
 import {Script, console2} from "forge-std/Script.sol";
@@ -11,7 +11,7 @@ abstract contract WithEnvironment is Script {
     string public chain;
     string public env;
 
-    function _loadEnv(string calldata chain_) internal {
+    function _loadEnv(string memory chain_) internal {
         chain = chain_;
         console2.log("Using chain:", chain_);
 
@@ -25,16 +25,16 @@ abstract contract WithEnvironment is Script {
     /// @param  key_    The key to look up in the environment file
     /// @return address The address from the environment file, or the zero address
     function _envAddress(string memory chain_, string memory key_) internal view returns (address) {
-        console2.log("    Checking in env.json for", key_, "on", chain_);
+        console2.log("  Checking in env.json for", key_, "on", chain_);
         string memory fullKey = string.concat(".current.", chain_, ".", key_);
         address addr;
         bool keyExists = vm.keyExists(env, fullKey);
 
         if (keyExists) {
             addr = env.readAddress(fullKey);
-            console2.log("      %s: %s (from env.json)", key_, addr);
+            console2.log("    %s: %s (from env.json)", key_, addr);
         } else {
-            console2.log("      %s: *** NOT FOUND ***", key_);
+            console2.log("    %s: *** NOT FOUND ***", key_);
         }
 
         return addr;

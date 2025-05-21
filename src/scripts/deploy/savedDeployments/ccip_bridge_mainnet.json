@@ -1,0 +1,14 @@
+{
+    "sequence": [
+        {
+            "name": "CCIPMintBurnTokenPool",
+            "args": {
+                "initialBridgedSupply": "1"
+            }
+        },
+        {
+            "name": "CCIPCrossChainBridge",
+            "args": {}
+        }
+    ]
+}
