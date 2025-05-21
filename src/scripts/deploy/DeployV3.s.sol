@@ -137,6 +137,7 @@ contract DeployV3 is WithEnvironment {
             vm.toString(block.timestamp),
             ".json"
         );
+        console2.log("\n");
         console2.log("Writing deployments to", file);
 
         // Write deployment info to file in JSON format
@@ -174,6 +175,8 @@ contract DeployV3 is WithEnvironment {
         // solhint-enable quotes
 
         // Update the env.json file
+        console2.log("\n");
+        console2.log("Writing deployment addresses to env.json");
         for (uint256 i; i < len; ++i) {
             string memory key = deployedToKeys[i];
             address value = deployedTo[key];
