@@ -274,8 +274,10 @@ contract DeployV3 is WithEnvironment {
         }
 
         // If not mainnet/sepolia, ensure the initial bridged supply is 0
-        if (mainnetChainId != 1 && mainnetChainId != 11155111 && initialBridgedSupply != 0)
-            revert("initialBridgedSupply must be 0 on non-mainnet chains");
+        if (mainnetChainId != 1 && mainnetChainId != 11155111) {
+            console2.log("Overriding initial bridged supply to 0 on non-mainnet chains");
+            initialBridgedSupply = 0;
+        }
 
         // Dependencies
         console2.log("Checking dependencies");
