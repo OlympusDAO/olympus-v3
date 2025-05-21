@@ -51,13 +51,7 @@ contract ConfigureCCIPTokenPool is OlyBatch {
 
         // Enable the CCIPMintBurnTokenPool policy
         console2.log("Enabling CCIPMintBurnTokenPool policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                PolicyEnabler.enable.selector,
-                ""
-            )
-        );
+        addToBatch(kernel, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
 
         console2.log("Completed");
     }

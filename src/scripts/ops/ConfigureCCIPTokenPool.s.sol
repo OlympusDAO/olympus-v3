@@ -70,7 +70,7 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
         console2.log("\nChain update applied");
     }
 
-    function transferTokenPoolOwnership() external {
+    function transferTokenPoolAdminRole() external {
         _loadEnv("sepolia");
 
         ITokenAdminRegistry registry = ITokenAdminRegistry(
