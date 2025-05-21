@@ -5,6 +5,7 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
+import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 
 contract ConfigureCCIPTokenPool is WithEnvironment {
     uint64 public constant SOLANA_DEVNET_CHAIN_SELECTOR = 16423721717087811551;
