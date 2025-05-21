@@ -6,6 +6,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
+import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
 
 contract ConfigureCCIPTokenPool is WithEnvironment {
     uint64 public constant SOLANA_DEVNET_CHAIN_SELECTOR = 16423721717087811551;
@@ -13,6 +14,33 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
         bytes32(0x0000000000000000000000000000000000000000000000000000000000000000);
     bytes32 public constant SOLANA_DEV_TOKEN_ADDRESS =
         bytes32(0x0000000000000000000000000000000000000000000000000000000000000000);
+
+    function acceptAdminRole() external {
+        _loadEnv("sepolia");
+
+        ITokenAdminRegistry registry = ITokenAdminRegistry(
+            _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
+        );
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+
+        registry.acceptAdminRole(token);
+
+        console2.log("Admin role accepted");
+    }
+
+    function setPool() external {
+        _loadEnv("sepolia");
+
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPMintBurnTokenPool");
+
+        ITokenAdminRegistry registry = ITokenAdminRegistry(
+            _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
+        );
+        registry.setPool(token, tokenPoolAddress);
+
+        console2.log("Pool set");
+    }
 
     /// @dev temp function. Finalise the declarative configurator before production.
     function configureRemotePoolSolanaDevnet() external {
