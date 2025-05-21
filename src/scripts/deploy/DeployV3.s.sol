@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.15;
 
+// Scripting
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
+// Contracts
 import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/CCIPCrossChainBridge.sol";
 
@@ -22,6 +24,7 @@ contract DeployV3 is WithEnvironment {
     // TODOs
     // [ ] Shift per-deployment functions into separate files, so we don't have import hell
     // [ ] Add support for Kernel deployment
+    // [ ] Handle error code from ffi calls
 
     // ========== STATE VARIABLES ========== //
 
