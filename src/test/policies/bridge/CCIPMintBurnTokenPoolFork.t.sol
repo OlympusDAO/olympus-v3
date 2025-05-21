@@ -434,4 +434,18 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
         // Process the bridging transaction
         simulator.switchChainAndRouteMessage(mainnetForkId);
     }
+
+    // mainnet -> solana
+    // [ ] the OHM is burned on mainnet
+    // [ ] the OHM is minted on solana to the recipient
+    // [ ] the bridged supply on mainnet is incremented
+    // [ ] the MINTR approval on mainnet is incremented
+    // NOTE: unable to test this as solana is not supported by the ccip simulator
+
+    // solana -> mainnet
+    // [ ] the OHM is burned on solana
+    // [ ] the OHM is minted on mainnet to the recipient
+    // [ ] the bridged supply on mainnet is decremented
+    // [ ] the MINTR approval on mainnet is decremented
+    // NOTE: unable to test this as solana is not supported by the ccip simulator
 }
