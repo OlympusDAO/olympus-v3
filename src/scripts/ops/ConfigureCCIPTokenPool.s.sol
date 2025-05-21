@@ -10,9 +10,9 @@ import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol"
 contract ConfigureCCIPTokenPool is WithEnvironment {
     uint64 public constant SOLANA_DEVNET_CHAIN_SELECTOR = 16423721717087811551;
     bytes32 public constant SOLANA_DEV_TOKEN_POOL_ADDRESS =
-        bytes32(0x0000000000000000000000000000000000000000);
+        bytes32(0x0000000000000000000000000000000000000000000000000000000000000000);
     bytes32 public constant SOLANA_DEV_TOKEN_ADDRESS =
-        bytes32(0x0000000000000000000000000000000000000000);
+        bytes32(0x0000000000000000000000000000000000000000000000000000000000000000);
 
     /// @dev temp function. Finalise the declarative configurator before production.
     function configureRemotePoolSolanaDevnet() external {
