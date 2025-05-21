@@ -5,6 +5,7 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 import {console2} from "forge-std/console2.sol";
 
@@ -33,6 +34,10 @@ contract ConfigureCCIPTokenPool is OlyBatch {
     }
 
     function install(bool send_) external isDaoBatch(send_) {
+        // Assumptions
+        // - The token pool has been linked to OHM in the CCIP token admin registry
+        // - The token pool is already configured
+
         // Install the CCIPMintBurnTokenPool policy
         console2.log("Installing CCIPMintBurnTokenPool policy");
         addToBatch(
@@ -44,12 +49,16 @@ contract ConfigureCCIPTokenPool is OlyBatch {
             )
         );
 
+        // Enable the CCIPMintBurnTokenPool policy
+        console2.log("Enabling CCIPMintBurnTokenPool policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                PolicyEnabler.enable.selector,
+                ""
+            )
+        );
+
         console2.log("Completed");
-
-        // Next steps:
-        // - Configure the token pool
-        // - Enable the token pool
     }
-
-    function configure(string calldata chain_, bool send_) external isDaoBatch(send_) {}
 }

@@ -69,4 +69,20 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
         vm.stopBroadcast();
         console2.log("\nChain update applied");
     }
+
+    function transferTokenPoolOwnership() external {
+        _loadEnv("sepolia");
+
+        ITokenAdminRegistry registry = ITokenAdminRegistry(
+            _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
+        );
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+        address newOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        registry.transferAdminRole(token, newOwner);
+        console2.log("Transferred admin role to DAO MS");
+
+        // Next steps:
+        // - DAO MS must accept the admin role
+    }
 }
