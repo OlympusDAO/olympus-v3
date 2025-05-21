@@ -12,6 +12,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // CCIP
+import {BurnMintTokenPoolAbstract} from "@chainlink-ccip-1.6.0/ccip/pools/BurnMintTokenPoolAbstract.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
 import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
@@ -22,7 +23,12 @@ import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
 ///         As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
 ///
 ///         Despite being a policy, the admin functions inherited from `TokenPool` are not virtual and cannot be overriden, and so remain gated to the owner.
-contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool, ICCIPMintBurnTokenPool {
+contract CCIPMintBurnTokenPool is
+    Policy,
+    PolicyEnabler,
+    BurnMintTokenPoolAbstract,
+    ICCIPMintBurnTokenPool
+{
     // =========  STATE VARIABLES ========= //
 
     /// @notice Bophades module for minting and burning OHM
@@ -90,50 +96,20 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool, ICCIPMintBur
 
     // ========= MINT/BURN FUNCTIONS ========= //
 
-    /// @inheritdoc IPoolV1
-    /// @dev        This is based on the {BurnMintTokenPoolAbstract.lockOrBurn} function, with customisations for the Olympus protocol stack.
-    ///
-    ///             This function performs the following:
-    ///             - Validates the lockOrBurnIn data
-    ///             - Burns the OHM
-    ///             - Emits the Burned event
-    function lockOrBurn(
-        Pool.LockOrBurnInV1 calldata lockOrBurnIn
-    ) external virtual override onlyEnabled returns (Pool.LockOrBurnOutV1 memory) {
-        // CCIP-provided validation:
-        // - Supported token
-        // - RMN curse status
-        // - Allowlist status (unused)
-        // - Caller is the OnRamp configured in the Router for the destination chain
-        //
-        // Also consumes the outbound rate limit for the destination chain
-        _validateLockOrBurn(lockOrBurnIn);
+    function _burn(uint256 amount_) internal override {
+        // Validate that the policy is enabled
+        if (!isEnabled) revert NotEnabled();
 
         // Validate that the amount is not zero
-        if (lockOrBurnIn.amount == 0) revert TokenPool_ZeroAmount();
-
-        // We should ideally check that the destination token pool is on the whitelist, but it is not provided in `Pool.LockOrBurnInV1`
-
-        // The Router will have sent the OHM to this contract already
+        if (amount_ == 0) revert TokenPool_ZeroAmount();
 
         // Check that there is sufficient balance
-        {
-            uint256 balance = i_token.balanceOf(address(this));
-            if (balance < lockOrBurnIn.amount)
-                revert TokenPool_InsufficientBalance(lockOrBurnIn.amount, balance);
-        }
+        uint256 balance = i_token.balanceOf(address(this));
+        if (balance < amount_) revert TokenPool_InsufficientBalance(amount_, balance);
 
         // Burn the OHM
-        i_token.approve(address(MINTR), lockOrBurnIn.amount);
-        MINTR.burnOhm(address(this), lockOrBurnIn.amount);
-
-        emit Burned(lockOrBurnIn.originalSender, lockOrBurnIn.amount);
-
-        return
-            Pool.LockOrBurnOutV1({
-                destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector),
-                destPoolData: _encodeLocalDecimals()
-            });
+        i_token.approve(address(MINTR), amount_);
+        MINTR.burnOhm(address(this), amount_);
     }
 
     /// @inheritdoc IPoolV1
@@ -178,37 +154,9 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool, ICCIPMintBur
         // Mint to the receiver
         MINTR.mintOhm(releaseOrMintIn.receiver, localAmount);
 
-        emit Minted(
-            _tryDecodeAddress(releaseOrMintIn.originalSender),
-            releaseOrMintIn.receiver,
-            localAmount
-        );
+        emit Minted(msg.sender, releaseOrMintIn.receiver, localAmount);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: localAmount});
-    }
-
-    /// @notice Attemps to decode an address from ABI-encoded bytes data
-    /// @dev    This function avoids reverting if the bytes array is not in the correct format, and returns the zero address instead
-    function _tryDecodeAddress(bytes memory data_) internal pure returns (address) {
-        // ABI-encoded address is always 32 bytes
-        if (data_.length != 32) return address(0);
-
-        // ABI-encoded address has 12 leading zeroes
-        bool isAddress = true;
-        for (uint256 i = 0; i < 12; i++) {
-            if (data_[i] != 0) {
-                isAddress = false;
-                break;
-            }
-        }
-        if (!isAddress) return address(0);
-
-        // Decode the address
-        address addr;
-        assembly {
-            addr := mload(add(data_, 32))
-        }
-        return addr;
     }
 
     function getBridgedSupply() external view returns (uint256) {
