@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {ICCIPMintBurnTokenPool} from "src/policies/interfaces/ICCIPMintBurnTokenPool.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -21,38 +22,7 @@ import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";
 ///         As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
 ///
 ///         Despite being a policy, the admin functions inherited from `TokenPool` are not virtual and cannot be overriden, and so remain gated to the owner.
-contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
-    // Tasks
-    // [X] Add PolicyEnabler
-    // [X] Add compiler configuration for 0.8.24
-    // [X] Import TokenPool abstract
-    // [X] Implement minting of OHM
-    // [X] Implement burning of OHM
-    // [X] Implement support for rate-limiting
-    // [X] Implement tracking of bridged supply from mainnet
-    // [X] failure handling
-    // [X] extract interface
-
-    // =========  ERRORS ========= //
-
-    error TokenPool_MintApprovalOutOfSync(uint256 expected, uint256 actual);
-
-    error TokenPool_InvalidToken(address expected, address actual);
-
-    error TokenPool_InvalidTokenDecimals(uint8 expected, uint8 actual);
-
-    error TokenPool_ZeroAmount();
-
-    error TokenPool_InvalidAddress(string param);
-
-    error TokenPool_ZeroAddress();
-
-    error TokenPool_InvalidRecipient(address recipient);
-
-    error TokenPool_InsufficientBalance(uint256 expected, uint256 actual);
-
-    error TokenPool_BridgedSupplyExceeded(uint256 bridgedSupply, uint256 amount);
-
+contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool, ICCIPMintBurnTokenPool {
     // =========  STATE VARIABLES ========= //
 
     /// @notice Bophades module for minting and burning OHM
@@ -339,8 +309,7 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, TokenPool {
 
     // ========= VIEW FUNCTIONS ========= //
 
-    /// @notice Returns the amount of OHM that has been bridged from mainnet
-    /// @dev    This will only return a value on mainnet
+    /// @inheritdoc ICCIPMintBurnTokenPool
     function getBridgedSupply() external view returns (uint256) {
         return _bridgedSupply;
     }

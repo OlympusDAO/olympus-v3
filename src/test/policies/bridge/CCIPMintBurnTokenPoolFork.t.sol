@@ -5,6 +5,8 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
+import {ICCIPMintBurnTokenPool} from "src/policies/interfaces/ICCIPMintBurnTokenPool.sol";
+
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -16,9 +18,6 @@ import {CCIPLocalSimulatorFork, Register} from "@chainlink-local-0.2.5/ccip/CCIP
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
-import {OffRamp} from "@chainlink-ccip-1.6.0/ccip/offRamp/OffRamp.sol";
-
-import {console2} from "@forge-std-1.9.6/console2.sol";
 
 interface IOwnable {
     function owner() external returns (address);
@@ -424,7 +423,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             abi.encodeWithSignature(
                 "TokenHandlingError(bytes)",
                 abi.encodeWithSelector(
-                    CCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
+                    ICCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
                     INITIAL_BRIDGED_SUPPLY,
                     amount
                 )

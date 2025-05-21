@@ -6,6 +6,7 @@ import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerato
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {ICCIPMintBurnTokenPool} from "src/policies/interfaces/ICCIPMintBurnTokenPool.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
@@ -350,7 +351,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // This is due to the bridgedSupply and MINTR approval being out of sync
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
+                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
                 INITIAL_BRIDGED_SUPPLY,
                 INITIAL_BRIDGED_SUPPLY + 100
             )
@@ -388,7 +389,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
+                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
                 0,
                 100
             )
@@ -490,7 +491,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_InvalidToken.selector,
+                ICCIPMintBurnTokenPool.TokenPool_InvalidToken.selector,
                 oldOHM,
                 address(OHM)
             )
@@ -526,7 +527,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
+                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
                 INITIAL_BRIDGED_SUPPLY,
                 INITIAL_BRIDGED_SUPPLY + 100
             )
@@ -565,7 +566,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
+                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
                 0,
                 100
             )
@@ -720,7 +721,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_InsufficientBalance.selector,
+                ICCIPMintBurnTokenPool.TokenPool_InsufficientBalance.selector,
                 AMOUNT,
                 AMOUNT - 1
             )
@@ -740,7 +741,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
+            abi.encodeWithSelector(ICCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
         );
 
         // Call function
@@ -931,7 +932,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
+            abi.encodeWithSelector(ICCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
         );
 
         // Call function
@@ -1031,7 +1032,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
+                ICCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
                 INITIAL_BRIDGED_SUPPLY,
                 INITIAL_BRIDGED_SUPPLY + 1
             )
