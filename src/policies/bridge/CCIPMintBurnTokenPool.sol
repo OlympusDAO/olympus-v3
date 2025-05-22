@@ -90,36 +90,22 @@ contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, BurnMintTokenPoolBase, 
 
     /// @notice Burns the specified amount of OHM
     /// @dev    Implementation of the `_burn` function from the `BurnMintTokenPoolAbstract` contract
-    function _burn(uint256 amount_) internal override {
-        // Validate that the policy is enabled
-        if (!isEnabled) revert NotEnabled();
-
-        // Validate that the amount is not zero
-        if (amount_ == 0) revert TokenPool_ZeroAmount();
-
-        // Check that there is sufficient balance
-        uint256 balance = i_token.balanceOf(address(this));
-        if (balance < amount_) revert TokenPool_InsufficientBalance(amount_, balance);
-
+    function _burn(uint256 amount_) internal override onlyEnabled {
         // Burn the OHM
+        // Will revert if amount is 0 or if there is insufficient balance
         i_token.approve(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
     }
 
     /// @notice Mints the specified amount of OHM
     /// @dev    Implementation of the `_mint` function from the `BurnMintTokenPoolBase` contract
-    function _mint(address receiver_, uint256 amount_) internal override {
-        // Validate that the policy is enabled
-        if (!isEnabled) revert NotEnabled();
-
-        // Validate that the amount is not zero
-        if (amount_ == 0) revert TokenPool_ZeroAmount();
-
+    function _mint(address receiver_, uint256 amount_) internal override onlyEnabled {
         // Increment the mint approval
         // Although this permits infinite minting on the non-mainnet chain, it would not be possible to bridge back to mainnet due to checks on that side of the bridge
         MINTR.increaseMintApproval(address(this), amount_);
 
         // Mint to the receiver
+        // Will revert if amount is 0
         MINTR.mintOhm(receiver_, amount_);
     }
 

@@ -14,6 +14,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
@@ -501,13 +502,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         givenTokenPoolHasOHM(AMOUNT - 1)
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPTokenPool.TokenPool_InsufficientBalance.selector,
-                AMOUNT,
-                AMOUNT - 1
-            )
-        );
+        vm.expectRevert("ERC20: burn amount exceeds balance");
 
         // Call function
         vm.prank(ONRAMP);
@@ -522,7 +517,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         givenTokenPoolHasOHM(AMOUNT - 1)
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICCIPTokenPool.TokenPool_ZeroAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(MINTRv1.MINTR_ZeroAmount.selector));
 
         // Call function
         vm.prank(ONRAMP);
@@ -682,7 +677,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICCIPTokenPool.TokenPool_ZeroAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(MINTRv1.MINTR_ZeroAmount.selector));
 
         // Call function
         vm.prank(OFFRAMP);

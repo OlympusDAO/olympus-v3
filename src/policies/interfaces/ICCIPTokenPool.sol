@@ -6,10 +6,6 @@ interface ICCIPTokenPool {
 
     error TokenPool_InvalidToken(address expected, address actual);
 
-    error TokenPool_ZeroAmount();
-
-    error TokenPool_InsufficientBalance(uint256 expected, uint256 actual);
-
     // ========= FUNCTIONS ========= //
 
     /// @notice Returns the amount of OHM that has been bridged from mainnet
