@@ -4,10 +4,6 @@ pragma solidity >=0.8.0;
 interface ICCIPCrossChainBridge {
     // ========= ERRORS ========= //
 
-    error Bridge_NotEnabled();
-
-    error Bridge_NotDisabled();
-
     error Bridge_InvalidAddress(string param);
 
     error Bridge_ZeroAmount();
@@ -27,10 +23,6 @@ interface ICCIPCrossChainBridge {
         uint256 amount,
         uint256 fees
     );
-
-    event BridgeEnabled();
-
-    event BridgeDisabled();
 
     event Withdrawn(address indexed recipient, uint256 amount);
 

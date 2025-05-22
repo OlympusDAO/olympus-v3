@@ -4,6 +4,8 @@ pragma solidity >=0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {stdError} from "forge-std/StdError.sol";
 
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
@@ -20,9 +22,9 @@ contract CCIPCrossChainBridgeTest is Test {
         uint256 fees
     );
 
-    event BridgeEnabled();
+    event Enabled();
 
-    event BridgeDisabled();
+    event Disabled();
 
     event Withdrawn(address indexed recipient, uint256 amount);
 
@@ -153,7 +155,7 @@ contract CCIPCrossChainBridgeTest is Test {
 
     function test_enable_alreadyEnabled_reverts() public givenContractIsEnabled {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotDisabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
 
         // Call function
         vm.prank(OWNER);
@@ -172,7 +174,7 @@ contract CCIPCrossChainBridgeTest is Test {
     function test_enable() public {
         // Expect event
         vm.expectEmit();
-        emit BridgeEnabled();
+        emit Enabled();
 
         // Call function
         vm.prank(OWNER);
@@ -192,7 +194,7 @@ contract CCIPCrossChainBridgeTest is Test {
 
     function test_disable_notEnabled_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
 
         // Call function
         vm.prank(OWNER);
@@ -211,7 +213,7 @@ contract CCIPCrossChainBridgeTest is Test {
     function test_disable() public givenContractIsEnabled {
         // Expect event
         vm.expectEmit();
-        emit BridgeDisabled();
+        emit Disabled();
 
         // Call function
         vm.prank(OWNER);
@@ -247,7 +249,7 @@ contract CCIPCrossChainBridgeTest is Test {
 
     function test_sendToSVM_notEnabled_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
 
         // Call function
         vm.prank(SENDER);
@@ -391,7 +393,7 @@ contract CCIPCrossChainBridgeTest is Test {
 
     function test_sendToEVM_notEnabled_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(ICCIPCrossChainBridge.Bridge_NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
 
         // Call function
         vm.prank(SENDER);

@@ -3,7 +3,6 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IRouterClient} from "@chainlink-ccip-1.6.0/ccip/interfaces/IRouterClient.sol";
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 
@@ -11,14 +10,15 @@ import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBri
 import {Owned} from "solmate/auth/Owned.sol";
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
 
+// Contracts
+import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
+
 /// @title  CCIPCrossChainBridge
 /// @notice Convenience contract for sending OHM between chains using Chainlink CCIP
 ///         Although not strictly necessary (as `Router.ccipSend()` can be called directly), this contract makes it easier to use.
 ///         It is a periphery contract, as it does not require any privileged access to the Olympus protocol.
-contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
+contract CCIPCrossChainBridge is ICCIPCrossChainBridge, PeripheryEnabler, Owned {
     // ========= STATE VARIABLES ========= //
-
-    bool public isEnabled;
 
     IERC20 public immutable OHM;
 
@@ -41,6 +41,8 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
         // Set state
         OHM = IERC20(ohm_);
         CCIP_ROUTER = IRouterClient(ccipRouter_);
+
+        // Disabled by default
     }
 
     // ========= SENDING OHM ========= //
@@ -200,29 +202,17 @@ contract CCIPCrossChainBridge is ICCIPCrossChainBridge, IEnabler, Owned {
 
     // ========= ENABLER FUNCTIONS ========= //
 
-    modifier onlyEnabled() {
-        if (!isEnabled) revert Bridge_NotEnabled();
-        _;
-    }
+    /// @inheritdoc PeripheryEnabler
+    function _enable(bytes calldata) internal override {}
 
-    /// @inheritdoc IEnabler
-    function enable(bytes calldata) external onlyOwner {
-        // Validate that the contract is disabled
-        if (isEnabled) revert Bridge_NotDisabled();
+    /// @inheritdoc PeripheryEnabler
+    function _disable(bytes calldata) internal override {}
 
-        // Enable the contract
-        isEnabled = true;
-
-        // Emit the enabled event
-        emit BridgeEnabled();
-    }
-
-    /// @inheritdoc IEnabler
-    function disable(bytes calldata) external onlyEnabled onlyOwner {
-        // Disable the contract
-        isEnabled = false;
-
-        // Emit the disabled event
-        emit BridgeDisabled();
+    /// @inheritdoc PeripheryEnabler
+    function _onlyOwner() internal view override {
+        // Validate that the caller is the owner
+        // String literal to keep it consistent with the solmate onlyOwner modifier
+        // solhint-disable-next-line gas-custom-errors
+        if (msg.sender != owner) revert("UNAUTHORIZED");
     }
 }
