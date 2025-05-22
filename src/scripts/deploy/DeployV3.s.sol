@@ -254,34 +254,6 @@ contract DeployV3 is WithEnvironment {
     // ========== DEPLOYMENT FUNCTIONS ========== //
 
     function deployCCIPMintBurnTokenPool() public returns (address, string memory) {
-        // Decode arguments from the sequence file
-        uint256 initialBridgedSupply = _readDeploymentArgUint256(
-            "CCIPMintBurnTokenPool",
-            "initialBridgedSupply"
-        );
-
-        // Determine the appropriate mainnet chain ID
-        uint256 mainnetChainId = 1;
-        bytes memory chainMemory = bytes(chain);
-        // If a testnet, set sepolia to be the mainnet chain ID
-        if (
-            keccak256(chainMemory) == keccak256("sepolia") ||
-            keccak256(chainMemory) == keccak256("optimism-sepolia") ||
-            keccak256(chainMemory) == keccak256("base-sepolia") ||
-            keccak256(chainMemory) == keccak256("arbitrum-sepolia") ||
-            keccak256(chainMemory) == keccak256("berachain-bartio") ||
-            keccak256(chainMemory) == keccak256("goerli") ||
-            keccak256(chainMemory) == keccak256("holesky")
-        ) {
-            mainnetChainId = 11155111;
-        }
-
-        // If not mainnet/sepolia, ensure the initial bridged supply is 0
-        if (mainnetChainId != 1 && mainnetChainId != 11155111) {
-            console2.log("Overriding initial bridged supply to 0 on non-mainnet chains");
-            initialBridgedSupply = 0;
-        }
-
         // Dependencies
         console2.log("Checking dependencies");
         address rmnProxy = _envAddressNotZero("external.ccip.RMN");
@@ -293,21 +265,17 @@ contract DeployV3 is WithEnvironment {
         console2.log("\n");
         console2.log("CCIPMintBurnTokenPool parameters:");
         console2.log("  kernel", kernel);
-        console2.log("  initialBridgedSupply", initialBridgedSupply);
         console2.log("  ohm", ohm);
         console2.log("  rmnProxy", rmnProxy);
         console2.log("  ccipRouter", ccipRouter);
-        console2.log("  mainnetChainId", mainnetChainId);
 
         // Deploy CCIPMintBurnTokenPool
         vm.broadcast();
         CCIPMintBurnTokenPool ccipMintBurnTokenPool = new CCIPMintBurnTokenPool(
             kernel,
-            initialBridgedSupply,
             ohm,
             rmnProxy,
-            ccipRouter,
-            mainnetChainId
+            ccipRouter
         );
 
         return (address(ccipMintBurnTokenPool), "olympus.policies");

@@ -6,7 +6,7 @@ import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerato
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
-import {ICCIPMintBurnTokenPool} from "src/policies/interfaces/ICCIPMintBurnTokenPool.sol";
+import {ICCIPTokenPool} from "src/policies/interfaces/ICCIPTokenPool.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
@@ -38,8 +38,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
     Kernel public kernel;
     RolesAdmin public rolesAdmin;
     CCIPMintBurnTokenPool public tokenPool;
-
-    uint256 public constant INITIAL_BRIDGED_SUPPLY = 1_234_567_890;
 
     address public SENDER;
     address public RECEIVER;
@@ -106,11 +104,9 @@ contract CCIPMintBurnTokenPoolTest is Test {
     function _createTokenPool() internal {
         tokenPool = new CCIPMintBurnTokenPool(
             address(kernel),
-            INITIAL_BRIDGED_SUPPLY,
             address(OHM),
             address(RMNProxy),
-            address(router),
-            1
+            address(router)
         );
     }
 
@@ -215,14 +211,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
         assertEq(MINTR.mintApproval(address(tokenPool)), expected, "mintApproval");
     }
 
-    function _assertBridgedSupplyInitialized(bool expected) internal view {
-        assertEq(tokenPool.isBridgeSupplyInitialized(), expected, "isBridgeSupplyInitialized");
-    }
-
-    function _assertIsChainMainnet(bool expected) internal view {
-        assertEq(tokenPool.isChainMainnet(), expected, "isChainMainnet");
-    }
-
     function _assertIsEnabled(bool expected) internal view {
         assertEq(tokenPool.isEnabled(), expected, "isEnabled");
     }
@@ -256,45 +244,16 @@ contract CCIPMintBurnTokenPoolTest is Test {
     // =========  TESTS ========= //
 
     // constructor
-    // given the chain is mainnet
-    //  [X] isChainMainnet is true
-    //  [X] the owner is the deployer
-    //  [X] the contract is disabled
-    //  [X] bridgedSupply is 0
-    //  [X] isBridgeSupplyInitialized is false
-    // [X] isChainMainnet is false
     // [X] the owner is the deployer
     // [X] the contract is disabled
-    // [X] bridgedSupply is 0
-    // [X] isBridgeSupplyInitialized is false
 
-    function test_constructor_mainnet() public {
+    function test_constructor() public {
         _createTokenPool();
 
         // Assert
         assertEq(tokenPool.owner(), address(this), "owner");
         _assertIsEnabled(false);
-        _assertIsChainMainnet(true);
         _assertBridgedSupply(0);
-        _assertBridgedSupplyInitialized(false);
-    }
-
-    function test_constructor_notMainnet() public {
-        tokenPool = new CCIPMintBurnTokenPool(
-            address(kernel),
-            INITIAL_BRIDGED_SUPPLY,
-            address(OHM),
-            address(RMNProxy),
-            address(router),
-            2
-        );
-
-        // Assert
-        assertEq(tokenPool.owner(), address(this), "owner");
-        _assertIsEnabled(false);
-        _assertIsChainMainnet(false);
-        _assertBridgedSupply(0);
-        _assertBridgedSupplyInitialized(false);
     }
 
     // enable
@@ -302,17 +261,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
     //  [X] it reverts
     // given the caller does not have the admin role
     //  [X] it reverts
-    // given the chain is mainnet
-    //  given the contract has been enabled before
-    //   given the MINTR approval is different to the bridgedSupply value
-    //    [X] it reverts
-    //   [X] it enables the contract
-    //  given the MINTR approval is non-zero
-    //   [X] it reverts
-    //  [X] bridgedSupply is set to INITIAL_BRIDGED_SUPPLY
-    //  [X] bridgedSupplyInitialized is true
-    //  [X] the MINTR approval is set to INITIAL_BRIDGED_SUPPLY
-    //  [X] it enables the contract
     // [X] bridgedSupply remains 0
     // [X] bridgedSupplyInitialized is false
     // [X] the MINTR approval remains 0
@@ -338,88 +286,13 @@ contract CCIPMintBurnTokenPoolTest is Test {
         tokenPool.enable("");
     }
 
-    function test_enable_mainnet_previouslyEnabled_differentMinterApproval_reverts()
-        public
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenIsDisabled
-    {
-        // Set the MINTR approval to a different value
-        _increaseMinterApproval(100);
-
-        // Expect revert
-        // This is due to the bridgedSupply and MINTR approval being out of sync
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
-                INITIAL_BRIDGED_SUPPLY,
-                INITIAL_BRIDGED_SUPPLY + 100
-            )
-        );
-
-        // Call function
-        vm.prank(ADMIN);
-        tokenPool.enable("");
-    }
-
-    function test_enable_mainnet_previouslyEnabled()
-        public
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
-        givenTokenPoolHasOHM(AMOUNT)
-        givenBridgedOut(AMOUNT)
-        givenIsDisabled
-    {
-        // Call function
-        vm.prank(ADMIN);
-        tokenPool.enable("");
-
-        // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT);
-        _assertBridgedSupplyInitialized(true);
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT);
-        _assertIsEnabled(true);
-    }
-
-    function test_enable_mainnet_nonZeroMinterApproval_reverts() public givenTokenPoolIsInstalled {
-        // Set the MINTR approval to a non-zero value
-        _increaseMinterApproval(100);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
-                0,
-                100
-            )
-        );
-
-        // Call function
-        vm.prank(ADMIN);
-        tokenPool.enable("");
-    }
-
-    function test_enable_mainnet() public givenTokenPoolIsInstalled {
-        // Call function
-        vm.prank(ADMIN);
-        tokenPool.enable("");
-
-        // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY);
-        _assertBridgedSupplyInitialized(true);
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY);
-        _assertIsEnabled(true);
-    }
-
-    function test_enable_notMainnet() public givenChainIsNotMainnet givenTokenPoolIsInstalled {
+    function test_enable() public givenTokenPoolIsInstalled {
         // Call function
         vm.prank(ADMIN);
         tokenPool.enable("");
 
         // Assert
         _assertBridgedSupply(0);
-        _assertBridgedSupplyInitialized(false);
         _assertMinterApproval(0);
         _assertIsEnabled(true);
     }
@@ -465,18 +338,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
     // configureDependencies
     // given the provided token is not the OHM registered in the MINTR module
     //  [X] it reverts
-    // given the chain is mainnet
-    //  given bridgedSupplyInitialized is true
-    //   given the MINTR approval is different to the bridgedSupply value
-    //    [X] it reverts
-    //   [X] the bridgedSupply is unchanged
-    //   [X] the MINTR approval is unchanged
-    //   [X] it activates the policy
-    //  given the MINTR approval is non-zero
-    //   [X] it reverts
-    //  [X] the bridgedSupply is unchanged
-    //  [X] the MINTR approval is unchanged
-    //  [X] it activates the policy
     // [X] the bridgedSupply is unchanged
     // [X] the MINTR approval is unchanged
     // [X] it activates the policy
@@ -491,7 +352,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_InvalidToken.selector,
+                ICCIPTokenPool.TokenPool_InvalidToken.selector,
                 oldOHM,
                 address(OHM)
             )
@@ -501,92 +362,16 @@ contract CCIPMintBurnTokenPoolTest is Test {
         _installTokenPool();
     }
 
-    function test_configureDependencies_notMainnet() public givenChainIsNotMainnet {
+    function test_configureDependencies() public givenChainIsNotMainnet {
         // Call function
         _createTokenPool();
         _installTokenPool();
 
         // Assert
-        _assertIsChainMainnet(false);
         _assertBridgedSupply(0);
-        _assertBridgedSupplyInitialized(false);
         _assertMinterApproval(0);
         _assertIsEnabled(false);
         _assertIsPolicyActive(true);
-    }
-
-    function test_configureDependencies_mainnet_previouslyEnabled_differentMinterApproval_reverts()
-        public
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenPolicyIsDeactivated
-    {
-        // Change the MINTR approval to a different value
-        _increaseMinterApproval(100);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
-                INITIAL_BRIDGED_SUPPLY,
-                INITIAL_BRIDGED_SUPPLY + 100
-            )
-        );
-
-        // Call function
-        _installTokenPool();
-    }
-
-    function test_configureDependencies_mainnet_previouslyEnabled()
-        public
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
-        givenTokenPoolHasOHM(AMOUNT)
-        givenBridgedOut(AMOUNT)
-        givenPolicyIsDeactivated
-    {
-        // Call function
-        _installTokenPool();
-
-        // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT);
-        _assertBridgedSupplyInitialized(true);
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT);
-        _assertIsEnabled(true); // Previously enabled
-        _assertIsPolicyActive(true);
-    }
-
-    function test_configureDependencies_mainnet_nonZeroMinterApproval_reverts() public {
-        _createTokenPool();
-
-        // Set the MINTR approval to a non-zero value
-        _increaseMinterApproval(100);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_MintApprovalOutOfSync.selector,
-                0,
-                100
-            )
-        );
-
-        // Call function
-        _installTokenPool();
-    }
-
-    function test_configureDependencies_mainnet() public {
-        // Call function
-        _createTokenPool();
-        _installTokenPool();
-
-        // Assert
-        _assertBridgedSupply(0); // Not yet enabled
-        _assertBridgedSupplyInitialized(false); // Not yet enabled
-        _assertMinterApproval(0); // Not yet enabled
-        _assertIsEnabled(false); // Not yet enabled
-        _assertIsPolicyActive(true); // Policy is active
     }
 
     // lockOrBurn
@@ -604,13 +389,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
     //  [X] it reverts
     // given the amount of tokens to be bridged is 0
     //  [X] it reverts
-    // given the current chain is mainnet or sepolia
-    //  [X] the bridgedSupply is incremented by the amount of tokens to be bridged
-    //  [X] the MINTR approval is increased by the amount of tokens to be bridged
-    //  [X] the OHM tokens are burned from the token pool
-    //  [X] a Burned event is emitted
-    //  [X] it returns the destination token address
-    //  [X] it returns the pool data as encoded local decimals
     // [X] the bridgedSupply is not incremented
     // [X] the MINTR approval is not incremented
     // [X] the OHM tokens are burned from the token pool
@@ -631,7 +409,11 @@ contract CCIPMintBurnTokenPoolTest is Test {
             });
     }
 
-    function test_lockOrBurn_givenDisabled_reverts() public givenTokenPoolIsInstalled {
+    function test_lockOrBurn_givenDisabled_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
         // Expect revert
         _expectRevertNotEnabled();
 
@@ -721,7 +503,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_InsufficientBalance.selector,
+                ICCIPTokenPool.TokenPool_InsufficientBalance.selector,
                 AMOUNT,
                 AMOUNT - 1
             )
@@ -740,41 +522,14 @@ contract CCIPMintBurnTokenPoolTest is Test {
         givenTokenPoolHasOHM(AMOUNT - 1)
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(ICCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ICCIPTokenPool.TokenPool_ZeroAmount.selector));
 
         // Call function
         vm.prank(ONRAMP);
         tokenPool.lockOrBurn(_getLockOrBurnParams(0));
     }
 
-    function test_lockOrBurn_notMainnet()
-        public
-        givenChainIsNotMainnet
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
-        givenTokenPoolHasOHM(AMOUNT)
-    {
-        // Expect event
-        vm.expectEmit();
-        emit Burned(SENDER, AMOUNT);
-
-        // Call function
-        vm.prank(ONRAMP);
-        Pool.LockOrBurnOutV1 memory result = tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
-
-        // Assert
-        _assertBridgedSupply(0); // No change
-        _assertMinterApproval(0); // No change
-        _assertTokenPoolOhmBalance(0); // Burned
-        _assertReceiverOhmBalance(0);
-        assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
-        assertEq(result.destPoolData, abi.encode(9), "destPoolData");
-    }
-
-    function test_lockOrBurn_mainnet()
+    function test_lockOrBurn()
         public
         givenTokenPoolIsInstalled
         givenIsEnabled
@@ -783,15 +538,15 @@ contract CCIPMintBurnTokenPoolTest is Test {
     {
         // Expect event
         vm.expectEmit();
-        emit Burned(SENDER, AMOUNT);
+        emit Burned(ONRAMP, AMOUNT);
 
         // Call function
         vm.prank(ONRAMP);
         Pool.LockOrBurnOutV1 memory result = tokenPool.lockOrBurn(_getLockOrBurnParams(AMOUNT));
 
         // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY + AMOUNT); // Incremented
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY + AMOUNT); // Incremented
+        _assertBridgedSupply(0);
+        _assertMinterApproval(0);
         _assertTokenPoolOhmBalance(0); // Burned
         _assertReceiverOhmBalance(0);
         assertEq(result.destTokenAddress, abi.encode(address(remoteOHM)), "destTokenAddress");
@@ -811,14 +566,6 @@ contract CCIPMintBurnTokenPoolTest is Test {
     //  [X] it reverts
     // given the amount of tokens to be bridged is 0
     //  [X] it reverts
-    // given the current chain is mainnet or sepolia
-    //   when the amount of tokens to be bridged is greater than the bridgedSupply
-    //    [X] it reverts
-    //  [X] the bridgedSupply is decremented by the amount of tokens bridged
-    //  [X] the MINTR approval is decreased by the amount of tokens bridged
-    //  [X] the OHM tokens are minted to the recipient
-    //  [X] a Minted event is emitted
-    //  [X] it returns the amount of tokens minted
     // [X] the bridgedSupply is not decremented
     // [X] the MINTR approval is not decremented
     // [X] the OHM tokens are minted to the recipient
@@ -841,7 +588,11 @@ contract CCIPMintBurnTokenPoolTest is Test {
             });
     }
 
-    function test_releaseOrMint_givenDisabled_reverts() public givenTokenPoolIsInstalled {
+    function test_releaseOrMint_givenDisabled_reverts()
+        public
+        givenTokenPoolIsInstalled
+        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+    {
         // Expect revert
         _expectRevertNotEnabled();
 
@@ -931,50 +682,22 @@ contract CCIPMintBurnTokenPoolTest is Test {
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(ICCIPMintBurnTokenPool.TokenPool_ZeroAmount.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ICCIPTokenPool.TokenPool_ZeroAmount.selector));
 
         // Call function
         vm.prank(OFFRAMP);
         tokenPool.releaseOrMint(_getReleaseOrMintParams(0));
     }
 
-    function test_releaseOrMint_notMainnet()
+    function test_releaseOrMint_originalSenderNotEVM()
         public
-        givenChainIsNotMainnet
         givenTokenPoolIsInstalled
         givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
     {
         // Expect event
         vm.expectEmit();
-        emit Minted(SENDER, RECEIVER, AMOUNT);
-
-        // Call function
-        vm.prank(OFFRAMP);
-        Pool.ReleaseOrMintOutV1 memory result = tokenPool.releaseOrMint(
-            _getReleaseOrMintParams(AMOUNT)
-        );
-
-        // Assert
-        _assertBridgedSupply(0); // No change
-        _assertMinterApproval(0); // Incremented, then minting brings back to 0
-        _assertTokenPoolOhmBalance(0);
-        _assertReceiverOhmBalance(AMOUNT);
-        assertEq(result.destinationAmount, AMOUNT, "destinationAmount");
-    }
-
-    function test_releaseOrMint_notMainnet_originalSenderNotEVM()
-        public
-        givenChainIsNotMainnet
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
-    {
-        // Expect event
-        vm.expectEmit();
-        emit Minted(0x0000000000000000000000000000000000000000, RECEIVER, AMOUNT);
+        emit Minted(OFFRAMP, RECEIVER, AMOUNT);
 
         // Call function
         vm.prank(OFFRAMP);
@@ -993,13 +716,13 @@ contract CCIPMintBurnTokenPoolTest is Test {
 
         // Assert
         _assertBridgedSupply(0); // No change
-        _assertMinterApproval(0); // Incremented, then minting brings back to 0
+        _assertMinterApproval(0); // No change
         _assertTokenPoolOhmBalance(0);
         _assertReceiverOhmBalance(AMOUNT);
         assertEq(result.destinationAmount, AMOUNT, "destinationAmount");
     }
 
-    function test_releaseOrMint_mainnet()
+    function test_releaseOrMint()
         public
         givenTokenPoolIsInstalled
         givenIsEnabled
@@ -1007,7 +730,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     {
         // Expect event
         vm.expectEmit();
-        emit Minted(SENDER, RECEIVER, AMOUNT);
+        emit Minted(OFFRAMP, RECEIVER, AMOUNT);
 
         // Call function
         vm.prank(OFFRAMP);
@@ -1016,30 +739,10 @@ contract CCIPMintBurnTokenPoolTest is Test {
         );
 
         // Assert
-        _assertBridgedSupply(INITIAL_BRIDGED_SUPPLY - AMOUNT); // Amount deducted
-        _assertMinterApproval(INITIAL_BRIDGED_SUPPLY - AMOUNT); // Amount deducted
+        _assertBridgedSupply(0); // No change
+        _assertMinterApproval(0); // No change
         _assertTokenPoolOhmBalance(0);
         _assertReceiverOhmBalance(AMOUNT);
         assertEq(result.destinationAmount, AMOUNT, "destinationAmount");
-    }
-
-    function test_releaseOrMint_greaterThanBridgedSupply_reverts()
-        public
-        givenTokenPoolIsInstalled
-        givenIsEnabled
-        givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
-    {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
-                INITIAL_BRIDGED_SUPPLY,
-                INITIAL_BRIDGED_SUPPLY + 1
-            )
-        );
-
-        // Call function
-        vm.prank(OFFRAMP);
-        tokenPool.releaseOrMint(_getReleaseOrMintParams(INITIAL_BRIDGED_SUPPLY + 1));
     }
 }

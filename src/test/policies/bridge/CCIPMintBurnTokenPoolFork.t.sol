@@ -5,8 +5,6 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-import {ICCIPMintBurnTokenPool} from "src/policies/interfaces/ICCIPMintBurnTokenPool.sol";
-
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -46,8 +44,6 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
 
     uint64 public mainnetChainSelector;
     uint64 public polygonChainSelector;
-
-    uint256 public constant INITIAL_BRIDGED_SUPPLY = 1_234_567_890;
 
     address public SENDER;
     address public RECIPIENT;
@@ -100,11 +96,9 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             mainnetRolesAdmin = new RolesAdmin(mainnetKernel);
             mainnetTokenPool = new CCIPMintBurnTokenPool(
                 address(mainnetKernel),
-                INITIAL_BRIDGED_SUPPLY,
                 address(mainnetOHM),
                 mainnetDetails.rmnProxyAddress,
-                mainnetDetails.routerAddress,
-                11155111
+                mainnetDetails.routerAddress
             );
             mainnetBridge = new CCIPCrossChainBridge(
                 address(mainnetOHM),
@@ -160,11 +154,9 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             polygonRolesAdmin = new RolesAdmin(polygonKernel);
             polygonTokenPool = new CCIPMintBurnTokenPool(
                 address(polygonKernel),
-                INITIAL_BRIDGED_SUPPLY,
                 address(polygonOHM),
                 polygonDetails.rmnProxyAddress,
-                polygonDetails.routerAddress,
-                11155111
+                polygonDetails.routerAddress
             );
             polygonBridge = new CCIPCrossChainBridge(
                 address(polygonOHM),
@@ -288,9 +280,9 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
     // mainnet -> polygon
     // [X] the OHM is burned on mainnet
     // [X] the OHM is minted on polygon to the recipient
-    // [X] the bridged supply on mainnet is incremented
+    // [X] the bridged supply on mainnet is not updated
     // [X] the bridged supply on polygon is not updated
-    // [X] the MINTR approval on mainnet is incremented
+    // [X] the MINTR approval on mainnet is not updated
     // [X] the MINTR approval on polygon is not updated
 
     function test_mainnetToPolygon() public {
@@ -309,14 +301,10 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             "mainnet: sender: OHM balance"
         );
         assertEq(mainnetOHM.balanceOf(RECIPIENT), 0, "mainnet: recipient: OHM balance");
-        assertEq(
-            mainnetTokenPool.getBridgedSupply(),
-            INITIAL_BRIDGED_SUPPLY + SEND_AMOUNT,
-            "mainnet: bridged supply"
-        );
+        assertEq(mainnetTokenPool.getBridgedSupply(), 0, "mainnet: bridged supply");
         assertEq(
             mainnetMinter.mintApproval(address(mainnetTokenPool)),
-            INITIAL_BRIDGED_SUPPLY + SEND_AMOUNT,
+            0,
             "mainnet: minter approval"
         );
 
@@ -338,14 +326,12 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
     }
 
     // polygon -> mainnet
-    // given the bridge amount is greater than the bridged supply
-    //  [X] it reverts
     // [X] the OHM is burned on polygon
     // [X] the OHM is minted on mainnet to the recipient
     // [X] the bridged supply on polygon is not updated
-    // [X] the bridged supply on mainnet is decremented
+    // [X] the bridged supply on mainnet is not updated
     // [X] the MINTR approval on polygon is not updated
-    // [X] the MINTR approval on mainnet is decremented
+    // [X] the MINTR approval on mainnet is not updated
 
     function test_polygonToMainnet() public {
         // Start on Polygon
@@ -383,68 +369,25 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
         // Assertions - mainnet
         assertEq(mainnetOHM.balanceOf(SENDER), MINT_AMOUNT, "mainnet: sender: OHM balance");
         assertEq(mainnetOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "mainnet: recipient: OHM balance");
-        assertEq(
-            mainnetTokenPool.getBridgedSupply(),
-            INITIAL_BRIDGED_SUPPLY - SEND_AMOUNT,
-            "mainnet: bridged supply"
-        );
+        assertEq(mainnetTokenPool.getBridgedSupply(), 0, "mainnet: bridged supply");
         assertEq(
             mainnetMinter.mintApproval(address(mainnetTokenPool)),
-            INITIAL_BRIDGED_SUPPLY - SEND_AMOUNT,
+            0,
             "mainnet: minter approval"
         );
-    }
-
-    function test_polygonToMainnet_exceedsBridgedSupply_reverts() public {
-        // Define an amount larger than the initial bridged supply
-        uint256 amount = INITIAL_BRIDGED_SUPPLY + 1;
-
-        // Start on Polygon
-        vm.selectFork(polygonForkId);
-
-        // Mint the amount to the sender
-        polygonOHM.mint(SENDER, amount);
-
-        // Get the fee
-        uint256 fee = polygonBridge.getFeeEVM(mainnetChainSelector, RECIPIENT, amount);
-
-        // Call the bridge
-        vm.startPrank(SENDER);
-        polygonOHM.approve(address(polygonBridge), amount);
-        polygonBridge.sendToEVM{value: fee}(mainnetChainSelector, RECIPIENT, amount);
-        vm.stopPrank();
-
-        // The following command runs into an OutOfGas error, so disable gas metering
-        vm.pauseGasMetering();
-
-        // Expect the mainnet transaction to revert
-        // There is a mismatch between the error signature in OffRamp.sol and what is actually thrown. This may change in the future.
-        vm.expectRevert(
-            abi.encodeWithSignature(
-                "TokenHandlingError(bytes)",
-                abi.encodeWithSelector(
-                    ICCIPMintBurnTokenPool.TokenPool_BridgedSupplyExceeded.selector,
-                    INITIAL_BRIDGED_SUPPLY,
-                    amount
-                )
-            )
-        );
-
-        // Process the bridging transaction
-        simulator.switchChainAndRouteMessage(mainnetForkId);
     }
 
     // mainnet -> solana
     // [ ] the OHM is burned on mainnet
     // [ ] the OHM is minted on solana to the recipient
-    // [ ] the bridged supply on mainnet is incremented
-    // [ ] the MINTR approval on mainnet is incremented
+    // [ ] the bridged supply on mainnet is not updated
+    // [ ] the MINTR approval on mainnet is not updated
     // NOTE: unable to test this as solana is not supported by the ccip simulator
 
     // solana -> mainnet
     // [ ] the OHM is burned on solana
     // [ ] the OHM is minted on mainnet to the recipient
-    // [ ] the bridged supply on mainnet is decremented
-    // [ ] the MINTR approval on mainnet is decremented
+    // [ ] the bridged supply on mainnet is not updated
+    // [ ] the MINTR approval on mainnet is not updated
     // NOTE: unable to test this as solana is not supported by the ccip simulator
 }

@@ -2,9 +2,7 @@
     "sequence": [
         {
             "name": "CCIPMintBurnTokenPool",
-            "args": {
-                "initialBridgedSupply": "1"
-            }
+            "args": {}
         },
         {
             "name": "CCIPCrossChainBridge",
