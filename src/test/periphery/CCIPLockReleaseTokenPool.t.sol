@@ -9,7 +9,6 @@ import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol"
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 
 // Contracts
-import {ICCIPTokenPool} from "src/policies/interfaces/ICCIPTokenPool.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {CCIPLockReleaseTokenPool} from "src/periphery/bridge/CCIPLockReleaseTokenPool.sol";
 import {Ownable2Step} from "@chainlink-ccip-1.6.0/shared/access/Ownable2Step.sol";
