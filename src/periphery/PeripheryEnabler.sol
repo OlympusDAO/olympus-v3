@@ -4,22 +4,16 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
-// Libraries
-import {Owned} from "solmate/auth/Owned.sol";
-
 /// @title PeripheryEnabler
 /// @notice Abstract contract that implements the `IEnabler` interface
-/// @dev    This contract is designed to be used as a base contract for periphery contracts that need to be enabled and disabled
+/// @dev    This contract is designed to be used as a base contract for periphery contracts that need to be enabled and disabled.
+///         It additionally is not opionated about whether a caller is permitted to enable/disable the contract, and delegates it to a virtual function.
 ///         It is a periphery contract, as it does not require any privileged access to the Olympus protocol.
-abstract contract PeripheryEnabler is Owned, IEnabler {
+abstract contract PeripheryEnabler is IEnabler {
     // ========= STATE VARIABLES ========= //
 
     /// @notice Whether the contract is enabled
     bool public isEnabled;
-
-    // ========= CONSTRUCTOR ========= //
-
-    constructor(address owner_) Owned(owner_) {}
 
     // ========= MODIFIERS ========= //
 
@@ -33,6 +27,12 @@ abstract contract PeripheryEnabler is Owned, IEnabler {
         _;
     }
 
+    // ========= OWNERSHIP ========= //
+
+    /// @notice Implementation-specific validation of ownership
+    /// @dev    Implementing contracts should override this function to perform the appropriate validation and revert if the caller is not permitted to enable/disable the contract.
+    function _onlyOwner() internal view virtual;
+
     // ========= ENABLER FUNCTIONS ========= //
 
     /// @notice Implementation-specific enable function
@@ -45,10 +45,13 @@ abstract contract PeripheryEnabler is Owned, IEnabler {
     ///
     /// @param  enableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
-    function _enable(bytes calldata enableData_) internal virtual {}
+    function _enable(bytes calldata enableData_) internal virtual;
 
     /// @inheritdoc IEnabler
-    function enable(bytes calldata enableData_) external onlyOwner onlyDisabled {
+    function enable(bytes calldata enableData_) external onlyDisabled {
+        // Validate that the caller is permissioned
+        _onlyOwner();
+
         // Call the implementation-specific enable function
         _enable(enableData_);
 
@@ -69,10 +72,13 @@ abstract contract PeripheryEnabler is Owned, IEnabler {
     ///
     /// @param  disableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
-    function _disable(bytes calldata disableData_) internal virtual {}
+    function _disable(bytes calldata disableData_) internal virtual;
 
     /// @inheritdoc IEnabler
-    function disable(bytes calldata disableData_) external onlyOwner onlyEnabled {
+    function disable(bytes calldata disableData_) external onlyEnabled {
+        // Validate that the caller is permissioned
+        _onlyOwner();
+
         // Call the implementation-specific disable function
         _disable(disableData_);
 
