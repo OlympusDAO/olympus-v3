@@ -8,6 +8,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 
 // Contracts
 import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
+import {CCIPLockReleaseTokenPool} from "src/periphery/bridge/CCIPLockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
 // solhint-disable gas-custom-errors
@@ -279,6 +280,31 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(ccipMintBurnTokenPool), "olympus.policies");
+    }
+
+    function deployCCIPLockReleaseTokenPool() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address rmnProxy = _envAddressNotZero("external.ccip.RMN");
+        address ccipRouter = _envAddressNotZero("external.ccip.Router");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
+        // Log arguments
+        console2.log("\n");
+        console2.log("CCIPLockReleaseTokenPool parameters:");
+        console2.log("  ohm", ohm);
+        console2.log("  rmnProxy", rmnProxy);
+        console2.log("  ccipRouter", ccipRouter);
+
+        // Deploy CCIPLockReleaseTokenPool
+        vm.broadcast();
+        CCIPLockReleaseTokenPool ccipLockReleaseTokenPool = new CCIPLockReleaseTokenPool(
+            ohm,
+            rmnProxy,
+            ccipRouter
+        );
+
+        return (address(ccipLockReleaseTokenPool), "olympus.periphery");
     }
 
     function deployCCIPCrossChainBridge() public returns (address, string memory) {
