@@ -8,7 +8,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 
 // Contracts
 import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
-import {CCIPCrossChainBridge} from "src/periphery/CCIPCrossChainBridge.sol";
+import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
 // solhint-disable gas-custom-errors
 

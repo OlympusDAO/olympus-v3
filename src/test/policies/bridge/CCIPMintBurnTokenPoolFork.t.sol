@@ -10,7 +10,7 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {CCIPCrossChainBridge} from "src/periphery/CCIPCrossChainBridge.sol";
+import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
 import {CCIPLocalSimulatorFork, Register} from "@chainlink-local-0.2.5/ccip/CCIPLocalSimulatorFork.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";

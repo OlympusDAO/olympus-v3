@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {stdError} from "forge-std/StdError.sol";
 
-import {CCIPCrossChainBridge} from "src/periphery/CCIPCrossChainBridge.sol";
+import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
 
