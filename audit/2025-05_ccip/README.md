@@ -10,8 +10,8 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 Keeping the architecture of CCIP in mind, the integration has been designed in the following manner:
 
-- `CCIPMintBurnTokenPool`: inheriting from the CCIP-provided `TokenPool` contract, it is a privileged Bophades `Policy` that has the permission to mint/burn OHM.
-- `CCIPCrossChainBridge`: provides a simple interface for end users to send OHM from one chain to another, while hiding the complexity of constructing CCIP messages. It supports both EVM and SVM destination chains.
+- User-facing bridge contract that packages the message for the CCIP contracts and ensures that token approval is in place
+- Token pool contracts that interact with the CCIP on- and off-ramp contracts to handle burn/mint or lock/release of OHM tokens, as appropriate
 
 ## Scope
 
@@ -20,15 +20,23 @@ Keeping the architecture of CCIP in mind, the integration has been designed in t
 The contracts in scope for this audit are:
 
 - [src/](../../src)
+    - [external/](../../src/external)
+        - [bridge/](../../src/external/bridge)
+            - [BurnMintTokenPoolBase.sol](../../src/external/bridge/BurnMintTokenPoolBase.sol)
     - [periphery/](../../src/periphery)
+        - [bridge/](../../src/periphery/bridge)
+            - [CCIPCrossChainBridge.sol](../../src/periphery/bridge/CCIPCrossChainBridge.sol)
+            - [CCIPLockReleaseTokenPool.sol](../../src/periphery/bridge/CCIPLockReleaseTokenPool.sol)
         - [interfaces/](../../src/periphery/interfaces)
             - [ICCIPCrossChainBridge.sol](../../src/periphery/interfaces/ICCIPCrossChainBridge.sol)
-        - [CCIPCrossChainBridge.sol](../../src/periphery/CCIPCrossChainBridge.sol)
+        - [PeripheryEnabler.sol](../../src/periphery/PeripheryEnabler.sol)
     - [policies/](../../src/policies)
         - [bridge/](../../src/policies/bridge)
-            - [CCIPMintBurnTokenPool.sol](../../src/policies/bridge/CCIPMintBurnTokenPool.sol)
+            - [CCIPBurnMintTokenPool.sol](../../src/policies/bridge/CCIPBurnMintTokenPool.sol)
+        - [interfaces/](../../src/policies/interfaces)
+            - [ICCIPTokenPool.sol](../../src/policies/interfaces/ICCIPTokenPool.sol)
 
-The following PR provides the changes: TODO
+[PR 69](https://github.com/OlympusDAO/olympus-v3/pull/69) provides the changes.
 
 ### Previous Audits
 
@@ -67,18 +75,101 @@ You can review previous audits here:
     - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_CoolerV2-Electisec_report.pdf)
     - The PolicyEnabler and PolicyAdmin mix-ins are audited here
 
+### Modifications to Audited Contracts
+
+Some of the in-scope contracts modify or include unmodified code from the CCIP contracts that have been previously audited:
+
+- `BurnMintTokenPoolBase.sol`
+    - The `releaseOrMint()` function is the same as in the source [BurnMintTokenPoolAbstract.sol](https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/ccip/pools/BurnMintTokenPoolAbstract.sol) file, with the `mint()` call on line 46 replaced with a call to a `_mint()` virtual function. This was to allow for custom mint signatures/behaviours (which is already supported for token burning).
+- `CCIPLockReleaseTokenPool.sol`
+    - The `lockOrBurn()` and `releaseOrMint()` functions are the same as in the source [LockReleaseTokenPool.sol](https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/ccip/pools/LockReleaseTokenPool.sol) file, with the addition of `onlyEnabled` modifiers and `public` visibility. Calling `super.lockOrBurn()` and `super.releaseOrMint()` was not possible, due to the `external` visibility.
+
 ## Implementation
 
 The following sections provide detail on the processes and implementation.
 
 ### Sending OHM
 
-sequence diagram
+#### Sending - Canonical Chain
 
-Note on sending from mainnet
+On the canonical/base chain (Mainnet for production and Sepolia for testing), a lightly modified `LockReleaseTokenPool` is used, which custodies OHM that is bridged out.
+
+```mermaid
+sequenceDiagram
+    participant Sender
+    participant CCIPCrossChainBridge
+    participant Router
+    participant OnRamp
+    participant CCIPLockReleaseTokenPool
+
+    Sender->>CCIPCrossChainBridge: send(chain, receiver, amount)
+    Sender-->>CCIPCrossChainBridge: OHM.transferFrom()
+    CCIPCrossChainBridge->>Router: ccipSend(chain, message)
+    CCIPCrossChainBridge-->>CCIPLockReleaseTokenPool: OHM.transferFrom()
+    Router->>OnRamp: forwardFromRouter(chain, message, fee, bridge)
+    OnRamp->>CCIPLockReleaseTokenPool: lockOrBurn()
+    Note over OnRamp, CCIPLockReleaseTokenPool: OHM remains custodied in the TokenPool
+```
+
+In contract to previous bridging implementations by Olympus, the `LockReleaseTokenPool` was adopted for the following reasons:
+
+- In the event that bridging infrastructure is compromised, the quantity of OHM in the `LockReleaseTokenPool` will provide a hard cap to the amount of OHM that can be bridged back to the canonical chain.
+- The same outcome is achievable with a "burn and mint" approach, but required more significant additions to the `BurnMintTokenPool` contract. The preference is to reduce the amount of custom code, and so the "lock and release" approach has been adopted.
+
+#### Sending - Other Chains
+
+When sending OHM from other non-canonical chains (regardless of which chain the recipient is located on), the "burn and mint" approach is used.
+
+```mermaid
+sequenceDiagram
+    participant Sender
+    participant CCIPCrossChainBridge
+    participant Router
+    participant OnRamp
+    participant CCIPBurnMintTokenPool
+    participant MINTR
+
+    Sender->>CCIPCrossChainBridge: send(chain, receiver, amount)
+    Sender-->>CCIPCrossChainBridge: OHM.transferFrom()
+    CCIPCrossChainBridge->>Router: ccipSend(chain, message)
+    CCIPCrossChainBridge-->>CCIPBurnMintTokenPool: OHM.transferFrom()
+    Router->>OnRamp: forwardFromRouter(chain, message, fee, bridge)
+    OnRamp->>CCIPBurnMintTokenPool: lockOrBurn()
+    CCIPBurnMintTokenPool->>MINTR: burnOhm()
+```
 
 ### Receiving OHM
 
-sequence diagram
+#### Receiving - Canonical Chain
 
-Note on receiving on mainnet
+On the canonical/base chain (Mainnet for production and Sepolia for testing), a lightly modified `LockReleaseTokenPool` is used.
+
+```mermaid
+sequenceDiagram
+    participant OffRamp
+    participant CCIPLockReleaseTokenPool
+    participant Recipient
+
+    OffRamp->>CCIPLockReleaseTokenPool: releaseOrMint()
+    CCIPLockReleaseTokenPool-->>Recipient: OHM.transfer()
+    Note over CCIPLockReleaseTokenPool, Recipient: OHM custodied in the TokenPool is used
+```
+
+As mentioned in the section on [Sending OHM](#sending-ohm), the amount of OHM bridged from the canonical chain is custodied in the TokenPool. Instead of minting new OHM upon bridging in, the custodied OHM is used. This provides additional protection: in the scenario where the bridging infrastructure is exploited and fraudulent bridging messages are sent to the TokenPool on the canonical chain, the amount of OHM that could enter circulating would have a hard cap set by the balance of OHM custodied in the TokenPool contract.
+
+#### Receiving - Other Chains
+
+When receiving OHM on a non-canonical chain (regardless of which chain the sender is located on), the "burn and mint" approach is used.
+
+```mermaid
+sequenceDiagram
+    participant OffRamp
+    participant CCIPBurnMintTokenPool
+    participant MINTR
+    participant Recipient
+
+    OffRamp->>CCIPBurnMintTokenPool: releaseOrMint()
+    CCIPBurnMintTokenPool->MINTR: mintOhm()
+    MINTR-->>Recipient: OHM.transfer()
+    Note over CCIPBurnMintTokenPool, MINTR: new OHM is minted
+```
