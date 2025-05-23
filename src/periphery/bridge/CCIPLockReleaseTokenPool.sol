@@ -40,7 +40,7 @@ contract CCIPLockReleaseTokenPool is LockReleaseTokenPool, PeripheryEnabler, ICC
     /// @dev        This function overrides the `LockReleaseTokenPool` implementation to validate the enabled state
     function lockOrBurn(
         Pool.LockOrBurnInV1 calldata lockOrBurnIn
-    ) external virtual override onlyEnabled returns (Pool.LockOrBurnOutV1 memory) {
+    ) public virtual override onlyEnabled returns (Pool.LockOrBurnOutV1 memory) {
         // The following code is taken from the `LockReleaseTokenPool` contract
         // The `lockOrBurn` function is external, which prevents `super.lockOrBurn()` from being called
         _validateLockOrBurn(lockOrBurnIn);
@@ -58,7 +58,7 @@ contract CCIPLockReleaseTokenPool is LockReleaseTokenPool, PeripheryEnabler, ICC
     /// @dev        This function overrides the `LockReleaseTokenPool` implementation to validate the enabled state
     function releaseOrMint(
         Pool.ReleaseOrMintInV1 calldata releaseOrMintIn
-    ) external virtual override onlyEnabled returns (Pool.ReleaseOrMintOutV1 memory) {
+    ) public virtual override onlyEnabled returns (Pool.ReleaseOrMintOutV1 memory) {
         // The following code is taken from the `LockReleaseTokenPool` contract
         // The `releaseOrMint` function is external, which prevents `super.releaseOrMint()` from being called
         _validateReleaseOrMint(releaseOrMintIn);
