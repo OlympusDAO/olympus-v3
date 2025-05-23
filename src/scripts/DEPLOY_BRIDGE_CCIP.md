@@ -68,7 +68,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 
 ## Install and Enable Token Pool
 
-The CCIPMintBurnTokenPool contract is a policy and must be activated in the Kernel. It is also disabled by default. The owner (DAO MS) must enable it.
+The CCIPBurnMintTokenPool contract is a policy and must be activated in the Kernel. It is also disabled by default. The owner (DAO MS) must enable it.
 
 ```bash
 ./shell/safeBatch.sh --contract ConfigureCCIPTokenPool --batch run --broadcast false --testnet false --env .env.< chain > --account < cast account >

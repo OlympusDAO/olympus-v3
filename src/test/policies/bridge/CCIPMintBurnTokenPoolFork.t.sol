@@ -8,7 +8,7 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
+import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
@@ -22,7 +22,7 @@ interface IOwnable {
 }
 
 // solhint-disable max-states-count
-contract CCIPMintBurnTokenPoolForkTest is Test {
+contract CCIPBurnMintTokenPoolForkTest is Test {
     using ModuleTestFixtureGenerator for OlympusMinter;
 
     CCIPLocalSimulatorFork public simulator;
@@ -37,8 +37,8 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
     Kernel public polygonKernel;
     RolesAdmin public mainnetRolesAdmin;
     RolesAdmin public polygonRolesAdmin;
-    CCIPMintBurnTokenPool public mainnetTokenPool;
-    CCIPMintBurnTokenPool public polygonTokenPool;
+    CCIPBurnMintTokenPool public mainnetTokenPool;
+    CCIPBurnMintTokenPool public polygonTokenPool;
     CCIPCrossChainBridge public mainnetBridge;
     CCIPCrossChainBridge public polygonBridge;
 
@@ -94,7 +94,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             mainnetMinter = new OlympusMinter(mainnetKernel, address(mainnetOHM));
             mainnetRoles = new OlympusRoles(mainnetKernel);
             mainnetRolesAdmin = new RolesAdmin(mainnetKernel);
-            mainnetTokenPool = new CCIPMintBurnTokenPool(
+            mainnetTokenPool = new CCIPBurnMintTokenPool(
                 address(mainnetKernel),
                 address(mainnetOHM),
                 mainnetDetails.rmnProxyAddress,
@@ -152,7 +152,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
             polygonMinter = new OlympusMinter(polygonKernel, address(polygonOHM));
             polygonRoles = new OlympusRoles(polygonKernel);
             polygonRolesAdmin = new RolesAdmin(polygonKernel);
-            polygonTokenPool = new CCIPMintBurnTokenPool(
+            polygonTokenPool = new CCIPBurnMintTokenPool(
                 address(polygonKernel),
                 address(polygonOHM),
                 polygonDetails.rmnProxyAddress,
@@ -225,7 +225,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
 
     function _addTokenAndPool(
         MockOhm token_,
-        CCIPMintBurnTokenPool tokenPool_,
+        CCIPBurnMintTokenPool tokenPool_,
         address tokenAdminRegistry_
     ) internal {
         ITokenAdminRegistry registry = ITokenAdminRegistry(tokenAdminRegistry_);
@@ -244,7 +244,7 @@ contract CCIPMintBurnTokenPoolForkTest is Test {
     }
 
     function _applyChainUpdates(
-        CCIPMintBurnTokenPool tokenPool,
+        CCIPBurnMintTokenPool tokenPool,
         uint64 remoteChainSelector,
         address remotePool,
         address remoteTokenAddress

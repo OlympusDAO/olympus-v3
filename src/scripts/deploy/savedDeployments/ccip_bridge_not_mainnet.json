@@ -1,7 +1,7 @@
 {
     "sequence": [
         {
-            "name": "CCIPMintBurnTokenPool",
+            "name": "CCIPBurnMintTokenPool",
             "args": {}
         },
         {

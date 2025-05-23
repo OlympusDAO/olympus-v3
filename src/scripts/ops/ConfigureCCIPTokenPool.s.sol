@@ -32,7 +32,7 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
         _loadEnv("sepolia");
 
         address token = _envAddressNotZero("olympus.legacy.OHM");
-        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPMintBurnTokenPool");
+        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
 
         ITokenAdminRegistry registry = ITokenAdminRegistry(
             _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
@@ -46,7 +46,7 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
     function configureRemotePoolSolanaDevnet() external {
         _loadEnv("sepolia");
 
-        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPMintBurnTokenPool");
+        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
         TokenPool tokenPool = TokenPool(tokenPoolAddress);
 
         bytes[] memory remotePoolAddresses = new bytes[](1);

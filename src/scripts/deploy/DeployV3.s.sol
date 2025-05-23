@@ -7,7 +7,7 @@ import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 // Contracts
-import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
+import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {CCIPLockReleaseTokenPool} from "src/periphery/bridge/CCIPLockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
@@ -87,7 +87,7 @@ contract DeployV3 is WithEnvironment {
             console2.log("Deploying", name);
             console2.log("\n");
 
-            // e.g. a deployment named CCIPMintBurnTokenPool would require the following function: deployCCIPMintBurnTokenPool()
+            // e.g. a deployment named CCIPBurnMintTokenPool would require the following function: deployCCIPBurnMintTokenPool()
             bytes4 selector = bytes4(keccak256(bytes(string.concat("deploy", name, "()"))));
 
             // Call the deploy function for the contract
@@ -254,7 +254,7 @@ contract DeployV3 is WithEnvironment {
 
     // ========== DEPLOYMENT FUNCTIONS ========== //
 
-    function deployCCIPMintBurnTokenPool() public returns (address, string memory) {
+    function deployCCIPBurnMintTokenPool() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address rmnProxy = _envAddressNotZero("external.ccip.RMN");
@@ -264,22 +264,22 @@ contract DeployV3 is WithEnvironment {
 
         // Log arguments
         console2.log("\n");
-        console2.log("CCIPMintBurnTokenPool parameters:");
+        console2.log("CCIPBurnMintTokenPool parameters:");
         console2.log("  kernel", kernel);
         console2.log("  ohm", ohm);
         console2.log("  rmnProxy", rmnProxy);
         console2.log("  ccipRouter", ccipRouter);
 
-        // Deploy CCIPMintBurnTokenPool
+        // Deploy CCIPBurnMintTokenPool
         vm.broadcast();
-        CCIPMintBurnTokenPool ccipMintBurnTokenPool = new CCIPMintBurnTokenPool(
+        CCIPBurnMintTokenPool ccipBurnMintTokenPool = new CCIPBurnMintTokenPool(
             kernel,
             ohm,
             rmnProxy,
             ccipRouter
         );
 
-        return (address(ccipMintBurnTokenPool), "olympus.policies");
+        return (address(ccipBurnMintTokenPool), "olympus.policies");
     }
 
     function deployCCIPLockReleaseTokenPool() public returns (address, string memory) {

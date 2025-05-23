@@ -15,12 +15,12 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {BurnMintTokenPoolBase} from "src/external/bridge/BurnMintTokenPoolBase.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 
-/// @title  CCIPMintBurnTokenPool
-/// @notice Bophades policy to handling minting and burning of OHM using Chainlink CCIP on non-mainnet chains
+/// @title  CCIPBurnMintTokenPool
+/// @notice Bophades policy to handling minting and burning of OHM using Chainlink CCIP on non-canonical chains
 /// @dev    As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
 ///
 ///         Despite being a policy, the admin functions inherited from `TokenPool` are not virtual and cannot be overriden, and so remain gated to the owner.
-contract CCIPMintBurnTokenPool is Policy, PolicyEnabler, BurnMintTokenPoolBase, ICCIPTokenPool {
+contract CCIPBurnMintTokenPool is Policy, PolicyEnabler, BurnMintTokenPoolBase, ICCIPTokenPool {
     // =========  STATE VARIABLES ========= //
 
     /// @notice Bophades module for minting and burning OHM

@@ -11,7 +11,7 @@ import {ICCIPTokenPool} from "src/policies/interfaces/ICCIPTokenPool.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {CCIPMintBurnTokenPool} from "src/policies/bridge/CCIPMintBurnTokenPool.sol";
+import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
@@ -25,7 +25,7 @@ import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol"
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 
 // solhint-disable max-states-count
-contract CCIPMintBurnTokenPoolTest is Test {
+contract CCIPBurnMintTokenPoolTest is Test {
     using ModuleTestFixtureGenerator for OlympusMinter;
 
     MockCCIPRouter public router;
@@ -38,7 +38,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     OlympusRoles public ROLES;
     Kernel public kernel;
     RolesAdmin public rolesAdmin;
-    CCIPMintBurnTokenPool public tokenPool;
+    CCIPBurnMintTokenPool public tokenPool;
 
     address public SENDER;
     address public RECEIVER;
@@ -103,7 +103,7 @@ contract CCIPMintBurnTokenPoolTest is Test {
     // ========= HELPERS ========= //
 
     function _createTokenPool() internal {
-        tokenPool = new CCIPMintBurnTokenPool(
+        tokenPool = new CCIPBurnMintTokenPool(
             address(kernel),
             address(OHM),
             address(RMNProxy),
