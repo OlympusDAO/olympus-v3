@@ -15,8 +15,23 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
     bytes32 public constant SOLANA_DEV_TOKEN_ADDRESS =
         bytes32(0x0000000000000000000000000000000000000000000000000000000000000000);
 
-    function acceptAdminRole() external {
-        _loadEnv("sepolia");
+    /// @dev Returns true if the chain is canonical chain upon which new OHM is minted (mainnet or sepolia)
+    function _isChainCanonical(string calldata chain_) internal pure returns (bool) {
+        return
+            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("mainnet")) ||
+            keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("sepolia"));
+    }
+
+    function _getTokenPoolAddress(string calldata chain_) internal view returns (address) {
+        if (_isChainCanonical(chain_)) {
+            return _envAddressNotZero("olympus.policies.CCIPLockReleaseTokenPool");
+        } else {
+            return _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+        }
+    }
+
+    function acceptAdminRole(string calldata chain_) external {
+        _loadEnv(chain_);
 
         ITokenAdminRegistry registry = ITokenAdminRegistry(
             _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
@@ -28,11 +43,11 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
         console2.log("Admin role accepted");
     }
 
-    function setPool() external {
-        _loadEnv("sepolia");
+    function setPool(string calldata chain_) external {
+        _loadEnv(chain_);
 
         address token = _envAddressNotZero("olympus.legacy.OHM");
-        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+        address tokenPoolAddress = _getTokenPoolAddress(chain_);
 
         ITokenAdminRegistry registry = ITokenAdminRegistry(
             _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
@@ -43,10 +58,10 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
     }
 
     /// @dev temp function. Finalise the declarative configurator before production.
-    function configureRemotePoolSolanaDevnet() external {
-        _loadEnv("sepolia");
+    function configureRemotePoolSolanaDevnet(string calldata chain_) external {
+        _loadEnv(chain_);
 
-        address tokenPoolAddress = _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+        address tokenPoolAddress = _getTokenPoolAddress(chain_);
         TokenPool tokenPool = TokenPool(tokenPoolAddress);
 
         bytes[] memory remotePoolAddresses = new bytes[](1);
@@ -70,8 +85,8 @@ contract ConfigureCCIPTokenPool is WithEnvironment {
         console2.log("\nChain update applied");
     }
 
-    function transferTokenPoolAdminRole() external {
-        _loadEnv("sepolia");
+    function transferTokenPoolAdminRole(string calldata chain_) external {
+        _loadEnv(chain_);
 
         ITokenAdminRegistry registry = ITokenAdminRegistry(
             _envAddressNotZero("olympus.ccip.TokenAdminRegistry")
