@@ -19,18 +19,28 @@ contract CCIPTokenPoolBatch is OlyBatch {
     address public crossChainBridge;
 
     /// @dev Returns true if the chain is canonical chain upon which new OHM is minted (mainnet or sepolia)
-    function _isChainCanonical(string calldata chain_) internal pure returns (bool) {
+    function _isChainCanonical(string memory chain_) internal pure returns (bool) {
         return
             keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("mainnet")) ||
             keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("sepolia"));
     }
 
-    function _getTokenPoolAddress(string calldata chain_) internal view returns (address) {
+    function _getTokenPoolAddress(string memory chain_) internal view returns (address) {
         if (_isChainCanonical(chain_)) {
             return _envAddressNotZero("olympus.policies.CCIPLockReleaseTokenPool");
         } else {
             return _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
         }
+    }
+
+    function _envAddressNotZero(string memory key_) internal view returns (address) {
+        address addressValue = envAddress("current", key_);
+        if (addressValue == address(0)) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("Address is not set");
+        }
+
+        return addressValue;
     }
 
     function loadEnv() internal override {
