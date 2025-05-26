@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
+import {ICCIPClient} from "src/external/bridge/ICCIPClient.sol";
+
 interface ICCIPCrossChainBridge {
     // ========= ERRORS ========= //
 
@@ -14,6 +16,18 @@ interface ICCIPCrossChainBridge {
 
     error Bridge_TransferFailed(address caller, address recipient, uint256 amount);
 
+    error Bridge_DestinationNotTrusted();
+
+    error Bridge_SourceNotTrusted();
+
+    error Bridge_InvalidCaller();
+
+    error Bridge_FailedMessageNotFound(bytes32 messageId);
+
+    error Bridge_InvalidPayloadTokensLength();
+
+    error Bridge_InvalidPayloadToken();
+
     // ========= EVENTS ========= //
 
     event Bridged(
@@ -24,7 +38,22 @@ interface ICCIPCrossChainBridge {
         uint256 fees
     );
 
+    event Received(
+        bytes32 messageId,
+        uint64 sourceChainSelector,
+        address indexed sender,
+        uint256 amount
+    );
+
     event Withdrawn(address indexed recipient, uint256 amount);
+
+    event TrustedRemoteEVMSet(uint64 indexed dstChainSelector, address indexed to);
+
+    event TrustedRemoteSVMSet(uint64 indexed dstChainSelector, bytes32 indexed to);
+
+    event MessageFailed(bytes32 messageId);
+
+    event RetryMessageSuccess(bytes32 messageId);
 
     // ========= SEND OHM ========= //
 
@@ -82,6 +111,21 @@ interface ICCIPCrossChainBridge {
         uint256 amount_
     ) external payable returns (bytes32 messageId);
 
+    // ========= RECEIVE OHM ========= //
+
+    /// @notice Gets the failed message for the specified message ID
+    ///
+    /// @param messageId_ The message ID
+    /// @return message_ The failed message
+    function getFailedMessage(
+        bytes32 messageId_
+    ) external view returns (ICCIPClient.Any2EVMMessage memory);
+
+    /// @notice Retries a failed message
+    ///
+    /// @param messageId_ The message ID
+    function retryFailedMessage(bytes32 messageId_) external;
+
     // ========= TOKEN WITHDRAWAL ========= //
 
     /// @notice Allows the owner to withdraw the native token from the contract
@@ -89,4 +133,40 @@ interface ICCIPCrossChainBridge {
     ///
     /// @param  recipient_  The recipient of the native token
     function withdraw(address recipient_) external;
+
+    // ========= TRUSTED REMOTES ========= //
+
+    /// @notice Sets the trusted remote for the specified destination EVM chain
+    /// @dev    This is needed to send/receive messages to/from the specified destination EVM chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    /// @param to_                  The destination address
+    function setTrustedRemoteEVM(uint64 dstChainSelector_, address to_) external;
+
+    /// @notice Gets the trusted remote for the specified destination EVM chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    /// @return to_                The destination address
+    function getTrustedRemoteEVM(uint64 dstChainSelector_) external view returns (address);
+
+    /// @notice Sets the trusted remote for the specified destination SVM chain
+    /// @dev    This is needed to send/receive messages to/from the specified destination SVM chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    /// @param to_                  The destination address
+    function setTrustedRemoteSVM(uint64 dstChainSelector_, bytes32 to_) external;
+
+    /// @notice Gets the trusted remote for the specified destination SVM chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    ///
+    /// @return to_                The destination address
+    function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (bytes32);
+
+    // ========= CONFIGURATION ========= //
+
+    /// @notice Gets the CCIP router address
+    ///
+    /// @return ccipRouter_ The CCIP router address
+    function getCCIPRouter() external view returns (address);
 }

@@ -16,6 +16,8 @@ import {CCIPLocalSimulatorFork, Register} from "@chainlink-local-0.2.5/ccip/CCIP
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
+import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
+import {IRouterClient} from "@chainlink-ccip-1.6.0/ccip/interfaces/IRouterClient.sol";
 
 interface IOwnable {
     function owner() external returns (address);
@@ -205,6 +207,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
                 address(polygonTokenPool),
                 address(polygonOHM)
             );
+
+            _setTrustedRemote(mainnetBridge, polygonChainSelector, address(polygonBridge));
         }
 
         // Configure the polygon token pool
@@ -217,6 +221,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
                 address(mainnetTokenPool),
                 address(mainnetOHM)
             );
+
+            _setTrustedRemote(polygonBridge, mainnetChainSelector, address(mainnetBridge));
         }
 
         // Set the active chain to mainnet
@@ -275,6 +281,15 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         tokenPool.applyChainUpdates(new uint64[](0), chainUpdates);
     }
 
+    function _setTrustedRemote(
+        CCIPCrossChainBridge bridge_,
+        uint64 chainSelector_,
+        address remote_
+    ) internal {
+        vm.prank(ADMIN);
+        bridge_.setTrustedRemoteEVM(chainSelector_, remote_);
+    }
+
     // ========= TESTS ========= //
 
     // mainnet -> polygon
@@ -292,6 +307,69 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         vm.startPrank(SENDER);
         mainnetOHM.approve(address(mainnetBridge), SEND_AMOUNT);
         mainnetBridge.sendToEVM{value: fee}(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
+        vm.stopPrank();
+
+        // Assertions - mainnet
+        assertEq(
+            mainnetOHM.balanceOf(SENDER),
+            MINT_AMOUNT - SEND_AMOUNT,
+            "mainnet: sender: OHM balance"
+        );
+        assertEq(mainnetOHM.balanceOf(RECIPIENT), 0, "mainnet: recipient: OHM balance");
+        assertEq(mainnetTokenPool.getBridgedSupply(), 0, "mainnet: bridged supply");
+        assertEq(
+            mainnetMinter.mintApproval(address(mainnetTokenPool)),
+            0,
+            "mainnet: minter approval"
+        );
+
+        // The following command runs into an OutOfGas error, so disable gas metering
+        vm.pauseGasMetering();
+
+        // Process the bridging transaction
+        simulator.switchChainAndRouteMessage(polygonForkId);
+
+        // Assertions - polygon
+        assertEq(polygonOHM.balanceOf(SENDER), MINT_AMOUNT, "polygon: sender: OHM balance");
+        assertEq(polygonOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "polygon: recipient: OHM balance");
+        assertEq(polygonTokenPool.getBridgedSupply(), 0, "polygon: bridged supply");
+        assertEq(
+            polygonMinter.mintApproval(address(polygonTokenPool)),
+            0,
+            "polygon: minter approval"
+        );
+    }
+
+    // when the bridge contract is not used
+    //  [X] the OHM is burned on mainnet
+    //  [X] the OHM is minted on polygon to the recipient
+    //  [X] the bridged supply on mainnet is not updated
+    //  [X] the bridged supply on polygon is not updated
+    //  [X] the MINTR approval on mainnet is not updated
+    //  [X] the MINTR approval on polygon is not updated
+
+    function test_mainnetToPolygon_noBridge() public {
+        uint256 fee = mainnetBridge.getFeeEVM(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
+
+        // Construct the CCIP message
+        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        tokenAmounts[0] = Client.EVMTokenAmount({token: address(mainnetOHM), amount: SEND_AMOUNT});
+        Client.EVM2AnyMessage memory ccipMessage = Client.EVM2AnyMessage({
+            receiver: abi.encode(RECIPIENT),
+            data: "",
+            tokenAmounts: tokenAmounts,
+            extraArgs: Client._argsToBytes(
+                Client.GenericExtraArgsV2({gasLimit: 0, allowOutOfOrderExecution: false})
+            ),
+            feeToken: address(0)
+        });
+
+        IRouterClient router = IRouterClient(mainnetBridge.getCCIPRouter());
+
+        // Call the CCIP router
+        vm.startPrank(SENDER);
+        mainnetOHM.approve(address(router), SEND_AMOUNT);
+        router.ccipSend{value: fee}(polygonChainSelector, ccipMessage);
         vm.stopPrank();
 
         // Assertions - mainnet
@@ -344,6 +422,73 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         vm.startPrank(SENDER);
         polygonOHM.approve(address(polygonBridge), SEND_AMOUNT);
         polygonBridge.sendToEVM{value: fee}(mainnetChainSelector, RECIPIENT, SEND_AMOUNT);
+        vm.stopPrank();
+
+        // Assertions - polygon
+        assertEq(
+            polygonOHM.balanceOf(SENDER),
+            MINT_AMOUNT - SEND_AMOUNT,
+            "polygon: sender: OHM balance"
+        );
+        assertEq(polygonOHM.balanceOf(RECIPIENT), 0, "polygon: recipient: OHM balance");
+        assertEq(polygonTokenPool.getBridgedSupply(), 0, "polygon: bridged supply");
+        assertEq(
+            polygonMinter.mintApproval(address(polygonTokenPool)),
+            0,
+            "polygon: minter approval"
+        );
+
+        // The following command runs into an OutOfGas error, so disable gas metering
+        vm.pauseGasMetering();
+
+        // Process the bridging transaction
+        simulator.switchChainAndRouteMessage(mainnetForkId);
+
+        // Assertions - mainnet
+        assertEq(mainnetOHM.balanceOf(SENDER), MINT_AMOUNT, "mainnet: sender: OHM balance");
+        assertEq(mainnetOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "mainnet: recipient: OHM balance");
+        assertEq(mainnetTokenPool.getBridgedSupply(), 0, "mainnet: bridged supply");
+        assertEq(
+            mainnetMinter.mintApproval(address(mainnetTokenPool)),
+            0,
+            "mainnet: minter approval"
+        );
+    }
+
+    // when the bridge contract is not used
+    // [X] the OHM is burned on polygon
+    // [X] the OHM is minted on mainnet to the recipient
+    // [X] the bridged supply on polygon is not updated
+    // [X] the bridged supply on mainnet is not updated
+    // [X] the MINTR approval on polygon is not updated
+    // [X] the MINTR approval on mainnet is not updated
+
+    function test_polygonToMainnet_noBridge() public {
+        // Start on Polygon
+        vm.selectFork(polygonForkId);
+
+        // Get the fee
+        uint256 fee = polygonBridge.getFeeEVM(mainnetChainSelector, RECIPIENT, SEND_AMOUNT);
+
+        // Construct the CCIP message
+        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        tokenAmounts[0] = Client.EVMTokenAmount({token: address(polygonOHM), amount: SEND_AMOUNT});
+        Client.EVM2AnyMessage memory ccipMessage = Client.EVM2AnyMessage({
+            receiver: abi.encode(RECIPIENT),
+            data: "",
+            tokenAmounts: tokenAmounts,
+            extraArgs: Client._argsToBytes(
+                Client.GenericExtraArgsV2({gasLimit: 0, allowOutOfOrderExecution: false})
+            ),
+            feeToken: address(0)
+        });
+
+        IRouterClient router = IRouterClient(polygonBridge.getCCIPRouter());
+
+        // Call the CCIP router
+        vm.startPrank(SENDER);
+        polygonOHM.approve(address(router), SEND_AMOUNT);
+        router.ccipSend{value: fee}(mainnetChainSelector, ccipMessage);
         vm.stopPrank();
 
         // Assertions - polygon
