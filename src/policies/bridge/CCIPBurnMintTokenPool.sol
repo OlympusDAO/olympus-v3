@@ -12,7 +12,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // CCIP
-import {BurnMintTokenPoolBase} from "src/external/bridge/BurnMintTokenPoolBase.sol";
+import {BurnMintTokenPoolBase} from "src/policies/bridge/BurnMintTokenPoolBase.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 
 /// @title  CCIPBurnMintTokenPool

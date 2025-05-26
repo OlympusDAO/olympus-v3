@@ -20,9 +20,6 @@ Keeping the architecture of CCIP in mind, the integration has been designed in t
 The contracts in scope for this audit are:
 
 - [src/](../../src)
-    - [external/](../../src/external)
-        - [bridge/](../../src/external/bridge)
-            - [BurnMintTokenPoolBase.sol](../../src/external/bridge/BurnMintTokenPoolBase.sol)
     - [periphery/](../../src/periphery)
         - [bridge/](../../src/periphery/bridge)
             - [CCIPCrossChainBridge.sol](../../src/periphery/bridge/CCIPCrossChainBridge.sol)
@@ -32,6 +29,7 @@ The contracts in scope for this audit are:
         - [PeripheryEnabler.sol](../../src/periphery/PeripheryEnabler.sol)
     - [policies/](../../src/policies)
         - [bridge/](../../src/policies/bridge)
+            - [BurnMintTokenPoolBase.sol](../../src/policies/bridge/BurnMintTokenPoolBase.sol)
             - [CCIPBurnMintTokenPool.sol](../../src/policies/bridge/CCIPBurnMintTokenPool.sol)
         - [interfaces/](../../src/policies/interfaces)
             - [ICCIPTokenPool.sol](../../src/policies/interfaces/ICCIPTokenPool.sol)
