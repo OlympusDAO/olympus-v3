@@ -44,6 +44,9 @@ compilation_restrictions = [
     { paths = "**", version = "0.8.15" },
 ]
 
+[profile.deploy]
+script_execution_protection = false
+
 [fuzz]
 runs = 256
 
