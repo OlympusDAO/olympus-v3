@@ -86,7 +86,21 @@ Some of the in-scope contracts modify or include unmodified code from the CCIP c
 
 The following sections provide detail on the processes and implementation.
 
-### Sending OHM
+### Bridge
+
+`CCIPCrossChainBridge` is a convenience contract that can be used when sending OHM.
+
+It offers the following benefits to the end-user:
+
+- Construction of the CCIP message used for bridging, including chain-specific extra arguments
+- Fee calculation (which requires constructing the CCIP message)
+- Failure handling on the destination chain, allowing for retries
+
+A side-effect of this is that the `CCIPCrossChainBridge` contract will be recorded as the receiver in the bridging transaction. Upon receipt, the contract will decode the actual receiver address from the message data, and transfer the bridged OHM to that address.
+
+This bridging contract, however, is optional. An end-user or application can send a CCIP message directly to the CCIP router in order to conduct a bridging transaction (without availing the benefits mentioned above).
+
+### Token Pools
 
 #### Sending - Canonical Chain
 
@@ -109,10 +123,11 @@ sequenceDiagram
     Note over OnRamp, CCIPLockReleaseTokenPool: OHM remains custodied in the TokenPool
 ```
 
-In contract to previous bridging implementations by Olympus, the `LockReleaseTokenPool` was adopted for the following reasons:
+In contract to previous bridging implementations by Olympus (which utilised a "burn and mint" approach), the `LockReleaseTokenPool` was adopted for the following reasons:
 
 - In the event that bridging infrastructure is compromised, the quantity of OHM in the `LockReleaseTokenPool` will provide a hard cap to the amount of OHM that can be bridged back to the canonical chain.
 - The same outcome is achievable with a "burn and mint" approach, but required more significant additions to the `BurnMintTokenPool` contract. The preference is to reduce the amount of custom code, and so the "lock and release" approach has been adopted.
+- This also has the benefit that the `LockReleaseTokenPool` does not require mint and burn permissions from the Bophades Kernel, and can operate as an external periphery contract.
 
 #### Sending - Other Chains
 
@@ -136,8 +151,6 @@ sequenceDiagram
     CCIPBurnMintTokenPool->>MINTR: burnOhm()
 ```
 
-### Receiving OHM
-
 #### Receiving - Canonical Chain
 
 On the canonical/base chain (Mainnet for production and Sepolia for testing), a lightly modified `LockReleaseTokenPool` is used.
@@ -146,14 +159,17 @@ On the canonical/base chain (Mainnet for production and Sepolia for testing), a 
 sequenceDiagram
     participant OffRamp
     participant CCIPLockReleaseTokenPool
+    participant CCIPCrossChainBridge
     participant Recipient
 
     OffRamp->>CCIPLockReleaseTokenPool: releaseOrMint()
-    CCIPLockReleaseTokenPool-->>Recipient: OHM.transfer()
-    Note over CCIPLockReleaseTokenPool, Recipient: OHM custodied in the TokenPool is used
+    CCIPLockReleaseTokenPool-->>CCIPCrossChainBridge: OHM.transfer()
+    CCIPLockReleaseTokenPool->>CCIPCrossChainBridge: ccipReceive()
+    Note over CCIPLockReleaseTokenPool, CCIPCrossChainBridge: OHM custodied in the TokenPool is used
+    CCIPCrossChainBridge-->>Recipient: OHM.transfer()
 ```
 
-As mentioned in the section on [Sending OHM](#sending-ohm), the amount of OHM bridged from the canonical chain is custodied in the TokenPool. Instead of minting new OHM upon bridging in, the custodied OHM is used. This provides additional protection: in the scenario where the bridging infrastructure is exploited and fraudulent bridging messages are sent to the TokenPool on the canonical chain, the amount of OHM that could enter circulating would have a hard cap set by the balance of OHM custodied in the TokenPool contract.
+As mentioned in the section on [Sending OHM - Canonical Chain](#sending---canonical-chain), the amount of OHM bridged from the canonical chain is custodied in the TokenPool. Instead of minting new OHM upon bridging in, the custodied OHM is used. This provides additional protection: in the scenario where the bridging infrastructure is exploited and fraudulent bridging messages are sent to the TokenPool on the canonical chain, the amount of OHM that could enter circulating would have a hard cap set by the balance of OHM custodied in the TokenPool contract.
 
 #### Receiving - Other Chains
 
@@ -164,10 +180,13 @@ sequenceDiagram
     participant OffRamp
     participant CCIPBurnMintTokenPool
     participant MINTR
+    participant CCIPCrossChainBridge
     participant Recipient
 
     OffRamp->>CCIPBurnMintTokenPool: releaseOrMint()
     CCIPBurnMintTokenPool->MINTR: mintOhm()
-    MINTR-->>Recipient: OHM.transfer()
-    Note over CCIPBurnMintTokenPool, MINTR: new OHM is minted
+    MINTR-->>CCIPCrossChainBridge: OHM.transfer()
+    Note over CCIPBurnMintTokenPool, CCIPCrossChainBridge: new OHM is minted
+    CCIPBurnMintTokenPool->>CCIPCrossChainBridge: ccipReceive()
+    CCIPCrossChainBridge-->>Recipient: OHM.transfer()
 ```
