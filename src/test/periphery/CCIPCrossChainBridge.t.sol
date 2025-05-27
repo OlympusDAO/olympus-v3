@@ -64,7 +64,12 @@ contract CCIPCrossChainBridgeTest is Test {
     uint64 public constant SOURCE_CHAIN_SELECTOR = 222222;
     bytes32 public constant SVM_RECIPIENT =
         bytes32(0x0000000000000000000000000000000000000000000000000000000000000022);
-    bytes32 public constant SVM_TRUSTED_REMOTE = "11111111111111111111111111111111";
+
+    // The default SVM receiver address is the zero address
+    // Source: https://docs.chain.link/ccip/tutorials/svm/destination/build-messages#receiver
+    // base58 "11111111111111111111111111111111" decoded = 0x0000000000000000000000000000000000000000000000000000000000000000
+    bytes32 public constant SVM_TRUSTED_REMOTE =
+        0x0000000000000000000000000000000000000000000000000000000000000000;
     address public constant EVM_TRUSTED_REMOTE = 0x1234567890123456789012345678901234567890;
     uint256 public constant AMOUNT = 1e9;
     uint256 public constant ETH_AMOUNT = 1e18;
@@ -401,7 +406,7 @@ contract CCIPCrossChainBridgeTest is Test {
             DESTINATION_CHAIN_SELECTOR,
             "destinationChainSelector"
         );
-        assertEq(router.messageReceiver(), "11111111111111111111111111111111", "messageReceiver");
+        assertEq(router.messageReceiver(), abi.encodePacked(SVM_TRUSTED_REMOTE), "messageReceiver");
         assertEq(router.messageData().length, 0, "messageData");
         assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
         address[] memory tokens = router.getMessageTokens();
