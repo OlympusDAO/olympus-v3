@@ -21,6 +21,13 @@ import {CCIPReceiver} from "@chainlink-ccip-1.6.0/ccip/applications/CCIPReceiver
 ///
 ///         The contract is designed to be an intermediary when receiving OHM, so that failed messages can be retried.
 contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCrossChainBridge {
+    // ========= DATA STRUCTURES ========= //
+
+    struct TrustedRemoteSVM {
+        bytes32 remoteAddress;
+        bool isSet;
+    }
+
     // ========= STATE VARIABLES ========= //
 
     IERC20 public immutable OHM;
@@ -32,7 +39,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @notice Mapping of SVM chain selectors to trusted recipients
     /// @dev    When sending, this is used to determine the initial recipient of a bridging message.
-    mapping(uint64 => bytes32) internal _trustedRemoteSVM;
+    mapping(uint64 => TrustedRemoteSVM) internal _trustedRemoteSVM;
 
     /// @notice Mapping of message IDs to failed messages
     /// @dev    When a message fails to receive, it is stored here to allow for retries.
@@ -134,11 +141,13 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         bytes32 to_
     ) internal view returns (bytes memory recipient, bytes memory data, bytes memory extraArgs) {
         // Validate that the destination chain has a trusted remote
-        bytes32 trustedRemote = _trustedRemoteSVM[dstChainSelector_];
-        if (trustedRemote == bytes32(0)) revert Bridge_DestinationNotTrusted();
+        TrustedRemoteSVM memory trustedRemote = _trustedRemoteSVM[dstChainSelector_];
+        // The default receiver on SVM is the zero address, so an alternative check is needed
+        // Source: https://docs.chain.link/ccip/tutorials/svm/destination/build-messages#receiver
+        if (!trustedRemote.isSet) revert Bridge_DestinationNotTrusted();
 
-        // Initial recipient is the trusted remote (this contract on the destination chain)
-        recipient = abi.encodePacked(trustedRemote);
+        // Initial recipient is the trusted remote
+        recipient = abi.encodePacked(trustedRemote.remoteAddress);
         // Data is empty
         data = "";
         // Extra args
@@ -435,13 +444,13 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @inheritdoc ICCIPCrossChainBridge
     function setTrustedRemoteSVM(uint64 dstChainSelector_, bytes32 to_) external onlyOwner {
-        _trustedRemoteSVM[dstChainSelector_] = to_;
+        _trustedRemoteSVM[dstChainSelector_] = TrustedRemoteSVM({remoteAddress: to_, isSet: true});
         emit TrustedRemoteSVMSet(dstChainSelector_, to_);
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
     function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (bytes32) {
-        return _trustedRemoteSVM[dstChainSelector_];
+        return _trustedRemoteSVM[dstChainSelector_].remoteAddress;
     }
 
     // ========= CONFIGURATION ========= //
