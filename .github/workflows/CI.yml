@@ -61,9 +61,10 @@ jobs:
                   name: lcov.info
                   path: lcov.info
 
-            - name: Report Code Coverage
-              uses: zgosalvez/github-actions-report-lcov@v3
-              with:
-                  coverage-files: lcov.info
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  update-comment: true
+            # This action runs genhtml (which gives an error), but does not support providing arguments to ignore the error
+            # - name: Report Code Coverage
+            #   uses: zgosalvez/github-actions-report-lcov@v3
+            #   with:
+            #       coverage-files: lcov.info
+            #       github-token: ${{ secrets.GITHUB_TOKEN }}
+            #       update-comment: true

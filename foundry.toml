@@ -1,6 +1,8 @@
 [profile.default]
 ffi = true
 ast = true
+legacy_assertions = true
+assertions_revert = false
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'forge-std/=lib/forge-std/src/',
@@ -24,8 +26,19 @@ fs_permissions = [
 ]
 solc_version = "0.8.15"
 optimizer = true
-optimizer_runs = 10
+optimizer_runs = 10000
 chain_id = 1
+verbosity = 3
+
+# Operator is too large - it needs to only use 10 optimizer runs
+additional_compiler_profiles = [
+    { name = "ten-runs", optimizer_runs = 10 },
+    { name = "five-thousand-runs", optimizer_runs = 5000 },
+]
+compilation_restrictions = [
+    { paths = "src/policies/Operator.sol", profile = "ten-runs" },
+    { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
+]
 
 [fuzz]
 runs = 256
