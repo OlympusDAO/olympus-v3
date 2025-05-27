@@ -43,7 +43,7 @@ library ChainHelper {
     }
 
     /// @notice Returns all of the production or testnet chains, based on whether `chain_` is a production or testnet chain
-    function _getChains(string calldata chain_) internal pure returns (string[] memory) {
+    function _getChains(string memory chain_) internal pure returns (string[] memory) {
         if (_isProductionChain(chain_)) {
             return _getProductionChains();
         } else if (_isTestnetChain(chain_)) {

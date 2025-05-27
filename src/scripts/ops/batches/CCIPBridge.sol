@@ -15,7 +15,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     bytes32 public constant SOLANA_RECEIVER =
         0x0000000000000000000000000000000000000000000000000000000000000000;
 
-    function _setTrustedRemoteEVM(string calldata remoteChain_) internal {
+    function _setTrustedRemoteEVM(string memory remoteChain_) internal {
         // Validate that the chain is an EVM chain
         if (ChainHelper._isSVMChain(remoteChain_)) {
             // solhint-disable-next-line gas-custom-errors
@@ -32,10 +32,11 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         );
 
         if (
-            address(ICCIPCrossChainBridge(bridge).getTrustedRemoteEVM(remoteChainSelector)) ==
-            remoteBridgeAddress
+            address(
+                ICCIPCrossChainBridge(bridgeAddress).getTrustedRemoteEVM(remoteChainSelector)
+            ) == remoteBridgeAddress
         ) {
-            console2.log("  Trusted remote for EVM chain", remoteChain, "is already set");
+            console2.log("  Trusted remote for EVM chain", remoteChain_, "is already set");
             return;
         }
 
@@ -66,7 +67,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    function _setTrustedRemoteSVM(string calldata remoteChain_) internal {
+    function _setTrustedRemoteSVM(string memory remoteChain_) internal {
         // Validate that the chain is an SVM chain
         if (!ChainHelper._isSVMChain(remoteChain_)) {
             // solhint-disable-next-line gas-custom-errors
@@ -135,10 +136,10 @@ contract CCIPBridgeBatch is BatchScriptV2 {
                 continue;
             }
 
-            if (ChainHelper._isEVMChain(remoteChain)) {
-                _setTrustedRemoteEVM(remoteChain);
-            } else if (ChainHelper._isSVMChain(remoteChain)) {
+            if (ChainHelper._isSVMChain(remoteChain)) {
                 _setTrustedRemoteSVM(remoteChain);
+            } else {
+                _setTrustedRemoteEVM(remoteChain);
             }
         }
 
