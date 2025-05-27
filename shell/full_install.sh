@@ -3,6 +3,13 @@
 # Exit if there are any errors
 set -e
 
+echo "*** Cleaning build artifacts"
+forge clean
+
+echo "*** Clearing dependencies"
+rm -rf dependencies/
+rm -rf lib/
+
 echo "*** Installing dependencies using pnpm"
 pnpm install
 
