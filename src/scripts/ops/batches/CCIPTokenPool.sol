@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.24;
 
-import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
+import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
+import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
+import {console2} from "forge-std/console2.sol";
+import {Base58Decoder} from "src/scripts/ops/lib/Base58Decoder.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-
-import {console2} from "forge-std/console2.sol";
+import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
+import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
+import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
 ///         This scripts is designed to define the desired configuration,
 ///         and the script will execute the necessary transactions to
 ///         configure the CCIP bridge to the desired state.
-contract CCIPTokenPoolBatch is OlyBatch {
-    address public kernel;
-    address public tokenPool;
-    address public crossChainBridge;
-
+contract CCIPTokenPoolBatch is BatchScriptV2, WithEnvironment {
     /// @dev Returns true if the chain is canonical chain upon which new OHM is minted (mainnet or sepolia)
     function _isChainCanonical(string memory chain_) internal pure returns (bool) {
         return
@@ -33,27 +33,21 @@ contract CCIPTokenPoolBatch is OlyBatch {
         }
     }
 
-    function _envAddressNotZero(string memory key_) internal view returns (address) {
-        address addressValue = envAddress("current", key_);
-        if (addressValue == address(0)) {
-            // solhint-disable-next-line gas-custom-errors
-            revert("Address is not set");
-        }
-
-        return addressValue;
+    modifier setUp(string calldata chain_, address owner_) {
+        _loadEnv(chain_);
+        _setUpBatchScript(owner_);
+        _;
     }
 
-    function loadEnv() internal override {
-        // Load contract addresses from the environment file
-        kernel = envAddress("current", "olympus.Kernel");
-        tokenPool = _getTokenPoolAddress(chain);
-        crossChainBridge = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-    }
-
-    function install(bool send_) external isDaoBatch(send_) {
+    function install(string calldata chain_, address owner_) external setUp(chain_, owner_) {
         // Assumptions
         // - The token pool has been linked to OHM in the CCIP token admin registry
         // - The token pool is already configured
+
+        // Load contract addresses from the environment file
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address tokenPool = _getTokenPoolAddress(chain);
+        address crossChainBridge = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
 
         // Install the TokenPool policy
         if (!_isChainCanonical(chain)) {
@@ -79,5 +73,138 @@ contract CCIPTokenPoolBatch is OlyBatch {
 
         // Next steps:
         // - Non-canonical chains: Governance to enable the TokenPool policy
+    }
+
+    /// @notice Accepts the admin role for the OHM token
+    function acceptAdminRole(
+        string calldata chain_,
+        address owner_
+    ) external setUp(chain_, owner_) {
+        // Load contract addresses from the environment file
+        address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+
+        // Accept the admin role
+        addToBatch(
+            tokenRegistry,
+            abi.encodeWithSelector(ITokenAdminRegistry.acceptAdminRole.selector, token)
+        );
+
+        console2.log("Completed");
+    }
+
+    /// @notice Sets the pool for the OHM token
+    function setPool(string calldata chain_, address owner_) external setUp(chain_, owner_) {
+        // Load contract addresses from the environment file
+        address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+        address tokenPool = _getTokenPoolAddress(chain);
+
+        // Set the pool
+        addToBatch(
+            tokenRegistry,
+            abi.encodeWithSelector(ITokenAdminRegistry.setPool.selector, token, tokenPool)
+        );
+
+        console2.log("Completed");
+    }
+
+    function transferTokenPoolAdminRole(
+        string calldata chain_,
+        address owner_
+    ) external setUp(chain_, owner_) {
+        address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+        address newOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        addToBatch(
+            tokenRegistry,
+            abi.encodeWithSelector(ITokenAdminRegistry.transferAdminRole.selector, token, newOwner)
+        );
+
+        console2.log("Transferred admin role to DAO MS");
+
+        // Next steps:
+        // - DAO MS must accept the admin role
+    }
+
+    function configureRemotePool(
+        string calldata chain_,
+        address owner_,
+        string calldata remoteChain_
+    ) external setUp(chain_, owner_) {
+        address tokenPoolAddress = _getTokenPoolAddress(chain_);
+        address remotePoolAddress = _getTokenPoolAddress(remoteChain_);
+        address remoteTokenAddress = _envAddressNotZero(remoteChain_, "olympus.legacy.OHM");
+        uint64 remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+        );
+
+        bytes[] memory remotePoolAddresses = new bytes[](1);
+        remotePoolAddresses[0] = abi.encodePacked(remotePoolAddress);
+
+        TokenPool.ChainUpdate memory chainUpdate = TokenPool.ChainUpdate({
+            remoteChainSelector: remoteChainSelector,
+            remotePoolAddresses: remotePoolAddresses,
+            remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
+            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0}),
+            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0})
+        });
+        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
+        chainUpdates[0] = chainUpdate;
+
+        // Apply the chain update
+        addToBatch(
+            tokenPoolAddress,
+            abi.encodeWithSelector(
+                TokenPool.applyChainUpdates.selector,
+                new uint64[](0),
+                chainUpdates
+            )
+        );
+
+        console2.log("Completed");
+    }
+
+    /// @dev temp function. Finalise the declarative configurator before production.
+    function configureRemotePoolSolanaDevnet(
+        string calldata chain_,
+        address owner_
+    ) external setUp(chain_, owner_) {
+        address tokenPoolAddress = _getTokenPoolAddress(chain_);
+        bytes32 remotePoolAddress = Base58Decoder.decode(
+            _envStringNotEmpty("solana-devnet", "olympus.periphery.TokenPool")
+        );
+        bytes32 remoteTokenAddress = Base58Decoder.decode(
+            _envStringNotEmpty("solana-devnet", "olympus.legacy.OHM")
+        );
+        uint64 remoteChainSelector = uint64(
+            _envUintNotZero("solana-devnet", "external.ccip.ChainSelector")
+        );
+
+        bytes[] memory remotePoolAddresses = new bytes[](1);
+        remotePoolAddresses[0] = abi.encodePacked(remotePoolAddress);
+
+        TokenPool.ChainUpdate memory solanaTestnetChainUpdate = TokenPool.ChainUpdate({
+            remoteChainSelector: remoteChainSelector,
+            remotePoolAddresses: remotePoolAddresses,
+            remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
+            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0}),
+            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0})
+        });
+        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
+        chainUpdates[0] = solanaTestnetChainUpdate;
+
+        // Apply the chain update
+        addToBatch(
+            tokenPoolAddress,
+            abi.encodeWithSelector(
+                TokenPool.applyChainUpdates.selector,
+                new uint64[](0),
+                chainUpdates
+            )
+        );
+
+        console2.log("Completed");
     }
 }
