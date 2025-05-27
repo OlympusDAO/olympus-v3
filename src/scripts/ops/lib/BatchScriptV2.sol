@@ -63,6 +63,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
     }
 
     function _proposeMultisigBatch() internal {
+        console2.log("\n");
+        console2.log("Proposing batch to multi-sig");
+
         bytes32 txHash = _multiSig.proposeTransactions(
             _batchTargets,
             _batchData,
@@ -75,12 +78,15 @@ abstract contract BatchScriptV2 is WithEnvironment {
     }
 
     function _proposeEOABatch() internal {
+        console2.log("\n");
+        console2.log("Executing batch as EOA");
+
         vm.startBroadcast();
 
         // Iterate over each batch target and execute
         for (uint256 i; i < _batchTargets.length; i++) {
-            console2.log("Executing batch target", i);
-            console2.log("Target", _batchTargets[i]);
+            console2.log("  Executing batch target", i);
+            console2.log("  Target", _batchTargets[i]);
             (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
 
             // Revert if the call failed
@@ -95,6 +101,8 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
 
         vm.stopBroadcast();
+
+        console2.log("Batch executed");
     }
 
     function proposeBatch() public {
