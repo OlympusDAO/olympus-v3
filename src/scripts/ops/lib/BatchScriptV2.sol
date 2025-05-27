@@ -63,6 +63,11 @@ abstract contract BatchScriptV2 is WithEnvironment {
     }
 
     function _proposeMultisigBatch() internal {
+        if (_batchTargets.length == 0) {
+            console2.log("No batch targets to propose");
+            return;
+        }
+
         console2.log("\n");
         console2.log("Proposing batch to multi-sig");
 
@@ -78,6 +83,11 @@ abstract contract BatchScriptV2 is WithEnvironment {
     }
 
     function _proposeEOABatch() internal {
+        if (_batchTargets.length == 0) {
+            console2.log("No batch targets to propose");
+            return;
+        }
+
         console2.log("\n");
         console2.log("Executing batch as EOA");
 
