@@ -26,5 +26,8 @@ cd lib/forge-proposal-simulator && git checkout 864b357b650f9dc7b2fb1ae235624548
 echo "*** Running forge soldeer update"
 forge soldeer update
 
+echo "*** Installing safe-utils dependencies"
+cd dependencies/safe-utils-0.0.11/ && forge install && cd ../..
+
 echo "*** Running forge build"
 forge clean && forge build

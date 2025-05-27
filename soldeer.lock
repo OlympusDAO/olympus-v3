@@ -18,6 +18,12 @@ checksum = "55f341818321b3f925161a72fd0dcd62e4a0a4b66785a7a932bf2bfaf96fb9d1"
 integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
 
 [[dependencies]]
+name = "safe-utils"
+version = "0.0.11"
+git = "https://github.com/Recon-Fuzz/safe-utils.git"
+rev = "094dc539532b7de9d710d3a1d118a776cd583726"
+
+[[dependencies]]
 name = "surl"
 version = "1.0.0"
 git = "https://github.com/memester-xyz/surl.git"

@@ -36,3 +36,4 @@ lib/forge-proposal-simulator:Governors/=lib/forge-proposal-simulator/Governors/
 dependencies/chainlink-local-0.2.5/:@chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
 dependencies/chainlink-local-0.2.5/:@chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
 @forge-std-1.9.6/=dependencies/forge-std-1.9.6/src/
+@safe-utils-0.0.11/=dependencies/safe-utils-0.0.11/src/
