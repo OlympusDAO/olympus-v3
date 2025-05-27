@@ -10,6 +10,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
+import {ICrossChainBridge} from "src/periphery/interfaces/ICrossChainBridge.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
@@ -17,6 +18,9 @@ import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol"
 ///         and the script will execute the necessary transactions to
 ///         configure the CCIP bridge to the desired state.
 contract CCIPTokenPoolBatch is BatchScriptV2 {
+    bytes32 public constant SOLANA_RECEIVER =
+        0x0000000000000000000000000000000000000000000000000000000000000000;
+
     /// @dev Returns true if the chain is canonical chain upon which new OHM is minted (mainnet or sepolia)
     function _isChainCanonical(string memory chain_) internal pure returns (bool) {
         return
@@ -31,6 +35,10 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             return _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
         }
     }
+
+    // TODOs
+    // [ ] Declarative configuration of a token pool
+    // [ ] Declarative configuration of a bridge
 
     function install(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
         // Assumptions
@@ -211,6 +219,63 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                 TokenPool.applyChainUpdates.selector,
                 new uint64[](0),
                 chainUpdates
+            )
+        );
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    function setTrustedRemoteEVM(
+        string calldata chain_,
+        bool useDaoMS_,
+        string calldata remoteChain_
+    ) external setUp(chain_, useDaoMS_) {
+        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        address remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+        );
+        address remoteBridgeAddress = _envAddressNotZero(
+            remoteChain_,
+            "olympus.periphery.CCIPCrossChainBridge"
+        );
+
+        // Set the trusted remote
+        addToBatch(
+            bridgeAddress,
+            abi.encodeWithSelector(
+                ICrossChainBridge.setTrustedRemoteEVM.selector,
+                remoteChainSelector,
+                remoteBridgeAddress
+            )
+        );
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    function setTrustedRemoteSolana(
+        string calldata chain_,
+        bool useDaoMS_,
+        string calldata remoteChain_
+    ) external setUp(chain_, useDaoMS_) {
+        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        address remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+        );
+        bytes32 remotePubKey = SOLANA_RECEIVER;
+
+        // Set the trusted remote
+        addToBatch(
+            bridgeAddress,
+            abi.encodeWithSelector(
+                ICrossChainBridge.setTrustedRemoteSVM.selector,
+                remoteChainSelector,
+                remotePubKey
             )
         );
 
