@@ -872,6 +872,8 @@ contract CCIPCrossChainBridgeTest is Test {
     // retryFailedMessage
     // when the message id is not in the failedMessages mapping
     //  [X] it reverts
+    // given the contract is not enabled
+    //  [X] it reverts
     // given the message execution fails again
     //  [X] it reverts
     // [X] it transfers the OHM to the recipient
@@ -888,7 +890,23 @@ contract CCIPCrossChainBridgeTest is Test {
         );
 
         // Call function
-        vm.prank(address(bridge));
+        bridge.retryFailedMessage(MESSAGE_ID);
+    }
+
+    function test_retryFailedMessage_notEnabled_reverts()
+        public
+        givenSourceEVMChainHasTrustedRemote
+    {
+        Client.Any2EVMMessage memory message = _getAnyToEVMMessage();
+
+        // Initial attempt to execute
+        vm.prank(address(router));
+        bridge.ccipReceive(message);
+
+        // Expect revert
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+
+        // Call function
         bridge.retryFailedMessage(MESSAGE_ID);
     }
 

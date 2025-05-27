@@ -330,6 +330,9 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     /// @notice Actual handler for receiving CCIP messages
     /// @dev    Does NOT support receiving messages from SVM, since they will not go through this contract
     function _receiveMessage(Client.Any2EVMMessage memory message_) internal {
+        // Validate that the contract is enabled
+        if (!isEnabled) revert NotEnabled();
+
         // Validate that the sender is a trusted remote
         // This will be the sending bridge contract, as it is set in the OnRamp.forwardFromRouter() function
         address sourceBridge = abi.decode(message_.sender, (address));
@@ -359,7 +362,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @notice Receives a message from the CCIP router
     /// @dev    This function can only be called by the contract
-    function receiveMessage(Client.Any2EVMMessage calldata message_) external onlyEnabled {
+    function receiveMessage(Client.Any2EVMMessage calldata message_) external {
         // Validate that the caller is this contract
         if (msg.sender != address(this)) revert Bridge_InvalidCaller();
 
