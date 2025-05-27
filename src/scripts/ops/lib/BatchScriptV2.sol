@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-import {Script} from "@forge-std-1.9.6/Script.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
+
+import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 
 import {Safe} from "@safe-utils-0.0.11/Safe.sol";
 
 /// @title BatchScriptV2
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
-abstract contract BatchScriptV2 is Script {
+abstract contract BatchScriptV2 is WithEnvironment {
     using Safe for *;
 
     /// @notice Address of the owner
@@ -23,17 +24,35 @@ abstract contract BatchScriptV2 is Script {
     // TODOs
     // [ ] Add Ledger signer support
 
+    modifier setUp(string calldata chain_, bool useDaoMS_) {
+        console2.log("Setting up batch script");
+
+        _loadEnv(chain_);
+
+        address owner = msg.sender;
+        if (useDaoMS_) owner = _envAddressNotZero("olympus.multisig.dao");
+        _setUpBatchScript(owner);
+        _;
+    }
+
     function _setUpBatchScript(address owner_) internal {
+        // Validate that the owner is not the forge default deployer
+        if (owner_ == 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("BatchScriptV2: Owner cannot be the forge default deployer");
+        }
+
         _owner = owner_;
+        console2.log("  Owner address", _owner);
 
         // Check if the owner is a Safe Multisig
         // It is assumed to be if it is a contract
         if (_owner.code.length > 0) {
-            console2.log("Owner address is a multi-sig");
+            console2.log("  Owner address is a multi-sig");
             _isMultiSig = true;
             _multiSig.initialize(_owner);
         } else {
-            console2.log("Owner address is an EOA");
+            console2.log("  Owner address is an EOA");
             _isMultiSig = false;
         }
     }
@@ -60,6 +79,8 @@ abstract contract BatchScriptV2 is Script {
 
         // Iterate over each batch target and execute
         for (uint256 i; i < _batchTargets.length; i++) {
+            console2.log("Executing batch target", i);
+            console2.log("Target", _batchTargets[i]);
             (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
 
             // Revert if the call failed

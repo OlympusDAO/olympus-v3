@@ -13,7 +13,7 @@ abstract contract WithEnvironment is Script {
 
     function _loadEnv(string memory chain_) internal {
         chain = chain_;
-        console2.log("Using chain:", chain_);
+        console2.log("  Using chain:", chain_);
 
         // Load environment file
         env = vm.readFile("./src/scripts/env.json");
