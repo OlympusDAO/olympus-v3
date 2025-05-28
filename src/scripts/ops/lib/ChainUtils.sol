@@ -15,18 +15,16 @@ library ChainUtils {
     string public constant TEST_BASE_SEPOLIA = "base-sepolia";
     string public constant TEST_ARBITRUM_SEPOLIA = "arbitrum-sepolia";
     string public constant TEST_BERACHAIN_BARTIO = "berachain-bartio";
-    string public constant TEST_GOERLI = "goerli";
     string public constant TEST_SOLANA = "solana-devnet";
 
     /// @notice Returns an array of testnet chains
     function _getTestnetChains() internal pure returns (string[] memory) {
-        string[] memory chains = new string[](6);
+        string[] memory chains = new string[](5);
         chains[0] = TEST_SEPOLIA;
         chains[1] = TEST_BASE_SEPOLIA;
         chains[2] = TEST_ARBITRUM_SEPOLIA;
         chains[3] = TEST_BERACHAIN_BARTIO;
-        chains[4] = TEST_GOERLI;
-        chains[5] = TEST_SOLANA;
+        chains[4] = TEST_SOLANA;
 
         return chains;
     }
