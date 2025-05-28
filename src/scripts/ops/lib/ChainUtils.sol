@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.15;
 
-library ChainHelper {
+import {ArrayUtils} from "./ArrayUtils.sol";
+
+library ChainUtils {
     string public constant PROD_MAINNET = "mainnet";
     string public constant PROD_BASE = "base";
     string public constant PROD_ARBITRUM = "arbitrum";
@@ -62,24 +64,12 @@ library ChainHelper {
 
     /// @notice Returns true if the chain is a production chain
     function _isProductionChain(string memory chain_) internal pure returns (bool) {
-        string[] memory chains = _getProductionChains();
-        for (uint256 i = 0; i < chains.length; i++) {
-            if (keccak256(abi.encodePacked(chains[i])) == keccak256(abi.encodePacked(chain_))) {
-                return true;
-            }
-        }
-        return false;
+        return ArrayUtils.contains(_getProductionChains(), chain_);
     }
 
     /// @notice Returns true if the chain is a testnet chain
     function _isTestnetChain(string memory chain_) internal pure returns (bool) {
-        string[] memory chains = _getTestnetChains();
-        for (uint256 i = 0; i < chains.length; i++) {
-            if (keccak256(abi.encodePacked(chains[i])) == keccak256(abi.encodePacked(chain_))) {
-                return true;
-            }
-        }
-        return false;
+        return ArrayUtils.contains(_getTestnetChains(), chain_);
     }
 
     /// @notice Returns true if the chain is an SVM chain
