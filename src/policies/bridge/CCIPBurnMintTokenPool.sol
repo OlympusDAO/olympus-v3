@@ -5,6 +5,7 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {ICCIPTokenPool} from "src/policies/interfaces/ICCIPTokenPool.sol";
 import {ITypeAndVersion} from "@chainlink-ccip-1.6.0/shared/interfaces/ITypeAndVersion.sol";
+import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -131,5 +132,15 @@ contract CCIPBurnMintTokenPool is
     /// @inheritdoc ITypeAndVersion
     function typeAndVersion() external pure override returns (string memory) {
         return _typeAndVersion;
+    }
+
+    // ========= ERC165 ========= //
+
+    function supportsInterface(bytes4 interfaceId) public pure override returns (bool) {
+        return
+            interfaceId == type(ICCIPTokenPool).interfaceId ||
+            interfaceId == type(ITypeAndVersion).interfaceId ||
+            interfaceId == type(IPolicyEnabler).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }

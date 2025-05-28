@@ -9,8 +9,8 @@ import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol"
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 
 // Contracts
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {CCIPLockReleaseTokenPool} from "src/periphery/bridge/CCIPLockReleaseTokenPool.sol";
+import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {Ownable2Step} from "@chainlink-ccip-1.6.0/shared/access/Ownable2Step.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
@@ -25,7 +25,7 @@ contract CCIPLockReleaseTokenPoolTest is Test {
     MockOhm public OHM;
     MockOhm public remoteOHM;
 
-    CCIPLockReleaseTokenPool public tokenPool;
+    LockReleaseTokenPool public tokenPool;
 
     address public OWNER;
     address public SENDER;
@@ -60,18 +60,55 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
         // Create the token pool
         vm.prank(OWNER);
-        tokenPool = new CCIPLockReleaseTokenPool(address(OHM), address(RMNProxy), address(router));
+        tokenPool = new LockReleaseTokenPool(
+            IERC20(address(OHM)),
+            9,
+            new address[](0),
+            address(RMNProxy),
+            true,
+            address(router)
+        );
     }
 
     modifier givenIsEnabled() {
+        RateLimiter.Config memory outboundRateLimiterConfig = RateLimiter.Config({
+            isEnabled: false, // Rate limiter disabled will enable bridging
+            capacity: 0,
+            rate: 0
+        });
+        RateLimiter.Config memory inboundRateLimiterConfig = RateLimiter.Config({
+            isEnabled: false, // Rate limiter disabled will enable bridging
+            capacity: 0,
+            rate: 0
+        });
+
         vm.prank(OWNER);
-        tokenPool.enable("");
+        tokenPool.setChainRateLimiterConfig(
+            REMOTE_CHAIN,
+            outboundRateLimiterConfig,
+            inboundRateLimiterConfig
+        );
         _;
     }
 
     modifier givenIsDisabled() {
+        RateLimiter.Config memory outboundRateLimiterConfig = RateLimiter.Config({
+            isEnabled: true, // Rate limiter enabled will disable bridging
+            capacity: 2,
+            rate: 1
+        });
+        RateLimiter.Config memory inboundRateLimiterConfig = RateLimiter.Config({
+            isEnabled: true, // Rate limiter enabled will disable bridging
+            capacity: 2,
+            rate: 1
+        });
+
         vm.prank(OWNER);
-        tokenPool.disable("");
+        tokenPool.setChainRateLimiterConfig(
+            REMOTE_CHAIN,
+            outboundRateLimiterConfig,
+            inboundRateLimiterConfig
+        );
         _;
     }
 
@@ -89,14 +126,14 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         remotePoolAddresses[0] = abi.encode(remotePool_);
 
         RateLimiter.Config memory outboundRateLimiterConfig = RateLimiter.Config({
-            isEnabled: false,
-            capacity: 0,
-            rate: 0
+            isEnabled: true, // Disabled by default
+            capacity: 2,
+            rate: 1
         });
         RateLimiter.Config memory inboundRateLimiterConfig = RateLimiter.Config({
-            isEnabled: false,
-            capacity: 0,
-            rate: 0
+            isEnabled: true, // Disabled by default
+            capacity: 2,
+            rate: 1
         });
 
         TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
@@ -114,19 +151,18 @@ contract CCIPLockReleaseTokenPoolTest is Test {
     }
 
     function _assertBridgedSupply(uint256 expected) internal view {
-        assertEq(tokenPool.getBridgedSupply(), expected, "bridgedSupply");
-    }
-
-    function _assertIsEnabled(bool expected) internal view {
-        assertEq(tokenPool.isEnabled(), expected, "isEnabled");
+        assertEq(OHM.balanceOf(address(tokenPool)), expected, "bridgedSupply");
     }
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-    }
-
-    function _expectRevertNotDisabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateLimiter.TokenMaxCapacityExceeded.selector,
+                2,
+                AMOUNT,
+                address(OHM)
+            )
+        );
     }
 
     function _expectRevertNotOwner() internal {
@@ -143,80 +179,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     // ============ TESTS ============ //
 
-    // enable
-    // given the contraact is enabled
-    //  [X] it reverts
-    // given the caller is not the owner
-    //  [X] it reverts
-    // [X] it enables the contract
-
-    function test_enable_givenEnabled_reverts() public givenIsEnabled {
-        // Expect revert
-        _expectRevertNotDisabled();
-
-        // Call function
-        vm.prank(OWNER);
-        tokenPool.enable("");
-    }
-
-    function test_enable_callerNotOwner_reverts(address caller_) public {
-        vm.assume(caller_ != OWNER);
-
-        // Expect revert
-        _expectRevertNotOwner();
-
-        // Call function
-        vm.prank(caller_);
-        tokenPool.enable("");
-    }
-
-    function test_enable() public {
-        // Call function
-        vm.prank(OWNER);
-        tokenPool.enable("");
-
-        // Assert
-        _assertIsEnabled(true);
-    }
-
-    // disable
-    // given the contract is disabled
-    //  [X] it reverts
-    // given the caller is not the owner
-    //  [X] it reverts
-    // [X] it disables the contract
-
-    function test_disable_givenDisabled_reverts() public {
-        // Expect revert
-        _expectRevertNotEnabled();
-
-        // Call function
-        vm.prank(OWNER);
-        tokenPool.disable("");
-    }
-
-    function test_disable_callerNotAdmin_reverts(address caller_) public givenIsEnabled {
-        vm.assume(caller_ != OWNER);
-
-        // Expect revert
-        _expectRevertNotOwner();
-
-        // Call function
-        vm.prank(caller_);
-        tokenPool.disable("");
-    }
-
-    function test_disable() public givenIsEnabled {
-        // Call function
-        vm.prank(OWNER);
-        tokenPool.disable("");
-
-        // Assert
-        _assertIsEnabled(false);
-    }
-
     // lockOrBurn
-    // given the policy is disabled
+    // given bridging is disabled
     //  [X] it reverts
     // given the provided token is not the configured token of the token pool
     //  [X] it reverts
@@ -258,8 +222,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_lockOrBurn_givenDifferentToken_reverts()
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Create a new OHM token that will be passed to lockOrBurn
@@ -283,7 +247,6 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_lockOrBurn_givenUnsupportedRemoteChain_reverts()
         public
-        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Expect revert
@@ -296,8 +259,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_lockOrBurn_remoteChainCursed_reverts()
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Mark the remote chain as cursed
@@ -313,8 +276,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_lockOrBurn_callerNotOnRamp_reverts()
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Expect revert
@@ -331,8 +294,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         uint256 sendAmount_
     )
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         sendAmount_ = bound(sendAmount_, 1, AMOUNT);
@@ -400,8 +363,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_releaseOrMint_givenDifferentToken_reverts()
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Create a new OHM token that will be passed to releaseOrMint
@@ -428,7 +391,6 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_releaseOrMint_givenUnsupportedRemoteChain_reverts()
         public
-        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Expect revert
@@ -441,8 +403,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_releaseOrMint_sourceChainCursed_reverts()
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Mark the remote chain as cursed
@@ -458,8 +420,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
 
     function test_releaseOrMint_callerNotOffRamp_reverts()
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         // Expect revert
@@ -476,8 +438,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         uint256 sendAmount_
     )
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         sendAmount_ = bound(sendAmount_, 1, AMOUNT);
@@ -512,8 +474,8 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         uint256 sendAmount_
     )
         public
-        givenIsEnabled
         givenRemoteChainIsSupported(REMOTE_CHAIN, REMOTE_POOL, address(remoteOHM))
+        givenIsEnabled
         givenTokenPoolHasOHM(AMOUNT)
     {
         sendAmount_ = bound(sendAmount_, 1, AMOUNT);
@@ -533,18 +495,5 @@ contract CCIPLockReleaseTokenPoolTest is Test {
         _assertTokenPoolOhmBalance(AMOUNT - sendAmount_);
         _assertReceiverOhmBalance(sendAmount_);
         assertEq(result.destinationAmount, sendAmount_, "destinationAmount");
-    }
-
-    // getBridgedSupply
-    // [X] it returns the balance of OHM in the contract
-
-    function test_getBridgedSupply(uint256 amount_) public {
-        amount_ = bound(amount_, 1, AMOUNT);
-
-        // Mint OHM to the token pool
-        OHM.mint(address(tokenPool), amount_);
-
-        // Assert
-        assertEq(tokenPool.getBridgedSupply(), amount_, "bridgedSupply");
     }
 }

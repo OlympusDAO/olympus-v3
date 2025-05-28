@@ -6,9 +6,12 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
+// Interfaces
+import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+
 // Contracts
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
-import {CCIPLockReleaseTokenPool} from "src/periphery/bridge/CCIPLockReleaseTokenPool.sol";
+import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
 // solhint-disable gas-custom-errors
@@ -288,23 +291,32 @@ contract DeployV3 is WithEnvironment {
         address rmnProxy = _envAddressNotZero("external.ccip.RMN");
         address ccipRouter = _envAddressNotZero("external.ccip.Router");
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        uint8 ohmDecimals = 9;
+        address[] memory allowlist = new address[](0);
+        bool acceptLiquidity = true;
 
         // Log arguments
         console2.log("\n");
-        console2.log("CCIPLockReleaseTokenPool parameters:");
+        console2.log("LockReleaseTokenPool parameters:");
         console2.log("  ohm", ohm);
+        console2.log("  ohmDecimals", ohmDecimals);
+        console2.log("  allowlist", allowlist.length > 0 ? "true" : "false");
         console2.log("  rmnProxy", rmnProxy);
+        console2.log("  acceptLiquidity", acceptLiquidity);
         console2.log("  ccipRouter", ccipRouter);
 
-        // Deploy CCIPLockReleaseTokenPool
+        // Deploy LockReleaseTokenPool
         vm.broadcast();
-        CCIPLockReleaseTokenPool ccipLockReleaseTokenPool = new CCIPLockReleaseTokenPool(
-            ohm,
+        LockReleaseTokenPool lockReleaseTokenPool = new LockReleaseTokenPool(
+            IERC20(ohm),
+            ohmDecimals,
+            allowlist,
             rmnProxy,
+            acceptLiquidity,
             ccipRouter
         );
 
-        return (address(ccipLockReleaseTokenPool), "olympus.periphery");
+        return (address(lockReleaseTokenPool), "olympus.periphery");
     }
 
     function deployCCIPCrossChainBridge() public returns (address, string memory) {

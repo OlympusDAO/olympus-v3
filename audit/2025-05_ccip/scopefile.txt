@@ -1,5 +1,4 @@
 src/periphery/bridge/CCIPCrossChainBridge.sol
-src/periphery/bridge/CCIPLockReleaseTokenPool.sol
 src/periphery/interfaces/ICCIPCrossChainBridge.sol
 src/periphery/PeripheryEnabler.sol
 src/policies/bridge/BurnMintTokenPoolBase.sol

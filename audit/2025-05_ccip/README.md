@@ -23,7 +23,6 @@ The contracts in scope for this audit are:
     - [periphery/](../../src/periphery)
         - [bridge/](../../src/periphery/bridge)
             - [CCIPCrossChainBridge.sol](../../src/periphery/bridge/CCIPCrossChainBridge.sol)
-            - [CCIPLockReleaseTokenPool.sol](../../src/periphery/bridge/CCIPLockReleaseTokenPool.sol)
         - [interfaces/](../../src/periphery/interfaces)
             - [ICCIPCrossChainBridge.sol](../../src/periphery/interfaces/ICCIPCrossChainBridge.sol)
         - [PeripheryEnabler.sol](../../src/periphery/PeripheryEnabler.sol)
@@ -79,8 +78,6 @@ Some of the in-scope contracts modify or include unmodified code from the CCIP c
 
 - `BurnMintTokenPoolBase.sol`
     - The `releaseOrMint()` function is the same as in the source [BurnMintTokenPoolAbstract.sol](https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/ccip/pools/BurnMintTokenPoolAbstract.sol) file, with the `mint()` call on line 46 replaced with a call to a `_mint()` virtual function. This was to allow for custom mint signatures/behaviours (which is already supported for token burning).
-- `CCIPLockReleaseTokenPool.sol`
-    - The `lockOrBurn()` and `releaseOrMint()` functions are the same as in the source [LockReleaseTokenPool.sol](https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/ccip/pools/LockReleaseTokenPool.sol) file, with the addition of `onlyEnabled` modifiers and `public` visibility. Calling `super.lockOrBurn()` and `super.releaseOrMint()` was not possible, due to the `external` visibility.
 
 ## Implementation
 
@@ -112,15 +109,15 @@ sequenceDiagram
     participant CCIPCrossChainBridge
     participant Router
     participant OnRamp
-    participant CCIPLockReleaseTokenPool
+    participant LockReleaseTokenPool
 
     Sender->>CCIPCrossChainBridge: send(chain, receiver, amount)
     Sender-->>CCIPCrossChainBridge: OHM.transferFrom()
     CCIPCrossChainBridge->>Router: ccipSend(chain, message)
-    CCIPCrossChainBridge-->>CCIPLockReleaseTokenPool: OHM.transferFrom()
+    CCIPCrossChainBridge-->>LockReleaseTokenPool: OHM.transferFrom()
     Router->>OnRamp: forwardFromRouter(chain, message, fee, bridge)
-    OnRamp->>CCIPLockReleaseTokenPool: lockOrBurn()
-    Note over OnRamp, CCIPLockReleaseTokenPool: OHM remains custodied in the TokenPool
+    OnRamp->>LockReleaseTokenPool: lockOrBurn()
+    Note over OnRamp, LockReleaseTokenPool: OHM remains custodied in the TokenPool
 ```
 
 In contract to previous bridging implementations by Olympus (which utilised a "burn and mint" approach), the `LockReleaseTokenPool` was adopted for the following reasons:
@@ -158,14 +155,14 @@ On the canonical/base chain (Mainnet for production and Sepolia for testing), a 
 ```mermaid
 sequenceDiagram
     participant OffRamp
-    participant CCIPLockReleaseTokenPool
+    participant LockReleaseTokenPool
     participant CCIPCrossChainBridge
     participant Recipient
 
-    OffRamp->>CCIPLockReleaseTokenPool: releaseOrMint()
-    CCIPLockReleaseTokenPool-->>CCIPCrossChainBridge: OHM.transfer()
-    CCIPLockReleaseTokenPool->>CCIPCrossChainBridge: ccipReceive()
-    Note over CCIPLockReleaseTokenPool, CCIPCrossChainBridge: OHM custodied in the TokenPool is used
+    OffRamp->>LockReleaseTokenPool: releaseOrMint()
+    LockReleaseTokenPool-->>CCIPCrossChainBridge: OHM.transfer()
+    LockReleaseTokenPool->>CCIPCrossChainBridge: ccipReceive()
+    Note over LockReleaseTokenPool, CCIPCrossChainBridge: OHM custodied in the TokenPool is used
     CCIPCrossChainBridge-->>Recipient: OHM.transfer()
 ```
 
