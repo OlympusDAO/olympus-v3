@@ -34,6 +34,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     // TODOs
     // [ ] Declarative configuration of a token pool
+    // [ ] Set the owner as the rebalancer of the lock release token pool
 
     function install(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
         // Assumptions
