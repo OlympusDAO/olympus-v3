@@ -22,6 +22,9 @@ import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
 contract CCIPLockReleaseTokenPool is LockReleaseTokenPool, PeripheryEnabler, ICCIPTokenPool {
     using SafeERC20 for IERC20;
 
+    // NOTE: This should ideally override the `typeAndVersion` function, but it is not possible to do so
+    //       as the `LockReleaseTokenPool` contract does not have a virtual `typeAndVersion` function
+
     // ========= CONSTRUCTOR ========= //
 
     constructor(

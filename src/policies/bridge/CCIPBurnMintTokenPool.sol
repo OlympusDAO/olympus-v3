@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {ICCIPTokenPool} from "src/policies/interfaces/ICCIPTokenPool.sol";
+import {ITypeAndVersion} from "@chainlink-ccip-1.6.0/shared/interfaces/ITypeAndVersion.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -20,11 +21,21 @@ import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 /// @dev    As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
 ///
 ///         Despite being a policy, the admin functions inherited from `TokenPool` are not virtual and cannot be overriden, and so remain gated to the owner.
-contract CCIPBurnMintTokenPool is Policy, PolicyEnabler, BurnMintTokenPoolBase, ICCIPTokenPool {
+contract CCIPBurnMintTokenPool is
+    Policy,
+    PolicyEnabler,
+    BurnMintTokenPoolBase,
+    ICCIPTokenPool,
+    ITypeAndVersion
+{
     // =========  STATE VARIABLES ========= //
 
     /// @notice Bophades module for minting and burning OHM
     MINTRv1 public MINTR;
+
+    /// @notice Unique identifier for the TokenPool
+    /// @dev    This is used to identify the TokenPool to CCIP
+    string internal constant _typeAndVersion = "OlympusBurnMintTokenPool 1.6.0";
 
     // =========  CONSTRUCTOR ========= //
 
@@ -113,5 +124,12 @@ contract CCIPBurnMintTokenPool is Policy, PolicyEnabler, BurnMintTokenPoolBase, 
     /// @dev        This function is not used in this policy, so it returns 0
     function getBridgedSupply() external pure returns (uint256) {
         return 0;
+    }
+
+    // ========= TYPE AND VERSION ========= //
+
+    /// @inheritdoc ITypeAndVersion
+    function typeAndVersion() external pure override returns (string memory) {
+        return _typeAndVersion;
     }
 }
