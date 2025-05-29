@@ -36,7 +36,7 @@ contract CCIPBurnMintTokenPool is
 
     /// @notice Unique identifier for the TokenPool
     /// @dev    This is used to identify the TokenPool to CCIP
-    string internal constant _typeAndVersion = "OlympusBurnMintTokenPool 1.6.0";
+    string internal constant _typeAndVersion = "BurnMintTokenPool 1.5.1";
 
     // =========  CONSTRUCTOR ========= //
 
