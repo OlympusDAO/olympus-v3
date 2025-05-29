@@ -132,20 +132,8 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("\n");
         console2.log("  Destination SVM chain:", remoteChain_);
 
-        if (
-            ICCIPCrossChainBridge(bridgeAddress).getTrustedRemoteSVM(remoteChainSelector) ==
-            remotePubKey
-        ) {
-            console2.log(
-                "  Trusted remote is already set to",
-                vm.toString(remotePubKey),
-                ". No change needed."
-            );
-            console2.log("\n");
-            return;
-        }
-
-        // Set the trusted remote
+        // Set the trusted remote always
+        // Otherwise the default will not be set
         addToBatch(
             bridgeAddress,
             abi.encodeWithSelector(

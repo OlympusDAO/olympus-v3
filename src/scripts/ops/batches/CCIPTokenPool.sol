@@ -6,7 +6,6 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {Base58} from "@base58-solidity-1.0.3/Base58.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
@@ -58,7 +57,6 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         // Load contract addresses from the environment file
         address kernel = _envAddressNotZero("olympus.Kernel");
         address tokenPool = _getTokenPoolAddress(chain);
-        address crossChainBridge = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
 
         // Install the TokenPool policy
         if (!_isChainCanonical(chain)) {
@@ -88,10 +86,6 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             );
             console2.log("Set the owner as the rebalancer of the LockReleaseTokenPool");
         }
-
-        // Enable the CCIPCrossChainBridge
-        console2.log("Enabling CCIPCrossChainBridge");
-        addToBatch(crossChainBridge, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         // Run
         proposeBatch();
