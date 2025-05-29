@@ -7,6 +7,7 @@ import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 contract CCIPBridgeBatch is BatchScriptV2 {
     // TODOs
@@ -15,6 +16,21 @@ contract CCIPBridgeBatch is BatchScriptV2 {
 
     bytes32 public constant SOLANA_RECEIVER =
         0x0000000000000000000000000000000000000000000000000000000000000000;
+
+    /// @notice Sets trusted remotes and enables the bridge for the specified chain
+    function enable(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
+        // Set the trusted remotes
+        _setAllTrustedRemotes(chain_);
+
+        // Set the bridge to enabled
+        console2.log("\n");
+        console2.log("Enabling bridge for", chain_);
+        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        addToBatch(bridgeAddress, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+
+        // Run
+        proposeBatch();
+    }
 
     /// @notice Sets the trusted remote for an EVM chain
     /// @dev    Handles the following scenarios:
@@ -156,14 +172,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    /// @notice Sets the bridges on all other chains as trusted remotes for the source chain
-    /// @dev    This currently does not support selectively enabling bridging for specific chains
-    ///
-    ///         This function skips the function call if the trusted remote is already set to the correct value
-    function setAllTrustedRemotes(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function _setAllTrustedRemotes(string memory chain_) internal {
         console2.log("\n");
         console2.log("Setting all trusted remotes for", chain_);
 
@@ -190,6 +199,18 @@ contract CCIPBridgeBatch is BatchScriptV2 {
                 _setTrustedRemoteEVM(remoteChain, !isTrustedChain);
             }
         }
+    }
+
+    /// @notice Sets the bridges on all other chains as trusted remotes for the source chain
+    /// @dev    This currently does not support selectively enabling bridging for specific chains
+    ///
+    ///         This function skips the function call if the trusted remote is already set to the correct value
+    function setAllTrustedRemotes(
+        string calldata chain_,
+        bool useDaoMS_
+    ) external setUp(chain_, useDaoMS_) {
+        // Set the trusted remotes
+        _setAllTrustedRemotes(chain_);
 
         // Run
         proposeBatch();
