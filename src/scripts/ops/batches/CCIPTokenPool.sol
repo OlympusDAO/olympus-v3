@@ -118,6 +118,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         }
 
         // Accept the admin role
+        console2.log("Accepting admin role for", token, "to", _owner);
         addToBatch(
             tokenRegistry,
             abi.encodeWithSelector(ITokenAdminRegistry.acceptAdminRole.selector, token)
@@ -143,6 +144,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         }
 
         // Set the pool
+        console2.log("Setting pool for", token, "to", tokenPool);
         addToBatch(
             tokenRegistry,
             abi.encodeWithSelector(ITokenAdminRegistry.setPool.selector, token, tokenPool)
@@ -168,6 +170,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             return;
         }
 
+        console2.log("Transferring admin role for", token, "to", newOwner);
         addToBatch(
             tokenRegistry,
             abi.encodeWithSelector(ITokenAdminRegistry.transferAdminRole.selector, token, newOwner)
@@ -176,7 +179,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         // Run
         proposeBatch();
 
-        console2.log("Transferred admin role to DAO MS");
+        console2.log("Completed");
 
         // Next steps:
         // - DAO MS must accept the admin role
@@ -208,6 +211,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         chainUpdates[0] = chainUpdate;
 
         // Apply the chain update
+        console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
         addToBatch(
             tokenPoolAddress,
             abi.encodeWithSelector(
@@ -254,6 +258,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         chainUpdates[0] = chainUpdate;
 
         // Apply the chain update
+        console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
         addToBatch(
             tokenPoolAddress,
             abi.encodeWithSelector(
