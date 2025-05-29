@@ -1,4 +1,10 @@
 [[dependencies]]
+name = "base58-solidity"
+version = "1.0.3"
+git = "https://github.com/storyicon/base58-solidity.git"
+rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f"
+
+[[dependencies]]
 name = "chainlink-ccip"
 version = "1.6.0"
 git = "https://github.com/smartcontractkit/chainlink.git"

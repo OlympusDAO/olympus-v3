@@ -3,7 +3,7 @@ pragma solidity >=0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
-import {Base58Decoder} from "src/scripts/ops/lib/Base58Decoder.sol";
+import {Base58} from "@base58-solidity-1.0.3/Base58.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -27,7 +27,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     function _getTokenPoolAddress(string memory chain_) internal view returns (address) {
         if (_isChainCanonical(chain_)) {
-            return _envAddressNotZero("olympus.policies.CCIPLockReleaseTokenPool");
+            return _envAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool");
         } else {
             return _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
         }
@@ -200,11 +200,11 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         string calldata remoteChain_
     ) external setUp(chain_, useDaoMS_) {
         address tokenPoolAddress = _getTokenPoolAddress(chain_);
-        bytes32 remotePoolAddress = Base58Decoder.decode(
-            _envStringNotEmpty(remoteChain_, "olympus.periphery.TokenPool")
+        bytes32 remotePoolAddress = bytes32(
+            Base58.decodeFromString(_envStringNotEmpty(remoteChain_, "olympus.periphery.TokenPool"))
         );
-        bytes32 remoteTokenAddress = Base58Decoder.decode(
-            _envStringNotEmpty(remoteChain_, "olympus.legacy.OHM")
+        bytes32 remoteTokenAddress = bytes32(
+            Base58.decodeFromString(_envStringNotEmpty(remoteChain_, "olympus.legacy.OHM"))
         );
         uint64 remoteChainSelector = uint64(
             _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
