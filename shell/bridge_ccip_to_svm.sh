@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Bridges OHM to the specified address and EVM chain using CCIP
+# Bridges OHM to the specified address and SVM chain using CCIP
 #
 # Usage:
-# ./bridge_ccip_evm.sh
+# ./bridge_ccip_to_svm.sh
 #   --fromChain <chain>
 #   --toChain <chain>
 #   --to <recipient address>
@@ -35,7 +35,7 @@ echo ""
 echo "Validating arguments"
 validate_text "$fromChain" "No from chain specified. Provide the from chain after the --from-chain flag."
 validate_text "$toChain" "No to chain specified. Provide the to chain after the --to-chain flag."
-validate_address "$to" "No recipient specified or it is not an EVM address. Provide the recipient after the --to flag."
+validate_text "$to" "No recipient specified or it is not an SVM address. Provide the recipient after the --to flag."
 validate_number "$amount" "No amount specified. Provide the amount after the --amount flag."
 validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
 
@@ -63,7 +63,7 @@ set_account_address $account
 echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/BridgeCCIP.s.sol:BridgeCCIPScript \
-    --sig "bridgeToEVM(string,string,address,uint256)()" $fromChain $toChain $to $amount \
+    --sig "bridgeToSVM(string,string,string,uint256)()" $fromChain $toChain $to $amount \
     --rpc-url $RPC_URL \
     --account $account \
     --slow \
