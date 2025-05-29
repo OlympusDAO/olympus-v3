@@ -130,3 +130,11 @@ forge script src/scripts/ops/batches/CCIPBridge.sol --sig "enable(string,bool)()
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
 
 It will also set trusted remotes at the same time as enabling.
+
+## Bridging
+
+For EVM -> EVM, use the `./shell/bridge_ccip_to_evm.sh`.
+
+For EVM -> SVM, use the `./shell/bridge_ccip_to_svm.sh`.
+
+For SVM -> EVM, follow the [SVM tutorial](https://docs.chain.link/ccip/tutorials/svm/source).
