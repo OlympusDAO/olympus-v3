@@ -6,11 +6,6 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {TestSuite} from "proposal-sim/test/TestSuite.t.sol";
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
-import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
-import {Timelock} from "src/external/governance/Timelock.sol";
 
 /// @notice Creates a sandboxed environment from a mainnet fork, to simulate the proposal.
 /// @dev    Update the `setUp` function to deploy your proposal and set the submission
@@ -27,50 +22,55 @@ abstract contract ProposalTest is Test {
 
     string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
 
-    /// @notice This function simulates the proposal with the given address.
+    /// @notice This function simulates a proposal suite which has already been setup via `_setupSuite()` or `_setupSuites()`.
     /// @dev    This function assumes the following:
     ///         - A mainnet fork has been created using `vm.createSelectFork` with a block number prior to the proposal deployment.
     ///         - If the proposal has been submitted on-chain, the `hasBeenSubmitted` flag has been set to `true`.
     ///         - The proposal contract has been deployed within the test contract and passed as an argument.
-    ///
-    /// @param  proposal_ The address of the proposal contract.
-    function _simulateProposal(address proposal_) internal virtual {
+    function _simulateProposal() internal virtual {
         /// @notice This section is used to simulate the proposal on the mainnet fork.
-        {
-            // Populate addresses array
-            address[] memory proposalsAddresses = new address[](1);
-            proposalsAddresses[0] = address(proposal_);
+        if (address(suite) == address(0)) {
+            revert("_setupSuites() should be called prior to simulating");
+        }
 
-            // Deploy TestSuite contract
-            suite = new TestSuite(ADDRESSES_PATH, proposalsAddresses);
+        // Execute proposals
+        suite.testProposals();
 
-            // Set addresses object
-            addresses = suite.addresses();
+        // Proposals execution may change addresses, so we need to update the addresses object.
+        addresses = suite.addresses();
 
-            // Set debug mode
-            suite.setDebug(true);
-            // Execute proposals
-            suite.testProposals();
-
-            // Proposals execution may change addresses, so we need to update the addresses object.
-            addresses = suite.addresses();
-
-            // Check if simulated calldatas match the ones from mainnet.
-            if (hasBeenSubmitted) {
-                address governor = addresses.getAddress("olympus-governor");
-                bool[] memory matches = suite.checkProposalCalldatas(governor);
-                for (uint256 i; i < matches.length; i++) {
-                    assertTrue(matches[i], "Calldata should match");
-                }
-            } else {
-                console2.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
-                console2.log("Proposal has NOT been submitted on-chain yet.\n");
+        // Check if simulated calldatas match the ones from mainnet.
+        if (hasBeenSubmitted) {
+            address governor = addresses.getAddress("olympus-governor");
+            bool[] memory matches = suite.checkProposalCalldatas(governor);
+            for (uint256 i; i < matches.length; i++) {
+                assertTrue(matches[i], "Calldata should match");
             }
+        } else {
+            console2.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
+            console2.log("Proposal has NOT been submitted on-chain yet.\n");
         }
     }
 
+    function _setupSuite(address proposal_) internal {
+        address[] memory proposals_ = new address[](1);
+        proposals_[0] = proposal_;
+        _setupSuites(proposals_);
+    }
+
+    function _setupSuites(address[] memory proposals_) internal {
+        // Deploy TestSuite contract
+        suite = new TestSuite(ADDRESSES_PATH, proposals_);
+
+        // Set addresses object
+        addresses = suite.addresses();
+
+        // Set debug mode
+        suite.setDebug(true);
+    }
+
     /// @dev Dummy test to ensure `setUp` is executed and the proposal simulated.
-    function testProposal_simulate() public {
+    function testProposal_simulate() public pure {
         assertTrue(true, "Proposal should be simulated");
     }
 }

@@ -71,7 +71,7 @@ contract OIP_170_OCGProposalTest is Test {
     }
 
     // [DO NOT DELETE] Dummy test to ensure `setUp` is executed and the proposal simulated.
-    function testProposal_simulate() public {
+    function testProposal_simulate() public pure {
         assertTrue(true);
     }
 }

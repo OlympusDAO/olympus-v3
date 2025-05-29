@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {ProposalTest} from "./ProposalTest.sol";
-import {TestSuite} from "proposal-sim/test/TestSuite.t.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -26,20 +25,8 @@ contract LoanConsolidatorProposalTest is ProposalTest {
         /// @dev Set `hasBeenSubmitted` to `true` once the proposal has been submitted on-chain.
         hasBeenSubmitted = true;
 
-        // Populate addresses array
-        {
-            // Populate addresses array
-            address[] memory proposalsAddresses = new address[](1);
-            proposalsAddresses[0] = address(proposal);
-
-            // Deploy TestSuite contract
-            suite = new TestSuite(ADDRESSES_PATH, proposalsAddresses);
-
-            // Set addresses object
-            addresses = suite.addresses();
-
-            kernel = Kernel(addresses.getAddress("olympus-kernel"));
-        }
+        _setupSuite(address(proposal));
+        kernel = Kernel(addresses.getAddress("olympus-kernel"));
 
         // Simulate the LoanConsolidatorInstall batch script having been run
         // The simulation will revert otherwise
@@ -57,6 +44,6 @@ contract LoanConsolidatorProposalTest is ProposalTest {
         }
 
         // Simulate the proposal
-        _simulateProposal(address(proposal));
+        _simulateProposal();
     }
 }

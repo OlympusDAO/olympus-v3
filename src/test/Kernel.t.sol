@@ -61,6 +61,7 @@ contract KernelTest is Test {
         kernel.executeAction(Actions.InstallModule, address(MOCKY));
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function testCorrectness_EnsureContract() public {
         ensureContract(address(kernel));
 
@@ -73,6 +74,7 @@ contract KernelTest is Test {
         ensureContract(address(0));
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function testCorrectness_EnsureValidKeycode() public {
         ensureValidKeycode(Keycode.wrap("VALID"));
 
