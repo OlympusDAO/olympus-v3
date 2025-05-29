@@ -8,6 +8,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {Owned} from "solmate/auth/Owned.sol";
 
 contract CCIPBridgeBatch is BatchScriptV2 {
     // TODOs
@@ -211,6 +212,36 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     ) external setUp(chain_, useDaoMS_) {
         // Set the trusted remotes
         _setAllTrustedRemotes(chain_);
+
+        // Run
+        proposeBatch();
+    }
+
+    function transferOwnership(
+        string calldata chain_,
+        bool useDaoMS_
+    ) external setUp(chain_, useDaoMS_) {
+        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        address newOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        // Check if the owner is already the new owner
+        if (Owned(bridgeAddress).owner() == newOwner) {
+            console2.log("Owner", newOwner, "is already the new owner. Skipping.");
+            return;
+        }
+
+        console2.log("\n");
+        console2.log(
+            "Transferring ownership of",
+            vm.toString(bridgeAddress),
+            "to",
+            vm.toString(newOwner)
+        );
+
+        addToBatch(
+            bridgeAddress,
+            abi.encodeWithSelector(Owned.transferOwnership.selector, newOwner)
+        );
 
         // Run
         proposeBatch();

@@ -11,6 +11,7 @@ import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenA
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
+import {TokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
@@ -31,6 +32,17 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         } else {
             return _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
         }
+    }
+
+    function _getTokenAdminRegistryConfig()
+        internal
+        view
+        returns (TokenAdminRegistry.TokenConfig memory)
+    {
+        address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
+        address token = _envAddressNotZero("olympus.legacy.OHM");
+
+        return TokenAdminRegistry(tokenRegistry).getTokenConfig(token);
     }
 
     // TODOs
@@ -99,6 +111,12 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
 
+        // Check if the owner is already the administrator
+        if (_getTokenAdminRegistryConfig().administrator == _owner) {
+            console2.log("Owner", _owner, "is already the administrator. Skipping.");
+            return;
+        }
+
         // Accept the admin role
         addToBatch(
             tokenRegistry,
@@ -117,6 +135,12 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
         address tokenPool = _getTokenPoolAddress(chain);
+
+        // Check if the pool is already set
+        if (_getTokenAdminRegistryConfig().tokenPool == tokenPool) {
+            console2.log("Pool", tokenPool, "is already set. Skipping.");
+            return;
+        }
 
         // Set the pool
         addToBatch(
@@ -137,6 +161,12 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
         address newOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        // Check if the admin role is already transferred
+        if (_getTokenAdminRegistryConfig().administrator == newOwner) {
+            console2.log("Admin role already transferred to", newOwner, ". Skipping.");
+            return;
+        }
 
         addToBatch(
             tokenRegistry,

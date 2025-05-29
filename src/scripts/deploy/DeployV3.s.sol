@@ -255,6 +255,18 @@ contract DeployV3 is WithEnvironment {
             );
     }
 
+    function _getDeployer() internal returns (address) {
+        (, address msgSender, ) = vm.readCallers();
+
+        // Validate that the sender is not the default deployer (or else it can cause problems)
+        if (msgSender == address(0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38)) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("Cannot use the default foundry deployer address, specify using --sender");
+        }
+
+        return msgSender;
+    }
+
     // ========== DEPLOYMENT FUNCTIONS ========== //
 
     function deployCCIPBurnMintTokenPool() public returns (address, string memory) {
@@ -324,20 +336,20 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
         address ccipRouter = _envAddressNotZero("external.ccip.Router");
-        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        address owner = _getDeployer(); // Make the deployer the initial owner, so the configuration can be completed easily
 
         // Log dependencies
         console2.log("CCIPCrossChainBridge parameters:");
         console2.log("  ohm", ohm);
         console2.log("  ccipRouter", ccipRouter);
-        console2.log("  owner", daoMS);
+        console2.log("  owner", owner);
 
         // Deploy CCIPCrossChainBridge
         vm.broadcast();
         CCIPCrossChainBridge ccipCrossChainBridge = new CCIPCrossChainBridge(
             ohm,
             ccipRouter,
-            daoMS
+            owner
         );
 
         return (address(ccipCrossChainBridge), "olympus.periphery");

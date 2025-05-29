@@ -32,7 +32,7 @@ Flip the `--broadcast` and `--verify` flags to true in order to perform the depl
 The deployer wallet must temporarily accept the admin role in order to configure the pool:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -42,7 +42,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 Link the OHM token on a chain with a token pool:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "setPool(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "setPool(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -52,7 +52,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 This particular script will configure the token pool on Sepolia to be able to bridge to Solana Devnet:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureRemoteChainSVM(string,bool,string)()" < chain > true solana-devnet --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureRemoteChainSVM(string,bool,string)()" < chain > false solana-devnet --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -62,7 +62,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 Run this command to configure the trusted remotes for a bridge on a specific chain:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPBridge.sol --sig "setAllTrustedRemotes(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "setAllTrustedRemotes(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 The `env.json` file specifies the remote chains that are configured for each local chain. The following example would allow for bridging (using the `CCIPCrossChainBridge` contract) from sepolia to solana-devnet. Allowing bridging from solana-devnet to sepolia would require a corresponding entry in the `current.solana-devnet.olympus.config.CCIPCrossChainBridge.chains` key.
@@ -85,15 +85,33 @@ The `env.json` file specifies the remote chains that are configured for each loc
 
 The `setAllTrustedRemotes()` function operates in a declarative manner: it will add any new trusted remotes, update outdated trusted remotes, remove redundant trusted remotes and skip the rest.
 
-## Transfer Ownership of Token Pool
+## Transfer Ownership of Token Administrator Role to DAO MS
 
 The Token Pool ownership then should be transferred to the DAO MS (on production chains):
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRole(string)()" < chain > --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRole(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
+
+## Accept Ownership of Token Administrator Role
+
+The DAO MS must then accept the proposal for it to be the token administrator:
+
+```bash
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+```
+
+Note that the second argument, `true`, will create a batch to be signed by the Safe multi-sig.
+
+## Transfer Ownership of Bridge to DAO MS
+
+The ownership of the bridge must then be transferred to the DAO MS:
+
+```bash
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "transferOwnership(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+```
 
 ## Install and Enable Token Pool
 
