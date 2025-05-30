@@ -2,6 +2,7 @@
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
+import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 
@@ -23,6 +24,8 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
     // TODOs
     // [ ] Add Ledger signer support
+    // [X] Check for --broadcast flag before proposing batch
+    // [X] Simulate batch before proposing
 
     modifier setUp(string calldata chain_, bool useDaoMS_) {
         console2.log("Setting up batch script");
@@ -62,9 +65,39 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _batchData.push(data_);
     }
 
+    function _runBatch() internal {
+        // Iterate over each batch target and execute
+        for (uint256 i; i < _batchTargets.length; i++) {
+            console2.log("  Executing batch target", i);
+            console2.log("  Target", _batchTargets[i]);
+            (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
+
+            // Revert if the call failed
+            // Source: https://ethereum.stackexchange.com/a/150367
+            if (!success) {
+                assembly{
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+        }
+    }
+
     function _proposeMultisigBatch() internal {
         if (_batchTargets.length == 0) {
             console2.log("No batch targets to propose");
+            return;
+        }
+
+        console2.log("\n");
+        console2.log("Simulating execution of batch");
+        vm.startPrank(_owner);
+        _runBatch();
+        vm.stopPrank();
+
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Batch simulation completed");
             return;
         }
 
@@ -93,22 +126,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         vm.startBroadcast();
 
-        // Iterate over each batch target and execute
-        for (uint256 i; i < _batchTargets.length; i++) {
-            console2.log("  Executing batch target", i);
-            console2.log("  Target", _batchTargets[i]);
-            (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
-
-            // Revert if the call failed
-            // Source: https://ethereum.stackexchange.com/a/150367
-            if (!success) {
-                assembly{
-                    let revertStringLength := mload(data)
-                    let revertStringPtr := add(data, 0x20)
-                    revert(revertStringPtr, revertStringLength)
-                }
-            }
-        }
+        _runBatch();
 
         vm.stopBroadcast();
 
