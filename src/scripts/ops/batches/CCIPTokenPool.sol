@@ -12,6 +12,7 @@ import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol"
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {TokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
@@ -79,8 +80,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         address kernel = _envAddressNotZero("olympus.Kernel");
         address tokenPool = _getTokenPoolAddress(chain);
 
-        // Install the TokenPool policy
         if (!_isChainCanonical(chain)) {
+            // Install the TokenPool policy
+            // Assumes that the caller is the kernel executor
             console2.log("Non-Canonical chain: Installing TokenPool policy into Kernel");
             addToBatch(
                 kernel,
@@ -90,11 +92,16 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                     tokenPool
                 )
             );
+
+            // On non-canonical chains (currently), the "admin" role (required for enabling the policy) is set to the DAO MS
+            console2.log("Non-Canonical chain: Enabling TokenPool policy");
+            addToBatch(tokenPool, abi.encodeWithSelector(IPolicyEnabler.enable.selector, ""));
         }
         // Canonical chain has a non-privileged LockReleaseTokenPool contract
         // It cannot facilitate any bridging operations until remote chains are configured
         else {
-            console2.log("Canonical chain: No need to install TokenPool policy into Kernel");
+            console2.log("Canonical chain: No need to install TokenPool contract in Kernel");
+            console2.log("Canonical chain: No need to enable TokenPool contract");
 
             // Set the owner as the rebalancer on the LockReleaseTokenPool
             // Allows for withdrawing OHM from the LockReleaseTokenPool
@@ -105,7 +112,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                     _envAddressNotZero("olympus.multisig.dao")
                 )
             );
-            console2.log("Set the owner as the rebalancer of the LockReleaseTokenPool");
+            console2.log(
+                "Canonical chain: Set the owner as the rebalancer of the LockReleaseTokenPool"
+            );
         }
 
         // Run
