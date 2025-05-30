@@ -44,11 +44,31 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         return TokenAdminRegistry(tokenRegistry).getTokenConfig(token);
     }
 
+    /// @notice Default rate limiter config for a TokenPool
+    /// @dev    The rate limiter is disabled by default, hence there is no rate limit
+    function _getRateLimiterConfigDefault() internal pure returns (RateLimiter.Config memory) {
+        return RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0});
+    }
+
+    /// @notice Rate limiter config for emergency shutdown
+    /// @dev    The rate limiter is enabled, with a very low capacity, which means the bridge is effectively disabled
+    function _getRateLimiterConfigEmergencyShutdown()
+        internal
+        pure
+        returns (RateLimiter.Config memory)
+    {
+        return RateLimiter.Config({isEnabled: true, capacity: 2, rate: 1});
+    }
+
     // TODOs
     // [ ] Declarative configuration of a token pool
     // [X] Set the owner as the rebalancer of the lock release token pool
-    // [ ] Add emergency disable/enable
+    // [X] Add emergency disable/enable
 
+    /// @notice Performs installation and initial configuration of the TokenPool
+    /// @dev    On a non-canonical chain: the TokenPool is activated in the Kernel
+    ///         On a canonical chain: the TokenPool is a periphery contract and
+    ///         does not need activation. The rebalancer is set to the DAO multisig.
     function install(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
         // Assumptions
         // - The token pool has been linked to OHM in the CCIP token admin registry
@@ -124,7 +144,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    /// @notice Sets the pool for the OHM token
+    /// @notice Sets the token pool for the OHM token
     function setPool(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
@@ -150,24 +170,24 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    function transferTokenPoolAdminRole(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    /// @notice Transfers the admin role for the OHM token to the DAO multisig
+    function transferTokenPoolAdminRoleToDaoMS(
+        string calldata chain_
+    ) external setUp(chain_, false) {
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
-        address newOwner = _envAddressNotZero("olympus.multisig.dao");
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
         // Check if the admin role is already transferred
-        if (_getTokenAdminRegistryConfig().administrator == newOwner) {
-            console2.log("Admin role already transferred to", newOwner, ". Skipping.");
+        if (_getTokenAdminRegistryConfig().administrator == daoMS) {
+            console2.log("Admin role already transferred to", daoMS, ". Skipping.");
             return;
         }
 
-        console2.log("Transferring admin role for", token, "to", newOwner);
+        console2.log("Transferring admin role for", token, "to", daoMS);
         addToBatch(
             tokenRegistry,
-            abi.encodeWithSelector(ITokenAdminRegistry.transferAdminRole.selector, token, newOwner)
+            abi.encodeWithSelector(ITokenAdminRegistry.transferAdminRole.selector, token, daoMS)
         );
 
         // Run
@@ -179,6 +199,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         // - DAO MS must accept the admin role
     }
 
+    /// @notice Configures the TokenPool to add support for the specified EVM remote chain
     function configureRemoteChainEVM(
         string calldata chain_,
         bool useDaoMS_,
@@ -198,8 +219,8 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             remoteChainSelector: remoteChainSelector,
             remotePoolAddresses: remotePoolAddresses,
             remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
-            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0}),
-            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0})
+            outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
+            inboundRateLimiterConfig: _getRateLimiterConfigDefault()
         });
         TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
         chainUpdates[0] = chainUpdate;
@@ -221,7 +242,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    /// @dev temp function. Finalise the declarative configurator before production.
+    /// @notice Configures the TokenPool to add support for the specified SVM remote chain
     function configureRemoteChainSVM(
         string calldata chain_,
         bool useDaoMS_,
@@ -245,8 +266,8 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             remoteChainSelector: remoteChainSelector,
             remotePoolAddresses: remotePoolAddresses,
             remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
-            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0}),
-            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0})
+            outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
+            inboundRateLimiterConfig: _getRateLimiterConfigDefault()
         });
         TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
         chainUpdates[0] = chainUpdate;
@@ -261,6 +282,68 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                 chainUpdates
             )
         );
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    // ===== EMERGENCY SHUTDOWN ===== //
+
+    function _emergencyShutdown(uint64 remoteChainSelector_) internal {
+        address tokenPoolAddress = _getTokenPoolAddress(chain);
+
+        // Set the rate limiter config to emergency shutdown
+        console2.log(
+            "Setting rate limiter config to emergency shutdown for remote chain selector",
+            remoteChainSelector_,
+            "and token pool",
+            tokenPoolAddress
+        );
+        addToBatch(
+            tokenPoolAddress,
+            abi.encodeWithSelector(
+                TokenPool.setChainRateLimiterConfig.selector,
+                remoteChainSelector_,
+                _getRateLimiterConfigEmergencyShutdown(),
+                _getRateLimiterConfigEmergencyShutdown()
+            )
+        );
+    }
+
+    /// @notice Performs an emergency shutdown of the TokenPool for a specific remote chain by enabling the rate limiter with a very low capacity
+    /// @dev    To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
+    function emergencyShutdown(
+        string calldata chain_,
+        bool useDaoMS_,
+        string calldata remoteChain_
+    ) external setUp(chain_, useDaoMS_) {
+        uint64 remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+        );
+
+        _emergencyShutdown(remoteChainSelector);
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    /// @notice Performs an emergency shutdown of the TokenPool for all remote chains by enabling the rate limiter with a very low capacity
+    /// @dev    To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
+    function emergencyShutdownAll(
+        string calldata chain_,
+        bool useDaoMS_
+    ) external setUp(chain_, useDaoMS_) {
+        // Determine the remote chains that are configured
+        uint64[] memory remoteChainSelectors = TokenPool(_getTokenPoolAddress(chain))
+            .getSupportedChains();
+
+        for (uint256 i = 0; i < remoteChainSelectors.length; i++) {
+            _emergencyShutdown(remoteChainSelectors[i]);
+        }
 
         // Run
         proposeBatch();

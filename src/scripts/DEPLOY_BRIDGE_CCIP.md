@@ -90,7 +90,7 @@ The `setAllTrustedRemotes()` function operates in a declarative manner: it will 
 The Token Pool ownership then should be transferred to the DAO MS (on production chains):
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRole(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRoleToDaoMS(string)()" < chain > --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
