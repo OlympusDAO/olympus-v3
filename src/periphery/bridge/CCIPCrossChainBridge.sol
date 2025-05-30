@@ -344,9 +344,12 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
         // Validate that the sender is a trusted remote
         // This will be the sending bridge contract, as it is set in the OnRamp.forwardFromRouter() function
+        // Be pessimistic and ensure the sender is set (otherwise the trusted remote check will not revert)
         address sourceBridge = abi.decode(message_.sender, (address));
-        if (sourceBridge != _trustedRemoteEVM[message_.sourceChainSelector])
-            revert Bridge_SourceNotTrusted();
+        if (
+            sourceBridge == address(0) ||
+            sourceBridge != _trustedRemoteEVM[message_.sourceChainSelector]
+        ) revert Bridge_SourceNotTrusted();
 
         // There should only be a single token and amount specified in the message
         if (message_.destTokenAmounts.length != 1) revert Bridge_InvalidPayloadTokensLength();

@@ -733,7 +733,9 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it reverts
     // given the contract is not enabled
     //  [X] it reverts
-    // given the source bridge is not trusted
+    // given the source bridge/sender is not trusted
+    //  [X] it reverts
+    // given the source bridge/sender is the zero address
     //  [X] it reverts
     // when the message has multiple tokens
     //  [X] it reverts
@@ -786,8 +788,39 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.receiveMessage(message);
     }
 
-    function test_receiveMessage_sourceBridgeNotTrusted_reverts() public givenContractIsEnabled {
+    function test_receiveMessage_senderNotTrusted_reverts() public givenContractIsEnabled {
         Client.Any2EVMMessage memory message = _getAnyToEVMMessage();
+
+        // Expect revert
+        vm.expectRevert(ICCIPCrossChainBridge.Bridge_SourceNotTrusted.selector);
+
+        // Call function
+        vm.prank(address(bridge));
+        bridge.receiveMessage(message);
+    }
+
+    function test_receiveMessage_senderZeroAddress_trustedRemoteNotSet_reverts()
+        public
+        givenContractIsEnabled
+    {
+        Client.Any2EVMMessage memory message = _getAnyToEVMMessage();
+        message.sender = abi.encode(address(0));
+
+        // Expect revert
+        vm.expectRevert(ICCIPCrossChainBridge.Bridge_SourceNotTrusted.selector);
+
+        // Call function
+        vm.prank(address(bridge));
+        bridge.receiveMessage(message);
+    }
+
+    function test_receiveMessage_senderZeroAddress_reverts()
+        public
+        givenContractIsEnabled
+        givenSourceEVMChainHasTrustedRemote
+    {
+        Client.Any2EVMMessage memory message = _getAnyToEVMMessage();
+        message.sender = abi.encode(address(0));
 
         // Expect revert
         vm.expectRevert(ICCIPCrossChainBridge.Bridge_SourceNotTrusted.selector);
