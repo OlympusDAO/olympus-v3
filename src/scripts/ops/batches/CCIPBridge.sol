@@ -33,6 +33,20 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         proposeBatch();
     }
 
+    /// @notice Disables the bridge for the specified chain
+    function disable(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
+        // Set the bridge to disabled
+        console2.log("\n");
+        console2.log("Disabling bridge for", chain_);
+        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        addToBatch(bridgeAddress, abi.encodeWithSelector(IEnabler.disable.selector, ""));
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
     /// @notice Sets the trusted remote for an EVM chain
     /// @dev    Handles the following scenarios:
     ///         - No bridge for the local chain: skips

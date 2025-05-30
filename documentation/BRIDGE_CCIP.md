@@ -1,13 +1,26 @@
-# CCIP Bridge
+# CCIP Bridging Infrastructure
 
-This document contains instructions on how to deploy and configure a CCIP Bridge for the Olympus protocol.
+This document contains instructions on how to deploy and configure bridging infrastructure using CCIP for the Olympus protocol.
 
 ## Pre-requisites
 
 - Chainlink must have proposed the deployer address as the admin for the OHM token on the respective chain.
-- `cast` must be set up with your deployer wallet.
+- `cast` must be set up with your wallet.
 - `.env.< chain >` with the required values.
 - The DAO MS address filled in `env.json`: `< chain >.olympus.multisig.dao`
+
+## Definitions
+
+- Canonical Chain: the main chain on which the Olympus protocol operates, and new OHM supply is minted. Currently, this is `mainnet` (production) and `sepolia` (testnet).
+- Non-Canonical Chain: all chains other than the canonical chain.
+
+## Concepts
+
+- Token Pool: a contract owned/controlled by the protocol that is responsible for burning/locking OHM when bridging out and minting/releasing OHM when bridging in. The specific type of Token Pool depends on whether the chain is canonical or not.
+- Bridge: in particular, `CCIPCrossChainBridge`, is a convenience contract that makes it easy to bridge from an EVM chain to another chain (including SVM). It provides the following features:
+    - Fee calculation in the native token
+    - CCIP message construction
+    - When receiving on an EVM chain: failure handling and retry functionality
 
 ## Deployment
 
@@ -27,7 +40,9 @@ This will simulate the deployment.
 
 Flip the `--broadcast` and `--verify` flags to true in order to perform the deployments and verify the contracts.
 
-## Admin Role
+## Configuration
+
+### Admin Role
 
 The deployer wallet must temporarily accept the admin role in order to configure the pool:
 
@@ -37,7 +52,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(st
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
 
-## Linking Token Pool
+### Linking Token Pool
 
 Link the OHM token on a chain with a token pool:
 
@@ -47,7 +62,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "setPool(string,boo
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
 
-## Configuring Token Pool
+### Configuring Token Pool
 
 This particular script will configure the token pool on Sepolia to be able to bridge to Solana Devnet:
 
@@ -57,7 +72,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureRemoteCha
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
 
-## Configuring Token Bridge
+### Configuring Token Bridge
 
 Run this command to configure the trusted remotes for a bridge on a specific chain:
 
@@ -85,7 +100,7 @@ The `env.json` file specifies the remote chains that are configured for each loc
 
 The `setAllTrustedRemotes()` function operates in a declarative manner: it will add any new trusted remotes, update outdated trusted remotes, remove redundant trusted remotes and skip the rest.
 
-## Transfer Ownership of Token Administrator Role to DAO MS
+### Transfer Ownership of Token Administrator Role to DAO MS
 
 The Token Pool ownership then should be transferred to the DAO MS (on production chains):
 
@@ -95,7 +110,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolA
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
 
-## Accept Ownership of Token Administrator Role
+### Accept Ownership of Token Administrator Role
 
 The DAO MS must then accept the proposal for it to be the token administrator:
 
@@ -105,7 +120,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(st
 
 Note that the second argument, `true`, will create a batch to be signed by the Safe multi-sig.
 
-## Transfer Ownership of Bridge to DAO MS
+### Transfer Ownership of Bridge to DAO MS
 
 The ownership of the bridge must then be transferred to the DAO MS:
 
@@ -113,7 +128,7 @@ The ownership of the bridge must then be transferred to the DAO MS:
 forge script src/scripts/ops/batches/CCIPBridge.sol --sig "transferOwnership(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
-## Install and Enable Token Pool
+### Install and Enable Token Pool
 
 ```bash
 forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "install(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
@@ -121,7 +136,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "install(string,boo
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
 
-## Enable Bridge
+### Enable Bridge
 
 ```bash
 forge script src/scripts/ops/batches/CCIPBridge.sol --sig "enable(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
@@ -138,3 +153,49 @@ For EVM -> EVM, use the `./shell/bridge_ccip_to_evm.sh`.
 For EVM -> SVM, use the `./shell/bridge_ccip_to_svm.sh`.
 
 For SVM -> EVM, follow the [SVM tutorial](https://docs.chain.link/ccip/tutorials/svm/source).
+
+## Adding New Chains
+
+TODO
+
+## Emergency Shutdown
+
+This section provides details on how to shut down the bridging infrastructure in an emergency.
+
+### Token Pool - Canonical Chain
+
+The Token Pool on the canonical chain is a `LockReleaseTokenPool`, which custodies the OHM that has been bridged from the canonical chain and establishes an upper limit for the OHM that can be bridged back.
+
+In a scenario where the aim is to prevent bridging from other chains to the canonical chain (e.g. an infinite mint bug), this can be achieved by withdrawing the OHM custodied in the contract.
+
+```bash
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "withdrawAllLiquidity(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+```
+
+This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
+
+### Token Pool - All Chains
+
+On a given chain, the Token Pool can be shut down by enabling the rate limiter and setting the capacity to be very low (e.g. 2 wei).
+
+If the aim is to disable bridging to and from a particular chain, this function can be used:
+
+```bash
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdown(string,bool,string)()" < chain > true < remote chain > --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+```
+
+If the aim is to disable bridging to and from all chains, this function can be used:
+
+```bash
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdownAll(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+```
+
+### Bridge
+
+This function will disable the CCIPCrossChainBridge contract:
+
+```bash
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "disable(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+```
+
+Any messages received by the contract while disabled will be marked as a failure and can be retried at a later date.

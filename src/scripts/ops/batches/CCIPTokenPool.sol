@@ -11,6 +11,7 @@ import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {TokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
@@ -344,6 +345,63 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         for (uint256 i = 0; i < remoteChainSelectors.length; i++) {
             _emergencyShutdown(remoteChainSelectors[i]);
         }
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    function _withdrawLiquidity(uint256 liquidity_) internal {
+        // Validate that the chain is canonical
+        if (!_isChainCanonical(chain)) {
+            // solhint-disable-next-line gas-custom-errors
+            revert(
+                "Withdrawing liquidity is only supported on the LockReleaseTokenPool on canonical chains"
+            );
+        }
+
+        address tokenPoolAddress = _getTokenPoolAddress(chain);
+
+        // Withdraw liquidity
+        console2.log(
+            "Withdrawing liquidity of",
+            liquidity_,
+            "OHM from token pool",
+            tokenPoolAddress
+        );
+        addToBatch(
+            tokenPoolAddress,
+            abi.encodeWithSelector(LockReleaseTokenPool.withdrawLiquidity.selector, liquidity_)
+        );
+    }
+
+    /// @notice Withdraws the total balance of OHM from a LockReleaseTokenPool
+    /// @dev    This function can only be called on canonical chains
+    function withdrawAllLiquidity(
+        string calldata chain_,
+        bool useDaoMS_
+    ) external setUp(chain_, useDaoMS_) {
+        uint256 liquidity = IERC20(_getTokenPoolAddress(chain)).balanceOf(_owner);
+
+        // Withdraw liquidity
+        _withdrawLiquidity(liquidity);
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    /// @notice Withdraws a specific amount of OHM from a LockReleaseTokenPool
+    /// @dev    This function can only be called on canonical chains
+    function withdrawLiquidity(
+        string calldata chain_,
+        bool useDaoMS_,
+        uint256 amount_
+    ) external setUp(chain_, useDaoMS_) {
+        // Withdraw liquidity
+        _withdrawLiquidity(amount_);
 
         // Run
         proposeBatch();
