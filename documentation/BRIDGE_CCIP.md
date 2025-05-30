@@ -1,4 +1,4 @@
-# Deploying a CCIP Bridge
+# CCIP Bridge
 
 This document contains instructions on how to deploy and configure a CCIP Bridge for the Olympus protocol.
 
