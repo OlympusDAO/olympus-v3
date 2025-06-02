@@ -235,6 +235,28 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
         chainUpdates[0] = chainUpdate;
 
+        // If the remote chain is already configured, remove it
+        if (TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector)) {
+            console2.log(
+                "Removing remote chain",
+                remoteChain_,
+                "from token pool",
+                tokenPoolAddress
+            );
+
+            uint64[] memory remoteChainSelectors = new uint64[](1);
+            remoteChainSelectors[0] = remoteChainSelector;
+
+            addToBatch(
+                tokenPoolAddress,
+                abi.encodeWithSelector(
+                    TokenPool.applyChainUpdates.selector,
+                    remoteChainSelectors,
+                    new TokenPool.ChainUpdate[](0)
+                )
+            );
+        }
+
         // Apply the chain update
         console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
         addToBatch(
@@ -281,6 +303,28 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         });
         TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
         chainUpdates[0] = chainUpdate;
+
+        // If the remote chain is already configured, remove it
+        if (TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector)) {
+            console2.log(
+                "Removing remote chain",
+                remoteChain_,
+                "from token pool",
+                tokenPoolAddress
+            );
+
+            uint64[] memory remoteChainSelectors = new uint64[](1);
+            remoteChainSelectors[0] = remoteChainSelector;
+
+            addToBatch(
+                tokenPoolAddress,
+                abi.encodeWithSelector(
+                    TokenPool.applyChainUpdates.selector,
+                    remoteChainSelectors,
+                    new TokenPool.ChainUpdate[](0)
+                )
+            );
+        }
 
         // Apply the chain update
         console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
