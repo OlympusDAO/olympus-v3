@@ -223,12 +223,12 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         );
 
         bytes[] memory remotePoolAddresses = new bytes[](1);
-        remotePoolAddresses[0] = abi.encodePacked(remotePoolAddress);
+        remotePoolAddresses[0] = abi.encode(remotePoolAddress);
 
         TokenPool.ChainUpdate memory chainUpdate = TokenPool.ChainUpdate({
             remoteChainSelector: remoteChainSelector,
             remotePoolAddresses: remotePoolAddresses,
-            remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
+            remoteTokenAddress: abi.encode(remoteTokenAddress),
             outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
             inboundRateLimiterConfig: _getRateLimiterConfigDefault()
         });
