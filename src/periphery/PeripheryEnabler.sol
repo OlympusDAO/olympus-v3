@@ -88,4 +88,10 @@ abstract contract PeripheryEnabler is IEnabler {
         // Emit the disabled event
         emit Disabled();
     }
+
+    // ========= ERC165 ========= //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+        return interfaceId == type(IEnabler).interfaceId;
+    }
 }
