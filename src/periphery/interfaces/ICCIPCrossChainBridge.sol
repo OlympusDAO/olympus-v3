@@ -57,6 +57,8 @@ interface ICCIPCrossChainBridge {
 
     event TrustedRemoteSVMUnset(uint64 indexed dstChainSelector);
 
+    event GasLimitSet(uint64 indexed dstChainSelector, uint32 gasLimit);
+
     event MessageFailed(bytes32 messageId);
 
     event RetryMessageSuccess(bytes32 messageId);
@@ -180,6 +182,21 @@ interface ICCIPCrossChainBridge {
     ///
     /// @return to_                The destination address
     function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (bytes32);
+
+    // ========= GAS LIMITS ========= //
+
+    /// @notice Sets the gas limit for the specified destination chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    /// @param gasLimit_            The gas limit
+    function setGasLimit(uint64 dstChainSelector_, uint32 gasLimit_) external;
+
+    /// @notice Gets the gas limit for the specified destination chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    ///
+    /// @return gasLimit_           The gas limit, or 0 if not set
+    function getGasLimit(uint64 dstChainSelector_) external view returns (uint32);
 
     // ========= CONFIGURATION ========= //
 

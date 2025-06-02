@@ -53,12 +53,9 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     /// @dev    When a message fails to receive, it is stored here to allow for retries.
     mapping(bytes32 => Client.Any2EVMMessage) internal _failedMessages;
 
-    // ========= CONSTANTS ========= //
-
-    uint32 internal constant _SVM_DEFAULT_COMPUTE_UNITS = 0;
-
-    /// @dev This is non-zero to allow for message handling by the bridge contract on the destination chain
-    uint32 internal constant _DEFAULT_GAS_LIMIT = 200_000;
+    /// @notice Mapping of destination chain selectors to gas limits
+    /// @dev    When sending, this is used to determine the gas limit for the message.
+    mapping(uint64 => uint32) internal _gasLimits;
 
     // ========= CONSTRUCTOR ========= //
 
@@ -100,11 +97,14 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
             });
     }
 
-    function _getSVMExtraArgs(bytes32 to_) internal pure returns (bytes memory) {
+    function _getSVMExtraArgs(
+        uint64 dstChainSelector_,
+        bytes32 to_
+    ) internal view returns (bytes memory) {
         return
             Client._svmArgsToBytes(
                 Client.SVMExtraArgsV1({
-                    computeUnits: _SVM_DEFAULT_COMPUTE_UNITS,
+                    computeUnits: _gasLimits[dstChainSelector_],
                     accountIsWritableBitmap: 0,
                     allowOutOfOrderExecution: true,
                     tokenReceiver: to_,
@@ -113,11 +113,11 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
             );
     }
 
-    function _getEVMExtraArgs() internal pure returns (bytes memory) {
+    function _getEVMExtraArgs(uint64 dstChainSelector_) internal view returns (bytes memory) {
         return
             Client._argsToBytes(
                 Client.GenericExtraArgsV2({
-                    gasLimit: _DEFAULT_GAS_LIMIT,
+                    gasLimit: _gasLimits[dstChainSelector_],
                     allowOutOfOrderExecution: true
                 })
             );
@@ -139,7 +139,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         // Data contains the actual recipient address
         data = abi.encode(to_);
         // Extra args
-        extraArgs = _getEVMExtraArgs();
+        extraArgs = _getEVMExtraArgs(dstChainSelector_);
 
         return (recipient, data, extraArgs);
     }
@@ -159,7 +159,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         // Data is empty
         data = "";
         // Extra args
-        extraArgs = _getSVMExtraArgs(to_);
+        extraArgs = _getSVMExtraArgs(dstChainSelector_, to_);
         return (recipient, data, extraArgs);
     }
 
@@ -256,6 +256,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
+    /// @dev        Unless specified for the chain through `setGasLimit()`, the gas limit will be 0
     function sendToSVM(
         uint64 dstChainSelector_,
         bytes32 to_,
@@ -273,6 +274,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
+    /// @dev        Unless specified for the chain through `setGasLimit()`, the gas limit will be 0
     function sendToEVM(
         uint64 dstChainSelector_,
         address to_,
@@ -489,6 +491,19 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         if (!trustedRemote.isSet) revert Bridge_TrustedRemoteNotSet();
 
         return trustedRemote.remoteAddress;
+    }
+
+    // ========= GAS LIMITS ========= //
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function setGasLimit(uint64 dstChainSelector_, uint32 gasLimit_) external onlyOwner {
+        _gasLimits[dstChainSelector_] = gasLimit_;
+        emit GasLimitSet(dstChainSelector_, gasLimit_);
+    }
+
+    /// @inheritdoc ICCIPCrossChainBridge
+    function getGasLimit(uint64 dstChainSelector_) external view returns (uint32) {
+        return _gasLimits[dstChainSelector_];
     }
 
     // ========= CONFIGURATION ========= //
