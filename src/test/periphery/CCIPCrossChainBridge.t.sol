@@ -170,6 +170,22 @@ contract CCIPCrossChainBridgeTest is Test {
         vm.expectRevert(ICCIPCrossChainBridge.Bridge_TrustedRemoteNotSet.selector);
     }
 
+    function _assertEVMRemoteNotSet() public {
+        ICCIPCrossChainBridge.TrustedRemoteEVM memory evmRemote = bridge.getTrustedRemoteEVM(
+            DESTINATION_CHAIN_SELECTOR
+        );
+        assertEq(evmRemote.remoteAddress, address(0), "trustedRemoteEVM");
+        assertEq(evmRemote.isSet, false, "evmIsSet");
+    }
+
+    function _assertSVMRemoteNotSet() public {
+        ICCIPCrossChainBridge.TrustedRemoteSVM memory svmRemote = bridge.getTrustedRemoteSVM(
+            DESTINATION_CHAIN_SELECTOR
+        );
+        assertEq(svmRemote.remoteAddress, bytes32(0), "svmAddress");
+        assertEq(svmRemote.isSet, false, "svmIsSet");
+    }
+
     // ============ TESTS ============ //
 
     // constructor
@@ -1334,15 +1350,13 @@ contract CCIPCrossChainBridgeTest is Test {
         _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, address(0));
 
         // Assert state
-        assertEq(
-            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
-            address(0),
-            "trustedRemoteEVM"
+        ICCIPCrossChainBridge.TrustedRemoteEVM memory evmRemote = bridge.getTrustedRemoteEVM(
+            DESTINATION_CHAIN_SELECTOR
         );
+        assertEq(evmRemote.remoteAddress, address(0), "trustedRemoteEVM");
+        assertEq(evmRemote.isSet, true, "evmIsSet");
 
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _assertSVMRemoteNotSet();
     }
 
     function test_setTrustedRemoteEVM(address trustedRemote_) public {
@@ -1354,15 +1368,13 @@ contract CCIPCrossChainBridgeTest is Test {
         _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, trustedRemote_);
 
         // Assert state
-        assertEq(
-            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
-            trustedRemote_,
-            "trustedRemoteEVM"
+        ICCIPCrossChainBridge.TrustedRemoteEVM memory evmRemote = bridge.getTrustedRemoteEVM(
+            DESTINATION_CHAIN_SELECTOR
         );
+        assertEq(evmRemote.remoteAddress, trustedRemote_, "trustedRemoteEVM");
+        assertEq(evmRemote.isSet, true, "evmIsSet");
 
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _assertSVMRemoteNotSet();
     }
 
     // unsetTrustedRemoteEVM
@@ -1410,8 +1422,9 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.unsetTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
 
         // Assert state
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+        _assertEVMRemoteNotSet();
+
+        _assertSVMRemoteNotSet();
     }
 
     function test_unsetTrustedRemoteEVM() public givenDestinationEVMChainHasTrustedRemote {
@@ -1424,37 +1437,32 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.unsetTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
 
         // Assert state
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+        _assertEVMRemoteNotSet();
+
+        _assertSVMRemoteNotSet();
     }
 
     // getTrustedRemoteEVM
     // when the destination chain selector is not set
-    //  [X] it reverts
+    //  [X] it returns the zero address and false
     // when the destination chain selector has been unset
-    //  [X] it reverts
+    //  [X] it returns the zero address and false
     // when the trusted remote is set to the zero address
     //  [X] it returns the zero address for the destination chain
     // [X] it returns the trusted remote for the destination chain
 
-    function test_getTrustedRemoteEVM_destinationChainNotSet_reverts() public {
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
-
+    function test_getTrustedRemoteEVM_destinationChainNotSet() public {
         // Call function
-        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+        _assertEVMRemoteNotSet();
     }
 
-    function test_getTrustedRemoteEVM_destinationChainUnset_reverts()
+    function test_getTrustedRemoteEVM_destinationChainUnset()
         public
         givenSourceEVMChainHasTrustedRemote
         givenSourceEVMChainHasTrustedRemoteUnset
     {
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
-
         // Call function
-        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+        _assertEVMRemoteNotSet();
     }
 
     function test_getTrustedRemoteEVM_zeroAddress() public {
@@ -1462,20 +1470,20 @@ contract CCIPCrossChainBridgeTest is Test {
         _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, address(0));
 
         // Call function
-        assertEq(
-            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
-            address(0),
-            "trustedRemoteEVM"
+        ICCIPCrossChainBridge.TrustedRemoteEVM memory evmRemote = bridge.getTrustedRemoteEVM(
+            DESTINATION_CHAIN_SELECTOR
         );
+        assertEq(evmRemote.remoteAddress, address(0), "trustedRemoteEVM");
+        assertEq(evmRemote.isSet, true, "evmIsSet");
     }
 
     function test_getTrustedRemoteEVM() public givenDestinationEVMChainHasTrustedRemote {
         // Call function
-        assertEq(
-            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
-            EVM_TRUSTED_REMOTE,
-            "trustedRemoteEVM"
+        ICCIPCrossChainBridge.TrustedRemoteEVM memory evmRemote = bridge.getTrustedRemoteEVM(
+            DESTINATION_CHAIN_SELECTOR
         );
+        assertEq(evmRemote.remoteAddress, EVM_TRUSTED_REMOTE, "trustedRemoteEVM");
+        assertEq(evmRemote.isSet, true, "evmIsSet");
     }
 
     // setTrustedRemoteSVM
@@ -1505,15 +1513,13 @@ contract CCIPCrossChainBridgeTest is Test {
         _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, bytes32(0));
 
         // Assert state
-        assertEq(
-            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
-            bytes32(0),
-            "trustedRemoteSVM"
-        );
+        _assertEVMRemoteNotSet();
 
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+        ICCIPCrossChainBridge.TrustedRemoteSVM memory svmRemote = bridge.getTrustedRemoteSVM(
+            DESTINATION_CHAIN_SELECTOR
+        );
+        assertEq(svmRemote.remoteAddress, bytes32(0), "svmAddress");
+        assertEq(svmRemote.isSet, true, "svmIsSet");
     }
 
     function test_setTrustedRemoteSVM(bytes32 trustedRemote_) public {
@@ -1525,15 +1531,13 @@ contract CCIPCrossChainBridgeTest is Test {
         _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, trustedRemote_);
 
         // Assert state
-        assertEq(
-            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
-            trustedRemote_,
-            "trustedRemoteSVM"
-        );
+        _assertEVMRemoteNotSet();
 
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+        ICCIPCrossChainBridge.TrustedRemoteSVM memory svmRemote = bridge.getTrustedRemoteSVM(
+            DESTINATION_CHAIN_SELECTOR
+        );
+        assertEq(svmRemote.remoteAddress, trustedRemote_, "svmAddress");
+        assertEq(svmRemote.isSet, true, "svmIsSet");
     }
 
     // unsetTrustedRemoteSVM
@@ -1581,8 +1585,9 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
 
         // Assert state
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _assertEVMRemoteNotSet();
+
+        _assertSVMRemoteNotSet();
     }
 
     function test_unsetTrustedRemoteSVM() public givenDestinationSVMChainHasTrustedRemote {
@@ -1595,8 +1600,9 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
 
         // Assert state
-        _expectRevertTrustedRemoteNotSet();
-        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _assertEVMRemoteNotSet();
+
+        _assertSVMRemoteNotSet();
     }
 
     // getTrustedRemoteSVM
@@ -1608,24 +1614,22 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it returns the zero address for the destination chain
     // [X] it returns the trusted remote for the destination chain
 
-    function test_getTrustedRemoteSVM_destinationChainNotSet_reverts() public {
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
+    function test_getTrustedRemoteSVM_destinationChainNotSet() public {
+        // Assert state
+        _assertEVMRemoteNotSet();
 
-        // Call function
-        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _assertSVMRemoteNotSet();
     }
 
-    function test_getTrustedRemoteSVM_destinationChainUnset_reverts()
+    function test_getTrustedRemoteSVM_destinationChainUnset()
         public
         givenDestinationSVMChainHasTrustedRemote
         givenDestinationSVMChainHasTrustedRemoteUnset
     {
-        // Expect revert
-        _expectRevertTrustedRemoteNotSet();
+        // Assert state
+        _assertEVMRemoteNotSet();
 
-        // Call function
-        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _assertSVMRemoteNotSet();
     }
 
     function test_getTrustedRemoteSVM_zeroAddress() public {
@@ -1633,19 +1637,19 @@ contract CCIPCrossChainBridgeTest is Test {
         _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, bytes32(0));
 
         // Call function
-        assertEq(
-            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
-            bytes32(0),
-            "trustedRemoteSVM"
+        ICCIPCrossChainBridge.TrustedRemoteSVM memory svmRemote = bridge.getTrustedRemoteSVM(
+            DESTINATION_CHAIN_SELECTOR
         );
+        assertEq(svmRemote.remoteAddress, bytes32(0), "svmAddress");
+        assertEq(svmRemote.isSet, true, "svmIsSet");
     }
 
     function test_getTrustedRemoteSVM() public givenDestinationSVMChainHasTrustedRemote {
         // Call function
-        assertEq(
-            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
-            SVM_TRUSTED_REMOTE,
-            "trustedRemoteSVM"
+        ICCIPCrossChainBridge.TrustedRemoteSVM memory svmRemote = bridge.getTrustedRemoteSVM(
+            DESTINATION_CHAIN_SELECTOR
         );
+        assertEq(svmRemote.remoteAddress, SVM_TRUSTED_REMOTE, "svmAddress");
+        assertEq(svmRemote.isSet, true, "svmIsSet");
     }
 }

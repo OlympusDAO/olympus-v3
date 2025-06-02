@@ -61,6 +61,18 @@ interface ICCIPCrossChainBridge {
 
     event RetryMessageSuccess(bytes32 messageId);
 
+    // ========= DATA STRUCTURES ========= //
+
+    struct TrustedRemoteEVM {
+        address remoteAddress;
+        bool isSet;
+    }
+
+    struct TrustedRemoteSVM {
+        bytes32 remoteAddress;
+        bool isSet;
+    }
+
     // ========= SEND OHM ========= //
 
     /// @notice Gets the fee for sending OHM to the specified destination SVM chain
@@ -159,7 +171,9 @@ interface ICCIPCrossChainBridge {
     ///
     /// @param dstChainSelector_    The destination chain selector
     /// @return to_                The destination address
-    function getTrustedRemoteEVM(uint64 dstChainSelector_) external view returns (address);
+    function getTrustedRemoteEVM(
+        uint64 dstChainSelector_
+    ) external view returns (TrustedRemoteEVM memory);
 
     /// @notice Sets the trusted remote for the specified destination SVM chain
     /// @dev    This is needed to send/receive messages to/from the specified destination SVM chain
@@ -179,7 +193,9 @@ interface ICCIPCrossChainBridge {
     /// @param dstChainSelector_    The destination chain selector
     ///
     /// @return to_                The destination address
-    function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (bytes32);
+    function getTrustedRemoteSVM(
+        uint64 dstChainSelector_
+    ) external view returns (TrustedRemoteSVM memory);
 
     // ========= CONFIGURATION ========= //
 

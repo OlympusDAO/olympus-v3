@@ -21,18 +21,6 @@ import {CCIPReceiver} from "@chainlink-ccip-1.6.0/ccip/applications/CCIPReceiver
 ///
 ///         The contract is designed to be an intermediary when receiving OHM, so that failed messages can be retried.
 contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCrossChainBridge {
-    // ========= DATA STRUCTURES ========= //
-
-    struct TrustedRemoteSVM {
-        bytes32 remoteAddress;
-        bool isSet;
-    }
-
-    struct TrustedRemoteEVM {
-        address remoteAddress;
-        bool isSet;
-    }
-
     // ========= STATE VARIABLES ========= //
 
     IERC20 public immutable OHM;
@@ -459,11 +447,8 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @inheritdoc ICCIPCrossChainBridge
     /// @dev        This function will revert if the trusted remote is not set
-    function getTrustedRemoteEVM(uint64 dstChainSelector_) external view returns (address) {
-        TrustedRemoteEVM memory trustedRemote = _trustedRemoteEVM[dstChainSelector_];
-        if (!trustedRemote.isSet) revert Bridge_TrustedRemoteNotSet();
-
-        return trustedRemote.remoteAddress;
+    function getTrustedRemoteEVM(uint64 dstChainSelector_) external view returns (TrustedRemoteEVM memory) {
+        return _trustedRemoteEVM[dstChainSelector_];
     }
 
     /// @inheritdoc ICCIPCrossChainBridge
@@ -484,11 +469,8 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @inheritdoc ICCIPCrossChainBridge
     /// @dev        This function will revert if the trusted remote is not set
-    function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (bytes32) {
-        TrustedRemoteSVM memory trustedRemote = _trustedRemoteSVM[dstChainSelector_];
-        if (!trustedRemote.isSet) revert Bridge_TrustedRemoteNotSet();
-
-        return trustedRemote.remoteAddress;
+    function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (TrustedRemoteSVM memory) {
+        return _trustedRemoteSVM[dstChainSelector_];
     }
 
     // ========= CONFIGURATION ========= //
