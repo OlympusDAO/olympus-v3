@@ -29,9 +29,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     function _getTokenPoolAddress(string memory chain_) internal view returns (address) {
         if (_isChainCanonical(chain_)) {
-            return _envAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool");
+            return _envAddressNotZero(chain_, "olympus.periphery.CCIPLockReleaseTokenPool");
         } else {
-            return _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+            return _envAddressNotZero(chain_, "olympus.policies.CCIPBurnMintTokenPool");
         }
     }
 
