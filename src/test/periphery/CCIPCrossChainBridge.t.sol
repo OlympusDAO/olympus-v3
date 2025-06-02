@@ -42,7 +42,11 @@ contract CCIPCrossChainBridgeTest is Test {
 
     event TrustedRemoteEVMSet(uint64 indexed dstChainSelector, address indexed to);
 
+    event TrustedRemoteEVMUnset(uint64 indexed dstChainSelector);
+
     event TrustedRemoteSVMSet(uint64 indexed dstChainSelector, bytes32 indexed to);
+
+    event TrustedRemoteSVMUnset(uint64 indexed dstChainSelector);
 
     event MessageFailed(bytes32 messageId);
 
@@ -125,21 +129,45 @@ contract CCIPCrossChainBridgeTest is Test {
     }
 
     modifier givenDestinationEVMChainHasTrustedRemote() {
-        vm.prank(OWNER);
-        bridge.setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, EVM_TRUSTED_REMOTE);
+        _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, EVM_TRUSTED_REMOTE);
         _;
+    }
+
+    function _setTrustedRemoteEVM(uint64 dstChainSelector_, address to_) public {
+        vm.prank(OWNER);
+        bridge.setTrustedRemoteEVM(dstChainSelector_, to_);
     }
 
     modifier givenSourceEVMChainHasTrustedRemote() {
-        vm.prank(OWNER);
-        bridge.setTrustedRemoteEVM(SOURCE_CHAIN_SELECTOR, EVM_TRUSTED_REMOTE);
+        _setTrustedRemoteEVM(SOURCE_CHAIN_SELECTOR, EVM_TRUSTED_REMOTE);
         _;
     }
 
-    modifier givenDestinationSVMChainHasTrustedRemote() {
+    modifier givenSourceEVMChainHasTrustedRemoteUnset() {
         vm.prank(OWNER);
-        bridge.setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, SVM_TRUSTED_REMOTE);
+        bridge.unsetTrustedRemoteEVM(SOURCE_CHAIN_SELECTOR);
         _;
+    }
+
+    function _setTrustedRemoteSVM(uint64 dstChainSelector_, bytes32 to_) public {
+        vm.prank(OWNER);
+        bridge.setTrustedRemoteSVM(dstChainSelector_, to_);
+    }
+
+    modifier givenDestinationSVMChainHasTrustedRemote() {
+        _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, SVM_TRUSTED_REMOTE);
+        _;
+    }
+
+    modifier givenDestinationSVMChainHasTrustedRemoteUnset() {
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+        _;
+    }
+
+    function _expectRevertTrustedRemoteNotSet() public {
+        // Expect revert
+        vm.expectRevert(ICCIPCrossChainBridge.Bridge_TrustedRemoteNotSet.selector);
     }
 
     // ============ TESTS ============ //
@@ -274,8 +302,6 @@ contract CCIPCrossChainBridgeTest is Test {
     // sendToSVM
     // given the contract is not enabled
     //  [X] it reverts
-    // given the destination SVM chain does not have a defined trusted remote
-    //  [X] it reverts
     // when the amount is zero
     //  [X] it reverts
     // when the sender has not provided enough native token to cover fees
@@ -284,7 +310,11 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it reverts
     // given the sender has not approved the contract to spend OHM
     //  [X] it reverts
-    // [X] the recipient address is the default trusted remote
+    // given the destination SVM chain does not have a defined trusted remote
+    //  [X] it reverts
+    // given the destination SVM chain's trusted remote is set to the zero address
+    //  [X] the recipient address is the zero address
+    // [X] the recipient address is the trusted remote
     // [X] the SVM extra args compute units are the default compute units
     // [X] the SVM extra args writeable bitmap is 0
     // [X] the SVM extra args allow out of order execution is true
@@ -386,6 +416,61 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
     }
 
+    function test_sendToSVM_trustedRemoteZeroAddress()
+        public
+        givenContractIsEnabled
+        givenSenderHasApprovedSpendingOHM(AMOUNT)
+    {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, bytes32(0));
+
+        // Expect event
+        vm.expectEmit();
+        emit Bridged(router.DEFAULT_MESSAGE_ID(), DESTINATION_CHAIN_SELECTOR, SENDER, AMOUNT, FEE);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+
+        // Assert message parameters
+        assertEq(
+            router.destinationChainSelector(),
+            DESTINATION_CHAIN_SELECTOR,
+            "destinationChainSelector"
+        );
+        assertEq(router.messageReceiver(), abi.encodePacked(bytes32(0)), "messageReceiver");
+        assertEq(router.messageData().length, 0, "messageData");
+        assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
+        address[] memory tokens = router.getMessageTokens();
+        assertEq(tokens.length, 1, "tokens.length");
+        assertEq(tokens[0], address(OHM), "tokens[0]");
+        uint256[] memory amounts = router.getMessageTokenAmounts();
+        assertEq(amounts.length, 1, "amounts.length");
+        assertEq(amounts[0], AMOUNT, "amounts[0]");
+        bytes memory extraArgs = router.messageExtraArgs();
+        assertEq(
+            extraArgs,
+            Client._svmArgsToBytes(
+                Client.SVMExtraArgsV1({
+                    computeUnits: 0,
+                    accountIsWritableBitmap: 0,
+                    allowOutOfOrderExecution: true,
+                    tokenReceiver: SVM_RECIPIENT,
+                    accounts: new bytes32[](0)
+                })
+            ),
+            "extraArgs"
+        );
+
+        // Assert token balances
+        assertEq(OHM.balanceOf(SENDER), 0, "SENDER OHM balance");
+        assertEq(OHM.balanceOf(address(bridge)), 0, "bridge OHM balance");
+        assertEq(OHM.balanceOf(address(router)), AMOUNT, "router OHM balance");
+        assertEq(SENDER.balance, ETH_AMOUNT - FEE, "SENDER ETH balance");
+        assertEq(address(bridge).balance, 0, "bridge ETH balance");
+        assertEq(address(router).balance, FEE, "router ETH balance");
+    }
+
     function test_sendToSVM()
         public
         givenContractIsEnabled
@@ -450,8 +535,10 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it reverts
     // given the sender has not approved the contract to spend OHM
     //  [X] it reverts
-    // given the destination chain does not have a defined CrossChainBridge
+    // given the destination chain does not have a trusted remote set
     //  [X] it reverts
+    // given the destination chain's trusted remote is set to the zero address
+    //  [X] the recipient address is the zero address
     // [X] the recipient address is the destination chain's CrossChainBridge address
     // [X] the data contains the actual recipient address
     // [X] the EVM extra args gas limit is the default gas limit
@@ -550,6 +637,56 @@ contract CCIPCrossChainBridgeTest is Test {
         // Call function
         vm.prank(SENDER);
         bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+    }
+
+    function test_sendToEVM_trustedRemoteZeroAddress()
+        public
+        givenContractIsEnabled
+        givenSenderHasApprovedSpendingOHM(AMOUNT)
+    {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, address(0));
+
+        // Expect event
+        vm.expectEmit();
+        emit Bridged(router.DEFAULT_MESSAGE_ID(), DESTINATION_CHAIN_SELECTOR, SENDER, AMOUNT, FEE);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+
+        // Assert message parameters
+        assertEq(
+            router.destinationChainSelector(),
+            DESTINATION_CHAIN_SELECTOR,
+            "destinationChainSelector"
+        );
+        assertEq(router.messageReceiver(), abi.encode(address(0)), "messageReceiver");
+        bytes memory messageData = router.messageData();
+        assertEq(abi.decode(messageData, (address)), EVM_RECIPIENT, "messageData");
+        assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
+        address[] memory tokens = router.getMessageTokens();
+        assertEq(tokens.length, 1, "tokens.length");
+        assertEq(tokens[0], address(OHM), "tokens[0]");
+        uint256[] memory amounts = router.getMessageTokenAmounts();
+        assertEq(amounts.length, 1, "amounts.length");
+        assertEq(amounts[0], AMOUNT, "amounts[0]");
+        bytes memory extraArgs = router.messageExtraArgs();
+        assertEq(
+            extraArgs,
+            Client._argsToBytes(
+                Client.GenericExtraArgsV2({gasLimit: 200_000, allowOutOfOrderExecution: true})
+            ),
+            "extraArgs"
+        );
+
+        // Assert token balances
+        assertEq(OHM.balanceOf(SENDER), 0, "SENDER OHM balance");
+        assertEq(OHM.balanceOf(address(bridge)), 0, "bridge OHM balance");
+        assertEq(OHM.balanceOf(address(router)), AMOUNT, "router OHM balance");
+        assertEq(SENDER.balance, ETH_AMOUNT - FEE, "SENDER ETH balance");
+        assertEq(address(bridge).balance, 0, "bridge ETH balance");
+        assertEq(address(router).balance, FEE, "router ETH balance");
     }
 
     function test_sendToEVM()
@@ -735,14 +872,17 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it reverts
     // given the source bridge/sender is not trusted
     //  [X] it reverts
-    // given the source bridge/sender is the zero address
-    //  [X] it reverts
     // when the message has multiple tokens
     //  [X] it reverts
     // when the message has does not use the destination OHM token
     //  [X] it reverts
     // when the message data has an invalid format
     //  [X] it reverts
+    // given the source bridge/sender is the zero address
+    //  given the trusted remote is not set
+    //   [X] it reverts
+    //  [X] it transfers the OHM to the recipient
+    //  [X] it emits an event
     // [X] it transfers the OHM to the recipient
     // [X] it emits an event
 
@@ -814,20 +954,27 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.receiveMessage(message);
     }
 
-    function test_receiveMessage_senderZeroAddress_reverts()
+    function test_receiveMessage_senderZeroAddress()
         public
         givenContractIsEnabled
-        givenSourceEVMChainHasTrustedRemote
+        givenBridgeHasOHMBalance(AMOUNT)
     {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteEVM(SOURCE_CHAIN_SELECTOR, address(0));
+
         Client.Any2EVMMessage memory message = _getAnyToEVMMessage();
         message.sender = abi.encode(address(0));
 
-        // Expect revert
-        vm.expectRevert(ICCIPCrossChainBridge.Bridge_SourceNotTrusted.selector);
+        // Expect event
+        vm.expectEmit();
+        emit Received(MESSAGE_ID, SOURCE_CHAIN_SELECTOR, address(0), AMOUNT);
 
         // Call function
         vm.prank(address(bridge));
         bridge.receiveMessage(message);
+
+        // Assert state
+        assertEq(OHM.balanceOf(EVM_RECIPIENT), AMOUNT, "OHM balance");
     }
 
     function test_receiveMessage_multipleTokens_reverts()
@@ -1163,6 +1310,9 @@ contract CCIPCrossChainBridgeTest is Test {
     // setTrustedRemoteEVM
     // when the caller is not the owner
     //  [X] it reverts
+    // when the address is the zero address
+    //  [X] it sets the trusted remote for the destination chain
+    //  [X] it emits an event
     // [X] it sets the trusted remote for the destination chain
     // [X] it emits an event
 
@@ -1175,31 +1325,165 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT);
     }
 
-    function test_setTrustedRemoteEVM() public {
+    function test_setTrustedRemoteEVM_zeroAddress() public {
         // Expect event
         vm.expectEmit();
-        emit TrustedRemoteEVMSet(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT);
+        emit TrustedRemoteEVMSet(DESTINATION_CHAIN_SELECTOR, address(0));
 
         // Call function
-        vm.prank(OWNER);
-        bridge.setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT);
+        _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, address(0));
 
         // Assert state
         assertEq(
             bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
-            EVM_RECIPIENT,
+            address(0),
             "trustedRemoteEVM"
         );
+
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_setTrustedRemoteEVM(address trustedRemote_) public {
+        // Expect event
+        vm.expectEmit();
+        emit TrustedRemoteEVMSet(DESTINATION_CHAIN_SELECTOR, trustedRemote_);
+
+        // Call function
+        _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, trustedRemote_);
+
+        // Assert state
         assertEq(
-            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
-            bytes32(0),
-            "trustedRemoteSVM"
+            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
+            trustedRemote_,
+            "trustedRemoteEVM"
+        );
+
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    // unsetTrustedRemoteEVM
+    // when the caller is not the owner
+    //  [X] it reverts
+    // when the destination chain selector is not set
+    //  [X] it reverts
+    // when the trusted remote is set to the zero address
+    //  [X] it unsets the trusted remote for the destination chain
+    //  [X] it emits an event
+    // [X] it unsets the trusted remote for the destination chain
+    // [X] it emits an event
+
+    function test_unsetTrustedRemoteEVM_callerNotOwner_reverts()
+        public
+        givenDestinationEVMChainHasTrustedRemote
+    {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.unsetTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_unsetTrustedRemoteEVM_destinationChainNotSet_reverts() public {
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_unsetTrustedRemoteEVM_trustedRemoteZeroAddress() public {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, address(0));
+
+        // Expect event
+        vm.expectEmit();
+        emit TrustedRemoteEVMUnset(DESTINATION_CHAIN_SELECTOR);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+
+        // Assert state
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_unsetTrustedRemoteEVM() public givenDestinationEVMChainHasTrustedRemote {
+        // Expect event
+        vm.expectEmit();
+        emit TrustedRemoteEVMUnset(DESTINATION_CHAIN_SELECTOR);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+
+        // Assert state
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    // getTrustedRemoteEVM
+    // when the destination chain selector is not set
+    //  [X] it reverts
+    // when the destination chain selector has been unset
+    //  [X] it reverts
+    // when the trusted remote is set to the zero address
+    //  [X] it returns the zero address for the destination chain
+    // [X] it returns the trusted remote for the destination chain
+
+    function test_getTrustedRemoteEVM_destinationChainNotSet_reverts() public {
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+
+        // Call function
+        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_getTrustedRemoteEVM_destinationChainUnset_reverts()
+        public
+        givenSourceEVMChainHasTrustedRemote
+        givenSourceEVMChainHasTrustedRemoteUnset
+    {
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+
+        // Call function
+        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_getTrustedRemoteEVM_zeroAddress() public {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR, address(0));
+
+        // Call function
+        assertEq(
+            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
+            address(0),
+            "trustedRemoteEVM"
+        );
+    }
+
+    function test_getTrustedRemoteEVM() public givenDestinationEVMChainHasTrustedRemote {
+        // Call function
+        assertEq(
+            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
+            EVM_TRUSTED_REMOTE,
+            "trustedRemoteEVM"
         );
     }
 
     // setTrustedRemoteSVM
     // when the caller is not the owner
     //  [X] it reverts
+    // when the address is the zero address
+    //  [X] it sets the trusted remote for the destination chain
+    //  [X] it emits an event
     // [X] it sets the trusted remote for the destination chain
     // [X] it emits an event
 
@@ -1212,25 +1496,156 @@ contract CCIPCrossChainBridgeTest is Test {
         bridge.setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, SVM_TRUSTED_REMOTE);
     }
 
-    function test_setTrustedRemoteSVM() public {
+    function test_setTrustedRemoteSVM_zeroAddress() public {
         // Expect event
         vm.expectEmit();
-        emit TrustedRemoteSVMSet(DESTINATION_CHAIN_SELECTOR, SVM_TRUSTED_REMOTE);
+        emit TrustedRemoteSVMSet(DESTINATION_CHAIN_SELECTOR, bytes32(0));
 
         // Call function
-        vm.prank(OWNER);
-        bridge.setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, SVM_TRUSTED_REMOTE);
+        _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, bytes32(0));
 
         // Assert state
         assertEq(
             bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
-            SVM_TRUSTED_REMOTE,
+            bytes32(0),
             "trustedRemoteSVM"
         );
+
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_setTrustedRemoteSVM(bytes32 trustedRemote_) public {
+        // Expect event
+        vm.expectEmit();
+        emit TrustedRemoteSVMSet(DESTINATION_CHAIN_SELECTOR, trustedRemote_);
+
+        // Call function
+        _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, trustedRemote_);
+
+        // Assert state
         assertEq(
-            bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR),
-            address(0),
-            "trustedRemoteEVM"
+            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
+            trustedRemote_,
+            "trustedRemoteSVM"
+        );
+
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteEVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    // unsetTrustedRemoteSVM
+    // when the caller is not the owner
+    //  [X] it reverts
+    // when the destination chain selector is not set
+    //  [X] it reverts
+    // when the trusted remote is set to the zero address
+    //  [X] it unsets the trusted remote for the destination chain
+    //  [X] it emits an event
+    // [X] it unsets the trusted remote for the destination chain
+    // [X] it emits an event
+
+    function test_unsetTrustedRemoteSVM_callerNotOwner_reverts()
+        public
+        givenDestinationSVMChainHasTrustedRemote
+    {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_unsetTrustedRemoteSVM_destinationChainNotSet_reverts() public {
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_unsetTrustedRemoteSVM_trustedRemoteZeroAddress() public {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, bytes32(0));
+
+        // Expect event
+        vm.expectEmit();
+        emit TrustedRemoteSVMUnset(DESTINATION_CHAIN_SELECTOR);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+
+        // Assert state
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_unsetTrustedRemoteSVM() public givenDestinationSVMChainHasTrustedRemote {
+        // Expect event
+        vm.expectEmit();
+        emit TrustedRemoteSVMUnset(DESTINATION_CHAIN_SELECTOR);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+
+        // Assert state
+        _expectRevertTrustedRemoteNotSet();
+        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    // getTrustedRemoteSVM
+    // when the destination chain selector is not set
+    //  [X] it reverts
+    // when the destination chain selector has been unset
+    //  [X] it reverts
+    // when the trusted remote is set to the zero address
+    //  [X] it returns the zero address for the destination chain
+    // [X] it returns the trusted remote for the destination chain
+
+    function test_getTrustedRemoteSVM_destinationChainNotSet_reverts() public {
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+
+        // Call function
+        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_getTrustedRemoteSVM_destinationChainUnset_reverts()
+        public
+        givenDestinationSVMChainHasTrustedRemote
+        givenDestinationSVMChainHasTrustedRemoteUnset
+    {
+        // Expect revert
+        _expectRevertTrustedRemoteNotSet();
+
+        // Call function
+        bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
+    }
+
+    function test_getTrustedRemoteSVM_zeroAddress() public {
+        // Set the trusted remote to the zero address
+        _setTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR, bytes32(0));
+
+        // Call function
+        assertEq(
+            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
+            bytes32(0),
+            "trustedRemoteSVM"
+        );
+    }
+
+    function test_getTrustedRemoteSVM() public givenDestinationSVMChainHasTrustedRemote {
+        // Call function
+        assertEq(
+            bridge.getTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR),
+            SVM_TRUSTED_REMOTE,
+            "trustedRemoteSVM"
         );
     }
 }
