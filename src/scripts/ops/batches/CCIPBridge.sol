@@ -268,9 +268,8 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     }
 
     /// @notice Sets the bridges on all other chains as trusted remotes for the source chain
-    /// @dev    This currently does not support selectively enabling bridging for specific chains
-    ///
-    ///         This function skips the function call if the trusted remote is already set to the correct value
+    /// @dev    This function skips the function call if the trusted remote is already set to the correct value
+    ///         This function unsets the trusted remote if the chain is not in the trusted chains listed in the config
     function setAllTrustedRemotes(
         string calldata chain_,
         bool useDaoMS_
