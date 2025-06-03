@@ -13,6 +13,8 @@ import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockRelease
 import {TokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
+import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
@@ -27,11 +29,19 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked("sepolia"));
     }
 
-    function _getTokenPoolAddress(string memory chain_) internal view returns (address) {
+    function _getTokenPoolAddressNotZero(string memory chain_) internal view returns (address) {
         if (_isChainCanonical(chain_)) {
             return _envAddressNotZero(chain_, "olympus.periphery.CCIPLockReleaseTokenPool");
         } else {
             return _envAddressNotZero(chain_, "olympus.policies.CCIPBurnMintTokenPool");
+        }
+    }
+
+    function _getTokenPoolAddress(string memory chain_) internal view returns (address) {
+        if (_isChainCanonical(chain_)) {
+            return _envAddress(chain_, "olympus.periphery.CCIPLockReleaseTokenPool");
+        } else {
+            return _envAddress(chain_, "olympus.policies.CCIPBurnMintTokenPool");
         }
     }
 
@@ -62,8 +72,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         return RateLimiter.Config({isEnabled: true, capacity: 2, rate: 1});
     }
 
-    // TODOs
-    // [ ] Declarative configuration of a token pool
+    // [X] Declarative configuration of a token pool
     // [X] Set the owner as the rebalancer of the lock release token pool
     // [X] Add emergency disable/enable
 
@@ -78,7 +87,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
         // Load contract addresses from the environment file
         address kernel = _envAddressNotZero("olympus.Kernel");
-        address tokenPool = _getTokenPoolAddress(chain);
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
 
         if (!_isChainCanonical(chain)) {
             // Install the TokenPool policy
@@ -159,7 +168,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
-        address tokenPool = _getTokenPoolAddress(chain);
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
 
         // Check if the pool is already set
         if (_getTokenAdminRegistryConfig().tokenPool == tokenPool) {
@@ -209,34 +218,56 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         // - DAO MS must accept the admin role
     }
 
-    /// @notice Configures the TokenPool to add support for the specified EVM remote chain
-    function configureRemoteChainEVM(
-        string calldata chain_,
-        bool useDaoMS_,
-        string calldata remoteChain_
-    ) external setUp(chain_, useDaoMS_) {
-        address tokenPoolAddress = _getTokenPoolAddress(chain_);
+    function _configureRemoteChainEVM(string memory remoteChain_, bool shouldReset_) internal {
+        console2.log("\n");
+        console2.log("Configuring remote chain", remoteChain_);
+
+        address tokenPoolAddress = _getTokenPoolAddress(chain);
+        // If the token pool is the zero address, then there is nothing to do
+        if (tokenPoolAddress == address(0)) {
+            console2.log("Token pool address is the zero address. Skipping.");
+            return;
+        }
+
         address remotePoolAddress = _getTokenPoolAddress(remoteChain_);
+        // If the remote pool is the zero address, then there is nothing to do
+        if (remotePoolAddress == address(0)) {
+            console2.log("Remote pool address is the zero address. Skipping.");
+            return;
+        }
+
         address remoteTokenAddress = _envAddressNotZero(remoteChain_, "olympus.legacy.OHM");
         uint64 remoteChainSelector = uint64(
             _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
         );
+        bool isSupportedChain = TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector);
 
-        bytes[] memory remotePoolAddresses = new bytes[](1);
-        remotePoolAddresses[0] = abi.encode(remotePoolAddress);
+        // If resetting, then it should be removed
+        if (shouldReset_) {
+            if (!isSupportedChain) {
+                console2.log("Remote chain is not configured. Skipping.");
+                return;
+            }
 
-        TokenPool.ChainUpdate memory chainUpdate = TokenPool.ChainUpdate({
-            remoteChainSelector: remoteChainSelector,
-            remotePoolAddresses: remotePoolAddresses,
-            remoteTokenAddress: abi.encode(remoteTokenAddress),
-            outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
-            inboundRateLimiterConfig: _getRateLimiterConfigDefault()
-        });
-        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
-        chainUpdates[0] = chainUpdate;
+            uint64[] memory remoteChainSelectors = new uint64[](1);
+            remoteChainSelectors[0] = remoteChainSelector;
 
-        // If the remote chain is already configured, remove it
-        if (TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector)) {
+            addToBatch(
+                tokenPoolAddress,
+                abi.encodeWithSelector(
+                    TokenPool.applyChainUpdates.selector,
+                    remoteChainSelectors,
+                    new TokenPool.ChainUpdate[](0)
+                )
+            );
+
+            console2.log("Remote chain", remoteChain_, "removed from token pool", tokenPoolAddress);
+            console2.log("\n");
+            return;
+        }
+
+        // If the remote chain is already configured, then remove it first
+        if (isSupportedChain) {
             console2.log(
                 "Removing remote chain",
                 remoteChain_,
@@ -257,6 +288,24 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             );
         }
 
+        // Prepare the chain update
+        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
+        {
+            // Prepare the remote pool addresses
+            bytes[] memory remotePoolAddresses = new bytes[](1);
+            remotePoolAddresses[0] = abi.encode(remotePoolAddress);
+
+            // Prepare the chain update
+            TokenPool.ChainUpdate memory chainUpdate = TokenPool.ChainUpdate({
+                remoteChainSelector: remoteChainSelector,
+                remotePoolAddresses: remotePoolAddresses,
+                remoteTokenAddress: abi.encode(remoteTokenAddress),
+                outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
+                inboundRateLimiterConfig: _getRateLimiterConfigDefault()
+            });
+            chainUpdates[0] = chainUpdate;
+        }
+
         // Apply the chain update
         console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
         addToBatch(
@@ -267,11 +316,124 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                 chainUpdates
             )
         );
+    }
+
+    /// @notice Configures the TokenPool to add support for the specified EVM remote chain
+    function configureRemoteChainEVM(
+        string calldata chain_,
+        bool useDaoMS_,
+        string calldata remoteChain_
+    ) external setUp(chain_, useDaoMS_) {
+        // Configure the remote chain
+        _configureRemoteChainEVM(remoteChain_, false);
 
         // Run
         proposeBatch();
 
         console2.log("Completed");
+    }
+
+    function _configureRemoteChainSVM(string memory remoteChain_, bool shouldReset_) internal {
+        console2.log("\n");
+        console2.log("Configuring remote chain", remoteChain_);
+
+        address tokenPoolAddress = _getTokenPoolAddress(chain);
+        // If the local pool is the zero address, then there is nothing to do
+        if (tokenPoolAddress == address(0)) {
+            console2.log("Token pool address is the zero address. Skipping.");
+            return;
+        }
+
+        bytes32 remotePoolAddress = bytes32(
+            Base58.decodeFromString(_envStringNotEmpty(remoteChain_, "olympus.periphery.TokenPool"))
+        );
+        // If the remote pool is the zero address, then there is nothing to do
+        if (remotePoolAddress == bytes32(0)) {
+            console2.log("Remote pool address is the zero address. Skipping.");
+            return;
+        }
+
+        bytes32 remoteTokenAddress = bytes32(
+            Base58.decodeFromString(_envStringNotEmpty(remoteChain_, "olympus.legacy.OHM"))
+        );
+        uint64 remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+        );
+        bool isSupportedChain = TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector);
+
+        // If resetting, then it should be removed
+        if (shouldReset_) {
+            if (!isSupportedChain) {
+                console2.log("Remote chain is not configured. Skipping.");
+                return;
+            }
+
+            uint64[] memory remoteChainSelectors = new uint64[](1);
+            remoteChainSelectors[0] = remoteChainSelector;
+
+            addToBatch(
+                tokenPoolAddress,
+                abi.encodeWithSelector(
+                    TokenPool.applyChainUpdates.selector,
+                    remoteChainSelectors,
+                    new TokenPool.ChainUpdate[](0)
+                )
+            );
+
+            console2.log("Remote chain", remoteChain_, "removed from token pool", tokenPoolAddress);
+            console2.log("\n");
+            return;
+        }
+
+        // If the remote chain is already configured, then remove it first
+        if (isSupportedChain) {
+            console2.log(
+                "Removing remote chain",
+                remoteChain_,
+                "from token pool",
+                tokenPoolAddress
+            );
+
+            uint64[] memory remoteChainSelectors = new uint64[](1);
+            remoteChainSelectors[0] = remoteChainSelector;
+
+            addToBatch(
+                tokenPoolAddress,
+                abi.encodeWithSelector(
+                    TokenPool.applyChainUpdates.selector,
+                    remoteChainSelectors,
+                    new TokenPool.ChainUpdate[](0)
+                )
+            );
+        }
+
+        // Prepare the chain update
+        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
+        {
+            // Prepare the remote pool addresses
+            bytes[] memory remotePoolAddresses = new bytes[](1);
+            remotePoolAddresses[0] = abi.encodePacked(remotePoolAddress);
+
+            TokenPool.ChainUpdate memory chainUpdate = TokenPool.ChainUpdate({
+                remoteChainSelector: remoteChainSelector,
+                remotePoolAddresses: remotePoolAddresses,
+                remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
+                outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
+                inboundRateLimiterConfig: _getRateLimiterConfigDefault()
+            });
+            chainUpdates[0] = chainUpdate;
+        }
+
+        // Apply the chain update
+        console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
+        addToBatch(
+            tokenPoolAddress,
+            abi.encodeWithSelector(
+                TokenPool.applyChainUpdates.selector,
+                new uint64[](0),
+                chainUpdates
+            )
+        );
     }
 
     /// @notice Configures the TokenPool to add support for the specified SVM remote chain
@@ -280,62 +442,8 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         bool useDaoMS_,
         string calldata remoteChain_
     ) external setUp(chain_, useDaoMS_) {
-        address tokenPoolAddress = _getTokenPoolAddress(chain_);
-        bytes32 remotePoolAddress = bytes32(
-            Base58.decodeFromString(_envStringNotEmpty(remoteChain_, "olympus.periphery.TokenPool"))
-        );
-        bytes32 remoteTokenAddress = bytes32(
-            Base58.decodeFromString(_envStringNotEmpty(remoteChain_, "olympus.legacy.OHM"))
-        );
-        uint64 remoteChainSelector = uint64(
-            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
-        );
-
-        bytes[] memory remotePoolAddresses = new bytes[](1);
-        remotePoolAddresses[0] = abi.encodePacked(remotePoolAddress);
-
-        TokenPool.ChainUpdate memory chainUpdate = TokenPool.ChainUpdate({
-            remoteChainSelector: remoteChainSelector,
-            remotePoolAddresses: remotePoolAddresses,
-            remoteTokenAddress: abi.encodePacked(remoteTokenAddress),
-            outboundRateLimiterConfig: _getRateLimiterConfigDefault(),
-            inboundRateLimiterConfig: _getRateLimiterConfigDefault()
-        });
-        TokenPool.ChainUpdate[] memory chainUpdates = new TokenPool.ChainUpdate[](1);
-        chainUpdates[0] = chainUpdate;
-
-        // If the remote chain is already configured, remove it
-        if (TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector)) {
-            console2.log(
-                "Removing remote chain",
-                remoteChain_,
-                "from token pool",
-                tokenPoolAddress
-            );
-
-            uint64[] memory remoteChainSelectors = new uint64[](1);
-            remoteChainSelectors[0] = remoteChainSelector;
-
-            addToBatch(
-                tokenPoolAddress,
-                abi.encodeWithSelector(
-                    TokenPool.applyChainUpdates.selector,
-                    remoteChainSelectors,
-                    new TokenPool.ChainUpdate[](0)
-                )
-            );
-        }
-
-        // Apply the chain update
-        console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPoolAddress);
-        addToBatch(
-            tokenPoolAddress,
-            abi.encodeWithSelector(
-                TokenPool.applyChainUpdates.selector,
-                new uint64[](0),
-                chainUpdates
-            )
-        );
+        // Configure the remote chain
+        _configureRemoteChainSVM(remoteChain_, false);
 
         // Run
         proposeBatch();
@@ -343,10 +451,53 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
+    function _configureRemoteChains(string memory chain_) internal {
+        console2.log("\n");
+        console2.log("Configuring all remote chains for", chain_);
+
+        string[] memory allChains = ChainUtils._getChains(chain_);
+        string[] memory trustedChains = _envStringArray(
+            "olympus.config.CCIPCrossChainBridge.chains"
+        );
+
+        // Iterate over all chains
+        for (uint256 i = 0; i < allChains.length; i++) {
+            string memory remoteChain = allChains[i];
+
+            // Skip the current chain
+            if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked(remoteChain))) {
+                continue;
+            }
+
+            // If the chain is not in the trusted chains listed in the config, then it should be removed as a trusted remote
+            bool isTrustedChain = ArrayUtils.contains(trustedChains, remoteChain);
+
+            if (ChainUtils._isSVMChain(remoteChain)) {
+                _configureRemoteChainSVM(remoteChain, !isTrustedChain);
+            } else {
+                _configureRemoteChainEVM(remoteChain, !isTrustedChain);
+            }
+        }
+    }
+
+    /// @notice Configures the TokenPool to add support for all remote chains
+    /// @dev    This function skips the function call if the remote chain is already configured
+    ///         This function removes the remote chain if the chain is not in the trusted chains listed in the config
+    function configureAllRemoteChains(
+        string calldata chain_,
+        bool useDaoMS_
+    ) external setUp(chain_, useDaoMS_) {
+        // Configure the remote chains
+        _configureRemoteChains(chain_);
+
+        // Run
+        proposeBatch();
+    }
+
     // ===== EMERGENCY SHUTDOWN ===== //
 
     function _emergencyShutdown(uint64 remoteChainSelector_) internal {
-        address tokenPoolAddress = _getTokenPoolAddress(chain);
+        address tokenPoolAddress = _getTokenPoolAddressNotZero(chain);
 
         // Set the rate limiter config to emergency shutdown
         console2.log(
@@ -392,7 +543,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         bool useDaoMS_
     ) external setUp(chain_, useDaoMS_) {
         // Determine the remote chains that are configured
-        uint64[] memory remoteChainSelectors = TokenPool(_getTokenPoolAddress(chain))
+        uint64[] memory remoteChainSelectors = TokenPool(_getTokenPoolAddressNotZero(chain))
             .getSupportedChains();
 
         for (uint256 i = 0; i < remoteChainSelectors.length; i++) {
@@ -414,7 +565,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             );
         }
 
-        address tokenPoolAddress = _getTokenPoolAddress(chain);
+        address tokenPoolAddress = _getTokenPoolAddressNotZero(chain);
 
         // Withdraw liquidity
         console2.log(
@@ -435,7 +586,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         string calldata chain_,
         bool useDaoMS_
     ) external setUp(chain_, useDaoMS_) {
-        uint256 liquidity = IERC20(_getTokenPoolAddress(chain)).balanceOf(_owner);
+        uint256 liquidity = IERC20(_getTokenPoolAddressNotZero(chain)).balanceOf(_owner);
 
         // Withdraw liquidity
         _withdrawLiquidity(liquidity);
