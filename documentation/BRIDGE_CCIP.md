@@ -47,7 +47,7 @@ Flip the `--broadcast` and `--verify` flags to true in order to perform the depl
 The deployer wallet must temporarily accept the admin role in order to configure the pool:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(bool)()" false --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -57,7 +57,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 Link the OHM token on a chain with a token pool:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "setPool(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "setPool(bool)()" false --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -67,7 +67,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 This script will configure the remote chains for a token pool. It uses the same `chains` key that is described in the next section.
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureAllRemoteChains(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureAllRemoteChains(bool)()" false --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -77,7 +77,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 Run this command to configure the trusted remotes for a bridge on a specific chain:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPBridge.sol --sig "setAllTrustedRemotes(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "setAllTrustedRemotes(bool)()" false --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 The `env.json` file specifies the remote chains that are configured for each local chain. The following example would allow for bridging (using the `CCIPCrossChainBridge` contract) from sepolia to solana-devnet. Allowing bridging from solana-devnet to sepolia would require a corresponding entry in the `current.solana-devnet.olympus.config.CCIPCrossChainBridge.chains` key.
@@ -105,7 +105,7 @@ The `setAllTrustedRemotes()` function operates in a declarative manner: it will 
 The Token Pool ownership then should be transferred to the DAO MS (on production chains):
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRoleToDaoMS(string)()" < chain > --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRoleToDaoMS(string)()" --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -115,7 +115,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 The DAO MS must then accept the proposal for it to be the token administrator:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "acceptAdminRole(bool)()" true --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 Note that the second argument, `true`, will create a batch to be signed by the Safe multi-sig.
@@ -125,13 +125,13 @@ Note that the second argument, `true`, will create a batch to be signed by the S
 The ownership of the bridge must then be transferred to the DAO MS:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPBridge.sol --sig "transferOwnership(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "transferOwnership(bool)()" false --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 ### Install and Enable Token Pool
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "install(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "install(bool)()" true --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -139,7 +139,7 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 ### Enable Bridge
 
 ```bash
-forge script src/scripts/ops/batches/CCIPBridge.sol --sig "enable(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "enable(bool)()" true --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -169,7 +169,7 @@ The Token Pool on the canonical chain is a `LockReleaseTokenPool`, which custodi
 In a scenario where the aim is to prevent bridging from other chains to the canonical chain (e.g. an infinite mint bug), this can be achieved by withdrawing the OHM custodied in the contract.
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "withdrawAllLiquidity(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "withdrawAllLiquidity(bool)()" true --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
@@ -181,13 +181,13 @@ On a given chain, the Token Pool can be shut down by enabling the rate limiter a
 If the aim is to disable bridging to and from a particular chain, this function can be used:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdown(string,bool,string)()" < chain > true < remote chain > --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdown(bool,string)()" true < remote chain > --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 If the aim is to disable bridging to and from all chains, this function can be used:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdownAll(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdownAll(bool)()" true --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 ### Bridge
@@ -195,7 +195,7 @@ forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "emergencyShutdownA
 This function will disable the CCIPCrossChainBridge contract:
 
 ```bash
-forge script src/scripts/ops/batches/CCIPBridge.sol --sig "disable(string,bool)()" < chain > true --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "disable(bool)()" true --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 Any messages received by the contract while disabled will be marked as a failure and can be retried at a later date.

@@ -17,6 +17,19 @@ library ChainUtils {
     string public constant TEST_BERACHAIN_BARTIO = "berachain-bartio";
     string public constant TEST_SOLANA = "solana-devnet";
 
+    uint256 public constant CHAIN_MAINNET = 1;
+    uint256 public constant CHAIN_SEPOLIA = 11155111;
+    uint256 public constant CHAIN_BASE = 8453;
+    uint256 public constant CHAIN_BASE_SEPOLIA = 84532;
+    uint256 public constant CHAIN_ARBITRUM = 42161;
+    uint256 public constant CHAIN_ARBITRUM_SEPOLIA = 421614;
+    uint256 public constant CHAIN_BERACHAIN = 80094;
+    uint256 public constant CHAIN_BERACHAIN_BEPOLIA = 80069;
+    uint256 public constant CHAIN_OPTIMISM = 10;
+    uint256 public constant CHAIN_OPTIMISM_SEPOLIA = 11155420;
+    uint256 public constant CHAIN_POLYGON = 137;
+    uint256 public constant CHAIN_POLYGON_AMOY = 80002;
+
     /// @notice Returns an array of testnet chains
     function _getTestnetChains() internal pure returns (string[] memory) {
         string[] memory chains = new string[](5);
@@ -74,5 +87,29 @@ library ChainUtils {
     function _isSVMChain(string memory chain_) internal pure returns (bool) {
         return keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked(PROD_SOLANA)) ||
             keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked(TEST_SOLANA));
+    }
+
+    /// @notice Returns the name of the chain for a given chain ID
+    function _getChainName(uint256 chainId_) internal pure returns (string memory) {
+        if (chainId_ == CHAIN_MAINNET) {
+            return PROD_MAINNET;
+        } else if (chainId_ == CHAIN_SEPOLIA) {
+            return TEST_SEPOLIA;
+        } else if (chainId_ == CHAIN_BASE) {
+            return PROD_BASE;
+        } else if (chainId_ == CHAIN_BASE_SEPOLIA) {
+            return TEST_BASE_SEPOLIA;
+        } else if (chainId_ == CHAIN_ARBITRUM) {
+            return PROD_ARBITRUM;
+        } else if (chainId_ == CHAIN_ARBITRUM_SEPOLIA) {
+            return TEST_ARBITRUM_SEPOLIA;
+        } else if (chainId_ == CHAIN_BERACHAIN) {
+            return PROD_BERACHAIN;
+        } else if (chainId_ == CHAIN_OPTIMISM) {
+            return PROD_OPTIMISM;
+        } else {
+            // solhint-disable-next-line gas-custom-errors
+            revert("_getChainId: Chain ID not found");
+        }
     }
 }

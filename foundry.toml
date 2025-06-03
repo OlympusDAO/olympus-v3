@@ -50,6 +50,21 @@ script_execution_protection = false
 [fuzz]
 runs = 256
 
+[rpc_endpoints]
+# Place ALCHEMY_API_KEY in the environment or .env file
+mainnet = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+sepolia = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+base = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+base-sepolia = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+arbitrum = "https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+arbitrum-sepolia = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+optimism = "https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+optimism-sepolia = "https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+polygon = "https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+polygon-amoy = "https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+berachain = "https://berachain-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+berachain-bepolia = "https://berachain-bepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+
 [soldeer]
 remappings_generate = false
 

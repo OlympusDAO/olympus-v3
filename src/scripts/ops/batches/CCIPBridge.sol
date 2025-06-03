@@ -20,13 +20,13 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     uint32 public constant EVM_GAS_LIMIT = 200_000;
 
     /// @notice Sets trusted remotes and enables the bridge for the specified chain
-    function enable(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
+    function enable(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Set the trusted remotes
-        _setAllTrustedRemotes(chain_);
+        _setAllTrustedRemotes(chain);
 
         // Set the bridge to enabled
         console2.log("\n");
-        console2.log("Enabling bridge for", chain_);
+        console2.log("Enabling bridge for", chain);
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
         addToBatch(bridgeAddress, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
@@ -35,10 +35,10 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     }
 
     /// @notice Disables the bridge for the specified chain
-    function disable(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
+    function disable(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Set the bridge to disabled
         console2.log("\n");
-        console2.log("Disabling bridge for", chain_);
+        console2.log("Disabling bridge for", chain);
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
         addToBatch(bridgeAddress, abi.encodeWithSelector(IEnabler.disable.selector, ""));
 
@@ -143,10 +143,9 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     }
 
     function setTrustedRemoteEVM(
-        string calldata chain_,
         bool useDaoMS_,
         string calldata remoteChain_
-    ) external setUp(chain_, useDaoMS_) {
+    ) external setUpWithChainId(useDaoMS_) {
         // Set the trusted remote
         _setTrustedRemoteEVM(remoteChain_, false);
 
@@ -225,10 +224,9 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     }
 
     function setTrustedRemoteSVM(
-        string calldata chain_,
         bool useDaoMS_,
         string calldata remoteChain_
-    ) external setUp(chain_, useDaoMS_) {
+    ) external setUpWithChainId(useDaoMS_) {
         // Set the trusted remote
         _setTrustedRemoteSVM(remoteChain_, false);
 
@@ -238,11 +236,11 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    function _setAllTrustedRemotes(string memory chain_) internal {
+    function _setAllTrustedRemotes(string memory chain) internal {
         console2.log("\n");
-        console2.log("Setting all trusted remotes for", chain_);
+        console2.log("Setting all trusted remotes for", chain);
 
-        string[] memory allChains = ChainUtils._getChains(chain_);
+        string[] memory allChains = ChainUtils._getChains(chain);
         string[] memory trustedChains = _envStringArray(
             "olympus.config.CCIPCrossChainBridge.chains"
         );
@@ -252,7 +250,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
             string memory remoteChain = allChains[i];
 
             // Skip the current chain
-            if (keccak256(abi.encodePacked(chain_)) == keccak256(abi.encodePacked(remoteChain))) {
+            if (keccak256(abi.encodePacked(chain)) == keccak256(abi.encodePacked(remoteChain))) {
                 continue;
             }
 
@@ -270,21 +268,15 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     /// @notice Sets the bridges on all other chains as trusted remotes for the source chain
     /// @dev    This function skips the function call if the trusted remote is already set to the correct value
     ///         This function unsets the trusted remote if the chain is not in the trusted chains listed in the config
-    function setAllTrustedRemotes(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function setAllTrustedRemotes(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Set the trusted remotes
-        _setAllTrustedRemotes(chain_);
+        _setAllTrustedRemotes(chain);
 
         // Run
         proposeBatch();
     }
 
-    function transferOwnership(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function transferOwnership(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
         address newOwner = _envAddressNotZero("olympus.multisig.dao");
 

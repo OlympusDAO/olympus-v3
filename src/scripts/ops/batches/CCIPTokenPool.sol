@@ -75,12 +75,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     // [X] Declarative configuration of a token pool
     // [X] Set the owner as the rebalancer of the lock release token pool
     // [X] Add emergency disable/enable
+    // [X] Determine local chain from block.chainid
 
     /// @notice Performs installation and initial configuration of the TokenPool
     /// @dev    On a non-canonical chain: the TokenPool is activated in the Kernel
     ///         On a canonical chain: the TokenPool is a periphery contract and
     ///         does not need activation. The rebalancer is set to the DAO multisig.
-    function install(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
+    function install(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Assumptions
         // - The token pool has been linked to OHM in the CCIP token admin registry
         // - The token pool is already configured
@@ -136,10 +137,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     }
 
     /// @notice Accepts the admin role for the OHM token
-    function acceptAdminRole(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function acceptAdminRole(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
@@ -164,7 +162,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     }
 
     /// @notice Sets the token pool for the OHM token
-    function setPool(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
+    function setPool(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
@@ -190,9 +188,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     }
 
     /// @notice Transfers the admin role for the OHM token to the DAO multisig
-    function transferTokenPoolAdminRoleToDaoMS(
-        string calldata chain_
-    ) external setUp(chain_, false) {
+    function transferTokenPoolAdminRoleToDaoMS() external setUpWithChainId(false) {
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
@@ -320,10 +316,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Configures the TokenPool to add support for the specified EVM remote chain
     function configureRemoteChainEVM(
-        string calldata chain_,
         bool useDaoMS_,
         string calldata remoteChain_
-    ) external setUp(chain_, useDaoMS_) {
+    ) external setUpWithChainId(useDaoMS_) {
         // Configure the remote chain
         _configureRemoteChainEVM(remoteChain_, false);
 
@@ -438,10 +433,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Configures the TokenPool to add support for the specified SVM remote chain
     function configureRemoteChainSVM(
-        string calldata chain_,
         bool useDaoMS_,
         string calldata remoteChain_
-    ) external setUp(chain_, useDaoMS_) {
+    ) external setUpWithChainId(useDaoMS_) {
         // Configure the remote chain
         _configureRemoteChainSVM(remoteChain_, false);
 
@@ -483,12 +477,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Configures the TokenPool to add support for all remote chains
     /// @dev    This function skips the function call if the remote chain is already configured
     ///         This function removes the remote chain if the chain is not in the trusted chains listed in the config
-    function configureAllRemoteChains(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function configureAllRemoteChains(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Configure the remote chains
-        _configureRemoteChains(chain_);
+        _configureRemoteChains(chain);
 
         // Run
         proposeBatch();
@@ -520,10 +511,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Performs an emergency shutdown of the TokenPool for a specific remote chain by enabling the rate limiter with a very low capacity
     /// @dev    To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
     function emergencyShutdown(
-        string calldata chain_,
         bool useDaoMS_,
         string calldata remoteChain_
-    ) external setUp(chain_, useDaoMS_) {
+    ) external setUpWithChainId(useDaoMS_) {
         uint64 remoteChainSelector = uint64(
             _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
         );
@@ -538,10 +528,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Performs an emergency shutdown of the TokenPool for all remote chains by enabling the rate limiter with a very low capacity
     /// @dev    To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
-    function emergencyShutdownAll(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function emergencyShutdownAll(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Determine the remote chains that are configured
         uint64[] memory remoteChainSelectors = TokenPool(_getTokenPoolAddressNotZero(chain))
             .getSupportedChains();
@@ -582,10 +569,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Withdraws the total balance of OHM from a LockReleaseTokenPool
     /// @dev    This function can only be called on canonical chains
-    function withdrawAllLiquidity(
-        string calldata chain_,
-        bool useDaoMS_
-    ) external setUp(chain_, useDaoMS_) {
+    function withdrawAllLiquidity(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         uint256 liquidity = IERC20(_getTokenPoolAddressNotZero(chain)).balanceOf(_owner);
 
         // Withdraw liquidity
@@ -600,10 +584,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Withdraws a specific amount of OHM from a LockReleaseTokenPool
     /// @dev    This function can only be called on canonical chains
     function withdrawLiquidity(
-        string calldata chain_,
         bool useDaoMS_,
         uint256 amount_
-    ) external setUp(chain_, useDaoMS_) {
+    ) external setUpWithChainId(useDaoMS_) {
         // Withdraw liquidity
         _withdrawLiquidity(amount_);
 

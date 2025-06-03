@@ -5,6 +5,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 import {Safe} from "@safe-utils-0.0.13/Safe.sol";
 
@@ -27,7 +28,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    modifier setUp(string calldata chain_, bool useDaoMS_) {
+    function _setUp(string memory chain_, bool useDaoMS_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
@@ -35,6 +36,16 @@ abstract contract BatchScriptV2 is WithEnvironment {
         address owner = msg.sender;
         if (useDaoMS_) owner = _envAddressNotZero("olympus.multisig.dao");
         _setUpBatchScript(owner);
+    }
+
+    modifier setUp(string memory chain_, bool useDaoMS_) {
+        _setUp(chain_, useDaoMS_);
+        _;
+    }
+
+    modifier setUpWithChainId(bool useDaoMS_) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _setUp(chainName, useDaoMS_);
         _;
     }
 
