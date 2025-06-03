@@ -11,12 +11,13 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 
 contract CCIPBridgeBatch is BatchScriptV2 {
-    // TODOs
     // [X] Declarative configuration of a bridge
     // [X] Enable trusted remotes for the specified chains
+    // [X] Management of gas limit
 
     bytes32 public constant SOLANA_RECEIVER =
         0x0000000000000000000000000000000000000000000000000000000000000000;
+    uint32 public constant EVM_GAS_LIMIT = 200_000;
 
     /// @notice Sets trusted remotes and enables the bridge for the specified chain
     function enable(string calldata chain_, bool useDaoMS_) external setUp(chain_, useDaoMS_) {
@@ -82,12 +83,28 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("\n");
         console2.log("  Destination EVM chain:", remoteChain_);
 
-        if (
-            address(
-                ICCIPCrossChainBridge(bridgeAddress).getTrustedRemoteEVM(remoteChainSelector)
-            ) == remoteBridgeAddress
-        ) {
+        ICCIPCrossChainBridge.TrustedRemoteEVM memory trustedRemote = ICCIPCrossChainBridge(
+            bridgeAddress
+        ).getTrustedRemoteEVM(remoteChainSelector);
+
+        // If the trusted remote should not be set
+        if (trustedRemote.remoteAddress == remoteBridgeAddress) {
             if (remoteBridgeAddress == address(0)) {
+                // If the trusted remote is set, unset it
+                if (trustedRemote.isSet) {
+                    addToBatch(
+                        bridgeAddress,
+                        abi.encodeWithSelector(
+                            ICCIPCrossChainBridge.unsetTrustedRemoteEVM.selector,
+                            remoteChainSelector
+                        )
+                    );
+
+                    console2.log("  Trusted remote unset");
+                    console2.log("\n");
+                    return;
+                }
+
                 console2.log("  Trusted remote is not active. No change needed.");
                 console2.log("\n");
                 return;
@@ -113,6 +130,19 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         );
 
         console2.log("  Trusted remote set to", vm.toString(remoteBridgeAddress));
+        console2.log("\n");
+
+        // Set the gas limit
+        addToBatch(
+            bridgeAddress,
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.setGasLimit.selector,
+                remoteChainSelector,
+                EVM_GAS_LIMIT
+            )
+        );
+
+        console2.log("  Gas limit set to", EVM_GAS_LIMIT);
         console2.log("\n");
     }
 
@@ -159,6 +189,8 @@ contract CCIPBridgeBatch is BatchScriptV2 {
 
         console2.log("  Trusted remote set to", vm.toString(remotePubKey));
         console2.log("\n");
+
+        // Note: at this stage, no need to set the gas limit, as it should be 0 and is 0 by default
     }
 
     function setTrustedRemoteSVM(
