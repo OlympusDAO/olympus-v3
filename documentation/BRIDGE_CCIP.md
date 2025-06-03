@@ -64,10 +64,10 @@ This will perform a simulation. Append `--broadcast` in order to perform the act
 
 ### Configuring Token Pool
 
-This particular script will configure the token pool on Sepolia to be able to bridge to Solana Devnet:
+This script will configure the remote chains for a token pool. It uses the same `chains` key that is described in the next section.
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureRemoteChainSVM(string,bool,string)()" < chain > false solana-devnet --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "configureAllRemoteChains(string,bool)()" < chain > false --rpc-url < RPC URL > --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
