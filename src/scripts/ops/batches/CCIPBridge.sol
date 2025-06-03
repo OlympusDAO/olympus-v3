@@ -71,45 +71,41 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         uint64 remoteChainSelector = uint64(
             _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
         );
-        address remoteBridgeAddress;
-        if (!shouldReset_) {
-            // If there is no bridge for the remote chain, it will be removed as a trusted remote
-            remoteBridgeAddress = _envAddress(
-                remoteChain_,
-                "olympus.periphery.CCIPCrossChainBridge"
-            );
-        }
-
-        console2.log("\n");
-        console2.log("  Destination EVM chain:", remoteChain_);
-
         ICCIPCrossChainBridge.TrustedRemoteEVM memory trustedRemote = ICCIPCrossChainBridge(
             bridgeAddress
         ).getTrustedRemoteEVM(remoteChainSelector);
 
-        // If the trusted remote should not be set
-        if (trustedRemote.remoteAddress == remoteBridgeAddress) {
-            if (remoteBridgeAddress == address(0)) {
-                // If the trusted remote is set, unset it
-                if (trustedRemote.isSet) {
-                    addToBatch(
-                        bridgeAddress,
-                        abi.encodeWithSelector(
-                            ICCIPCrossChainBridge.unsetTrustedRemoteEVM.selector,
-                            remoteChainSelector
-                        )
-                    );
+        console2.log("\n");
+        console2.log("  Destination EVM chain:", remoteChain_);
 
-                    console2.log("  Trusted remote unset");
-                    console2.log("\n");
-                    return;
-                }
+        // If resetting the trusted remote, then it should be unset
+        if (shouldReset_) {
+            if (trustedRemote.isSet) {
+                addToBatch(
+                    bridgeAddress,
+                    abi.encodeWithSelector(
+                        ICCIPCrossChainBridge.unsetTrustedRemoteEVM.selector,
+                        remoteChainSelector
+                    )
+                );
 
-                console2.log("  Trusted remote is not active. No change needed.");
+                console2.log("  Trusted remote unset");
                 console2.log("\n");
                 return;
             }
 
+            console2.log("  Trusted remote is not active. No change needed.");
+            console2.log("\n");
+            return;
+        }
+
+        address remoteBridgeAddress = _envAddressNotZero(
+            remoteChain_,
+            "olympus.periphery.CCIPCrossChainBridge"
+        );
+
+        // If the trusted remote should not be set
+        if (trustedRemote.isSet && trustedRemote.remoteAddress == remoteBridgeAddress) {
             console2.log(
                 "  Trusted remote is already set to",
                 vm.toString(remoteBridgeAddress),
@@ -160,7 +156,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    function _setTrustedRemoteSVM(string memory remoteChain_) internal {
+    function _setTrustedRemoteSVM(string memory remoteChain_, bool shouldReset_) internal {
         // Validate that the chain is an SVM chain
         if (!ChainUtils._isSVMChain(remoteChain_)) {
             // solhint-disable-next-line gas-custom-errors
@@ -168,16 +164,54 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         }
 
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        if (bridgeAddress == address(0)) {
+            console2.log("\n");
+            console2.log("  No bridge found for", chain, ". Skipping.");
+            console2.log("\n");
+            return;
+        }
+
         uint64 remoteChainSelector = uint64(
             _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
         );
-        bytes32 remotePubKey = SOLANA_RECEIVER;
+        ICCIPCrossChainBridge.TrustedRemoteSVM memory trustedRemote = ICCIPCrossChainBridge(
+            bridgeAddress
+        ).getTrustedRemoteSVM(remoteChainSelector);
 
         console2.log("\n");
         console2.log("  Destination SVM chain:", remoteChain_);
 
-        // Set the trusted remote always
-        // Otherwise the default will not be set
+        // If resetting the trusted remote, then it should be unset
+        if (shouldReset_) {
+            if (trustedRemote.isSet) {
+                addToBatch(
+                    bridgeAddress,
+                    abi.encodeWithSelector(
+                        ICCIPCrossChainBridge.unsetTrustedRemoteSVM.selector,
+                        remoteChainSelector
+                    )
+                );
+
+                console2.log("  Trusted remote unset");
+                console2.log("\n");
+                return;
+            }
+
+            console2.log("  Trusted remote is not active. No change needed.");
+            console2.log("\n");
+            return;
+        }
+
+        bytes32 remotePubKey = SOLANA_RECEIVER;
+
+        // If the trusted remote is already set, no need to set it again
+        if (trustedRemote.isSet && trustedRemote.remoteAddress == remotePubKey) {
+            console2.log("  Trusted remote is already set. No change needed.");
+            console2.log("\n");
+            return;
+        }
+
+        // Set the trusted remote
         addToBatch(
             bridgeAddress,
             abi.encodeWithSelector(
@@ -186,9 +220,6 @@ contract CCIPBridgeBatch is BatchScriptV2 {
                 remotePubKey
             )
         );
-
-        console2.log("  Trusted remote set to", vm.toString(remotePubKey));
-        console2.log("\n");
 
         // Note: at this stage, no need to set the gas limit, as it should be 0 and is 0 by default
     }
@@ -199,7 +230,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         string calldata remoteChain_
     ) external setUp(chain_, useDaoMS_) {
         // Set the trusted remote
-        _setTrustedRemoteSVM(remoteChain_);
+        _setTrustedRemoteSVM(remoteChain_, false);
 
         // Run
         proposeBatch();
@@ -225,12 +256,12 @@ contract CCIPBridgeBatch is BatchScriptV2 {
                 continue;
             }
 
-            if (ChainUtils._isSVMChain(remoteChain)) {
-                _setTrustedRemoteSVM(remoteChain);
-            } else {
-                // If the chain is not in the trusted chains listed in the config, then it should be removed as a trusted remote
-                bool isTrustedChain = ArrayUtils.contains(trustedChains, remoteChain);
+            // If the chain is not in the trusted chains listed in the config, then it should be removed as a trusted remote
+            bool isTrustedChain = ArrayUtils.contains(trustedChains, remoteChain);
 
+            if (ChainUtils._isSVMChain(remoteChain)) {
+                _setTrustedRemoteSVM(remoteChain, !isTrustedChain);
+            } else {
                 _setTrustedRemoteEVM(remoteChain, !isTrustedChain);
             }
         }
