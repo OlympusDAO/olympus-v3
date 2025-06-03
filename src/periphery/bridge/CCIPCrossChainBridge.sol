@@ -449,7 +449,9 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @inheritdoc ICCIPCrossChainBridge
     /// @dev        This function will revert if the trusted remote is not set
-    function getTrustedRemoteEVM(uint64 dstChainSelector_) external view returns (TrustedRemoteEVM memory) {
+    function getTrustedRemoteEVM(
+        uint64 dstChainSelector_
+    ) external view returns (TrustedRemoteEVM memory) {
         return _trustedRemoteEVM[dstChainSelector_];
     }
 
@@ -471,7 +473,9 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
 
     /// @inheritdoc ICCIPCrossChainBridge
     /// @dev        This function will revert if the trusted remote is not set
-    function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (TrustedRemoteSVM memory) {
+    function getTrustedRemoteSVM(
+        uint64 dstChainSelector_
+    ) external view returns (TrustedRemoteSVM memory) {
         return _trustedRemoteSVM[dstChainSelector_];
     }
 
