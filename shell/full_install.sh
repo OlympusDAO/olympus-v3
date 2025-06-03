@@ -31,7 +31,7 @@ echo "*** Running forge soldeer update"
 forge soldeer update
 
 echo "*** Installing safe-utils dependencies"
-cd dependencies/safe-utils-0.0.11/ && forge install && cd ../..
+cd dependencies/safe-utils-0.0.13/ && forge install && cd ../..
 
 # This must happen after the dependencies are installed, otherwise it may complain
 echo "*** Cleaning build artifacts"

@@ -25,9 +25,9 @@ integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
 
 [[dependencies]]
 name = "safe-utils"
-version = "0.0.11"
+version = "0.0.13"
 git = "https://github.com/Recon-Fuzz/safe-utils.git"
-rev = "094dc539532b7de9d710d3a1d118a776cd583726"
+rev = "bec514258acb85045a4b8590c5d695f3cc9599be"
 
 [[dependencies]]
 name = "surl"

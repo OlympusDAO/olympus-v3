@@ -58,5 +58,5 @@ surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", re
 chainlink-ccip = { version = "1.6.0", git = "https://github.com/smartcontractkit/chainlink.git", rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69" }
 chainlink-local = { version = "0.2.5", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "b429481536095867f9cd2c6480066c472b9594de" }
 forge-std = "1.9.6"
-safe-utils = { version = "0.0.11", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "094dc539532b7de9d710d3a1d118a776cd583726" }
+safe-utils = { version = "0.0.13", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "bec514258acb85045a4b8590c5d695f3cc9599be" }
 base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }

@@ -6,7 +6,7 @@ import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 
-import {Safe} from "@safe-utils-0.0.11/Safe.sol";
+import {Safe} from "@safe-utils-0.0.13/Safe.sol";
 
 /// @title BatchScriptV2
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
