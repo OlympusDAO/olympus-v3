@@ -1421,6 +1421,10 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it returns true
     // when the interface id is the ICCIPCrossChainBridge interface id
     //  [X] it returns true
+    // when the interface id is the IEnabler interface id
+    //  [X] it returns true
+    // when the interface id is the IERC165 interface id
+    //  [X] it returns true
     // [X] it returns false
 
     function test_supportsInterface() public view {
@@ -1434,6 +1438,7 @@ contract CCIPCrossChainBridgeTest is Test {
             true,
             "ICCIPCrossChainBridge"
         );
+        assertEq(bridge.supportsInterface(type(IEnabler).interfaceId), true, "IEnabler");
         assertEq(bridge.supportsInterface(type(IERC165).interfaceId), true, "IERC165");
         assertEq(bridge.supportsInterface(type(IERC20).interfaceId), false, "IERC20");
     }

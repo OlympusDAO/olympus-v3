@@ -499,10 +499,13 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         return i_ccipRouter;
     }
 
-    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId_
+    ) public view virtual override(CCIPReceiver, PeripheryEnabler) returns (bool) {
         return
             interfaceId_ == type(ICCIPCrossChainBridge).interfaceId ||
-            super.supportsInterface(interfaceId_);
+            CCIPReceiver.supportsInterface(interfaceId_) ||
+            PeripheryEnabler.supportsInterface(interfaceId_);
     }
 
     // ========= ENABLER FUNCTIONS ========= //
