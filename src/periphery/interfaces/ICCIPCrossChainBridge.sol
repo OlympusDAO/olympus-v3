@@ -28,6 +28,8 @@ interface ICCIPCrossChainBridge {
 
     error Bridge_InvalidPayloadToken();
 
+    error Bridge_TrustedRemoteNotSet();
+
     // ========= EVENTS ========= //
 
     event Bridged(
@@ -49,11 +51,27 @@ interface ICCIPCrossChainBridge {
 
     event TrustedRemoteEVMSet(uint64 indexed dstChainSelector, address indexed to);
 
+    event TrustedRemoteEVMUnset(uint64 indexed dstChainSelector);
+
     event TrustedRemoteSVMSet(uint64 indexed dstChainSelector, bytes32 indexed to);
+
+    event TrustedRemoteSVMUnset(uint64 indexed dstChainSelector);
 
     event MessageFailed(bytes32 messageId);
 
     event RetryMessageSuccess(bytes32 messageId);
+
+    // ========= DATA STRUCTURES ========= //
+
+    struct TrustedRemoteEVM {
+        address remoteAddress;
+        bool isSet;
+    }
+
+    struct TrustedRemoteSVM {
+        bytes32 remoteAddress;
+        bool isSet;
+    }
 
     // ========= SEND OHM ========= //
 
@@ -143,11 +161,19 @@ interface ICCIPCrossChainBridge {
     /// @param to_                  The destination address
     function setTrustedRemoteEVM(uint64 dstChainSelector_, address to_) external;
 
+    /// @notice Unsets the trusted remote for the specified destination EVM chain
+    /// @dev    This is needed to stop sending/receiving messages to/from the specified destination EVM chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    function unsetTrustedRemoteEVM(uint64 dstChainSelector_) external;
+
     /// @notice Gets the trusted remote for the specified destination EVM chain
     ///
     /// @param dstChainSelector_    The destination chain selector
     /// @return to_                The destination address
-    function getTrustedRemoteEVM(uint64 dstChainSelector_) external view returns (address);
+    function getTrustedRemoteEVM(
+        uint64 dstChainSelector_
+    ) external view returns (TrustedRemoteEVM memory);
 
     /// @notice Sets the trusted remote for the specified destination SVM chain
     /// @dev    This is needed to send/receive messages to/from the specified destination SVM chain
@@ -156,12 +182,20 @@ interface ICCIPCrossChainBridge {
     /// @param to_                  The destination address
     function setTrustedRemoteSVM(uint64 dstChainSelector_, bytes32 to_) external;
 
+    /// @notice Unsets the trusted remote for the specified destination SVM chain
+    /// @dev    This is needed to stop sending/receiving messages to/from the specified destination SVM chain
+    ///
+    /// @param dstChainSelector_    The destination chain selector
+    function unsetTrustedRemoteSVM(uint64 dstChainSelector_) external;
+
     /// @notice Gets the trusted remote for the specified destination SVM chain
     ///
     /// @param dstChainSelector_    The destination chain selector
     ///
     /// @return to_                The destination address
-    function getTrustedRemoteSVM(uint64 dstChainSelector_) external view returns (bytes32);
+    function getTrustedRemoteSVM(
+        uint64 dstChainSelector_
+    ) external view returns (TrustedRemoteSVM memory);
 
     // ========= CONFIGURATION ========= //
 
