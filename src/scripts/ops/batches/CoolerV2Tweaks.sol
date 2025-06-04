@@ -7,7 +7,6 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
-import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
