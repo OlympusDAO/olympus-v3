@@ -6,6 +6,7 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
+import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
@@ -123,6 +124,12 @@ contract DeployV3 is WithEnvironment {
     }
 
     function _saveDeployment(string memory chain_) internal {
+        // Skip if broadcast is not enabled
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Broadcast not enabled. Skipping saving deployments");
+            return;
+        }
+
         // Create the deployments folder if it doesn't exist
         if (!vm.isDir("./deployments")) {
             console2.log("Creating deployments directory");
