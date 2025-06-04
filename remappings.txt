@@ -6,7 +6,7 @@ test/=src/test/
 test/mocks=src/test/mocks
 test/lib=src/test/lib
 
-surl-1.0.0/=dependencies/surl-1.0.0/src/
+@surl-1.0.0/=dependencies/surl-1.0.0/src/
 
 @chainlink-ccip-1.6.0/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/
 
