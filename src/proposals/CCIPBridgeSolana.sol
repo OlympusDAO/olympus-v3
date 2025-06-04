@@ -6,15 +6,19 @@ pragma solidity ^0.8.15;
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+
 // Script
 import {ProposalScript} from "./ProposalScript.sol";
 
 /// @notice Proposal for activation of the CCIP Bridge for Solana
 // solhint-disable gas-custom-errors
 contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
+    address public _kernel;
+
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 10;
+        return 11;
     }
 
     // Returns the name of the proposal.
@@ -44,7 +48,7 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
                 "The custom/modified contracts have been [audited by Electisec](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-06_Electisec_CCIP_Bridge.pdf).\n\n",
                 "The code changes can be viewed at [PR 69](https://github.com/OlympusDAO/olympus-v3/pull/69).\n\n",
                 "## Proposal Steps\n\n",
-                "As stated, this proposal is an in-principle proposal, and there are no actions to be taken upon execution of the proposal.\n\n",
+                "As stated, this proposal is an in-principle proposal, and there are no bridge-related actions to be taken upon execution of the proposal. For technical reasons, there is a dummy action (OHM balance of the DAO MS) that will be taken to make the proposal valid.\n\n",
                 "At the completion of the proposal, the DAO MS will enable the bridging contracts in order to allow bridging to/from Solana.\n\n"
             );
     }
@@ -52,14 +56,23 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
     // solhint-enable quotes
 
     function _deploy(Addresses addresses, address) internal override {
-        // Nothing to do
+        // Cache the kernel address in state
+        _kernel = addresses.getAddress("olympus-kernel");
     }
 
     function _afterDeploy(Addresses addresses, address deployer) internal override {}
 
     // Sets up actions for the proposal
     function _build(Addresses addresses) internal override {
-        // Nothing to do
+        address daoMS = addresses.getAddress("olympus-multisig-dao");
+        address OHM = addresses.getAddress("olympus-legacy-ohm");
+
+        // Dummy transaction to make the proposal valid
+        _pushAction(
+            OHM,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, daoMS),
+            "Dummy action - get OHM balance of DAO MS"
+        );
     }
 
     // Executes the proposal actions.
