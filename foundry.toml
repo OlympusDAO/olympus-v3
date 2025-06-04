@@ -11,7 +11,6 @@ remappings = [
     'libraries/=src/libraries',
     'solmate/=lib/solmate/src/',
     'balancer-v2/=lib/balancer-v2/',
-    'layer-zero/=lib/solidity-examples/contracts/',
     '@openzeppelin/=lib/openzeppelin-contracts/',
     'bonds/=lib/bonds/src/',
     'proposal-sim/=lib/forge-proposal-simulator/',
@@ -42,7 +41,7 @@ compilation_restrictions = [
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
     { paths = "**", version = "0.8.15" },
 ]
-libs = ["dependencies"]
+# libs = ["dependencies"]
 
 [profile.deploy]
 script_execution_protection = false
@@ -76,3 +75,4 @@ forge-std = "1.9.6"
 safe-utils = { version = "0.0.13", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "bec514258acb85045a4b8590c5d695f3cc9599be" }
 base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }
 clones-with-immutable-args = { version = "1.0.0", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "5950723ffcfa047f13262e5dbd7218b54360c42e" }
+layer-zero-endpoint-v1 = { version = "0.0.6", git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git", rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f" }
