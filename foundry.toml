@@ -43,6 +43,7 @@ compilation_restrictions = [
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
     { paths = "**", version = "0.8.15" },
 ]
+libs = ["dependencies"]
 
 [profile.deploy]
 script_execution_protection = false
