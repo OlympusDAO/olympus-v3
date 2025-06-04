@@ -10,7 +10,6 @@ remappings = [
     'libraries/=src/libraries',
     'balancer-v2/=lib/balancer-v2/',
     'bonds/=lib/bonds/src/',
-    'proposal-sim/=lib/forge-proposal-simulator/',
 ]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
@@ -75,3 +74,4 @@ clones-with-immutable-args = { version = "1.0.0", git = "https://github.com/wigh
 layer-zero-endpoint-v1 = { version = "0.0.6", git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git", rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f" }
 solmate = { version = "6.2.0", git = "https://github.com/transmissions11/solmate.git", rev = "fadb2e2778adbf01c80275bfb99e5c14969d964b" }
 "@openzeppelin-contracts" = "4.8.0"
+forge-proposal-simulator = { version = "1.0.0", git = "https://github.com/OlympusDAO/forge-proposal-simulator.git", rev = "864b357b650f9dc7b2fb1ae23562454815d51def" }

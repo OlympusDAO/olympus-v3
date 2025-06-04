@@ -19,8 +19,6 @@ forge install
 
 echo "*** Restoring submodule commits"
 # Lock the submodules to specific commits
-# TODO look at how to improve submodules
-cd lib/forge-proposal-simulator && git checkout 864b357b650f9dc7b2fb1ae23562454815d51def && cd ../..
 
 echo "*** Running forge soldeer update"
 forge soldeer update
