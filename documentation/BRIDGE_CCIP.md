@@ -100,6 +100,20 @@ The `env.json` file specifies the remote chains that are configured for each loc
 
 The `setAllTrustedRemotes()` function operates in a declarative manner: it will add any new trusted remotes, update outdated trusted remotes, remove redundant trusted remotes and skip the rest.
 
+### Gas Limit
+
+EVM-EVM bridging uses programmable token transfers (in CCIP parlance), which requires setting a gas limit on the TokenPools. This is currently set at the same time as the [bridge is configured](#configuring-token-bridge). Should it be necessary to override this, there is a script.
+
+```bash
+forge script src/scripts/ops/batches/CCIPBridge.sol --sig "setGasLimitEVM(bool,string,uint32)()" false <DEST CHAIN> <GAS LIMIT> --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
+```
+
+### Destination Gas Overhead
+
+For destination chains where burning and minting is taking place (i.e. non-canonical chains), CCIP will need to set the destination gas overhead, which will cause the fees to be slightly higher. This is because there is gas consumed when minting on the destination chain.
+
+This will need to be repeated for all non-canonical chains. A future update (CCIP 1.7) will allow this to be user-configureable.
+
 ### Transfer Ownership of Token Administrator Role to DAO MS
 
 The Token Pool ownership then should be transferred to the DAO MS (on production chains):
