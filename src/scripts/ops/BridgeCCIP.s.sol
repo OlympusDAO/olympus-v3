@@ -21,13 +21,9 @@ contract BridgeCCIPScript is WithEnvironment {
         return bytes32(toBytes);
     }
 
-    function bridgeToSVM(
-        string calldata fromChain_,
-        string calldata toChain_,
-        string calldata to_,
-        uint256 amount_
-    ) external {
-        _loadEnv(fromChain_);
+    function bridgeToSVM(string calldata toChain_, string calldata to_, uint256 amount_) external {
+        string memory fromChain = ChainUtils._getChainName(block.chainid);
+        _loadEnv(fromChain);
 
         // Validate that the destination chain is an SVM chain
         if (!ChainUtils._isSVMChain(toChain_)) {
@@ -51,7 +47,7 @@ contract BridgeCCIPScript is WithEnvironment {
         uint256 nativeFee = bridgeContract.getFeeSVM(dstChainId, toAddress, amount_);
 
         console2.log("Bridging");
-        console2.log("From chain:", fromChain_);
+        console2.log("From chain:", chain);
         console2.log("To chain:", toChain_);
         console2.log("To chain id:", dstChainId);
         console2.log("Amount:", amount_);
@@ -71,13 +67,9 @@ contract BridgeCCIPScript is WithEnvironment {
         console2.log("Bridge complete");
     }
 
-    function bridgeToEVM(
-        string calldata fromChain_,
-        string calldata toChain_,
-        address to_,
-        uint256 amount_
-    ) external {
-        _loadEnv(fromChain_);
+    function bridgeToEVM(string calldata toChain_, address to_, uint256 amount_) external {
+        string memory fromChain = ChainUtils._getChainName(block.chainid);
+        _loadEnv(fromChain);
 
         // Validate that the destination chain is an EVM chain
         if (ChainUtils._isSVMChain(toChain_)) {
@@ -100,7 +92,7 @@ contract BridgeCCIPScript is WithEnvironment {
         uint256 nativeFee = bridgeContract.getFeeEVM(dstChainId, to_, amount_);
 
         console2.log("Bridging");
-        console2.log("From chain:", fromChain_);
+        console2.log("From chain:", chain);
         console2.log("To chain:", toChain_);
         console2.log("To chain id:", dstChainId);
         console2.log("Amount:", amount_);
