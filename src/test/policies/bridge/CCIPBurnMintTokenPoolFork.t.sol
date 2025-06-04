@@ -209,6 +209,9 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
             );
 
             _setTrustedRemote(mainnetBridge, polygonChainSelector, address(polygonBridge));
+
+            // Gas limit needed for bridging with data
+            _setGasLimit(mainnetBridge, polygonChainSelector, 200_000);
         }
 
         // Configure the polygon token pool
@@ -223,6 +226,9 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
             );
 
             _setTrustedRemote(polygonBridge, mainnetChainSelector, address(mainnetBridge));
+
+            // Gas limit needed for bridging with data
+            _setGasLimit(polygonBridge, mainnetChainSelector, 200_000);
         }
 
         // Set the active chain to mainnet
@@ -288,6 +294,15 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     ) internal {
         vm.prank(ADMIN);
         bridge_.setTrustedRemoteEVM(chainSelector_, remote_);
+    }
+
+    function _setGasLimit(
+        CCIPCrossChainBridge bridge_,
+        uint64 chainSelector_,
+        uint32 gasLimit_
+    ) internal {
+        vm.prank(ADMIN);
+        bridge_.setGasLimit(chainSelector_, gasLimit_);
     }
 
     // ========= TESTS ========= //
