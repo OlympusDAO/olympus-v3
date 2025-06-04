@@ -31,4 +31,4 @@ echo "*** Cleaning build artifacts"
 forge clean
 
 echo "*** Running forge build"
-forge clean && forge build
+forge build
