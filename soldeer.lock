@@ -1,4 +1,11 @@
 [[dependencies]]
+name = "@openzeppelin-contracts"
+version = "4.8.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/4_8_0_22-01-2024_13:13:40_contracts.zip"
+checksum = "932598a6426b76e315bb9fac536011eb21a76984015efe9e8167c4fc9d7e32a3"
+integrity = "954367e8adec93f80c6e795012955706347cdb0359360e7c835e4dd29e5a9c2f"
+
+[[dependencies]]
 name = "base58-solidity"
 version = "1.0.3"
 git = "https://github.com/storyicon/base58-solidity.git"

@@ -10,7 +10,6 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
     'balancer-v2/=lib/balancer-v2/',
-    '@openzeppelin/=lib/openzeppelin-contracts/',
     'bonds/=lib/bonds/src/',
     'proposal-sim/=lib/forge-proposal-simulator/',
 ]
@@ -76,3 +75,4 @@ base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base5
 clones-with-immutable-args = { version = "1.0.0", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "5950723ffcfa047f13262e5dbd7218b54360c42e" }
 layer-zero-endpoint-v1 = { version = "0.0.6", git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git", rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f" }
 solmate = { version = "6.2.0", git = "https://github.com/transmissions11/solmate.git", rev = "fadb2e2778adbf01c80275bfb99e5c14969d964b" }
+"@openzeppelin-contracts" = "4.8.0"
