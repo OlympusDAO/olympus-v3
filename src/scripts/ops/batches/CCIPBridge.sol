@@ -220,6 +220,9 @@ contract CCIPBridgeBatch is BatchScriptV2 {
             )
         );
 
+        console2.log("  Trusted remote set to", vm.toString(remotePubKey));
+        console2.log("\n");
+
         // Note: at this stage, no need to set the gas limit, as it should be 0 and is 0 by default
     }
 
