@@ -1,4 +1,3 @@
-ds-test/=lib/ds-test/src/
 interfaces/=src/interfaces/
 modules/=src/modules/
 policies/=src/policies/

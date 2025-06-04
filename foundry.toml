@@ -4,7 +4,6 @@ ast = true
 legacy_assertions = true
 assertions_revert = false
 remappings = [
-    'ds-test/=lib/ds-test/src/',
     'interfaces/=src/interfaces',
     'modules/=src/modules',
     'policies/=src/policies',
