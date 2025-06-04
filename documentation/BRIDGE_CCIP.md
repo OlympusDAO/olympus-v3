@@ -27,13 +27,13 @@ This document contains instructions on how to deploy and configure bridging infr
 For canonical chains (mainnet and sepolia), run the following:
 
 ```bash
-./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_bridge_mainnet.json --env .env.< chain > --broadcast false --verify false
+./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_bridge_mainnet.json --chain <CHAIN> --broadcast false --verify false
 ```
 
 For non-canonical chains, run the following:
 
 ```bash
-./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_bridge_not_mainnet.json --env .env.< chain > --broadcast false --verify false
+./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_bridge_not_mainnet.json --chain <CHAIN> --broadcast false --verify false
 ```
 
 This will simulate the deployment.

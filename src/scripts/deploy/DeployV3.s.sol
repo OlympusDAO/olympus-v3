@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
@@ -40,7 +41,8 @@ contract DeployV3 is WithEnvironment {
 
     // ========== SETUP FUNCTIONS ========== //
 
-    function _setUp(string calldata chain_, string calldata deployFilePath_) internal {
+    function _setUp(string calldata deployFilePath_) internal {
+        string memory chain_ = ChainUtils._getChainName(block.chainid);
         _loadEnv(chain_);
 
         // Load deployment data
@@ -70,9 +72,9 @@ contract DeployV3 is WithEnvironment {
         }
     }
 
-    function deploy(string calldata chain_, string calldata deployFilePath_) external {
+    function deploy(string calldata deployFilePath_) external {
         // Setup
-        _setUp(chain_, deployFilePath_);
+        _setUp(deployFilePath_);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -117,7 +119,7 @@ contract DeployV3 is WithEnvironment {
         }
 
         // Save deployments to file
-        _saveDeployment(chain_);
+        _saveDeployment(chain);
     }
 
     function _saveDeployment(string memory chain_) internal {
