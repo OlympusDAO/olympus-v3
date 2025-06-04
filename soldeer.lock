@@ -42,6 +42,12 @@ git = "https://github.com/Recon-Fuzz/safe-utils.git"
 rev = "bec514258acb85045a4b8590c5d695f3cc9599be"
 
 [[dependencies]]
+name = "solmate"
+version = "6.2.0"
+git = "https://github.com/transmissions11/solmate.git"
+rev = "fadb2e2778adbf01c80275bfb99e5c14969d964b"
+
+[[dependencies]]
 name = "surl"
 version = "1.0.0"
 git = "https://github.com/memester-xyz/surl.git"
