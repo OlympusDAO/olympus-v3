@@ -15,9 +15,6 @@
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 	branch = v4.8.0
-[submodule "lib/clones-with-immutable-args"]
-	path = lib/clones-with-immutable-args
-	url = https://github.com/wighawag/clones-with-immutable-args
 [submodule "lib/forge-proposal-simulator"]
 	path = lib/forge-proposal-simulator
 	url = https://github.com/OlympusDAO/forge-proposal-simulator
