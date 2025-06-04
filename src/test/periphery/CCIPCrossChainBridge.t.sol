@@ -48,6 +48,8 @@ contract CCIPCrossChainBridgeTest is Test {
 
     event TrustedRemoteSVMUnset(uint64 indexed dstChainSelector);
 
+    event GasLimitSet(uint64 indexed dstChainSelector, uint32 gasLimit);
+
     event MessageFailed(bytes32 messageId);
 
     event RetryMessageSuccess(bytes32 messageId);
@@ -330,6 +332,8 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it reverts
     // given the destination SVM chain's trusted remote is set to the zero address
     //  [X] the recipient address is the zero address
+    // given the destination chain has a gas limit set
+    //  [X] it uses the gas limit
     // [X] the recipient address is the trusted remote
     // [X] the SVM extra args compute units are the default compute units
     // [X] the SVM extra args writeable bitmap is 0
@@ -487,6 +491,63 @@ contract CCIPCrossChainBridgeTest is Test {
         assertEq(address(router).balance, FEE, "router ETH balance");
     }
 
+    function test_sendToSVM_gasLimitSet()
+        public
+        givenContractIsEnabled
+        givenDestinationSVMChainHasTrustedRemote
+        givenSenderHasApprovedSpendingOHM(AMOUNT)
+    {
+        // Set the gas limit
+        vm.prank(OWNER);
+        bridge.setGasLimit(DESTINATION_CHAIN_SELECTOR, 200_000);
+
+        // Expect event
+        vm.expectEmit();
+        emit Bridged(router.DEFAULT_MESSAGE_ID(), DESTINATION_CHAIN_SELECTOR, SENDER, AMOUNT, FEE);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToSVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, SVM_RECIPIENT, AMOUNT);
+
+        // Assert message parameters
+        assertEq(
+            router.destinationChainSelector(),
+            DESTINATION_CHAIN_SELECTOR,
+            "destinationChainSelector"
+        );
+        assertEq(router.messageReceiver(), abi.encodePacked(SVM_TRUSTED_REMOTE), "messageReceiver");
+        assertEq(router.messageData().length, 0, "messageData");
+        assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
+        address[] memory tokens = router.getMessageTokens();
+        assertEq(tokens.length, 1, "tokens.length");
+        assertEq(tokens[0], address(OHM), "tokens[0]");
+        uint256[] memory amounts = router.getMessageTokenAmounts();
+        assertEq(amounts.length, 1, "amounts.length");
+        assertEq(amounts[0], AMOUNT, "amounts[0]");
+        bytes memory extraArgs = router.messageExtraArgs();
+        assertEq(
+            extraArgs,
+            Client._svmArgsToBytes(
+                Client.SVMExtraArgsV1({
+                    computeUnits: 200_000,
+                    accountIsWritableBitmap: 0,
+                    allowOutOfOrderExecution: true,
+                    tokenReceiver: SVM_RECIPIENT,
+                    accounts: new bytes32[](0)
+                })
+            ),
+            "extraArgs"
+        );
+
+        // Assert token balances
+        assertEq(OHM.balanceOf(SENDER), 0, "SENDER OHM balance");
+        assertEq(OHM.balanceOf(address(bridge)), 0, "bridge OHM balance");
+        assertEq(OHM.balanceOf(address(router)), AMOUNT, "router OHM balance");
+        assertEq(SENDER.balance, ETH_AMOUNT - FEE, "SENDER ETH balance");
+        assertEq(address(bridge).balance, 0, "bridge ETH balance");
+        assertEq(address(router).balance, FEE, "router ETH balance");
+    }
+
     function test_sendToSVM()
         public
         givenContractIsEnabled
@@ -555,6 +616,8 @@ contract CCIPCrossChainBridgeTest is Test {
     //  [X] it reverts
     // given the destination chain's trusted remote is set to the zero address
     //  [X] the recipient address is the zero address
+    // given the destination chain has a gas limit set
+    //  [X] it uses the gas limit
     // [X] the recipient address is the destination chain's CrossChainBridge address
     // [X] the data contains the actual recipient address
     // [X] the EVM extra args gas limit is the default gas limit
@@ -691,6 +754,58 @@ contract CCIPCrossChainBridgeTest is Test {
         assertEq(
             extraArgs,
             Client._argsToBytes(
+                Client.GenericExtraArgsV2({gasLimit: 0, allowOutOfOrderExecution: true})
+            ),
+            "extraArgs"
+        );
+
+        // Assert token balances
+        assertEq(OHM.balanceOf(SENDER), 0, "SENDER OHM balance");
+        assertEq(OHM.balanceOf(address(bridge)), 0, "bridge OHM balance");
+        assertEq(OHM.balanceOf(address(router)), AMOUNT, "router OHM balance");
+        assertEq(SENDER.balance, ETH_AMOUNT - FEE, "SENDER ETH balance");
+        assertEq(address(bridge).balance, 0, "bridge ETH balance");
+        assertEq(address(router).balance, FEE, "router ETH balance");
+    }
+
+    function test_sendToEVM_gasLimitSet()
+        public
+        givenContractIsEnabled
+        givenDestinationEVMChainHasTrustedRemote
+        givenSenderHasApprovedSpendingOHM(AMOUNT)
+    {
+        // Set the gas limit
+        vm.prank(OWNER);
+        bridge.setGasLimit(DESTINATION_CHAIN_SELECTOR, 200_000);
+
+        // Expect event
+        vm.expectEmit();
+        emit Bridged(router.DEFAULT_MESSAGE_ID(), DESTINATION_CHAIN_SELECTOR, SENDER, AMOUNT, FEE);
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.sendToEVM{value: FEE}(DESTINATION_CHAIN_SELECTOR, EVM_RECIPIENT, AMOUNT);
+
+        // Assert message parameters
+        assertEq(
+            router.destinationChainSelector(),
+            DESTINATION_CHAIN_SELECTOR,
+            "destinationChainSelector"
+        );
+        assertEq(router.messageReceiver(), abi.encode(EVM_TRUSTED_REMOTE), "messageReceiver");
+        bytes memory messageData = router.messageData();
+        assertEq(abi.decode(messageData, (address)), EVM_RECIPIENT, "messageData");
+        assertEq(router.messageFeeToken(), address(0), "messageFeeToken");
+        address[] memory tokens = router.getMessageTokens();
+        assertEq(tokens.length, 1, "tokens.length");
+        assertEq(tokens[0], address(OHM), "tokens[0]");
+        uint256[] memory amounts = router.getMessageTokenAmounts();
+        assertEq(amounts.length, 1, "amounts.length");
+        assertEq(amounts[0], AMOUNT, "amounts[0]");
+        bytes memory extraArgs = router.messageExtraArgs();
+        assertEq(
+            extraArgs,
+            Client._argsToBytes(
                 Client.GenericExtraArgsV2({gasLimit: 200_000, allowOutOfOrderExecution: true})
             ),
             "extraArgs"
@@ -739,7 +854,7 @@ contract CCIPCrossChainBridgeTest is Test {
         assertEq(
             extraArgs,
             Client._argsToBytes(
-                Client.GenericExtraArgsV2({gasLimit: 200_000, allowOutOfOrderExecution: true})
+                Client.GenericExtraArgsV2({gasLimit: 0, allowOutOfOrderExecution: true})
             ),
             "extraArgs"
         );
@@ -1656,5 +1771,51 @@ contract CCIPCrossChainBridgeTest is Test {
         );
         assertEq(svmRemote.remoteAddress, SVM_TRUSTED_REMOTE, "svmAddress");
         assertEq(svmRemote.isSet, true, "svmIsSet");
+    }
+
+    // setGasLimit
+    // when the caller is not the owner
+    //  [X] it reverts
+    // [X] it sets the gas limit for the destination chain
+    // [X] it emits an event
+
+    function test_setGasLimit_callerNotOwner_reverts() public {
+        // Expect revert
+        vm.expectRevert("UNAUTHORIZED");
+
+        // Call function
+        vm.prank(SENDER);
+        bridge.setGasLimit(DESTINATION_CHAIN_SELECTOR, 200_000);
+    }
+
+    function test_setGasLimit(uint32 gasLimit_) public {
+        // Expect event
+        vm.expectEmit();
+        emit GasLimitSet(DESTINATION_CHAIN_SELECTOR, gasLimit_);
+
+        // Call function
+        vm.prank(OWNER);
+        bridge.setGasLimit(DESTINATION_CHAIN_SELECTOR, gasLimit_);
+
+        // Assert state
+        assertEq(bridge.getGasLimit(DESTINATION_CHAIN_SELECTOR), gasLimit_, "gasLimit");
+    }
+
+    // getGasLimit
+    // when the destination chain does not have a gas limit set
+    //  [X] it returns 0
+    // [X] it returns the gas limit
+
+    function test_getGasLimit_destinationChainNotSet_reverts() public view {
+        assertEq(bridge.getGasLimit(DESTINATION_CHAIN_SELECTOR), 0, "gasLimit");
+    }
+
+    function test_getGasLimit() public {
+        // Set the gas limit
+        vm.prank(OWNER);
+        bridge.setGasLimit(DESTINATION_CHAIN_SELECTOR, 200_000);
+
+        // Call function
+        assertEq(bridge.getGasLimit(DESTINATION_CHAIN_SELECTOR), 200_000, "gasLimit");
     }
 }
