@@ -3,14 +3,6 @@ ffi = true
 ast = true
 legacy_assertions = true
 assertions_revert = false
-remappings = [
-    'interfaces/=src/interfaces',
-    'modules/=src/modules',
-    'policies/=src/policies',
-    'libraries/=src/libraries',
-    'balancer-v2/=lib/balancer-v2/',
-    'bonds/=lib/bonds/src/',
-]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
     {access = "read-write", path = "./deployments/"},
@@ -37,7 +29,7 @@ compilation_restrictions = [
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
     { paths = "**", version = "0.8.15" },
 ]
-# libs = ["dependencies"]
+libs = ["dependencies"]
 
 [profile.deploy]
 script_execution_protection = false
