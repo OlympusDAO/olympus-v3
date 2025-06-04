@@ -279,6 +279,56 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         proposeBatch();
     }
 
+    function _setGasLimitEVM(string memory remoteChain_, uint32 gasLimit_) internal {
+        // Validate that the chain is an EVM chain
+        if (ChainUtils._isSVMChain(remoteChain_)) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("_setGasLimitEVM: Chain is not an EVM chain");
+        }
+
+        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
+        if (bridgeAddress == address(0)) {
+            console2.log("\n");
+            console2.log("  No bridge found for", chain, ". Skipping.");
+            console2.log("\n");
+            return;
+        }
+
+        uint64 remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+        );
+
+        console2.log("\n");
+        console2.log("  Destination EVM chain:", remoteChain_);
+
+        // Set the gas limit
+        addToBatch(
+            bridgeAddress,
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.setGasLimit.selector,
+                remoteChainSelector,
+                gasLimit_
+            )
+        );
+
+        console2.log("  Gas limit set to", gasLimit_);
+        console2.log("\n");
+    }
+
+    function setGasLimitEVM(
+        bool useDaoMS_,
+        string calldata remoteChain_,
+        uint32 gasLimit_
+    ) external setUpWithChainId(useDaoMS_) {
+        // Set the gas limit
+        _setGasLimitEVM(remoteChain_, gasLimit_);
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
     function transferOwnership(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
         address newOwner = _envAddressNotZero("olympus.multisig.dao");
