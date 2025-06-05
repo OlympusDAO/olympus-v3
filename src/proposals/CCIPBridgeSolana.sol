@@ -34,7 +34,7 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
                 "# Solana CCIP Bridge Activation\n\n",
                 "This is an in-principle proposal for activating the CCIP Bridge for Solana.\n\n",
                 "## Justification\n\n",
-                "As voted upon in [OIP-183](https://snapshot.box/#/s:olympusdao.eth/proposal/0x737aeb9e5b5ecf1bd757ec46dd6a1a3c4332b2b30cf6156fde19cd532e4200d3), it was proposed that CCIP be used to implement as bridging infrastructure to Solana.\n\n",
+                "As voted upon in [OIP-183](https://snapshot.box/#/s:olympusdao.eth/proposal/0x737aeb9e5b5ecf1bd757ec46dd6a1a3c4332b2b30cf6156fde19cd532e4200d3), it was proposed that CCIP be implemented as bridging infrastructure to Solana.\n\n",
                 "The contracts are designed in a way where they do not require privileged actions nor permissions, and so do not require installation/activation in the Kernel.\n\n",
                 "However, as it was explicitly mentioned in the OIP that there would be an OCG proposal for this matter, this proposal has been created.\n\n",
                 "The CCIP Bridge will operate between Ethereum mainnet and Solana mainnet.\n\n",
@@ -48,7 +48,7 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
                 "The custom/modified contracts have been [audited by Electisec](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-06_Electisec_CCIP_Bridge.pdf).\n\n",
                 "The code changes can be viewed at [PR 69](https://github.com/OlympusDAO/olympus-v3/pull/69).\n\n",
                 "## Proposal Steps\n\n",
-                "As stated, this proposal is an in-principle proposal, and there are no bridge-related actions to be taken upon execution of the proposal. For technical reasons, there is a dummy action (OHM balance of the DAO MS) that will be taken to make the proposal valid.\n\n",
+                "As stated, this proposal is an in-principle proposal, and there are no automated actions upon execution of the proposal. For technical reasons, there is a dummy action (OHM balance of the DAO MS) that will be taken to make the proposal valid.\n\n",
                 "At the completion of the proposal, the DAO MS will enable the bridging contracts in order to allow bridging to/from Solana.\n\n"
             );
     }
