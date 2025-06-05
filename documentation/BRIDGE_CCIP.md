@@ -112,7 +112,9 @@ forge script src/scripts/ops/batches/CCIPBridge.sol --sig "setGasLimitEVM(bool,s
 
 For destination chains where burning and minting is taking place (i.e. non-canonical chains), CCIP will need to set the destination gas overhead, which will cause the fees to be slightly higher. This is because there is gas consumed when minting on the destination chain.
 
-This will need to be repeated for all non-canonical chains. A future update (CCIP 1.7) will allow this to be user-configureable.
+This will need to be repeated for all non-canonical chains. A future update (CCIP 1.7) will allow this to be user-configurable.
+
+The current value for this is 175,000 gas.
 
 ### Transfer Ownership of Token Administrator Role to DAO MS
 
