@@ -29,7 +29,7 @@ Set up a foundry config in foundry.toml.
 Up-to-date addresses of all the deployments can be found in:
 
 - the olymsig repos: [mainnet](https://github.com/OlympusDAO/olymsig) and [testnet](https://github.com/OlympusDAO/olymsig-testnet)
-- [the official docs](https://docs.olympusdao.finance/main/technical/addresses)
+- [the official docs](https://docs.olympusdao.finance/main/contracts/addresses)
 
 ### Privileged Testnet Accounts (Multi-sigs)
 
@@ -53,3 +53,10 @@ See [DEPLOY.md](src/scripts/DEPLOY.md) and [DEPLOY_L2.md](src/scripts/DEPLOY_L2.
 - Deploy any dependencies (if on testnet)
 - Deploy BLV contracts
 - Activate BLV contracts with the BLV registry (using an olymsig script)
+
+## Cooler V2
+
+- Deploy the `cooler_v2.json` sequence
+- Set the deployed addresses in `src/scripts/env.json`
+- Run the governance proposal to activate the Cooler V2 contracts. This should also set the treasury borrower.
+- Deploy the `cooler_v2_periphery.json` sequence

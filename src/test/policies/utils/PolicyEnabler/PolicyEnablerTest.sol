@@ -100,7 +100,7 @@ contract PolicyEnablerTest is Test {
         uint256 expectedEnableValue_,
         uint256 expectedDisableValue_,
         uint256 expectedDisableAnotherValue_
-    ) internal {
+    ) internal view {
         // Assert enabled
         assertEq(policyEnabler.isEnabled(), isEnabled_, "isEnabled");
 

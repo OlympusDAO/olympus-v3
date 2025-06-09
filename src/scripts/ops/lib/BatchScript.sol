@@ -164,15 +164,17 @@ abstract contract BatchScript is Script {
         chainId = chain.chainId;
 
         // Set the Safe API base URL and multisend address based on chain
+        // These addresses are the multisend call only addresses
+        // Source: https://github.com/safe-global/safe-deployments/blob/v1.37.32/src/assets/v1.3.0/multi_send_call_only.json
         if (chainId == 1) {
             SAFE_API_BASE_URL = "https://safe-transaction-mainnet.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 5) {
             SAFE_API_BASE_URL = "https://safe-transaction-goerli.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 42161) {
             SAFE_API_BASE_URL = "https://safe-transaction-arbitrum.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else {
             revert("Unsupported chain");
         }
