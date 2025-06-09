@@ -150,6 +150,31 @@
         "name": "olympus-policy-contract-registry-admin"
     },
     {
+        "addr": "0xD3204Ae00d6599Ba6e182c6D640A79d76CdAad74",
+        "chainId": 1,
+        "name": "olympus-module-dlgte"
+    },
+    {
+        "addr": "0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC",
+        "chainId": 1,
+        "name": "olympus-policy-cooler-v2"
+    },
+    {
+        "addr": "0xD58d7406E9CE34c90cf849Fc3eed3764EB3779B0",
+        "chainId": 1,
+        "name": "olympus-policy-cooler-v2-treasury-borrower"
+    },
+    {
+        "addr": "0x9ee9f0c2e91E4f6B195B988a9e6e19efcf91e8dc",
+        "chainId": 1,
+        "name": "olympus-policy-cooler-v2-ltv-oracle"
+    },
+    {
+        "addr": "0xe6C5dc8508939B1c417f83B7fed3149ef22cF3Ff",
+        "chainId": 1,
+        "name": "origami-finance-hohm-manager"
+    },
+    {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-convertible-deposit-auctioneer"

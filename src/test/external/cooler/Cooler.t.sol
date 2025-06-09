@@ -733,7 +733,7 @@ contract CoolerTest is Test {
 
         vm.prank(owner);
         cooler.delegateVoting(others);
-        assertEq(others, collateral.delegatee());
+        assertEq(others, collateral.delegates(address(cooler)));
     }
 
     function testRevertFuzz_delegateVoting_onlyOwner(uint256 amount_) public {

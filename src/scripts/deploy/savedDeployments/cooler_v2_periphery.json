@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "CoolerV2Migrator",
+            "args": {}
+        },
+        {
+            "name": "CoolerV2Composites",
+            "args": {}
+        }
+    ]
+}

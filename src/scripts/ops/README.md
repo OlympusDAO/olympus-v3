@@ -9,5 +9,5 @@ To run the scripts on a testnet/forked chain, provide the `--testnet` flag to th
 For example:
 
 ```bash
-./batch.sh --contract ContractRegistryInstall --batch script1_install --broadcast true --testnet true --env .env.testnet
+./shell/safeBatch.sh --contract ContractRegistryInstall --batch script1_install --broadcast true --testnet true --env .env.testnet
 ```
