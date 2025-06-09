@@ -12,6 +12,8 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 abstract contract AssetManager is IAssetManager {
     using SafeTransferLib for ERC20;
 
+    // TODO shift to named parameters in mappings (req 0.8.18)
+
     struct AssetConfiguration {
         bool isConfigured;
         address vault;

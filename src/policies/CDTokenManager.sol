@@ -34,6 +34,7 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     // [X] Idle/vault strategy for deposited tokens
     // [ ] ERC6909 migration
     // [ ] Rename to receipt tokens
+    // [X] CDTokenSupply to depositor supply
 
     // ========== STATE VARIABLES ========== //
 
@@ -43,6 +44,10 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     /// @notice Maps depositors and CD tokens to the number of CD tokens they have minted
     /// @dev    This is used to ensure that the CD token is redeemable/solvent
     mapping(address => mapping(IConvertibleDepositERC20 => uint256)) internal _cdTokenSupply;
+
+    /// @notice Maps assets and depositors to the number of receipt tokens that have been minted
+    /// @dev    This is used to ensure that the receipt tokens are solvent
+    mapping(address => mapping(address => uint256)) internal _receiptTokenSupply;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -95,8 +100,8 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         // Deposit into vault
         uint256 shares = _depositAsset(address(cdToken_.asset()), msg.sender, amount_);
 
-        // Update the CD token supply for the caller
-        _cdTokenSupply[msg.sender][cdToken_] += amount_;
+        // Update the asset tracking
+        _receiptTokenSupply[address(cdToken_.asset())][msg.sender] += amount_;
 
         // Mint the CD token to the caller
         // This will also validate that the CD token is supported
@@ -119,10 +124,10 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         // The CD token supply is not adjusted here, as there is no minting/burning of CD tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are CD tokens, otherwise the CD token is not redeemable
-        if (_cdTokenSupply[msg.sender][cdToken_] > getDepositedAssets(asset, msg.sender)) {
+        if (_receiptTokenSupply[asset][msg.sender] > getDepositedAssets(asset, msg.sender)) {
             revert ConvertibleDepositTokenManager_Insolvent(
                 address(cdToken_),
-                _cdTokenSupply[msg.sender][cdToken_],
+                _receiptTokenSupply[asset][msg.sender],
                 getDepositedAssets(asset, msg.sender)
             );
         }
@@ -142,19 +147,11 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         // Withdraw the funds from the vault
         shares = _withdrawAsset(address(cdToken_.asset()), msg.sender, amount_);
 
-        // Update the CD token supply for the caller
-        _cdTokenSupply[msg.sender][cdToken_] -= amount_;
+        // Update the asset tracking
+        _receiptTokenSupply[address(cdToken_.asset())][msg.sender] -= amount_;
 
         // Emit an event
         emit Burn(msg.sender, address(cdToken_), amount_, shares);
-    }
-
-    /// @inheritdoc IConvertibleDepositTokenManager
-    function getTokenSupply(
-        address depositor_,
-        IConvertibleDepositERC20 cdToken_
-    ) external view returns (uint256 supply) {
-        supply = _cdTokenSupply[depositor_][cdToken_];
     }
 
     // ========== ADMIN FUNCTIONS ========== //
