@@ -24,7 +24,10 @@ fs_permissions = [
     {access = "read", path = "./src/scripts/"},
     {access = "read", path = "./src/proposals/addresses.json"},
 ]
-solc_version = "0.8.15"
+
+# The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
+# solc_version = "0.8.15"
+
 optimizer = true
 optimizer_runs = 10000
 chain_id = 1
@@ -38,6 +41,7 @@ additional_compiler_profiles = [
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
+    { paths = "**", version = "0.8.15" },
 ]
 
 [fuzz]

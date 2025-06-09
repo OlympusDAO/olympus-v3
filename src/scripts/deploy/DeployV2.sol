@@ -95,10 +95,9 @@ import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
-import {CDTokenManager} from "policies/CDTokenManager.sol";
-import {CDAuctioneer} from "policies/CDAuctioneer.sol";
-import {CDFacility} from "policies/CDFacility.sol";
-import {CDTokenManager} from "policies/CDTokenManager.sol";
+// import {CDTokenManager} from "policies/CDTokenManager.sol";
+// import {CDAuctioneer} from "policies/CDAuctioneer.sol";
+// import {CDFacility} from "policies/CDFacility.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -147,9 +146,9 @@ contract OlympusDeploy is Script {
     YieldRepurchaseFacility public yieldRepo;
     ReserveMigrator public reserveMigrator;
     EmissionManager public emissionManager;
-    CDAuctioneer public cdAuctioneer;
-    CDFacility public cdFacility;
-    CDTokenManager public cdTokenManager;
+    // CDAuctioneer public cdAuctioneer;
+    // CDFacility public cdFacility;
+    // CDTokenManager public cdTokenManager;
     CoolerLtvOracle public coolerV2LtvOracle;
     CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
     MonoCooler public coolerV2;
@@ -248,10 +247,10 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
-        selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
-        selectorMap["OlympusConvertibleDepositPositionManager"] = this
-            ._deployConvertibleDepositPositionManager
-            .selector;
+        // selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
+        // selectorMap["OlympusConvertibleDepositPositionManager"] = this
+        //     ._deployConvertibleDepositPositionManager
+        //     .selector;
         selectorMap["OlympusGovDelegation"] = this._deployGovDelegation.selector;
         selectorMap["DelegateEscrowFactory"] = this._deployDelegateEscrowFactory.selector;
         // Policies
@@ -281,13 +280,13 @@ contract OlympusDeploy is Script {
         selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
-        selectorMap["ConvertibleDepositAuctioneer"] = this
-            ._deployConvertibleDepositAuctioneer
-            .selector;
-        selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
-        selectorMap["ConvertibleDepositTokenManager"] = this
-            ._deployConvertibleDepositTokenManager
-            .selector;
+        // selectorMap["ConvertibleDepositAuctioneer"] = this
+        //     ._deployConvertibleDepositAuctioneer
+        //     .selector;
+        // selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
+        // selectorMap["ConvertibleDepositTokenManager"] = this
+        //     ._deployConvertibleDepositTokenManager
+        //     .selector;
 
         // Cooler Loans V2
         selectorMap["CoolerV2LtvOracle"] = this._deployCoolerV2LtvOracle.selector;
@@ -395,11 +394,11 @@ contract OlympusDeploy is Script {
         loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
-        cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
-        cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
-        cdTokenManager = CDTokenManager(
-            envAddress("olympus.policies.ConvertibleDepositTokenManager")
-        );
+        // cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
+        // cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
+        // cdTokenManager = CDTokenManager(
+        //     envAddress("olympus.policies.ConvertibleDepositTokenManager")
+        // );
 
         // Cooler Loans V2
         coolerV2LtvOracle = CoolerLtvOracle(envAddress("olympus.policies.CoolerV2LtvOracle"));
@@ -1562,6 +1561,8 @@ contract OlympusDeploy is Script {
     function _deployEmissionManager(bytes calldata) public returns (address) {
         // No additional arguments for EmissionManager
 
+        address cdAuctioneer = address(0); // TODO: Add cdAuctioneer
+
         // Log dependencies
         console2.log("EmissionManager parameters:");
         console2.log("   kernel", address(kernel));
@@ -1593,90 +1594,90 @@ contract OlympusDeploy is Script {
 
     // ========== CONVERTIBLE DEPOSIT ========== //
 
-    function _deployConvertibleDepository(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDepository
+    // function _deployConvertibleDepository(bytes calldata) public returns (address) {
+    //     // No additional arguments for ConvertibleDepository
 
-        // Log dependencies
-        console2.log("ConvertibleDepository parameters:");
-        console2.log("   kernel", address(kernel));
+    //     // Log dependencies
+    //     console2.log("ConvertibleDepository parameters:");
+    //     console2.log("   kernel", address(kernel));
 
-        // Deploy ConvertibleDepository
-        vm.broadcast();
-        CDEPO = new OlympusConvertibleDepository(kernel);
-        console2.log("ConvertibleDepository deployed at:", address(CDEPO));
+    //     // Deploy ConvertibleDepository
+    //     vm.broadcast();
+    //     CDEPO = new OlympusConvertibleDepository(kernel);
+    //     console2.log("ConvertibleDepository deployed at:", address(CDEPO));
 
-        return address(CDEPO);
-    }
+    //     return address(CDEPO);
+    // }
 
-    function _deployConvertibleDepositPositionManager(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDepositPositionManager
+    // function _deployConvertibleDepositPositionManager(bytes calldata) public returns (address) {
+    //     // No additional arguments for ConvertibleDepositPositionManager
 
-        // Log dependencies
-        console2.log("ConvertibleDepositPositionManager parameters:");
-        console2.log("   kernel", address(kernel));
+    //     // Log dependencies
+    //     console2.log("ConvertibleDepositPositionManager parameters:");
+    //     console2.log("   kernel", address(kernel));
 
-        // Deploy ConvertibleDepositPositionManager
-        vm.broadcast();
-        CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
-        console2.log("ConvertibleDepositPositionManager deployed at:", address(CDPOS));
+    //     // Deploy ConvertibleDepositPositionManager
+    //     vm.broadcast();
+    //     CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
+    //     console2.log("ConvertibleDepositPositionManager deployed at:", address(CDPOS));
 
-        return address(CDPOS);
-    }
+    //     return address(CDPOS);
+    // }
 
-    function _deployConvertibleDepositTokenManager(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDepositTokenManager
+    // function _deployConvertibleDepositTokenManager(bytes calldata) public returns (address) {
+    //     // No additional arguments for ConvertibleDepositTokenManager
 
-        // Log dependencies
-        console2.log("ConvertibleDepositTokenManager parameters:");
-        console2.log("   kernel", address(kernel));
+    //     // Log dependencies
+    //     console2.log("ConvertibleDepositTokenManager parameters:");
+    //     console2.log("   kernel", address(kernel));
 
-        // Deploy ConvertibleDepositTokenManager
-        vm.broadcast();
-        cdTokenManager = new CDTokenManager(address(kernel));
-        console2.log("ConvertibleDepositTokenManager deployed at:", address(cdTokenManager));
+    //     // Deploy ConvertibleDepositTokenManager
+    //     vm.broadcast();
+    //     cdTokenManager = new CDTokenManager(address(kernel));
+    //     console2.log("ConvertibleDepositTokenManager deployed at:", address(cdTokenManager));
 
-        return address(cdTokenManager);
-    }
+    //     return address(cdTokenManager);
+    // }
 
-    function _deployConvertibleDepositAuctioneer(bytes calldata args_) public returns (address) {
-        // No additional arguments for ConvertibleDepositAuctioneer
-        uint8 depositPeriodMonths = abi.decode(args_, (uint8));
+    // function _deployConvertibleDepositAuctioneer(bytes calldata args_) public returns (address) {
+    //     // No additional arguments for ConvertibleDepositAuctioneer
+    //     uint8 depositPeriodMonths = abi.decode(args_, (uint8));
 
-        // Log dependencies
-        console2.log("ConvertibleDepositAuctioneer parameters:");
-        console2.log("   kernel", address(kernel));
-        console2.log("   cdFacility", address(cdFacility));
-        console2.log("   reserveToken", address(reserve));
-        console2.log("   depositPeriodMonths", depositPeriodMonths);
+    //     // Log dependencies
+    //     console2.log("ConvertibleDepositAuctioneer parameters:");
+    //     console2.log("   kernel", address(kernel));
+    //     console2.log("   cdFacility", address(cdFacility));
+    //     console2.log("   reserveToken", address(reserve));
+    //     console2.log("   depositPeriodMonths", depositPeriodMonths);
 
-        // Deploy ConvertibleDepositAuctioneer
-        vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(
-            address(kernel),
-            address(cdFacility),
-            address(reserve),
-            depositPeriodMonths
-        );
-        console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
+    //     // Deploy ConvertibleDepositAuctioneer
+    //     vm.broadcast();
+    //     cdAuctioneer = new CDAuctioneer(
+    //         address(kernel),
+    //         address(cdFacility),
+    //         address(reserve),
+    //         depositPeriodMonths
+    //     );
+    //     console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
-        return address(cdAuctioneer);
-    }
+    //     return address(cdAuctioneer);
+    // }
 
-    function _deployConvertibleDepositFacility(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDepositFacility
+    // function _deployConvertibleDepositFacility(bytes calldata) public returns (address) {
+    //     // No additional arguments for ConvertibleDepositFacility
 
-        // Log dependencies
-        console2.log("ConvertibleDepositFacility parameters:");
-        console2.log("   kernel", address(kernel));
-        console2.log("   cdTokenManager", address(cdTokenManager));
+    //     // Log dependencies
+    //     console2.log("ConvertibleDepositFacility parameters:");
+    //     console2.log("   kernel", address(kernel));
+    //     console2.log("   cdTokenManager", address(cdTokenManager));
 
-        // Deploy ConvertibleDepositFacility
-        vm.broadcast();
-        cdFacility = new CDFacility(address(kernel), address(cdTokenManager));
-        console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
+    //     // Deploy ConvertibleDepositFacility
+    //     vm.broadcast();
+    //     cdFacility = new CDFacility(address(kernel), address(cdTokenManager));
+    //     console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
 
-        return address(cdFacility);
-    }
+    //     return address(cdFacility);
+    // }
 
     // ========== VERIFICATION ========== //
 
