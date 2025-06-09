@@ -17,7 +17,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
 
     bytes32 public constant SOLANA_RECEIVER =
         0x0000000000000000000000000000000000000000000000000000000000000000;
-    uint32 public constant EVM_GAS_LIMIT = 200_000;
+    uint32 public constant EVM_GAS_LIMIT = 90_000;
 
     /// @notice Sets trusted remotes and enables the bridge for the specified chain
     function enable(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
