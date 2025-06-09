@@ -1,4 +1,11 @@
 [[dependencies]]
+name = "@openzeppelin-contracts"
+version = "5.3.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/5_3_0_10-04-2025_10:51:50_contracts.zip"
+checksum = "fa2bc3db351137c4d5eb32b738a814a541b78e87fbcbfeca825e189c4c787153"
+integrity = "d69addf252dfe0688dcd893a7821cbee2421f8ce53d95ca0845a59530043cfd1"
+
+[[dependencies]]
 name = "base64"
 version = "1.1.0"
 git = "https://github.com/Brechtpd/base64.git"
