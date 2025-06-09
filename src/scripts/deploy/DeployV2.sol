@@ -77,6 +77,7 @@ import {OlympusContractRegistry} from "modules/RGSTY/OlympusContractRegistry.sol
 import {ContractRegistryAdmin} from "policies/ContractRegistryAdmin.sol";
 import {ReserveMigrator} from "policies/ReserveMigrator.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
+import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
@@ -94,8 +95,9 @@ import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
+import {CDTokenManager} from "policies/CDTokenManager.sol";
+import {CDAuctioneer} from "policies/CDAuctioneer.sol";
 import {CDFacility} from "policies/CDFacility.sol";
-import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 import {CDTokenManager} from "policies/CDTokenManager.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
