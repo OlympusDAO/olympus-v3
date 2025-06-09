@@ -6,14 +6,13 @@
 # ./deployV3.sh
 #   --account <cast wallet>
 #   --sequence <sequence-file>
+#   --chain <chain-name>
 #   [--broadcast <false>]
 #   [--verify <false>]
 #   [--resume <false>]
 #   [--env <env-file>]
 #
 # Environment variables:
-# RPC_URL
-# CHAIN
 # ETHERSCAN_KEY (only needed if verify is true)
 # VERIFIER_URL (only needed for a custom verifier or on a fork)
 
@@ -38,19 +37,17 @@ echo ""
 echo "Validating arguments"
 validate_text "$sequence" "No deployment sequence specified or it does not exist. Provide the relative path after the --sequence flag."
 validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
+validate_text "$chain" "No chain specified. Specify the chain after the --chain flag."
 
 # Validate environment variables
 echo ""
 echo "Validating environment variables"
-validate_text "$CHAIN" "No chain specified. Specify the CHAIN in the $ENV_FILE file."
-validate_text "$RPC_URL" "No RPC URL specified. Specify the RPC_URL in the $ENV_FILE file."
 
 echo ""
 echo "Summary:"
 echo "  Deploying from account: $account"
 echo "  Deployment sequence: $sequence"
-echo "  Chain: $CHAIN"
-echo "  Using RPC at URL: $RPC_URL"
+echo "  Chain: $chain"
 
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
@@ -63,8 +60,8 @@ set_account_address $account
 echo ""
 echo "Running forge script"
 FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV3.s.sol:DeployV3 \
-    --sig "deploy(string,string)()" $CHAIN $sequence \
-    --rpc-url $RPC_URL \
+    --sig "deploy(string)()" $sequence \
+    --rpc-url $chain \
     --account $account \
     --slow \
     -vvv \

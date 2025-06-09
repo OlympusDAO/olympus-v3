@@ -2054,6 +2054,8 @@ contract GovernorBravoDelegateTest is Test {
     }
 
     function testCorrectness_execute_supplyDrops_onlyVetoGuardian(address rando_) public {
+        vm.assume(rando_ != vetoGuardian);
+
         uint256 proposalId = _queueProposal(1);
 
         // Burn all gOHM

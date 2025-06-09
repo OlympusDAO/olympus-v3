@@ -5,6 +5,8 @@ pragma solidity >=0.8.15;
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
+import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
@@ -40,7 +42,8 @@ contract DeployV3 is WithEnvironment {
 
     // ========== SETUP FUNCTIONS ========== //
 
-    function _setUp(string calldata chain_, string calldata deployFilePath_) internal {
+    function _setUp(string calldata deployFilePath_) internal {
+        string memory chain_ = ChainUtils._getChainName(block.chainid);
         _loadEnv(chain_);
 
         // Load deployment data
@@ -70,9 +73,9 @@ contract DeployV3 is WithEnvironment {
         }
     }
 
-    function deploy(string calldata chain_, string calldata deployFilePath_) external {
+    function deploy(string calldata deployFilePath_) external {
         // Setup
-        _setUp(chain_, deployFilePath_);
+        _setUp(deployFilePath_);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -117,10 +120,16 @@ contract DeployV3 is WithEnvironment {
         }
 
         // Save deployments to file
-        _saveDeployment(chain_);
+        _saveDeployment(chain);
     }
 
     function _saveDeployment(string memory chain_) internal {
+        // Skip if broadcast is not enabled
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Broadcast not enabled. Skipping saving deployments");
+            return;
+        }
+
         // Create the deployments folder if it doesn't exist
         if (!vm.isDir("./deployments")) {
             console2.log("Creating deployments directory");
@@ -255,6 +264,18 @@ contract DeployV3 is WithEnvironment {
             );
     }
 
+    function _getDeployer() internal returns (address) {
+        (, address msgSender, ) = vm.readCallers();
+
+        // Validate that the sender is not the default deployer (or else it can cause problems)
+        if (msgSender == address(0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38)) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("Cannot use the default foundry deployer address, specify using --sender");
+        }
+
+        return msgSender;
+    }
+
     // ========== DEPLOYMENT FUNCTIONS ========== //
 
     function deployCCIPBurnMintTokenPool() public returns (address, string memory) {
@@ -324,20 +345,20 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
         address ccipRouter = _envAddressNotZero("external.ccip.Router");
-        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        address owner = _getDeployer(); // Make the deployer the initial owner, so the configuration can be completed easily
 
         // Log dependencies
         console2.log("CCIPCrossChainBridge parameters:");
         console2.log("  ohm", ohm);
         console2.log("  ccipRouter", ccipRouter);
-        console2.log("  owner", daoMS);
+        console2.log("  owner", owner);
 
         // Deploy CCIPCrossChainBridge
         vm.broadcast();
         CCIPCrossChainBridge ccipCrossChainBridge = new CCIPCrossChainBridge(
             ohm,
             ccipRouter,
-            daoMS
+            owner
         );
 
         return (address(ccipCrossChainBridge), "olympus.periphery");
