@@ -79,16 +79,6 @@ interface IConvertibleDepositTokenManager {
         uint256 amount_
     ) external returns (uint256 shares);
 
-    /// @notice Returns the number of shares that the given address has in the given vault
-    ///
-    /// @param  depositor_      The address of the depositor
-    /// @param  vault_          The address of the vault
-    /// @return shares          The number of shares that the depositor has in the vault
-    function getDepositedShares(
-        address depositor_,
-        IERC4626 vault_
-    ) external view returns (uint256 shares);
-
     /// @notice Returns the number of CD tokens that the given address has minted for given CD token
     ///
     /// @param  depositor_      The address of the depositor
@@ -98,11 +88,6 @@ interface IConvertibleDepositTokenManager {
         address depositor_,
         IConvertibleDepositERC20 cdToken_
     ) external view returns (uint256 supply);
-
-    /// @notice Returns the depositors of funds
-    ///
-    /// @return depositors      The addresses of the depositors
-    function getDepositors() external view returns (address[] memory depositors);
 
     // ========== TOKEN FUNCTIONS ========== //
 

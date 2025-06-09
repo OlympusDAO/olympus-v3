@@ -17,9 +17,11 @@ import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
+import {AssetManager} from "src/policies/utils/AssetManager.sol";
+
 /// @title Convertible Deposit Token Manager
 /// @notice This policy is used to manage convertible deposit ("CD") tokens on behalf of deposit facilities. It is meant to be used by the facilities, and is not an end-user policy.
-contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManager {
+contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManager, AssetManager {
     using SafeTransferLib for ERC20;
 
     // ========== CONSTANTS ========== //
@@ -27,20 +29,20 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     /// @notice The role that is allowed to deposit and withdraw funds
     bytes32 public constant ROLE_DEPOSITOR = "cd_token_manager";
 
+    // Tasks
+    // [ ] Rename to DepositManager
+    // [X] Idle/vault strategy for deposited tokens
+    // [ ] ERC6909 migration
+    // [ ] Rename to receipt tokens
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice The CDEPO module
     CDEPOv1 public CDEPO;
 
-    /// @notice Maps depositors and vaults to the number of shares they have deposited
-    mapping(address => mapping(IERC4626 => uint256)) internal _depositedShares;
-
     /// @notice Maps depositors and CD tokens to the number of CD tokens they have minted
     /// @dev    This is used to ensure that the CD token is redeemable/solvent
     mapping(address => mapping(IConvertibleDepositERC20 => uint256)) internal _cdTokenSupply;
-
-    /// @notice The list of depositors
-    address[] internal _depositors;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -85,45 +87,16 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
 
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
 
-    /// @notice Adds a depositor to the list of depositors
-    ///
-    /// @param  depositor_  The address of the depositor
-    function _addDepositor(address depositor_) internal {
-        // Check if the depositor is already in the list
-        if (_depositors.length > 0) {
-            for (uint256 i = 0; i < _depositors.length; i++) {
-                if (_depositors[i] == depositor_) {
-                    return;
-                }
-            }
-        }
-
-        // Add the depositor to the list
-        _depositors.push(depositor_);
-    }
-
     /// @inheritdoc IConvertibleDepositTokenManager
     function mint(
         IConvertibleDepositERC20 cdToken_,
         uint256 amount_
     ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
-        // Pull funds from the caller
-        ERC20 vaultAsset = ERC20(address(cdToken_.asset()));
-        vaultAsset.safeTransferFrom(msg.sender, address(this), amount_);
-
         // Deposit into vault
-        IERC4626 vault = cdToken_.vault();
-        vaultAsset.safeApprove(address(vault), amount_);
-        shares = vault.deposit(amount_, address(this));
-
-        // Update the shares deposited for the caller
-        _depositedShares[msg.sender][vault] += shares;
+        uint256 shares = _depositAsset(address(cdToken_.asset()), msg.sender, amount_);
 
         // Update the CD token supply for the caller
         _cdTokenSupply[msg.sender][cdToken_] += amount_;
-
-        // Add the caller to the list of depositors if they are not already in it
-        _addDepositor(msg.sender);
 
         // Mint the CD token to the caller
         // This will also validate that the CD token is supported
@@ -140,21 +113,17 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         uint256 amount_
     ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
         // Withdraw the funds from the vault
-        IERC4626 vault = cdToken_.vault();
-        shares = vault.withdraw(amount_, msg.sender, address(this));
-
-        // Update the shares deposited for the caller
-        _depositedShares[msg.sender][vault] -= shares;
+        address asset = address(cdToken_.asset());
+        uint256 shares = _withdrawAsset(asset, msg.sender, amount_);
 
         // The CD token supply is not adjusted here, as there is no minting/burning of CD tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are CD tokens, otherwise the CD token is not redeemable
-        uint256 sharesRequired = vault.previewWithdraw(_cdTokenSupply[msg.sender][cdToken_]);
-        if (sharesRequired > _depositedShares[msg.sender][vault]) {
+        if (_cdTokenSupply[msg.sender][cdToken_] > getDepositedAssets(asset, msg.sender)) {
             revert ConvertibleDepositTokenManager_Insolvent(
                 address(cdToken_),
-                sharesRequired,
-                _depositedShares[msg.sender][vault]
+                _cdTokenSupply[msg.sender][cdToken_],
+                getDepositedAssets(asset, msg.sender)
             );
         }
 
@@ -171,11 +140,7 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
         CDEPO.burnFrom(cdToken_, msg.sender, amount_);
 
         // Withdraw the funds from the vault
-        IERC4626 vault = cdToken_.vault();
-        shares = vault.withdraw(amount_, msg.sender, address(this));
-
-        // Update the shares deposited for the caller
-        _depositedShares[msg.sender][vault] -= shares;
+        shares = _withdrawAsset(address(cdToken_.asset()), msg.sender, amount_);
 
         // Update the CD token supply for the caller
         _cdTokenSupply[msg.sender][cdToken_] -= amount_;
@@ -185,24 +150,11 @@ contract CDTokenManager is Policy, PolicyEnabler, IConvertibleDepositTokenManage
     }
 
     /// @inheritdoc IConvertibleDepositTokenManager
-    function getDepositedShares(
-        address depositor_,
-        IERC4626 vault_
-    ) external view returns (uint256 shares) {
-        shares = _depositedShares[depositor_][vault_];
-    }
-
-    /// @inheritdoc IConvertibleDepositTokenManager
     function getTokenSupply(
         address depositor_,
         IConvertibleDepositERC20 cdToken_
     ) external view returns (uint256 supply) {
         supply = _cdTokenSupply[depositor_][cdToken_];
-    }
-
-    /// @inheritdoc IConvertibleDepositTokenManager
-    function getDepositors() external view returns (address[] memory depositors) {
-        depositors = _depositors;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
