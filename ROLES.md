@@ -9,8 +9,11 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | CDAuctioneer | Update parameters, activate the policy |
 | admin | CDClearinghouse | Activate the policy |
 | admin | CDFacility | Create CD tokens, update reclaim rate, activate the policy |
-| admin | EmissionManager | Set configuration parameters, activate the policy |
+| admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
+| admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
 | admin | EmissionManager | Adjust yield, activate the policy |
+| admin | EmissionManager | Set configuration parameters, activate the policy |
+| admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
@@ -24,7 +27,10 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | CDAuctioneer | Deactivate the policy |
 | emergency | CDClearinghouse | Deactivate the policy |
 | emergency | CDFacility | Deactivate the policy |
+| emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
+| emergency | CoolerTreasuryBorrower | Allows enable/disable on the CoolerTreasuryBorrower |
 | emergency | EmissionManager | Deactivate the EmissionManager |
+| emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
@@ -39,6 +45,7 @@ This document describes the roles that are used in the Olympus protocol.
 | operator_reporter | Operator | Report bond purchases |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
+| treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 
 ## Role Allocations
 

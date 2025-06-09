@@ -3,7 +3,13 @@
 # Deploys an L2 installation of the Olympus protocol.
 #
 # Usage:
-# ./deploy.sh --account <cast wallet> --broadcast <false> --verify <false> --resume <false> --env <env-file>
+# ./deploy.sh
+#   --account <cast wallet>
+#   --ohm <true|false>
+#   --broadcast <false>
+#   --verify <false>
+#   --resume <false>
+#   --env <env-file>
 #
 # Environment variables:
 # RPC_URL
@@ -31,6 +37,7 @@ RESUME=${resume:-false}
 echo ""
 echo "Validating arguments"
 validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
+validate_boolean "$ohm" "No ohm flag specified. Provide true or false after the --ohm flag."
 
 # Validate environment variables
 echo ""
@@ -42,6 +49,7 @@ echo ""
 echo "Summary:"
 echo "  Deploying from account: $account"
 echo "  Chain: $CHAIN"
+echo "  Deploying OHM: $ohm"
 echo "  Using RPC at URL: $RPC_URL"
 
 # Validate and set forge script flags
@@ -55,7 +63,7 @@ set_account_address $account
 echo ""
 echo "Running forge script"
 forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
-    --sig "deploy(string)()" $CHAIN \
+    --sig "deploy(string,bool)()" $CHAIN $ohm \
     --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG \
