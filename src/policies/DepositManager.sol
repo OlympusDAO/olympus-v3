@@ -19,8 +19,10 @@ import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {AssetManager} from "src/libraries/AssetManager.sol";
 
-/// @title Convertible Deposit Token Manager
-/// @notice This policy is used to manage convertible deposit ("CD") tokens on behalf of deposit facilities. It is meant to be used by the facilities, and is not an end-user policy.
+/// @title Deposit Manager
+/// @notice This policy is used to manage deposits on behalf of other protocol contracts. For each deposit, a receipt token is minted 1:1 to the depositor.
+/// @dev    This contract combines functionality from a number of inherited contracts, in order to simplify contract implementation.
+///         Receipt tokens are ERC6909 tokens in order to reduce gas costs. They can optionally be wrapped to an ERC20 token.
 contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager, ERC6909Wrappable {
     using SafeTransferLib for ERC20;
 
@@ -36,15 +38,25 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
     // [X] Rename to receipt tokens
     // [X] CDTokenSupply to depositor supply
 
+    // ========== STRUCTS ========== //
+
+    struct DepositConfiguration {
+        IERC20 asset;
+        uint8 periodMonths;
+        uint16 reclaimRate;
+    }
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice Maps assets and depositors to the number of receipt tokens that have been minted
     /// @dev    This is used to ensure that the receipt tokens are solvent
-    mapping(address => mapping(address => uint256)) internal _receiptTokenSupply;
+    ///         As with the AssetManager, deposited asset tokens with different deposit periods are co-mingled.
+    mapping(IERC20 => mapping(address => uint256)) internal _receiptTokenSupply;
 
-    /// @notice Maps assets and deposit periods to the reclaim rate
-    mapping(address => mapping(uint8 => uint16)) internal _depositReclaimRates;
+    /// @notice Maps token ID to the deposit configuration
+    mapping(uint256 => DepositConfiguration) internal _depositConfigurations;
 
+    /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     // ========== CONSTRUCTOR ========== //
@@ -92,10 +104,10 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         bool shouldWrap_
     ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
         // Deposit into vault
-        shares = _depositAsset(address(asset_), depositor_, amount_);
+        shares = _depositAsset(asset_, depositor_, amount_);
 
         // Mint the receipt token to the caller
-        uint256 tokenId = getReceiptTokenId(address(asset_), periodMonths_);
+        uint256 tokenId = getReceiptTokenId(asset_, periodMonths_);
         _mint(depositor_, tokenId, amount_, shouldWrap_);
 
         return shares;
@@ -114,19 +126,16 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         returns (uint256 shares)
     {
         // Withdraw the funds from the vault
-        shares = _withdrawAsset(address(asset_), depositor_, amount_);
+        shares = _withdrawAsset(asset_, depositor_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
-        if (
-            _receiptTokenSupply[address(asset_)][msg.sender] >
-            getDepositedAssets(address(asset_), msg.sender)
-        ) {
+        if (_receiptTokenSupply[asset_][msg.sender] > getDepositedAssets(asset_, msg.sender)) {
             revert DepositManager_Insolvent(
                 address(asset_),
-                _receiptTokenSupply[address(asset_)][msg.sender],
-                getDepositedAssets(address(asset_), msg.sender)
+                _receiptTokenSupply[asset_][msg.sender],
+                getDepositedAssets(asset_, msg.sender)
             );
         }
 
@@ -140,37 +149,52 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         IERC20 asset_,
         uint8 periodMonths_,
         address depositor_,
+        address recipient_,
         uint256 amount_,
         bool wrapped_
     ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
-        // Burn the receipt token from the caller
-        _burn(depositor_, getReceiptTokenId(address(asset_), periodMonths_), amount_, wrapped_);
+        // Burn the receipt token from the depositor
+        _burn(depositor_, getReceiptTokenId(asset_, periodMonths_), amount_, wrapped_);
 
         // Update the asset tracking for the caller (operator)
-        _receiptTokenSupply[address(asset_)][msg.sender] -= amount_;
+        _receiptTokenSupply[asset_][msg.sender] -= amount_;
 
-        // Withdraw the funds from the vault
-        shares = _withdrawAsset(address(asset_), depositor_, amount_);
+        // Withdraw the funds from the vault to the recipient
+        shares = _withdrawAsset(asset_, recipient_, amount_);
 
         return shares;
     }
 
+    // TODO add reclaim
+
     // ========== TOKEN FUNCTIONS ========== //
 
-    /// @notice Generates a unique token ID for a token and deposit period combination
-    ///
-    /// @param  asset_          The address of the asset
-    /// @param  periodMonths_   The period of the CD token
-    /// @return tokenId         The unique token ID
-    function getReceiptTokenId(address asset_, uint8 periodMonths_) public pure returns (uint256) {
+    /// @inheritdoc IDepositManager
+    function getReceiptTokenId(
+        IERC20 asset_,
+        uint8 periodMonths_
+    ) public pure override returns (uint256) {
         return uint256(keccak256(abi.encode(asset_, periodMonths_)));
+    }
+
+    /// @inheritdoc IDepositManager
+    function getAssetFromTokenId(uint256 tokenId_) public view override returns (IERC20, uint8) {
+        return (
+            _depositConfigurations[tokenId_].asset,
+            _depositConfigurations[tokenId_].periodMonths
+        );
     }
 
     // ========== TOKEN MANAGEMENT ========== //
 
     /// @inheritdoc IDepositManager
-    function isConfiguredAsset(IERC20 asset_, uint8 periodMonths_) public view returns (bool) {
-        return isValidTokenId(getReceiptTokenId(address(asset_), periodMonths_));
+    function isConfiguredAsset(
+        IERC20 asset_,
+        uint8 periodMonths_
+    ) public view override returns (bool) {
+        return
+            address(_depositConfigurations[getReceiptTokenId(asset_, periodMonths_)].asset) !=
+            address(0);
     }
 
     modifier onlyConfiguredAsset(IERC20 asset_, uint8 periodMonths_) {
@@ -190,7 +214,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         uint8 periodMonths_
     ) internal returns (uint256 tokenId) {
         // Generate a unique token ID for the token and deposit period combination
-        tokenId = getReceiptTokenId(address(asset_), periodMonths_);
+        tokenId = getReceiptTokenId(asset_, periodMonths_);
 
         // Set the metadata for the receipt token
         _setName(
@@ -219,10 +243,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         return tokenId;
     }
 
-    function _setReclaimRate(IERC20 asset_, uint8 periodMonths_, uint16 reclaimRate_) internal {
+    /// @dev Assumes that the token ID is valid
+    function _setDepositReclaimRate(
+        IERC20 asset_,
+        uint8 periodMonths_,
+        uint16 reclaimRate_
+    ) internal {
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
 
-        _depositReclaimRates[address(asset_)][periodMonths_] = reclaimRate_;
+        _depositConfigurations[getReceiptTokenId(asset_, periodMonths_)].reclaimRate = reclaimRate_;
         emit ReclaimRateUpdated(address(asset_), periodMonths_, reclaimRate_);
     }
 
@@ -234,13 +263,19 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         uint16 reclaimRate_
     ) external onlyEnabled onlyAdminRole returns (uint256 receiptTokenId) {
         // Configure the asset in the AssetManager
-        _configureAsset(address(asset_), address(vault_));
+        _configureAsset(asset_, address(vault_));
 
         // Configure the ERC6909 receipt token
         receiptTokenId = _setReceiptTokenData(asset_, periodMonths_);
 
-        // Set the reclaim rate
-        _setReclaimRate(asset_, periodMonths_, reclaimRate_);
+        // Set the deposit configuration
+        _depositConfigurations[receiptTokenId] = DepositConfiguration({
+            asset: asset_,
+            periodMonths: periodMonths_,
+            reclaimRate: 0
+        });
+        // Set the reclaim rate (which does validation and emits an event)
+        _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
 
         return receiptTokenId;
     }
@@ -251,7 +286,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         uint8 periodMonths_,
         uint16 reclaimRate_
     ) external onlyEnabled onlyAdminRole onlyConfiguredAsset(asset_, periodMonths_) {
-        _setReclaimRate(asset_, periodMonths_, reclaimRate_);
+        _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager
@@ -259,6 +294,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         IERC20 asset_,
         uint8 periodMonths_
     ) external view returns (uint16) {
-        return _depositReclaimRates[address(asset_)][periodMonths_];
+        return _depositConfigurations[getReceiptTokenId(asset_, periodMonths_)].reclaimRate;
     }
 }

@@ -82,12 +82,13 @@ interface IDepositManager {
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Burning the receipt token
-    ///         - Transferring the underlying asset from the contract to the depositor
+    ///         - Transferring the underlying asset from the contract to the recipient
     ///         - Updating the amount of deposited funds
     ///
     /// @param  asset_        The address of the underlying asset
     /// @param  periodMonths_ The period of the deposit
-    /// @param  depositor_    The depositor
+    /// @param  depositor_    The depositor that is holding the receipt tokens
+    /// @param  recipient_    The recipient of the withdrawn asset
     /// @param  amount_       The amount to withdraw
     /// @param  wrapped_      Whether the receipt token is wrapped
     /// @return shares        The number of vault shares equivalent to the withdrawn amount
@@ -95,6 +96,7 @@ interface IDepositManager {
         IERC20 asset_,
         uint8 periodMonths_,
         address depositor_,
+        address recipient_,
         uint256 amount_,
         bool wrapped_
     ) external returns (uint256 shares);
@@ -121,10 +123,27 @@ interface IDepositManager {
 
     /// @notice Returns whether a deposit asset is configured
     ///
-    /// @param  asset_        The address of the underlying asset
-    /// @param  periodMonths_ The period of the deposit
-    /// @return isConfigured  Whether the deposit asset is configured
+    /// @param  asset_          The address of the underlying asset
+    /// @param  periodMonths_   The period of the deposit
+    /// @return isConfigured    Whether the deposit asset is configured
     function isConfiguredAsset(IERC20 asset_, uint8 periodMonths_) external view returns (bool);
+
+    /// @notice Returns the ID of the receipt token for a deposit asset
+    /// @dev    The ID returned is not a guarantee that the asset is configured. {isConfiguredAsset} should be used for that purpose.
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  periodMonths_   The period of the deposit
+    /// @return receiptTokenId  The ID of the receipt token
+    function getReceiptTokenId(IERC20 asset_, uint8 periodMonths_) external view returns (uint256);
+
+    /// @notice Returns the asset and deposit period from a receipt token ID
+    ///
+    /// @param  tokenId_        The ID of the receipt token
+    /// @return asset           The address of the underlying asset (or the zero address)
+    /// @return periodMonths    The period of the deposit (or 0)
+    function getAssetFromTokenId(uint256 tokenId_) external view returns (IERC20, uint8);
+
+    // ========== RECLAIM RATE ========== //
 
     /// @notice Sets the reclaim rate for a deposit
     /// @dev    The implementing contract is expected to handle the following:

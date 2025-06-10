@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -8,8 +8,8 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
+import {IAssetManager} from "src/interfaces/IAssetManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -44,8 +44,8 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
 
     constructor(
         address kernel_,
-        address tokenManager_
-    ) Policy(Kernel(kernel_)) CDRedemptionVault(tokenManager_) {
+        address depositManager_
+    ) Policy(Kernel(kernel_)) CDRedemptionVault(depositManager_) {
         // Disabled by default by PolicyEnabler
     }
 
@@ -83,34 +83,54 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
 
     // ========== MINT ========== //
 
+    modifier onlyYieldBearingAsset(IERC20 asset_, uint8 periodMonths_) {
+        // Validate that the asset has a yield bearing vault
+        IAssetManager.AssetConfiguration memory assetConfiguration = DEPOSIT_MANAGER
+            .getAssetConfiguration(asset_);
+        if (!assetConfiguration.isConfigured || address(assetConfiguration.vault) == address(0))
+            revert YDF_InvalidToken(address(asset_), periodMonths_);
+        _;
+    }
+
     /// @inheritdoc IYieldDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
-    ///             - The CD token is not supported
+    ///             - The asset token is not supported
     function mint(
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 asset_,
+        uint8 periodMonths_,
         uint256 amount_,
-        bool wrap_
-    ) external nonReentrant onlyEnabled returns (uint256 positionId) {
-        // Mint the CD token to the account
-        // This will validate that the CD token is supported, and transfer the deposit token
-        _mintFor(cdToken_, msg.sender, amount_);
+        bool wrapPosition_,
+        bool wrapReceipt_
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyYieldBearingAsset(asset_, periodMonths_)
+        returns (uint256 positionId)
+    {
+        // Deposit the asset into the deposit manager (and mint the receipt token)
+        // This will validate that the asset is supported, and mint the receipt token
+        DEPOSIT_MANAGER.deposit(asset_, periodMonths_, msg.sender, amount_, wrapReceipt_);
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
             msg.sender, // owner
-            address(cdToken_), // CD token
+            address(asset_), // asset
+            periodMonths_, // period months
             amount_, // amount
             type(uint256).max, // conversion price of max to indicate no conversion price
-            uint48(block.timestamp + cdToken_.periodMonths() * 30 days), // expiry
-            wrap_ // wrap
+            uint48(block.timestamp + periodMonths_ * 30 days), // expiry
+            wrapPosition_ // wrap
         );
 
         // Set the initial yield conversion rate
-        positionLastYieldConversionRate[positionId] = _getConversionRate(cdToken_.vault());
+        positionLastYieldConversionRate[positionId] = _getConversionRate(
+            DEPOSIT_MANAGER.getAssetConfiguration(asset_).vault
+        );
 
         // Emit an event
-        emit CreatedDeposit(address(cdToken_.asset()), msg.sender, positionId, amount_);
+        emit CreatedDeposit(address(asset_), msg.sender, positionId, periodMonths_, amount_);
     }
 
     // ========== YIELD FUNCTIONS ========== //
@@ -118,12 +138,19 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     function _previewHarvest(
         address account_,
         uint256 positionId_,
-        address previousCDToken_,
+        address previousAsset_,
+        uint8 previousPeriodMonths_,
         uint48 timestampHint_
     )
         internal
         view
-        returns (uint256 yieldMinusFee, uint256 yieldFee, address currentCDToken, uint256 endRate)
+        returns (
+            uint256 yieldMinusFee,
+            uint256 yieldFee,
+            address currentAsset,
+            uint8 currentPeriodMonths,
+            uint256 endRate
+        )
     {
         // Validate that the position is valid
         // This will revert if the position is not valid
@@ -135,24 +162,28 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         // Validate that the position is not convertible
         if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
-        // Set the CD token, or validate
-        currentCDToken = position.convertibleDepositToken;
-        if (previousCDToken_ == address(0)) {
-            // Validate that the CD token is supported
-            if (!TOKEN_MANAGER.isConvertibleDepositToken(currentCDToken))
-                revert YDF_InvalidToken(positionId_, currentCDToken);
-        } else if (previousCDToken_ != currentCDToken) {
-            revert YDF_InvalidArgs("multiple CD tokens");
+        // Validate that the asset has a yield bearing vault
+        IERC4626 assetVault = DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault;
+        if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
+
+        // Set the asset, or validate
+        currentAsset = position.asset;
+        currentPeriodMonths = position.periodMonths;
+        if (previousAsset_ == address(0)) {
+            // Validate that the asset is supported
+            if (!DEPOSIT_MANAGER.isConfiguredAsset(IERC20(currentAsset), currentPeriodMonths))
+                revert YDF_Unsupported(positionId_);
+        } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {
+            revert YDF_InvalidArgs("multiple tokens");
         }
 
         // Get the vault and last snapshot rate
-        IERC4626 vault = IConvertibleDepositERC20(currentCDToken).vault();
         uint256 lastSnapshotRate = positionLastYieldConversionRate[positionId_];
 
         // Calculate the end rate (either current rate or rate at expiry)
         if (block.timestamp <= position.expiry) {
             // Deposit period hasn't finished, use current rate
-            endRate = _getConversionRate(vault);
+            endRate = _getConversionRate(assetVault);
         } else {
             // Deposit period has finished, find the rate at expiry
             // Validate timestamp hint if provided
@@ -166,9 +197,9 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             uint48 snapshotKey = _getSnapshotKey(snapshotTimestamp);
 
             // Get the rate at the snapshot key
-            uint256 expiryRate = vaultRateSnapshots[vault][snapshotKey];
+            uint256 expiryRate = vaultRateSnapshots[assetVault][snapshotKey];
             if (expiryRate == 0) {
-                revert YDF_NoSnapshotAvailable(address(vault), snapshotKey);
+                revert YDF_NoSnapshotAvailable(address(assetVault), snapshotKey);
             }
 
             endRate = expiryRate;
@@ -178,14 +209,14 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         uint256 yield = FullMath.mulDiv(
             endRate - lastSnapshotRate,
             position.remainingDeposit,
-            10 ** vault.decimals()
+            10 ** assetVault.decimals()
         );
 
         // Calculate fees
         yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
         yieldMinusFee = yield - yieldFee;
 
-        return (yieldMinusFee, yieldFee, currentCDToken, endRate);
+        return (yieldMinusFee, yieldFee, currentAsset, currentPeriodMonths, endRate);
     }
 
     /// @inheritdoc IYieldDepositFacility
@@ -206,27 +237,37 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             revert YDF_InvalidArgs("array length mismatch");
         }
 
-        address cdToken;
+        uint8 periodMonths;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (uint256 previewYieldMinusFee, , address currentCDToken, ) = _previewHarvest(
-                account_,
-                positionId,
-                cdToken,
-                timestampHints_[i]
-            );
+            (
+                uint256 previewYieldMinusFee,
+                ,
+                address currentAsset,
+                uint8 currentPeriodMonths,
+
+            ) = _previewHarvest(
+                    account_,
+                    positionId,
+                    address(asset),
+                    periodMonths,
+                    timestampHints_[i]
+                );
             yieldMinusFee += previewYieldMinusFee;
-            cdToken = currentCDToken;
+            asset = IERC20(currentAsset);
+            periodMonths = currentPeriodMonths;
         }
 
-        return (yieldMinusFee, IConvertibleDepositERC20(cdToken).asset());
+        return (yieldMinusFee, asset);
     }
 
     /// @inheritdoc IYieldDepositFacility
     function harvest(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
         return harvest(positionIds_, new uint48[](positionIds_.length));
     }
+
+    // TODO rename to claimYield
 
     /// @inheritdoc IYieldDepositFacility
     function harvest(
@@ -237,7 +278,8 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             revert YDF_InvalidArgs("array length mismatch");
         }
 
-        IConvertibleDepositERC20 cdToken;
+        IERC20 asset;
+        uint8 periodMonths;
         uint256 yieldFee;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
@@ -245,13 +287,21 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             (
                 uint256 previewYieldMinusFee,
                 uint256 previewYieldFee,
-                address currentCDToken,
+                address currentAsset,
+                uint8 currentPeriodMonths,
                 uint256 endRate
-            ) = _previewHarvest(msg.sender, positionId, address(cdToken), timestampHints_[i]);
+            ) = _previewHarvest(
+                    msg.sender,
+                    positionId,
+                    address(asset),
+                    periodMonths,
+                    timestampHints_[i]
+                );
 
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
-            cdToken = IConvertibleDepositERC20(currentCDToken);
+            asset = IERC20(currentAsset);
+            periodMonths = currentPeriodMonths;
 
             // If there is yield, update the last yield conversion rate
             if (previewYieldMinusFee > 0) {
@@ -259,18 +309,14 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             }
         }
 
-        // Withdraw the yield from the token manager
-        _withdraw(cdToken, yieldMinusFee + yieldFee);
-
-        // Transfer the yield to the owner
-        // msg.sender is ok here as _previewHarvest validates that the caller is the owner of the position
-        _transferUnderlyingTo(cdToken, msg.sender, yieldMinusFee);
-
-        // Deposit the yield fee into the vault on behalf of the TRSRY
-        _depositIntoVaultFor(cdToken, address(TRSRY), yieldFee);
+        // Withdraw the yield from the deposit manager to the caller
+        // This will validate that the deposits are still solvent
+        DEPOSIT_MANAGER.claimYield(asset, periodMonths, msg.sender, yieldMinusFee);
+        // Claim the yield fee
+        DEPOSIT_MANAGER.claimYield(asset, periodMonths, address(TRSRY), yieldFee);
 
         // Emit event
-        emit Harvest(address(cdToken.asset()), msg.sender, yieldMinusFee);
+        emit Harvest(address(asset), msg.sender, yieldMinusFee);
 
         return yieldMinusFee;
     }
@@ -324,12 +370,15 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         // Get the rounded timestamp
         uint48 snapshotKey = _getSnapshotKey(uint48(block.timestamp));
 
-        // Get all supported vault tokens
-        IConvertibleDepositERC20[] memory cdTokens = TOKEN_MANAGER.getConvertibleDepositTokens();
+        // Get all supported assets
+        IERC20[] memory assets = DEPOSIT_MANAGER.getConfiguredAssets();
 
         // Store snapshots for each vault
-        for (uint256 i; i < cdTokens.length; ++i) {
-            IERC4626 vault = cdTokens[i].vault();
+        for (uint256 i; i < assets.length; ++i) {
+            IERC4626 vault = DEPOSIT_MANAGER.getAssetConfiguration(assets[i]).vault;
+
+            // Skip if the vault is not set
+            if (address(vault) == address(0)) continue;
 
             // Only store if we haven't stored for this interval
             if (vaultRateSnapshots[vault][snapshotKey] == 0) {

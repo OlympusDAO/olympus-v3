@@ -82,8 +82,9 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable {
     // ========== ERC165 ========== //
 
     function supportsInterface(bytes4 interfaceId_) public view returns (bool) {
+        // super does not implement ERC165, so no need to call it
         return
-            interfaceId_ == type(IERC20BurnableMintable).interfaceId ||
-            super.supportsInterface(interfaceId_);
+            interfaceId_ == type(IERC20).interfaceId ||
+            interfaceId_ == type(IERC20BurnableMintable).interfaceId;
     }
 }

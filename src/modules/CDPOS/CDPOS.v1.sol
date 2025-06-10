@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {Module} from "src/Kernel.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
@@ -13,14 +13,16 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @notice Data structure for the terms of a deposit position
     ///
     /// @param  owner                   Address of the owner of the position
-    /// @param  convertibleDepositToken Address of the convertible deposit token
+    /// @param  asset                   Address of the asset
+    /// @param  periodMonths            The period of the deposit
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token (only for convertible positions)
+    /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
     /// @param  expiry                  Timestamp of the position expiry
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
         address owner;
-        address convertibleDepositToken;
+        address asset;
+        uint8 periodMonths;
         uint256 remainingDeposit;
         uint256 conversionPrice;
         uint48 expiry;
@@ -33,7 +35,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
-        address indexed convertibleDepositToken,
+        address indexed asset,
+        uint8 periodMonths,
         uint256 remainingDeposit,
         uint256 conversionPrice,
         uint48 expiry,
@@ -47,7 +50,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     event PositionSplit(
         uint256 indexed positionId,
         uint256 indexed newPositionId,
-        address indexed convertibleDepositToken,
+        address indexed asset,
+        uint8 periodMonths,
         uint256 amount,
         address to,
         bool wrap
@@ -138,7 +142,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     ///         - Wrap the position if requested
     ///
     /// @param  owner_                      The address of the owner of the position
-    /// @param  convertibleDepositToken_    The address of the convertible deposit token
+    /// @param  asset_                      The address of the asset
+    /// @param  periodMonths_               The period of the deposit
     /// @param  remainingDeposit_           The amount of reserve tokens remaining to be converted
     /// @param  conversionPrice_            The price of the reserve token in USD
     /// @param  expiry_                     The timestamp for the position expiry
@@ -146,7 +151,8 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @return positionId                  The ID of the new position
     function mint(
         address owner_,
-        address convertibleDepositToken_,
+        address asset_,
+        uint8 periodMonths_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 expiry_,

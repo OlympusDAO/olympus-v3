@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.15;
 
+// Interfaces
 import {IAssetManager} from "src/interfaces/IAssetManager.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
+// Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 /// @title  AssetManager
@@ -12,16 +15,16 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 abstract contract AssetManager is IAssetManager {
     using SafeTransferLib for ERC20;
 
-    struct AssetConfiguration {
-        bool isConfigured;
-        ERC4626 vault;
-    }
+    // ========== STATE VARIABLES ========== //
+
+    /// @notice Array of configured assets
+    IERC20[] internal _configuredAssets;
 
     /// @notice Mapping of assets to a configuration
-    mapping(ERC20 => AssetConfiguration) internal _assetConfigurations;
+    mapping(IERC20 => AssetConfiguration) internal _assetConfigurations;
 
     /// @notice Mapping of assets and operators to the number of shares they have deposited
-    mapping(ERC20 => mapping(address => uint256)) internal _depositedShares;
+    mapping(IERC20 => mapping(address => uint256)) internal _depositedShares;
 
     // ========== ACTION FUNCTIONS ========== //
 
@@ -37,18 +40,18 @@ abstract contract AssetManager is IAssetManager {
     /// @param  amount_     The amount of assets to deposit
     /// @return shares      The number of shares received
     function _depositAsset(
-        address asset_,
+        IERC20 asset_,
         address depositor_,
         uint256 amount_
     ) internal returns (uint256 shares) {
         // Validate that the vault is approved
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[ERC20(asset_)];
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
         if (!assetConfiguration.isConfigured) {
             revert AssetManager_NotConfigured();
         }
 
         // Pull the assets from the depositor
-        ERC20 asset = ERC20(asset_);
+        ERC20 asset = ERC20(address(asset_));
         asset.safeTransferFrom(depositor_, address(this), amount_);
 
         // If the vault is the zero address, the asset is to be kept idle
@@ -62,9 +65,9 @@ abstract contract AssetManager is IAssetManager {
         }
 
         // Update the shares deposited by the caller (operator)
-        _depositedShares[asset][msg.sender] += amount_;
+        _depositedShares[asset_][msg.sender] += amount_;
 
-        emit AssetDeposited(asset_, depositor_, msg.sender, amount_, shares);
+        emit AssetDeposited(address(asset_), depositor_, msg.sender, amount_, shares);
         return shares;
     }
 
@@ -79,12 +82,12 @@ abstract contract AssetManager is IAssetManager {
     /// @param  amount_     The amount of assets to withdraw
     /// @return shares      The number of shares withdrawn
     function _withdrawAsset(
-        address asset_,
+        IERC20 asset_,
         address depositor_,
         uint256 amount_
     ) internal returns (uint256 shares) {
         // Validate that the vault is approved
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[ERC20(asset_)];
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
         if (!assetConfiguration.isConfigured) {
             revert AssetManager_NotConfigured();
         }
@@ -99,37 +102,35 @@ abstract contract AssetManager is IAssetManager {
         }
 
         // Update the shares deposited by the caller (operator)
-        _depositedShares[ERC20(asset_)][msg.sender] -= shares;
+        _depositedShares[asset_][msg.sender] -= shares;
 
-        emit AssetWithdrawn(asset_, depositor_, msg.sender, amount_, shares);
+        emit AssetWithdrawn(address(asset_), depositor_, msg.sender, amount_, shares);
         return shares;
     }
 
     /// @inheritdoc IAssetManager
     function getDepositedShares(
-        address asset_,
+        IERC20 asset_,
         address operator_
     ) public view override returns (uint256 shares) {
-        shares = _depositedShares[ERC20(asset_)][operator_];
+        shares = _depositedShares[asset_][operator_];
         return shares;
     }
 
     /// @inheritdoc IAssetManager
     function getDepositedAssets(
-        address asset_,
+        IERC20 asset_,
         address operator_
     ) public view override returns (uint256 assets) {
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[ERC20(asset_)];
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
 
         // If the asset is not configured or there is no vault, the assets are kept idle and the shares = assets
         if (address(assetConfiguration.vault) == address(0)) {
-            assets = _depositedShares[ERC20(asset_)][operator_];
+            assets = _depositedShares[asset_][operator_];
         }
         // Otherwise, convert from shares to assets
         else {
-            assets = assetConfiguration.vault.previewRedeem(
-                _depositedShares[ERC20(asset_)][operator_]
-            );
+            assets = assetConfiguration.vault.previewRedeem(_depositedShares[asset_][operator_]);
         }
 
         return assets;
@@ -148,38 +149,41 @@ abstract contract AssetManager is IAssetManager {
     ///
     /// @param asset_  The asset to configure
     /// @param vault_  The vault to use
-    function _configureAsset(address asset_, address vault_) internal {
+    function _configureAsset(IERC20 asset_, address vault_) internal {
         // Validate that the vault is not already approved
-        if (_assetConfigurations[ERC20(asset_)].isConfigured) {
+        if (_assetConfigurations[asset_].isConfigured) {
             revert AssetManager_VaultAlreadySet();
         }
 
         // Validate that the vault asset matches
-        if (vault_ != address(0) && address(ERC4626(vault_).asset()) != asset_) {
+        if (vault_ != address(0) && address(IERC4626(vault_).asset()) != address(asset_)) {
             revert AssetManager_VaultAssetMismatch();
         }
 
         // Configure the asset
-        _assetConfigurations[ERC20(asset_)] = AssetConfiguration({
+        _assetConfigurations[asset_] = AssetConfiguration({
             isConfigured: true,
-            vault: ERC4626(vault_)
+            vault: IERC4626(vault_)
         });
 
-        emit AssetConfigured(asset_, vault_);
+        // Add the asset to the array of configured assets
+        _configuredAssets.push(asset_);
+
+        emit AssetConfigured(address(asset_), vault_);
     }
 
     /// @notice Get the configuration for an asset
     ///
-    /// @param  asset_      The asset to get the configuration for
-    /// @return isConfigured  Whether the asset is approved
-    /// @return vault       The vault to use
+    /// @param  asset_          The asset to get the configuration for
+    /// @return configuration   The configuration for the asset
     function getAssetConfiguration(
-        address asset_
-    ) public view override returns (bool isConfigured, address vault) {
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[ERC20(asset_)];
+        IERC20 asset_
+    ) public view override returns (AssetConfiguration memory configuration) {
+        return _assetConfigurations[asset_];
+    }
 
-        isConfigured = assetConfiguration.isConfigured;
-        vault = address(assetConfiguration.vault);
-        return (isConfigured, vault);
+    /// @inheritdoc IAssetManager
+    function getConfiguredAssets() public view override returns (IERC20[] memory assets) {
+        return _configuredAssets;
     }
 }

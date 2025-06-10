@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+// Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 /// @title  IConvertibleDepositFacility
 /// @notice Interface for a contract that can perform functions related to convertible deposit (CD) tokens
@@ -9,14 +10,17 @@ interface IConvertibleDepositFacility {
     // ========== EVENTS ========== //
 
     event CreatedDeposit(
-        address indexed depositToken,
-        address indexed user,
+        address indexed asset,
+        address indexed depositor,
         uint256 indexed positionId,
+        uint8 periodMonths,
         uint256 depositAmount
     );
+
     event ConvertedDeposit(
-        address indexed depositToken,
-        address indexed user,
+        address indexed asset,
+        address indexed depositor,
+        uint8 periodMonths,
         uint256 depositAmount,
         uint256 convertedAmount
     );
@@ -31,32 +35,37 @@ interface IConvertibleDepositFacility {
 
     error CDF_InvalidAmount(uint256 positionId_, uint256 amount_);
 
-    error CDF_InvalidToken(uint256 positionId_, address token_);
+    error CDF_InvalidToken(uint256 positionId_, address token_, uint8 periodMonths_);
 
     error CDF_Unsupported(uint256 positionId_);
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
-    /// @notice Mints a position for a call option
+    /// @notice Creates a convertible deposit position
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the CD token is supported
+    ///         - Validating that the asset is supported
     ///         - Validating that the caller has the correct role
-    ///         - Depositing the token into the CDEPO module and minting the CD token
+    ///         - Depositing the asset
+    ///         - Minting the receipt token
     ///         - Creating a new position in the CDPOS module
     ///         - Emitting an event
     ///
-    /// @param  cdToken_            The address of the CD token
+    /// @param  asset_              The address of the asset
+    /// @param  periodMonths_       The period of the deposit
     /// @param  account_            The address to create the position for
-    /// @param  amount_             The amount of token to deposit
-    /// @param  conversionPrice_    The amount of CD tokens per OHM token
-    /// @param  wrap_               Whether the position should be wrapped
+    /// @param  amount_             The amount of asset to deposit
+    /// @param  conversionPrice_    The amount of converted tokens per asset token
+    /// @param  wrapPosition_       Whether the position should be wrapped
+    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
     /// @return positionId          The ID of the new position
     function mint(
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 asset_,
+        uint8 periodMonths_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        bool wrap_
+        bool wrapPosition_,
+        bool wrapReceipt_
     ) external returns (uint256 positionId);
 
     /// @notice Converts CD tokens to OHM before conversion expiry

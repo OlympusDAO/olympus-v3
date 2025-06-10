@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 // Interfaces
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 
 // Bophades
@@ -83,46 +83,64 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     /// @dev        This function reverts if:
     ///             - The caller does not have the ROLE_AUCTIONEER role
     ///             - The contract is not enabled
-    ///             - The CD token is not supported
+    ///             - The asset and period are not supported
     function mint(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
+        IERC20 asset_,
+        uint8 periodMonths_,
+        address depositor_,
         uint256 amount_,
         uint256 conversionPrice_,
-        bool wrap_
+        bool wrapPosition_,
+        bool wrapReceipt_
     ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
-        // Mint the CD token to the account
-        // This will validate that the CD token is supported, and transfer the deposit token
-        _mintFor(cdToken_, account_, amount_);
+        // Deposit the asset into the deposit manager
+        // This will validate that the asset is supported, and mint the receipt token
+        DEPOSIT_MANAGER.deposit(asset_, periodMonths_, depositor_, amount_, wrapReceipt_);
 
-        // Create a new term record in the CDPOS module
+        // Create a new position in the CDPOS module
         positionId = CDPOS.mint(
-            account_,
-            address(cdToken_),
+            depositor_,
+            address(asset_),
+            periodMonths_,
             amount_,
             conversionPrice_,
-            uint48(block.timestamp + cdToken_.periodMonths() * 30 days),
-            wrap_
+            uint48(block.timestamp + periodMonths_ * 30 days),
+            wrapPosition_
         );
 
         // Emit an event
-        emit CreatedDeposit(address(cdToken_.asset()), account_, positionId, amount_);
+        emit CreatedDeposit(address(asset_), depositor_, positionId, periodMonths_, amount_);
     }
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
+    /// @notice Determines the conversion output
+    ///
+    /// @param  depositor_            The depositor of the position
+    /// @param  positionId_           The ID of the position
+    /// @param  amount_               The amount of CD tokens to convert
+    /// @param  previousAsset_        Used to validate that the asset is the same across positions (zero if the first position)
+    /// @param  previousPeriodMonths_ Used to validate that the period is the same across positions (0 if the first position)
+    /// @return convertedTokenOut     The amount of converted tokens
+    /// @return currentAsset          The asset of the current position
+    /// @return currentPeriodMonths   The period of the current position
     function _previewConvert(
-        address account_,
+        address depositor_,
         uint256 positionId_,
         uint256 amount_,
-        address previousCDToken_
-    ) internal view returns (uint256 convertedTokenOut, address currentCDToken) {
+        address previousAsset_,
+        uint8 previousPeriodMonths_
+    )
+        internal
+        view
+        returns (uint256 convertedTokenOut, address currentAsset, uint8 currentPeriodMonths)
+    {
         // Validate that the position is valid
         // This will revert if the position is not valid
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
 
-        // Validate that the caller is the owner of the position
-        if (position.owner != account_) revert CDF_NotOwner(positionId_);
+        // Validate that the depositor is the owner of the position
+        if (position.owner != depositor_) revert CDF_NotOwner(positionId_);
 
         // Validate that the position has not expired
         if (block.timestamp >= position.expiry) revert CDF_PositionExpired(positionId_);
@@ -133,59 +151,61 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         // Validate that the position supports conversion
         if (position.conversionPrice == type(uint256).max) revert CDF_Unsupported(positionId_);
 
-        // Set the CD token, or validate
-        currentCDToken = position.convertibleDepositToken;
-        if (previousCDToken_ == address(0)) {
-            // Validate that the CD token is supported
-            if (!TOKEN_MANAGER.isConvertibleDepositToken(currentCDToken))
-                revert CDF_InvalidToken(positionId_, currentCDToken);
-        } else if (previousCDToken_ != currentCDToken) {
-            revert CDF_InvalidArgs("multiple CD tokens");
+        // Set the asset, or validate
+        currentAsset = position.asset;
+        currentPeriodMonths = position.periodMonths;
+        if (previousAsset_ == address(0)) {
+            // Validate that the asset is supported
+            if (!DEPOSIT_MANAGER.isConfiguredAsset(IERC20(currentAsset), currentPeriodMonths))
+                revert CDF_InvalidToken(positionId_, currentAsset, currentPeriodMonths);
+        } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {
+            revert CDF_InvalidArgs("multiple assets");
         }
 
         // The deposit and CD token have the same decimals, so either can be used
         convertedTokenOut =
-            (amount_ * (10 ** IConvertibleDepositERC20(currentCDToken).decimals())) /
+            (amount_ * (10 ** IERC20(currentAsset).decimals())) /
             position.conversionPrice;
 
-        return (convertedTokenOut, currentCDToken);
+        return (convertedTokenOut, currentAsset, currentPeriodMonths);
     }
 
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
-    ///             - account_ is not the owner of all of the positions
+    ///             - depositor_ is not the owner of all of the positions
     ///             - Any position is not valid
-    ///             - Any position is not a supported CD token
-    ///             - Any position has a different CD token
+    ///             - Any position is not a supported asset
+    ///             - Any position has a different asset or deposit period
     ///             - Any position has reached the conversion expiry
     ///             - Any conversion amount is greater than the remaining deposit
-    ///             - The amount of CD tokens to convert is 0
+    ///             - The amount of deposits to convert is 0
     ///             - The converted amount is 0
     function previewConvert(
-        address account_,
+        address depositor_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view onlyEnabled returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
-        address cdToken;
+        address asset;
+        uint8 periodMonths;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
             uint256 amount = amounts_[i];
 
             cdTokenIn += amount;
 
-            (uint256 previewConvertOut, address currentCDToken) = _previewConvert(
-                account_,
-                positionId,
-                amount,
-                cdToken
-            );
+            (
+                uint256 previewConvertOut,
+                address currentAsset,
+                uint8 currentPeriodMonths
+            ) = _previewConvert(depositor_, positionId, amount, asset, periodMonths);
             convertedTokenOut += previewConvertOut;
-            cdToken = currentCDToken;
+            asset = currentAsset;
+            periodMonths = currentPeriodMonths;
         }
 
         // If the amount is 0, revert
@@ -203,11 +223,11 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - Any position is not valid
-    ///             - Any position is not a supported CD token
-    ///             - Any position has a different CD token
+    ///             - Any position is not a supported asset
+    ///             - Any position has a different asset or deposit period
     ///             - Any position has reached the conversion expiry
     ///             - Any position has a conversion amount greater than the remaining deposit
-    ///             - The amount of CD tokens to convert is 0
+    ///             - The amount of deposits to convert is 0
     ///             - The converted amount is 0
     function convert(
         uint256[] memory positionIds_,
@@ -216,21 +236,22 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
-        IConvertibleDepositERC20 cdToken;
+        address asset;
+        uint8 periodMonths;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
             uint256 depositAmount = amounts_[i];
 
             cdTokenIn += depositAmount;
 
-            (uint256 previewConvertOut, address currentCDToken) = _previewConvert(
-                msg.sender,
-                positionId,
-                depositAmount,
-                address(cdToken)
-            );
+            (
+                uint256 previewConvertOut,
+                address currentAsset,
+                uint8 currentPeriodMonths
+            ) = _previewConvert(msg.sender, positionId, depositAmount, asset, periodMonths);
             convertedTokenOut += previewConvertOut;
-            cdToken = IConvertibleDepositERC20(currentCDToken);
+            asset = currentAsset;
+            periodMonths = currentPeriodMonths;
 
             // Update the position
             CDPOS.update(
@@ -239,14 +260,15 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
             );
         }
 
-        // Pull the CD tokens from the caller
-        _pullCDToken(cdToken, cdTokenIn);
-
-        // Withdraw the underlying asset from the token manager to this contract
-        _burn(cdToken, cdTokenIn);
-
-        // Deposit the underlying asset into the vault on behalf of the TRSRY
-        _depositIntoVaultFor(cdToken, address(TRSRY), cdTokenIn);
+        // Withdraw the underlying asset and deposit into the treasury
+        DEPOSIT_MANAGER.withdraw(
+            IERC20(asset),
+            periodMonths,
+            msg.sender,
+            address(TRSRY),
+            cdTokenIn,
+            false
+        );
 
         // Mint OHM to the owner/caller
         // No need to check if `convertedTokenOut` is 0, as MINTR will revert
@@ -254,7 +276,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
         MINTR.mintOhm(msg.sender, convertedTokenOut);
 
         // Emit event
-        emit ConvertedDeposit(address(cdToken.asset()), msg.sender, cdTokenIn, convertedTokenOut);
+        emit ConvertedDeposit(asset, msg.sender, periodMonths, cdTokenIn, convertedTokenOut);
 
         return (cdTokenIn, convertedTokenOut);
     }

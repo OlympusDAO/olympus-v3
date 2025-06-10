@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+
 interface IAssetManager {
     // ========== ERRORS ========== //
 
@@ -26,13 +29,22 @@ interface IAssetManager {
         uint256 shares
     );
 
+    // ========== DATA STRUCTURES ========== //
+
+    struct AssetConfiguration {
+        bool isConfigured;
+        IERC4626 vault;
+    }
+
+    // ========== ASSET FUNCTIONS ========== //
+
     /// @notice Get the number of shares deposited for an asset and operator
     ///
     /// @param  asset_      The asset to get the deposited shares for
     /// @param  operator_   The operator to get the deposited shares for
     /// @return shares      The number of shares deposited
     function getDepositedShares(
-        address asset_,
+        IERC20 asset_,
         address operator_
     ) external view returns (uint256 shares);
 
@@ -42,16 +54,20 @@ interface IAssetManager {
     /// @param  operator_   The operator to get the deposited assets for
     /// @return assets      The number of assets deposited
     function getDepositedAssets(
-        address asset_,
+        IERC20 asset_,
         address operator_
     ) external view returns (uint256 assets);
 
     /// @notice Get the configuration for an asset
     ///
-    /// @param  asset_      The asset to get the configuration for
-    /// @return isConfigured  Whether the asset is approved
-    /// @return vault       The vault to use
+    /// @param  asset_          The asset to get the configuration for
+    /// @return configuration   The configuration for the asset
     function getAssetConfiguration(
-        address asset_
-    ) external view returns (bool isConfigured, address vault);
+        IERC20 asset_
+    ) external view returns (AssetConfiguration memory configuration);
+
+    /// @notice Get the assets that are configured
+    ///
+    /// @return assets  The assets that are configured
+    function getConfiguredAssets() external view returns (IERC20[] memory assets);
 }

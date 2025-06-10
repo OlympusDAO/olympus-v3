@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 /// @title IYieldDepositFacility
 /// @notice Interface for the Yield Facility that can be used to mint yield-bearing deposits
@@ -10,13 +9,14 @@ interface IYieldDepositFacility {
     // ========== EVENTS ========== //
 
     event CreatedDeposit(
-        address indexed depositToken,
-        address indexed user,
+        address indexed asset,
+        address indexed depositor,
         uint256 indexed positionId,
+        uint8 periodMonths,
         uint256 depositAmount
     );
 
-    event Harvest(address indexed depositToken, address indexed user, uint256 yield);
+    event Harvest(address indexed asset, address indexed depositor, uint256 yield);
 
     event YieldFeeSet(uint16 yieldFee);
 
@@ -28,7 +28,7 @@ interface IYieldDepositFacility {
 
     error YDF_NotOwner(uint256 positionId_);
 
-    error YDF_InvalidToken(uint256 positionId_, address token_);
+    error YDF_InvalidToken(address token_, uint8 periodMonths_);
 
     error YDF_Unsupported(uint256 positionId_);
 
@@ -38,18 +38,22 @@ interface IYieldDepositFacility {
 
     /// @notice Mints a position for a yield-bearing deposit
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the CD token is supported
-    ///         - Depositing the token into the CDEPO module and minting the CD token
+    ///         - Validating that the asset is supported
+    ///         - Depositing the asset into the deposit manager and minting the receipt token
     ///         - Creating a new position in the CDPOS module
     ///
-    /// @param  cdToken_            The address of the CD token
+    /// @param  asset_              The address of the asset
+    /// @param  periodMonths_       The period of the deposit
     /// @param  amount_             The amount of token to deposit
-    /// @param  wrap_               Whether the position should be wrapped
+    /// @param  wrapPosition_       Whether the position should be wrapped
+    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
     /// @return positionId          The ID of the new position
     function mint(
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 asset_,
+        uint8 periodMonths_,
         uint256 amount_,
-        bool wrap_
+        bool wrapPosition_,
+        bool wrapReceipt_
     ) external returns (uint256 positionId);
 
     // ========== YIELD ========== //

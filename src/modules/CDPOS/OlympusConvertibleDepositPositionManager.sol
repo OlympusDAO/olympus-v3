@@ -96,7 +96,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
 
     function _create(
         address owner_,
-        address convertibleDepositToken_,
+        address asset_,
+        uint8 periodMonths_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
@@ -106,7 +107,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         positionId = positionCount++;
         _positions[positionId] = Position({
             owner: owner_,
-            convertibleDepositToken: convertibleDepositToken_,
+            asset: asset_,
+            periodMonths: periodMonths_,
             remainingDeposit: remainingDeposit_,
             conversionPrice: conversionPrice_,
             expiry: conversionExpiry_,
@@ -123,7 +125,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         emit PositionCreated(
             positionId,
             owner_,
-            convertibleDepositToken_,
+            asset_,
+            periodMonths_,
             remainingDeposit_,
             conversionPrice_,
             conversionExpiry_,
@@ -145,7 +148,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
     ///             This is a permissioned function that can only be called by approved policies
     function mint(
         address owner_,
-        address convertibleDepositToken_,
+        address asset_,
+        uint8 periodMonths_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
@@ -154,9 +158,11 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         // Validate that the owner is not the zero address
         if (owner_ == address(0)) revert CDPOS_InvalidParams("owner");
 
-        // Validate that the convertible deposit token is not the zero address
-        if (convertibleDepositToken_ == address(0))
-            revert CDPOS_InvalidParams("convertible deposit token");
+        // Validate that the asset is not the zero address
+        if (asset_ == address(0)) revert CDPOS_InvalidParams("asset");
+
+        // Validate that the period is greater than 0
+        if (periodMonths_ == 0) revert CDPOS_InvalidParams("period");
 
         // Validate that the remaining deposit is greater than 0
         if (remainingDeposit_ == 0) revert CDPOS_InvalidParams("deposit");
@@ -170,7 +176,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         return
             _create(
                 owner_,
-                convertibleDepositToken_,
+                asset_,
+                periodMonths_,
                 remainingDeposit_,
                 conversionPrice_,
                 conversionExpiry_,
@@ -237,7 +244,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         // Create the new position
         newPositionId = _create(
             to_,
-            position.convertibleDepositToken,
+            position.asset,
+            position.periodMonths,
             amount_,
             position.conversionPrice,
             position.expiry,
@@ -248,7 +256,8 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         emit PositionSplit(
             positionId_,
             newPositionId,
-            position.convertibleDepositToken,
+            position.asset,
+            position.periodMonths,
             amount_,
             to_,
             wrap_
@@ -273,12 +282,13 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         uint8 depositDecimals;
         string memory cdSymbol;
         {
-            ERC20 cdToken = ERC20(position_.convertibleDepositToken);
-            depositDecimals = cdToken.decimals();
-            cdSymbol = cdToken.symbol();
+            ERC20 asset = ERC20(position_.asset);
+            depositDecimals = asset.decimals();
+            cdSymbol = asset.symbol();
         }
 
         bool positionIsConvertible = _isConvertible(position_);
+        // TODO add deposit period
 
         return
             string.concat(
@@ -345,7 +355,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         Position memory position = _getPosition(id_);
 
         // Get the decimals of the deposit token
-        uint8 depositDecimals = ERC20(position.convertibleDepositToken).decimals();
+        uint8 depositDecimals = ERC20(position.asset).decimals();
 
         bool positionIsConvertible = _isConvertible(position);
 
@@ -357,9 +367,14 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
             '"attributes": [',
             string.concat('{"trait_type": "Position ID", "value": ', Strings.toString(id_), "},"),
             string.concat(
-                '{"trait_type": "Convertible Deposit Token", "value": "',
-                Strings.toHexString(position.convertibleDepositToken),
+                '{"trait_type": "Deposit Asset", "value": "',
+                Strings.toHexString(position.asset),
                 '"},'
+            ),
+            string.concat(
+                '{"trait_type": "Deposit Period", "value": ',
+                Strings.toString(position.periodMonths),
+                "},"
             ),
             positionIsConvertible
                 ? string.concat(
