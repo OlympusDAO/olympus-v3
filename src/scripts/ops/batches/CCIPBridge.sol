@@ -301,6 +301,16 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         console2.log("\n");
         console2.log("  Destination EVM chain:", remoteChain_);
 
+        // Get the gas limit
+        uint32 gasLimit = ICCIPCrossChainBridge(bridgeAddress).getGasLimit(remoteChainSelector);
+
+        // If the gas limit is already set, then no need to set it again
+        if (gasLimit == gasLimit_) {
+            console2.log("  Gas limit is already set to", gasLimit_, ". No change needed.");
+            console2.log("\n");
+            return;
+        }
+
         // Set the gas limit
         addToBatch(
             bridgeAddress,
