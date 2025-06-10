@@ -16,7 +16,6 @@ import {uint2str} from "src/libraries/Uint2Str.sol";
 // Bophades
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {CDEPOv1} from "./CDEPO.v1.sol";
-import {ConvertibleDepositTokenClone} from "./ConvertibleDepositTokenClone.sol";
 import {IConvertibleDepositERC20} from "./IConvertibleDepositERC20.sol";
 
 /// @title  Olympus Convertible Depository
@@ -66,7 +65,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== CONSTRUCTOR ========== //
 
     constructor(Kernel kernel_) Module(kernel_) {
-        _TOKEN_IMPLEMENTATION = address(new ConvertibleDepositTokenClone());
+        // _TOKEN_IMPLEMENTATION = address(new ConvertibleDepositTokenClone());
     }
 
     // ========== MODULE FUNCTIONS ========== //

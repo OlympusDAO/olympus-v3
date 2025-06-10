@@ -5,7 +5,7 @@ pragma solidity 0.8.15;
 import {IConvertibleDepositRedemptionVault} from "../interfaces/IConvertibleDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConvertibleDepositTokenManager} from "src/policies/interfaces/IConvertibleDepositTokenManager.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
 // Libraries
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
@@ -35,7 +35,7 @@ abstract contract CDRedemptionVault is
     // ========== STATE VARIABLES ========== //
 
     /// @notice The address of the token manager
-    IConvertibleDepositTokenManager public immutable TOKEN_MANAGER;
+    IDepositManager public immutable TOKEN_MANAGER;
 
     /// @notice The TRSRY module.
     /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
@@ -54,7 +54,7 @@ abstract contract CDRedemptionVault is
     // ========== CONSTRUCTOR ========== //
 
     constructor(address tokenManager_) {
-        TOKEN_MANAGER = IConvertibleDepositTokenManager(tokenManager_);
+        TOKEN_MANAGER = IDepositManager(tokenManager_);
     }
 
     // ========== MINT/BURN ========== //
@@ -65,8 +65,12 @@ abstract contract CDRedemptionVault is
         address account_,
         uint256 amount_
     ) internal {
+        // TODO shift the amount check to the DepositManager
+
         // Validate that the amount is greater than 0
         if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
+
+        // TODO consider forgoing the transfer and letting DepositManager handle it
 
         // Transfer asset from account
         ERC20 asset = ERC20(address(cdToken_.asset()));
@@ -75,7 +79,7 @@ abstract contract CDRedemptionVault is
         // Deposit into the token manager
         // This will perform validation of the CD token, and mint the CD tokens
         asset.safeApprove(address(TOKEN_MANAGER), amount_);
-        TOKEN_MANAGER.mint(cdToken_, amount_);
+        // TOKEN_MANAGER.mint(cdToken_, amount_);
 
         // Transfer the minted CD tokens to the account
         ERC20(address(cdToken_)).safeTransfer(account_, amount_);
@@ -111,7 +115,7 @@ abstract contract CDRedemptionVault is
 
         // Withdraw the underlying asset from the token manager
         // It will validate that the CD token is supported and solvent
-        TOKEN_MANAGER.withdraw(cdToken_, amount_);
+        // TOKEN_MANAGER.withdraw(cdToken_, amount_);
     }
 
     /// @notice Burns the CD tokens and recieves the deposit token
@@ -125,7 +129,7 @@ abstract contract CDRedemptionVault is
 
         // Burn the CD tokens and recieve the deposit token
         ERC20(address(cdToken_)).safeApprove(address(TOKEN_MANAGER), amount_);
-        TOKEN_MANAGER.burn(cdToken_, amount_);
+        // TOKEN_MANAGER.burn(cdToken_, amount_);
     }
 
     /// @inheritdoc IConvertibleDepositRedemptionVault
@@ -297,10 +301,10 @@ abstract contract CDRedemptionVault is
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
-        reclaimed = amount_.mulDiv(
-            TOKEN_MANAGER.getTokenReclaimRate(cdToken_),
-            ONE_HUNDRED_PERCENT
-        );
+        // reclaimed = amount_.mulDiv(
+        //     TOKEN_MANAGER.getTokenReclaimRate(cdToken_),
+        //     ONE_HUNDRED_PERCENT
+        // );
 
         // If the reclaimed amount is 0, revert
         if (reclaimed == 0) revert CDRedemptionVault_ZeroAmount();

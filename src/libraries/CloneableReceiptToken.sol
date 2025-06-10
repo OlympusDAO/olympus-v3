@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.15;
 
-import {CloneERC20} from "../../external/clones/CloneERC20.sol";
-
+// Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConvertibleDeposit} from "./IConvertibleDeposit.sol";
+import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
 
-/// @title  ConvertibleDepositTokenClone
-/// @notice Convertible deposit token implementation that is deployed as a clone
+// Libraries
+import {CloneERC20} from "src/external/clones/CloneERC20.sol";
+
+/// @title  CloneableReceiptToken
+/// @notice ERC20 implementation that is deployed as a clone
 ///         with immutable arguments for each supported input token.
-contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
+contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable {
+    error OnlyOwner();
+
     // ========== IMMUTABLE ARGS ========== //
 
     // Storage layout:
@@ -19,8 +22,7 @@ contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
     // 0x40 - decimals, 1 byte
     // 0x41 - owner, 20 bytes
     // 0x55 - asset, 20 bytes
-    // 0x69 - vault, 20 bytes
-    // 0x7D - periodMonths, 1 byte
+    // 0x69 - periodMonths, 1 byte
 
     /// @notice The owner of the clone
     /// @return _owner The owner address stored in immutable args
@@ -34,16 +36,10 @@ contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
         _asset = IERC20(_getArgAddress(0x55));
     }
 
-    /// @notice The vault that holds the underlying asset
-    /// @return _vault The vault address stored in immutable args
-    function vault() public pure returns (IERC4626 _vault) {
-        _vault = IERC4626(_getArgAddress(0x69));
-    }
-
     /// @notice The period of the deposit token (in months)
     /// @return _periodMonths The period months stored in immutable args
     function periodMonths() public pure returns (uint8 _periodMonths) {
-        _periodMonths = _getArgUint8(0x7D);
+        _periodMonths = _getArgUint8(0x69);
     }
 
     // ========== OWNER-ONLY FUNCTIONS ========== //
@@ -81,5 +77,13 @@ contract ConvertibleDepositTokenClone is CloneERC20, IConvertibleDeposit {
         }
 
         _burn(from_, amount_);
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId_) public view returns (bool) {
+        return
+            interfaceId_ == type(IERC20BurnableMintable).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 }

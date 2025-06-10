@@ -14,34 +14,36 @@ interface IAssetManager {
     event AssetDeposited(
         address indexed asset,
         address indexed depositor,
+        address indexed operator,
         uint256 amount,
         uint256 shares
     );
     event AssetWithdrawn(
         address indexed asset,
         address indexed withdrawer,
+        address indexed operator,
         uint256 amount,
         uint256 shares
     );
 
-    /// @notice Get the number of shares deposited for an asset and depositor
+    /// @notice Get the number of shares deposited for an asset and operator
     ///
     /// @param  asset_      The asset to get the deposited shares for
-    /// @param  depositor_  The depositor to get the deposited shares for
+    /// @param  operator_   The operator to get the deposited shares for
     /// @return shares      The number of shares deposited
     function getDepositedShares(
         address asset_,
-        address depositor_
+        address operator_
     ) external view returns (uint256 shares);
 
-    /// @notice Get the number of assets deposited for an asset and depositor
+    /// @notice Get the number of assets deposited for an asset and operator
     ///
     /// @param  asset_      The asset to get the deposited assets for
-    /// @param  depositor_  The depositor to get the deposited assets for
+    /// @param  operator_   The operator to get the deposited assets for
     /// @return assets      The number of assets deposited
     function getDepositedAssets(
         address asset_,
-        address depositor_
+        address operator_
     ) external view returns (uint256 assets);
 
     /// @notice Get the configuration for an asset

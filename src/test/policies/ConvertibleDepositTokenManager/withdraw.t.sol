@@ -14,7 +14,7 @@ contract WithdrawCDTokenManagerTest is CDTokenManagerTest {
 
     // given the CD token manager is disabled
     //  [X] it reverts
-    // given the caller does not have the cd_token_manager role
+    // given the caller does not have the deposit_manager role
     //  [X] it reverts
     // given the CD token does not exist
     //  [X] it reverts

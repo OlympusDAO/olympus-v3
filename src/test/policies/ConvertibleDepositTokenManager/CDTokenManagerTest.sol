@@ -6,7 +6,7 @@ import {stdError} from "forge-std/StdError.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
-import {CDTokenManager} from "src/policies/CDTokenManager.sol";
+import {DepositManager} from "src/policies/DepositManager.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
@@ -20,13 +20,13 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
-import {IConvertibleDepositTokenManager} from "src/policies/interfaces/IConvertibleDepositTokenManager.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
 contract CDTokenManagerTest is Test {
     Kernel public kernel;
     OlympusConvertibleDepository public CDEPO;
     OlympusRoles public ROLES;
-    CDTokenManager public cdTokenManager;
+    DepositManager public cdTokenManager;
     RolesAdmin public rolesAdmin;
 
     MockERC20 public reserveToken;
@@ -54,7 +54,7 @@ contract CDTokenManagerTest is Test {
         kernel = new Kernel();
         ROLES = new OlympusRoles(kernel);
         CDEPO = new OlympusConvertibleDepository(kernel);
-        cdTokenManager = new CDTokenManager(address(kernel));
+        cdTokenManager = new DepositManager(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -65,7 +65,7 @@ contract CDTokenManagerTest is Test {
         // Grant roles
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
-        rolesAdmin.grantRole(bytes32("cd_token_manager"), facility);
+        rolesAdmin.grantRole(bytes32("deposit_manager"), facility);
 
         // Enable the CD token manager
         vm.prank(admin);
@@ -145,7 +145,7 @@ contract CDTokenManagerTest is Test {
 
     function _expectRevertNotCDTokenManagerRole() internal {
         vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("cd_token_manager"))
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("deposit_manager"))
         );
     }
 
@@ -178,7 +178,7 @@ contract CDTokenManagerTest is Test {
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositTokenManager.ConvertibleDepositTokenManager_Insolvent.selector,
+                IDepositManager.ConvertibleDepositTokenManager_Insolvent.selector,
                 address(cdToken_),
                 sharesRequired_,
                 sharesDeposited_
@@ -189,7 +189,7 @@ contract CDTokenManagerTest is Test {
     function _expectRevertZeroAmount() internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositTokenManager.ConvertibleDepositTokenManager_ZeroAmount.selector
+                IDepositManager.ConvertibleDepositTokenManager_ZeroAmount.selector
             )
         );
     }

@@ -95,7 +95,7 @@ import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
-// import {CDTokenManager} from "policies/CDTokenManager.sol";
+// import {DepositManager} from "policies/DepositManager.sol";
 // import {CDAuctioneer} from "policies/CDAuctioneer.sol";
 // import {CDFacility} from "policies/CDFacility.sol";
 
@@ -148,7 +148,7 @@ contract OlympusDeploy is Script {
     EmissionManager public emissionManager;
     // CDAuctioneer public cdAuctioneer;
     // CDFacility public cdFacility;
-    // CDTokenManager public cdTokenManager;
+    // DepositManager public cdTokenManager;
     CoolerLtvOracle public coolerV2LtvOracle;
     CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
     MonoCooler public coolerV2;
@@ -396,7 +396,7 @@ contract OlympusDeploy is Script {
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
         // cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
         // cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
-        // cdTokenManager = CDTokenManager(
+        // cdTokenManager = DepositManager(
         //     envAddress("olympus.policies.ConvertibleDepositTokenManager")
         // );
 
@@ -1633,7 +1633,7 @@ contract OlympusDeploy is Script {
 
     //     // Deploy ConvertibleDepositTokenManager
     //     vm.broadcast();
-    //     cdTokenManager = new CDTokenManager(address(kernel));
+    //     cdTokenManager = new DepositManager(address(kernel));
     //     console2.log("ConvertibleDepositTokenManager deployed at:", address(cdTokenManager));
 
     //     return address(cdTokenManager);
