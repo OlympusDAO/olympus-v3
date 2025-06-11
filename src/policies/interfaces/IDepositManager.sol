@@ -35,6 +35,14 @@ interface IDepositManager {
 
     error DepositManager_AssetNotConfigured(address asset, uint8 periodMonths);
 
+    // ========== STRUCTS ========== //
+
+    struct DepositConfiguration {
+        IERC20 asset;
+        uint8 periodMonths;
+        uint16 reclaimRate;
+    }
+
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
 
     /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token
@@ -114,22 +122,27 @@ interface IDepositManager {
     /// @param  periodMonths_   The period of the deposit
     /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
-    function configureAsset(
+    function configureDeposit(
         IERC20 asset_,
         IERC4626 vault_,
         uint8 periodMonths_,
         uint16 reclaimRate_
     ) external returns (uint256 receiptTokenId);
 
-    /// @notice Returns whether a deposit asset is configured
+    /// @notice Returns whether a deposit asset and period are supported
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  periodMonths_   The period of the deposit
     /// @return isConfigured    Whether the deposit asset is configured
-    function isConfiguredAsset(IERC20 asset_, uint8 periodMonths_) external view returns (bool);
+    function isDepositAsset(IERC20 asset_, uint8 periodMonths_) external view returns (bool);
+
+    /// @notice Returns the deposit assets
+    ///
+    /// @return depositAssets   The deposit assets
+    function getDepositAssets() external view returns (DepositConfiguration[] memory depositAssets);
 
     /// @notice Returns the ID of the receipt token for a deposit asset
-    /// @dev    The ID returned is not a guarantee that the asset is configured. {isConfiguredAsset} should be used for that purpose.
+    /// @dev    The ID returned is not a guarantee that the asset is configured. {isDepositAsset} should be used for that purpose.
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  periodMonths_   The period of the deposit

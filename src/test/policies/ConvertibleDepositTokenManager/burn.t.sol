@@ -113,7 +113,7 @@ contract BurnCDTokenManagerTest is CDTokenManagerTest {
     {
         burnAmount_ = bound(burnAmount_, 1e18, 100e18);
 
-        uint256 beforeShares = cdTokenManager.getDepositedShares(facility, iVault);
+        (uint256 beforeShares, ) = cdTokenManager.getOperatorShares(facility, iVault);
         uint256 expectedWithdrawnShares = vault.previewWithdraw(burnAmount_);
 
         // Expect event

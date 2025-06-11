@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity >=0.8.15;
+pragma solidity >=0.8.20;
 
 // Interfaces
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
@@ -23,10 +23,10 @@ abstract contract BaseAssetManager is IAssetManager {
     IERC20[] internal _configuredAssets;
 
     /// @notice Mapping of assets to a configuration
-    mapping(IERC20 => AssetConfiguration) internal _assetConfigurations;
+    mapping(IERC20 asset => AssetConfiguration) internal _assetConfigurations;
 
     /// @notice Mapping of assets and operators to the number of shares they have deposited
-    mapping(IERC20 => mapping(address => uint256)) internal _depositedShares;
+    mapping(IERC20 asset => mapping(address operator => uint256 shares)) internal _operatorShares;
 
     // ========== ACTION FUNCTIONS ========== //
 
@@ -67,7 +67,7 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         // Update the shares deposited by the caller (operator)
-        _depositedShares[asset_][msg.sender] += amount_;
+        _operatorShares[asset_][msg.sender] += amount_;
 
         emit AssetDeposited(address(asset_), depositor_, msg.sender, amount_, shares);
         return shares;
@@ -104,23 +104,32 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         // Update the shares deposited by the caller (operator)
-        _depositedShares[asset_][msg.sender] -= shares;
+        _operatorShares[asset_][msg.sender] -= shares;
 
         emit AssetWithdrawn(address(asset_), depositor_, msg.sender, amount_, shares);
         return shares;
     }
 
     /// @inheritdoc IAssetManager
-    function getDepositedShares(
+    function getOperatorShares(
         IERC20 asset_,
         address operator_
-    ) public view override returns (uint256 shares) {
-        shares = _depositedShares[asset_][operator_];
-        return shares;
+    ) public view override returns (uint256 shares, uint256 sharesInAssets) {
+        shares = _operatorShares[asset_][operator_];
+
+        // Convert from shares to assets
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
+        if (address(assetConfiguration.vault) == address(0)) {
+            sharesInAssets = shares;
+        } else {
+            sharesInAssets = assetConfiguration.vault.previewRedeem(shares);
+        }
+
+        return (shares, sharesInAssets);
     }
 
     /// @inheritdoc IAssetManager
-    function getDepositedAssets(
+    function getOperatorAssets(
         IERC20 asset_,
         address operator_
     ) public view override returns (uint256 assets) {
@@ -128,11 +137,11 @@ abstract contract BaseAssetManager is IAssetManager {
 
         // If the asset is not configured or there is no vault, the assets are kept idle and the shares = assets
         if (address(assetConfiguration.vault) == address(0)) {
-            assets = _depositedShares[asset_][operator_];
+            assets = _operatorShares[asset_][operator_];
         }
         // Otherwise, convert from shares to assets
         else {
-            assets = assetConfiguration.vault.previewRedeem(_depositedShares[asset_][operator_]);
+            assets = assetConfiguration.vault.previewRedeem(_operatorShares[asset_][operator_]);
         }
 
         return assets;

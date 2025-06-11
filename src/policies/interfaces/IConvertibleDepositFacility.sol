@@ -25,6 +25,8 @@ interface IConvertibleDepositFacility {
         uint256 convertedAmount
     );
 
+    event ClaimedYield(address indexed asset, uint256 amount);
+
     // ========== ERRORS ========== //
 
     error CDF_InvalidArgs(string reason_);
@@ -106,6 +108,23 @@ interface IConvertibleDepositFacility {
         uint256[] memory positionIds_,
         uint256[] memory amounts_
     ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut);
+
+    // ========== YIELD ========== //
+
+    /// @notice Preview the amount of yield that would be claimed for the given asset
+    ///
+    /// @param  asset_          The address of the asset
+    /// @return assets          The amount of assets that would be claimed
+    function previewClaimYield(IERC20 asset_) external view returns (uint256 assets);
+
+    /// @notice Claim the yield accrued for the given asset
+    ///
+    /// @param  asset_          The address of the asset
+    /// @return assets          The amount of assets that were claimed
+    function claimYield(IERC20 asset_) external returns (uint256 assets);
+
+    /// @notice Claim the yield accrued for all assets and deposit periods
+    function claimAllYield() external;
 
     // ========== VIEW FUNCTIONS ========== //
 

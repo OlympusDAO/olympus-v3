@@ -222,11 +222,8 @@ contract CDTokenManagerTest is Test {
     }
 
     function _assertDepositedShares(IERC4626 vault_, uint256 shares_) internal {
-        assertEq(
-            cdTokenManager.getDepositedShares(facility, vault_),
-            shares_,
-            "Deposited shares mismatch"
-        );
+        (uint256 depositedShares, ) = cdTokenManager.getOperatorShares(facility, vault_);
+        assertEq(depositedShares, shares_, "Deposited shares mismatch");
     }
 
     function _assertVaultShares(IERC4626 vault_, uint256 shares_) internal {

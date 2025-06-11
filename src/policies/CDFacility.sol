@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -156,7 +157,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         currentPeriodMonths = position.periodMonths;
         if (previousAsset_ == address(0)) {
             // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isConfiguredAsset(IERC20(currentAsset), currentPeriodMonths))
+            if (!DEPOSIT_MANAGER.isDepositAsset(IERC20(currentAsset), currentPeriodMonths))
                 revert CDF_InvalidToken(positionId_, currentAsset, currentPeriodMonths);
         } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {
             revert CDF_InvalidArgs("multiple assets");
@@ -279,6 +280,52 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         emit ConvertedDeposit(asset, msg.sender, periodMonths, cdTokenIn, convertedTokenOut);
 
         return (cdTokenIn, convertedTokenOut);
+    }
+
+    // ========== YIELD ========== //
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function previewClaimYield(IERC20 asset_) public view returns (uint256 yieldAssets) {
+        // The yield is the difference between the quantity of deposits assets and shares (in terms of assets)
+        uint256 depositedAssets = DEPOSIT_MANAGER.getOperatorAssets(asset_, address(this));
+        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorShares(
+            asset_,
+            address(this)
+        );
+
+        yieldAssets = depositedSharesInAssets - depositedAssets;
+
+        return yieldAssets;
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function claimYield(IERC20 asset_) public returns (uint256 yieldAssets) {
+        // Determine the yield
+        yieldAssets = previewClaimYield(asset_);
+
+        // Skip if there is no yield to claim
+        if (yieldAssets == 0) return 0;
+
+        // Claim the yield
+        // This will revert if the asset is not supported, or the receipt token becomes insolvent
+        DEPOSIT_MANAGER.claimYield(asset_, 0, address(TRSRY), yieldAssets);
+
+        // Emit the event
+        emit ClaimedYield(address(asset_), yieldAssets);
+
+        return yieldAssets;
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function claimAllYield() external {
+        // Get the assets
+        IERC20[] memory assets = DEPOSIT_MANAGER.getConfiguredAssets();
+
+        // Iterate over the deposit assets
+        for (uint256 i; i < assets.length; ++i) {
+            // Claim the yield
+            claimYield(assets[i]);
+        }
     }
 
     // ========== VIEW FUNCTIONS ========== //

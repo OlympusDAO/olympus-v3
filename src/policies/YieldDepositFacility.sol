@@ -166,6 +166,7 @@ contract YieldDepositFacility is
         if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
         // Validate that the asset has a yield bearing vault
+        // TODO shift up a level, no need to do this every position
         IERC4626 assetVault = DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault;
         if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
 
@@ -237,7 +238,7 @@ contract YieldDepositFacility is
             periodMonths = position.periodMonths;
 
             // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isConfiguredAsset(asset, periodMonths))
+            if (!DEPOSIT_MANAGER.isDepositAsset(asset, periodMonths))
                 revert YDF_Unsupported(positionIds_[0]);
         }
 
@@ -280,7 +281,7 @@ contract YieldDepositFacility is
             periodMonths = position.periodMonths;
 
             // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isConfiguredAsset(asset, periodMonths))
+            if (!DEPOSIT_MANAGER.isDepositAsset(asset, periodMonths))
                 revert YDF_Unsupported(positionIds_[0]);
         }
 

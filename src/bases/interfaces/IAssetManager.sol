@@ -4,6 +4,10 @@ pragma solidity >=0.8.15;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
+/// @title  IAssetManager
+/// @notice This interface defines the functions for custodying assets.
+///         A depositor can deposit assets into a vault, and withdraw them later.
+///         An operator is the contract that acts on behalf of the depositor. Only operators can interact with the contract. The deposits facilitated by an operator are siloed from other operators.
 interface IAssetManager {
     // ========== ERRORS ========== //
 
@@ -40,20 +44,21 @@ interface IAssetManager {
 
     /// @notice Get the number of shares deposited for an asset and operator
     ///
-    /// @param  asset_      The asset to get the deposited shares for
-    /// @param  operator_   The operator to get the deposited shares for
-    /// @return shares      The number of shares deposited
-    function getDepositedShares(
+    /// @param  asset_          The asset to get the deposited shares for
+    /// @param  operator_       The operator to get the deposited shares for
+    /// @return shares          The number of shares deposited
+    /// @return sharesInAssets  The number of shares deposited (in terms of assets)
+    function getOperatorShares(
         IERC20 asset_,
         address operator_
-    ) external view returns (uint256 shares);
+    ) external view returns (uint256 shares, uint256 sharesInAssets);
 
     /// @notice Get the number of assets deposited for an asset and operator
     ///
     /// @param  asset_      The asset to get the deposited assets for
     /// @param  operator_   The operator to get the deposited assets for
     /// @return assets      The number of assets deposited
-    function getDepositedAssets(
+    function getOperatorAssets(
         IERC20 asset_,
         address operator_
     ) external view returns (uint256 assets);

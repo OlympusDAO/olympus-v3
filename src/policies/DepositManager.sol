@@ -12,6 +12,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
+import {String} from "src/libraries/String.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -31,11 +32,12 @@ contract DepositManager is
     ERC6909Wrappable
 {
     using SafeTransferLib for ERC20;
+    using String for string;
 
     // ========== CONSTANTS ========== //
 
     /// @notice The role that is allowed to deposit and withdraw funds
-    bytes32 public constant ROLE_DEPOSITOR = "deposit_manager";
+    bytes32 public constant ROLE_DEPOSIT_OPERATOR = "deposit_operator";
 
     // Tasks
     // [X] Rename to DepositManager
@@ -47,23 +49,19 @@ contract DepositManager is
     // [ ] consider shifting away from policy
     // [ ] consider if asset configuration should require a different role
 
-    // ========== STRUCTS ========== //
-
-    struct DepositConfiguration {
-        IERC20 asset;
-        uint8 periodMonths;
-        uint16 reclaimRate;
-    }
-
     // ========== STATE VARIABLES ========== //
 
-    /// @notice Maps assets and depositors to the number of receipt tokens that have been minted
+    /// @notice Maps assets and operators to the number of receipt tokens that have been minted
     /// @dev    This is used to ensure that the receipt tokens are solvent
     ///         As with the BaseAssetManager, deposited asset tokens with different deposit periods are co-mingled.
-    mapping(IERC20 => mapping(address => uint256)) internal _receiptTokenSupply;
+    mapping(IERC20 asset => mapping(address operator => uint256 receiptTokenSupply))
+        internal _receiptTokenSupply;
 
     /// @notice Maps token ID to the deposit configuration
-    mapping(uint256 => DepositConfiguration) internal _depositConfigurations;
+    mapping(uint256 tokenId => DepositConfiguration) internal _depositConfigurations;
+
+    /// @notice Array of deposit token IDs
+    uint256[] internal _depositTokenIds;
 
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
@@ -111,7 +109,7 @@ contract DepositManager is
         address depositor_,
         uint256 amount_,
         bool shouldWrap_
-    ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
+    ) external onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
         // Deposit into vault
         shares = _depositAsset(asset_, depositor_, amount_);
 
@@ -130,21 +128,22 @@ contract DepositManager is
         uint256 amount_
     )
         external
-        onlyRole(ROLE_DEPOSITOR)
+        onlyRole(ROLE_DEPOSIT_OPERATOR)
         onlyConfiguredAsset(asset_, periodMonths_)
         returns (uint256 shares)
     {
+        // TODO does this need deposit period?
         // Withdraw the funds from the vault
         shares = _withdrawAsset(asset_, depositor_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
-        if (_receiptTokenSupply[asset_][msg.sender] > getDepositedAssets(asset_, msg.sender)) {
+        if (_receiptTokenSupply[asset_][msg.sender] > getOperatorAssets(asset_, msg.sender)) {
             revert DepositManager_Insolvent(
                 address(asset_),
                 _receiptTokenSupply[asset_][msg.sender],
-                getDepositedAssets(asset_, msg.sender)
+                getOperatorAssets(asset_, msg.sender)
             );
         }
 
@@ -161,7 +160,7 @@ contract DepositManager is
         address recipient_,
         uint256 amount_,
         bool wrapped_
-    ) external onlyRole(ROLE_DEPOSITOR) returns (uint256 shares) {
+    ) external onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
         // Burn the receipt token from the depositor
         _burn(depositor_, getReceiptTokenId(asset_, periodMonths_), amount_, wrapped_);
 
@@ -192,10 +191,10 @@ contract DepositManager is
         );
     }
 
-    // ========== TOKEN MANAGEMENT ========== //
+    // ========== DEPOSIT CONFIGURATION ========== //
 
     /// @inheritdoc IDepositManager
-    function isConfiguredAsset(
+    function isDepositAsset(
         IERC20 asset_,
         uint8 periodMonths_
     ) public view override returns (bool) {
@@ -205,15 +204,9 @@ contract DepositManager is
     }
 
     modifier onlyConfiguredAsset(IERC20 asset_, uint8 periodMonths_) {
-        if (!isConfiguredAsset(asset_, periodMonths_))
+        if (!isDepositAsset(asset_, periodMonths_))
             revert DepositManager_AssetNotConfigured(address(asset_), periodMonths_);
         _;
-    }
-
-    function _truncate32(string memory str_) internal pure returns (string memory) {
-        bytes32 nameBytes = bytes32(abi.encodePacked(str_));
-
-        return string(abi.encodePacked(nameBytes));
     }
 
     function _setReceiptTokenData(
@@ -226,14 +219,14 @@ contract DepositManager is
         // Set the metadata for the receipt token
         _setName(
             tokenId,
-            _truncate32(
-                string.concat(asset_.name(), " Receipt - ", uint2str(periodMonths_), " months")
-            )
+            string
+                .concat(asset_.name(), " Receipt - ", uint2str(periodMonths_), " months")
+                .truncate32()
         );
 
         _setSymbol(
             tokenId,
-            _truncate32(string.concat("r", asset_.symbol(), "-", uint2str(periodMonths_), "m"))
+            string.concat("r", asset_.symbol(), "-", uint2str(periodMonths_), "m").truncate32()
         );
 
         _setDecimals(tokenId, asset_.decimals());
@@ -263,7 +256,7 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
-    function configureAsset(
+    function configureDeposit(
         IERC20 asset_,
         IERC4626 vault_,
         uint8 periodMonths_,
@@ -281,10 +274,25 @@ contract DepositManager is
             periodMonths: periodMonths_,
             reclaimRate: 0
         });
+
+        // Add the deposit token ID to the array
+        _depositTokenIds.push(receiptTokenId);
+
         // Set the reclaim rate (which does validation and emits an event)
         _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
 
         return receiptTokenId;
+    }
+
+    /// @inheritdoc IDepositManager
+    function getDepositAssets() external view returns (DepositConfiguration[] memory) {
+        DepositConfiguration[] memory depositAssets = new DepositConfiguration[](
+            _depositTokenIds.length
+        );
+        for (uint256 i; i < _depositTokenIds.length; ++i) {
+            depositAssets[i] = _depositConfigurations[_depositTokenIds[i]];
+        }
+        return depositAssets;
     }
 
     /// @inheritdoc IDepositManager
