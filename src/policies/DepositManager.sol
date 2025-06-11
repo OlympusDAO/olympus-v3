@@ -45,6 +45,7 @@ contract DepositManager is
     // [X] CDTokenSupply to depositor supply
     // [ ] borrowing and repayment of deposited funds
     // [ ] consider shifting away from policy
+    // [ ] consider if asset configuration should require a different role
 
     // ========== STRUCTS ========== //
 
@@ -172,8 +173,6 @@ contract DepositManager is
 
         return shares;
     }
-
-    // TODO add reclaim
 
     // ========== TOKEN FUNCTIONS ========== //
 
