@@ -96,7 +96,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
     ///             - The asset token is not supported
-    function mint(
+    function createPosition(
         IERC20 asset_,
         uint8 periodMonths_,
         uint256 amount_,
@@ -141,17 +141,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         address previousAsset_,
         uint8 previousPeriodMonths_,
         uint48 timestampHint_
-    )
-        internal
-        view
-        returns (
-            uint256 yieldMinusFee,
-            uint256 yieldFee,
-            address currentAsset,
-            uint8 currentPeriodMonths,
-            uint256 endRate
-        )
-    {
+    ) internal view returns (uint256 yieldMinusFee, uint256 yieldFee, uint256 endRate) {
         // Validate that the position is valid
         // This will revert if the position is not valid
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
@@ -159,23 +149,20 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         // Validate that the caller is the owner of the position
         if (position.owner != account_) revert YDF_NotOwner(positionId_);
 
+        // Validate that the asset and period are the same as the previous asset and period
+        if (
+            previousAsset_ == address(0) ||
+            previousPeriodMonths_ == 0 ||
+            previousAsset_ != position.asset ||
+            previousPeriodMonths_ != position.periodMonths
+        ) revert YDF_InvalidArgs("multiple tokens");
+
         // Validate that the position is not convertible
         if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
         // Validate that the asset has a yield bearing vault
         IERC4626 assetVault = DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault;
         if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
-
-        // Set the asset, or validate
-        currentAsset = position.asset;
-        currentPeriodMonths = position.periodMonths;
-        if (previousAsset_ == address(0)) {
-            // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isConfiguredAsset(IERC20(currentAsset), currentPeriodMonths))
-                revert YDF_Unsupported(positionId_);
-        } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {
-            revert YDF_InvalidArgs("multiple tokens");
-        }
 
         // Get the vault and last snapshot rate
         uint256 lastSnapshotRate = positionLastYieldConversionRate[positionId_];
@@ -216,7 +203,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
         yieldMinusFee = yield - yieldFee;
 
-        return (yieldMinusFee, yieldFee, currentAsset, currentPeriodMonths, endRate);
+        return (yieldMinusFee, yieldFee, endRate);
     }
 
     /// @inheritdoc IYieldDepositFacility
@@ -233,30 +220,33 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
     ) public view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
-        if (positionIds_.length != timestampHints_.length) {
+        if (positionIds_.length != timestampHints_.length)
             revert YDF_InvalidArgs("array length mismatch");
+        if (positionIds_.length == 0) revert YDF_InvalidArgs("no positions");
+
+        // Get the asset and period months
+        uint8 periodMonths;
+        {
+            CDPOSv1.Position memory position = CDPOS.getPosition(positionIds_[0]);
+            asset = IERC20(position.asset);
+            periodMonths = position.periodMonths;
+
+            // Validate that the asset is supported
+            if (!DEPOSIT_MANAGER.isConfiguredAsset(asset, periodMonths))
+                revert YDF_Unsupported(positionIds_[0]);
         }
 
-        uint8 periodMonths;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (
-                uint256 previewYieldMinusFee,
-                ,
-                address currentAsset,
-                uint8 currentPeriodMonths,
-
-            ) = _previewHarvest(
-                    account_,
-                    positionId,
-                    address(asset),
-                    periodMonths,
-                    timestampHints_[i]
-                );
+            (uint256 previewYieldMinusFee, , ) = _previewHarvest(
+                account_,
+                positionId,
+                address(asset),
+                periodMonths,
+                timestampHints_[i]
+            );
             yieldMinusFee += previewYieldMinusFee;
-            asset = IERC20(currentAsset);
-            periodMonths = currentPeriodMonths;
         }
 
         return (yieldMinusFee, asset);
@@ -274,12 +264,23 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
     ) public onlyEnabled returns (uint256 yieldMinusFee) {
-        if (positionIds_.length != timestampHints_.length) {
+        if (positionIds_.length != timestampHints_.length)
             revert YDF_InvalidArgs("array length mismatch");
-        }
+        if (positionIds_.length == 0) revert YDF_InvalidArgs("no positions");
 
+        // Get the asset and period months
         IERC20 asset;
         uint8 periodMonths;
+        {
+            CDPOSv1.Position memory position = CDPOS.getPosition(positionIds_[0]);
+            asset = IERC20(position.asset);
+            periodMonths = position.periodMonths;
+
+            // Validate that the asset is supported
+            if (!DEPOSIT_MANAGER.isConfiguredAsset(asset, periodMonths))
+                revert YDF_Unsupported(positionIds_[0]);
+        }
+
         uint256 yieldFee;
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
@@ -287,8 +288,6 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
             (
                 uint256 previewYieldMinusFee,
                 uint256 previewYieldFee,
-                address currentAsset,
-                uint8 currentPeriodMonths,
                 uint256 endRate
             ) = _previewHarvest(
                     msg.sender,
@@ -300,8 +299,6 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
 
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
-            asset = IERC20(currentAsset);
-            periodMonths = currentPeriodMonths;
 
             // If there is yield, update the last yield conversion rate
             if (previewYieldMinusFee > 0) {

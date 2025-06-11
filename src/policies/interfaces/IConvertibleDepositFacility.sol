@@ -58,7 +58,7 @@ interface IConvertibleDepositFacility {
     /// @param  wrapPosition_       Whether the position should be wrapped
     /// @param  wrapReceipt_        Whether the receipt token should be wrapped
     /// @return positionId          The ID of the new position
-    function mint(
+    function createPosition(
         IERC20 asset_,
         uint8 periodMonths_,
         address account_,

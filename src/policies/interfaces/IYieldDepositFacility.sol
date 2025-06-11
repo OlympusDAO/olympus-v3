@@ -36,7 +36,7 @@ interface IYieldDepositFacility {
 
     // ========== MINT ========== //
 
-    /// @notice Mints a position for a yield-bearing deposit
+    /// @notice Creates a position for a yield-bearing deposit
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the asset is supported
     ///         - Depositing the asset into the deposit manager and minting the receipt token
@@ -48,7 +48,7 @@ interface IYieldDepositFacility {
     /// @param  wrapPosition_       Whether the position should be wrapped
     /// @param  wrapReceipt_        Whether the receipt token should be wrapped
     /// @return positionId          The ID of the new position
-    function mint(
+    function createPosition(
         IERC20 asset_,
         uint8 periodMonths_,
         uint256 amount_,

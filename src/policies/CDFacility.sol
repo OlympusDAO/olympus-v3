@@ -84,7 +84,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     ///             - The caller does not have the ROLE_AUCTIONEER role
     ///             - The contract is not enabled
     ///             - The asset and period are not supported
-    function mint(
+    function createPosition(
         IERC20 asset_,
         uint8 periodMonths_,
         address depositor_,

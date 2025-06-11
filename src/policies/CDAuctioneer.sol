@@ -7,12 +7,10 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {CDEPOv1} from "src/modules/CDEPO/CDEPO.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CDFacility} from "./CDFacility.sol";
@@ -56,15 +54,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     /// @notice Address of the Convertible Deposit Facility
     CDFacility public immutable CD_FACILITY;
-
-    /// @notice Address of the CDEPO module
-    /// @dev    This is set in `configureDependencies()`
-    CDEPOv1 public CDEPO;
-
-    /// @notice Address of the CD token
-    /// @dev    This is set in `configureDependencies()`
-    ///         In effect, it is an immutable variable, but it cannot be declared immutable as it can only be set in `configureDependencies()`
-    IConvertibleDepositERC20 public convertibleDebtToken;
 
     /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -112,20 +101,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("ROLES");
-        dependencies[1] = toKeycode("CDEPO");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[1]));
-
-        // Validate that the bid token is supported by the CDEPO module
-        convertibleDebtToken = CDEPO.getConvertibleDepositToken(
-            address(BID_TOKEN),
-            DEPOSIT_PERIOD_MONTHS
-        );
-        if (address(convertibleDebtToken) == address(0))
-            revert CDAuctioneer_InvalidParams("bid token");
     }
 
     /// @inheritdoc Policy
@@ -190,12 +169,16 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // We round up to be conservative
         uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
+        // TODO give user option to mint position and receipt tokens
+
         // Create the CD tokens and position
-        positionId = CD_FACILITY.mint(
-            convertibleDebtToken,
+        positionId = CD_FACILITY.createPosition(
+            BID_TOKEN,
+            DEPOSIT_PERIOD_MONTHS,
             msg.sender,
             depositIn,
             conversionPrice,
+            false,
             false
         );
 
@@ -287,7 +270,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // Preview the bid results
         (, , , , ohmOut) = _previewBid(bidAmount_, currentTick);
 
-        return (ohmOut, address(CDEPO));
+        return (ohmOut, address(CD_FACILITY.DEPOSIT_MANAGER()));
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -588,5 +571,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // Reset the auction results
         _auctionResults = new int256[](_auctionTrackingPeriod);
         _auctionResultsNextIndex = 0;
+
+        // TODO validate that the bid token and period are supported
     }
 }
