@@ -369,27 +369,36 @@ sequenceDiagram
     ReserveToken-->>caller: reserve tokens
 ```
 
-#### Borrow Against CD Tokens
+#### Borrowing Against Receipt Tokens
 
-TODO update
+Depositors that have committed to redeeming their deposit can borrow against that deposit.
 
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDClearinghouse
-    participant CDEPO
+    participant CDFacility
+    participant DepositManager
+    participant DepositToken as Deposit (ERC20)
     participant VaultToken as Vault (ERC4626)
-    participant cdReserve
-    participant Cooler
 
-    caller->>CDClearinghouse: lendToCooler(principalAmount)
-    CDClearinghouse->>cdReserve: transferFrom(caller, collateralAmount)
-    caller-->>CDClearinghouse: cdReserve tokens
-    CDClearinghouse->>CDEPO: incurDebt(VaultToken, principalAmount)
-    CDEPO-->>CDClearinghouse: vault tokens
-    CDClearinghouse->>Cooler: cdReserve tokens
-    CDClearinghouse-->>caller: vault tokens
+    caller->>CDFacility: borrow(amount)
+    note over caller, CDFacility: only if caller has committed to redemption
+    CDFacility->>DepositManager: borrow()
+    alt DepositToken has vault defined
+    DepositManager->>VaultToken: redeem()
+    VaultToken-->>DepositManager: deposit tokens
+    end
+    DepositManager->>DepositToken: transfer()
+    DepositManager-->>caller: deposit tokens
 ```
+
+TODO liquidation
+
+#### Repayment Against Receipt Token Loan
+
+When a depositor has borrowed against their receipt tokens, they must repay the loan in order to complete the redemption.
+
+TODO repayment
 
 ### EmissionManager (Policy)
 
