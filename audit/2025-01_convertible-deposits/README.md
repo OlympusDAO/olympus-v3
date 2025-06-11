@@ -215,20 +215,20 @@ flowchart TD
   admin((admin)) -- enable --> CDAuctioneer
   admin((admin)) -- enable --> CDClearinghouse
   admin((admin)) -- enable --> CDFacility
-  admin((admin)) -- enable --> CDTokenManager
+  admin((admin)) -- enable --> DepositManager
   admin((admin)) -- enable --> EmissionManager
   admin((admin)) -- restart --> EmissionManager
   emergency((emergency)) -- disable --> CDAuctioneer
   emergency((emergency)) -- disable --> CDClearinghouse
   emergency((emergency)) -- disable --> CDFacility
-  emergency((emergency)) -- disable --> CDTokenManager
+  emergency((emergency)) -- disable --> DepositManager
   emergency((emergency)) -- disable --> EmissionManager
 
   subgraph Policies
     CDAuctioneer
     CDClearinghouse
     CDFacility
-    CDTokenManager
+    DepositManager
     EmissionManager
   end
 ```
@@ -261,24 +261,22 @@ sequenceDiagram
     participant caller
     participant CDAuctioneer
     participant CDFacility
-    participant CDTokenManager
-    participant CDPOS
-    participant CDEPO
-    participant ReserveToken as Reserve (ERC20)
+    participant DepositManager
+    participant DepositToken as Deposit (ERC20)
     participant VaultToken as Vault (ERC4626)
-    participant cdReserve
+    participant CDPOS
 
     caller->>CDAuctioneer: bid(depositAmount)
     CDAuctioneer->>CDAuctioneer: determine conversion price
     CDAuctioneer->>CDFacility: mint(cdToken, caller, depositAmount, conversionPrice, expiry, wrapNft)
-    CDFacility->>CDTokenManager: mintFor(caller, depositAmount)
-    CDTokenManager->>ReserveToken: transferFrom(caller, depositAmount)
-    caller-->>CDTokenManager: reserve tokens
-    CDTokenManager->>VaultToken: deposit the amount reserve tokens in the vault
-    VaultToken-->>CDTokenManager: vault tokens
-    CDTokenManager->>CDEPO: mintFor(caller, depositAmount)
-    CDEPO->>cdReserve: mintFor(caller, depositAmount)
-    cdReserve-->>caller: cdReserve tokens
+    CDFacility->>DepositManager: deposit(caller, depositAmount)
+    DepositManager->>DepositToken: transferFrom(caller, depositAmount)
+    caller-->>DepositManager: deposit tokens
+    alt DepositToken has vault defined
+        DepositManager->>VaultToken: deposit()
+        VaultToken-->>DepositManager: vault tokens
+    end
+    DepositManager-->>caller: receipt tokens
     CDFacility->>CDPOS: mint(caller, cdToken, depositAmount, conversionPrice, expiry, wrapNft)
     CDPOS-->>caller: CDPOS ERC721 token
 ```
@@ -291,28 +289,26 @@ Prior to the expiry of the convertible deposit, a deposit owner can convert thei
 sequenceDiagram
     participant caller
     participant CDFacility
-    participant CDTokenManager
     participant CDPOS
-    participant CDEPO
+    participant DepositManager
+    participant DepositToken as Deposit (ERC20)
+    participant VaultToken as Vault (ERC4626)
     participant TRSRY
     participant MINTR
-    participant ReserveToken
-    participant VaultToken
     participant OHM
-    participant cdReserve
 
     caller->>CDFacility: convert(positionIds, amounts)
     loop For each position
         CDFacility->>CDPOS: update(positionId, remainingAmount)
     end
-    CDFacility->>CDTokenManager: redeemFor(caller, amount)
-    CDTokenManager->>CDEPO: burnFrom(caller, amount)
-    CDEPO->>cdReserve: burnFrom(caller, amount)
-    caller-->>cdReserve: burns tokens
-    CDTokenManager->>VaultToken: withdraw amount of reserve tokens to CDFacility
-    ReserveToken-->>CDFacility: reserve tokens
-    CDFacility->>VaultToken: deposit amount of reserve tokens to TRSRY
-    VaultToken-->>TRSRY: vault tokens
+    CDFacility->>DepositManager: withdraw(caller, amount)
+    caller-->>DepositManager: burns receipt tokens
+    alt DepositToken has vault defined
+    DepositManager->>VaultToken: redeem()
+    VaultToken-->>DepositManager: deposit tokens
+    end
+    DepositManager->>DepositToken: transfer()
+    DepositManager-->>TRSRY: reserve tokens
     CDFacility->>MINTR: mintOhm(caller, convertedAmount)
     MINTR->>OHM: mint(caller, convertedAmount)
     OHM-->>caller: OHM tokens
@@ -325,21 +321,22 @@ The holder of convertible deposit tokens can reclaim their underlying deposit at
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDTokenManager
-    participant CDEPO
-    participant MINTR
-    participant ReserveToken
-    participant VaultToken
-    participant cdReserve
+    participant CDFacility
+    participant DepositManager
+    participant DepositToken as Deposit (ERC20)
+    participant VaultToken as Vault (ERC4626)
 
-    caller->>CDTokenManager: reclaim(amount)
-    CDTokenManager->>CDEPO: burnFrom(caller, amount)
-    CDEPO->>cdReserve: burns tokens
-    caller-->>cdReserve: cdReserve tokens
-    CDTokenManager->>VaultToken: withdraw discounted amount to the CDTokenManager
-    ReserveToken-->>CDTokenManager: reserve tokens
-    CDTokenManager->>ReserveToken: transfer(caller, discountedAmount)
-    ReserveToken-->>caller: reserve tokens
+    caller->>CDFacility: reclaim(amount)
+    CDFacility->>DepositManager: withdraw()
+    caller-->>DepositManager: burns receipt tokens
+    alt DepositToken has vault defined
+    DepositManager->>VaultToken: redeem()
+    VaultToken-->>DepositManager: deposit tokens
+    end
+    DepositManager->>DepositToken: transfer(caller, discountedAmount)
+    DepositManager-->>caller: deposit tokens
+    DepositManager->>DepositToken: transfer(caller, fee)
+    DepositManager-->>TRSRY: deposit tokens
 ```
 
 #### Redeem Deposit
