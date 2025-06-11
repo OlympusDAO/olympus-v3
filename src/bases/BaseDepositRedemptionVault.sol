@@ -2,10 +2,8 @@
 pragma solidity >=0.8.15;
 
 // Interfaces
-import {IConvertibleDepositRedemptionVault} from "../interfaces/IConvertibleDepositRedemptionVault.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 
 // Libraries
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
@@ -18,15 +16,18 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
 
-/// @title  CDRedemptionVault
-/// @notice A contract that manages the redemption of convertible deposit (CD) tokens
-abstract contract CDRedemptionVault is
-    IConvertibleDepositRedemptionVault,
+/// @title  BaseDepositRedemptionVault
+/// @notice A contract that manages the redemption of receipt tokens
+abstract contract BaseDepositRedemptionVault is
+    IDepositRedemptionVault,
     PolicyEnabler,
     ReentrancyGuard
 {
     using SafeTransferLib for ERC20;
     using FullMath for uint256;
+
+    // Tasks
+    // [ ] Consider if dependency on PolicyEnabler is needed
 
     // ========== CONSTANTS ========== //
 
@@ -39,7 +40,7 @@ abstract contract CDRedemptionVault is
     DepositManager public immutable DEPOSIT_MANAGER;
 
     /// @notice The TRSRY module.
-    /// @dev    The inheriting contract must assign the CDEPO module address to this state variable using `configureDependencies()`
+    /// @dev    The inheriting contract must assign the TRSRY module address to this state variable using `configureDependencies()`
     TRSRYv1 public TRSRY;
 
     /// @notice The number of commitments per user
@@ -48,82 +49,49 @@ abstract contract CDRedemptionVault is
     /// @notice The commitments for each user and commitment ID
     mapping(address => mapping(uint16 => UserCommitment)) internal _userCommitments;
 
-    /// @notice Mapping of vault token to total shares
-    /// @dev    This is used to track deposited vault shares for each vault token
-    mapping(IERC4626 => uint256) private _totalShares;
-
     // ========== CONSTRUCTOR ========== //
 
     constructor(address depositManager_) {
         DEPOSIT_MANAGER = DepositManager(depositManager_);
     }
 
-    // TODO remove obsolete functions
-
-    /// @notice Pull the CD tokens from the caller
-    function _pullCDToken(IConvertibleDepositERC20 cdToken_, uint256 amount_) internal {
-        ERC20(address(cdToken_)).safeTransferFrom(msg.sender, address(this), amount_);
-    }
-
-    /// @notice Transfer a CD token's underlying asset to `to_`
-    function _transferUnderlyingTo(
-        IConvertibleDepositERC20 cdToken_,
-        address to_,
+    /// @notice Pull the receipt tokens from the caller
+    function _pullReceiptToken(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) internal {
-        ERC20(address(cdToken_.asset())).safeTransfer(to_, amount_);
-    }
-
-    /// @notice Deposit the underlying asset into the vault on behalf of `to_`
-    function _depositIntoVaultFor(
-        IConvertibleDepositERC20 cdToken_,
-        address to_,
-        uint256 amount_
-    ) internal {
-        ERC20(address(cdToken_)).safeApprove(address(cdToken_.vault()), amount_);
-        cdToken_.vault().deposit(amount_, to_);
-    }
-
-    /// @notice Burns the CD tokens and recieves the deposit token
-    /// @dev    This function will result in `amount_` worth of the deposit token being present in this contract.
-    ///
-    ///         Assumptions:
-    ///         - `amount_` worth of the CD token has already been transferred to this contract
-    function _burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) internal {
-        // Validate that the amount is greater than 0
+        // Check that the amount is not 0
         if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
-        // Burn the CD tokens and recieve the deposit token
-        ERC20(address(cdToken_)).safeApprove(address(DEPOSIT_MANAGER), amount_);
-        // DEPOSIT_MANAGER.burn(cdToken_, amount_);
-    }
+        // Validate that the asset is supported
+        if (!DEPOSIT_MANAGER.isConfiguredAsset(depositToken_, depositPeriod_))
+            revert CDRedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
-    function burn(IConvertibleDepositERC20 cdToken_, uint256 amount_) external {
-        // Pull the CD tokens from the caller
-        _pullCDToken(cdToken_, amount_);
-
-        // Withdraw the underlying asset from the token manager
-        _burn(cdToken_, amount_);
-
-        // Deposit the underlying asset into the vault on behalf of the TRSRY
-        _depositIntoVaultFor(cdToken_, address(TRSRY), amount_);
+        // Transfer the receipt tokens from the caller to this contract
+        DEPOSIT_MANAGER.transferFrom(
+            msg.sender,
+            address(this),
+            DEPOSIT_MANAGER.getReceiptTokenId(depositToken_, depositPeriod_),
+            amount_
+        );
     }
 
     // ========== USER COMMITMENTS ========== //
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     function getRedeemCommitmentCount(address user_) external view returns (uint16 count) {
         return _userCommitmentCount[user_];
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     function getRedeemCommitment(
         address user_,
         uint16 commitmentId_
     ) external view returns (UserCommitment memory commitment) {
         commitment = _userCommitments[user_][commitmentId_];
-        if (commitment.cdToken == IConvertibleDepositERC20(address(0)))
+        // TODO should this be a revert?
+        if (address(commitment.depositToken) == address(0))
             revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
 
         return commitment;
@@ -133,54 +101,52 @@ abstract contract CDRedemptionVault is
 
     modifier onlyValidCommitmentId(address user_, uint16 commitmentId_) {
         // If the CD token is the zero address, the commitment is invalid
-        if (address(_userCommitments[user_][commitmentId_].cdToken) == address(0))
+        if (address(_userCommitments[user_][commitmentId_].depositToken) == address(0))
             revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
         _;
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function performs the following:
-    ///             - Checks that the CD token is configured in the CDEPO module
     ///             - Creates a new commitment for the user
-    ///             - Transfers the CD tokens from the caller to this contract
+    ///             - Transfers the receipt tokens from the caller to this contract
     ///             - Emits the Committed event
     ///             - Returns the new commitment ID
     ///
     ///             The function will revert if:
-    ///             - The CD token is not configured in the CDEPO module
+    ///             - The deposit token and period are not supported
     ///             - The amount is 0
-    ///             - The caller has not approved this contract to spend the CD tokens
-    ///             - The caller does not have enough CD tokens
+    ///             - The caller has not approved this contract to spend the receipt tokens
+    ///             - The caller does not have enough receipt tokens
     function commitRedeem(
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) external nonReentrant onlyEnabled returns (uint16 commitmentId) {
-        // Check that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
-
         // Create a User Commitment
         commitmentId = _userCommitmentCount[msg.sender]++;
         _userCommitments[msg.sender][commitmentId] = UserCommitment({
-            cdToken: cdToken_,
+            depositToken: depositToken_,
+            depositPeriod: depositPeriod_,
             amount: amount_,
-            redeemableAt: uint48(block.timestamp + cdToken_.periodMonths() * 30 days)
+            redeemableAt: uint48(block.timestamp + depositPeriod_ * 30 days)
         });
 
-        // Pull the CD tokens from the caller
-        // This will validate that the CD token is supported
-        _pullCDToken(cdToken_, amount_);
+        // Pull the receipt tokens from the caller
+        // This will validate that the deposit token is supported
+        _pullReceiptToken(depositToken_, depositPeriod_, amount_);
 
         // Return the new commitment ID
-        emit Committed(msg.sender, commitmentId, address(cdToken_), amount_);
+        emit Committed(msg.sender, commitmentId, address(depositToken_), depositPeriod_, amount_);
         return commitmentId;
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function performs the following:
     ///             - Checks that the commitment ID is valid
     ///             - Checks that the amount is not greater than the commitment
     ///             - Reduces the commitment amount
-    ///             - Transfers the quantity of CD tokens to the caller
+    ///             - Transfers the quantity of receipt tokens to the caller
     ///             - Emits the Uncommitted event
     ///
     ///             The function will revert if:
@@ -204,14 +170,24 @@ abstract contract CDRedemptionVault is
         // Update the commitment
         commitment.amount -= amount_;
 
-        // Transfer the quantity of CD tokens to the caller
-        ERC20(address(commitment.cdToken)).safeTransfer(msg.sender, amount_);
+        // Transfer the quantity of receipt tokens to the caller
+        DEPOSIT_MANAGER.transfer(
+            msg.sender,
+            DEPOSIT_MANAGER.getReceiptTokenId(commitment.depositToken, commitment.depositPeriod),
+            amount_
+        );
 
         // Emit the uncommitted event
-        emit Uncommitted(msg.sender, commitmentId_, address(commitment.cdToken), amount_);
+        emit Uncommitted(
+            msg.sender,
+            commitmentId_,
+            address(commitment.depositToken),
+            commitment.depositPeriod,
+            amount_
+        );
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function performs the following:
     ///             - Checks that the commitment ID is valid
     ///             - Checks that the commitment is redeemable
@@ -241,25 +217,37 @@ abstract contract CDRedemptionVault is
         uint256 commitmentAmount = commitment.amount;
         commitment.amount = 0;
 
-        // Withdraw the underlying asset from the token manager
-        _burn(commitment.cdToken, commitmentAmount);
-
-        // Transfer the underlying asset to the caller
-        _transferUnderlyingTo(commitment.cdToken, msg.sender, commitmentAmount);
+        // Withdraw the underlying asset from the deposit manager
+        // This will burn the receipt tokens from this contract and send the released deposit tokens to the caller
+        DEPOSIT_MANAGER.withdraw(
+            commitment.depositToken,
+            commitment.depositPeriod,
+            address(this),
+            msg.sender,
+            commitmentAmount,
+            false
+        );
 
         // Emit the redeemed event
-        emit Redeemed(msg.sender, commitmentId_, address(commitment.cdToken), commitmentAmount);
+        emit Redeemed(
+            msg.sender,
+            commitmentId_,
+            address(commitment.depositToken),
+            commitment.depositPeriod,
+            commitmentAmount
+        );
     }
 
     // ========== RECLAIM ========== //
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
-    ///             - The amount of CD tokens to reclaim is 0
+    ///             - The amount of deposit tokens to reclaim is 0
     ///             - The reclaimed amount is 0
     function previewReclaim(
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) public view onlyEnabled returns (uint256 reclaimed) {
         // Validate that the amount is not 0
@@ -267,10 +255,10 @@ abstract contract CDRedemptionVault is
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
-        // reclaimed = amount_.mulDiv(
-        //     DEPOSIT_MANAGER.getTokenReclaimRate(cdToken_),
-        //     ONE_HUNDRED_PERCENT
-        // );
+        reclaimed = amount_.mulDiv(
+            DEPOSIT_MANAGER.getDepositReclaimRate(depositToken_, depositPeriod_),
+            ONE_HUNDRED_PERCENT
+        );
 
         // If the reclaimed amount is 0, revert
         if (reclaimed == 0) revert CDRedemptionVault_ZeroAmount();
@@ -278,38 +266,44 @@ abstract contract CDRedemptionVault is
         return reclaimed;
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
     ///             - The CD token is not supported
     ///             - The amount of CD tokens to reclaim is 0
     ///             - The reclaimed amount is 0
     function reclaimFor(
-        IConvertibleDepositERC20 cdToken_,
-        address account_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        address recipient_,
         uint256 amount_
     ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
         // Calculate the quantity of deposit token to withdraw and return
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(cdToken_, amount_);
+        uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
 
-        // Pull the CD tokens from the caller
-        // This will validate that the CD token is supported
-        _pullCDToken(cdToken_, amount_);
+        // Withdraw the deposit tokens from the deposit manager
+        // This will burn the receipt tokens from the caller and send the released deposit tokens to this contract
+        DEPOSIT_MANAGER.withdraw(
+            depositToken_,
+            depositPeriod_,
+            msg.sender,
+            address(this),
+            amount_,
+            false
+        );
 
-        // Withdraw all of the underlying asset from the token manager
-        _burn(cdToken_, amount_);
+        // Transfer discounted amount of the deposit token to the recipient
+        ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
 
-        // Transfer discounted amount of the underlying asset to the caller
-        _transferUnderlyingTo(cdToken_, account_, discountedAssetsOut);
-
-        // Deposit the remaining into the vault on behalf of the TRSRY
-        _depositIntoVaultFor(cdToken_, address(TRSRY), amount_ - discountedAssetsOut);
+        // Transfer the remaining deposit tokens to the TRSRY
+        ERC20(address(depositToken_)).safeTransfer(address(TRSRY), amount_ - discountedAssetsOut);
 
         // Emit event
         emit Reclaimed(
-            account_,
-            address(cdToken_.asset()),
+            recipient_,
+            address(depositToken_),
+            depositPeriod_,
             discountedAssetsOut,
             amount_ - discountedAssetsOut
         );
@@ -317,11 +311,12 @@ abstract contract CDRedemptionVault is
         return discountedAssetsOut;
     }
 
-    /// @inheritdoc IConvertibleDepositRedemptionVault
+    /// @inheritdoc IDepositRedemptionVault
     function reclaim(
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) external returns (uint256 reclaimed) {
-        reclaimed = reclaimFor(cdToken_, msg.sender, amount_);
+        reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
     }
 }

@@ -11,12 +11,12 @@ import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
+import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.sol";
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
-contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
+contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptionVault {
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
@@ -34,7 +34,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, CDRedemptionVault {
     constructor(
         address kernel_,
         address tokenManager_
-    ) Policy(Kernel(kernel_)) CDRedemptionVault(tokenManager_) {
+    ) Policy(Kernel(kernel_)) BaseDepositRedemptionVault(tokenManager_) {
         // Disabled by default by PolicyEnabler
     }
 

@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
-import {IConvertibleDepositRedemptionVault} from "src/policies/interfaces/IConvertibleDepositRedemptionVault.sol";
+import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
@@ -27,7 +27,7 @@ contract CommitRedeemYDFTest is YieldDepositFacilityTest {
         uint256 previousOtherUserCommitmentAmount_
     ) internal {
         // Get commitment
-        IConvertibleDepositRedemptionVault.UserCommitment memory commitment = yieldDepositFacility
+        IDepositRedemptionVault.UserCommitment memory commitment = yieldDepositFacility
             .getRedeemCommitment(user_, commitmentId_);
 
         // Assert commitment values
@@ -98,7 +98,7 @@ contract CommitRedeemYDFTest is YieldDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositRedemptionVault.CDRedemptionVault_InvalidCDToken.selector,
+                IDepositRedemptionVault.CDRedemptionVault_InvalidCDToken.selector,
                 address(reserveToken)
             )
         );
@@ -115,7 +115,7 @@ contract CommitRedeemYDFTest is YieldDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositRedemptionVault.CDRedemptionVault_ZeroAmount.selector,
+                IDepositRedemptionVault.CDRedemptionVault_ZeroAmount.selector,
                 recipient
             )
         );

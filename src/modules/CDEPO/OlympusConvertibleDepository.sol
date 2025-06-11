@@ -299,7 +299,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
         onlyCDToken(cdToken_)
         returns (uint256 yieldReserve, uint256 yieldSReserve)
     {
-        // TODO shift to CDRedemptionVault
+        // TODO shift to BaseDepositRedemptionVault
         // Validate that the recipient_ address is not the zero address
         if (recipient_ == address(0)) revert CDEPO_InvalidArgs("recipient");
 

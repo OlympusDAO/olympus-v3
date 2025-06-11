@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {IConvertibleDepositRedemptionVault} from "src/policies/interfaces/IConvertibleDepositRedemptionVault.sol";
+import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
@@ -28,8 +28,10 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         uint256 uncommittedAmount_
     ) internal {
         // Get commitment
-        IConvertibleDepositRedemptionVault.UserCommitment memory commitment = facility
-            .getRedeemCommitment(user_, commitmentId_);
+        IDepositRedemptionVault.UserCommitment memory commitment = facility.getRedeemCommitment(
+            user_,
+            commitmentId_
+        );
 
         // Assert commitment values
         assertEq(address(commitment.cdToken), address(cdToken_), "CD token mismatch");
@@ -98,7 +100,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositRedemptionVault.CDRedemptionVault_InvalidCommitmentId.selector,
+                IDepositRedemptionVault.CDRedemptionVault_InvalidCommitmentId.selector,
                 recipient,
                 0
             )
@@ -117,7 +119,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositRedemptionVault.CDRedemptionVault_InvalidCommitmentId.selector,
+                IDepositRedemptionVault.CDRedemptionVault_InvalidCommitmentId.selector,
                 recipientTwo,
                 0
             )
@@ -139,7 +141,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositRedemptionVault.CDRedemptionVault_TooEarly.selector,
+                IDepositRedemptionVault.CDRedemptionVault_TooEarly.selector,
                 recipient,
                 0
             )
@@ -160,7 +162,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositRedemptionVault.CDRedemptionVault_AlreadyRedeemed.selector,
+                IDepositRedemptionVault.CDRedemptionVault_AlreadyRedeemed.selector,
                 recipient,
                 0
             )
@@ -216,7 +218,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
 
         // The other commitment should not be affected
         uint16 otherCommitmentId = index_ == 0 ? 1 : 0;
-        IConvertibleDepositRedemptionVault.UserCommitment memory otherCommitment = facility
+        IDepositRedemptionVault.UserCommitment memory otherCommitment = facility
             .getRedeemCommitment(recipient, otherCommitmentId);
         assertEq(otherCommitment.amount, COMMITMENT_AMOUNT, "Other commitment amount mismatch");
     }
@@ -240,7 +242,7 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         _assertRedeemed(recipientTwo, 0, cdToken, COMMITMENT_AMOUNT, COMMITMENT_AMOUNT, 0, 0);
 
         // The other commitment should not be affected
-        IConvertibleDepositRedemptionVault.UserCommitment memory otherCommitment = facility
+        IDepositRedemptionVault.UserCommitment memory otherCommitment = facility
             .getRedeemCommitment(recipient, 0);
         assertEq(otherCommitment.amount, COMMITMENT_AMOUNT, "Other commitment amount mismatch");
         assertEq(reserveToken.balanceOf(recipient), 0, "User: reserve token balance mismatch");

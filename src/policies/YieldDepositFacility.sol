@@ -17,10 +17,15 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {CDRedemptionVault} from "src/policies/utils/CDRedemptionVault.sol";
+import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.sol";
 
 /// @title YieldDepositFacility
-contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, CDRedemptionVault {
+contract YieldDepositFacility is
+    Policy,
+    IYieldDepositFacility,
+    IPeriodicTask,
+    BaseDepositRedemptionVault
+{
     // ========== STATE VARIABLES ========== //
 
     /// @notice The CDPOS module.
@@ -45,7 +50,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     constructor(
         address kernel_,
         address depositManager_
-    ) Policy(Kernel(kernel_)) CDRedemptionVault(depositManager_) {
+    ) Policy(Kernel(kernel_)) BaseDepositRedemptionVault(depositManager_) {
         // Disabled by default by PolicyEnabler
     }
 

@@ -37,6 +37,8 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
     // [X] ERC6909 migration
     // [X] Rename to receipt tokens
     // [X] CDTokenSupply to depositor supply
+    // [ ] borrowing and repayment of deposited funds
+    // [ ] consider shifting away from policy
 
     // ========== STRUCTS ========== //
 
