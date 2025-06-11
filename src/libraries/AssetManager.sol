@@ -12,6 +12,8 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 /// @title  AssetManager
 /// @notice This is a base contract for managing asset deposits and withdrawals. It is designed to be inherited by another contract.
+///         This contract supports multiple assets, and can store them idle or in an ERC4626 vault (specified at the time of configuration). Once an approach is specified, it cannot be changed. This is to avoid the threat of a governance attack that shifts the deposited funds to a different vault in order to steal them.
+///         Future versions of the contract could add support for more complex strategies and/or strategy migration, while addressing the concern of funds theft.
 abstract contract AssetManager is IAssetManager {
     using SafeTransferLib for ERC20;
 
