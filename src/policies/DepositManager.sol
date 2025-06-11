@@ -111,6 +111,7 @@ contract DepositManager is
         bool shouldWrap_
     ) external onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
         // Deposit into vault
+        // This will revert if the asset is not configured
         shares = _depositAsset(asset_, depositor_, amount_);
 
         // Mint the receipt token to the caller
@@ -123,18 +124,11 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     function claimYield(
         IERC20 asset_,
-        uint8 periodMonths_,
-        address depositor_,
+        address recipient_,
         uint256 amount_
-    )
-        external
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
-        onlyConfiguredAsset(asset_, periodMonths_)
-        returns (uint256 shares)
-    {
-        // TODO does this need deposit period?
+    ) external onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
         // Withdraw the funds from the vault
-        shares = _withdrawAsset(asset_, depositor_, amount_);
+        _withdrawAsset(asset_, recipient_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
@@ -148,8 +142,7 @@ contract DepositManager is
         }
 
         // Emit an event
-        emit ClaimedYield(address(asset_), depositor_, msg.sender, amount_, shares);
-        return shares;
+        emit ClaimedYield(address(asset_), recipient_, msg.sender, amount_);
     }
 
     /// @inheritdoc IDepositManager
@@ -168,6 +161,7 @@ contract DepositManager is
         _receiptTokenSupply[asset_][msg.sender] -= amount_;
 
         // Withdraw the funds from the vault to the recipient
+        // This will revert if the asset is not configured
         shares = _withdrawAsset(asset_, recipient_, amount_);
 
         return shares;
@@ -203,7 +197,7 @@ contract DepositManager is
             address(0);
     }
 
-    modifier onlyConfiguredAsset(IERC20 asset_, uint8 periodMonths_) {
+    modifier onlyDepositAsset(IERC20 asset_, uint8 periodMonths_) {
         if (!isDepositAsset(asset_, periodMonths_))
             revert DepositManager_AssetNotConfigured(address(asset_), periodMonths_);
         _;
@@ -300,7 +294,7 @@ contract DepositManager is
         IERC20 asset_,
         uint8 periodMonths_,
         uint16 reclaimRate_
-    ) external onlyEnabled onlyAdminRole onlyConfiguredAsset(asset_, periodMonths_) {
+    ) external onlyEnabled onlyAdminRole onlyDepositAsset(asset_, periodMonths_) {
         _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
     }
 

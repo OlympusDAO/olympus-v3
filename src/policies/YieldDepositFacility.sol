@@ -312,9 +312,9 @@ contract YieldDepositFacility is
 
         // Withdraw the yield from the deposit manager to the caller
         // This will validate that the deposits are still solvent
-        DEPOSIT_MANAGER.claimYield(asset, periodMonths, msg.sender, yieldMinusFee);
+        DEPOSIT_MANAGER.claimYield(asset, msg.sender, yieldMinusFee);
         // Claim the yield fee
-        DEPOSIT_MANAGER.claimYield(asset, periodMonths, address(TRSRY), yieldFee);
+        DEPOSIT_MANAGER.claimYield(asset, address(TRSRY), yieldFee);
 
         // Emit event
         emit YieldClaimed(address(asset), msg.sender, yieldMinusFee);

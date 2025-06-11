@@ -45,18 +45,13 @@ abstract contract BaseAssetManager is IAssetManager {
         IERC20 asset_,
         address depositor_,
         uint256 amount_
-    ) internal returns (uint256 shares) {
-        // Validate that the vault is approved
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-        if (!assetConfiguration.isConfigured) {
-            revert AssetManager_NotConfigured();
-        }
-
+    ) internal onlyConfiguredAsset(asset_) returns (uint256 shares) {
         // Pull the assets from the depositor
         ERC20 asset = ERC20(address(asset_));
         asset.safeTransferFrom(depositor_, address(this), amount_);
 
         // If the vault is the zero address, the asset is to be kept idle
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
         if (address(assetConfiguration.vault) == address(0)) {
             shares = amount_;
         }
@@ -87,14 +82,9 @@ abstract contract BaseAssetManager is IAssetManager {
         IERC20 asset_,
         address depositor_,
         uint256 amount_
-    ) internal returns (uint256 shares) {
-        // Validate that the vault is approved
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-        if (!assetConfiguration.isConfigured) {
-            revert AssetManager_NotConfigured();
-        }
-
+    ) internal onlyConfiguredAsset(asset_) returns (uint256 shares) {
         // If the vault is the zero address, the asset is idle and kept in this contract
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
         if (address(assetConfiguration.vault) == address(0)) {
             shares = amount_;
         }
@@ -181,6 +171,15 @@ abstract contract BaseAssetManager is IAssetManager {
         _configuredAssets.push(asset_);
 
         emit AssetConfigured(address(asset_), vault_);
+    }
+
+    function _isConfiguredAsset(IERC20 asset_) internal view returns (bool) {
+        return _assetConfigurations[asset_].isConfigured;
+    }
+
+    modifier onlyConfiguredAsset(IERC20 asset_) {
+        if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
+        _;
     }
 
     /// @notice Get the configuration for an asset

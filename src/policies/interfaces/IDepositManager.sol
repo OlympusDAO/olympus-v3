@@ -13,8 +13,7 @@ interface IDepositManager {
         address indexed asset,
         address indexed depositor,
         address indexed operator,
-        uint256 amount,
-        uint256 shares
+        uint256 amount
     );
 
     event ReceiptTokenConfigured(
@@ -70,21 +69,14 @@ interface IDepositManager {
     ///         This does not burn receipt tokens, but should reduce the amount of shares the caller has in the vault.
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
-    ///         - Transferring the underlying asset from the contract to the depositor
+    ///         - Transferring the underlying asset from the contract to the recipient
     ///         - Updating the amount of deposited funds
     ///         - Checking solvency
     ///
     /// @param  asset_        The address of the underlying asset
-    /// @param  periodMonths_ The period of the deposit
-    /// @param  depositor_    The depositor
+    /// @param  recipient_    The recipient of the claimed yield
     /// @param  amount_       The amount to claim yield for
-    /// @return shares        The number of vault shares equivalent to the claimed yield
-    function claimYield(
-        IERC20 asset_,
-        uint8 periodMonths_,
-        address depositor_,
-        uint256 amount_
-    ) external returns (uint256 shares);
+    function claimYield(IERC20 asset_, address recipient_, uint256 amount_) external;
 
     /// @notice Withdraws the given amount of the underlying asset
     /// @dev    The implementing contract is expected to handle the following:

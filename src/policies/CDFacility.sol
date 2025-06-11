@@ -308,7 +308,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
-        DEPOSIT_MANAGER.claimYield(asset_, 0, address(TRSRY), yieldAssets);
+        DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), yieldAssets);
 
         // Emit the event
         emit ClaimedYield(address(asset_), yieldAssets);
