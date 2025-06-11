@@ -135,7 +135,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
 
     // ========== YIELD FUNCTIONS ========== //
 
-    function _previewHarvest(
+    function _previewClaimYield(
         address account_,
         uint256 positionId_,
         address previousAsset_,
@@ -207,15 +207,15 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     }
 
     /// @inheritdoc IYieldDepositFacility
-    function previewHarvest(
+    function previewClaimYield(
         address account_,
         uint256[] memory positionIds_
     ) external view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
-        return previewHarvest(account_, positionIds_, new uint48[](positionIds_.length));
+        return previewClaimYield(account_, positionIds_, new uint48[](positionIds_.length));
     }
 
     /// @inheritdoc IYieldDepositFacility
-    function previewHarvest(
+    function previewClaimYield(
         address account_,
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
@@ -239,7 +239,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         for (uint256 i; i < positionIds_.length; ++i) {
             uint256 positionId = positionIds_[i];
 
-            (uint256 previewYieldMinusFee, , ) = _previewHarvest(
+            (uint256 previewYieldMinusFee, , ) = _previewClaimYield(
                 account_,
                 positionId,
                 address(asset),
@@ -253,14 +253,12 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
     }
 
     /// @inheritdoc IYieldDepositFacility
-    function harvest(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
-        return harvest(positionIds_, new uint48[](positionIds_.length));
+    function claimYield(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
+        return claimYield(positionIds_, new uint48[](positionIds_.length));
     }
 
-    // TODO rename to claimYield
-
     /// @inheritdoc IYieldDepositFacility
-    function harvest(
+    function claimYield(
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
     ) public onlyEnabled returns (uint256 yieldMinusFee) {
@@ -289,7 +287,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
                 uint256 previewYieldMinusFee,
                 uint256 previewYieldFee,
                 uint256 endRate
-            ) = _previewHarvest(
+            ) = _previewClaimYield(
                     msg.sender,
                     positionId,
                     address(asset),
@@ -313,7 +311,7 @@ contract YieldDepositFacility is Policy, IYieldDepositFacility, IPeriodicTask, C
         DEPOSIT_MANAGER.claimYield(asset, periodMonths, address(TRSRY), yieldFee);
 
         // Emit event
-        emit Harvest(address(asset), msg.sender, yieldMinusFee);
+        emit YieldClaimed(address(asset), msg.sender, yieldMinusFee);
 
         return yieldMinusFee;
     }

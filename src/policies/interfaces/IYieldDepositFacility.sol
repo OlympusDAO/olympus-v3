@@ -16,7 +16,7 @@ interface IYieldDepositFacility {
         uint256 depositAmount
     );
 
-    event Harvest(address indexed asset, address indexed depositor, uint256 yield);
+    event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
 
     event YieldFeeSet(uint16 yieldFee);
 
@@ -69,7 +69,7 @@ interface IYieldDepositFacility {
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that would be claimed
     /// @return asset           The address of the asset that will be received
-    function previewHarvest(
+    function previewClaimYield(
         address account_,
         uint256[] memory positionIds_
     ) external view returns (uint256 yield, IERC20 asset);
@@ -87,7 +87,7 @@ interface IYieldDepositFacility {
     /// @param  timestampHints_ An array of timestamp hints for each position
     /// @return yield           The amount of yield that would be claimed
     /// @return asset           The address of the asset that will be received
-    function previewHarvest(
+    function previewClaimYield(
         address account_,
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
@@ -104,7 +104,7 @@ interface IYieldDepositFacility {
     ///
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that was claimed
-    function harvest(uint256[] memory positionIds_) external returns (uint256 yield);
+    function claimYield(uint256[] memory positionIds_) external returns (uint256 yield);
 
     /// @notice Claims the yield for the given positions with timestamp hints
     /// @dev    The implementing contract is expected to handle the following:
@@ -119,7 +119,7 @@ interface IYieldDepositFacility {
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @param  timestampHints_ An array of timestamp hints for each position
     /// @return yield           The amount of yield that was claimed
-    function harvest(
+    function claimYield(
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
     ) external returns (uint256 yield);
