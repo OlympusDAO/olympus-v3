@@ -25,6 +25,7 @@ cd lib/solmate/ && git checkout fadb2e2778adbf01c80275bfb99e5c14969d964b && cd .
 cd lib/forge-proposal-simulator && git checkout 864b357b650f9dc7b2fb1ae23562454815d51def && cd ../..
 
 echo "*** Running forge soldeer update"
+rm -rf dependencies/
 forge soldeer update
 
 echo "*** Running forge build"
