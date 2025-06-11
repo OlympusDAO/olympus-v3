@@ -17,13 +17,19 @@ import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {AssetManager} from "src/libraries/AssetManager.sol";
+import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
 
 /// @title Deposit Manager
 /// @notice This policy is used to manage deposits on behalf of other protocol contracts. For each deposit, a receipt token is minted 1:1 to the depositor.
 /// @dev    This contract combines functionality from a number of inherited contracts, in order to simplify contract implementation.
 ///         Receipt tokens are ERC6909 tokens in order to reduce gas costs. They can optionally be wrapped to an ERC20 token.
-contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager, ERC6909Wrappable {
+contract DepositManager is
+    Policy,
+    PolicyEnabler,
+    IDepositManager,
+    BaseAssetManager,
+    ERC6909Wrappable
+{
     using SafeTransferLib for ERC20;
 
     // ========== CONSTANTS ========== //
@@ -52,7 +58,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
 
     /// @notice Maps assets and depositors to the number of receipt tokens that have been minted
     /// @dev    This is used to ensure that the receipt tokens are solvent
-    ///         As with the AssetManager, deposited asset tokens with different deposit periods are co-mingled.
+    ///         As with the BaseAssetManager, deposited asset tokens with different deposit periods are co-mingled.
     mapping(IERC20 => mapping(address => uint256)) internal _receiptTokenSupply;
 
     /// @notice Maps token ID to the deposit configuration
@@ -264,7 +270,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, AssetManager,
         uint8 periodMonths_,
         uint16 reclaimRate_
     ) external onlyEnabled onlyAdminRole returns (uint256 receiptTokenId) {
-        // Configure the asset in the AssetManager
+        // Configure the asset in the BaseAssetManager
         _configureAsset(asset_, address(vault_));
 
         // Configure the ERC6909 receipt token

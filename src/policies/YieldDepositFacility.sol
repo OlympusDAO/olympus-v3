@@ -9,7 +9,7 @@ import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacili
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
-import {IAssetManager} from "src/interfaces/IAssetManager.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
