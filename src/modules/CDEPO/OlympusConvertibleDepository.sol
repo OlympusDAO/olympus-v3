@@ -29,7 +29,7 @@ contract OlympusConvertibleDepository is CDEPOv1 {
     // ========== STATE VARIABLES ========== //
 
     /// @notice The address of the implementation of the {ConvertibleDepositTokenClone} contract
-    address private immutable _TOKEN_IMPLEMENTATION;
+    // address private immutable _TOKEN_IMPLEMENTATION;
 
     /// @notice List of supported deposit tokens
     IERC20[] private _depositTokens;
@@ -416,9 +416,10 @@ contract OlympusConvertibleDepository is CDEPOv1 {
             periodMonths_ // Period Months
         );
 
-        IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
-            _TOKEN_IMPLEMENTATION.clone(data)
-        );
+        IConvertibleDepositERC20 cdToken;
+        // IConvertibleDepositERC20 cdToken = IConvertibleDepositERC20(
+        //     _TOKEN_IMPLEMENTATION.clone(data)
+        // );
 
         _depositToConvertible[depositTokenContract][periodMonths_] = cdToken;
         _convertibleToDeposit[cdToken] = depositTokenContract;
