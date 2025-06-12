@@ -22,7 +22,7 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable {
     // 0x40 - decimals, 1 byte
     // 0x41 - owner, 20 bytes
     // 0x55 - asset, 20 bytes
-    // 0x69 - periodMonths, 1 byte
+    // 0x69 - depositPeriod, 1 byte
 
     /// @notice The owner of the clone
     /// @return _owner The owner address stored in immutable args
@@ -36,10 +36,10 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable {
         _asset = IERC20(_getArgAddress(0x55));
     }
 
-    /// @notice The period of the deposit token (in months)
-    /// @return _periodMonths The period months stored in immutable args
-    function periodMonths() public pure returns (uint8 _periodMonths) {
-        _periodMonths = _getArgUint8(0x69);
+    /// @notice The deposit period (in months)
+    /// @return _depositPeriod The deposit period stored in immutable args
+    function depositPeriod() public pure returns (uint8 _depositPeriod) {
+        _depositPeriod = _getArgUint8(0x69);
     }
 
     // ========== OWNER-ONLY FUNCTIONS ========== //

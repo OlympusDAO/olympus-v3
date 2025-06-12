@@ -69,9 +69,9 @@ contract DepositManager is
     // ========== MODIFIERS ========== //
 
     /// @notice Reverts if the deposit asset is not configured
-    modifier onlyDepositAsset(IERC20 asset_, uint8 periodMonths_) {
-        if (!isDepositAsset(asset_, periodMonths_))
-            revert DepositManager_AssetNotConfigured(address(asset_), periodMonths_);
+    modifier onlyDepositAsset(IERC20 asset_, uint8 depositPeriod_) {
+        if (!isDepositAsset(asset_, depositPeriod_))
+            revert DepositManager_AssetNotConfigured(address(asset_), depositPeriod_);
         _;
     }
 
@@ -115,7 +115,7 @@ contract DepositManager is
     /// @dev        This function is only callable by addresses with the deposit operator role
     function deposit(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         address depositor_,
         uint256 amount_,
         bool shouldWrap_
@@ -125,7 +125,7 @@ contract DepositManager is
         shares = _depositAsset(asset_, depositor_, amount_);
 
         // Mint the receipt token to the caller
-        uint256 tokenId = getReceiptTokenId(asset_, periodMonths_);
+        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
         _mint(depositor_, tokenId, amount_, shouldWrap_);
 
         return shares;
@@ -160,14 +160,14 @@ contract DepositManager is
     /// @dev        This function is only callable by addresses with the deposit operator role
     function withdraw(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         address depositor_,
         address recipient_,
         uint256 amount_,
         bool wrapped_
     ) external onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
         // Burn the receipt token from the depositor
-        _burn(depositor_, getReceiptTokenId(asset_, periodMonths_), amount_, wrapped_);
+        _burn(depositor_, getReceiptTokenId(asset_, depositPeriod_), amount_, wrapped_);
 
         // Update the asset tracking for the caller (operator)
         _receiptTokenSupply[asset_][msg.sender] -= amount_;
@@ -184,16 +184,16 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     function getReceiptTokenId(
         IERC20 asset_,
-        uint8 periodMonths_
+        uint8 depositPeriod_
     ) public pure override returns (uint256) {
-        return uint256(keccak256(abi.encode(asset_, periodMonths_)));
+        return uint256(keccak256(abi.encode(asset_, depositPeriod_)));
     }
 
     /// @inheritdoc IDepositManager
     function getAssetFromTokenId(uint256 tokenId_) public view override returns (IERC20, uint8) {
         return (
             _depositConfigurations[tokenId_].asset,
-            _depositConfigurations[tokenId_].periodMonths
+            _depositConfigurations[tokenId_].depositPeriod
         );
     }
 
@@ -202,31 +202,31 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     function isDepositAsset(
         IERC20 asset_,
-        uint8 periodMonths_
+        uint8 depositPeriod_
     ) public view override returns (bool) {
         return
-            address(_depositConfigurations[getReceiptTokenId(asset_, periodMonths_)].asset) !=
+            address(_depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].asset) !=
             address(0);
     }
 
     function _setReceiptTokenData(
         IERC20 asset_,
-        uint8 periodMonths_
+        uint8 depositPeriod_
     ) internal returns (uint256 tokenId) {
         // Generate a unique token ID for the token and deposit period combination
-        tokenId = getReceiptTokenId(asset_, periodMonths_);
+        tokenId = getReceiptTokenId(asset_, depositPeriod_);
 
         // Set the metadata for the receipt token
         _setName(
             tokenId,
             string
-                .concat(asset_.name(), " Receipt - ", uint2str(periodMonths_), " months")
+                .concat(asset_.name(), " Receipt - ", uint2str(depositPeriod_), " months")
                 .truncate32()
         );
 
         _setSymbol(
             tokenId,
-            string.concat("r", asset_.symbol(), "-", uint2str(periodMonths_), "m").truncate32()
+            string.concat("r", asset_.symbol(), "-", uint2str(depositPeriod_), "m").truncate32()
         );
 
         _setDecimals(tokenId, asset_.decimals());
@@ -235,24 +235,25 @@ contract DepositManager is
         bytes memory additionalMetadata = abi.encodePacked(
             address(this), // Owner
             address(asset_), // Asset
-            periodMonths_ // Period Months
+            depositPeriod_ // Deposit Period
         );
         _tokenMetadataAdditional[tokenId] = additionalMetadata;
 
-        emit ReceiptTokenConfigured(tokenId, address(asset_), periodMonths_);
+        emit ReceiptTokenConfigured(tokenId, address(asset_), depositPeriod_);
         return tokenId;
     }
 
     /// @dev Assumes that the token ID is valid
     function _setDepositReclaimRate(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         uint16 reclaimRate_
     ) internal {
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
 
-        _depositConfigurations[getReceiptTokenId(asset_, periodMonths_)].reclaimRate = reclaimRate_;
-        emit ReclaimRateUpdated(address(asset_), periodMonths_, reclaimRate_);
+        _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)]
+            .reclaimRate = reclaimRate_;
+        emit ReclaimRateUpdated(address(asset_), depositPeriod_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager
@@ -260,19 +261,19 @@ contract DepositManager is
     function configureDeposit(
         IERC20 asset_,
         IERC4626 vault_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         uint16 reclaimRate_
     ) external onlyEnabled onlyManagerOrAdminRole returns (uint256 receiptTokenId) {
         // Configure the asset in the BaseAssetManager
         _configureAsset(asset_, address(vault_));
 
         // Configure the ERC6909 receipt token
-        receiptTokenId = _setReceiptTokenData(asset_, periodMonths_);
+        receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_);
 
         // Set the deposit configuration
         _depositConfigurations[receiptTokenId] = DepositConfiguration({
             asset: asset_,
-            periodMonths: periodMonths_,
+            depositPeriod: depositPeriod_,
             reclaimRate: 0
         });
 
@@ -280,7 +281,7 @@ contract DepositManager is
         _depositTokenIds.push(receiptTokenId);
 
         // Set the reclaim rate (which does validation and emits an event)
-        _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
+        _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
 
         return receiptTokenId;
     }
@@ -300,17 +301,17 @@ contract DepositManager is
     /// @dev        This function is only callable by the manager or admin role
     function setDepositReclaimRate(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         uint16 reclaimRate_
-    ) external onlyEnabled onlyManagerOrAdminRole onlyDepositAsset(asset_, periodMonths_) {
-        _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
+    ) external onlyEnabled onlyManagerOrAdminRole onlyDepositAsset(asset_, depositPeriod_) {
+        _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager
     function getDepositReclaimRate(
         IERC20 asset_,
-        uint8 periodMonths_
+        uint8 depositPeriod_
     ) external view returns (uint16) {
-        return _depositConfigurations[getReceiptTokenId(asset_, periodMonths_)].reclaimRate;
+        return _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].reclaimRate;
     }
 }

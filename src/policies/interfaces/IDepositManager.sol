@@ -19,10 +19,10 @@ interface IDepositManager {
     event ReceiptTokenConfigured(
         uint256 indexed receiptTokenId,
         address indexed asset,
-        uint8 periodMonths
+        uint8 depositPeriod
     );
 
-    event ReclaimRateUpdated(address indexed asset, uint8 periodMonths, uint16 reclaimRate);
+    event ReclaimRateUpdated(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
 
     // ========== ERRORS ========== //
 
@@ -32,13 +32,13 @@ interface IDepositManager {
 
     error DepositManager_OutOfBounds();
 
-    error DepositManager_AssetNotConfigured(address asset, uint8 periodMonths);
+    error DepositManager_AssetNotConfigured(address asset, uint8 depositPeriod);
 
     // ========== STRUCTS ========== //
 
     struct DepositConfiguration {
         IERC20 asset;
-        uint8 periodMonths;
+        uint8 depositPeriod;
         uint16 reclaimRate;
     }
 
@@ -51,15 +51,15 @@ interface IDepositManager {
     ///         - Minting the receipt token to the depositor
     ///         - Updating the amount of deposited funds
     ///
-    /// @param  asset_        The address of the underlying asset
-    /// @param  periodMonths_ The period of the deposit
-    /// @param  depositor_    The depositor
-    /// @param  amount_       The amount to deposit
-    /// @param  shouldWrap_   Whether the receipt token should be wrapped
-    /// @return shares        The number of vault shares equivalent to the deposited amount
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    /// @param  depositor_      The depositor
+    /// @param  amount_         The amount to deposit
+    /// @param  shouldWrap_     Whether the receipt token should be wrapped
+    /// @return shares          The number of vault shares equivalent to the deposited amount
     function deposit(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         address depositor_,
         uint256 amount_,
         bool shouldWrap_
@@ -85,16 +85,16 @@ interface IDepositManager {
     ///         - Transferring the underlying asset from the contract to the recipient
     ///         - Updating the amount of deposited funds
     ///
-    /// @param  asset_        The address of the underlying asset
-    /// @param  periodMonths_ The period of the deposit
-    /// @param  depositor_    The depositor that is holding the receipt tokens
-    /// @param  recipient_    The recipient of the withdrawn asset
-    /// @param  amount_       The amount to withdraw
-    /// @param  wrapped_      Whether the receipt token is wrapped
-    /// @return shares        The number of vault shares equivalent to the withdrawn amount
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    /// @param  depositor_      The depositor that is holding the receipt tokens
+    /// @param  recipient_      The recipient of the withdrawn asset
+    /// @param  amount_         The amount to withdraw
+    /// @param  wrapped_        Whether the receipt token is wrapped
+    /// @return shares          The number of vault shares equivalent to the withdrawn amount
     function withdraw(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         address depositor_,
         address recipient_,
         uint256 amount_,
@@ -111,42 +111,36 @@ interface IDepositManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  vault_          The address of the vault to use for the receipt token (or the zero address)
-    /// @param  periodMonths_   The period of the deposit
+    /// @param  depositPeriod_  The deposit period, in months
     /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
     function configureDeposit(
         IERC20 asset_,
         IERC4626 vault_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         uint16 reclaimRate_
     ) external returns (uint256 receiptTokenId);
 
     /// @notice Returns whether a deposit asset and period are supported
     ///
     /// @param  asset_          The address of the underlying asset
-    /// @param  periodMonths_   The period of the deposit
+    /// @param  depositPeriod_  The deposit period, in months
     /// @return isConfigured    Whether the deposit asset is configured
-    function isDepositAsset(IERC20 asset_, uint8 periodMonths_) external view returns (bool);
+    function isDepositAsset(IERC20 asset_, uint8 depositPeriod_) external view returns (bool);
 
     /// @notice Returns the deposit assets
     ///
     /// @return depositAssets   The deposit assets
     function getDepositAssets() external view returns (DepositConfiguration[] memory depositAssets);
 
-    /// @notice Returns the ID of the receipt token for a deposit asset
-    /// @dev    The ID returned is not a guarantee that the asset is configured. {isDepositAsset} should be used for that purpose.
-    ///
-    /// @param  asset_          The address of the underlying asset
-    /// @param  periodMonths_   The period of the deposit
-    /// @return receiptTokenId  The ID of the receipt token
-    function getReceiptTokenId(IERC20 asset_, uint8 periodMonths_) external view returns (uint256);
-
     /// @notice Returns the asset and deposit period from a receipt token ID
     ///
     /// @param  tokenId_        The ID of the receipt token
     /// @return asset           The address of the underlying asset (or the zero address)
-    /// @return periodMonths    The period of the deposit (or 0)
-    function getAssetFromTokenId(uint256 tokenId_) external view returns (IERC20, uint8);
+    /// @return depositPeriod   The deposit period, in months (or 0)
+    function getAssetFromTokenId(
+        uint256 tokenId_
+    ) external view returns (IERC20 asset, uint8 depositPeriod);
 
     // ========== RECLAIM RATE ========== //
 
@@ -155,22 +149,32 @@ interface IDepositManager {
     ///         - Validating that the caller has the correct role
     ///         - Setting the reclaim rate for the deposit
     ///
-    /// @param  asset_        The address of the underlying asset
-    /// @param  periodMonths_ The period of the deposit
-    /// @param  reclaimRate_  The reclaim rate to set
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    /// @param  reclaimRate_    The reclaim rate to set
     function setDepositReclaimRate(
         IERC20 asset_,
-        uint8 periodMonths_,
+        uint8 depositPeriod_,
         uint16 reclaimRate_
     ) external;
 
     /// @notice Returns the reclaim rate for a deposit
     ///
-    /// @param  asset_        The address of the underlying asset
-    /// @param  periodMonths_ The period of the deposit
-    /// @return reclaimRate   The reclaim rate for the deposit
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    /// @return reclaimRate     The reclaim rate for the deposit
     function getDepositReclaimRate(
         IERC20 asset_,
-        uint8 periodMonths_
+        uint8 depositPeriod_
     ) external view returns (uint16 reclaimRate);
+
+    // ========== RECEIPT TOKEN FUNCTIONS ========== //
+
+    /// @notice Returns the ID of the receipt token for a deposit asset
+    /// @dev    The ID returned is not a guarantee that the asset is configured. {isDepositAsset} should be used for that purpose.
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    /// @return receiptTokenId  The ID of the receipt token
+    function getReceiptTokenId(IERC20 asset_, uint8 depositPeriod_) external view returns (uint256);
 }
