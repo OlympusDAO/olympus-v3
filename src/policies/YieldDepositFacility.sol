@@ -166,11 +166,10 @@ contract YieldDepositFacility is
         if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
         // Validate that the asset has a yield bearing vault
-        // TODO shift up a level, no need to do this every position
         IERC4626 assetVault = DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault;
         if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
 
-        // Get the vault and last snapshot rate
+        // Get the last snapshot rate
         uint256 lastSnapshotRate = positionLastYieldConversionRate[positionId_];
 
         // Calculate the end rate (either current rate or rate at expiry)
