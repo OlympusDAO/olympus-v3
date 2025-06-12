@@ -144,11 +144,12 @@ contract DepositManager is
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
-        if (_assetLiabilities[asset_][msg.sender] > getOperatorAssets(asset_, msg.sender)) {
+        (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, msg.sender);
+        if (_assetLiabilities[asset_][msg.sender] > depositedSharesInAssets) {
             revert DepositManager_Insolvent(
                 address(asset_),
                 _assetLiabilities[asset_][msg.sender],
-                getOperatorAssets(asset_, msg.sender)
+                depositedSharesInAssets
             );
         }
 
