@@ -46,8 +46,8 @@ contract DepositManager is
     // [X] Rename to receipt tokens
     // [X] CDTokenSupply to depositor supply
     // [ ] borrowing and repayment of deposited funds
-    // [ ] consider shifting away from policy
-    // [ ] consider if asset configuration should require a different role
+    // [X] consider shifting away from policy
+    // [X] consider if asset configuration should require a different role
 
     // ========== STATE VARIABLES ========== //
 
@@ -65,6 +65,15 @@ contract DepositManager is
 
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
+
+    // ========== MODIFIERS ========== //
+
+    /// @notice Reverts if the deposit asset is not configured
+    modifier onlyDepositAsset(IERC20 asset_, uint8 periodMonths_) {
+        if (!isDepositAsset(asset_, periodMonths_))
+            revert DepositManager_AssetNotConfigured(address(asset_), periodMonths_);
+        _;
+    }
 
     // ========== CONSTRUCTOR ========== //
 
@@ -103,6 +112,7 @@ contract DepositManager is
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
 
     /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by addresses with the deposit operator role
     function deposit(
         IERC20 asset_,
         uint8 periodMonths_,
@@ -122,6 +132,7 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by addresses with the deposit operator role
     function claimYield(
         IERC20 asset_,
         address recipient_,
@@ -146,6 +157,7 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by addresses with the deposit operator role
     function withdraw(
         IERC20 asset_,
         uint8 periodMonths_,
@@ -197,12 +209,6 @@ contract DepositManager is
             address(0);
     }
 
-    modifier onlyDepositAsset(IERC20 asset_, uint8 periodMonths_) {
-        if (!isDepositAsset(asset_, periodMonths_))
-            revert DepositManager_AssetNotConfigured(address(asset_), periodMonths_);
-        _;
-    }
-
     function _setReceiptTokenData(
         IERC20 asset_,
         uint8 periodMonths_
@@ -250,12 +256,13 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
     function configureDeposit(
         IERC20 asset_,
         IERC4626 vault_,
         uint8 periodMonths_,
         uint16 reclaimRate_
-    ) external onlyEnabled onlyAdminRole returns (uint256 receiptTokenId) {
+    ) external onlyEnabled onlyManagerOrAdminRole returns (uint256 receiptTokenId) {
         // Configure the asset in the BaseAssetManager
         _configureAsset(asset_, address(vault_));
 
@@ -290,11 +297,12 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
     function setDepositReclaimRate(
         IERC20 asset_,
         uint8 periodMonths_,
         uint16 reclaimRate_
-    ) external onlyEnabled onlyAdminRole onlyDepositAsset(asset_, periodMonths_) {
+    ) external onlyEnabled onlyManagerOrAdminRole onlyDepositAsset(asset_, periodMonths_) {
         _setDepositReclaimRate(asset_, periodMonths_, reclaimRate_);
     }
 
