@@ -15,6 +15,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     //  [ ] it reverts
     // given the depositor has not approved the contract to spend the asset
     //  [ ] it reverts
+    // given the depositor does not have sufficient asset balance
+    //  [ ] it reverts
     // given the asset configuration has the vault set to the zero address
     //  [ ] the returned shares are the deposited amount
     //  [ ] the asset is stored in the contract

@@ -86,7 +86,12 @@ contract DepositManagerTest is Test {
 
     modifier givenAssetIsConfigured(address vault_) {
         vm.prank(ADMIN);
-        depositManager.configureDeposit(IERC20(address(asset)), IERC4626(vault_), DEPOSIT_PERIOD, 100e2);
+        depositManager.configureDeposit(
+            IERC20(address(asset)),
+            IERC4626(vault_),
+            DEPOSIT_PERIOD,
+            100e2
+        );
         _;
     }
 
