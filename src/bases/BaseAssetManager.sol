@@ -101,7 +101,7 @@ abstract contract BaseAssetManager is IAssetManager {
     }
 
     /// @inheritdoc IAssetManager
-    function getOperatorShares(
+    function getOperatorAssets(
         IERC20 asset_,
         address operator_
     ) public view override returns (uint256 shares, uint256 sharesInAssets) {
@@ -116,25 +116,6 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         return (shares, sharesInAssets);
-    }
-
-    /// @inheritdoc IAssetManager
-    function getOperatorAssets(
-        IERC20 asset_,
-        address operator_
-    ) public view override returns (uint256 assets) {
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-
-        // If the asset is not configured or there is no vault, the assets are kept idle and the shares = assets
-        if (address(assetConfiguration.vault) == address(0)) {
-            assets = _operatorShares[asset_][operator_];
-        }
-        // Otherwise, convert from shares to assets
-        else {
-            assets = assetConfiguration.vault.previewRedeem(_operatorShares[asset_][operator_]);
-        }
-
-        return assets;
     }
 
     // ========== ADMIN FUNCTIONS ========== //

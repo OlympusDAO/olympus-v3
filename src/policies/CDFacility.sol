@@ -4,7 +4,6 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -286,14 +285,15 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
 
     /// @inheritdoc IConvertibleDepositFacility
     function previewClaimYield(IERC20 asset_) public view returns (uint256 yieldAssets) {
+        // The yield is the difference between the quantity of deposited assets and the deposits that can be withdrawn
         // The yield is the difference between the quantity of deposits assets and shares (in terms of assets)
-        uint256 depositedAssets = DEPOSIT_MANAGER.getOperatorAssets(asset_, address(this));
-        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorShares(
+        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
             asset_,
             address(this)
         );
+        uint256 assetLiabilities = DEPOSIT_MANAGER.getAssetLiabilities(asset_, address(this));
 
-        yieldAssets = depositedSharesInAssets - depositedAssets;
+        yieldAssets = depositedSharesInAssets - assetLiabilities;
 
         return yieldAssets;
     }

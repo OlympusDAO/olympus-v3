@@ -55,7 +55,7 @@ contract DepositManager is
     /// @dev    This is used to ensure that the receipt tokens are solvent
     ///         As with the BaseAssetManager, deposited asset tokens with different deposit periods are co-mingled.
     mapping(IERC20 asset => mapping(address operator => uint256 receiptTokenSupply))
-        internal _receiptTokenSupply;
+        internal _assetLiabilities;
 
     /// @notice Maps token ID to the deposit configuration
     mapping(uint256 tokenId => DepositConfiguration) internal _depositConfigurations;
@@ -144,10 +144,10 @@ contract DepositManager is
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
-        if (_receiptTokenSupply[asset_][msg.sender] > getOperatorAssets(asset_, msg.sender)) {
+        if (_assetLiabilities[asset_][msg.sender] > getOperatorAssets(asset_, msg.sender)) {
             revert DepositManager_Insolvent(
                 address(asset_),
-                _receiptTokenSupply[asset_][msg.sender],
+                _assetLiabilities[asset_][msg.sender],
                 getOperatorAssets(asset_, msg.sender)
             );
         }
@@ -169,8 +169,8 @@ contract DepositManager is
         // Burn the receipt token from the depositor
         _burn(depositor_, getReceiptTokenId(asset_, depositPeriod_), amount_, wrapped_);
 
-        // Update the asset tracking for the caller (operator)
-        _receiptTokenSupply[asset_][msg.sender] -= amount_;
+        // Update the asset liabilities for the caller (operator)
+        _assetLiabilities[asset_][msg.sender] -= amount_;
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
@@ -297,6 +297,11 @@ contract DepositManager is
             depositAssets[i] = _depositConfigurations[_depositTokenIds[i]];
         }
         return depositAssets;
+    }
+
+    /// @inheritdoc IDepositManager
+    function getAssetLiabilities(IERC20 asset_, address operator_) external view returns (uint256) {
+        return _assetLiabilities[asset_][operator_];
     }
 
     /// @inheritdoc IDepositManager

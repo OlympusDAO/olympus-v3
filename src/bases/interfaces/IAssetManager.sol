@@ -42,26 +42,16 @@ interface IAssetManager {
 
     // ========== ASSET FUNCTIONS ========== //
 
-    /// @notice Get the number of shares deposited for an asset and operator
+    /// @notice Get the number of assets deposited for an asset and operator
     ///
     /// @param  asset_          The asset to get the deposited shares for
     /// @param  operator_       The operator to get the deposited shares for
     /// @return shares          The number of shares deposited
     /// @return sharesInAssets  The number of shares deposited (in terms of assets)
-    function getOperatorShares(
-        IERC20 asset_,
-        address operator_
-    ) external view returns (uint256 shares, uint256 sharesInAssets);
-
-    /// @notice Get the number of assets deposited for an asset and operator
-    ///
-    /// @param  asset_      The asset to get the deposited assets for
-    /// @param  operator_   The operator to get the deposited assets for
-    /// @return assets      The number of assets deposited
     function getOperatorAssets(
         IERC20 asset_,
         address operator_
-    ) external view returns (uint256 assets);
+    ) external view returns (uint256 shares, uint256 sharesInAssets);
 
     /// @notice Get the configuration for an asset
     ///

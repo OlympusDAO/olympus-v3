@@ -128,6 +128,16 @@ interface IDepositManager {
     /// @return isConfigured    Whether the deposit asset is configured
     function isDepositAsset(IERC20 asset_, uint8 depositPeriod_) external view returns (bool);
 
+    /// @notice Returns the liabilities for an asset and operator pair
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  operator_       The address of the operator
+    /// @return liabilities     The quantity of assets that the contract is custodying for the operator's depositors
+    function getAssetLiabilities(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 liabilities);
+
     /// @notice Returns the deposit assets
     ///
     /// @return depositAssets   The deposit assets
