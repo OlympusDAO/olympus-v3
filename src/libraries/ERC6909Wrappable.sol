@@ -47,8 +47,8 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
 
         return
             abi.encodePacked(
-                name(tokenId_),
-                symbol(tokenId_),
+                bytes32(bytes(name(tokenId_))),
+                bytes32(bytes(symbol(tokenId_))),
                 decimals(tokenId_),
                 additionalMetadata
             );
