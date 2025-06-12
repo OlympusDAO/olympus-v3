@@ -4,7 +4,7 @@ pragma solidity >=0.8.20;
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
 
@@ -22,7 +22,7 @@ contract DepositManagerTest is Test {
     address public DEPOSITOR;
 
     Kernel public kernel;
-    ROLESv1 public roles;
+    OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
 
@@ -42,7 +42,7 @@ contract DepositManagerTest is Test {
         kernel = new Kernel();
 
         // Create modules and policies
-        roles = new ROLESv1(kernel);
+        roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
         depositManager = new DepositManager(address(kernel));
 
