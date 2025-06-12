@@ -78,8 +78,7 @@ contract DepositManager is
     // ========== CONSTRUCTOR ========== //
 
     constructor(
-        address kernel_,
-        address erc20Implementation_
+        address kernel_
     ) Policy(Kernel(kernel_)) ERC6909Wrappable(address(new CloneableReceiptToken())) {
         // Disabled by default by PolicyEnabler
     }
