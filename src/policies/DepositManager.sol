@@ -190,7 +190,9 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
-    function getAssetFromTokenId(uint256 tokenId_) public view override returns (IERC20, uint8) {
+    function getAssetFromReceiptTokenId(
+        uint256 tokenId_
+    ) public view override returns (IERC20, uint8) {
         return (
             _depositConfigurations[tokenId_].asset,
             _depositConfigurations[tokenId_].depositPeriod

@@ -138,7 +138,7 @@ interface IDepositManager {
     /// @param  tokenId_        The ID of the receipt token
     /// @return asset           The address of the underlying asset (or the zero address)
     /// @return depositPeriod   The deposit period, in months (or 0)
-    function getAssetFromTokenId(
+    function getAssetFromReceiptTokenId(
         uint256 tokenId_
     ) external view returns (IERC20 asset, uint8 depositPeriod);
 
