@@ -317,7 +317,12 @@ contract ERC6909WrappableTest is Test {
 
     // when the tokenId is invalid
     //  [X] it reverts
-    function test_wrap_whenTokenIdIsInvalid_reverts() public {
+    function test_wrap_whenTokenIdIsInvalid_reverts()
+        public
+        givenERC20TokenExists
+        givenRecipientHasERC6909Tokens
+        givenRecipientHasApprovedERC6909TokenSpending
+    {
         vm.expectRevert(
             abi.encodeWithSelector(IERC6909Wrappable.ERC6909Wrappable_InvalidTokenId.selector, 999)
         );
@@ -326,7 +331,12 @@ contract ERC6909WrappableTest is Test {
 
     // when the recipient is the zero address
     //  [X] it reverts
-    function test_wrap_whenRecipientIsZeroAddress_reverts() public {
+    function test_wrap_whenRecipientIsZeroAddress_reverts()
+        public
+        givenERC20TokenExists
+        givenRecipientHasERC6909Tokens
+        givenRecipientHasApprovedERC6909TokenSpending
+    {
         vm.expectRevert(abi.encodeWithSelector(ERC6909.ERC6909InvalidSender.selector, address(0)));
         token.wrap(address(0), TOKEN_ID, AMOUNT);
     }
@@ -341,7 +351,7 @@ contract ERC6909WrappableTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ERC6909.ERC6909InsufficientAllowance.selector,
-                alice,
+                address(token),
                 0,
                 AMOUNT,
                 TOKEN_ID
@@ -420,7 +430,7 @@ contract ERC6909WrappableTest is Test {
     // when the recipient is the zero address
     //  [X] it reverts
     function test_unwrap_whenRecipientIsZeroAddress_reverts() public givenERC20TokenExists {
-        vm.expectRevert("ERC6909: transfer to the zero address");
+        vm.expectRevert(abi.encodeWithSelector(ERC6909.ERC6909InvalidSender.selector, address(0)));
         token.unwrap(address(0), TOKEN_ID, AMOUNT);
     }
 

@@ -67,8 +67,9 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         uint256 tokenId_,
         uint256 amount_,
         bool shouldWrap_
-    ) internal {
+    ) internal onlyValidTokenId(tokenId_) {
         if (amount_ == 0) revert ERC6909Wrappable_ZeroAmount();
+        if (onBehalfOf_ == address(0)) revert ERC6909InvalidReceiver(onBehalfOf_);
 
         if (shouldWrap_) {
             _getWrappedToken(tokenId_).mintFor(onBehalfOf_, amount_);
@@ -83,8 +84,14 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     /// @param tokenId_      The ID of the ERC6909 token
     /// @param amount_       The amount of tokens to burn
     /// @param wrapped_      Whether the token is wrapped
-    function _burn(address onBehalfOf_, uint256 tokenId_, uint256 amount_, bool wrapped_) internal {
+    function _burn(
+        address onBehalfOf_,
+        uint256 tokenId_,
+        uint256 amount_,
+        bool wrapped_
+    ) internal onlyValidTokenId(tokenId_) {
         if (amount_ == 0) revert ERC6909Wrappable_ZeroAmount();
+        if (onBehalfOf_ == address(0)) revert ERC6909InvalidSender(onBehalfOf_);
 
         if (wrapped_) {
             // Will revert if the caller has not approved spending
@@ -160,8 +167,9 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         _burn(onBehalfOf_, tokenId_, amount_, false);
 
         // Mint the wrapped ERC20 token to the recipient
-        _getWrappedToken(tokenId_).mintFor(onBehalfOf_, amount_);
-        return wrappedToken;
+        IERC20BurnableMintable wrappedToken_ = _getWrappedToken(tokenId_);
+        wrappedToken_.mintFor(onBehalfOf_, amount_);
+        return address(wrappedToken_);
     }
 
     /// @inheritdoc IERC6909Wrappable
@@ -178,6 +186,11 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     /// @inheritdoc IERC6909Wrappable
     function isValidTokenId(uint256 tokenId_) public view returns (bool) {
         return decimals(tokenId_) > 0;
+    }
+
+    modifier onlyValidTokenId(uint256 tokenId_) {
+        if (!isValidTokenId(tokenId_)) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
+        _;
     }
 
     // ========== ERC165 ========== //
