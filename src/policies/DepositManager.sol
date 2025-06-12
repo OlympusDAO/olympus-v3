@@ -314,4 +314,41 @@ contract DepositManager is
     ) external view returns (uint16) {
         return _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].reclaimRate;
     }
+
+    // ========== RECEIPT TOKEN FUNCTIONS ========== //
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This is the same as the ERC6909 name() function, but is included for consistency
+    function getReceiptTokenName(uint256 tokenId_) external view override returns (string memory) {
+        return name(tokenId_);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This is the same as the ERC6909 symbol() function, but is included for consistency
+    function getReceiptTokenSymbol(
+        uint256 tokenId_
+    ) external view override returns (string memory) {
+        return symbol(tokenId_);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This is the same as the ERC6909 decimals() function, but is included for consistency
+    function getReceiptTokenDecimals(uint256 tokenId_) external view override returns (uint8) {
+        return decimals(tokenId_);
+    }
+
+    /// @inheritdoc IDepositManager
+    function getReceiptTokenOwner(uint256) external view override returns (address) {
+        return address(this);
+    }
+
+    /// @inheritdoc IDepositManager
+    function getReceiptTokenAsset(uint256 tokenId_) external view override returns (IERC20) {
+        return _depositConfigurations[tokenId_].asset;
+    }
+
+    /// @inheritdoc IDepositManager
+    function getReceiptTokenDepositPeriod(uint256 tokenId_) external view override returns (uint8) {
+        return _depositConfigurations[tokenId_].depositPeriod;
+    }
 }

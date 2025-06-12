@@ -177,4 +177,42 @@ interface IDepositManager {
     /// @param  depositPeriod_  The deposit period, in months
     /// @return receiptTokenId  The ID of the receipt token
     function getReceiptTokenId(IERC20 asset_, uint8 depositPeriod_) external view returns (uint256);
+
+    /// @notice Returns the name of a receipt token
+    ///
+    /// @param  tokenId_    The ID of the receipt token
+    /// @return name        The name of the receipt token
+    function getReceiptTokenName(uint256 tokenId_) external view returns (string memory);
+
+    /// @notice Returns the symbol of a receipt token
+    ///
+    /// @param  tokenId_    The ID of the receipt token
+    /// @return symbol      The symbol of the receipt token
+    function getReceiptTokenSymbol(uint256 tokenId_) external view returns (string memory);
+
+    /// @notice Returns the decimals of a receipt token
+    ///
+    /// @param  tokenId_    The ID of the receipt token
+    /// @return decimals    The decimals of the receipt token
+    function getReceiptTokenDecimals(uint256 tokenId_) external view returns (uint8);
+
+    /// @notice Returns the owner of a receipt token
+    ///
+    /// @param  tokenId_    The ID of the receipt token
+    /// @return owner       The owner of the receipt token
+    function getReceiptTokenOwner(uint256 tokenId_) external view returns (address);
+
+    /// @notice Returns the asset of a receipt token
+    ///
+    /// @param  tokenId_    The ID of the receipt token
+    /// @return asset       The asset of the receipt token
+    function getReceiptTokenAsset(uint256 tokenId_) external view returns (IERC20);
+
+    /// @notice Returns the deposit period of a receipt token
+    ///
+    /// @param  tokenId_        The ID of the receipt token
+    /// @return depositPeriod   The deposit period of the receipt token
+    function getReceiptTokenDepositPeriod(
+        uint256 tokenId_
+    ) external view returns (uint8 depositPeriod);
 }
