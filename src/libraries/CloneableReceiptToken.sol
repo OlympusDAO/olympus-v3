@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
+import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
 
 // Libraries
 import {CloneERC20} from "src/external/clones/CloneERC20.sol";
@@ -11,9 +12,7 @@ import {CloneERC20} from "src/external/clones/CloneERC20.sol";
 /// @title  CloneableReceiptToken
 /// @notice ERC20 implementation that is deployed as a clone
 ///         with immutable arguments for each supported input token.
-contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable {
-    error OnlyOwner();
-
+contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositReceiptToken {
     // ========== IMMUTABLE ARGS ========== //
 
     // Storage layout:
@@ -85,6 +84,7 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable {
         // super does not implement ERC165, so no need to call it
         return
             interfaceId_ == type(IERC20).interfaceId ||
-            interfaceId_ == type(IERC20BurnableMintable).interfaceId;
+            interfaceId_ == type(IERC20BurnableMintable).interfaceId ||
+            interfaceId_ == type(IDepositReceiptToken).interfaceId;
     }
 }
