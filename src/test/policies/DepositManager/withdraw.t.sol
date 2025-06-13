@@ -7,7 +7,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     // Tests
     // given the caller does not have the deposit operator role
     //  [ ] it reverts
-    // given the deposit asset is not configured
+    // given the deposit asset configuration does not exist
     //  [ ] it reverts
     // given wrapped is true
     //  given the depositor has not approved the contract to spend the wrapped receipt token
@@ -29,7 +29,9 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     //  [ ] the asset liabilities are decreased by the withdrawn amount
     //  [ ] the asset is sent to the depositor
     //  [ ] the operator shares are decreased by the withdrawn amount
-    // given there has been a deposit
+    // given the deposit configuration is disabled
+    //  [ ] the asset is withdrawn from the vault and sent to the depositor
+    // given there has been anothera deposit
     //  [ ] the operator shares are correct
     //  [ ] the asset liabilities are correct
     // [ ] the wrapped receipt token is not burned

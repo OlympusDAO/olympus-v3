@@ -16,7 +16,19 @@ interface IDepositManager {
         uint256 amount
     );
 
-    event ReceiptTokenConfigured(
+    event DepositConfigured(
+        uint256 indexed receiptTokenId,
+        address indexed asset,
+        uint8 depositPeriod
+    );
+
+    event DepositConfigurationEnabled(
+        uint256 indexed receiptTokenId,
+        address indexed asset,
+        uint8 depositPeriod
+    );
+
+    event DepositConfigurationDisabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
         uint8 depositPeriod
@@ -32,14 +44,23 @@ interface IDepositManager {
 
     error DepositManager_OutOfBounds();
 
-    error DepositManager_AssetNotConfigured(address asset, uint8 depositPeriod);
+    error DepositManager_InvalidAsset();
+
+    error DepositManager_InvalidConfiguration(address asset, uint8 depositPeriod);
+
+    error DepositManager_ConfigurationExists(address asset, uint8 depositPeriod);
+
+    error DepositManager_ConfigurationEnabled(address asset, uint8 depositPeriod);
+
+    error DepositManager_ConfigurationDisabled(address asset, uint8 depositPeriod);
 
     // ========== STRUCTS ========== //
 
     struct DepositConfiguration {
-        IERC20 asset;
+        bool isEnabled;
         uint8 depositPeriod;
         uint16 reclaimRate;
+        IERC20 asset;
     }
 
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
@@ -101,56 +122,96 @@ interface IDepositManager {
         bool wrapped_
     ) external returns (uint256 shares);
 
-    // ========== TOKEN FUNCTIONS ========== //
+    /// @notice Returns the liabilities for an asset and operator pair
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  operator_       The address of the operator
+    /// @return liabilities     The quantity of assets that the contract is custodying for the operator's depositors
+    function getOperatorLiabilities(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 liabilities);
 
-    /// @notice Configures a new deposit asset
+    // ========== DEPOSIT CONFIGURATIONS ========== //
+
+    /// @notice Configures an asset to be deposited into a vault
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Configuring the asset
+    ///         - Emitting an event
+    ///
+    /// @param  asset_  The address of the underlying asset
+    /// @param  vault_  The address of the vault to use for the receipt token (or the zero address)
+    function configureAssetVault(IERC20 asset_, IERC4626 vault_) external;
+
+    /// @notice Adds a new deposit configuration
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Creating a new receipt token
     ///         - Emitting an event
     ///
     /// @param  asset_          The address of the underlying asset
-    /// @param  vault_          The address of the vault to use for the receipt token (or the zero address)
     /// @param  depositPeriod_  The deposit period, in months
     /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
-    function configureDeposit(
+    function addDepositConfiguration(
         IERC20 asset_,
-        IERC4626 vault_,
         uint8 depositPeriod_,
         uint16 reclaimRate_
     ) external returns (uint256 receiptTokenId);
 
-    /// @notice Returns whether a deposit asset and period are supported
+    /// @notice Disables a deposit configuration, which prevents new deposits
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Disabling the deposit configuration
+    ///         - Emitting an event
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    function disableDepositConfiguration(IERC20 asset_, uint8 depositPeriod_) external;
+
+    /// @notice Enables a deposit configuration, which allows new deposits
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Enabling the deposit configuration
+    ///         - Emitting an event
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    function enableDepositConfiguration(IERC20 asset_, uint8 depositPeriod_) external;
+
+    /// @notice Returns the deposit configuration for an asset and period
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositPeriod_  The deposit period, in months
+    /// @return configuration   The deposit configuration
+    function getDepositConfiguration(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external view returns (DepositConfiguration memory configuration);
+
+    /// @notice Returns the deposit configuration from a receipt token ID
+    ///
+    /// @param  tokenId_        The ID of the receipt token
+    /// @return configuration   The deposit configuration
+    function getDepositConfiguration(
+        uint256 tokenId_
+    ) external view returns (DepositConfiguration memory configuration);
+
+    /// @notice Returns whether a deposit asset and period combination are configured
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
     /// @return isConfigured    Whether the deposit asset is configured
-    function isDepositAsset(IERC20 asset_, uint8 depositPeriod_) external view returns (bool);
+    function isConfiguredDeposit(IERC20 asset_, uint8 depositPeriod_) external view returns (bool);
 
-    /// @notice Returns the liabilities for an asset and operator pair
+    /// @notice Returns the deposit configurations
     ///
-    /// @param  asset_          The address of the underlying asset
-    /// @param  operator_       The address of the operator
-    /// @return liabilities     The quantity of assets that the contract is custodying for the operator's depositors
-    function getAssetLiabilities(
-        IERC20 asset_,
-        address operator_
-    ) external view returns (uint256 liabilities);
-
-    /// @notice Returns the deposit assets
-    ///
-    /// @return depositAssets   The deposit assets
-    function getDepositAssets() external view returns (DepositConfiguration[] memory depositAssets);
-
-    /// @notice Returns the asset and deposit period from a receipt token ID
-    ///
-    /// @param  tokenId_        The ID of the receipt token
-    /// @return asset           The address of the underlying asset (or the zero address)
-    /// @return depositPeriod   The deposit period, in months (or 0)
-    function getAssetFromReceiptTokenId(
-        uint256 tokenId_
-    ) external view returns (IERC20 asset, uint8 depositPeriod);
+    /// @return depositConfigurations   The deposit configurations
+    function getDepositConfigurations()
+        external
+        view
+        returns (DepositConfiguration[] memory depositConfigurations);
 
     // ========== RECLAIM RATE ========== //
 

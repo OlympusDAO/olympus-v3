@@ -69,9 +69,9 @@ contract DepositManager is
     // ========== MODIFIERS ========== //
 
     /// @notice Reverts if the deposit asset is not configured
-    modifier onlyDepositAsset(IERC20 asset_, uint8 depositPeriod_) {
-        if (!isDepositAsset(asset_, depositPeriod_))
-            revert DepositManager_AssetNotConfigured(address(asset_), depositPeriod_);
+    modifier onlyConfiguredDeposit(IERC20 asset_, uint8 depositPeriod_) {
+        if (!isConfiguredDeposit(asset_, depositPeriod_))
+            revert DepositManager_InvalidConfiguration(address(asset_), depositPeriod_);
         _;
     }
 
@@ -179,30 +179,18 @@ contract DepositManager is
         return shares;
     }
 
-    // ========== TOKEN FUNCTIONS ========== //
-
     /// @inheritdoc IDepositManager
-    function getReceiptTokenId(
+    function getOperatorLiabilities(
         IERC20 asset_,
-        uint8 depositPeriod_
-    ) public pure override returns (uint256) {
-        return uint256(keccak256(abi.encode(asset_, depositPeriod_)));
-    }
-
-    /// @inheritdoc IDepositManager
-    function getAssetFromReceiptTokenId(
-        uint256 tokenId_
-    ) public view override returns (IERC20, uint8) {
-        return (
-            _depositConfigurations[tokenId_].asset,
-            _depositConfigurations[tokenId_].depositPeriod
-        );
+        address operator_
+    ) external view returns (uint256) {
+        return _assetLiabilities[asset_][operator_];
     }
 
     // ========== DEPOSIT CONFIGURATION ========== //
 
     /// @inheritdoc IDepositManager
-    function isDepositAsset(
+    function isConfiguredDeposit(
         IERC20 asset_,
         uint8 depositPeriod_
     ) public view override returns (bool) {
@@ -210,6 +198,158 @@ contract DepositManager is
             address(_depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].asset) !=
             address(0);
     }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
+    function configureAssetVault(
+        IERC20 asset_,
+        IERC4626 vault_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        _configureAsset(asset_, address(vault_));
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
+    function addDepositConfiguration(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint16 reclaimRate_
+    )
+        external
+        onlyEnabled
+        onlyManagerOrAdminRole
+        onlyConfiguredAsset(asset_)
+        returns (uint256 receiptTokenId)
+    {
+        // Validate that the deposit period is not 0
+        if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
+
+        // Validate that the asset and deposit period combination is not already configured
+        if (isConfiguredDeposit(asset_, depositPeriod_)) {
+            revert DepositManager_ConfigurationExists(address(asset_), depositPeriod_);
+        }
+
+        // Configure the ERC6909 receipt token
+        receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_);
+
+        // Set the deposit configuration
+        _depositConfigurations[receiptTokenId] = DepositConfiguration({
+            isEnabled: true,
+            depositPeriod: depositPeriod_,
+            reclaimRate: 0,
+            asset: asset_
+        });
+
+        // Add the deposit token ID to the array
+        _depositTokenIds.push(receiptTokenId);
+
+        // Set the reclaim rate (which does validation and emits an event)
+        _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
+
+        // Emit event
+        emit DepositConfigured(receiptTokenId, address(asset_), depositPeriod_);
+
+        return receiptTokenId;
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
+    function enableDepositConfiguration(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external onlyEnabled onlyManagerOrAdminRole onlyConfiguredDeposit(asset_, depositPeriod_) {
+        // Validate that the deposit configuration is disabled
+        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
+        if (_depositConfigurations[tokenId].isEnabled) {
+            revert DepositManager_ConfigurationEnabled(address(asset_), depositPeriod_);
+        }
+
+        // Enable the deposit configuration
+        _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].isEnabled = true;
+
+        // Emit event
+        emit DepositConfigurationEnabled(tokenId, address(asset_), depositPeriod_);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
+    function disableDepositConfiguration(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external onlyEnabled onlyManagerOrAdminRole onlyConfiguredDeposit(asset_, depositPeriod_) {
+        // Validate that the deposit configuration is enabled
+        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
+        if (!_depositConfigurations[tokenId].isEnabled) {
+            revert DepositManager_ConfigurationDisabled(address(asset_), depositPeriod_);
+        }
+
+        // Disable the deposit configuration
+        _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].isEnabled = false;
+
+        // Emit event
+        emit DepositConfigurationDisabled(tokenId, address(asset_), depositPeriod_);
+    }
+
+    /// @inheritdoc IDepositManager
+    function getDepositConfigurations() external view returns (DepositConfiguration[] memory) {
+        DepositConfiguration[] memory depositAssets = new DepositConfiguration[](
+            _depositTokenIds.length
+        );
+        for (uint256 i; i < _depositTokenIds.length; ++i) {
+            depositAssets[i] = _depositConfigurations[_depositTokenIds[i]];
+        }
+        return depositAssets;
+    }
+
+    /// @inheritdoc IDepositManager
+    function getDepositConfiguration(
+        uint256 tokenId_
+    ) public view override returns (DepositConfiguration memory) {
+        return _depositConfigurations[tokenId_];
+    }
+
+    /// @inheritdoc IDepositManager
+    function getDepositConfiguration(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) public view override returns (DepositConfiguration memory) {
+        return _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)];
+    }
+
+    // ========== DEPOSIT RECLAIM RATE ========== //
+
+    /// @dev Assumes that the token ID is valid
+    function _setDepositReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint16 reclaimRate_
+    ) internal {
+        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
+
+        _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)]
+            .reclaimRate = reclaimRate_;
+        emit ReclaimRateUpdated(address(asset_), depositPeriod_, reclaimRate_);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
+    function setDepositReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint16 reclaimRate_
+    ) external onlyEnabled onlyManagerOrAdminRole onlyConfiguredDeposit(asset_, depositPeriod_) {
+        _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
+    }
+
+    /// @inheritdoc IDepositManager
+    function getDepositReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external view returns (uint16) {
+        return _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].reclaimRate;
+    }
+
+    // ========== RECEIPT TOKEN FUNCTIONS ========== //
 
     function _setReceiptTokenData(
         IERC20 asset_,
@@ -241,88 +381,16 @@ contract DepositManager is
         );
         _tokenMetadataAdditional[tokenId] = additionalMetadata;
 
-        emit ReceiptTokenConfigured(tokenId, address(asset_), depositPeriod_);
         return tokenId;
     }
 
-    /// @dev Assumes that the token ID is valid
-    function _setDepositReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        uint16 reclaimRate_
-    ) internal {
-        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
-
-        _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)]
-            .reclaimRate = reclaimRate_;
-        emit ReclaimRateUpdated(address(asset_), depositPeriod_, reclaimRate_);
-    }
-
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by the manager or admin role
-    function configureDeposit(
-        IERC20 asset_,
-        IERC4626 vault_,
-        uint8 depositPeriod_,
-        uint16 reclaimRate_
-    ) external onlyEnabled onlyManagerOrAdminRole returns (uint256 receiptTokenId) {
-        // Configure the asset in the BaseAssetManager
-        _configureAsset(asset_, address(vault_));
-
-        // Configure the ERC6909 receipt token
-        receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_);
-
-        // Set the deposit configuration
-        _depositConfigurations[receiptTokenId] = DepositConfiguration({
-            asset: asset_,
-            depositPeriod: depositPeriod_,
-            reclaimRate: 0
-        });
-
-        // Add the deposit token ID to the array
-        _depositTokenIds.push(receiptTokenId);
-
-        // Set the reclaim rate (which does validation and emits an event)
-        _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
-
-        return receiptTokenId;
-    }
-
-    /// @inheritdoc IDepositManager
-    function getDepositAssets() external view returns (DepositConfiguration[] memory) {
-        DepositConfiguration[] memory depositAssets = new DepositConfiguration[](
-            _depositTokenIds.length
-        );
-        for (uint256 i; i < _depositTokenIds.length; ++i) {
-            depositAssets[i] = _depositConfigurations[_depositTokenIds[i]];
-        }
-        return depositAssets;
-    }
-
-    /// @inheritdoc IDepositManager
-    function getAssetLiabilities(IERC20 asset_, address operator_) external view returns (uint256) {
-        return _assetLiabilities[asset_][operator_];
-    }
-
-    /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by the manager or admin role
-    function setDepositReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        uint16 reclaimRate_
-    ) external onlyEnabled onlyManagerOrAdminRole onlyDepositAsset(asset_, depositPeriod_) {
-        _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getDepositReclaimRate(
+    function getReceiptTokenId(
         IERC20 asset_,
         uint8 depositPeriod_
-    ) external view returns (uint16) {
-        return _depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].reclaimRate;
+    ) public pure override returns (uint256) {
+        return uint256(keccak256(abi.encode(asset_, depositPeriod_)));
     }
-
-    // ========== RECEIPT TOKEN FUNCTIONS ========== //
 
     /// @inheritdoc IDepositManager
     /// @dev        This is the same as the ERC6909 name() function, but is included for consistency

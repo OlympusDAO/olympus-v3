@@ -11,7 +11,11 @@ contract DepositManagerDepositTest is DepositManagerTest {
     //  [ ] it reverts
     // when the deposit amount is 0
     //  [ ] it reverts
-    // given the deposit asset is not configured
+    // given the deposit configuration does not exist
+    //  given the asset vault is set
+    //   [ ] it reverts
+    //  [ ] it reverts
+    // given the deposit configuration is disabled
     //  [ ] it reverts
     // given the depositor has not approved the contract to spend the asset
     //  [ ] it reverts

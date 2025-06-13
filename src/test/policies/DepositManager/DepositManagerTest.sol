@@ -8,6 +8,10 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
 
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
+
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
@@ -28,6 +32,9 @@ contract DepositManagerTest is Test {
 
     MockERC20 public asset;
     MockERC4626 public vault;
+    IERC20 public iAsset;
+    IERC4626 public iVault;
+
     uint8 public constant DEPOSIT_PERIOD = 1;
     uint256 public constant MINT_AMOUNT = 100e18;
     uint16 public constant RECLAIM_RATE = 90e2;
@@ -65,6 +72,8 @@ contract DepositManagerTest is Test {
         // Configure asset
         asset = new MockERC20("Asset", "ASSET", 18);
         vault = new MockERC4626(ERC20(address(asset)), "Vault", "VAULT");
+        iAsset = IERC20(address(asset));
+        iVault = IERC4626(address(vault));
 
         // Mint balance to the depositor
         asset.mint(DEPOSITOR, MINT_AMOUNT);
@@ -86,14 +95,15 @@ contract DepositManagerTest is Test {
         _;
     }
 
-    modifier givenAssetIsConfigured(address vault_) {
+    modifier givenAssetVaultIsConfigured() {
         vm.prank(ADMIN);
-        depositManager.configureDeposit(
-            IERC20(address(asset)),
-            IERC4626(vault_),
-            DEPOSIT_PERIOD,
-            RECLAIM_RATE
-        );
+        depositManager.configureAssetVault(iAsset, iVault);
+        _;
+    }
+
+    modifier givenDepositIsConfigured() {
+        vm.prank(ADMIN);
+        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
         _;
     }
 
@@ -101,5 +111,45 @@ contract DepositManagerTest is Test {
         vm.prank(DEPOSITOR);
         asset.approve(address(depositManager), amount_);
         _;
+    }
+
+    // ========== REVERT HELPERS ========== //
+
+    function _expectRevertNotEnabled() internal {
+        vm.expectRevert(abi.encodeWithSelector(IPolicyEnabler.NotEnabled.selector));
+    }
+
+    function _expectRevertNotManagerOrAdmin() internal {
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+    }
+
+    function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_InvalidConfiguration.selector,
+                address(asset_),
+                depositPeriod_
+            )
+        );
+    }
+
+    function _expectRevertConfigurationEnabled(IERC20 asset_, uint8 depositPeriod_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_ConfigurationEnabled.selector,
+                address(asset_),
+                depositPeriod_
+            )
+        );
+    }
+
+    function _expectRevertConfigurationDisabled(IERC20 asset_, uint8 depositPeriod_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_ConfigurationDisabled.selector,
+                address(asset_),
+                depositPeriod_
+            )
+        );
     }
 }

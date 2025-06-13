@@ -65,7 +65,7 @@ abstract contract BaseDepositRedemptionVault is
         if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
 
         // Validate that the asset is supported
-        if (!DEPOSIT_MANAGER.isDepositAsset(depositToken_, depositPeriod_))
+        if (!DEPOSIT_MANAGER.isConfiguredDeposit(depositToken_, depositPeriod_))
             revert CDRedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
 
         // Transfer the receipt tokens from the caller to this contract

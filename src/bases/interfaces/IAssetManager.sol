@@ -12,12 +12,14 @@ interface IAssetManager {
     // ========== ERRORS ========== //
 
     error AssetManager_NotConfigured();
+    error AssetManager_InvalidAsset();
     error AssetManager_VaultAlreadySet();
     error AssetManager_VaultAssetMismatch();
 
     // ========== EVENTS ========== //
 
     event AssetConfigured(address indexed asset, address indexed vault);
+
     event AssetDeposited(
         address indexed asset,
         address indexed depositor,

@@ -156,7 +156,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         currentPeriodMonths = position.periodMonths;
         if (previousAsset_ == address(0)) {
             // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isDepositAsset(IERC20(currentAsset), currentPeriodMonths))
+            if (!DEPOSIT_MANAGER.isConfiguredDeposit(IERC20(currentAsset), currentPeriodMonths))
                 revert CDF_InvalidToken(positionId_, currentAsset, currentPeriodMonths);
         } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {
             revert CDF_InvalidArgs("multiple assets");
@@ -291,7 +291,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             asset_,
             address(this)
         );
-        uint256 assetLiabilities = DEPOSIT_MANAGER.getAssetLiabilities(asset_, address(this));
+        uint256 assetLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(asset_, address(this));
 
         yieldAssets = depositedSharesInAssets - assetLiabilities;
 

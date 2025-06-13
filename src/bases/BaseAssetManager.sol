@@ -132,6 +132,11 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param asset_  The asset to configure
     /// @param vault_  The vault to use
     function _configureAsset(IERC20 asset_, address vault_) internal {
+        // Validate that the asset is not the zero address
+        if (address(asset_) == address(0)) {
+            revert AssetManager_InvalidAsset();
+        }
+
         // Validate that the vault is not already approved
         if (_assetConfigurations[asset_].isConfigured) {
             revert AssetManager_VaultAlreadySet();
