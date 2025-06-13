@@ -75,6 +75,14 @@ contract DepositManager is
         _;
     }
 
+    modifier onlyEnabledDeposit(IERC20 asset_, uint8 depositPeriod_) {
+        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
+        if (!_depositConfigurations[tokenId].isEnabled) {
+            revert DepositManager_ConfigurationDisabled(address(asset_), depositPeriod_);
+        }
+        _;
+    }
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(
@@ -118,7 +126,14 @@ contract DepositManager is
         address depositor_,
         uint256 amount_,
         bool shouldWrap_
-    ) external onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
+    )
+        external
+        onlyEnabled
+        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyConfiguredDeposit(asset_, depositPeriod_)
+        onlyEnabledDeposit(asset_, depositPeriod_)
+        returns (uint256 shares)
+    {
         // Deposit into vault
         // This will revert if the asset is not configured
         shares = _depositAsset(asset_, depositor_, amount_);
@@ -126,6 +141,9 @@ contract DepositManager is
         // Mint the receipt token to the caller
         uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
         _mint(depositor_, tokenId, amount_, shouldWrap_);
+
+        // Update the asset liabilities for the caller (operator)
+        _assetLiabilities[asset_][msg.sender] += amount_;
 
         return shares;
     }

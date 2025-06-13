@@ -62,7 +62,7 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         // Update the shares deposited by the caller (operator)
-        _operatorShares[asset_][msg.sender] += amount_;
+        _operatorShares[asset_][msg.sender] += shares;
 
         emit AssetDeposited(address(asset_), depositor_, msg.sender, amount_, shares);
         return shares;

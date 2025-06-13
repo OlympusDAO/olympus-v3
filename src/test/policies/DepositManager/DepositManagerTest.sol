@@ -18,7 +18,10 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
+// solhint-disable max-states-count
 contract DepositManagerTest is Test {
     address public ADMIN;
     address public MANAGER;
@@ -34,6 +37,13 @@ contract DepositManagerTest is Test {
     MockERC4626 public vault;
     IERC20 public iAsset;
     IERC4626 public iVault;
+
+    uint256 public previousDepositManagerAssetBalance;
+    uint256 public previousDepositManagerSharesBalance;
+    uint256 public previousDepositManagerOperatorSharesBalance;
+    uint256 public previousDepositorReceiptTokenBalance;
+    uint256 public previousDepositorWrappedTokenBalance;
+    uint256 public previousAssetLiabilities;
 
     uint8 public constant DEPOSIT_PERIOD = 1;
     uint256 public constant MINT_AMOUNT = 100e18;
@@ -75,6 +85,23 @@ contract DepositManagerTest is Test {
         iAsset = IERC20(address(asset));
         iVault = IERC4626(address(vault));
 
+        // Simulate the asset vault having earnt yield
+        {
+            // Deposit into the vault
+            asset.mint(address(this), 100e18);
+            asset.approve(address(vault), 100e18);
+            vault.deposit(100e18, address(this));
+
+            // Earn yield
+            asset.mint(address(vault), 10e18);
+
+            // Validate
+            assertFalse(
+                vault.convertToAssets(1e18) == 1e18,
+                "convertToAssets should not be equal to 1e18"
+            );
+        }
+
         // Mint balance to the depositor
         asset.mint(DEPOSITOR, MINT_AMOUNT);
 
@@ -101,15 +128,53 @@ contract DepositManagerTest is Test {
         _;
     }
 
+    modifier givenAssetVaultIsConfiguredWithZeroAddress() {
+        vm.prank(ADMIN);
+        depositManager.configureAssetVault(iAsset, IERC4626(address(0)));
+        _;
+    }
+
     modifier givenDepositIsConfigured() {
         vm.prank(ADMIN);
         depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
         _;
     }
 
+    modifier givenDepositConfigurationIsDisabled() {
+        vm.prank(ADMIN);
+        depositManager.disableDepositConfiguration(iAsset, DEPOSIT_PERIOD);
+        _;
+    }
+
     modifier givenDepositorHasApprovedSpendingAsset(uint256 amount_) {
         vm.prank(DEPOSITOR);
         asset.approve(address(depositManager), amount_);
+        _;
+    }
+
+    modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, amount_, shouldWrap_);
+
+        // Update the previous balances
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        previousDepositorReceiptTokenBalance = depositManager.balanceOf(DEPOSITOR, receiptTokenId);
+        if (depositManager.getWrappedToken(receiptTokenId) != address(0)) {
+            previousDepositorWrappedTokenBalance = IERC20(
+                depositManager.getWrappedToken(receiptTokenId)
+            ).balanceOf(DEPOSITOR);
+        }
+
+        previousDepositManagerAssetBalance = asset.balanceOf(address(depositManager));
+        previousDepositManagerSharesBalance = vault.balanceOf(address(depositManager));
+
+        (uint256 shares, uint256 sharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        previousDepositManagerOperatorSharesBalance = shares;
+
+        previousAssetLiabilities = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
         _;
     }
 
@@ -121,6 +186,12 @@ contract DepositManagerTest is Test {
 
     function _expectRevertNotManagerOrAdmin() internal {
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+    }
+
+    function _expectRevertNotDepositOperator() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("deposit_operator"))
+        );
     }
 
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
@@ -151,5 +222,153 @@ contract DepositManagerTest is Test {
                 depositPeriod_
             )
         );
+    }
+
+    function _expectRevertZeroAddress() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC6909.ERC6909InvalidReceiver.selector, address(0))
+        );
+    }
+
+    function _expectRevertZeroAmount() internal {
+        vm.expectRevert(abi.encodeWithSelector(IDepositManager.DepositManager_ZeroAmount.selector));
+    }
+
+    function _expectRevertERC20InsufficientAllowance() internal {
+        vm.expectRevert("TRANSFER_FROM_FAILED");
+    }
+
+    function _expectRevertERC20InsufficientBalance() internal {
+        vm.expectRevert("TRANSFER_FROM_FAILED");
+    }
+
+    // ========== ASSERTIONS ========== //
+
+    function _assertAssetBalance(
+        uint256 expectedSharesAmount_,
+        uint256 depositAssetsAmount_,
+        uint256 depositSharesAmount_
+    ) internal {
+        // Shares amount
+        assertEq(depositSharesAmount_, expectedSharesAmount_, "Shares amount mismatch");
+
+        DepositManager.AssetConfiguration memory assetConfiguration = depositManager
+            .getAssetConfiguration(iAsset);
+
+        // If the vault is not set
+        if (address(assetConfiguration.vault) == address(0)) {
+            // Assets = shares
+            assertEq(
+                depositAssetsAmount_,
+                depositSharesAmount_,
+                "No vault: Assets and shares mismatch"
+            );
+
+            // The assets should be in the deposit manager
+            assertEq(
+                asset.balanceOf(address(depositManager)),
+                previousDepositManagerAssetBalance + depositAssetsAmount_,
+                "No vault: Asset balance mismatch"
+            );
+
+            // There should be no vault shares in the deposit manager
+            assertEq(
+                vault.balanceOf(address(depositManager)),
+                0,
+                "No vault: Vault shares balance mismatch"
+            );
+
+            // The operator assets should be updated with the deposited amount
+            (uint256 shares, uint256 sharesInAssets) = depositManager.getOperatorAssets(
+                iAsset,
+                DEPOSIT_OPERATOR
+            );
+
+            assertEq(
+                sharesInAssets,
+                previousDepositManagerAssetBalance + depositAssetsAmount_,
+                "No vault: Operator shares in assets balance mismatch"
+            );
+            assertEq(
+                shares,
+                previousDepositManagerAssetBalance + depositAssetsAmount_,
+                "No vault: Operator shares balance mismatch"
+            );
+        }
+        // Vault is set
+        else {
+            // Assets != shares
+            assertFalse(
+                depositAssetsAmount_ == depositSharesAmount_,
+                "Vault: Assets and shares mismatch"
+            );
+
+            // The vault shares should be in the deposit manager
+            assertEq(
+                vault.balanceOf(address(depositManager)),
+                previousDepositManagerSharesBalance + depositSharesAmount_,
+                "Vault: Vault shares balance mismatch"
+            );
+
+            // There should be no assets in the deposit manager
+            assertEq(asset.balanceOf(address(depositManager)), 0, "Vault: Asset balance mismatch");
+
+            // The operator assets should be updated with the deposited amount
+            (uint256 shares, uint256 sharesInAssets) = depositManager.getOperatorAssets(
+                iAsset,
+                DEPOSIT_OPERATOR
+            );
+
+            assertEq(
+                sharesInAssets,
+                vault.previewRedeem(shares),
+                "Vault: Operator shares in assets balance mismatch"
+            );
+            assertEq(
+                shares,
+                previousDepositManagerOperatorSharesBalance + depositSharesAmount_,
+                "Vault: Operator shares balance mismatch"
+            );
+        }
+
+        // Liabilities is the deposit amount
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            previousAssetLiabilities + depositAssetsAmount_,
+            "Liabilities mismatch"
+        );
+    }
+
+    function _assertReceiptToken(
+        uint256 unwrappedAmount_,
+        uint256 wrappedAmount_,
+        bool wrappedTokenExists_
+    ) internal {
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+
+        // Unwrapped amount
+        assertEq(
+            depositManager.balanceOf(DEPOSITOR, receiptTokenId),
+            previousDepositorReceiptTokenBalance + unwrappedAmount_,
+            "Unwrapped amount mismatch"
+        );
+
+        address wrappedToken = depositManager.getWrappedToken(receiptTokenId);
+
+        // Wrapped token exists
+        if (wrappedTokenExists_) {
+            assertTrue(wrappedToken != address(0), "Wrapped token should exist");
+        } else {
+            assertTrue(wrappedToken == address(0), "Wrapped token should not exist");
+        }
+
+        // Wrapped amount
+        if (wrappedTokenExists_) {
+            assertEq(
+                IERC20(wrappedToken).balanceOf(DEPOSITOR),
+                previousDepositorWrappedTokenBalance + wrappedAmount_,
+                "Wrapped amount mismatch"
+            );
+        }
     }
 }

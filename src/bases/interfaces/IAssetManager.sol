@@ -27,6 +27,7 @@ interface IAssetManager {
         uint256 amount,
         uint256 shares
     );
+
     event AssetWithdrawn(
         address indexed asset,
         address indexed withdrawer,
