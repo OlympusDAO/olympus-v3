@@ -4,7 +4,9 @@ pragma solidity >=0.8.20;
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 contract DepositManagerWithdrawTest is DepositManagerTest {
-    // Tests
+    // ========== TESTS ========== //
+    // given the contract is disabled
+    //  [ ] it reverts
     // given the caller does not have the deposit operator role
     //  [ ] it reverts
     // given the deposit asset configuration does not exist

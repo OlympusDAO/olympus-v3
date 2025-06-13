@@ -47,7 +47,11 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
     // given the deposit configuration does not exist
     //  [X] it reverts
 
-    function test_givenDepositConfigurationDoesNotExist_reverts() public givenIsEnabled givenAssetVaultIsConfigured {
+    function test_givenDepositConfigurationDoesNotExist_reverts()
+        public
+        givenIsEnabled
+        givenAssetVaultIsConfigured
+    {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
@@ -57,7 +61,9 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
     // when the reclaim rate is greater than 100%
     //  [X] it reverts
 
-    function test_whenReclaimRateIsGreaterThan100_reverts(uint16 reclaimRate_) public givenIsEnabled givenAssetVaultIsConfigured givenDepositIsConfigured {
+    function test_whenReclaimRateIsGreaterThan100_reverts(
+        uint16 reclaimRate_
+    ) public givenIsEnabled givenAssetVaultIsConfigured givenDepositIsConfigured {
         reclaimRate_ = uint16(bound(reclaimRate_, 100e2 + 1, type(uint16).max));
 
         vm.expectRevert(
@@ -71,7 +77,9 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
     // [X] it sets the reclaim rate for the deposit asset
     // [X] an event is emitted
 
-    function test_setsReclaimRate(uint16 reclaimRate_) public givenIsEnabled givenAssetVaultIsConfigured givenDepositIsConfigured {
+    function test_setsReclaimRate(
+        uint16 reclaimRate_
+    ) public givenIsEnabled givenAssetVaultIsConfigured givenDepositIsConfigured {
         reclaimRate_ = uint16(bound(reclaimRate_, 0, 100e2));
 
         // Expect event
@@ -81,6 +89,10 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
         vm.prank(ADMIN);
         depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, reclaimRate_);
 
-        assertEq(depositManager.getDepositReclaimRate(iAsset, DEPOSIT_PERIOD), reclaimRate_, "Reclaim rate mismatch");
+        assertEq(
+            depositManager.getDepositReclaimRate(iAsset, DEPOSIT_PERIOD),
+            reclaimRate_,
+            "Reclaim rate mismatch"
+        );
     }
 }
