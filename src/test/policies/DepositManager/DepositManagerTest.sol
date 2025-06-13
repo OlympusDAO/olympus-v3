@@ -30,6 +30,7 @@ contract DepositManagerTest is Test {
     MockERC4626 public vault;
     uint8 public constant DEPOSIT_PERIOD = 1;
     uint256 public constant MINT_AMOUNT = 100e18;
+    uint16 public constant RECLAIM_RATE = 90e2;
 
     function setUp() public {
         ADMIN = makeAddr("ADMIN");
@@ -38,13 +39,14 @@ contract DepositManagerTest is Test {
         DEPOSITOR = makeAddr("DEPOSITOR");
 
         // Kernel
-        vm.prank(ADMIN);
+        vm.startPrank(ADMIN);
         kernel = new Kernel();
 
         // Create modules and policies
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
         depositManager = new DepositManager(address(kernel));
+        vm.stopPrank();
 
         // Install modules and policies
         vm.startPrank(ADMIN);
@@ -90,7 +92,7 @@ contract DepositManagerTest is Test {
             IERC20(address(asset)),
             IERC4626(vault_),
             DEPOSIT_PERIOD,
-            100e2
+            RECLAIM_RATE
         );
         _;
     }
