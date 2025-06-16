@@ -149,12 +149,27 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
+    function maxClaimYield(IERC20 asset_, address operator_) external view returns (uint256) {
+        (, uint256 depositedSharesInAssets) = getOperatorAssets(
+            asset_,
+            operator_
+        );
+        uint256 operatorLiabilities = _assetLiabilities[asset_][operator_];
+
+        // Avoid reverting
+        // This can happen due to off-by-one rounding errors in ERC4626
+        if (depositedSharesInAssets < operatorLiabilities) return 0;
+
+        return depositedSharesInAssets - operatorLiabilities;
+    }
+
+    /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
     function claimYield(
         IERC20 asset_,
         address recipient_,
         uint256 amount_
-    ) external onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
+    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
         // Withdraw the funds from the vault
         _withdrawAsset(asset_, recipient_, amount_);
 
@@ -163,11 +178,7 @@ contract DepositManager is
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, msg.sender);
         if (_assetLiabilities[asset_][msg.sender] > depositedSharesInAssets) {
-            revert DepositManager_Insolvent(
-                address(asset_),
-                _assetLiabilities[asset_][msg.sender],
-                depositedSharesInAssets
-            );
+            revert DepositManager_Insolvent(address(asset_), _assetLiabilities[asset_][msg.sender]);
         }
 
         // Emit an event

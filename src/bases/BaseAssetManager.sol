@@ -61,6 +61,9 @@ abstract contract BaseAssetManager is IAssetManager {
             shares = assetConfiguration.vault.deposit(amount_, address(this));
         }
 
+        // Amount of shares must be non-zero
+        if (shares == 0) revert AssetManager_ZeroAmount();
+
         // Update the shares deposited by the caller (operator)
         _operatorShares[asset_][msg.sender] += shares;
 
@@ -110,6 +113,9 @@ abstract contract BaseAssetManager is IAssetManager {
             // Redeem the shares for assets
             assetConfiguration.vault.redeem(shares, depositor_, address(this));
         }
+
+        // Amount of shares must be non-zero
+        if (shares == 0) revert AssetManager_ZeroAmount();
 
         // Update the shares deposited by the caller (operator)
         _operatorShares[asset_][msg.sender] -= shares;

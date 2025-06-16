@@ -38,9 +38,7 @@ interface IDepositManager {
 
     // ========== ERRORS ========== //
 
-    error DepositManager_Insolvent(address asset, uint256 sharesRequired, uint256 sharesDeposited);
-
-    error DepositManager_ZeroAmount();
+    error DepositManager_Insolvent(address asset, uint256 requiredAssets);
 
     error DepositManager_ZeroAddress();
 
@@ -87,6 +85,16 @@ interface IDepositManager {
         uint256 amount_,
         bool shouldWrap_
     ) external returns (uint256 shares);
+
+    /// @notice Returns the maximum yield that can be claimed for an asset and operator pair
+    ///
+    /// @param  asset_        The address of the underlying asset
+    /// @param  operator_     The address of the operator
+    /// @return yieldAssets   The amount of yield that can be claimed
+    function maxClaimYield(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 yieldAssets);
 
     /// @notice Claims the yield from the underlying asset
     ///         This does not burn receipt tokens, but should reduce the amount of shares the caller has in the vault.

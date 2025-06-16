@@ -11,6 +11,7 @@ import {DepositManager} from "src/policies/DepositManager.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -233,6 +234,15 @@ contract DepositManagerTest is Test {
         );
     }
 
+    function _expectRevertNotConfiguredAsset(IERC20 asset_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_NotConfigured.selector,
+                address(asset_)
+            )
+        );
+    }
+
     function _expectRevertInvalidReceiptTokenId(IERC20 asset_, uint8 depositPeriod_) internal {
         uint256 receiptTokenId = depositManager.getReceiptTokenId(asset_, depositPeriod_);
         vm.expectRevert(
@@ -280,7 +290,7 @@ contract DepositManagerTest is Test {
     }
 
     function _expectRevertZeroAmount() internal {
-        vm.expectRevert(abi.encodeWithSelector(IDepositManager.DepositManager_ZeroAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_ZeroAmount.selector));
     }
 
     function _expectRevertERC20InsufficientAllowance() internal {
@@ -325,6 +335,16 @@ contract DepositManagerTest is Test {
                 currentBalance_,
                 amount_,
                 depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD)
+            )
+        );
+    }
+
+    function _expectRevertInsolvent(uint256 liabilities_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_Insolvent.selector,
+                address(iAsset),
+                liabilities_
             )
         );
     }

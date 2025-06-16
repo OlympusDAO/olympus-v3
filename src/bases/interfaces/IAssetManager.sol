@@ -15,6 +15,7 @@ interface IAssetManager {
     error AssetManager_InvalidAsset();
     error AssetManager_VaultAlreadySet();
     error AssetManager_VaultAssetMismatch();
+    error AssetManager_ZeroAmount();
 
     // ========== EVENTS ========== //
 

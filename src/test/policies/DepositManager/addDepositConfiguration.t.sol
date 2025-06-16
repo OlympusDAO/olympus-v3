@@ -162,7 +162,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
     // when the caller is not the manager or admin
     //  [X] it reverts
     function test_whenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
-        vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_OPERATOR);
+        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
 
         _expectRevertNotManagerOrAdmin();
 

@@ -300,6 +300,61 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _assertDepositAssetBalance(recipient, amount_);
     }
 
+    // given the maximum yield has been claimed
+    //  [X] a depositor can withdraw the full deposit
+
+    function test_givenMaxYieldClaimed()
+        public
+        givenIsEnabled
+        givenAssetVaultIsConfigured
+        givenDepositIsConfigured
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
+    {
+        // Simulate yield being accrued to the vault
+        asset.mint(address(vault), 10e18);
+
+        // Determine the maximum yield that can be claimed
+        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        uint256 maxYield = operatorSharesInAssets - operatorLiabilities - 1;
+
+        // Claim the yield
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.claimYield(iAsset, ADMIN, maxYield);
+
+        // Withdraw the full deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, false);
+
+        // Operator shares
+        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        assertEq(operatorSharesAfter, 0, "Operator shares mismatch");
+
+        // Vault balance
+        assertEq(vault.balanceOf(address(depositManager)), 0, "Vault balance mismatch");
+
+        // Asset liabilities
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "Asset liabilities mismatch"
+        );
+
+        _assertReceiptToken(MINT_AMOUNT, 0, false, false);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
+    }
+
     // [X] the wrapped receipt token is not burned
     // [X] the receipt token is burned
     // [X] the asset liabilities are decreased by the withdrawn amount
