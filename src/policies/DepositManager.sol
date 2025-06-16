@@ -183,8 +183,12 @@ contract DepositManager is
         address recipient_,
         uint256 amount_,
         bool wrapped_
-    ) external onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
+    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
+        // Validate that the recipient is not the zero address
+        if (recipient_ == address(0)) revert DepositManager_ZeroAddress();
+
         // Burn the receipt token from the depositor
+        // Will revert if the asset configuration is not valid/invalid receipt token ID
         _burn(depositor_, getReceiptTokenId(asset_, depositPeriod_), amount_, wrapped_);
 
         // Update the asset liabilities for the caller (operator)

@@ -171,8 +171,9 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 shares = depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, amount_, false);
 
         // Assert
-        _assertAssetBalance(amount_, amount_, shares);
-        _assertReceiptToken(amount_, 0, false);
+        _assertAssetBalance(amount_, amount_, shares, true);
+        _assertReceiptToken(amount_, 0, false, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - amount_);
     }
 
     // when shouldWrap is true
@@ -196,8 +197,9 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 shares = depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, amount, true);
 
         // Assert
-        _assertAssetBalance(expectedShares, amount, shares);
-        _assertReceiptToken(0, amount, true);
+        _assertAssetBalance(expectedShares, amount, shares, true);
+        _assertReceiptToken(0, amount, true, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - amount);
     }
 
     //  [X] the wrapped receipt tokens are minted to the depositor
@@ -222,8 +224,9 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 shares = depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, amount, true);
 
         // Assert
-        _assertAssetBalance(expectedShares, amount, shares);
-        _assertReceiptToken(0, amount, true);
+        _assertAssetBalance(expectedShares, amount, shares, true);
+        _assertReceiptToken(0, amount, true, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - 10e18 - amount);
     }
 
     // [X] the returned shares are the deposited amount (in terms of vault shares)
@@ -256,7 +259,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 shares = depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, amount_, false);
 
         // Assert
-        _assertAssetBalance(expectedShares, amount_, shares);
-        _assertReceiptToken(amount_, 0, false);
+        _assertAssetBalance(expectedShares, amount_, shares, true);
+        _assertReceiptToken(amount_, 0, false, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - amount_);
     }
 }

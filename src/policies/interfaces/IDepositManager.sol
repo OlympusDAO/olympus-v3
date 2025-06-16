@@ -42,6 +42,8 @@ interface IDepositManager {
 
     error DepositManager_ZeroAmount();
 
+    error DepositManager_ZeroAddress();
+
     error DepositManager_OutOfBounds();
 
     error DepositManager_InvalidAsset();
