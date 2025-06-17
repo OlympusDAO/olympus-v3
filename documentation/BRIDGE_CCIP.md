@@ -121,7 +121,7 @@ The current value for this is 175,000 gas.
 The Token Pool ownership then should be transferred to the DAO MS (on production chains):
 
 ```bash
-forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRoleToDaoMS(string)()" --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
+forge script src/scripts/ops/batches/CCIPTokenPool.sol --sig "transferTokenPoolAdminRoleToDaoMS()()" --rpc-url <CHAIN> --account < cast account > --slow -vvv --sender < account address >
 ```
 
 This will perform a simulation. Append `--broadcast` in order to perform the actual transaction.
