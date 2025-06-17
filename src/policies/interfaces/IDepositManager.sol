@@ -77,14 +77,14 @@ interface IDepositManager {
     /// @param  depositor_      The depositor
     /// @param  amount_         The amount to deposit
     /// @param  shouldWrap_     Whether the receipt token should be wrapped
-    /// @return shares          The number of vault shares equivalent to the deposited amount
+    /// @return actualAmount    The quantity of receipt tokens minted to the depositor
     function deposit(
         IERC20 asset_,
         uint8 depositPeriod_,
         address depositor_,
         uint256 amount_,
         bool shouldWrap_
-    ) external returns (uint256 shares);
+    ) external returns (uint256 actualAmount);
 
     /// @notice Returns the maximum yield that can be claimed for an asset and operator pair
     ///
@@ -122,7 +122,7 @@ interface IDepositManager {
     /// @param  recipient_      The recipient of the withdrawn asset
     /// @param  amount_         The amount to withdraw
     /// @param  wrapped_        Whether the receipt token is wrapped
-    /// @return shares          The number of vault shares equivalent to the withdrawn amount
+    /// @return actualAmount    The quantity of underlying assets transferred to the recipient
     function withdraw(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -130,7 +130,7 @@ interface IDepositManager {
         address recipient_,
         uint256 amount_,
         bool wrapped_
-    ) external returns (uint256 shares);
+    ) external returns (uint256 actualAmount);
 
     /// @notice Returns the liabilities for an asset and operator pair
     ///

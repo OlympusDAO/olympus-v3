@@ -4,6 +4,18 @@ pragma solidity >=0.8.20;
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
+    function _getExpectedMaxYield() internal view returns (uint256) {
+        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        return operatorSharesInAssets - operatorLiabilities - 1;
+    }
+
     // ========== TESTS ========== //
 
     // given the contract is disabled
@@ -21,15 +33,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
 
-        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 expectedMaxYield = operatorSharesInAssets - operatorLiabilities;
+        // Calculate the expected max yield
+        uint256 expectedMaxYield = _getExpectedMaxYield();
 
         uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
         assertEq(maxYield, expectedMaxYield, "Max yield mismatch");
@@ -58,15 +63,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
 
-        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 expectedMaxYield = operatorSharesInAssets - operatorLiabilities;
+        // Calculate the expected max yield
+        uint256 expectedMaxYield = _getExpectedMaxYield();
 
         uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
         assertEq(maxYield, expectedMaxYield, "Max yield mismatch");
@@ -88,9 +86,11 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     }
 
     // given there is no yield to claim
-    //  [ ] it returns zero
+    //  [X] it returns zero
 
-    function test_givenNoYieldToClaim() public givenIsEnabled
+    function test_givenNoYieldToClaim()
+        public
+        givenIsEnabled
         givenAssetVaultIsConfigured
         givenDepositIsConfigured
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -114,15 +114,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
 
-        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 expectedMaxYield = operatorSharesInAssets - operatorLiabilities;
+        // Calculate the expected max yield
+        uint256 expectedMaxYield = _getExpectedMaxYield();
 
         uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
         assertEq(maxYield, expectedMaxYield, "Max yield mismatch");
@@ -130,6 +123,6 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
         // Claim the yield
         // This will revert if insolvent
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.claimYield(iAsset, ADMIN, expectedMaxYield);
+        depositManager.claimYield(iAsset, ADMIN, maxYield);
     }
 }

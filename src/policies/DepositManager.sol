@@ -132,35 +132,31 @@ contract DepositManager is
         onlyRole(ROLE_DEPOSIT_OPERATOR)
         onlyConfiguredDeposit(asset_, depositPeriod_)
         onlyEnabledDeposit(asset_, depositPeriod_)
-        returns (uint256 shares)
+        returns (uint256 actualAmount)
     {
         // Deposit into vault
         // This will revert if the asset is not configured
-        shares = _depositAsset(asset_, depositor_, amount_);
+        (actualAmount, ) = _depositAsset(asset_, depositor_, amount_);
 
         // Mint the receipt token to the caller
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
-        _mint(depositor_, tokenId, amount_, shouldWrap_);
+        _mint(depositor_, getReceiptTokenId(asset_, depositPeriod_), actualAmount, shouldWrap_);
 
         // Update the asset liabilities for the caller (operator)
-        _assetLiabilities[asset_][msg.sender] += amount_;
+        _assetLiabilities[asset_][msg.sender] += actualAmount;
 
-        return shares;
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositManager
     function maxClaimYield(IERC20 asset_, address operator_) external view returns (uint256) {
-        (, uint256 depositedSharesInAssets) = getOperatorAssets(
-            asset_,
-            operator_
-        );
+        (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, operator_);
         uint256 operatorLiabilities = _assetLiabilities[asset_][operator_];
 
         // Avoid reverting
-        // This can happen due to off-by-one rounding errors in ERC4626
-        if (depositedSharesInAssets < operatorLiabilities) return 0;
+        // Adjust by 1 to account for the different behaviour in ERC4626.previewRedeem and ERC4626.previewWithdraw, which could leave the receipt token insolvent
+        if (depositedSharesInAssets < operatorLiabilities + 1) return 0;
 
-        return depositedSharesInAssets - operatorLiabilities;
+        return depositedSharesInAssets - operatorLiabilities - 1;
     }
 
     /// @inheritdoc IDepositManager
@@ -171,7 +167,7 @@ contract DepositManager is
         uint256 amount_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
         // Withdraw the funds from the vault
-        _withdrawAsset(asset_, recipient_, amount_);
+        (, uint256 actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
@@ -182,7 +178,7 @@ contract DepositManager is
         }
 
         // Emit an event
-        emit ClaimedYield(address(asset_), recipient_, msg.sender, amount_);
+        emit ClaimedYield(address(asset_), recipient_, msg.sender, actualAmount);
     }
 
     /// @inheritdoc IDepositManager
@@ -194,7 +190,7 @@ contract DepositManager is
         address recipient_,
         uint256 amount_,
         bool wrapped_
-    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 shares) {
+    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
         // Validate that the recipient is not the zero address
         if (recipient_ == address(0)) revert DepositManager_ZeroAddress();
 
@@ -207,9 +203,9 @@ contract DepositManager is
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
-        shares = _withdrawAsset(asset_, recipient_, amount_);
+        (, actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
 
-        return shares;
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositManager

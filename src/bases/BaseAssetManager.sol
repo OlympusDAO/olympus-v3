@@ -33,19 +33,22 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @notice Deposit assets into the configured vault
     /// @dev    This function will pull the assets from the depositor and deposit them into the vault. If the vault is the zero address, the assets will be kept idle.
     ///
+    ///         When an ERC4626 vault is configured for an asset, the amount of assets that can be withdrawn may be 1 less than what was originally deposited. To be conservative, this function returns the actual amount.
+    ///
     ///         This function will revert if:
     ///         - The vault is not approved
     ///         - It is unable to pull the assets from the depositor
     ///
-    /// @param  asset_      The asset to deposit
-    /// @param  depositor_  The depositor
-    /// @param  amount_     The amount of assets to deposit
-    /// @return shares      The number of shares received
+    /// @param  asset_          The asset to deposit
+    /// @param  depositor_      The depositor
+    /// @param  amount_         The amount of assets to deposit
+    /// @return actualAmount    The actual amount of assets redeemable by the shares
+    /// @return shares          The number of shares received
     function _depositAsset(
         IERC20 asset_,
         address depositor_,
         uint256 amount_
-    ) internal onlyConfiguredAsset(asset_) returns (uint256 shares) {
+    ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         // Pull the assets from the depositor
         ERC20 asset = ERC20(address(asset_));
         asset.safeTransferFrom(depositor_, address(this), amount_);
@@ -54,11 +57,18 @@ abstract contract BaseAssetManager is IAssetManager {
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
         if (address(assetConfiguration.vault) == address(0)) {
             shares = amount_;
+            actualAmount = amount_;
         }
         // Otherwise, deposit the assets into the vault
         else {
             asset.safeApprove(address(assetConfiguration.vault), amount_);
             shares = assetConfiguration.vault.deposit(amount_, address(this));
+
+            // The amount of assets redeemable by the shares can be different from the amount deposited
+            // due to rounding errors in the ERC4626 vault
+            // To avoid minting more receipt tokens than the actual redeemable amount,
+            // we should use the previewRedeem function to get the actual amount of assets redeemable by the shares.
+            actualAmount = assetConfiguration.vault.previewRedeem(shares);
         }
 
         // Amount of shares must be non-zero
@@ -67,8 +77,8 @@ abstract contract BaseAssetManager is IAssetManager {
         // Update the shares deposited by the caller (operator)
         _operatorShares[asset_][msg.sender] += shares;
 
-        emit AssetDeposited(address(asset_), depositor_, msg.sender, amount_, shares);
-        return shares;
+        emit AssetDeposited(address(asset_), depositor_, msg.sender, actualAmount, shares);
+        return (actualAmount, shares);
     }
 
     /// @notice Withdraw assets from the configured vault
@@ -85,33 +95,18 @@ abstract contract BaseAssetManager is IAssetManager {
         IERC20 asset_,
         address depositor_,
         uint256 amount_
-    ) internal onlyConfiguredAsset(asset_) returns (uint256 shares) {
+    ) internal onlyConfiguredAsset(asset_) returns (uint256 shares, uint256 assetAmount) {
         // If the vault is the zero address, the asset is idle and kept in this contract
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
         if (address(assetConfiguration.vault) == address(0)) {
             shares = amount_;
+            assetAmount = amount_;
             ERC20(address(asset_)).safeTransfer(depositor_, amount_);
         }
         // Otherwise, withdraw the assets from the vault
         else {
-            uint256 expShares = assetConfiguration.vault.previewWithdraw(amount_);
-            uint256 operatorShares = _operatorShares[asset_][msg.sender];
-
-            // If the last deposit is being withdrawn,
-            // the ERC4626 vault's implementation of rounding up
-            // or rounding down may result in a 1 wei difference
-            // between the shares required to withdraw the amount
-            // and the actual shares held.
-            // In that scenario, we should use the operator's balance
-            // of shares instead of the expected shares.
-            if (expShares == operatorShares + 1) {
-                shares = operatorShares;
-            } else {
-                shares = expShares;
-            }
-
-            // Redeem the shares for assets
-            assetConfiguration.vault.redeem(shares, depositor_, address(this));
+            shares = assetConfiguration.vault.withdraw(amount_, depositor_, address(this));
+            assetAmount = amount_;
         }
 
         // Amount of shares must be non-zero
@@ -120,8 +115,8 @@ abstract contract BaseAssetManager is IAssetManager {
         // Update the shares deposited by the caller (operator)
         _operatorShares[asset_][msg.sender] -= shares;
 
-        emit AssetWithdrawn(address(asset_), depositor_, msg.sender, amount_, shares);
-        return shares;
+        emit AssetWithdrawn(address(asset_), depositor_, msg.sender, assetAmount, shares);
+        return (shares, assetAmount);
     }
 
     /// @inheritdoc IAssetManager

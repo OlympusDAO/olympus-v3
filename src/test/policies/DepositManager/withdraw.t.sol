@@ -55,7 +55,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _expectRevertERC20CloneInsufficientAllowance();
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, true);
+        depositManager.withdraw(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSITOR,
+            DEPOSITOR,
+            previousDepositorDepositActualAmount,
+            true
+        );
     }
 
     //  given the depositor's wrapped receipt token balance is less than the amount to withdraw
@@ -78,7 +85,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             DEPOSIT_PERIOD,
             DEPOSITOR,
             DEPOSITOR,
-            MINT_AMOUNT + 1,
+            previousDepositorDepositActualAmount + 1,
             true
         );
     }
@@ -95,13 +102,18 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, true)
         givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT)
     {
-        uint256 expectedShares = vault.previewWithdraw(MINT_AMOUNT);
+        uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
 
-        uint256 shares = _withdraw(MINT_AMOUNT, true);
+        uint256 actualAmount = _withdraw(previousDepositorDepositActualAmount, true);
 
-        _assertAssetBalance(expectedShares, MINT_AMOUNT, shares, false);
-        _assertReceiptToken(0, MINT_AMOUNT, true, false);
-        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
+        _assertAssetBalance(
+            expectedShares,
+            previousDepositorDepositActualAmount,
+            actualAmount,
+            false
+        );
+        _assertReceiptToken(0, previousDepositorDepositActualAmount, true, false);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
 
     // given the depositor has not approved the contract to spend the receipt token
@@ -115,10 +127,17 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
-        _expectRevertReceiptTokenInsufficientAllowance(0, MINT_AMOUNT);
+        _expectRevertReceiptTokenInsufficientAllowance(0, previousDepositorDepositActualAmount);
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, false);
+        depositManager.withdraw(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSITOR,
+            DEPOSITOR,
+            previousDepositorDepositActualAmount,
+            false
+        );
     }
 
     // given the depositor's receipt token balance is less than the amount to withdraw
@@ -133,7 +152,10 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT + 1)
     {
-        _expectRevertReceiptTokenInsufficientBalance(MINT_AMOUNT, MINT_AMOUNT + 1);
+        _expectRevertReceiptTokenInsufficientBalance(
+            previousDepositorDepositActualAmount,
+            MINT_AMOUNT + 1
+        );
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
@@ -222,13 +244,18 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
         givenDepositConfigurationIsDisabled
     {
-        uint256 expectedShares = vault.previewWithdraw(MINT_AMOUNT);
+        uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
 
-        uint256 shares = _withdraw(MINT_AMOUNT, false);
+        uint256 actualAmount = _withdraw(previousDepositorDepositActualAmount, false);
 
-        _assertAssetBalance(expectedShares, MINT_AMOUNT, shares, false);
-        _assertReceiptToken(MINT_AMOUNT, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
+        _assertAssetBalance(
+            expectedShares,
+            previousDepositorDepositActualAmount,
+            actualAmount,
+            false
+        );
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
 
     // given there has been another deposit
@@ -249,9 +276,9 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         amount_ = bound(amount_, 1e18, MINT_AMOUNT / 2);
         uint256 expectedShares = vault.previewWithdraw(amount_);
 
-        uint256 shares = _withdraw(amount_, false);
+        uint256 actualAmount = _withdraw(amount_, false);
 
-        _assertAssetBalance(expectedShares, amount_, shares, false);
+        _assertAssetBalance(expectedShares, amount_, actualAmount, false);
         _assertReceiptToken(amount_, 0, false, false);
         _assertDepositAssetBalance(DEPOSITOR, amount_);
     }
@@ -271,7 +298,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     {
         _expectRevertZeroAddress();
 
-        _withdraw(address(0), MINT_AMOUNT, false);
+        _withdraw(address(0), previousDepositorDepositActualAmount, false);
     }
 
     //  [X] the asset is transferred to the recipient
@@ -292,9 +319,9 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         address recipient = makeAddr("RECIPIENT");
 
-        uint256 shares = _withdraw(recipient, amount_, false);
+        uint256 actualAmount = _withdraw(recipient, amount_, false);
 
-        _assertAssetBalance(expectedShares, amount_, shares, false);
+        _assertAssetBalance(expectedShares, amount_, actualAmount, false);
         _assertReceiptToken(amount_, 0, false, false);
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, amount_);
@@ -316,15 +343,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         asset.mint(address(vault), 10e18);
 
         // Determine the maximum yield that can be claimed
-        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 maxYield = operatorSharesInAssets - operatorLiabilities - 1;
+        uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
 
         // Claim the yield
         vm.prank(DEPOSIT_OPERATOR);
@@ -332,7 +351,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         // Withdraw the full deposit
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, false);
+        depositManager.withdraw(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSITOR,
+            DEPOSITOR,
+            previousDepositorDepositActualAmount,
+            false
+        );
 
         // Operator shares
         (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
@@ -351,8 +377,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(MINT_AMOUNT, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
 
     // [X] the wrapped receipt token is not burned
@@ -370,12 +396,17 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
     {
-        uint256 expectedShares = vault.previewWithdraw(MINT_AMOUNT);
+        uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
 
-        uint256 shares = _withdraw(MINT_AMOUNT, false);
+        uint256 actualAmount = _withdraw(previousDepositorDepositActualAmount, false);
 
-        _assertAssetBalance(expectedShares, MINT_AMOUNT, shares, false);
-        _assertReceiptToken(MINT_AMOUNT, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
+        _assertAssetBalance(
+            expectedShares,
+            previousDepositorDepositActualAmount,
+            actualAmount,
+            false
+        );
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
 }
