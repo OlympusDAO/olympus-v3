@@ -59,6 +59,7 @@ contract CreateCDPOSTest is CDPOSTest {
         CDPOS.mint(
             address(this),
             convertibleDepositToken,
+            DEPOSIT_PERIOD,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
@@ -88,6 +89,7 @@ contract CreateCDPOSTest is CDPOSTest {
         CDPOS.mint(
             address(this),
             address(0),
+            DEPOSIT_PERIOD,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,

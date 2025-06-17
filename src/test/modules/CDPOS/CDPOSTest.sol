@@ -20,6 +20,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
     uint48 public constant CONVERSION_EXPIRY_DELAY = 1 days;
     uint48 public constant INITIAL_BLOCK = 100000000;
     uint48 public constant CONVERSION_EXPIRY = uint48(INITIAL_BLOCK + CONVERSION_EXPIRY_DELAY);
+    uint8 public constant DEPOSIT_PERIOD = 9;
 
     Kernel public kernel;
     OlympusConvertibleDepositPositionManager public CDPOS;
@@ -79,11 +80,8 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
     ) internal view {
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
         assertEq(position.owner, owner_, "position.owner");
-        assertEq(
-            position.convertibleDepositToken,
-            convertibleDepositToken,
-            "position.convertibleDepositToken"
-        );
+        assertEq(position.asset, convertibleDepositToken, "position.asset");
+        assertEq(position.periodMonths, DEPOSIT_PERIOD, "position.periodMonths");
         assertEq(position.remainingDeposit, remainingDeposit_, "position.remainingDeposit");
         assertEq(position.conversionPrice, conversionPrice_, "position.conversionPrice");
         assertEq(position.expiry, conversionExpiry_, "position.expiry");
@@ -165,6 +163,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         CDPOS.mint(
             owner_,
             convertibleDepositToken,
+            DEPOSIT_PERIOD,
             remainingDeposit_,
             conversionPrice_,
             conversionExpiry_,
