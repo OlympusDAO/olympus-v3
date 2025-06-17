@@ -132,19 +132,20 @@ contract DepositManager is
         onlyRole(ROLE_DEPOSIT_OPERATOR)
         onlyConfiguredDeposit(asset_, depositPeriod_)
         onlyEnabledDeposit(asset_, depositPeriod_)
-        returns (uint256 actualAmount)
+        returns (uint256 receiptTokenId, uint256 actualAmount)
     {
         // Deposit into vault
         // This will revert if the asset is not configured
         (actualAmount, ) = _depositAsset(asset_, depositor_, amount_);
 
         // Mint the receipt token to the caller
-        _mint(depositor_, getReceiptTokenId(asset_, depositPeriod_), actualAmount, shouldWrap_);
+        receiptTokenId = getReceiptTokenId(asset_, depositPeriod_);
+        _mint(depositor_, receiptTokenId, actualAmount, shouldWrap_);
 
         // Update the asset liabilities for the caller (operator)
         _assetLiabilities[asset_][msg.sender] += actualAmount;
 
-        return actualAmount;
+        return (receiptTokenId, actualAmount);
     }
 
     /// @inheritdoc IDepositManager

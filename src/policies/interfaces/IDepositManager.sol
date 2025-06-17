@@ -77,6 +77,7 @@ interface IDepositManager {
     /// @param  depositor_      The depositor
     /// @param  amount_         The amount to deposit
     /// @param  shouldWrap_     Whether the receipt token should be wrapped
+    /// @return receiptTokenId  The ID of the receipt token
     /// @return actualAmount    The quantity of receipt tokens minted to the depositor
     function deposit(
         IERC20 asset_,
@@ -84,7 +85,7 @@ interface IDepositManager {
         address depositor_,
         uint256 amount_,
         bool shouldWrap_
-    ) external returns (uint256 actualAmount);
+    ) external returns (uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Returns the maximum yield that can be claimed for an asset and operator pair
     ///

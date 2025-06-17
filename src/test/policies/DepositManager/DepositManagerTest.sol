@@ -158,7 +158,7 @@ contract DepositManagerTest is Test {
 
     modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
         vm.prank(DEPOSIT_OPERATOR);
-        previousDepositorDepositActualAmount = depositManager.deposit(
+        (, previousDepositorDepositActualAmount) = depositManager.deposit(
             iAsset,
             DEPOSIT_PERIOD,
             DEPOSITOR,
@@ -505,6 +505,13 @@ contract DepositManagerTest is Test {
                 "Liabilities mismatch"
             );
         }
+    }
+
+    function _assertReceiptTokenId(
+        uint256 expectedReceiptTokenId_,
+        uint256 actualReceiptTokenId_
+    ) internal view {
+        assertEq(actualReceiptTokenId_, expectedReceiptTokenId_, "receipt token id mismatch");
     }
 
     function _assertReceiptToken(

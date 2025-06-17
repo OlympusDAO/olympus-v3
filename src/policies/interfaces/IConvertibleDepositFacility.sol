@@ -68,7 +68,24 @@ interface IConvertibleDepositFacility {
         uint256 conversionPrice_,
         bool wrapPosition_,
         bool wrapReceipt_
-    ) external returns (uint256 positionId);
+    ) external returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
+
+    /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token. This function can be used to mint additional receipt tokens on a 1:1 basis, without creating a new position.
+    ///
+    /// @param  asset_              The address of the asset
+    /// @param  periodMonths_       The period of the deposit
+    /// @param  depositor_          The address to deposit for
+    /// @param  amount_             The amount of asset to deposit
+    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
+    /// @return receiptTokenId      The ID of the receipt token
+    /// @return actualAmount        The quantity of receipt tokens minted to the depositor
+    function deposit(
+        IERC20 asset_,
+        uint8 periodMonths_,
+        address depositor_,
+        uint256 amount_,
+        bool wrapReceipt_
+    ) external returns (uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Converts CD tokens to OHM before conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
@@ -83,11 +100,13 @@ interface IConvertibleDepositFacility {
     ///
     /// @param  positionIds_        An array of position ids that will be converted
     /// @param  amounts_            An array of amounts of CD tokens to convert
+    /// @param  wrappedReceipt_     Whether the receipt tokens to use are wrapped as ERC20s
     /// @return cdTokenIn           The total amount of CD tokens converted
     /// @return convertedTokenOut   The amount of OHM minted during conversion
     function convert(
         uint256[] memory positionIds_,
-        uint256[] memory amounts_
+        uint256[] memory amounts_,
+        bool wrappedReceipt_
     ) external returns (uint256 cdTokenIn, uint256 convertedTokenOut);
 
     /// @notice Preview the amount of CD tokens and OHM that would be converted

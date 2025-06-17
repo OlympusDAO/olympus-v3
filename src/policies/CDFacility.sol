@@ -29,6 +29,18 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     /// @notice The CDPOS module.
     CDPOSv1 public CDPOS;
 
+    // ========== STRUCTS ========== //
+
+    struct CreatePositionParams {
+        IERC20 asset;
+        uint8 periodMonths;
+        address depositor;
+        uint256 amount;
+        uint256 conversionPrice;
+        bool wrapPosition;
+        bool wrapReceipt;
+    }
+
     // ========== SETUP ========== //
 
     constructor(
@@ -92,24 +104,76 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         uint256 conversionPrice_,
         bool wrapPosition_,
         bool wrapReceipt_
-    ) external onlyRole(ROLE_AUCTIONEER) nonReentrant onlyEnabled returns (uint256 positionId) {
+    )
+        external
+        onlyRole(ROLE_AUCTIONEER)
+        nonReentrant
+        onlyEnabled
+        returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount)
+    {
+        // Load parameters into struct to avoid stack too deep
+        CreatePositionParams memory params = CreatePositionParams({
+            asset: asset_,
+            periodMonths: periodMonths_,
+            depositor: depositor_,
+            amount: amount_,
+            conversionPrice: conversionPrice_,
+            wrapPosition: wrapPosition_,
+            wrapReceipt: wrapReceipt_
+        });
+
         // Deposit the asset into the deposit manager
         // This will validate that the asset is supported, and mint the receipt token
-        DEPOSIT_MANAGER.deposit(asset_, periodMonths_, depositor_, amount_, wrapReceipt_);
+        (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
+            params.asset,
+            params.periodMonths,
+            params.depositor,
+            params.amount,
+            params.wrapReceipt
+        );
 
         // Create a new position in the CDPOS module
         positionId = CDPOS.mint(
-            depositor_,
-            address(asset_),
-            periodMonths_,
-            amount_,
-            conversionPrice_,
-            uint48(block.timestamp + periodMonths_ * 30 days),
-            wrapPosition_
+            params.depositor,
+            address(params.asset),
+            params.periodMonths,
+            actualAmount,
+            params.conversionPrice,
+            uint48(block.timestamp + params.periodMonths * 30 days),
+            params.wrapPosition
         );
 
         // Emit an event
-        emit CreatedDeposit(address(asset_), depositor_, positionId, periodMonths_, amount_);
+        emit CreatedDeposit(
+            address(params.asset),
+            params.depositor,
+            positionId,
+            params.periodMonths,
+            actualAmount
+        );
+
+        return (positionId, receiptTokenId, actualAmount);
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    function deposit(
+        IERC20 asset_,
+        uint8 periodMonths_,
+        address depositor_,
+        uint256 amount_,
+        bool wrapReceipt_
+    ) external nonReentrant onlyEnabled returns (uint256 receiptTokenId, uint256 actualAmount) {
+        // Deposit the asset into the deposit manager and get the receipt token back
+        // This will revert if the asset is not supported
+        (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
+            asset_,
+            periodMonths_,
+            depositor_,
+            amount_,
+            wrapReceipt_
+        );
+
+        return (receiptTokenId, actualAmount);
     }
 
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
@@ -231,7 +295,8 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     ///             - The converted amount is 0
     function convert(
         uint256[] memory positionIds_,
-        uint256[] memory amounts_
+        uint256[] memory amounts_,
+        bool wrappedReceipt_
     ) external nonReentrant onlyEnabled returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
@@ -267,7 +332,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             msg.sender,
             address(TRSRY),
             cdTokenIn,
-            false
+            wrappedReceipt_
         );
 
         // Mint OHM to the owner/caller
@@ -285,16 +350,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
 
     /// @inheritdoc IConvertibleDepositFacility
     function previewClaimYield(IERC20 asset_) public view returns (uint256 yieldAssets) {
-        // The yield is the difference between the quantity of deposited assets and the deposits that can be withdrawn
-        // The yield is the difference between the quantity of deposits assets and shares (in terms of assets)
-        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
-            asset_,
-            address(this)
-        );
-        uint256 assetLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(asset_, address(this));
-
-        yieldAssets = depositedSharesInAssets - assetLiabilities;
-
+        yieldAssets = DEPOSIT_MANAGER.maxClaimYield(asset_, address(this));
         return yieldAssets;
     }
 

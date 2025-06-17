@@ -172,7 +172,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // TODO give user option to mint position and receipt tokens
 
         // Create the CD tokens and position
-        positionId = CD_FACILITY.createPosition(
+        (positionId, , ) = CD_FACILITY.createPosition(
             BID_TOKEN,
             DEPOSIT_PERIOD_MONTHS,
             msg.sender,
