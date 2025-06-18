@@ -38,7 +38,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
         mockERC721Receiver = new ERC721ReceiverMock(
             IERC721Receiver.onERC721Received.selector,
-            ERC721ReceiverMock.Error.None
+            ERC721ReceiverMock.RevertType.None
         );
 
         // Set up the convertible deposit token
