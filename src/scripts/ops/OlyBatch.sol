@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {BatchScript} from "./lib/BatchScript.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {console2} from "forge-std/console2.sol";
-import {Surl} from "surl-1.0.0/Surl.sol";
+import {Surl} from "@surl-1.0.0/Surl.sol";
 
 abstract contract OlyBatch is BatchScript {
     using stdJson for string;

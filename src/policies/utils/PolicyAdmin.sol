@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";

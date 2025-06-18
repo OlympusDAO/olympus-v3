@@ -48,6 +48,20 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
         (sig.v, sig.r, sig.s) = vm.sign(accountPk, typedDataHash);
     }
 
+    function _calculateSigner(
+        IMonoCooler.Authorization memory authorization_,
+        IMonoCooler.Signature memory signature_
+    ) internal view returns (address) {
+        bytes32 structHash = keccak256(abi.encode(AUTHORIZATION_TYPEHASH, authorization_));
+        return
+            ECDSA.recover(
+                ECDSA.toTypedDataHash(buildDomainSeparator(), structHash),
+                signature_.v,
+                signature_.r,
+                signature_.s
+            );
+    }
+
     function test_isSenderAuthorized_self() public view {
         assertEq(cooler.isSenderAuthorized(BOB, ALICE), false);
         assertEq(cooler.isSenderAuthorized(ALICE, ALICE), true);
@@ -160,7 +174,7 @@ contract MonoCoolerAuthorization is MonoCoolerBaseTest {
             vm.expectRevert(
                 abi.encodeWithSelector(
                     IMonoCooler.InvalidSigner.selector,
-                    0xD36ED23d73671445c86Ef402F5F5035Ba1B2D4f3,
+                    _calculateSigner(auth, sig),
                     ALICE
                 )
             );

@@ -14,7 +14,7 @@ import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
 import {ProposalScript} from "./ProposalScript.sol";
 
 // Libraries
-import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
+import {Strings} from "@openzeppelin-4.8.0/utils/Strings.sol";
 
 /// @notice Sets gOHM delegation limits for hOHM.
 // solhint-disable gas-custom-errors
