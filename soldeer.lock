@@ -1,11 +1,4 @@
 [[dependencies]]
-name = "@openzeppelin-contracts"
-version = "5.3.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/5_3_0_10-04-2025_10:51:50_contracts.zip"
-checksum = "fa2bc3db351137c4d5eb32b738a814a541b78e87fbcbfeca825e189c4c787153"
-integrity = "d69addf252dfe0688dcd893a7821cbee2421f8ce53d95ca0845a59530043cfd1"
-
-[[dependencies]]
 name = "base58-solidity"
 version = "1.0.3"
 git = "https://github.com/storyicon/base58-solidity.git"
@@ -53,6 +46,12 @@ name = "layer-zero-endpoint-v1"
 version = "0.0.6"
 git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
 rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
+
+[[dependencies]]
+name = "openzeppelin"
+version = "5.3.0"
+git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git"
+rev = "e4f70216d759d8e6a64144a9e1f7bbeed78e7079"
 
 [[dependencies]]
 name = "safe-utils"
