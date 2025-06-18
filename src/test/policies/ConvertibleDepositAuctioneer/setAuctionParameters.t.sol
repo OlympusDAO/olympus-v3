@@ -7,43 +7,6 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "cd_emissionmanager" role
     //  [X] it reverts
-    // when the new target is 0
-    //  [X] it reverts
-    // when the new tick size is 0
-    //  [X] it reverts
-    // when the new min price is 0
-    //  [X] it reverts
-    // when the contract is deactivated
-    //  [X] it sets the parameters
-    //  [X] it emits an event
-    //  [X] it does not change the current tick capacity
-    //  [X] it does not change the current tick price
-    //  [X] it does not change the day state
-    //  [X] it does not change the auction results
-    //  [X] it does not change the auction results index
-    // when the new tick size is less than the current tick capacity
-    //  [X] the tick capacity is set to the new tick size
-    // when the new tick size is >= the current tick capacity
-    //  [X] the tick capacity is unchanged
-    // when the new min price is > than the current tick price
-    //  [X] the tick price is set to the new min price
-    // when the new min price is <= the current tick price
-    //  [X] the tick price is unchanged
-    // given this is the first day of the auction cycle
-    //  [X] the day state is reset
-    //  [X] it records the previous day's auction results
-    //  [X] it resets the auction results index
-    //  [X] the AuctionResult event is emitted
-    // given this is the second day of the auction cycle
-    //  [X] the day state is reset
-    //  [X] it resets the auction results history
-    //  [X] it increments the auction results index
-    //  [X] it records the previous day's auction results
-    //  [X] the AuctionResult event is emitted
-    // [X] the day state is reset
-    // [X] it records the previous day's auction results
-    // [X] it increments the auction results index
-    // [X] the AuctionResult event is emitted
 
     function test_callerDoesNotHaveEmissionManagerRole_reverts(address caller_) public {
         // Ensure caller is not emissionManager
@@ -56,6 +19,63 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.prank(caller_);
         auctioneer.setAuctionParameters(100, 100, 100);
     }
+
+    // when the new target is 0
+    //  [X] it reverts
+
+    function test_targetZero_reverts() public givenEnabled {
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 14e18;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "target"
+            )
+        );
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
+    }
+
+    // when the new tick size is 0
+    //  [X] it reverts
+
+    function test_tickSizeZero_reverts() public givenEnabled {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "tick size"
+            )
+        );
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(21e9, 0, 16e18);
+    }
+
+    // when the new min price is 0
+    //  [X] it reverts
+
+    function test_minPriceZero_reverts() public givenEnabled {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "min price"
+            )
+        );
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(21e9, 11e9, 0);
+    }
+
+    // given the contract is not initialized
+    //  [X] it sets the parameters
 
     function test_contractNotInitialized() public {
         uint256 newTarget = 21e9;
@@ -78,50 +98,14 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertAuctionResultsNextIndex(0);
     }
 
-    function test_targetZero_reverts() public givenEnabled {
-        uint256 newTickSize = 11e9;
-        uint256 newMinPrice = 14e18;
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
-                "target"
-            )
-        );
-
-        // Call function
-        vm.prank(emissionManager);
-        auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
-    }
-
-    function test_tickSizeZero_reverts() public givenEnabled {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
-                "tick size"
-            )
-        );
-
-        // Call function
-        vm.prank(emissionManager);
-        auctioneer.setAuctionParameters(21e9, 0, 16e18);
-    }
-
-    function test_minPriceZero_reverts() public givenEnabled {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
-                "min price"
-            )
-        );
-
-        // Call function
-        vm.prank(emissionManager);
-        auctioneer.setAuctionParameters(21e9, 11e9, 0);
-    }
+    // when the contract is deactivated
+    //  [X] it sets the parameters
+    //  [X] it emits an event
+    //  [X] it does not change the current tick capacity
+    //  [X] it does not change the current tick price
+    //  [X] it does not change the day state
+    //  [X] it does not change the auction results
+    //  [X] it does not change the auction results index
 
     function test_contractInactive() public givenEnabled givenRecipientHasBid(1e18) givenDisabled {
         uint256 lastConvertible = auctioneer.getDayState().convertible;
@@ -171,6 +155,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertAuctionResultsNextIndex(lastAuctionResultsIndex);
     }
 
+    // when the new tick size is less than the current tick capacity
+    //  [X] the tick capacity is set to the new tick size
+
     function test_newTickSizeLessThanCurrentTickCapacity(uint256 newTickSize_) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
@@ -190,6 +177,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Tick capacity has been adjusted to the new tick size
         _assertPreviousTick(newTickSize, MIN_PRICE, newTickSize, lastUpdate);
     }
+
+    // when the new tick size is >= the current tick capacity
+    //  [X] the tick capacity is unchanged
 
     function test_newTickSizeGreaterThanCurrentTickCapacity(
         uint256 newTickSize_
@@ -213,6 +203,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, lastUpdate);
     }
 
+    // when the new min price is > than the current tick price
+    //  [X] the tick price is set to the new min price
+
     function test_newMinPriceGreaterThanCurrentTickPrice(uint256 newMinPrice_) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
@@ -233,6 +226,9 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, lastUpdate);
     }
 
+    // when the new min price is <= the current tick price
+    //  [X] the tick price is unchanged
+
     function test_newMinPriceLessThanCurrentTickPrice(uint256 newMinPrice_) public givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
@@ -252,6 +248,22 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Tick price has been unchanged
         _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, lastUpdate);
     }
+
+    // given this is the first day of the auction cycle
+    //  [X] the day state is reset
+    //  [X] it records the previous day's auction results
+    //  [X] it resets the auction results index
+    //  [X] the AuctionResult event is emitted
+    // given this is the second day of the auction cycle
+    //  [X] the day state is reset
+    //  [X] it resets the auction results history
+    //  [X] it increments the auction results index
+    //  [X] it records the previous day's auction results
+    //  [X] the AuctionResult event is emitted
+    // [X] the day state is reset
+    // [X] it records the previous day's auction results
+    // [X] it increments the auction results index
+    // [X] the AuctionResult event is emitted
 
     function test_calledOnDayTwo() public givenEnabled givenRecipientHasBid(1e18) {
         uint256 dayOneTarget = TARGET;

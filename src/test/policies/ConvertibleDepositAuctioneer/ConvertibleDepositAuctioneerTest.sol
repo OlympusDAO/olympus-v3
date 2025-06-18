@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
@@ -14,12 +14,12 @@ import {CDAuctioneer} from "src/policies/CDAuctioneer.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {DepositManager} from "src/policies/DepositManager.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositAuctioneerTest is Test {
@@ -29,14 +29,15 @@ contract ConvertibleDepositAuctioneerTest is Test {
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
-    OlympusConvertibleDepository public convertibleDepository;
     OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
+    DepositManager public depositManager;
 
     MockERC20 public ohm;
     MockERC20 public reserveToken;
     MockERC4626 public vault;
-    IConvertibleDepositERC20 public cdToken;
+    IERC20 public iReserveToken;
+    uint256 public receiptTokenId;
 
     address public recipient = address(0x1);
     address public emissionManager = address(0x3);
@@ -75,6 +76,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
         vm.label(address(reserveToken), "RES");
         vm.label(address(vault), "sRES");
+        iReserveToken = IERC20(address(reserveToken));
 
         _createStack();
     }
@@ -87,9 +89,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
-        facility = new CDFacility(address(kernel));
+        depositManager = new DepositManager(address(kernel));
+        facility = new CDFacility(address(kernel), address(depositManager));
         auctioneer = new CDAuctioneer(
             address(kernel),
             address(facility),
@@ -102,8 +104,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.InstallModule, address(treasury));
         kernel.executeAction(Actions.InstallModule, address(minter));
         kernel.executeAction(Actions.InstallModule, address(roles));
-        kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
+        kernel.executeAction(Actions.ActivatePolicy, address(depositManager));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
@@ -111,7 +113,12 @@ contract ConvertibleDepositAuctioneerTest is Test {
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
+        rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
+
+        // Enable the deposit manager policy
+        vm.prank(admin);
+        depositManager.enable("");
 
         // Enable the facility
         vm.prank(admin);
@@ -120,7 +127,11 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Create a CD token
         // Required at the time of activation of the auctioneer policy
         vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
+        depositManager.configureAssetVault(iReserveToken, IERC4626(address(vault)));
+
+        depositManager.addDepositConfiguration(iReserveToken, PERIOD_MONTHS, 90e2);
+
+        receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         vm.stopPrank();
 
         // Activate the auctioneer policy
@@ -143,7 +154,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 target_,
         uint256 tickSize_,
         uint256 minPrice_
-    ) internal {
+    ) internal view {
         IConvertibleDepositAuctioneer.AuctionParameters memory auctionParameters = auctioneer
             .getAuctionParameters();
 
@@ -157,7 +168,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 price_,
         uint256 tickSize_,
         uint48 lastUpdate_
-    ) internal {
+    ) internal view {
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick();
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
@@ -166,7 +177,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
     }
 
-    function _assertDayState(uint256 deposits_, uint256 convertible_) internal {
+    function _assertDayState(uint256 deposits_, uint256 convertible_) internal view {
         IConvertibleDepositAuctioneer.Day memory day = auctioneer.getDayState();
 
         assertEq(day.deposits, deposits_, "deposits");
@@ -181,7 +192,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         int256 resultFive_,
         int256 resultSix_,
         int256 resultSeven_
-    ) internal {
+    ) internal view {
         int256[] memory auctionResults = auctioneer.getAuctionResults();
 
         assertEq(auctionResults.length, 7, "auction results length");
@@ -194,7 +205,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(auctionResults[6], resultSeven_, "result seven");
     }
 
-    function _assertAuctionResultsEmpty(uint8 length_) internal {
+    function _assertAuctionResultsEmpty(uint8 length_) internal view {
         int256[] memory auctionResults = auctioneer.getAuctionResults();
 
         assertEq(auctionResults.length, length_, "auction results length");
@@ -203,7 +214,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         }
     }
 
-    function _assertAuctionResults(int256[] memory auctionResults_) internal {
+    function _assertAuctionResults(int256[] memory auctionResults_) internal view {
         int256[] memory auctionResults = auctioneer.getAuctionResults();
 
         assertEq(auctionResults.length, auctionResults_.length, "auction results length");
@@ -216,7 +227,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         }
     }
 
-    function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal {
+    function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal view {
         assertEq(auctioneer.getAuctionResultsNextIndex(), nextIndex_, "next index");
     }
 
@@ -291,13 +302,15 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 
-    modifier givenConvertibleDepositTokenSpendingIsApproved(
+    modifier givenWrappedReceiptTokenSpendingIsApproved(
         address owner_,
         address spender_,
         uint256 amount_
     ) {
+        IERC20 wrappedReceiptToken = IERC20(depositManager.getWrappedToken(receiptTokenId));
+
         vm.prank(owner_);
-        cdToken.approve(spender_, amount_);
+        wrappedReceiptToken.approve(spender_, amount_);
         _;
     }
 
@@ -337,7 +350,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _mintReserveToken(owner_, deposit_);
 
         // Approve spending
-        _approveReserveTokenSpending(owner_, address(convertibleDepository), deposit_);
+        _approveReserveTokenSpending(owner_, address(depositManager), deposit_);
 
         // Bid
         _bid(owner_, deposit_);
@@ -352,6 +365,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Create the tokens
         reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        iReserveToken = IERC20(address(reserveToken));
 
         // Re-create the stack
         _createStack();

@@ -7,16 +7,8 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "admin" role
     //  [X] it reverts
-    // given the contract is not initialized
-    //  [X] it sets the tick step
-    // when the value is < 100e2
-    //  [X] it reverts
-    // when the contract is deactivated
-    //  [X] it sets the tick step
-    // [X] it sets the tick step
-    // [X] it emits an event
 
-    function test_callerDoesNotHaveCdAdminRole_reverts(address caller_) public {
+    function test_callerDoesNotHaveAdminRole_reverts(address caller_) public {
         // Ensure caller is not admin
         vm.assume(caller_ != admin);
 
@@ -28,6 +20,9 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         auctioneer.setTickStep(100e2);
     }
 
+    // given the contract is not initialized
+    //  [X] it sets the tick step
+
     function test_contractNotInitialized() public {
         // Call function
         vm.prank(admin);
@@ -36,6 +31,9 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         // Assert state
         assertEq(auctioneer.getTickStep(), 100e2, "tick step");
     }
+
+    // when the value is < 100e2
+    //  [X] it reverts
 
     function test_valueIsOutOfBounds_reverts(uint24 tickStep_) public {
         uint24 tickStep = uint24(bound(tickStep_, 0, 100e2 - 1));
@@ -52,6 +50,9 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         vm.prank(admin);
         auctioneer.setTickStep(tickStep);
     }
+
+    // when the contract is deactivated
+    //  [X] it sets the tick step
 
     function test_contractInactive(uint24 tickStep_) public {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
@@ -72,6 +73,9 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         // Assert state
         assertEq(auctioneer.getTickStep(), tickStep, "tick step");
     }
+
+    // [X] it sets the tick step
+    // [X] it emits an event
 
     function test_contractActive(uint24 tickStep_) public givenEnabled {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));

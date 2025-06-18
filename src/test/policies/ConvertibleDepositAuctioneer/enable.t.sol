@@ -7,28 +7,6 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "admin" role
     //  [X] it reverts
-    // when the contract is already enabled
-    //  [X] it reverts
-    // when the contract is disabled
-    //  when the enable parameters length is incorrect
-    //   [X] it reverts
-    //  when the tick size is 0
-    //   [X] it reverts
-    //  when the min price is 0
-    //   [X] it reverts
-    //  when the tick step is < 100e2
-    //   [X] it reverts
-    //  when the auction tracking period is 0
-    //   [X] it reverts
-    //  [X] it activates the contract
-    //  [X] it emits an event
-    //  [X] it sets the auction parameters
-    //  [X] it sets the tick step
-    //  [X] it sets the auction tracking period
-    //  [X] it sets the previous tick
-    //  [X] it sets the last update to the current block timestamp
-    //  [X] it resets the day state
-    //  [X] it resets the auction results history and index
 
     function test_callerDoesNotHaveAdminRole_reverts(address caller_) public {
         // Ensure caller is not admin address
@@ -52,6 +30,9 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         );
     }
 
+    // when the contract is already enabled
+    //  [X] it reverts
+
     function test_contractEnabled_reverts() public givenEnabled {
         // Expect revert
         _expectNotDisabledRevert();
@@ -70,6 +51,10 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
             )
         );
     }
+
+    // when the contract is disabled
+    //  when the enable parameters length is incorrect
+    //   [X] it reverts
 
     function test_enableParamsLengthIncorrect_reverts() public {
         // Expect revert
@@ -92,6 +77,9 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
             )
         );
     }
+
+    //  when the tick size is 0
+    //   [X] it reverts
 
     function test_tickSizeZero_reverts() public {
         // Expect revert
@@ -117,6 +105,9 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         );
     }
 
+    //  when the min price is 0
+    //   [X] it reverts
+
     function test_minPriceZero_reverts() public {
         // Expect revert
         vm.expectRevert(
@@ -140,6 +131,9 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
             )
         );
     }
+
+    //  when the tick step is < 100e2
+    //   [X] it reverts
 
     function test_tickStepOutOfBounds_reverts(uint24 tickStep_) public {
         uint24 tickStep = uint24(bound(tickStep_, 0, 100e2 - 1));
@@ -167,6 +161,9 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         );
     }
 
+    //  when the auction tracking period is 0
+    //   [X] it reverts
+
     function test_auctionTrackingPeriodZero_reverts() public {
         // Expect revert
         vm.expectRevert(
@@ -190,6 +187,16 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
             )
         );
     }
+
+    //  [X] it activates the contract
+    //  [X] it emits an event
+    //  [X] it sets the auction parameters
+    //  [X] it sets the tick step
+    //  [X] it sets the auction tracking period
+    //  [X] it sets the previous tick
+    //  [X] it sets the last update to the current block timestamp
+    //  [X] it resets the day state
+    //  [X] it resets the auction results history and index
 
     function test_contractDisabled() public givenEnabled givenRecipientHasBid(1e18) givenDisabled {
         uint48 lastUpdate = uint48(block.timestamp);

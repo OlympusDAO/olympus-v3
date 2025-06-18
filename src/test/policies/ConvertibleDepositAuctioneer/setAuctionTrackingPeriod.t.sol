@@ -9,34 +9,6 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
 {
     // given the caller does not have the admin role
     //  [X] it reverts
-    // when the auction tracking period is 0
-    //  [X] it reverts
-    // given the contract is deactivated
-    //  [X] the array length is set to the tracking period
-    //  [X] it sets the auction tracking period
-    //  [X] it emits an event
-    //  [X] it resets the auction results
-    //  [X] it resets the auction results index
-    // given the previous auction tracking period is less
-    //  [X] the array length is increased to the tracking period
-    //  [X] it sets the auction tracking period
-    //  [X] it emits an event
-    //  [X] it resets the auction results
-    //  [X] it resets the auction results index
-    // given the previous auction tracking period is the same
-    //  [X] the array length is unchanged
-    //  [X] it sets the auction tracking period
-    //  [X] it emits an event
-    //  [X] it resets the auction results
-    //  [X] it resets the auction results index
-    // given the previous auction tracking period is greater
-    //  [X] the array length is reduced to the tracking period
-    //  [X] it sets the auction tracking period
-    //  [X] it emits an event
-    //  [X] it resets the auction results
-    //  [X] it resets the auction results index
-    // given there are previous auction results
-    //  [X] it resets the auction results
 
     function test_callerDoesNotHaveAdminRole_reverts() public givenEnabled {
         // Expect revert
@@ -46,6 +18,9 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         vm.prank(recipient);
         auctioneer.setAuctionTrackingPeriod(AUCTION_TRACKING_PERIOD);
     }
+
+    // when the auction tracking period is 0
+    //  [X] it reverts
 
     function test_auctionTrackingPeriodZero_reverts() public givenEnabled {
         // Expect revert
@@ -60,6 +35,12 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         vm.prank(admin);
         auctioneer.setAuctionTrackingPeriod(0);
     }
+
+    // given the contract is not initialized
+    //  [X] it sets the auction tracking period
+    //  [X] it emits an event
+    //  [X] it resets the auction results
+    //  [X] it resets the auction results index
 
     function test_contractNotInitialized() public {
         // Call function
@@ -81,6 +62,13 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         _assertAuctionResultsNextIndex(0);
     }
 
+    // given the contract is deactivated
+    //  [X] the array length is set to the tracking period
+    //  [X] it sets the auction tracking period
+    //  [X] it emits an event
+    //  [X] it resets the auction results
+    //  [X] it resets the auction results index
+
     function test_contractDisabled() public {
         // Call function
         vm.prank(admin);
@@ -100,6 +88,13 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         _assertAuctionResultsEmpty(AUCTION_TRACKING_PERIOD + 1);
         _assertAuctionResultsNextIndex(0);
     }
+
+    // given the previous auction tracking period is less
+    //  [X] the array length is increased to the tracking period
+    //  [X] it sets the auction tracking period
+    //  [X] it emits an event
+    //  [X] it resets the auction results
+    //  [X] it resets the auction results index
 
     function test_previousTrackingPeriodLess() public givenEnabled {
         // Expect event
@@ -125,6 +120,13 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         _assertAuctionResultsNextIndex(0);
     }
 
+    // given the previous auction tracking period is the same
+    //  [X] the array length is unchanged
+    //  [X] it sets the auction tracking period
+    //  [X] it emits an event
+    //  [X] it resets the auction results
+    //  [X] it resets the auction results index
+
     function test_previousTrackingPeriodSame() public givenEnabled {
         // Call function
         vm.prank(admin);
@@ -145,6 +147,13 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         _assertAuctionResultsNextIndex(0);
     }
 
+    // given the previous auction tracking period is greater
+    //  [X] the array length is reduced to the tracking period
+    //  [X] it sets the auction tracking period
+    //  [X] it emits an event
+    //  [X] it resets the auction results
+    //  [X] it resets the auction results index
+
     function test_previousTrackingPeriodGreater() public givenEnabled {
         // Call function
         vm.prank(admin);
@@ -164,6 +173,9 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
         _assertAuctionResultsEmpty(AUCTION_TRACKING_PERIOD - 1);
         _assertAuctionResultsNextIndex(0);
     }
+
+    // given there are previous auction results
+    //  [X] it resets the auction results
 
     function test_previousAuctionResults() public givenEnabled givenRecipientHasBid(1e18) {
         // Warp to the next day and trigger storage of the previous day's results
