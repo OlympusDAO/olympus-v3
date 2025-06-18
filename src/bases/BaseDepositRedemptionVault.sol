@@ -62,11 +62,11 @@ abstract contract BaseDepositRedemptionVault is
         uint256 amount_
     ) internal {
         // Check that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
+        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
         // Validate that the asset is supported
         if (!DEPOSIT_MANAGER.isConfiguredDeposit(depositToken_, depositPeriod_))
-            revert CDRedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
+            revert RedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
 
         // Transfer the receipt tokens from the caller to this contract
         DEPOSIT_MANAGER.transferFrom(
@@ -92,7 +92,7 @@ abstract contract BaseDepositRedemptionVault is
         commitment = _userCommitments[user_][commitmentId_];
         // TODO should this be a revert?
         if (address(commitment.depositToken) == address(0))
-            revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
+            revert RedemptionVault_InvalidCommitmentId(user_, commitmentId_);
 
         return commitment;
     }
@@ -102,7 +102,7 @@ abstract contract BaseDepositRedemptionVault is
     modifier onlyValidCommitmentId(address user_, uint16 commitmentId_) {
         // If the CD token is the zero address, the commitment is invalid
         if (address(_userCommitments[user_][commitmentId_].depositToken) == address(0))
-            revert CDRedemptionVault_InvalidCommitmentId(user_, commitmentId_);
+            revert RedemptionVault_InvalidCommitmentId(user_, commitmentId_);
         _;
     }
 
@@ -129,7 +129,7 @@ abstract contract BaseDepositRedemptionVault is
             depositToken: depositToken_,
             depositPeriod: depositPeriod_,
             amount: amount_,
-            redeemableAt: uint48(block.timestamp + depositPeriod_ * 30 days)
+            redeemableAt: uint48(block.timestamp + uint48(depositPeriod_) * 30 days)
         });
 
         // Pull the receipt tokens from the caller
@@ -161,11 +161,11 @@ abstract contract BaseDepositRedemptionVault is
         UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
 
         // Check that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
+        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
         // Check that the amount is not greater than the commitment
         if (amount_ > commitment.amount)
-            revert CDRedemptionVault_InvalidAmount(msg.sender, commitmentId_, amount_);
+            revert RedemptionVault_InvalidAmount(msg.sender, commitmentId_, amount_);
 
         // Update the commitment
         commitment.amount -= amount_;
@@ -207,11 +207,11 @@ abstract contract BaseDepositRedemptionVault is
 
         // Check that the commitment is not already redeemed
         if (commitment.amount == 0)
-            revert CDRedemptionVault_AlreadyRedeemed(msg.sender, commitmentId_);
+            revert RedemptionVault_AlreadyRedeemed(msg.sender, commitmentId_);
 
         // Check that the commitment is redeemable
         if (block.timestamp < commitment.redeemableAt)
-            revert CDRedemptionVault_TooEarly(msg.sender, commitmentId_);
+            revert RedemptionVault_TooEarly(msg.sender, commitmentId_);
 
         // Update the commitment
         uint256 commitmentAmount = commitment.amount;
@@ -219,6 +219,11 @@ abstract contract BaseDepositRedemptionVault is
 
         // Withdraw the underlying asset from the deposit manager
         // This will burn the receipt tokens from this contract and send the released deposit tokens to the caller
+        DEPOSIT_MANAGER.approve(
+            address(DEPOSIT_MANAGER),
+            DEPOSIT_MANAGER.getReceiptTokenId(commitment.depositToken, commitment.depositPeriod),
+            commitmentAmount
+        );
         DEPOSIT_MANAGER.withdraw(
             commitment.depositToken,
             commitment.depositPeriod,
@@ -251,7 +256,7 @@ abstract contract BaseDepositRedemptionVault is
         uint256 amount_
     ) public view onlyEnabled returns (uint256 reclaimed) {
         // Validate that the amount is not 0
-        if (amount_ == 0) revert CDRedemptionVault_ZeroAmount();
+        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
@@ -261,7 +266,7 @@ abstract contract BaseDepositRedemptionVault is
         );
 
         // If the reclaimed amount is 0, revert
-        if (reclaimed == 0) revert CDRedemptionVault_ZeroAmount();
+        if (reclaimed == 0) revert RedemptionVault_ZeroAmount();
 
         return reclaimed;
     }

@@ -59,6 +59,26 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         );
     }
 
+    // given the deposit is not configured
+    //  [X] it reverts
+
+    function test_givenDepositIsNotConfigured_reverts() public givenLocallyActive {
+        // Expect revert
+        _expectRevertInvalidConfiguration(iReserveToken, PERIOD_MONTHS + 1);
+
+        // Call function
+        vm.prank(auctioneer);
+        facility.createPosition(
+            iReserveToken,
+            PERIOD_MONTHS + 1,
+            recipient,
+            RESERVE_TOKEN_AMOUNT,
+            CONVERSION_PRICE,
+            false,
+            true
+        );
+    }
+
     // when the recipient has not approved deposit manager to spend the reserve tokens
     //  [X] it reverts
 

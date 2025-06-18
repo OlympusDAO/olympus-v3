@@ -43,17 +43,17 @@ interface IDepositRedemptionVault {
 
     // ========== ERRORS ========== //
 
-    error CDRedemptionVault_InvalidToken(address depositToken, uint8 depositPeriod);
+    error RedemptionVault_InvalidToken(address depositToken, uint8 depositPeriod);
 
-    error CDRedemptionVault_ZeroAmount();
+    error RedemptionVault_ZeroAmount();
 
-    error CDRedemptionVault_InvalidCommitmentId(address user, uint16 commitmentId);
+    error RedemptionVault_InvalidCommitmentId(address user, uint16 commitmentId);
 
-    error CDRedemptionVault_InvalidAmount(address user, uint16 commitmentId, uint256 amount);
+    error RedemptionVault_InvalidAmount(address user, uint16 commitmentId, uint256 amount);
 
-    error CDRedemptionVault_TooEarly(address user, uint16 commitmentId);
+    error RedemptionVault_TooEarly(address user, uint16 commitmentId);
 
-    error CDRedemptionVault_AlreadyRedeemed(address user, uint16 commitmentId);
+    error RedemptionVault_AlreadyRedeemed(address user, uint16 commitmentId);
 
     // ========== DATA STRUCTURES ========== //
 

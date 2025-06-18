@@ -139,7 +139,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             params.periodMonths,
             actualAmount,
             params.conversionPrice,
-            uint48(block.timestamp + params.periodMonths * 30 days),
+            uint48(block.timestamp + uint48(params.periodMonths) * 30 days),
             params.wrapPosition
         );
 
@@ -159,7 +159,6 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     function deposit(
         IERC20 asset_,
         uint8 periodMonths_,
-        address depositor_,
         uint256 amount_,
         bool wrapReceipt_
     ) external nonReentrant onlyEnabled returns (uint256 receiptTokenId, uint256 actualAmount) {
@@ -168,7 +167,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
             asset_,
             periodMonths_,
-            depositor_,
+            msg.sender,
             amount_,
             wrapReceipt_
         );

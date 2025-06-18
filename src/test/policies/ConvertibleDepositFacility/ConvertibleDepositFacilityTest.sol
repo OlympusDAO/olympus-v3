@@ -19,6 +19,9 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositFacilityTest is Test {
@@ -241,7 +244,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        facility.deposit(iReserveToken, PERIOD_MONTHS, account_, amount_, false);
+        facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
         _;
     }
 
@@ -252,15 +255,15 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_
     ) {
         // Mint reserve tokens to the account
-        reserveToken.mint(account_, amount_);
+        MockERC20(address(asset_)).mint(account_, amount_);
 
         // Approve deposit manager to spend the reserve tokens
         vm.prank(account_);
-        reserveToken.approve(address(depositManager), amount_);
+        asset_.approve(address(depositManager), amount_);
 
         // Mint the CD token to the account
         vm.prank(account_);
-        facility.deposit(iReserveToken, PERIOD_MONTHS, account_, amount_, false);
+        facility.deposit(asset_, depositPeriod_, amount_, false);
         _;
     }
 
@@ -370,15 +373,11 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Mint the CD token to the user
         vm.prank(user_);
-        facility.deposit(iReserveToken, PERIOD_MONTHS, user_, amount_, false);
+        facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
 
         // Approve spending of the CD token
         vm.prank(user_);
-        depositManager.approve(
-            address(facility),
-            depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS),
-            amount_
-        );
+        depositManager.approve(address(facility), receiptTokenId, amount_);
 
         // Commit
         vm.prank(user_);
@@ -485,5 +484,62 @@ contract ConvertibleDepositFacilityTest is Test {
 
     function _expectRevertNotEnabled() internal {
         vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+    }
+
+    function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_InvalidConfiguration.selector,
+                address(asset_),
+                depositPeriod_
+            )
+        );
+    }
+
+    function _expectRevertDepositNotConfigured(IERC20 asset_, uint8 depositPeriod_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
+                address(asset_),
+                depositPeriod_
+            )
+        );
+    }
+
+    function _expectRevertRedemptionVaultZeroAmount() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
+        );
+    }
+
+    function _expectRevertReceiptTokenInsufficientAllowance(
+        address spender_,
+        uint256 currentAllowance_,
+        uint256 amount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientAllowance.selector,
+                spender_,
+                currentAllowance_,
+                amount_,
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+            )
+        );
+    }
+
+    function _expectRevertReceiptTokenInsufficientBalance(
+        uint256 currentBalance_,
+        uint256 amount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientBalance.selector,
+                recipient,
+                currentBalance_,
+                amount_,
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+            )
+        );
     }
 }

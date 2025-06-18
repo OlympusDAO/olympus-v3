@@ -125,7 +125,7 @@ contract YieldDepositFacility is
             periodMonths_, // period months
             amount_, // amount
             type(uint256).max, // conversion price of max to indicate no conversion price
-            uint48(block.timestamp + periodMonths_ * 30 days), // expiry
+            uint48(block.timestamp + uint48(periodMonths_) * 30 days), // expiry
             wrapPosition_ // wrap
         );
 

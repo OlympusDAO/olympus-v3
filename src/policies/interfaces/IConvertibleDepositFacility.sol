@@ -74,7 +74,6 @@ interface IConvertibleDepositFacility {
     ///
     /// @param  asset_              The address of the asset
     /// @param  periodMonths_       The period of the deposit
-    /// @param  depositor_          The address to deposit for
     /// @param  amount_             The amount of asset to deposit
     /// @param  wrapReceipt_        Whether the receipt token should be wrapped
     /// @return receiptTokenId      The ID of the receipt token
@@ -82,7 +81,6 @@ interface IConvertibleDepositFacility {
     function deposit(
         IERC20 asset_,
         uint8 periodMonths_,
-        address depositor_,
         uint256 amount_,
         bool wrapReceipt_
     ) external returns (uint256 receiptTokenId, uint256 actualAmount);

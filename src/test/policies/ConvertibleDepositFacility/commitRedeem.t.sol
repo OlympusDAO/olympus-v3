@@ -3,29 +3,29 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-
-contract CommitRedeemCDFTest is ConvertibleDepositFacilityTest {
+contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
     event Committed(
         address indexed user,
         uint16 indexed commitmentId,
-        address indexed cdToken,
+        address indexed depositToken,
+        uint8 depositPeriod,
         uint256 amount
     );
 
     function _assertCommitment(
         address user_,
         uint16 commitmentId_,
-        IConvertibleDepositERC20 cdToken_,
-        uint256 cdTokenBalanceBefore_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 receiptTokenBalanceBefore_,
         uint256 amount_,
         uint256 previousUserCommitmentAmount_,
         uint256 previousOtherUserCommitmentAmount_
-    ) internal {
+    ) internal view {
         // Get commitment
         IDepositRedemptionVault.UserCommitment memory commitment = facility.getRedeemCommitment(
             user_,
@@ -33,11 +33,16 @@ contract CommitRedeemCDFTest is ConvertibleDepositFacilityTest {
         );
 
         // Assert commitment values
-        assertEq(address(commitment.cdToken), address(cdToken_), "CD token mismatch");
+        assertEq(
+            address(commitment.depositToken),
+            address(depositToken_),
+            "deposit token mismatch"
+        );
+        assertEq(commitment.depositPeriod, depositPeriod_, "deposit period mismatch");
         assertEq(commitment.amount, amount_, "Amount mismatch");
         assertEq(
             commitment.redeemableAt,
-            block.timestamp + cdToken_.periodMonths() * 30 days,
+            block.timestamp + depositPeriod_ * 30 days,
             "RedeemableAt mismatch"
         );
 
@@ -48,37 +53,227 @@ contract CommitRedeemCDFTest is ConvertibleDepositFacilityTest {
             "Commitment count mismatch"
         );
 
-        // Assert CD token balances
+        // Assert receipt token balances
+        uint256 receiptTokenId_ = depositManager.getReceiptTokenId(depositToken_, depositPeriod_);
         assertEq(
-            cdToken_.balanceOf(user_),
-            cdTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
-            "user: CD token balance mismatch"
+            depositManager.balanceOf(user_, receiptTokenId_),
+            receiptTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
+            "user: receipt token balance mismatch"
         );
         assertEq(
-            cdToken_.balanceOf(address(facility)),
+            depositManager.balanceOf(address(facility), receiptTokenId_),
             amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
-            "CDFacility: CD token balance mismatch"
+            "CDFacility: receipt token balance mismatch"
         );
     }
 
     // given the contract is disabled
     //  [X] it reverts
+
+    function test_contractDisabled_reverts() public {
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(recipient);
+        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+    }
+
     // when the CD token is not supported by CDEPO
     //  [X] it reverts
+
+    function test_cdTokenNotSupported_reverts() public givenLocallyActive {
+        // Expect revert
+        _expectRevertDepositNotConfigured(iReserveToken, PERIOD_MONTHS + 1);
+
+        // Call function
+        vm.prank(recipient);
+        facility.commitRedeem(iReserveToken, PERIOD_MONTHS + 1, COMMITMENT_AMOUNT);
+    }
+
     // when the amount is 0
     //  [X] it reverts
+
+    function test_amountIsZero_reverts() public givenLocallyActive {
+        // Expect revert
+        _expectRevertRedemptionVaultZeroAmount();
+
+        // Call function
+        vm.prank(recipient);
+        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, 0);
+    }
+
     // when the caller has not approved spending of the CD token by the contract
     //  [X] it reverts
+
+    function test_cdTokenNotApproved_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        )
+    {
+        // Expect revert
+        _expectRevertReceiptTokenInsufficientAllowance(address(facility), 0, COMMITMENT_AMOUNT);
+
+        // Call function
+        vm.prank(recipient);
+        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+    }
+
     // when the caller does not have enough CD tokens
     //  [X] it reverts
+
+    function test_cdTokenInsufficientBalance_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        )
+        givenReceiptTokenSpendingIsApproved(recipient, address(facility), 2e18)
+    {
+        // Expect revert
+        _expectRevertReceiptTokenInsufficientBalance(COMMITMENT_AMOUNT, 2e18);
+
+        // Call function
+        vm.prank(recipient);
+        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, 2e18);
+    }
+
     // given there is an existing commitment for the caller
     //  given the existing commitment is for the same CD token
     //   [X] it creates a new commitment for the caller
     //   [X] it returns a commitment ID of 1
+
+    function test_existingCommitment_sameCDToken()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, COMMITMENT_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        )
+        givenReceiptTokenSpendingIsApproved(recipient, address(facility), COMMITMENT_AMOUNT)
+    {
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Committed(recipient, 1, address(iReserveToken), PERIOD_MONTHS, COMMITMENT_AMOUNT);
+
+        // Call function
+        vm.prank(recipient);
+        uint16 commitmentId = facility.commitRedeem(
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
+
+        // Assertions
+        assertEq(commitmentId, 1, "Commitment ID mismatch");
+        _assertCommitment(
+            recipient,
+            commitmentId,
+            iReserveToken,
+            PERIOD_MONTHS,
+            2e18,
+            COMMITMENT_AMOUNT,
+            COMMITMENT_AMOUNT,
+            0
+        );
+    }
+
     //  [X] it creates a new commitment for the caller
     //  [X] it returns a commitment ID of 1
+
+    function test_existingCommitment_differentCDToken()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, COMMITMENT_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveTokenTwo,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        )
+    {
+        // Approve spending of the second receipt token
+        vm.prank(recipient);
+        depositManager.approve(address(facility), receiptTokenIdTwo, COMMITMENT_AMOUNT);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Committed(recipient, 1, address(iReserveTokenTwo), PERIOD_MONTHS, COMMITMENT_AMOUNT);
+
+        // Call function
+        vm.prank(recipient);
+        uint16 commitmentId = facility.commitRedeem(
+            iReserveTokenTwo,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
+
+        // Assertions
+        assertEq(commitmentId, 1, "Commitment ID mismatch");
+        _assertCommitment(
+            recipient,
+            commitmentId,
+            iReserveTokenTwo,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            COMMITMENT_AMOUNT,
+            0,
+            0
+        );
+    }
+
     // given there is an existing commitment for a different user
     //  [X] it returns a commitment ID of 0
+
+    function test_existingCommitment_differentUser()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, COMMITMENT_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipientTwo,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        )
+        givenReceiptTokenSpendingIsApproved(recipientTwo, address(facility), COMMITMENT_AMOUNT)
+    {
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Committed(recipientTwo, 0, address(iReserveToken), PERIOD_MONTHS, COMMITMENT_AMOUNT);
+
+        // Call function
+        vm.prank(recipientTwo);
+        uint16 commitmentId = facility.commitRedeem(
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
+
+        // Assertions
+        assertEq(commitmentId, 0, "Commitment ID mismatch");
+        _assertCommitment(
+            recipientTwo,
+            commitmentId,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            COMMITMENT_AMOUNT,
+            0,
+            COMMITMENT_AMOUNT
+        );
+    }
+
     // [X] it transfers the CD tokens from the caller to the contract
     // [X] it creates a new commitment for the caller
     // [X] the new commitment has the same CD token
@@ -87,189 +282,40 @@ contract CommitRedeemCDFTest is ConvertibleDepositFacilityTest {
     // [X] it emits a Committed event
     // [X] it returns a commitment ID of 0
 
-    function test_contractDisabled_reverts() public {
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
-
-        // Call function
-        vm.prank(recipient);
-        facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
-    }
-
-    function test_cdTokenNotSupported_reverts() public givenLocallyActive {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.CDRedemptionVault_InvalidCDToken.selector,
-                address(reserveToken)
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.commitRedeem(IConvertibleDepositERC20(address(reserveToken)), COMMITMENT_AMOUNT);
-    }
-
-    function test_amountIsZero_reverts() public givenLocallyActive {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.CDRedemptionVault_ZeroAmount.selector,
-                recipient
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.commitRedeem(cdToken, 0);
-    }
-
-    function test_cdTokenNotApproved_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
-    {
-        // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
-
-        // Call function
-        vm.prank(recipient);
-        facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
-    }
-
-    function test_cdTokenInsufficientBalance_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenConvertibleDepositTokenSpendingIsApproved(recipient, address(facility), 2e18)
-    {
-        // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
-
-        // Call function
-        vm.prank(recipient);
-        facility.commitRedeem(cdToken, 2e18);
-    }
-
-    function test_existingCommitment_sameCDToken()
-        public
-        givenLocallyActive
-        givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenConvertibleDepositTokenSpendingIsApproved(
-            recipient,
-            address(facility),
-            COMMITMENT_AMOUNT
-        )
-    {
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit Committed(recipient, 1, address(cdToken), COMMITMENT_AMOUNT);
-
-        // Call function
-        vm.prank(recipient);
-        uint16 commitmentId = facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
-
-        // Assertions
-        assertEq(commitmentId, 1, "Commitment ID mismatch");
-        _assertCommitment(
-            recipient,
-            commitmentId,
-            cdToken,
-            2e18,
-            COMMITMENT_AMOUNT,
-            COMMITMENT_AMOUNT,
-            0
-        );
-    }
-
-    function test_existingCommitment_differentCDToken()
-        public
-        givenLocallyActive
-        givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenAddressHasConvertibleDepositToken(recipient, cdTokenTwo, COMMITMENT_AMOUNT)
-    {
-        // Approve spending of the second CD token
-        vm.prank(recipient);
-        cdTokenTwo.approve(address(facility), COMMITMENT_AMOUNT);
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit Committed(recipient, 1, address(cdTokenTwo), COMMITMENT_AMOUNT);
-
-        // Call function
-        vm.prank(recipient);
-        uint16 commitmentId = facility.commitRedeem(cdTokenTwo, COMMITMENT_AMOUNT);
-
-        // Assertions
-        assertEq(commitmentId, 1, "Commitment ID mismatch");
-        _assertCommitment(
-            recipient,
-            commitmentId,
-            cdTokenTwo,
-            COMMITMENT_AMOUNT,
-            COMMITMENT_AMOUNT,
-            0,
-            0
-        );
-    }
-
-    function test_existingCommitment_differentUser()
-        public
-        givenLocallyActive
-        givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenAddressHasConvertibleDepositToken(recipientTwo, cdToken, COMMITMENT_AMOUNT)
-        givenConvertibleDepositTokenSpendingIsApproved(
-            recipientTwo,
-            address(facility),
-            COMMITMENT_AMOUNT
-        )
-    {
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit Committed(recipientTwo, 0, address(cdToken), COMMITMENT_AMOUNT);
-
-        // Call function
-        vm.prank(recipientTwo);
-        uint16 commitmentId = facility.commitRedeem(cdToken, COMMITMENT_AMOUNT);
-
-        // Assertions
-        assertEq(commitmentId, 0, "Commitment ID mismatch");
-        _assertCommitment(
-            recipientTwo,
-            commitmentId,
-            cdToken,
-            COMMITMENT_AMOUNT,
-            COMMITMENT_AMOUNT,
-            0,
-            COMMITMENT_AMOUNT
-        );
-    }
-
     function test_success(
         uint256 amount_
     )
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositToken(recipient, cdToken, COMMITMENT_AMOUNT)
-        givenConvertibleDepositTokenSpendingIsApproved(
+        givenAddressHasConvertibleDepositToken(
             recipient,
-            address(facility),
+            iReserveToken,
+            PERIOD_MONTHS,
             COMMITMENT_AMOUNT
         )
+        givenReceiptTokenSpendingIsApproved(recipient, address(facility), COMMITMENT_AMOUNT)
     {
         amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Committed(recipient, 0, address(cdToken), amount_);
+        emit Committed(recipient, 0, address(iReserveToken), PERIOD_MONTHS, amount_);
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = facility.commitRedeem(cdToken, amount_);
+        uint16 commitmentId = facility.commitRedeem(iReserveToken, PERIOD_MONTHS, amount_);
 
         // Assertions
         assertEq(commitmentId, 0, "Commitment ID mismatch");
-        _assertCommitment(recipient, commitmentId, cdToken, COMMITMENT_AMOUNT, amount_, 0, 0);
+        _assertCommitment(
+            recipient,
+            commitmentId,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            amount_,
+            0,
+            0
+        );
     }
 }
