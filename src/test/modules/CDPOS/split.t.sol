@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {CDPOSTest} from "./CDPOSTest.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
-import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {IERC721Receiver} from "@openzeppelin-5.3.0/token/ERC721/IERC721Receiver.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {ERC721ReceiverMock} from "@openzeppelin-5.3.0/mocks/token/ERC721ReceiverMock.sol";
+import {IERC721Receiver} from "@openzeppelin-5.3.0/interfaces/IERC721Receiver.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {ERC721ReceiverMock} from "@openzeppelin/contracts/mocks/ERC721ReceiverMock.sol";
-import {IERC721Receiver} from "@openzeppelin/contracts/interfaces/IERC721Receiver.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";

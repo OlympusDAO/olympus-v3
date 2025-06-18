@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {CDPOSTest} from "./CDPOSTest.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {Base64} from "base64-1.1.0/base64.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Base64} from "@base64-1.1.0/base64.sol";
+import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
