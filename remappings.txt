@@ -6,7 +6,7 @@ test/=src/test/
 test/mocks=src/test/mocks
 test/lib=src/test/lib
 
-base64-1.1.0/=dependencies/base64-1.1.0/
+@base64-1.1.0/=dependencies/base64-1.1.0/
 
 @surl-1.0.0/=dependencies/surl-1.0.0/src/
 
@@ -32,10 +32,11 @@ layer-zero/=dependencies/layer-zero-endpoint-v1-0.0.6/contracts/
 @solmate-6.2.0/=dependencies/solmate-6.2.0/src/
 solmate/=dependencies/solmate-6.2.0/src/
 
-@openzeppelin-4.8.0/=dependencies/@openzeppelin-contracts-5.3.0/
-@openzeppelin-5.3.0/=dependencies/@openzeppelin-contracts-5.3.0/
-@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.3.0/
-openzeppelin/=dependencies/@openzeppelin-contracts-5.3.0/
+@openzeppelin-4.8.0/=dependencies/openzeppelin-4.8.0/contracts/
+@openzeppelin/contracts/=dependencies/openzeppelin-4.8.0/contracts/
+openzeppelin/=dependencies/openzeppelin-4.8.0/contracts/
+
+@openzeppelin-5.3.0/=dependencies/openzeppelin-new-5.3.0/contracts/
 
 proposal-sim/=dependencies/forge-proposal-simulator-1.0.0/
 dependencies/forge-proposal-simulator-1.0.0/:@addresses/=dependencies/forge-proposal-simulator-1.0.0/addresses/
