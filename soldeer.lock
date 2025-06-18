@@ -6,10 +6,28 @@ checksum = "fa2bc3db351137c4d5eb32b738a814a541b78e87fbcbfeca825e189c4c787153"
 integrity = "d69addf252dfe0688dcd893a7821cbee2421f8ce53d95ca0845a59530043cfd1"
 
 [[dependencies]]
+name = "base58-solidity"
+version = "1.0.3"
+git = "https://github.com/storyicon/base58-solidity.git"
+rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f"
+
+[[dependencies]]
 name = "base64"
 version = "1.1.0"
 git = "https://github.com/Brechtpd/base64.git"
 rev = "4d85607b18d981acff392d2e99ba654305552a97"
+
+[[dependencies]]
+name = "chainlink-ccip"
+version = "1.6.0"
+git = "https://github.com/smartcontractkit/chainlink.git"
+rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69"
+
+[[dependencies]]
+name = "chainlink-local"
+version = "0.2.5"
+git = "https://github.com/smartcontractkit/chainlink-local.git"
+rev = "b429481536095867f9cd2c6480066c472b9594de"
 
 [[dependencies]]
 name = "clones-with-immutable-args"
@@ -18,11 +36,35 @@ git = "https://github.com/wighawag/clones-with-immutable-args.git"
 rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce"
 
 [[dependencies]]
+name = "forge-proposal-simulator"
+version = "1.0.0"
+git = "https://github.com/OlympusDAO/forge-proposal-simulator.git"
+rev = "864b357b650f9dc7b2fb1ae23562454815d51def"
+
+[[dependencies]]
 name = "forge-std"
 version = "1.9.6"
 url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_9_6_01-02-2025_20:49:10_forge-std-1.9.zip"
 checksum = "55f341818321b3f925161a72fd0dcd62e4a0a4b66785a7a932bf2bfaf96fb9d1"
 integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
+
+[[dependencies]]
+name = "layer-zero-endpoint-v1"
+version = "0.0.6"
+git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
+rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
+
+[[dependencies]]
+name = "safe-utils"
+version = "0.0.13"
+git = "https://github.com/Recon-Fuzz/safe-utils.git"
+rev = "bec514258acb85045a4b8590c5d695f3cc9599be"
+
+[[dependencies]]
+name = "solmate"
+version = "6.2.0"
+git = "https://github.com/transmissions11/solmate.git"
+rev = "fadb2e2778adbf01c80275bfb99e5c14969d964b"
 
 [[dependencies]]
 name = "surl"
