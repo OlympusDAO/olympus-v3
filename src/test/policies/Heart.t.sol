@@ -8,7 +8,6 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -50,7 +49,6 @@ contract HeartTest is Test {
     MockPrice internal PRICE;
     OlympusRoles internal ROLES;
     OlympusMinter internal MINTR;
-    OlympusConvertibleDepository internal CDEPO;
     OlympusTreasury internal TRSRY;
 
     MockOperator internal operator;
@@ -97,7 +95,6 @@ contract HeartTest is Test {
             PRICE = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             ROLES = new OlympusRoles(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            CDEPO = new OlympusConvertibleDepository(kernel);
             TRSRY = new OlympusTreasury(kernel);
 
             // Configure mocks
@@ -147,7 +144,6 @@ contract HeartTest is Test {
             kernel.executeAction(Actions.InstallModule, address(PRICE));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
-            kernel.executeAction(Actions.InstallModule, address(CDEPO));
             kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
             // Approve policies
@@ -168,12 +164,11 @@ contract HeartTest is Test {
     // ======== SETUP DEPENDENCIES ======= //
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](5);
+        Keycode[] memory expectedDeps = new Keycode[](4);
         expectedDeps[0] = toKeycode("PRICE");
         expectedDeps[1] = toKeycode("ROLES");
         expectedDeps[2] = toKeycode("MINTR");
-        expectedDeps[3] = toKeycode("CDEPO");
-        expectedDeps[4] = toKeycode("TRSRY");
+        expectedDeps[3] = toKeycode("TRSRY");
 
         Keycode[] memory deps = heart.configureDependencies();
         // Check: configured dependencies storage
@@ -182,7 +177,6 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
         assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
-        assertEq(fromKeycode(deps[4]), fromKeycode(expectedDeps[4]));
     }
 
     function testRevert_configureDependencies_invalidFrequency() public {
@@ -212,12 +206,11 @@ contract HeartTest is Test {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](4);
+        Permissions[] memory expectedPerms = new Permissions[](3);
 
         expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
         expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
-        expectedPerms[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepAllYield.selector);
 
         Permissions[] memory perms = heart.requestPermissions();
         // Check: permission storage
@@ -237,7 +230,7 @@ contract HeartTest is Test {
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if PRICE or operator revert
     //     [X] reward auction functions correctly based on time since beat available
-    //     [X] sweep yield from CDEPO into TRSRY
+    //     [ ] sweep yield from CDFacility into TRSRY
     // [X] Mints rewardToken correctly
 
     function testCorrectness_beat() public {

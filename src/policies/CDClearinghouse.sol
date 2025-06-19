@@ -12,7 +12,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+// import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -20,7 +20,6 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
-import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
 /// @title  Convertible Deposit Clearinghouse
@@ -37,7 +36,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @notice The collateral token of the clearinghouse.
     /// @dev    This is set in `configureDependencies()`
-    IConvertibleDepositERC20 internal _collateralToken;
+    IERC20 internal _collateralToken;
 
     /// @notice The scale of the collateral token.
     /// @dev    This is the number of decimals of the collateral token.
@@ -69,7 +68,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     CHREGv1 public CHREG;
 
     /// @notice Convertible Depository Module
-    CDEPOv1 public CDEPO;
+    // CDEPOv1 public CDEPO;
 
     /// @notice Treasury Module
     TRSRYv1 public TRSRY;
@@ -110,31 +109,31 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
-        dependencies[0] = toKeycode("CDEPO");
+        dependencies = new Keycode[](3);
+        // dependencies[0] = toKeycode("CDEPO");
         dependencies[1] = toKeycode("CHREG");
         dependencies[2] = toKeycode("ROLES");
         dependencies[3] = toKeycode("TRSRY");
 
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[0]));
+        // CDEPO = CDEPOv1(getModuleAddress(dependencies[0]));
         CHREG = CHREGv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
 
-        (uint8 CDEPO_MAJOR, ) = CDEPO.VERSION();
+        // (uint8 CDEPO_MAJOR, ) = CDEPO.VERSION();
         (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1, 1]);
-        if (CDEPO_MAJOR != 1 || CHREG_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (CHREG_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
 
         // Validate that the debt token's underlying asset is supported by the CDEPO module
         // TODO configure period months
-        _collateralToken = CDEPO.getConvertibleDepositToken(address(_DEBT_TOKEN.asset()), 6);
+        // _collateralToken = CDEPO.getConvertibleDepositToken(address(_DEBT_TOKEN.asset()), 6);
         if (address(_collateralToken) == address(0)) revert InvalidParams("debt token");
 
         // Validate that the decimals are the same
@@ -145,14 +144,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
-        Keycode CDEPO_KEYCODE = toKeycode("CDEPO");
+        // Keycode CDEPO_KEYCODE = toKeycode("CDEPO");
 
-        requests = new Permissions[](5);
+        requests = new Permissions[](2);
         requests[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
         requests[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
-        requests[2] = Permissions(CDEPO_KEYCODE, CDEPO.incurDebt.selector);
-        requests[3] = Permissions(CDEPO_KEYCODE, CDEPO.repayDebt.selector);
-        requests[4] = Permissions(CDEPO_KEYCODE, CDEPO.reduceDebt.selector);
+        // requests[2] = Permissions(CDEPO_KEYCODE, CDEPO.incurDebt.selector);
+        // requests[3] = Permissions(CDEPO_KEYCODE, CDEPO.repayDebt.selector);
+        // requests[4] = Permissions(CDEPO_KEYCODE, CDEPO.reduceDebt.selector);
 
         return requests;
     }
@@ -204,7 +203,7 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Borrow from CDEPO
         // This will transfer the debt token from CDEPO to this contract
-        CDEPO.incurDebt(IERC4626(address(_DEBT_TOKEN)), amount_);
+        // CDEPO.incurDebt(IERC4626(address(_DEBT_TOKEN)), amount_);
 
         // Clear the created loan request by providing enough reserve.
         _DEBT_TOKEN.safeApprove(address(cooler_), amount_);
@@ -286,14 +285,14 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Reduce the debt owed to CDEPO
         // CDEPO will cap the reduction to the amount owed
-        CDEPO.reduceDebt(IERC4626(address(_DEBT_TOKEN)), totalPrincipal);
+        // CDEPO.reduceDebt(IERC4626(address(_DEBT_TOKEN)), totalPrincipal);
 
         // Reward keeper.
         ERC20(address(_collateralToken)).safeTransfer(msg.sender, keeperRewards);
 
         // Burn the collateral token
         uint256 collateralBalance = _collateralToken.balanceOf(address(this));
-        ERC20(address(_collateralToken)).safeApprove(address(CDEPO), collateralBalance);
+        // ERC20(address(_collateralToken)).safeApprove(address(CDEPO), collateralBalance);
         // CDEPO.burn(_collateralToken, collateralBalance);
 
         // Sweep yield
@@ -332,8 +331,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
 
         // Repay the debt token to CDEPO
         if (principalPaid_ > 0) {
-            _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
-            CDEPO.repayDebt(IERC4626(address(_DEBT_TOKEN)), principalPaid_);
+            // _DEBT_TOKEN.safeApprove(address(CDEPO), principalPaid_);
+            // CDEPO.repayDebt(IERC4626(address(_DEBT_TOKEN)), principalPaid_);
         }
 
         // Sweep the yield

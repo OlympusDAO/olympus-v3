@@ -46,7 +46,6 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositionManager} from "modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 
 // Bophades Policies
@@ -119,7 +118,6 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
-    OlympusConvertibleDepository public CDEPO;
     OlympusConvertibleDepositPositionManager public CDPOS;
     OlympusGovDelegation public DLGTE;
 
@@ -247,7 +245,6 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
-        // selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
         // selectorMap["OlympusConvertibleDepositPositionManager"] = this
         //     ._deployConvertibleDepositPositionManager
         //     .selector;
@@ -1593,21 +1590,6 @@ contract OlympusDeploy is Script {
     }
 
     // ========== CONVERTIBLE DEPOSIT ========== //
-
-    // function _deployConvertibleDepository(bytes calldata) public returns (address) {
-    //     // No additional arguments for ConvertibleDepository
-
-    //     // Log dependencies
-    //     console2.log("ConvertibleDepository parameters:");
-    //     console2.log("   kernel", address(kernel));
-
-    //     // Deploy ConvertibleDepository
-    //     vm.broadcast();
-    //     CDEPO = new OlympusConvertibleDepository(kernel);
-    //     console2.log("ConvertibleDepository deployed at:", address(CDEPO));
-
-    //     return address(CDEPO);
-    // }
 
     // function _deployConvertibleDepositPositionManager(bytes calldata) public returns (address) {
     //     // No additional arguments for ConvertibleDepositPositionManager

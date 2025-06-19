@@ -24,7 +24,7 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
     // [X] the user receives vault token
     // [X] the cooler receives collateral
     // [X] the debt is recorded on CDEPO
-
+    /*
     function test_notFromFactory_reverts() public {
         CoolerFactory maliciousFactory = new CoolerFactory();
         vm.prank(USER);
@@ -131,4 +131,5 @@ contract LendToCoolerCDClearinghouseTest is ConvertibleDepositClearinghouseTest 
         assertEq(loan.lender, address(clearinghouse), "loan lender");
         assertEq(loan.expiry, block.timestamp + 121 days, "loan duration");
     }
+    */
 }

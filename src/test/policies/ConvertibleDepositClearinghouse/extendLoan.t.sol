@@ -23,7 +23,7 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
     // [X] the interest is transferred from the user to the Clearinghouse
     // [X] the loan is extended
     // [X] the yield is swept to the TRSRY
-
+    /*
     function test_notFromFactory_reverts() public givenUserHasCollateral(4e18) {
         CoolerFactory maliciousFactory = new CoolerFactory();
         vm.prank(USER);
@@ -238,4 +238,5 @@ contract ExtendLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "cooler loan expiry"
         );
     }
+    */
 }

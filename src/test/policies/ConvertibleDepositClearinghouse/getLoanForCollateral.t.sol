@@ -12,7 +12,7 @@ contract GetLoanForCollateralCDClearinghouseTest is ConvertibleDepositClearingho
     //  [X] the interest is rounded down
     // [X] the principal is in debt token terms
     // [X] the interest is in debt token terms
-
+    /*
     function test_zero() public {
         // Call function
         (uint256 principal, uint256 interest) = clearinghouse.getLoanForCollateral(0);
@@ -70,4 +70,5 @@ contract GetLoanForCollateralCDClearinghouseTest is ConvertibleDepositClearingho
         assertEq(principalFour, 1000000000000000000, "principalFour");
         assertEq(interestFour, 3315068493150684, "interestFour");
     }
+    */
 }

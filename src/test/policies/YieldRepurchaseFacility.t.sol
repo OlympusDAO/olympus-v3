@@ -23,7 +23,6 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
@@ -56,7 +55,6 @@ contract YieldRepurchaseFacilityTest is Test {
     OlympusMinter internal MINTR;
     OlympusRoles internal ROLES;
     OlympusClearinghouseRegistry internal CHREG;
-    OlympusConvertibleDepository internal CDEPO;
     address internal godmode;
 
     MockClearinghouse internal clearinghouse;
@@ -108,7 +106,6 @@ contract YieldRepurchaseFacilityTest is Test {
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
             ROLES = new OlympusRoles(kernel);
-            CDEPO = new OlympusConvertibleDepository(kernel);
 
             // Deploy mock clearinghouse and registry
             clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
@@ -148,7 +145,6 @@ contract YieldRepurchaseFacilityTest is Test {
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, address(CHREG));
-            kernel.executeAction(Actions.InstallModule, address(CDEPO));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
@@ -244,6 +240,7 @@ contract YieldRepurchaseFacilityTest is Test {
     // [X] shutdown
     // [X] getNextYield
     // [X] getReserveBalance
+    //  [ ] includes yield in the CDFacility
 
     function test_setup() public {
         // addresses are set correctly

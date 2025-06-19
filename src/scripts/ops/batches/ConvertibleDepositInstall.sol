@@ -10,7 +10,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 /// @notice     Installs the ConvertibleDeposit contracts
 contract ConvertibleDepositInstall is OlyBatch {
     address public kernel;
-    address public cdepo;
+    // address public cdepo;
     address public cdpos;
     address public cdAuctioneer;
     address public cdFacility;
@@ -22,7 +22,7 @@ contract ConvertibleDepositInstall is OlyBatch {
     function loadEnv() internal override {
         // Load contract addresses from the environment file
         kernel = envAddress("current", "olympus.Kernel");
-        cdepo = envAddress("current", "olympus.modules.OlympusConvertibleDepository");
+        // cdepo = envAddress("current", "olympus.modules.OlympusConvertibleDepository");
         cdpos = envAddress("current", "olympus.modules.OlympusConvertibleDepositPositionManager");
         cdAuctioneer = envAddress("current", "olympus.policies.ConvertibleDepositAuctioneer");
         cdFacility = envAddress("current", "olympus.policies.ConvertibleDepositFacility");
@@ -38,7 +38,7 @@ contract ConvertibleDepositInstall is OlyBatch {
 
         // Validate addresses
         // solhint-disable custom-errors
-        require(cdepo != address(0), "CDEPO address is not set");
+        // require(cdepo != address(0), "CDEPO address is not set");
         require(cdpos != address(0), "CDPOS address is not set");
         require(cdAuctioneer != address(0), "CDAuctioneer address is not set");
         require(cdFacility != address(0), "CDFacility address is not set");
@@ -48,10 +48,10 @@ contract ConvertibleDepositInstall is OlyBatch {
 
         // A. Kernel Actions
         // A.1. Install the CDEPO module on the kernel
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, cdepo)
-        );
+        // addToBatch(
+        //     kernel,
+        //     abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, cdepo)
+        // );
 
         // A.2. Install the CDPOS module on the kernel
         addToBatch(

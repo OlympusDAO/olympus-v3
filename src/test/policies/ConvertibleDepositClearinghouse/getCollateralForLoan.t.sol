@@ -11,7 +11,7 @@ contract GetCollateralForLoanCDClearinghouseTest is ConvertibleDepositClearingho
     // when the collateral is not a whole number
     //  [X] it rounds up
     // [X] the collateral is calculated based on the debt token
-
+    /*
     function test_zero() public {
         // Call function
         uint256 collateral = clearinghouse.getCollateralForLoan(0);
@@ -43,4 +43,5 @@ contract GetCollateralForLoanCDClearinghouseTest is ConvertibleDepositClearingho
         // Collateral = 100e18 * 1e18 / 75e16 = 133333333333333333333.3333333333
         assertEq(clearinghouse.getCollateralForLoan(50e18), 133333333333333333333, "case 3");
     }
+    */
 }

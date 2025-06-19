@@ -103,7 +103,7 @@ contract TokenURICDPOSTest is CDPOSTest {
         // Convertible Deposit Token
         string memory tokenUriConvertibleDepositToken = vm.parseJsonString(
             decodedTokenURI,
-            '.attributes[?(@.trait_type=="Convertible Deposit Token")].value'
+            '.attributes[?(@.trait_type=="Deposit Asset")].value'
         );
         assertEq(
             tokenUriConvertibleDepositToken,

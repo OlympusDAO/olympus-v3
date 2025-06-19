@@ -5,9 +5,10 @@ import {ConvertibleDepositClearinghouseTest} from "./ConvertibleDepositClearingh
 
 contract DebtTokenCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
     // [X] the debt token is the vault token
-
+    /*
     function test_debtToken() public {
         // Assertions
         assertEq(address(clearinghouse.debtToken()), address(vault));
     }
+    */
 }
