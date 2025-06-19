@@ -4,41 +4,50 @@ pragma solidity >=0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
+import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
+import {DepositManager} from "src/policies/DepositManager.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
+import {CDFacility} from "src/policies/CDFacility.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 // solhint-disable max-states-count
 contract YieldDepositFacilityTest is Test {
     Kernel public kernel;
     YieldDepositFacility public yieldDepositFacility;
     OlympusRoles public roles;
-    OlympusConvertibleDepository public convertibleDepository;
     OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
     OlympusTreasury public treasury;
+    OlympusMinter public minter;
     RolesAdmin public rolesAdmin;
+    DepositManager public depositManager;
+    CDFacility public cdFacility;
+
+    MockERC20 public ohm;
 
     MockERC20 public reserveToken;
     MockERC4626 public vault;
     IERC20 internal iReserveToken;
     IERC4626 internal iVault;
-    IConvertibleDepositERC20 internal cdToken;
+    uint256 internal _receiptTokenId;
 
     MockERC20 public reserveTokenTwo;
     MockERC4626 public vaultTwo;
     IERC20 internal iReserveTokenTwo;
     IERC4626 internal iVaultTwo;
-    IConvertibleDepositERC20 internal cdTokenTwo;
+    uint256 internal _receiptTokenIdTwo;
 
     address public recipient = address(0x1);
     address public auctioneer = address(0x2);
@@ -56,8 +65,12 @@ contract YieldDepositFacilityTest is Test {
     uint256 public cdepoVaultBalanceBefore;
     uint256 public recipientReserveTokenBalanceBefore;
 
+    uint256 internal _previousDepositActualAmount;
+
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
+
+        ohm = new MockERC20("OHM", "OHM", 9);
 
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         iReserveToken = IERC20(address(reserveToken));
@@ -99,41 +112,61 @@ contract YieldDepositFacilityTest is Test {
     function _createStack() internal {
         kernel = new Kernel();
         roles = new OlympusRoles(kernel);
-        convertibleDepository = new OlympusConvertibleDepository(kernel);
         convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
         treasury = new OlympusTreasury(kernel);
-        yieldDepositFacility = new YieldDepositFacility(address(kernel));
+        depositManager = new DepositManager(address(kernel));
+        yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
+        cdFacility = new CDFacility(address(kernel), address(depositManager));
+        minter = new OlympusMinter(kernel, address(ohm));
 
         // Install modules
         kernel.executeAction(Actions.InstallModule, address(roles));
-
-        kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
         kernel.executeAction(Actions.InstallModule, address(treasury));
+        kernel.executeAction(Actions.InstallModule, address(minter));
+        kernel.executeAction(Actions.ActivatePolicy, address(depositManager));
         kernel.executeAction(Actions.ActivatePolicy, address(yieldDepositFacility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(cdFacility));
 
         // Grant roles
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("heart"), heart);
+        rolesAdmin.grantRole(bytes32("deposit_operator"), address(yieldDepositFacility));
+        rolesAdmin.grantRole(bytes32("deposit_operator"), address(cdFacility));
+        rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
 
-        // Enable the facility
+        // Enable the deposit manager
+        vm.prank(admin);
+        depositManager.enable("");
+
+        // Enable the yield deposit facility
         vm.prank(admin);
         yieldDepositFacility.enable("");
 
-        // Create a CD token
-        vm.startPrank(admin);
-        cdToken = yieldDepositFacility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
-        vm.stopPrank();
-        vm.label(address(cdToken), "cdToken");
+        // Enable the CD facility
+        vm.prank(admin);
+        cdFacility.enable("");
 
         // Create a CD token
         vm.startPrank(admin);
-        cdTokenTwo = yieldDepositFacility.create(IERC4626(address(vaultTwo)), PERIOD_MONTHS, 90e2);
+        depositManager.configureAssetVault(iReserveToken, iVault);
+
+        depositManager.addDepositConfiguration(iReserveToken, PERIOD_MONTHS, 90e2);
+
+        _receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         vm.stopPrank();
-        vm.label(address(cdTokenTwo), "cdTokenTwo");
+
+        // Create a second CD token
+        vm.startPrank(admin);
+        depositManager.configureAssetVault(iReserveTokenTwo, iVaultTwo);
+
+        depositManager.addDepositConfiguration(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
+
+        _receiptTokenIdTwo = depositManager.getReceiptTokenId(iReserveTokenTwo, PERIOD_MONTHS);
+        vm.stopPrank();
 
         // Disable the facility
         vm.prank(emergency);
@@ -148,12 +181,26 @@ contract YieldDepositFacilityTest is Test {
     }
 
     function _updateCdepoVaultBalance() internal {
-        cdepoVaultBalanceBefore = vault.balanceOf(address(convertibleDepository));
+        cdepoVaultBalanceBefore = vault.balanceOf(address(depositManager));
+    }
+
+    function _mintToken(IERC20 token_, address to_, uint256 amount_) internal {
+        MockERC20(address(token_)).mint(to_, amount_);
     }
 
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
-        reserveToken.mint(to_, amount_);
+        _mintToken(iReserveToken, to_, amount_);
         _;
+    }
+
+    function _approveTokenSpending(
+        IERC20 token_,
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) internal {
+        vm.prank(owner_);
+        token_.approve(spender_, amount_);
     }
 
     modifier givenReserveTokenSpendingIsApproved(
@@ -161,14 +208,19 @@ contract YieldDepositFacilityTest is Test {
         address spender_,
         uint256 amount_
     ) {
-        vm.prank(owner_);
-        reserveToken.approve(spender_, amount_);
+        _approveTokenSpending(iReserveToken, owner_, spender_, amount_);
         _;
     }
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        convertibleDepository.mint(cdToken, amount_);
+        (, uint256 actualAmount) = yieldDepositFacility.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            false
+        );
+        _previousDepositActualAmount = actualAmount;
 
         _updateReserveBalances();
         _updateCdepoVaultBalance();
@@ -177,21 +229,26 @@ contract YieldDepositFacilityTest is Test {
 
     modifier givenAddressHasConvertibleDepositToken(
         address account_,
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 asset_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) {
-        MockERC20 underlyingToken = MockERC20(address(cdToken_.asset()));
-
         // Mint reserve tokens to the account
-        underlyingToken.mint(account_, amount_);
+        MockERC20(address(asset_)).mint(account_, amount_);
 
         // Approve CDEPO to spend the reserve tokens
         vm.prank(account_);
-        underlyingToken.approve(address(convertibleDepository), amount_);
+        asset_.approve(address(depositManager), amount_);
 
         // Mint the CD token to the account
         vm.prank(account_);
-        convertibleDepository.mint(cdToken_, amount_);
+        (, uint256 actualAmount) = yieldDepositFacility.deposit(
+            asset_,
+            depositPeriod_,
+            amount_,
+            false
+        );
+        _previousDepositActualAmount = actualAmount;
         _;
     }
 
@@ -201,19 +258,25 @@ contract YieldDepositFacilityTest is Test {
 
         // Approve the reserve token spending
         vm.prank(account_);
-        reserveToken.approve(address(convertibleDepository), amount_);
+        reserveToken.approve(address(depositManager), amount_);
     }
 
     function _createYieldDepositPosition(
         address account_,
         uint256 amount_
-    ) internal returns (uint256 positionId) {
+    )
+        internal
+        returns (uint256 actualPositionId, uint256 actualReceiptTokenId, uint256 actualAmount)
+    {
         // Mint the CD token
         vm.prank(account_);
-        positionId = yieldDepositFacility.mint(cdToken, amount_, false);
+        (actualPositionId, actualReceiptTokenId, actualAmount) = yieldDepositFacility
+            .createPosition(iReserveToken, PERIOD_MONTHS, amount_, false, false);
 
         _updateReserveBalances();
         _updateCdepoVaultBalance();
+
+        return (actualPositionId, actualReceiptTokenId, actualAmount);
     }
 
     modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
@@ -238,6 +301,7 @@ contract YieldDepositFacilityTest is Test {
         reserveToken = new MockERC20("Reserve Token", "RES", decimals_);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        iVault = IERC4626(address(vault));
 
         _createStack();
         _;
@@ -305,7 +369,7 @@ contract YieldDepositFacilityTest is Test {
         positionIds[0] = positionId_;
 
         vm.prank(account_);
-        yieldDepositFacility.harvest(positionIds);
+        yieldDepositFacility.claimYield(positionIds);
         _;
     }
 
@@ -315,34 +379,40 @@ contract YieldDepositFacilityTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        cdToken.approve(spender_, amount_);
+        depositManager.approve(spender_, _receiptTokenId, amount_);
         _;
     }
 
     modifier givenCommitted(
         address user_,
-        IConvertibleDepositERC20 cdToken_,
+        IERC20 asset_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) {
         // Mint reserve tokens to the user
-        MockERC20 underlyingToken = MockERC20(address(cdToken_.asset()));
-        underlyingToken.mint(user_, amount_);
+        MockERC20(address(asset_)).mint(user_, amount_);
 
         // Approve spending of the reserve tokens
         vm.prank(user_);
-        underlyingToken.approve(address(convertibleDepository), amount_);
+        asset_.approve(address(depositManager), amount_);
 
         // Mint the CD token to the user
         vm.prank(user_);
-        convertibleDepository.mint(cdToken_, amount_);
+        (, uint256 actualAmount) = yieldDepositFacility.deposit(
+            asset_,
+            depositPeriod_,
+            amount_,
+            false
+        );
+        _previousDepositActualAmount = actualAmount;
 
         // Approve spending of the CD token
         vm.prank(user_);
-        cdToken_.approve(address(yieldDepositFacility), amount_);
+        depositManager.approve(address(yieldDepositFacility), _receiptTokenId, actualAmount);
 
         // Commit
         vm.prank(user_);
-        yieldDepositFacility.commitRedeem(cdToken_, amount_);
+        yieldDepositFacility.commitRedeem(asset_, depositPeriod_, actualAmount);
         _;
     }
 
@@ -356,11 +426,33 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
-    // ========== ASSERTIONS ========== //
-
-    function _expectRoleRevert(bytes32 role_) internal {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
+    function _createConvertibleDepositPosition(
+        address account_,
+        uint256 amount_,
+        uint256 conversionPrice_
+    ) internal returns (uint256 positionId) {
+        vm.prank(auctioneer);
+        (positionId, , ) = cdFacility.createPosition(
+            iReserveToken,
+            PERIOD_MONTHS,
+            account_,
+            amount_,
+            conversionPrice_,
+            false,
+            false
+        );
     }
+
+    modifier givenAddressHasConvertibleDepositPosition(
+        address account_,
+        uint256 amount_,
+        uint256 conversionPrice_
+    ) {
+        _createConvertibleDepositPosition(account_, amount_, conversionPrice_);
+        _;
+    }
+
+    // ========== ASSERTIONS ========== //
 
     function _assertHarvestBalances(
         address caller_,
@@ -370,7 +462,7 @@ contract YieldDepositFacilityTest is Test {
         uint256 expectedTreasuryBalance_,
         uint256 expectedVaultSharesReduction_,
         uint256 expectedConversionRate_
-    ) internal {
+    ) internal view {
         // Assert caller received yield minus fee
         assertEq(
             reserveToken.balanceOf(caller_),
@@ -385,11 +477,11 @@ contract YieldDepositFacilityTest is Test {
             "Treasury received incorrect fee"
         );
 
-        // Assert convertibleDepository's vault shares are reduced by the yield amount
+        // Assert DepositManager's vault shares are reduced by the yield amount
         assertEq(
-            cdepoVaultBalanceBefore - vault.balanceOf(address(convertibleDepository)),
+            cdepoVaultBalanceBefore - vault.balanceOf(address(depositManager)),
             expectedVaultSharesReduction_,
-            "ConvertibleDepository's vault shares are not reduced by the yield amount"
+            "DepositManager's vault shares are not reduced by the yield amount"
         );
 
         // Assert conversion rate is updated
@@ -397,6 +489,75 @@ contract YieldDepositFacilityTest is Test {
             yieldDepositFacility.positionLastYieldConversionRate(positionId_),
             expectedConversionRate_,
             "Conversion rate is not updated"
+        );
+    }
+
+    function _assertReserveTokenBalance(uint256 amount_) internal view {
+        assertEq(reserveToken.balanceOf(recipient), amount_, "reserveToken.balanceOf(recipient)");
+    }
+
+    function _assertReceiptTokenBalance(uint256 amount_) internal view {
+        assertEq(
+            depositManager.balanceOf(recipient, _receiptTokenId),
+            amount_,
+            "receiptToken.balanceOf(recipient)"
+        );
+    }
+
+    // ========== REVERT HELPERS ========== //
+
+    function _expectRevertNotEnabled() internal {
+        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+    }
+
+    function _expectRoleRevert(bytes32 role_) internal {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
+    }
+
+    function _expectRevertDepositNotConfigured(IERC20 asset_, uint8 depositPeriod_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
+                address(asset_),
+                depositPeriod_
+            )
+        );
+    }
+
+    function _expectRevertRedemptionVaultZeroAmount() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
+        );
+    }
+
+    function _expectRevertReceiptTokenInsufficientAllowance(
+        address spender_,
+        uint256 currentAllowance_,
+        uint256 amount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientAllowance.selector,
+                spender_,
+                currentAllowance_,
+                amount_,
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+            )
+        );
+    }
+
+    function _expectRevertReceiptTokenInsufficientBalance(
+        uint256 currentBalance_,
+        uint256 amount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientBalance.selector,
+                recipient,
+                currentBalance_,
+                amount_,
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+            )
         );
     }
 }

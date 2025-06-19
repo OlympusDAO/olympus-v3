@@ -3,83 +3,75 @@ pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-
-contract UncommitRedeemYDFTest is YieldDepositFacilityTest {
+contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
     event Uncommitted(
         address indexed user,
         uint16 indexed commitmentId,
-        address indexed cdToken,
+        address indexed depositToken,
+        uint8 depositPeriod,
         uint256 amount
     );
 
     function _assertUncommitment(
         address user_,
         uint16 commitmentId_,
-        IConvertibleDepositERC20 cdToken_,
-        uint256 cdTokenBalanceBefore_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 depositTokenBalanceBefore_,
         uint256 amount_,
         uint256 previousUserCommitmentAmount_
-    ) internal {
+    ) internal view {
         // Get commitment
         IDepositRedemptionVault.UserCommitment memory commitment = yieldDepositFacility
             .getRedeemCommitment(user_, commitmentId_);
 
         // Assert commitment values
-        assertEq(address(commitment.cdToken), address(cdToken_), "CD token mismatch");
+        assertEq(address(commitment.depositToken), address(depositToken_), "depositToken mismatch");
+        assertEq(commitment.depositPeriod, depositPeriod_, "depositPeriod mismatch");
         assertEq(commitment.amount, previousUserCommitmentAmount_ - amount_, "Amount mismatch");
 
-        // Assert CD token balances
+        // Assert receipt token balances
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(depositToken_, depositPeriod_);
         assertEq(
-            cdToken_.balanceOf(user_),
-            cdTokenBalanceBefore_ + amount_,
-            "user: CD token balance mismatch"
+            depositManager.balanceOf(user_, receiptTokenId),
+            depositTokenBalanceBefore_ + amount_,
+            "user: receipt token balance mismatch"
         );
         assertEq(
-            cdToken_.balanceOf(address(yieldDepositFacility)),
+            depositManager.balanceOf(address(yieldDepositFacility), receiptTokenId),
             previousUserCommitmentAmount_ - amount_,
-            "CDFacility: CD token balance mismatch"
+            "CDFacility: receipt token balance mismatch"
         );
     }
 
     // given the contract is disabled
     //  [X] it reverts
-    // given the commitment ID does not exist
-    //  [X] it reverts
-    // given the commitment ID exists for a different user
-    //  [X] it reverts
-    // given the amount to uncommit is 0
-    //  [X] it reverts
-    // given the amount to uncommit is more than the commitment
-    //  [X] it reverts
-    // given there has been a partial uncommit
-    //  [X] it reduces the commitment amount
-    // [X] it transfers the CD tokens from the contract to the caller
-    // [X] it reduces the commitment amount
-    // [X] it emits an Uncommitted event
 
     function test_contractDisabled_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        _expectRevertNotEnabled();
 
         // Call function
         vm.prank(recipient);
         yieldDepositFacility.uncommitRedeem(0, COMMITMENT_AMOUNT);
     }
 
+    // given the commitment ID does not exist
+    //  [X] it reverts
+
     function test_invalidCommitmentId_reverts()
         public
         givenLocallyActive
-        givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT)
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
     {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.CDRedemptionVault_InvalidCommitmentId.selector,
+                IDepositRedemptionVault.RedemptionVault_InvalidCommitmentId.selector,
                 recipient,
                 1
             )
@@ -90,33 +82,18 @@ contract UncommitRedeemYDFTest is YieldDepositFacilityTest {
         yieldDepositFacility.uncommitRedeem(1, COMMITMENT_AMOUNT);
     }
 
-    function test_amountIsZero_reverts()
-        public
-        givenLocallyActive
-        givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT)
-    {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.CDRedemptionVault_ZeroAmount.selector,
-                recipient
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, 0);
-    }
+    // given the commitment ID exists for a different user
+    //  [X] it reverts
 
     function test_commitmentIdExistsForDifferentUser_reverts()
         public
         givenLocallyActive
-        givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT)
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
     {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.CDRedemptionVault_InvalidCommitmentId.selector,
+                IDepositRedemptionVault.RedemptionVault_InvalidCommitmentId.selector,
                 recipientTwo,
                 0
             )
@@ -124,19 +101,42 @@ contract UncommitRedeemYDFTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipientTwo);
-        yieldDepositFacility.uncommitRedeem(0, COMMITMENT_AMOUNT);
+        yieldDepositFacility.uncommitRedeem(0, _previousDepositActualAmount);
     }
+
+    // given the amount to uncommit is 0
+    //  [X] it reverts
+
+    function test_amountIsZero_reverts()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertRedemptionVaultZeroAmount();
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.uncommitRedeem(0, 0);
+    }
+
+    // given the amount to uncommit is more than the commitment
+    //  [X] it reverts
 
     function test_amountGreaterThanCommitment_reverts(
         uint256 amount_
-    ) public givenLocallyActive givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT) {
+    )
+        public
+        givenLocallyActive
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+    {
         // Bound the amount to be greater than the commitment
-        amount_ = bound(amount_, COMMITMENT_AMOUNT + 1, type(uint256).max);
+        amount_ = bound(amount_, _previousDepositActualAmount + 1, type(uint256).max);
 
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.CDRedemptionVault_InvalidAmount.selector,
+                IDepositRedemptionVault.RedemptionVault_InvalidAmount.selector,
                 recipient,
                 0,
                 amount_
@@ -148,54 +148,33 @@ contract UncommitRedeemYDFTest is YieldDepositFacilityTest {
         yieldDepositFacility.uncommitRedeem(0, amount_);
     }
 
-    function test_success(
-        uint256 amount_
-    ) public givenLocallyActive givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT) {
-        // Bound the amount to be between 1 and the commitment amount
-        amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
-
-        // Get CD token balance before
-        uint256 cdTokenBalanceBefore = cdToken.balanceOf(recipient);
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit Uncommitted(recipient, 0, address(cdToken), amount_);
-
-        // Call function
-        vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, amount_);
-
-        // Assertions
-        _assertUncommitment(
-            recipient,
-            0,
-            cdToken,
-            cdTokenBalanceBefore,
-            amount_,
-            COMMITMENT_AMOUNT
-        );
-    }
+    // given there has been a partial uncommit
+    //  [X] it reduces the commitment amount
 
     function test_success_partialUncommitRedeem(
         uint256 firstAmount_,
         uint256 secondAmount_
-    ) public givenLocallyActive givenCommitted(recipient, cdToken, COMMITMENT_AMOUNT) {
+    )
+        public
+        givenLocallyActive
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+    {
         // Bound the first amount to be between 1 and half the commitment amount
-        firstAmount_ = bound(firstAmount_, 1, COMMITMENT_AMOUNT / 2);
+        firstAmount_ = bound(firstAmount_, 1, _previousDepositActualAmount / 2);
 
         // Bound the second amount to be between 1 and the remaining commitment amount
-        secondAmount_ = bound(secondAmount_, 1, COMMITMENT_AMOUNT - firstAmount_);
+        secondAmount_ = bound(secondAmount_, 1, _previousDepositActualAmount - firstAmount_);
 
         // First uncommit
         vm.prank(recipient);
         yieldDepositFacility.uncommitRedeem(0, firstAmount_);
 
         // Get CD token balance before second uncommit
-        uint256 cdTokenBalanceBefore = cdToken.balanceOf(recipient);
+        uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, _receiptTokenId);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Uncommitted(recipient, 0, address(cdToken), secondAmount_);
+        emit Uncommitted(recipient, 0, address(iReserveToken), PERIOD_MONTHS, secondAmount_);
 
         // Call function again
         vm.prank(recipient);
@@ -205,10 +184,48 @@ contract UncommitRedeemYDFTest is YieldDepositFacilityTest {
         _assertUncommitment(
             recipient,
             0,
-            cdToken,
-            cdTokenBalanceBefore,
+            iReserveToken,
+            PERIOD_MONTHS,
+            receiptTokenBalanceBefore,
             secondAmount_,
-            COMMITMENT_AMOUNT - firstAmount_
+            _previousDepositActualAmount - firstAmount_
+        );
+    }
+
+    // [X] it transfers the CD tokens from the contract to the caller
+    // [X] it reduces the commitment amount
+    // [X] it emits an Uncommitted event
+
+    function test_success(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+    {
+        // Bound the amount to be between 1 and the commitment amount
+        amount_ = bound(amount_, 1, _previousDepositActualAmount);
+
+        // Get CD token balance before
+        uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, _receiptTokenId);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Uncommitted(recipient, 0, address(iReserveToken), PERIOD_MONTHS, amount_);
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.uncommitRedeem(0, amount_);
+
+        // Assertions
+        _assertUncommitment(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            receiptTokenBalanceBefore,
+            amount_,
+            _previousDepositActualAmount
         );
     }
 }

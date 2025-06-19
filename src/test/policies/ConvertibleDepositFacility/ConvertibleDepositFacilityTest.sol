@@ -277,7 +277,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_
     ) internal returns (uint256 positionId) {
         vm.prank(account_);
-        positionId = yieldDepositFacility.createPosition(
+        (positionId, , ) = yieldDepositFacility.createPosition(
             iReserveToken,
             PERIOD_MONTHS,
             amount_,

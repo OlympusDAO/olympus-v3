@@ -45,6 +45,18 @@ contract YieldDepositFacility is
     /// @notice The interval between snapshots in seconds
     uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
 
+    // ========== STRUCTS ========== //
+
+    struct CreatePositionParams {
+        IERC20 asset;
+        uint8 periodMonths;
+        address depositor;
+        uint256 amount;
+        uint256 conversionPrice;
+        bool wrapPosition;
+        bool wrapReceipt;
+    }
+
     // ========== SETUP ========== //
 
     constructor(
@@ -112,21 +124,38 @@ contract YieldDepositFacility is
         nonReentrant
         onlyEnabled
         onlyYieldBearingAsset(asset_, periodMonths_)
-        returns (uint256 positionId)
+        returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount)
     {
+        // Load parameters into struct to avoid stack too deep
+        CreatePositionParams memory params = CreatePositionParams({
+            asset: asset_,
+            periodMonths: periodMonths_,
+            depositor: msg.sender,
+            amount: amount_,
+            conversionPrice: type(uint256).max,
+            wrapPosition: wrapPosition_,
+            wrapReceipt: wrapReceipt_
+        });
+
         // Deposit the asset into the deposit manager (and mint the receipt token)
         // This will validate that the asset is supported, and mint the receipt token
-        DEPOSIT_MANAGER.deposit(asset_, periodMonths_, msg.sender, amount_, wrapReceipt_);
+        (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
+            params.asset,
+            params.periodMonths,
+            params.depositor,
+            params.amount,
+            params.wrapReceipt
+        );
 
         // Create a new term record in the CDPOS module
         positionId = CDPOS.mint(
-            msg.sender, // owner
-            address(asset_), // asset
-            periodMonths_, // period months
-            amount_, // amount
-            type(uint256).max, // conversion price of max to indicate no conversion price
-            uint48(block.timestamp + uint48(periodMonths_) * 30 days), // expiry
-            wrapPosition_ // wrap
+            params.depositor, // owner
+            address(params.asset), // asset
+            params.periodMonths, // period months
+            params.amount, // amount
+            params.conversionPrice, // conversion price of max to indicate no conversion price
+            uint48(block.timestamp + uint48(params.periodMonths) * 30 days), // expiry
+            params.wrapPosition // wrap
         );
 
         // Set the initial yield conversion rate
@@ -135,7 +164,15 @@ contract YieldDepositFacility is
         );
 
         // Emit an event
-        emit CreatedDeposit(address(asset_), msg.sender, positionId, periodMonths_, amount_);
+        emit CreatedDeposit(
+            address(params.asset),
+            params.depositor,
+            positionId,
+            params.periodMonths,
+            params.amount
+        );
+
+        return (positionId, receiptTokenId, actualAmount);
     }
 
     /// @inheritdoc IYieldDepositFacility

@@ -48,15 +48,15 @@ interface IYieldDepositFacility {
     /// @param  wrapPosition_       Whether the position should be wrapped
     /// @param  wrapReceipt_        Whether the receipt token should be wrapped
     /// @return positionId          The ID of the new position
+    /// @return receiptTokenId      The ID of the receipt token
+    /// @return actualAmount        The quantity of receipt tokens minted to the depositor
     function createPosition(
         IERC20 asset_,
         uint8 periodMonths_,
         uint256 amount_,
         bool wrapPosition_,
         bool wrapReceipt_
-    ) external returns (uint256 positionId);
-
-    // TODO add actual amount, receiptTokenId
+    ) external returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token. This function can be used to mint additional receipt tokens on a 1:1 basis, without creating a new position.
     ///
