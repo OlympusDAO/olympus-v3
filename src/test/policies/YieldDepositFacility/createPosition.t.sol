@@ -2,6 +2,9 @@
 pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
     event CreatedDeposit(
@@ -23,6 +26,30 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         vm.prank(recipient);
         yieldDepositFacility.createPosition(
             iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT,
+            false,
+            false
+        );
+    }
+
+    // given the asset is not yield-bearing
+    //  [X] it reverts
+
+    function test_givenAssetIsNotYieldBearing_reverts() public givenLocallyActive {
+        // Create a new asset
+        MockERC20 newAsset = new MockERC20("New Asset", "NEW", 18);
+        vm.prank(admin);
+        depositManager.configureAssetVault(IERC20(address(newAsset)), IERC4626(address(0)));
+        IERC20 iNewAsset = IERC20(address(newAsset));
+
+        // Expect revert
+        _expectRevertInvalidToken(iNewAsset, PERIOD_MONTHS);
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.createPosition(
+            iNewAsset,
             PERIOD_MONTHS,
             RESERVE_TOKEN_AMOUNT,
             false,
@@ -86,7 +113,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         _assertReserveTokenBalance(0);
 
         // Assert that the CDEPO token was minted to the recipient
-        _assertReceiptTokenBalance(actualAmount);
+        _assertReceiptTokenBalance(recipient, actualAmount, false);
 
         // Assert that the recipient has a CDPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
@@ -157,7 +184,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         _assertReserveTokenBalance(0);
 
         // Assert that the receipt token token was minted to the recipient
-        _assertReceiptTokenBalance(actualAmount);
+        _assertReceiptTokenBalance(recipient, actualAmount, false);
 
         // Assert that the recipient has a CDPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);

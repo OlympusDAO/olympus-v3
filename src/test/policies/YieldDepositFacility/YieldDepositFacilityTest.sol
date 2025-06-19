@@ -22,6 +22,8 @@ import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVa
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 
 // solhint-disable max-states-count
 contract YieldDepositFacilityTest is Test {
@@ -496,12 +498,40 @@ contract YieldDepositFacilityTest is Test {
         assertEq(reserveToken.balanceOf(recipient), amount_, "reserveToken.balanceOf(recipient)");
     }
 
-    function _assertReceiptTokenBalance(uint256 amount_) internal view {
+    function _assertReceiptTokenBalance(
+        address recipient_,
+        uint256 depositAmount_,
+        bool isWrapped_
+    ) internal view {
         assertEq(
-            depositManager.balanceOf(recipient, _receiptTokenId),
-            amount_,
+            depositManager.balanceOf(recipient_, _receiptTokenId),
+            isWrapped_ ? 0 : depositAmount_,
             "receiptToken.balanceOf(recipient)"
         );
+
+        IERC20 wrappedReceiptToken = IERC20(depositManager.getWrappedToken(_receiptTokenId));
+
+        if (!isWrapped_) {
+            // If the wrapped receipt token is set, make sure the balance is 0
+            if (address(wrappedReceiptToken) != address(0)) {
+                assertEq(
+                    wrappedReceiptToken.balanceOf(recipient_),
+                    0,
+                    "wrappedReceiptToken.balanceOf(recipient)"
+                );
+            }
+        } else {
+            if (address(wrappedReceiptToken) == address(0)) {
+                // solhint-disable-next-line gas-custom-errors
+                revert("wrappedReceiptToken is not set");
+            }
+
+            assertEq(
+                wrappedReceiptToken.balanceOf(recipient_),
+                isWrapped_ ? depositAmount_ : 0,
+                "wrappedReceiptToken.balanceOf(recipient)"
+            );
+        }
     }
 
     // ========== REVERT HELPERS ========== //
@@ -514,7 +544,10 @@ contract YieldDepositFacilityTest is Test {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
-    function _expectRevertDepositNotConfigured(IERC20 asset_, uint8 depositPeriod_) internal {
+    function _expectRevertRedemptionVaultInvalidToken(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
@@ -557,6 +590,29 @@ contract YieldDepositFacilityTest is Test {
                 currentBalance_,
                 amount_,
                 depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+            )
+        );
+    }
+
+    function _expectRevertDepositManagerInvalidConfiguration(
+        IERC20 asset_,
+        uint8 periodMonths_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_InvalidConfiguration.selector,
+                address(asset_),
+                periodMonths_
+            )
+        );
+    }
+
+    function _expectRevertInvalidToken(IERC20 asset_, uint8 periodMonths_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IYieldDepositFacility.YDF_InvalidToken.selector,
+                address(asset_),
+                periodMonths_
             )
         );
     }

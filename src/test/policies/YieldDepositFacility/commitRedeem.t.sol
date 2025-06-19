@@ -78,7 +78,7 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
 
     function test_cdTokenNotSupported_reverts() public givenLocallyActive {
         // Expect revert
-        _expectRevertDepositNotConfigured(iReserveToken, PERIOD_MONTHS + 1);
+        _expectRevertRedemptionVaultInvalidToken(iReserveToken, PERIOD_MONTHS + 1);
 
         // Call function
         vm.prank(recipient);
