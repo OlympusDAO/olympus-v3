@@ -138,6 +138,32 @@ contract YieldDepositFacility is
         emit CreatedDeposit(address(asset_), msg.sender, positionId, periodMonths_, amount_);
     }
 
+    /// @inheritdoc IYieldDepositFacility
+    function deposit(
+        IERC20 asset_,
+        uint8 periodMonths_,
+        uint256 amount_,
+        bool wrapReceipt_
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyYieldBearingAsset(asset_, periodMonths_)
+        returns (uint256 receiptTokenId, uint256 actualAmount)
+    {
+        // Deposit the asset into the deposit manager (and mint the receipt token)
+        // This will validate that the asset is supported, and mint the receipt token
+        (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
+            asset_,
+            periodMonths_,
+            msg.sender,
+            amount_,
+            wrapReceipt_
+        );
+
+        return (receiptTokenId, actualAmount);
+    }
+
     // ========== YIELD FUNCTIONS ========== //
 
     function _previewClaimYield(

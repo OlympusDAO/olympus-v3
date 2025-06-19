@@ -56,6 +56,23 @@ interface IYieldDepositFacility {
         bool wrapReceipt_
     ) external returns (uint256 positionId);
 
+    // TODO add actual amount, receiptTokenId
+
+    /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token. This function can be used to mint additional receipt tokens on a 1:1 basis, without creating a new position.
+    ///
+    /// @param  asset_              The address of the asset
+    /// @param  periodMonths_       The period of the deposit
+    /// @param  amount_             The amount of asset to deposit
+    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
+    /// @return receiptTokenId      The ID of the receipt token
+    /// @return actualAmount        The quantity of receipt tokens minted to the depositor
+    function deposit(
+        IERC20 asset_,
+        uint8 periodMonths_,
+        uint256 amount_,
+        bool wrapReceipt_
+    ) external returns (uint256 receiptTokenId, uint256 actualAmount);
+
     // ========== YIELD ========== //
 
     /// @notice Preview the amount of yield that would be claimed for the given positions
