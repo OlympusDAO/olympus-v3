@@ -229,6 +229,7 @@ contract YieldDepositFacility is
         if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
         // Validate that the asset has a yield bearing vault
+        // This is validated in the createPosition function, but is checked to be safe
         IERC4626 assetVault = DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault;
         if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
 
@@ -260,11 +261,18 @@ contract YieldDepositFacility is
             endRate = expiryRate;
         }
 
+        // Calculate the number of shares for the position
+        uint256 lastShares = FullMath.mulDiv(
+            position.remainingDeposit, // assets
+            10 ** assetVault.decimals(), // decimals
+            lastSnapshotRate // assets per share
+        );
+
         // Calculate the yield
         uint256 yield = FullMath.mulDiv(
-            endRate - lastSnapshotRate,
-            position.remainingDeposit,
-            10 ** assetVault.decimals()
+            endRate - lastSnapshotRate, // assets per share
+            lastShares, // shares
+            10 ** assetVault.decimals() // decimals
         );
 
         // Calculate fees
@@ -372,11 +380,14 @@ contract YieldDepositFacility is
             }
         }
 
-        // Withdraw the yield from the deposit manager to the caller
+        // Withdraw the yield from the deposit manager to this contract
         // This will validate that the deposits are still solvent
-        DEPOSIT_MANAGER.claimYield(asset, msg.sender, yieldMinusFee);
-        // Claim the yield fee
-        DEPOSIT_MANAGER.claimYield(asset, address(TRSRY), yieldFee);
+        // This is also done as one call, to avoid off-by-one rounding errors with ERC4626
+        DEPOSIT_MANAGER.claimYield(asset, address(this), yieldMinusFee + yieldFee);
+        // Transfer the yield (minus fee) to the caller
+        IERC20(asset).transfer(msg.sender, yieldMinusFee);
+        // Transfer the yield fee to the treasury
+        IERC20(asset).transfer(address(TRSRY), yieldFee);
 
         // Emit event
         emit YieldClaimed(address(asset), msg.sender, yieldMinusFee);
