@@ -7,6 +7,7 @@ import {Base64} from "@base64-1.1.0/base64.sol";
 import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 function substring(
     string memory str,
@@ -54,7 +55,9 @@ contract TokenURIDEPOSTest is DEPOSTest {
     // [X] the image value is set
 
     function test_positionDoesNotExist() public {
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 1)
+        );
 
         DEPOS.tokenURI(1);
     }

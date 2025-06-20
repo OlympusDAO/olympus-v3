@@ -11,6 +11,7 @@ import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerato
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 abstract contract DEPOSTest is Test, IERC721Receiver {
     using ModuleTestFixtureGenerator for OlympusDepositPositionManager;

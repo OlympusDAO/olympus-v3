@@ -5,6 +5,7 @@ import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Module} from "src/Kernel.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract CreateDEPOSTest is DEPOSTest {
     event PositionCreated(
@@ -69,7 +70,9 @@ contract CreateDEPOSTest is DEPOSTest {
 
     function test_ownerIsZeroAddress_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "owner"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidParams.selector, "owner")
+        );
 
         // Call function
         _createPosition(address(0), REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
@@ -79,7 +82,7 @@ contract CreateDEPOSTest is DEPOSTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                DEPOSv1.DEPOS_InvalidParams.selector,
+                IDepositPositionManager.DEPOS_InvalidParams.selector,
                 "convertible deposit token"
             )
         );
@@ -99,7 +102,9 @@ contract CreateDEPOSTest is DEPOSTest {
 
     function test_remainingDepositIsZero_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "deposit"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidParams.selector, "deposit")
+        );
 
         // Call function
         _createPosition(address(this), 0, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
@@ -108,7 +113,10 @@ contract CreateDEPOSTest is DEPOSTest {
     function test_conversionPriceIsZero_reverts() public {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "conversion price")
+            abi.encodeWithSelector(
+                IDepositPositionManager.DEPOS_InvalidParams.selector,
+                "conversion price"
+            )
         );
 
         // Call function
@@ -120,7 +128,10 @@ contract CreateDEPOSTest is DEPOSTest {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "conversion expiry")
+            abi.encodeWithSelector(
+                IDepositPositionManager.DEPOS_InvalidParams.selector,
+                "conversion expiry"
+            )
         );
 
         // Call function
@@ -240,7 +251,7 @@ contract CreateDEPOSTest is DEPOSTest {
         }
 
         // Assert that the position count is correct
-        assertEq(DEPOS.positionCount(), 10, "positionCount");
+        assertEq(DEPOS.getPositionCount(), 10, "positionCount");
 
         // Assert that the owner has sequential position IDs
         for (uint256 i = 0; i < 10; i++) {
@@ -277,7 +288,7 @@ contract CreateDEPOSTest is DEPOSTest {
         }
 
         // Assert that the position count is correct
-        assertEq(DEPOS.positionCount(), 10, "positionCount");
+        assertEq(DEPOS.getPositionCount(), 10, "positionCount");
 
         // Assert that the owner1's positions are correct
         for (uint256 i = 0; i < 5; i++) {

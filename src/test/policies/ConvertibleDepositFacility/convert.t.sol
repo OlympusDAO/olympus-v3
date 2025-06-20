@@ -6,6 +6,7 @@ import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleD
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {stdError} from "forge-std/StdError.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest {
     event ConvertedDeposit(
@@ -88,7 +89,9 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         }
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 2));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 2)
+        );
 
         // Call function
         vm.prank(recipient);

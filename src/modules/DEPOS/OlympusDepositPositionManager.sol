@@ -12,6 +12,7 @@ import {DecimalString} from "src/libraries/DecimalString.sol";
 // Bophades
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 /// @title  Olympus Deposit Position Manager
 /// @notice Implementation of the {DEPOSv1} interface
@@ -28,7 +29,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     constructor(
         address kernel_
-    ) Module(Kernel(kernel_)) ERC721("Olympus Convertible Deposit Position", "OCDP") {}
+    ) Module(Kernel(kernel_)) ERC721("Olympus Deposit Position", "ODP") {}
 
     // ========== MODULE FUNCTIONS ========== //
 
@@ -45,7 +46,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     // ========== WRAPPING ========== //
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///             - The caller is not the owner of the position
@@ -70,7 +71,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         emit PositionWrapped(positionId_);
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///             - The caller is not the owner of the position
@@ -107,7 +108,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         bool wrap_
     ) internal returns (uint256 positionId) {
         // Create the position record
-        positionId = positionCount++;
+        positionId = _positionCount++;
         _positions[positionId] = Position({
             owner: owner_,
             asset: asset_,
@@ -139,7 +140,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         return positionId;
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The owner is the zero address
@@ -188,7 +189,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
             );
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The position ID is invalid
@@ -206,7 +207,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         emit PositionUpdated(positionId_, amount_);
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The caller is not the owner of the position
     ///             - The amount is 0
@@ -463,6 +464,11 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     // ========== TERM INFORMATION ========== //
 
+    /// @inheritdoc IDepositPositionManager
+    function getPositionCount() external view virtual override returns (uint256) {
+        return _positionCount;
+    }
+
     function _getPosition(uint256 positionId_) internal view returns (Position memory) {
         Position memory position = _positions[positionId_];
         // `mint()` blocks a 0 conversion price, so this should never happen on a valid position
@@ -471,14 +477,14 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         return position;
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     function getUserPositionIds(
         address user_
-    ) external view virtual override returns (uint256[] memory positionIds) {
+    ) external view virtual override returns (uint256[] memory) {
         return _userPositions[user_];
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     function getPosition(
@@ -487,15 +493,13 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         return _getPosition(positionId_);
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///
     /// @return     isExpired_  Returns true if the conversion expiry timestamp is now or in the past
-    function isExpired(
-        uint256 positionId_
-    ) external view virtual override returns (bool isExpired_) {
-        isExpired_ = _getPosition(positionId_).expiry <= block.timestamp;
+    function isExpired(uint256 positionId_) external view virtual override returns (bool) {
+        return _getPosition(positionId_).expiry <= block.timestamp;
     }
 
     function _isConvertible(Position memory position_) internal pure returns (bool) {
@@ -504,15 +508,13 @@ contract OlympusDepositPositionManager is DEPOSv1 {
             position_.expiry != NON_CONVERSION_EXPIRY;
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///
     /// @return     isConvertible_  Returns true if the conversion price is not the maximum value
-    function isConvertible(
-        uint256 positionId_
-    ) external view virtual override returns (bool isConvertible_) {
-        isConvertible_ = _isConvertible(_getPosition(positionId_));
+    function isConvertible(uint256 positionId_) external view virtual override returns (bool) {
+        return _isConvertible(_getPosition(positionId_));
     }
 
     function _previewConvert(
@@ -525,7 +527,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         return (amount_ * 1e9) / conversionPrice_;
     }
 
-    /// @inheritdoc DEPOSv1
+    /// @inheritdoc IDepositPositionManager
     function previewConvert(
         uint256 positionId_,
         uint256 amount_

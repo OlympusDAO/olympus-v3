@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract TransferFromDEPOSTest is DEPOSTest {
     // when the position does not exist
@@ -20,7 +21,9 @@ contract TransferFromDEPOSTest is DEPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 0)
+        );
 
         // Call function
         DEPOS.transferFrom(address(this), address(1), 0);
@@ -73,7 +76,9 @@ contract TransferFromDEPOSTest is DEPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotWrapped.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotWrapped.selector, 0)
+        );
 
         // Call function
         vm.prank(address(this));

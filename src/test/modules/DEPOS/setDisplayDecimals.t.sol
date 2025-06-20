@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {Module} from "src/Kernel.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract SetDisplayDecimalsDEPOSTest is DEPOSTest {
     // when the caller is not a permissioned address

@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
@@ -31,7 +32,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     function test_whenPositionDoesNotExist_reverts() public givenLocallyActive {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, POSITION_ID)
+            abi.encodeWithSelector(
+                IDepositPositionManager.DEPOS_InvalidPositionId.selector,
+                POSITION_ID
+            )
         );
 
         // Attempt to harvest non-existent position

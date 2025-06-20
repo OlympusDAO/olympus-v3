@@ -5,6 +5,7 @@ import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Module} from "src/Kernel.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract UpdateDEPOSTest is DEPOSTest {
     event PositionUpdated(uint256 indexed positionId, uint256 remainingDeposit);
@@ -22,7 +23,9 @@ contract UpdateDEPOSTest is DEPOSTest {
 
     function test_invalidPosition_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 0)
+        );
 
         // Call function
         _updatePosition(0, 1e18);

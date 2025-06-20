@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract UnwrapDEPOSTest is DEPOSTest {
     event PositionUnwrapped(uint256 indexed positionId);
@@ -29,7 +30,9 @@ contract UnwrapDEPOSTest is DEPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 0)
+        );
 
         // Call function
         _unwrapPosition(godmode, 0);
@@ -46,7 +49,7 @@ contract UnwrapDEPOSTest is DEPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
         _unwrapPosition(address(0x1), 0);
@@ -63,7 +66,7 @@ contract UnwrapDEPOSTest is DEPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
         _unwrapPosition(address(0x1), 0);
@@ -80,7 +83,9 @@ contract UnwrapDEPOSTest is DEPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotWrapped.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotWrapped.selector, 0)
+        );
 
         // Call function
         _unwrapPosition(address(this), 0);

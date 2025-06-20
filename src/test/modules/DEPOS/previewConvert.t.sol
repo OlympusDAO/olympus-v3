@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract PreviewConvertDEPOSTest is DEPOSTest {
     // when the position does not exist
@@ -30,7 +31,9 @@ contract PreviewConvertDEPOSTest is DEPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 0)
+        );
 
         // Call function
         DEPOS.previewConvert(0, 0);
@@ -75,7 +78,9 @@ contract PreviewConvertDEPOSTest is DEPOSTest {
         uint256 amount = bound(amount_, REMAINING_DEPOSIT + 1, type(uint256).max);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "amount"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidParams.selector, "amount")
+        );
 
         // Call function
         DEPOS.previewConvert(0, amount);
@@ -92,7 +97,9 @@ contract PreviewConvertDEPOSTest is DEPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotConvertible.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotConvertible.selector, 0)
+        );
 
         // Call function
         DEPOS.previewConvert(0, REMAINING_DEPOSIT);
