@@ -6,20 +6,18 @@ pragma solidity >=0.8.15;
 interface IPositionTokenRenderer {
     // ========== ERRORS ========== //
 
-    error PositionTokenRenderer_ZeroAddress();
+    error PositionTokenRenderer_InvalidAddress();
 
     // ========== FUNCTIONS ========== //
-
-    /// @notice Get the address of the position manager contract
-    /// @dev    This function should return the address of the position manager contract
-    ///
-    /// @return positionManager_    The address of the position manager contract
-    function getPositionManager() external view returns (address positionManager_);
 
     /// @notice Renders the token URI for a given position
     /// @dev    This function should return a valid JSON metadata string that follows the ERC721 metadata standard
     ///
+    /// @param  positionManager_ The address of the position manager contract
     /// @param  positionId_      The ID of the position to render
     /// @return uri              The token URI as a string
-    function tokenURI(uint256 positionId_) external view returns (string memory uri);
+    function tokenURI(
+        address positionManager_,
+        uint256 positionId_
+    ) external view returns (string memory uri);
 }

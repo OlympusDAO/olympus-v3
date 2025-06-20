@@ -84,7 +84,10 @@ contract ConvertibleDepositFacilityTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepositPositions = new OlympusDepositPositionManager(address(kernel));
+        convertibleDepositPositions = new OlympusDepositPositionManager(
+            address(kernel),
+            address(0)
+        );
         depositManager = new DepositManager(address(kernel));
         facility = new CDFacility(address(kernel), address(depositManager));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));

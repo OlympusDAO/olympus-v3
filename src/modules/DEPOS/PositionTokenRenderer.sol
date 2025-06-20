@@ -11,6 +11,7 @@ import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 import {Base64} from "@openzeppelin-5.3.0/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
+import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // solhint-disable quotes
 
@@ -24,42 +25,32 @@ contract PositionTokenRenderer is IPositionTokenRenderer {
     /// @notice The number of decimal places to display when rendering values as decimal strings
     uint8 public constant DISPLAY_DECIMALS = 2;
 
-    /// @notice The address of the position manager contract
-    IDepositPositionManager internal immutable _POSITION_MANAGER;
-
-    /// @notice Constructor
-    ///
-    /// @param positionManager_ The address of the position manager contract
-    constructor(address positionManager_) {
-        // Validate that the position manager contract is not zero address
-        if (positionManager_ == address(0)) {
-            revert PositionTokenRenderer_ZeroAddress();
-        }
-
-        // Set the position manager contract
-        _POSITION_MANAGER = IDepositPositionManager(positionManager_);
-    }
-
     // ========== FUNCTIONS ========== //
 
     /// @inheritdoc IPositionTokenRenderer
-    function getPositionManager() external view returns (address) {
-        return address(_POSITION_MANAGER);
-    }
+    function tokenURI(
+        address positionManager_,
+        uint256 positionId_
+    ) external view override returns (string memory) {
+        // Validate that the position manager supports the IDepositPositionManager interface
+        if (
+            !IERC165(positionManager_).supportsInterface(type(IDepositPositionManager).interfaceId)
+        ) {
+            revert PositionTokenRenderer_InvalidAddress();
+        }
 
-    /// @inheritdoc IPositionTokenRenderer
-    function tokenURI(uint256 positionId_) external view override returns (string memory) {
         // Get the position data from the position manager
-        IDepositPositionManager.Position memory position = _POSITION_MANAGER.getPosition(
-            positionId_
-        );
+        IDepositPositionManager.Position memory position = IDepositPositionManager(positionManager_)
+            .getPosition(positionId_);
 
         // Get the decimals of the deposit token
         uint8 depositDecimals = ERC20(position.asset).decimals();
         string memory cdSymbol = ERC20(position.asset).symbol();
 
         // Check if the position is convertible
-        bool positionIsConvertible = _POSITION_MANAGER.isConvertible(positionId_);
+        bool positionIsConvertible = IDepositPositionManager(positionManager_).isConvertible(
+            positionId_
+        );
 
         // Generate the JSON metadata
         string memory jsonContent = string.concat(

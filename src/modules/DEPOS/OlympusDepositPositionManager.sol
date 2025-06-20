@@ -6,11 +6,6 @@ import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Libraries
 import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
-import {Base64} from "@openzeppelin-5.3.0/utils/Base64.sol";
-import {Timestamp} from "src/libraries/Timestamp.sol";
-import {DecimalString} from "src/libraries/DecimalString.sol";
 
 // Bophades
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
@@ -31,8 +26,11 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     // ========== CONSTRUCTOR ========== //
 
     constructor(
-        address kernel_
-    ) Module(Kernel(kernel_)) ERC721("Olympus Deposit Position", "ODP") {}
+        address kernel_,
+        address tokenRenderer_
+    ) Module(Kernel(kernel_)) ERC721("Olympus Deposit Position", "ODP") {
+        _setTokenRenderer(tokenRenderer_);
+    }
 
     // ========== MODULE FUNCTIONS ========== //
 
@@ -279,7 +277,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     function tokenURI(uint256 id_) public view virtual override returns (string memory) {
         if (_tokenRenderer == address(0)) return "";
 
-        return IPositionTokenRenderer(_tokenRenderer).tokenURI(id_);
+        return IPositionTokenRenderer(_tokenRenderer).tokenURI(address(this), id_);
     }
 
     /// @inheritdoc ERC721
@@ -408,11 +406,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     // ========== TOKEN URI RENDERER ========== //
 
-    /// @inheritdoc IDepositPositionManager
-    /// @dev        This function reverts if:
-    ///             - The caller is not permissioned
-    ///             - The renderer contract does not implement the required interface
-    function setTokenRenderer(address renderer_) external virtual override permissioned {
+    function _setTokenRenderer(address renderer_) internal {
         // If setting to zero address, just clear the renderer
         if (renderer_ == address(0)) {
             _tokenRenderer = address(0);
@@ -431,8 +425,24 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     }
 
     /// @inheritdoc IDepositPositionManager
+    /// @dev        This function reverts if:
+    ///             - The caller is not permissioned
+    ///             - The renderer contract does not implement the required interface
+    function setTokenRenderer(address renderer_) external virtual override permissioned {
+        _setTokenRenderer(renderer_);
+    }
+
+    /// @inheritdoc IDepositPositionManager
     function getTokenRenderer() external view virtual override returns (address) {
         return _tokenRenderer;
+    }
+
+    // ========== ERC165 SUPPORT ========== //
+
+    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+        return
+            interfaceId_ == type(IDepositPositionManager).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 
     // ========== MODIFIERS ========== //

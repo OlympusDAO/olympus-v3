@@ -1600,7 +1600,7 @@ contract OlympusDeploy is Script {
 
     //     // Deploy ConvertibleDepositPositionManager
     //     vm.broadcast();
-    //     DEPOS = new OlympusDepositPositionManager(address(kernel));
+    //     DEPOS = new OlympusDepositPositionManager(address(kernel), address(0));
     //     console2.log("ConvertibleDepositPositionManager deployed at:", address(DEPOS));
 
     //     return address(DEPOS);

@@ -114,7 +114,10 @@ contract YieldDepositFacilityTest is Test {
     function _createStack() internal {
         kernel = new Kernel();
         roles = new OlympusRoles(kernel);
-        convertibleDepositPositions = new OlympusDepositPositionManager(address(kernel));
+        convertibleDepositPositions = new OlympusDepositPositionManager(
+            address(kernel),
+            address(0)
+        );
         treasury = new OlympusTreasury(kernel);
         depositManager = new DepositManager(address(kernel));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));

@@ -37,8 +37,8 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
         vm.warp(INITIAL_BLOCK);
 
         kernel = new Kernel();
-        DEPOS = new OlympusDepositPositionManager(address(kernel));
-        tokenURIRenderer = new PositionTokenRenderer(address(DEPOS));
+        tokenURIRenderer = new PositionTokenRenderer();
+        DEPOS = new OlympusDepositPositionManager(address(kernel), address(tokenURIRenderer));
         mockERC721Receiver = new ERC721ReceiverMock(
             IERC721Receiver.onERC721Received.selector,
             ERC721ReceiverMock.RevertType.None
