@@ -60,6 +60,9 @@ interface IDepositPositionManager {
     /// @notice Emitted when a position is unwrapped
     event PositionUnwrapped(uint256 indexed positionId);
 
+    /// @notice Emitted when the token renderer is set
+    event TokenRendererSet(address indexed renderer);
+
     // ========== ERRORS ========== //
 
     /// @notice Error thrown when the caller is not the owner of the position
@@ -79,6 +82,9 @@ interface IDepositPositionManager {
 
     /// @notice Error thrown when a position does not support conversion
     error DEPOS_NotConvertible(uint256 positionId_);
+
+    /// @notice Error thrown when the renderer contract does not implement the required interface
+    error DEPOS_InvalidRenderer(address renderer_);
 
     // ========== WRAPPING ========== //
 
@@ -210,4 +216,21 @@ interface IDepositPositionManager {
         uint256 positionId_,
         uint256 amount_
     ) external view returns (uint256 _ohmOut);
+
+    // ========== TOKEN URI RENDERER ========== //
+
+    /// @notice Set the token renderer contract
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the renderer contract implements the required interface
+    ///         - Set the renderer contract
+    ///         - Emit an event
+    ///
+    /// @param  renderer_ The address of the renderer contract
+    function setTokenRenderer(address renderer_) external;
+
+    /// @notice Get the current token renderer contract
+    ///
+    /// @return _renderer The address of the current renderer contract (or zero address if not set)
+    function getTokenRenderer() external view returns (address _renderer);
 }

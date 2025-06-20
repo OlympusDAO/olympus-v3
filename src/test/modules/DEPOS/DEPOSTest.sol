@@ -11,7 +11,7 @@ import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerato
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
-import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 
 abstract contract DEPOSTest is Test, IERC721Receiver {
     using ModuleTestFixtureGenerator for OlympusDepositPositionManager;
@@ -25,6 +25,7 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
 
     Kernel public kernel;
     OlympusDepositPositionManager public DEPOS;
+    PositionTokenRenderer public tokenURIRenderer;
     ERC721ReceiverMock public mockERC721Receiver;
     address public godmode;
     address public convertibleDepositToken;
@@ -37,6 +38,7 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
 
         kernel = new Kernel();
         DEPOS = new OlympusDepositPositionManager(address(kernel));
+        tokenURIRenderer = new PositionTokenRenderer(address(DEPOS));
         mockERC721Receiver = new ERC721ReceiverMock(
             IERC721Receiver.onERC721Received.selector,
             ERC721ReceiverMock.RevertType.None
@@ -56,6 +58,10 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(DEPOS));
         kernel.executeAction(Actions.ActivatePolicy, godmode);
+
+        // Set the token renderer
+        vm.prank(godmode);
+        DEPOS.setTokenRenderer(address(tokenURIRenderer));
     }
 
     function onERC721Received(
