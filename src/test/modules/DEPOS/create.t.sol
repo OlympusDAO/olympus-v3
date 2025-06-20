@@ -11,7 +11,8 @@ contract CreateDEPOSTest is DEPOSTest {
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
-        address indexed convertibleDepositToken,
+        address indexed asset,
+        uint8 periodMonths,
         uint256 remainingDeposit,
         uint256 conversionPrice,
         uint48 expiry,
@@ -20,36 +21,6 @@ contract CreateDEPOSTest is DEPOSTest {
 
     // when the caller is not a permissioned address
     //  [X] it reverts
-    // when the owner is the zero address
-    //  [X] it reverts
-    // when the convertible deposit token is the zero address
-    //  [X] it reverts
-    // when the remaining deposit is 0
-    //  [X] it reverts
-    // when the conversion price is 0
-    //  [X] it reverts
-    // when the expiry is in the past or now
-    //  [X] it reverts
-    // when multiple positions are created
-    //  [X] the position IDs are sequential
-    //  [X] the position IDs are unique
-    //  [X] the owner's list of positions is updated
-    // when the expiry is in the future
-    //  [X] it sets the expiry
-    // when the wrap flag is true
-    //  when the receiver cannot receive ERC721 tokens
-    //   [X] it reverts
-    //  [X] it mints the ERC721 token
-    //  [X] it marks the position as wrapped
-    //  [X] the position is listed as owned by the owner
-    //  [X] the ERC721 position is listed as owned by the owner
-    //  [X] the ERC721 balance of the owner is increased
-    // [X] it emits a PositionCreated event
-    // [X] the position is marked as unwrapped
-    // [X] the position is listed as owned by the owner
-    // [X] the owner's list of positions is updated
-    // [X] the ERC721 position is not listed as owned by the owner
-    // [X] the ERC721 balance of the owner is not increased
 
     function test_callerNotPermissioned_reverts() public {
         vm.expectRevert(
@@ -68,6 +39,9 @@ contract CreateDEPOSTest is DEPOSTest {
         );
     }
 
+    // when the owner is the zero address
+    //  [X] it reverts
+
     function test_ownerIsZeroAddress_reverts() public {
         // Expect revert
         vm.expectRevert(
@@ -78,13 +52,13 @@ contract CreateDEPOSTest is DEPOSTest {
         _createPosition(address(0), REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
     }
 
-    function test_convertibleDepositTokenIsZeroAddress_reverts() public {
+    // when the deposit token is the zero address
+    //  [X] it reverts
+
+    function test_depositTokenIsZeroAddress_reverts() public {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositPositionManager.DEPOS_InvalidParams.selector,
-                "convertible deposit token"
-            )
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidParams.selector, "asset")
         );
 
         // Call function
@@ -100,6 +74,9 @@ contract CreateDEPOSTest is DEPOSTest {
         );
     }
 
+    // when the remaining deposit is 0
+    //  [X] it reverts
+
     function test_remainingDepositIsZero_reverts() public {
         // Expect revert
         vm.expectRevert(
@@ -109,6 +86,9 @@ contract CreateDEPOSTest is DEPOSTest {
         // Call function
         _createPosition(address(this), 0, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
     }
+
+    // when the conversion price is 0
+    //  [X] it reverts
 
     function test_conversionPriceIsZero_reverts() public {
         // Expect revert
@@ -122,6 +102,9 @@ contract CreateDEPOSTest is DEPOSTest {
         // Call function
         _createPosition(address(this), REMAINING_DEPOSIT, 0, CONVERSION_EXPIRY, false);
     }
+
+    // when the expiry is in the past or now
+    //  [X] it reverts
 
     function test_conversionExpiryIsInPastOrNow_reverts(uint48 expiry_) public {
         uint48 expiry = uint48(bound(expiry_, 0, block.timestamp));
@@ -138,105 +121,10 @@ contract CreateDEPOSTest is DEPOSTest {
         _createPosition(address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
     }
 
-    function test_singlePosition() public {
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit PositionCreated(
-            0,
-            address(this),
-            convertibleDepositToken,
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        );
-
-        // Call function
-        _createPosition(
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        );
-
-        // Assert that this contract did not receive the position ERC721
-        _assertERC721PositionReceived(0, 0, false);
-
-        // Assert that the ERC721 balances were not updated
-        _assertERC721Balance(address(this), 0);
-        _assertERC721Owner(0, address(this), false);
-
-        // Assert that the position is correct
-        _assertPosition(
-            0,
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        );
-
-        // Assert that the owner's list of positions is updated
-        _assertUserPosition(address(this), 0, 1);
-    }
-
-    function test_singlePosition_whenWrapped_unsafeRecipient_reverts() public {
-        // Expect revert
-        vm.expectRevert();
-
-        // Call function
-        _createPosition(
-            address(convertibleDepositToken), // Needs to be a contract
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            true
-        );
-    }
-
-    function test_singlePosition_whenWrapped() public {
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit PositionCreated(
-            0,
-            address(this),
-            convertibleDepositToken,
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            true
-        );
-
-        // Call function
-        _createPosition(
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            true
-        );
-
-        // Assert that this contract received the position ERC721
-        _assertERC721PositionReceived(0, 1, true);
-
-        // Assert that the ERC721 balances were updated
-        _assertERC721Balance(address(this), 1);
-        _assertERC721Owner(0, address(this), true);
-
-        // Assert that the position is correct
-        _assertPosition(
-            0,
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            true
-        );
-
-        // Assert that the owner's list of positions is updated
-        _assertUserPosition(address(this), 0, 1);
-    }
+    // when multiple positions are created
+    //  [X] the position IDs are sequential
+    //  [X] the position IDs are unique
+    //  [X] the owner's list of positions is updated
 
     function test_multiplePositions_singleOwner() public {
         // Create 10 positions
@@ -321,6 +209,9 @@ contract CreateDEPOSTest is DEPOSTest {
         }
     }
 
+    // when the expiry is in the future
+    //  [X] it sets the expiry
+
     function test_conversionExpiryInFuture(uint48 expiry_) public {
         uint48 expiry = uint48(bound(expiry_, block.timestamp + 1, type(uint48).max));
 
@@ -330,6 +221,7 @@ contract CreateDEPOSTest is DEPOSTest {
             0,
             address(this),
             convertibleDepositToken,
+            DEPOSIT_PERIOD,
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             expiry,
@@ -341,5 +233,124 @@ contract CreateDEPOSTest is DEPOSTest {
 
         // Assert that the position is correct
         _assertPosition(0, address(this), REMAINING_DEPOSIT, CONVERSION_PRICE, expiry, false);
+    }
+
+    // when the wrap flag is true
+    //  when the receiver cannot receive ERC721 tokens
+    //   [X] it reverts
+
+    function test_singlePosition_whenWrapped_unsafeRecipient_reverts() public {
+        // Expect revert
+        vm.expectRevert();
+
+        // Call function
+        _createPosition(
+            address(convertibleDepositToken), // Needs to be a contract
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        );
+    }
+
+    //  [X] it mints the ERC721 token
+    //  [X] it marks the position as wrapped
+    //  [X] the position is listed as owned by the owner
+    //  [X] the ERC721 position is listed as owned by the owner
+    //  [X] the ERC721 balance of the owner is increased
+
+    function test_singlePosition_whenWrapped() public {
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit PositionCreated(
+            0,
+            address(this),
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        );
+
+        // Call function
+        _createPosition(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        );
+
+        // Assert that this contract received the position ERC721
+        _assertERC721PositionReceived(0, 1, true);
+
+        // Assert that the ERC721 balances were updated
+        _assertERC721Balance(address(this), 1);
+        _assertERC721Owner(0, address(this), true);
+
+        // Assert that the position is correct
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        );
+
+        // Assert that the owner's list of positions is updated
+        _assertUserPosition(address(this), 0, 1);
+    }
+
+    // [X] it emits a PositionCreated event
+    // [X] the position is marked as unwrapped
+    // [X] the position is listed as owned by the owner
+    // [X] the owner's list of positions is updated
+    // [X] the ERC721 position is not listed as owned by the owner
+    // [X] the ERC721 balance of the owner is not increased
+
+    function test_singlePosition() public {
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit PositionCreated(
+            0,
+            address(this),
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            false
+        );
+
+        // Call function
+        _createPosition(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            false
+        );
+
+        // Assert that this contract did not receive the position ERC721
+        _assertERC721PositionReceived(0, 0, false);
+
+        // Assert that the ERC721 balances were not updated
+        _assertERC721Balance(address(this), 0);
+        _assertERC721Owner(0, address(this), false);
+
+        // Assert that the position is correct
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            false
+        );
+
+        // Assert that the owner's list of positions is updated
+        _assertUserPosition(address(this), 0, 1);
     }
 }

@@ -48,7 +48,7 @@ contract TokenURIDEPOSTest is DEPOSTest {
     // [X] the name value is the name of the contract
     // [X] the symbol value is the symbol of the contract
     // [X] the position ID attribute is the position ID
-    // [X] the convertible deposit token attribute is the convertible deposit token address
+    // [X] the Deposit Token attribute is the Deposit Token address
     // [X] the conversion expiry attribute is the conversion expiry timestamp
     // [X] the remaining deposit attribute is the remaining deposit
     // [X] the conversion price attribute is the conversion price
@@ -90,11 +90,11 @@ contract TokenURIDEPOSTest is DEPOSTest {
         // Assert JSON structure
         // Name
         string memory tokenUriName = vm.parseJsonString(decodedTokenURI, ".name");
-        assertEq(tokenUriName, "Olympus Convertible Deposit Position", "name");
+        assertEq(tokenUriName, "Olympus Deposit Position", "name");
 
         // Symbol
         string memory tokenUriSymbol = vm.parseJsonString(decodedTokenURI, ".symbol");
-        assertEq(tokenUriSymbol, "OCDP", "symbol");
+        assertEq(tokenUriSymbol, "ODP", "symbol");
 
         // Position ID
         uint256 tokenUriPositionId = vm.parseJsonUint(
@@ -103,7 +103,7 @@ contract TokenURIDEPOSTest is DEPOSTest {
         );
         assertEq(tokenUriPositionId, positionId, "positionId");
 
-        // Convertible Deposit Token
+        // Deposit Token
         string memory tokenUriConvertibleDepositToken = vm.parseJsonString(
             decodedTokenURI,
             '.attributes[?(@.trait_type=="Deposit Asset")].value'
@@ -114,12 +114,19 @@ contract TokenURIDEPOSTest is DEPOSTest {
             "convertibleDepositToken"
         );
 
-        // Conversion Expiry
+        // Deposit Period
+        string memory tokenUriDepositPeriod = vm.parseJsonString(
+            decodedTokenURI,
+            '.attributes[?(@.trait_type=="Deposit Period")].value'
+        );
+        assertEq(tokenUriDepositPeriod, "9", "depositPeriod");
+
+        // Expiry
         uint256 tokenUriConversionExpiry = vm.parseJsonUint(
             decodedTokenURI,
-            '.attributes[?(@.trait_type=="Conversion Expiry")].value'
+            '.attributes[?(@.trait_type=="Expiry")].value'
         );
-        assertEq(tokenUriConversionExpiry, SAMPLE_CONVERSION_EXPIRY_DATE, "conversion expiry");
+        assertEq(tokenUriConversionExpiry, SAMPLE_CONVERSION_EXPIRY_DATE, "expiry");
 
         // Remaining Deposit
         string memory tokenUriRemainingDeposit = vm.parseJsonString(
@@ -311,7 +318,7 @@ contract TokenURIDEPOSTest is DEPOSTest {
             address(this),
             REMAINING_DEPOSIT,
             type(uint256).max,
-            type(uint48).max,
+            SAMPLE_CONVERSION_EXPIRY_DATE,
             false
         )
     {
@@ -328,13 +335,10 @@ contract TokenURIDEPOSTest is DEPOSTest {
         string memory decodedTokenURI = string(Base64.decode(base64EncodedTokenURI));
 
         // Assert JSON structure
-        // Conversion Expiry
-        assertFalse(
-            vm.keyExistsJson(
-                decodedTokenURI,
-                '.attributes[?(@.trait_type=="Conversion Expiry")].value'
-            ),
-            "conversion expiry"
+        // Expiry
+        assertTrue(
+            vm.keyExistsJson(decodedTokenURI, '.attributes[?(@.trait_type=="Expiry")].value'),
+            "expiry"
         );
 
         // Conversion Price

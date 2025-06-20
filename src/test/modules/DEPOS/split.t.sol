@@ -9,7 +9,8 @@ contract SplitDEPOSTest is DEPOSTest {
     event PositionSplit(
         uint256 indexed positionId,
         uint256 indexed newPositionId,
-        address indexed convertibleDepositToken,
+        address indexed asset,
+        uint8 periodMonths,
         uint256 amount,
         address to,
         bool wrap
@@ -158,7 +159,15 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(0, 1, convertibleDepositToken, amount, address(0x1), false);
+        emit PositionSplit(
+            0,
+            1,
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            amount,
+            address(0x1),
+            false
+        );
 
         // Call function
         _splitPosition(address(this), 0, amount, address(0x1), false);
@@ -203,7 +212,15 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(0, 1, convertibleDepositToken, amount, address(this), false);
+        emit PositionSplit(
+            0,
+            1,
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            amount,
+            address(this),
+            false
+        );
 
         // Call function
         _splitPosition(address(this), 0, amount, address(this), false);
@@ -247,7 +264,15 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(0, 1, convertibleDepositToken, amount, address(0x1), false);
+        emit PositionSplit(
+            0,
+            1,
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            amount,
+            address(0x1),
+            false
+        );
 
         // Call function
         _splitPosition(address(this), 0, amount, address(0x1), false);
@@ -292,7 +317,15 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(0, 1, convertibleDepositToken, amount, address(0x1), true);
+        emit PositionSplit(
+            0,
+            1,
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            amount,
+            address(0x1),
+            true
+        );
 
         // Call function
         _splitPosition(address(this), 0, amount, address(0x1), true);
