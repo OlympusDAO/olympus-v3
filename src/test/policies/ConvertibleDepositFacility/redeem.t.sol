@@ -25,7 +25,7 @@ contract ConvertibleDepositFacilityRedeemTest is ConvertibleDepositFacilityTest 
         uint256 otherUserCommitmentAmount_,
         uint256 alreadyRedeemedAmount_,
         uint256 uncommittedAmount_
-    ) internal {
+    ) internal view {
         // Get commitment
         IDepositRedemptionVault.UserCommitment memory commitment = facility.getRedeemCommitment(
             user_,

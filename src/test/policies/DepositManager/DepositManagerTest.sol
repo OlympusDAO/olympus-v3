@@ -510,7 +510,7 @@ contract DepositManagerTest is Test {
     function _assertReceiptTokenId(
         uint256 expectedReceiptTokenId_,
         uint256 actualReceiptTokenId_
-    ) internal view {
+    ) internal pure {
         assertEq(actualReceiptTokenId_, expectedReceiptTokenId_, "receipt token id mismatch");
     }
 

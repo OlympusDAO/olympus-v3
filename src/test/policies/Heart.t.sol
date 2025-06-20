@@ -205,7 +205,7 @@ contract HeartTest is Test {
         vm.stopPrank();
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
 
         expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
@@ -363,7 +363,7 @@ contract HeartTest is Test {
     // [X] frequency
     // [X] currentReward
 
-    function testCorrectness_viewFrequency() public {
+    function testCorrectness_viewFrequency() public view {
         // Get the beat frequency of the heart
         uint48 frequency = heart.frequency();
 

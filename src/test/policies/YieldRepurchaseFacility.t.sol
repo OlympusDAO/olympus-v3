@@ -242,7 +242,7 @@ contract YieldRepurchaseFacilityTest is Test {
     // [X] getReserveBalance
     //  [ ] includes yield in the CDFacility
 
-    function test_setup() public {
+    function test_setup() public view {
         // addresses are set correctly
         assertEq(address(yieldRepo.ohm()), address(ohm));
         assertEq(address(yieldRepo.reserve()), address(reserve));
