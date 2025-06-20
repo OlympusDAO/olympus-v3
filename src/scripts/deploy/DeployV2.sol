@@ -46,7 +46,7 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {OlympusConvertibleDepositPositionManager} from "modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
+// import {OlympusConvertibleDepositPositionManager} from "modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 
 // Bophades Policies
 import {Operator} from "policies/Operator.sol";
@@ -118,7 +118,7 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
-    OlympusConvertibleDepositPositionManager public CDPOS;
+    // OlympusConvertibleDepositPositionManager public CDPOS;
     OlympusGovDelegation public DLGTE;
 
     /// Policies

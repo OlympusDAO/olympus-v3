@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.15;
 
-import {ERC721} from "solmate/tokens/ERC721.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {CDPOSv1} from "./CDPOS.v1.sol";
-import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+// Libraries
+import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
+import {Base64} from "@openzeppelin-5.3.0/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
+
+// Bophades
+import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @title  Olympus Convertible Deposit Position Manager
 /// @notice Implementation of the {CDPOSv1} interface

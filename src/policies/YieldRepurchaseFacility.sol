@@ -2,22 +2,22 @@
 pragma solidity 0.8.15;
 
 // Libraries
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
-import {IBondSDA} from "interfaces/IBondSDA.sol";
+import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 
 // Bophades
 import {Kernel, Policy, Permissions, Keycode, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 interface BurnableERC20 {

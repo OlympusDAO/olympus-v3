@@ -7,8 +7,8 @@ import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";

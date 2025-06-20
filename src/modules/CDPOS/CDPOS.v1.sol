@@ -2,7 +2,7 @@
 pragma solidity >=0.8.15;
 
 import {Module} from "src/Kernel.sol";
-import {ERC721} from "solmate/tokens/ERC721.sol";
+import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
 
 /// @title  CDPOSv1
 /// @notice This defines the interface for the CDPOS module.

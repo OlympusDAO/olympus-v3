@@ -7,7 +7,7 @@ import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleD
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";

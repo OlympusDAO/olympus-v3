@@ -2,10 +2,10 @@
 pragma solidity ^0.8.15;
 
 // Libraries
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -17,10 +17,10 @@ import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 /// @title  Convertible Deposit Clearinghouse
 /// @notice Enables holders of a specific CD token to borrow against their position

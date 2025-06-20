@@ -6,9 +6,9 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 
 // Libraries
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades

@@ -7,8 +7,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 
 /// @title  BaseAssetManager
 /// @notice This is a base contract for managing asset deposits and withdrawals. It is designed to be inherited by another contract.

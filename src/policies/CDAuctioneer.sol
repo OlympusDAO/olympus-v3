@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 // Libraries
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
@@ -11,9 +11,9 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {CDFacility} from "./CDFacility.sol";
+import {CDFacility} from "src/policies/CDFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
 /// @notice Implementation of the {IConvertibleDepositAuctioneer} interface for a specific bid token and deposit period
