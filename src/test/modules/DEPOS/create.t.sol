@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Module} from "src/Kernel.sol";
 
-contract CreateCDPOSTest is CDPOSTest {
+contract CreateDEPOSTest is DEPOSTest {
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
@@ -56,7 +56,7 @@ contract CreateCDPOSTest is CDPOSTest {
         );
 
         vm.prank(address(this));
-        CDPOS.mint(
+        DEPOS.mint(
             address(this),
             convertibleDepositToken,
             DEPOSIT_PERIOD,
@@ -69,7 +69,7 @@ contract CreateCDPOSTest is CDPOSTest {
 
     function test_ownerIsZeroAddress_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "owner"));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "owner"));
 
         // Call function
         _createPosition(address(0), REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
@@ -79,14 +79,14 @@ contract CreateCDPOSTest is CDPOSTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                CDPOSv1.CDPOS_InvalidParams.selector,
+                DEPOSv1.DEPOS_InvalidParams.selector,
                 "convertible deposit token"
             )
         );
 
         // Call function
         vm.prank(godmode);
-        CDPOS.mint(
+        DEPOS.mint(
             address(this),
             address(0),
             DEPOSIT_PERIOD,
@@ -99,7 +99,7 @@ contract CreateCDPOSTest is CDPOSTest {
 
     function test_remainingDepositIsZero_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "deposit"));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "deposit"));
 
         // Call function
         _createPosition(address(this), 0, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
@@ -108,7 +108,7 @@ contract CreateCDPOSTest is CDPOSTest {
     function test_conversionPriceIsZero_reverts() public {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "conversion price")
+            abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "conversion price")
         );
 
         // Call function
@@ -120,7 +120,7 @@ contract CreateCDPOSTest is CDPOSTest {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "conversion expiry")
+            abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "conversion expiry")
         );
 
         // Call function
@@ -240,11 +240,11 @@ contract CreateCDPOSTest is CDPOSTest {
         }
 
         // Assert that the position count is correct
-        assertEq(CDPOS.positionCount(), 10, "positionCount");
+        assertEq(DEPOS.positionCount(), 10, "positionCount");
 
         // Assert that the owner has sequential position IDs
         for (uint256 i = 0; i < 10; i++) {
-            CDPOSv1.Position memory position = CDPOS.getPosition(i);
+            DEPOSv1.Position memory position = DEPOS.getPosition(i);
             assertEq(position.owner, address(this), "position.owner");
 
             // Assert that the ERC721 position is not updated
@@ -255,7 +255,7 @@ contract CreateCDPOSTest is CDPOSTest {
         _assertERC721Balance(address(this), 0);
 
         // Assert that the owner's positions list is correct
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         assertEq(ownerPositions.length, 10, "ownerPositions.length");
         for (uint256 i = 0; i < 10; i++) {
             assertEq(ownerPositions[i], i, "ownerPositions[i]");
@@ -277,17 +277,17 @@ contract CreateCDPOSTest is CDPOSTest {
         }
 
         // Assert that the position count is correct
-        assertEq(CDPOS.positionCount(), 10, "positionCount");
+        assertEq(DEPOS.positionCount(), 10, "positionCount");
 
         // Assert that the owner1's positions are correct
         for (uint256 i = 0; i < 5; i++) {
-            CDPOSv1.Position memory position = CDPOS.getPosition(i);
+            DEPOSv1.Position memory position = DEPOS.getPosition(i);
             assertEq(position.owner, owner1, "position.owner");
         }
 
         // Assert that the owner2's positions are correct
         for (uint256 i = 5; i < 10; i++) {
-            CDPOSv1.Position memory position = CDPOS.getPosition(i);
+            DEPOSv1.Position memory position = DEPOS.getPosition(i);
             assertEq(position.owner, owner2, "position.owner");
         }
 
@@ -296,14 +296,14 @@ contract CreateCDPOSTest is CDPOSTest {
         _assertERC721Balance(owner2, 0);
 
         // Assert that the owner1's positions list is correct
-        uint256[] memory owner1Positions = CDPOS.getUserPositionIds(owner1);
+        uint256[] memory owner1Positions = DEPOS.getUserPositionIds(owner1);
         assertEq(owner1Positions.length, 5, "owner1Positions.length");
         for (uint256 i = 0; i < 5; i++) {
             assertEq(owner1Positions[i], i, "owner1Positions[i]");
         }
 
         // Assert that the owner2's positions list is correct
-        uint256[] memory owner2Positions = CDPOS.getUserPositionIds(owner2);
+        uint256[] memory owner2Positions = DEPOS.getUserPositionIds(owner2);
         assertEq(owner2Positions.length, 5, "owner2Positions.length");
         for (uint256 i = 0; i < 5; i++) {
             assertEq(owner2Positions[i], i + 5, "owner2Positions[i]");

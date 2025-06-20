@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Base64} from "@base64-1.1.0/base64.sol";
 import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 
@@ -27,7 +27,7 @@ function substringFrom(string memory str, uint256 startIndex) pure returns (stri
 
 // solhint-disable quotes
 
-contract TokenURICDPOSTest is CDPOSTest {
+contract TokenURIDEPOSTest is DEPOSTest {
     uint48 public constant SAMPLE_DATE = 1737014593;
     uint48 public constant SAMPLE_CONVERSION_EXPIRY_DATE = 1737014593 + 1 days;
     string public constant CONVERSION_EXPIRY_DATE_STRING = "2025-01-17";
@@ -54,9 +54,9 @@ contract TokenURICDPOSTest is CDPOSTest {
     // [X] the image value is set
 
     function test_positionDoesNotExist() public {
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 1));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 1));
 
-        CDPOS.tokenURI(1);
+        DEPOS.tokenURI(1);
     }
 
     function test_success()
@@ -69,11 +69,11 @@ contract TokenURICDPOSTest is CDPOSTest {
             false
         )
     {
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         uint256 positionId = ownerPositions[0];
 
         // Call function
-        string memory tokenURI = CDPOS.tokenURI(positionId);
+        string memory tokenURI = DEPOS.tokenURI(positionId);
 
         // Check that the string begins with `data:application/json;base64,`
         assertEq(substring(tokenURI, 0, 29), "data:application/json;base64,", "prefix");
@@ -167,11 +167,11 @@ contract TokenURICDPOSTest is CDPOSTest {
             false
         )
     {
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         uint256 positionId = ownerPositions[0];
 
         // Call function
-        string memory tokenURI = CDPOS.tokenURI(positionId);
+        string memory tokenURI = DEPOS.tokenURI(positionId);
 
         // Check that the string begins with `data:application/json;base64,`
         assertEq(substring(tokenURI, 0, 29), "data:application/json;base64,", "prefix");
@@ -201,14 +201,14 @@ contract TokenURICDPOSTest is CDPOSTest {
             false
         )
     {
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         uint256 positionId = ownerPositions[0];
 
         // Update the position remaining deposit to 0
         _updatePosition(positionId, 0);
 
         // Call function
-        string memory tokenURI = CDPOS.tokenURI(positionId);
+        string memory tokenURI = DEPOS.tokenURI(positionId);
 
         // Check that the string begins with `data:application/json;base64,`
         assertEq(substring(tokenURI, 0, 29), "data:application/json;base64,", "prefix");
@@ -238,11 +238,11 @@ contract TokenURICDPOSTest is CDPOSTest {
             false
         )
     {
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         uint256 positionId = ownerPositions[0];
 
         // Call function
-        string memory tokenURI = CDPOS.tokenURI(positionId);
+        string memory tokenURI = DEPOS.tokenURI(positionId);
 
         // Check that the string begins with `data:application/json;base64,`
         assertEq(substring(tokenURI, 0, 29), "data:application/json;base64,", "prefix");
@@ -279,11 +279,11 @@ contract TokenURICDPOSTest is CDPOSTest {
             false
         )
     {
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         uint256 positionId = ownerPositions[1];
 
         // Call function
-        string memory tokenURI = CDPOS.tokenURI(positionId);
+        string memory tokenURI = DEPOS.tokenURI(positionId);
 
         // Check that the string begins with `data:application/json;base64,`
         assertEq(substring(tokenURI, 0, 29), "data:application/json;base64,", "prefix");
@@ -312,11 +312,11 @@ contract TokenURICDPOSTest is CDPOSTest {
             false
         )
     {
-        uint256[] memory ownerPositions = CDPOS.getUserPositionIds(address(this));
+        uint256[] memory ownerPositions = DEPOS.getUserPositionIds(address(this));
         uint256 positionId = ownerPositions[0];
 
         // Call function
-        string memory tokenURI = CDPOS.tokenURI(positionId);
+        string memory tokenURI = DEPOS.tokenURI(positionId);
 
         // Strip the `data:application/json;base64,` prefix
         string memory base64EncodedTokenURI = substringFrom(tokenURI, 29);

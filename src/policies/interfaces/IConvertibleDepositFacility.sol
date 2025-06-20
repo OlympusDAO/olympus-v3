@@ -49,7 +49,7 @@ interface IConvertibleDepositFacility {
     ///         - Validating that the caller has the correct role
     ///         - Depositing the asset
     ///         - Minting the receipt token
-    ///         - Creating a new position in the CDPOS module
+    ///         - Creating a new position in the DEPOS module
     ///         - Emitting an event
     ///
     /// @param  asset_              The address of the asset

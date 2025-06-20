@@ -141,9 +141,9 @@ Funds deposited are custodied in the CD token manager, and attributed to the dep
             - [IConvertibleDepositERC20.sol](../../src/modules/CDEPO/IConvertibleDepositERC20.sol)
             - [IConvertibleDepository.sol](../../src/modules/CDEPO/IConvertibleDepository.sol)
             - [OlympusConvertibleDepository.sol](../../src/modules/CDEPO/OlympusConvertibleDepository.sol)
-        - [CDPOS/](../../src/modules/CDPOS)
-            - [CDPOS.v1.sol](../../src/modules/CDPOS/CDPOS.v1.sol)
-            - [OlympusConvertibleDepositPositionManager.sol](../../src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol)
+        - [DEPOS/](../../src/modules/DEPOS)
+            - [DEPOS.v1.sol](../../src/modules/DEPOS/DEPOS.v1.sol)
+            - [OlympusDepositPositionManager.sol](../../src/modules/DEPOS/OlympusDepositPositionManager.sol)
     - [policies/](../../src/policies)
         - [interfaces/](../../src/policies/interfaces)
             - [IConvertibleDepositAuctioneer.sol](../../src/policies/interfaces/IConvertibleDepositAuctioneer.sol)
@@ -254,7 +254,7 @@ sequenceDiagram
 
 #### Deposit Creation
 
-A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CD tokens and a CDPOS position.
+A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the CD tokens and a DEPOS position.
 
 ```mermaid
 sequenceDiagram
@@ -264,7 +264,7 @@ sequenceDiagram
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
     participant VaultToken as Vault (ERC4626)
-    participant CDPOS
+    participant DEPOS
 
     caller->>CDAuctioneer: bid(depositAmount)
     CDAuctioneer->>CDAuctioneer: determine conversion price
@@ -277,8 +277,8 @@ sequenceDiagram
         VaultToken-->>DepositManager: vault tokens
     end
     DepositManager-->>caller: receipt tokens
-    CDFacility->>CDPOS: mint(caller, cdToken, depositAmount, conversionPrice, expiry, wrapNft)
-    CDPOS-->>caller: CDPOS ERC721 token
+    CDFacility->>DEPOS: mint(caller, cdToken, depositAmount, conversionPrice, expiry, wrapNft)
+    DEPOS-->>caller: DEPOS ERC721 token
 ```
 
 #### Deposit Conversion
@@ -289,7 +289,7 @@ Prior to the expiry of the convertible deposit, a deposit owner can convert thei
 sequenceDiagram
     participant caller
     participant CDFacility
-    participant CDPOS
+    participant DEPOS
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
     participant VaultToken as Vault (ERC4626)
@@ -299,7 +299,7 @@ sequenceDiagram
 
     caller->>CDFacility: convert(positionIds, amounts)
     loop For each position
-        CDFacility->>CDPOS: update(positionId, remainingAmount)
+        CDFacility->>DEPOS: update(positionId, remainingAmount)
     end
     CDFacility->>DepositManager: withdraw(caller, amount)
     caller-->>DepositManager: burns receipt tokens
@@ -349,7 +349,7 @@ After the convertible deposit conversion expiry and before the redemption expiry
 sequenceDiagram
     participant caller
     participant CDFacility
-    participant CDPOS
+    participant DEPOS
     participant CDEPO
     participant MINTR
     participant ReserveToken
@@ -358,7 +358,7 @@ sequenceDiagram
 
     caller->>CDFacility: redeem(positionIds, amounts)
     loop For each position
-        CDFacility->>CDPOS: update(positionId, remainingAmount)
+        CDFacility->>DEPOS: update(positionId, remainingAmount)
     end
     CDFacility->>CDEPO: redeemFor(caller, amount)
     caller-->>CDEPO: cdReserve tokens
@@ -442,17 +442,17 @@ CDFacility is a policy that is responsible for issuing CD tokens and handling su
 
 The CDAuctioneer is able to mint a call option:
 
-- `mint()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `mint()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the DEPOS module.
 
 The public can mint a yield-bearing deposit:
 
-- `mintYieldDeposit()`: results in the deposit of the configured deposit token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `mintYieldDeposit()`: results in the deposit of the configured deposit token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the DEPOS module.
 - `claimYield()`: transfers the variable yield accrued from the vault token (e.g. sUSDS) after deducting the yield fee. However, when the deposit is in the redemption queue, the yield is fixed.
 
 CD token holders can perform the following actions:
 
 - `convert()`: convert their deposit position into OHM before conversion expiry.
-- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a CDPOS position ID.
+- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a DEPOS position ID.
 - `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
 
 ### YieldRepurchaseFacility (Policy)
@@ -485,9 +485,9 @@ Bophades policies with the correct permissions are able to perform the additiona
 - Sweep any forfeited yield and assets into the caller's address
 - Manage debt (in terms of ERC4626 vault tokens)
 
-### CDPOS (Module)
+### DEPOS (Module)
 
-CDPOS is an ERC721 token and a Module representing the terms of a convertible deposit position.
+DEPOS is an ERC721 token and a Module representing the terms of a convertible deposit position.
 
 When a new position is created, it does not, by default, mint an ERC721 token to the owner. The state is instead stored within the contract.
 

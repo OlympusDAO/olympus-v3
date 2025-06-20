@@ -104,7 +104,7 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         // Assert that the wrapped receipt token was minted to the recipient
         _assertReceiptTokenBalance(recipient, actualDepositAmount, true);
 
-        // Assert that the recipient does not have a CDPOS position
+        // Assert that the recipient does not have a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 0, "positionIds.length");
     }
@@ -144,7 +144,7 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         // Assert that the receipt token was minted to the recipient
         _assertReceiptTokenBalance(recipient, actualDepositAmount, false);
 
-        // Assert that the recipient does not have a CDPOS position
+        // Assert that the recipient does not have a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 0, "positionIds.length");
     }

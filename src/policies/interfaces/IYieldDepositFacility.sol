@@ -40,7 +40,7 @@ interface IYieldDepositFacility {
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the asset is supported
     ///         - Depositing the asset into the deposit manager and minting the receipt token
-    ///         - Creating a new position in the CDPOS module
+    ///         - Creating a new position in the DEPOS module
     ///
     /// @param  asset_              The address of the asset
     /// @param  periodMonths_       The period of the deposit

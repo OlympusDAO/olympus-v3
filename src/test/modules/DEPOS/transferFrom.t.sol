@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
-contract TransferFromCDPOSTest is CDPOSTest {
+contract TransferFromDEPOSTest is DEPOSTest {
     // when the position does not exist
     //  [X] it reverts
     // when the ERC721 has not been minted
@@ -20,10 +20,10 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
 
         // Call function
-        CDPOS.transferFrom(address(this), address(1), 0);
+        DEPOS.transferFrom(address(this), address(1), 0);
     }
 
     function test_callerIsNotOwner_reverts()
@@ -41,7 +41,7 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
         // Call function
         vm.prank(address(0x1));
-        CDPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), address(0x1), 0);
     }
 
     function test_callerIsPermissioned_reverts()
@@ -59,7 +59,7 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
         // Call function
         vm.prank(godmode);
-        CDPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), address(0x1), 0);
     }
 
     function test_notMinted_reverts()
@@ -73,11 +73,11 @@ contract TransferFromCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotWrapped.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotWrapped.selector, 0));
 
         // Call function
         vm.prank(address(this));
-        CDPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), address(0x1), 0);
     }
 
     function test_success()
@@ -91,7 +91,7 @@ contract TransferFromCDPOSTest is CDPOSTest {
         )
     {
         // Call function
-        CDPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), address(0x1), 0);
 
         // ERC721 balance updated
         _assertERC721Balance(address(this), 0);
@@ -110,7 +110,7 @@ contract TransferFromCDPOSTest is CDPOSTest {
 
         // Position ownership updated
         assertEq(
-            CDPOS.getUserPositionIds(address(this)).length,
+            DEPOS.getUserPositionIds(address(this)).length,
             0,
             "getUserPositionIds should return 0 length"
         );

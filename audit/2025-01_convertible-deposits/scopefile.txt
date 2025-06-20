@@ -8,8 +8,8 @@ src/modules/CDEPO/IConvertibleDeposit.sol
 src/modules/CDEPO/IConvertibleDepositERC20.sol
 src/modules/CDEPO/IConvertibleDepository.sol
 src/modules/CDEPO/OlympusConvertibleDepository.sol
-src/modules/CDPOS/CDPOS.v1.sol
-src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol
+src/modules/DEPOS/DEPOS.v1.sol
+src/modules/DEPOS/OlympusDepositPositionManager.sol
 src/policies/interfaces/IConvertibleDepositAuctioneer.sol
 src/policies/interfaces/IConvertibleDepositFacility.sol
 src/policies/interfaces/IEmissionManager.sol

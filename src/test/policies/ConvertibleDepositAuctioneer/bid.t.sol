@@ -6,7 +6,7 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {FullMath} from "src/libraries/FullMath.sol";
 
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
     function _assertConvertibleDepositPosition(
@@ -43,7 +43,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 conversionPrice = FullMath.mulDivUp(bidAmount_, 1e9, expectedConvertedAmount_);
 
         // Assert that the position terms are correct
-        CDPOSv1.Position memory position = convertibleDepositPositions.getPosition(
+        DEPOSv1.Position memory position = convertibleDepositPositions.getPosition(
             returnedPositionId_
         );
         assertEq(position.owner, recipient, "position owner");

@@ -3,7 +3,7 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
 contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
@@ -68,7 +68,7 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         }
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 2));
 
         // Call function
         facility.previewConvert(recipient, positionIds_, amounts_);

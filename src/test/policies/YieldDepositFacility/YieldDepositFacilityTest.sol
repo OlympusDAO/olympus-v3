@@ -12,7 +12,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
+import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
@@ -30,7 +30,7 @@ contract YieldDepositFacilityTest is Test {
     Kernel public kernel;
     YieldDepositFacility public yieldDepositFacility;
     OlympusRoles public roles;
-    OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
+    OlympusDepositPositionManager public convertibleDepositPositions;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     RolesAdmin public rolesAdmin;
@@ -114,7 +114,7 @@ contract YieldDepositFacilityTest is Test {
     function _createStack() internal {
         kernel = new Kernel();
         roles = new OlympusRoles(kernel);
-        convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
+        convertibleDepositPositions = new OlympusDepositPositionManager(address(kernel));
         treasury = new OlympusTreasury(kernel);
         depositManager = new DepositManager(address(kernel));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));

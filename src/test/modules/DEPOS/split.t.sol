@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
-contract SplitCDPOSTest is CDPOSTest {
+contract SplitDEPOSTest is DEPOSTest {
     event PositionSplit(
         uint256 indexed positionId,
         uint256 indexed newPositionId,
@@ -38,7 +38,7 @@ contract SplitCDPOSTest is CDPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
 
         // Call function
         _splitPosition(address(this), 0, 1e18, address(0x1), false);
@@ -55,7 +55,7 @@ contract SplitCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotOwner.selector, 0));
 
         // Call function
         _splitPosition(address(0x1), 0, REMAINING_DEPOSIT, address(0x1), false);
@@ -72,7 +72,7 @@ contract SplitCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotOwner.selector, 0));
 
         // Call function
         _splitPosition(godmode, 0, REMAINING_DEPOSIT, address(0x1), false);
@@ -89,7 +89,7 @@ contract SplitCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "amount"));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "amount"));
 
         // Call function
         _splitPosition(address(this), 0, 0, address(0x1), false);
@@ -110,7 +110,7 @@ contract SplitCDPOSTest is CDPOSTest {
         uint256 amount = bound(amount_, REMAINING_DEPOSIT + 1, REMAINING_DEPOSIT + 2e18);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "amount"));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "amount"));
 
         // Call function
         _splitPosition(address(this), 0, amount, address(0x1), false);
@@ -127,7 +127,7 @@ contract SplitCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "to"));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "to"));
 
         // Call function
         _splitPosition(address(this), 0, REMAINING_DEPOSIT, address(0), false);

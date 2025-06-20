@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Module} from "src/Kernel.sol";
 
-contract UpdateCDPOSTest is CDPOSTest {
+contract UpdateDEPOSTest is DEPOSTest {
     event PositionUpdated(uint256 indexed positionId, uint256 remainingDeposit);
 
     // when the position does not exist
@@ -22,7 +22,7 @@ contract UpdateCDPOSTest is CDPOSTest {
 
     function test_invalidPosition_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
 
         // Call function
         _updatePosition(0, 1e18);
@@ -45,7 +45,7 @@ contract UpdateCDPOSTest is CDPOSTest {
 
         // Call function
         vm.prank(owner1);
-        CDPOS.update(0, 1e18);
+        DEPOS.update(0, 1e18);
     }
 
     function test_callerIsOwner_reverts()
@@ -64,7 +64,7 @@ contract UpdateCDPOSTest is CDPOSTest {
         );
 
         // Call function
-        CDPOS.update(0, 1e18);
+        DEPOS.update(0, 1e18);
     }
 
     function test_amountIsZero()
@@ -81,7 +81,7 @@ contract UpdateCDPOSTest is CDPOSTest {
         _updatePosition(0, 0);
 
         // Assert
-        assertEq(CDPOS.getPosition(0).remainingDeposit, 0);
+        assertEq(DEPOS.getPosition(0).remainingDeposit, 0);
     }
 
     function test_updatesRemainingDeposit(

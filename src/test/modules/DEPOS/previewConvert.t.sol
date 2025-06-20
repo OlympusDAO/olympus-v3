@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
-contract PreviewConvertCDPOSTest is CDPOSTest {
+contract PreviewConvertDEPOSTest is DEPOSTest {
     // when the position does not exist
     //  [X] it reverts
     // when the conversion expiry has passed
@@ -30,10 +30,10 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
 
         // Call function
-        CDPOS.previewConvert(0, 0);
+        DEPOS.previewConvert(0, 0);
     }
 
     function test_positionExpired(
@@ -54,7 +54,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         vm.warp(expiry);
 
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, REMAINING_DEPOSIT);
+        uint256 ohmOut = DEPOS.previewConvert(0, REMAINING_DEPOSIT);
 
         // Assert
         assertEq(ohmOut, 0);
@@ -75,10 +75,10 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         uint256 amount = bound(amount_, REMAINING_DEPOSIT + 1, type(uint256).max);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidParams.selector, "amount"));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidParams.selector, "amount"));
 
         // Call function
-        CDPOS.previewConvert(0, amount);
+        DEPOS.previewConvert(0, amount);
     }
 
     function test_givenNotConvertible_reverts()
@@ -92,10 +92,10 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotConvertible.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotConvertible.selector, 0));
 
         // Call function
-        CDPOS.previewConvert(0, REMAINING_DEPOSIT);
+        DEPOS.previewConvert(0, REMAINING_DEPOSIT);
     }
 
     function test_success()
@@ -109,7 +109,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         )
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, REMAINING_DEPOSIT);
+        uint256 ohmOut = DEPOS.previewConvert(0, REMAINING_DEPOSIT);
 
         // Calculate expected ohmOut
         uint256 expectedOhmOut = (REMAINING_DEPOSIT * 1e9) / CONVERSION_PRICE;
@@ -124,7 +124,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), 10e17, 2e17, CONVERSION_EXPIRY, false)
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, 10e17);
+        uint256 ohmOut = DEPOS.previewConvert(0, 10e17);
 
         // Calculate expected ohmOut
         uint256 expectedOhmOut = (10e17 * 1e9) / 2e17;
@@ -139,7 +139,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), 10e19, 2e19, CONVERSION_EXPIRY, false)
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, 10e19);
+        uint256 ohmOut = DEPOS.previewConvert(0, 10e19);
 
         // Calculate expected ohmOut
         uint256 expectedOhmOut = (10e19 * 1e9) / 2e19;
@@ -154,7 +154,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), 10e9, 2e9, CONVERSION_EXPIRY, false)
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, 10e9);
+        uint256 ohmOut = DEPOS.previewConvert(0, 10e9);
 
         // Calculate expected ohmOut
         uint256 expectedOhmOut = (10e9 * 1e9) / 2e9;
@@ -168,7 +168,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), REMAINING_DEPOSIT, 1, CONVERSION_EXPIRY, false)
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, REMAINING_DEPOSIT);
+        uint256 ohmOut = DEPOS.previewConvert(0, REMAINING_DEPOSIT);
 
         // Calculate expected ohmOut
         // uint256 expectedOhmOut = (REMAINING_DEPOSIT * 1e9) / 1;
@@ -183,7 +183,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), REMAINING_DEPOSIT, 1e36, CONVERSION_EXPIRY, false)
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, REMAINING_DEPOSIT);
+        uint256 ohmOut = DEPOS.previewConvert(0, REMAINING_DEPOSIT);
 
         // Calculate expected ohmOut
         // uint256 expectedOhmOut = (REMAINING_DEPOSIT * 1e9) / 1e36;
@@ -204,7 +204,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         )
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, 1);
+        uint256 ohmOut = DEPOS.previewConvert(0, 1);
 
         // Calculate expected ohmOut
         // uint256 expectedOhmOut = (1 * 1e9) / CONVERSION_PRICE;
@@ -219,7 +219,7 @@ contract PreviewConvertCDPOSTest is CDPOSTest {
         givenPositionCreated(address(this), 1000e18, CONVERSION_PRICE, CONVERSION_EXPIRY, false)
     {
         // Call function
-        uint256 ohmOut = CDPOS.previewConvert(0, 1000e18);
+        uint256 ohmOut = DEPOS.previewConvert(0, 1000e18);
 
         // Calculate expected ohmOut
         // uint256 expectedOhmOut = (1000e18 * 1e9) / CONVERSION_PRICE;

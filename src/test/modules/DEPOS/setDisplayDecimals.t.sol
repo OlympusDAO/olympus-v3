@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
 
 import {Module} from "src/Kernel.sol";
 
-contract SetDisplayDecimalsCDPOSTest is CDPOSTest {
+contract SetDisplayDecimalsDEPOSTest is DEPOSTest {
     // when the caller is not a permissioned address
     //  [X] it reverts
     // [X] it sets the display decimals
@@ -17,15 +17,15 @@ contract SetDisplayDecimalsCDPOSTest is CDPOSTest {
         );
 
         // Call function
-        CDPOS.setDisplayDecimals(2);
+        DEPOS.setDisplayDecimals(2);
     }
 
     function test_setDisplayDecimals() public {
         // Call function
         vm.prank(godmode);
-        CDPOS.setDisplayDecimals(4);
+        DEPOS.setDisplayDecimals(4);
 
         // Assert
-        assertEq(CDPOS.displayDecimals(), 4, "displayDecimals");
+        assertEq(DEPOS.displayDecimals(), 4, "displayDecimals");
     }
 }

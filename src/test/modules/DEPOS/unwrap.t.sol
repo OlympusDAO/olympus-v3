@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {CDPOSTest} from "./CDPOSTest.sol";
+import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
-contract UnwrapCDPOSTest is CDPOSTest {
+contract UnwrapDEPOSTest is DEPOSTest {
     event PositionUnwrapped(uint256 indexed positionId);
 
     // when the position does not exist
@@ -29,7 +29,7 @@ contract UnwrapCDPOSTest is CDPOSTest {
 
     function test_invalidPositionId_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_InvalidPositionId.selector, 0));
 
         // Call function
         _unwrapPosition(godmode, 0);
@@ -46,7 +46,7 @@ contract UnwrapCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotOwner.selector, 0));
 
         // Call function
         _unwrapPosition(address(0x1), 0);
@@ -63,7 +63,7 @@ contract UnwrapCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotOwner.selector, 0));
 
         // Call function
         _unwrapPosition(address(0x1), 0);
@@ -80,7 +80,7 @@ contract UnwrapCDPOSTest is CDPOSTest {
         )
     {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_NotWrapped.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(DEPOSv1.DEPOS_NotWrapped.selector, 0));
 
         // Call function
         _unwrapPosition(address(this), 0);

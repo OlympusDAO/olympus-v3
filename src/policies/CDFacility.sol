@@ -10,7 +10,7 @@ import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.sol";
 
 /// @title  Convertible Deposit Facility
@@ -26,8 +26,8 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
 
-    /// @notice The CDPOS module.
-    CDPOSv1 public CDPOS;
+    /// @notice The DEPOS module.
+    DEPOSv1 public DEPOS;
 
     // ========== STRUCTS ========== //
 
@@ -56,12 +56,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
-        dependencies[3] = toKeycode("CDPOS");
+        dependencies[3] = toKeycode("DEPOS");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-        CDPOS = CDPOSv1(getModuleAddress(dependencies[3]));
+        DEPOS = DEPOSv1(getModuleAddress(dependencies[3]));
     }
 
     /// @inheritdoc Policy
@@ -72,14 +72,14 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = toKeycode("MINTR");
-        Keycode cdposKeycode = toKeycode("CDPOS");
+        Keycode cdposKeycode = toKeycode("DEPOS");
 
         permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(cdposKeycode, CDPOS.mint.selector);
-        permissions[4] = Permissions(cdposKeycode, CDPOS.update.selector);
+        permissions[3] = Permissions(cdposKeycode, DEPOS.mint.selector);
+        permissions[4] = Permissions(cdposKeycode, DEPOS.update.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -132,8 +132,8 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             params.wrapReceipt
         );
 
-        // Create a new position in the CDPOS module
-        positionId = CDPOS.mint(
+        // Create a new position in the DEPOS module
+        positionId = DEPOS.mint(
             params.depositor,
             address(params.asset),
             params.periodMonths,
@@ -200,7 +200,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     {
         // Validate that the position is valid
         // This will revert if the position is not valid
-        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
+        DEPOSv1.Position memory position = DEPOS.getPosition(positionId_);
 
         // Validate that the depositor is the owner of the position
         if (position.owner != depositor_) revert CDF_NotOwner(positionId_);
@@ -318,9 +318,9 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             periodMonths = currentPeriodMonths;
 
             // Update the position
-            CDPOS.update(
+            DEPOS.update(
                 positionId,
-                CDPOS.getPosition(positionId).remainingDeposit - depositAmount
+                DEPOS.getPosition(positionId).remainingDeposit - depositAmount
             );
         }
 

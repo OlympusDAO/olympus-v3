@@ -14,7 +14,7 @@ import {CDAuctioneer} from "src/policies/CDAuctioneer.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
+import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
@@ -29,7 +29,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
-    OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
+    OlympusDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
 
@@ -89,7 +89,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         treasury = new OlympusTreasury(kernel);
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
-        convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
+        convertibleDepositPositions = new OlympusDepositPositionManager(address(kernel));
         depositManager = new DepositManager(address(kernel));
         facility = new CDFacility(address(kernel), address(depositManager));
         auctioneer = new CDAuctioneer(

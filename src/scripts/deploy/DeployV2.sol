@@ -46,7 +46,7 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-// import {OlympusConvertibleDepositPositionManager} from "modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
+// import {OlympusDepositPositionManager} from "modules/DEPOS/OlympusDepositPositionManager.sol";
 
 // Bophades Policies
 import {Operator} from "policies/Operator.sol";
@@ -118,7 +118,7 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
-    // OlympusConvertibleDepositPositionManager public CDPOS;
+    // OlympusDepositPositionManager public DEPOS;
     OlympusGovDelegation public DLGTE;
 
     /// Policies
@@ -245,7 +245,7 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
-        // selectorMap["OlympusConvertibleDepositPositionManager"] = this
+        // selectorMap["OlympusDepositPositionManager"] = this
         //     ._deployConvertibleDepositPositionManager
         //     .selector;
         selectorMap["OlympusGovDelegation"] = this._deployGovDelegation.selector;
@@ -1600,10 +1600,10 @@ contract OlympusDeploy is Script {
 
     //     // Deploy ConvertibleDepositPositionManager
     //     vm.broadcast();
-    //     CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
-    //     console2.log("ConvertibleDepositPositionManager deployed at:", address(CDPOS));
+    //     DEPOS = new OlympusDepositPositionManager(address(kernel));
+    //     console2.log("ConvertibleDepositPositionManager deployed at:", address(DEPOS));
 
-    //     return address(CDPOS);
+    //     return address(DEPOS);
     // }
 
     // function _deployConvertibleDepositTokenManager(bytes calldata) public returns (address) {

@@ -23,7 +23,7 @@ contract ConvertibleDepositInstall is OlyBatch {
         // Load contract addresses from the environment file
         kernel = envAddress("current", "olympus.Kernel");
         // cdepo = envAddress("current", "olympus.modules.OlympusConvertibleDepository");
-        cdpos = envAddress("current", "olympus.modules.OlympusConvertibleDepositPositionManager");
+        cdpos = envAddress("current", "olympus.modules.OlympusDepositPositionManager");
         cdAuctioneer = envAddress("current", "olympus.policies.ConvertibleDepositAuctioneer");
         cdFacility = envAddress("current", "olympus.policies.ConvertibleDepositFacility");
         emissionManager = envAddress("current", "olympus.policies.EmissionManager");
@@ -39,7 +39,7 @@ contract ConvertibleDepositInstall is OlyBatch {
         // Validate addresses
         // solhint-disable custom-errors
         // require(cdepo != address(0), "CDEPO address is not set");
-        require(cdpos != address(0), "CDPOS address is not set");
+        require(cdpos != address(0), "DEPOS address is not set");
         require(cdAuctioneer != address(0), "CDAuctioneer address is not set");
         require(cdFacility != address(0), "CDFacility address is not set");
         require(emissionManager != address(0), "EmissionManager address is not set");
@@ -53,7 +53,7 @@ contract ConvertibleDepositInstall is OlyBatch {
         //     abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, cdepo)
         // );
 
-        // A.2. Install the CDPOS module on the kernel
+        // A.2. Install the DEPOS module on the kernel
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, cdpos)

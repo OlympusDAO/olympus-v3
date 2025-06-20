@@ -4,10 +4,10 @@ pragma solidity >=0.8.15;
 import {Module} from "src/Kernel.sol";
 import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
 
-/// @title  CDPOSv1
-/// @notice This defines the interface for the CDPOS module.
+/// @title  DEPOSv1
+/// @notice This defines the interface for the DEPOS module.
 ///         The objective of this module is to track the terms of a deposit position.
-abstract contract CDPOSv1 is Module, ERC721 {
+abstract contract DEPOSv1 is Module, ERC721 {
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Data structure for the terms of a deposit position
@@ -87,22 +87,22 @@ abstract contract CDPOSv1 is Module, ERC721 {
     // ========== ERRORS ========== //
 
     /// @notice Error thrown when the caller is not the owner of the position
-    error CDPOS_NotOwner(uint256 positionId_);
+    error DEPOS_NotOwner(uint256 positionId_);
 
     /// @notice Error thrown when an invalid position ID is provided
-    error CDPOS_InvalidPositionId(uint256 id_);
+    error DEPOS_InvalidPositionId(uint256 id_);
 
     /// @notice Error thrown when a position has already been wrapped
-    error CDPOS_AlreadyWrapped(uint256 positionId_);
+    error DEPOS_AlreadyWrapped(uint256 positionId_);
 
     /// @notice Error thrown when a position has not been wrapped
-    error CDPOS_NotWrapped(uint256 positionId_);
+    error DEPOS_NotWrapped(uint256 positionId_);
 
     /// @notice Error thrown when an invalid parameter is provided
-    error CDPOS_InvalidParams(string reason_);
+    error DEPOS_InvalidParams(string reason_);
 
     /// @notice Error thrown when a position does not support conversion
-    error CDPOS_NotConvertible(uint256 positionId_);
+    error DEPOS_NotConvertible(uint256 positionId_);
 
     // ========== WRAPPING ========== //
 

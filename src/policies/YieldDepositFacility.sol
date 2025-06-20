@@ -15,7 +15,7 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.sol";
 
@@ -28,8 +28,8 @@ contract YieldDepositFacility is
 {
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The CDPOS module.
-    CDPOSv1 public CDPOS;
+    /// @notice The DEPOS module.
+    DEPOSv1 public DEPOS;
 
     /// @notice The yield fee
     uint16 internal _yieldFee;
@@ -70,11 +70,11 @@ contract YieldDepositFacility is
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("ROLES");
-        dependencies[1] = toKeycode("CDPOS");
+        dependencies[1] = toKeycode("DEPOS");
         dependencies[2] = toKeycode("TRSRY");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        CDPOS = CDPOSv1(getModuleAddress(dependencies[1]));
+        DEPOS = DEPOSv1(getModuleAddress(dependencies[1]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
     }
 
@@ -85,10 +85,10 @@ contract YieldDepositFacility is
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode cdposKeycode = toKeycode("CDPOS");
+        Keycode cdposKeycode = toKeycode("DEPOS");
 
         permissions = new Permissions[](1);
-        permissions[0] = Permissions(cdposKeycode, CDPOS.mint.selector);
+        permissions[0] = Permissions(cdposKeycode, DEPOS.mint.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -147,8 +147,8 @@ contract YieldDepositFacility is
             params.wrapReceipt
         );
 
-        // Create a new term record in the CDPOS module
-        positionId = CDPOS.mint(
+        // Create a new term record in the DEPOS module
+        positionId = DEPOS.mint(
             params.depositor, // owner
             address(params.asset), // asset
             params.periodMonths, // period months
@@ -212,7 +212,7 @@ contract YieldDepositFacility is
     ) internal view returns (uint256 yieldMinusFee, uint256 yieldFee, uint256 endRate) {
         // Validate that the position is valid
         // This will revert if the position is not valid
-        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
+        DEPOSv1.Position memory position = DEPOS.getPosition(positionId_);
 
         // Validate that the caller is the owner of the position
         if (position.owner != account_) revert YDF_NotOwner(positionId_);
@@ -226,7 +226,7 @@ contract YieldDepositFacility is
         ) revert YDF_InvalidArgs("multiple tokens");
 
         // Validate that the position is not convertible
-        if (CDPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
+        if (DEPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
 
         // Validate that the asset has a yield bearing vault
         // This is validated in the createPosition function, but is checked to be safe
@@ -303,7 +303,7 @@ contract YieldDepositFacility is
         // Get the asset and period months
         uint8 periodMonths;
         {
-            CDPOSv1.Position memory position = CDPOS.getPosition(positionIds_[0]);
+            DEPOSv1.Position memory position = DEPOS.getPosition(positionIds_[0]);
             asset = IERC20(position.asset);
             periodMonths = position.periodMonths;
 
@@ -346,7 +346,7 @@ contract YieldDepositFacility is
         IERC20 asset;
         uint8 periodMonths;
         {
-            CDPOSv1.Position memory position = CDPOS.getPosition(positionIds_[0]);
+            DEPOSv1.Position memory position = DEPOS.getPosition(positionIds_[0]);
             asset = IERC20(position.asset);
             periodMonths = position.periodMonths;
 

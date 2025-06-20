@@ -115,14 +115,14 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         // Assert that the CDEPO token was minted to the recipient
         _assertReceiptTokenBalance(recipient, actualAmount, false);
 
-        // Assert that the recipient has a CDPOS position
+        // Assert that the recipient has a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
     }
 
     // [X] it mints the CD tokens to account_
-    // [X] it creates a new position in the CDPOS module
+    // [X] it creates a new position in the DEPOS module
     // [X] the position does not have a conversion price
     // [X] it returns the position ID
     // [X] it emits a CreatedDeposit event
@@ -186,7 +186,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         // Assert that the receipt token token was minted to the recipient
         _assertReceiptTokenBalance(recipient, actualAmount, false);
 
-        // Assert that the recipient has a CDPOS position
+        // Assert that the recipient has a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");

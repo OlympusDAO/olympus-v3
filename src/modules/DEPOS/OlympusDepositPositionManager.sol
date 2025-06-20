@@ -10,13 +10,13 @@ import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
 
 // Bophades
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
-/// @title  Olympus Convertible Deposit Position Manager
-/// @notice Implementation of the {CDPOSv1} interface
-///         This contract is used to create, manage, and wrap/unwrap convertible deposit positions
-contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
+/// @title  Olympus Deposit Position Manager
+/// @notice Implementation of the {DEPOSv1} interface
+///         This contract is used to create, manage, and wrap/unwrap deposit positions
+contract OlympusDepositPositionManager is DEPOSv1 {
     // ========== STATE VARIABLES ========== //
 
     /// @notice The number of decimal places to display when rendering values as decimal strings.
@@ -34,7 +34,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
 
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
-        return toKeycode("CDPOS");
+        return toKeycode("DEPOS");
     }
 
     /// @inheritdoc Module
@@ -45,7 +45,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
 
     // ========== WRAPPING ========== //
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///             - The caller is not the owner of the position
@@ -59,7 +59,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         Position storage position = _positions[positionId_];
 
         // Validate that the position is not already wrapped
-        if (position.wrapped) revert CDPOS_AlreadyWrapped(positionId_);
+        if (position.wrapped) revert DEPOS_AlreadyWrapped(positionId_);
 
         // Mark the position as wrapped
         position.wrapped = true;
@@ -70,7 +70,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         emit PositionWrapped(positionId_);
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///             - The caller is not the owner of the position
@@ -84,7 +84,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         Position storage position = _positions[positionId_];
 
         // Validate that the position is wrapped
-        if (!position.wrapped) revert CDPOS_NotWrapped(positionId_);
+        if (!position.wrapped) revert DEPOS_NotWrapped(positionId_);
 
         // Mark the position as unwrapped
         position.wrapped = false;
@@ -139,7 +139,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         return positionId;
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The owner is the zero address
@@ -159,22 +159,22 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         bool wrap_
     ) external virtual override permissioned returns (uint256 positionId) {
         // Validate that the owner is not the zero address
-        if (owner_ == address(0)) revert CDPOS_InvalidParams("owner");
+        if (owner_ == address(0)) revert DEPOS_InvalidParams("owner");
 
         // Validate that the asset is not the zero address
-        if (asset_ == address(0)) revert CDPOS_InvalidParams("asset");
+        if (asset_ == address(0)) revert DEPOS_InvalidParams("asset");
 
         // Validate that the period is greater than 0
-        if (periodMonths_ == 0) revert CDPOS_InvalidParams("period");
+        if (periodMonths_ == 0) revert DEPOS_InvalidParams("period");
 
         // Validate that the remaining deposit is greater than 0
-        if (remainingDeposit_ == 0) revert CDPOS_InvalidParams("deposit");
+        if (remainingDeposit_ == 0) revert DEPOS_InvalidParams("deposit");
 
         // Validate that the conversion price is greater than 0
-        if (conversionPrice_ == 0) revert CDPOS_InvalidParams("conversion price");
+        if (conversionPrice_ == 0) revert DEPOS_InvalidParams("conversion price");
 
         // Validate that the conversion expiry is in the future
-        if (conversionExpiry_ <= block.timestamp) revert CDPOS_InvalidParams("conversion expiry");
+        if (conversionExpiry_ <= block.timestamp) revert DEPOS_InvalidParams("conversion expiry");
 
         return
             _create(
@@ -188,7 +188,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
             );
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The position ID is invalid
@@ -206,7 +206,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         emit PositionUpdated(positionId_, amount_);
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The caller is not the owner of the position
     ///             - The amount is 0
@@ -230,13 +230,13 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         Position storage position = _positions[positionId_];
 
         // Validate that the amount is greater than 0
-        if (amount_ == 0) revert CDPOS_InvalidParams("amount");
+        if (amount_ == 0) revert DEPOS_InvalidParams("amount");
 
         // Validate that the amount is less than or equal to the remaining deposit
-        if (amount_ > position.remainingDeposit) revert CDPOS_InvalidParams("amount");
+        if (amount_ > position.remainingDeposit) revert DEPOS_InvalidParams("amount");
 
         // Validate that the to address is not the zero address
-        if (to_ == address(0)) revert CDPOS_InvalidParams("to");
+        if (to_ == address(0)) revert DEPOS_InvalidParams("to");
 
         // Calculate the remaining deposit of the existing position
         uint256 remainingDeposit = position.remainingDeposit - amount_;
@@ -429,10 +429,10 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         Position storage position = _positions[tokenId_];
 
         // Validate that the position is valid
-        if (position.conversionPrice == 0) revert CDPOS_InvalidPositionId(tokenId_);
+        if (position.conversionPrice == 0) revert DEPOS_InvalidPositionId(tokenId_);
 
         // Validate that the position is wrapped/minted
-        if (!position.wrapped) revert CDPOS_NotWrapped(tokenId_);
+        if (!position.wrapped) revert DEPOS_NotWrapped(tokenId_);
 
         // Additional validation performed in super.transferForm():
         // - Approvals
@@ -455,7 +455,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
                 break;
             }
         }
-        if (!found) revert CDPOS_InvalidPositionId(tokenId_);
+        if (!found) revert DEPOS_InvalidPositionId(tokenId_);
 
         // Call `transferFrom` on the parent contract
         super.transferFrom(from_, to_, tokenId_);
@@ -466,19 +466,19 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
     function _getPosition(uint256 positionId_) internal view returns (Position memory) {
         Position memory position = _positions[positionId_];
         // `mint()` blocks a 0 conversion price, so this should never happen on a valid position
-        if (position.conversionPrice == 0) revert CDPOS_InvalidPositionId(positionId_);
+        if (position.conversionPrice == 0) revert DEPOS_InvalidPositionId(positionId_);
 
         return position;
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     function getUserPositionIds(
         address user_
     ) external view virtual override returns (uint256[] memory positionIds) {
         return _userPositions[user_];
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     function getPosition(
@@ -487,7 +487,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         return _getPosition(positionId_);
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///
@@ -504,7 +504,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
             position_.expiry != NON_CONVERSION_EXPIRY;
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     /// @dev        This function reverts if:
     ///             - The position ID is invalid
     ///
@@ -525,7 +525,7 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         return (amount_ * 1e9) / conversionPrice_;
     }
 
-    /// @inheritdoc CDPOSv1
+    /// @inheritdoc DEPOSv1
     function previewConvert(
         uint256 positionId_,
         uint256 amount_
@@ -536,10 +536,10 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
         if (position.expiry <= block.timestamp) return 0;
 
         // If the amount is greater than the remaining deposit, revert
-        if (amount_ > position.remainingDeposit) revert CDPOS_InvalidParams("amount");
+        if (amount_ > position.remainingDeposit) revert DEPOS_InvalidParams("amount");
 
         // If conversion is not supported, revert
-        if (!_isConvertible(position)) revert CDPOS_NotConvertible(positionId_);
+        if (!_isConvertible(position)) revert DEPOS_NotConvertible(positionId_);
 
         return _previewConvert(amount_, position.conversionPrice);
     }
@@ -556,13 +556,13 @@ contract OlympusConvertibleDepositPositionManager is CDPOSv1 {
 
     modifier onlyValidPosition(uint256 positionId_) {
         if (_getPosition(positionId_).conversionPrice == 0)
-            revert CDPOS_InvalidPositionId(positionId_);
+            revert DEPOS_InvalidPositionId(positionId_);
         _;
     }
 
     modifier onlyPositionOwner(uint256 positionId_) {
         // This validates that the caller is the owner of the position
-        if (_getPosition(positionId_).owner != msg.sender) revert CDPOS_NotOwner(positionId_);
+        if (_getPosition(positionId_).owner != msg.sender) revert DEPOS_NotOwner(positionId_);
         _;
     }
 }

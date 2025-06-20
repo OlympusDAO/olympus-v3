@@ -9,11 +9,11 @@ import {IERC721Receiver} from "@openzeppelin-5.3.0/interfaces/IERC721Receiver.so
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
+import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
-abstract contract CDPOSTest is Test, IERC721Receiver {
-    using ModuleTestFixtureGenerator for OlympusConvertibleDepositPositionManager;
+abstract contract DEPOSTest is Test, IERC721Receiver {
+    using ModuleTestFixtureGenerator for OlympusDepositPositionManager;
 
     uint256 public constant REMAINING_DEPOSIT = 25e18;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -23,7 +23,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
     uint8 public constant DEPOSIT_PERIOD = 9;
 
     Kernel public kernel;
-    OlympusConvertibleDepositPositionManager public CDPOS;
+    OlympusDepositPositionManager public DEPOS;
     ERC721ReceiverMock public mockERC721Receiver;
     address public godmode;
     address public convertibleDepositToken;
@@ -35,7 +35,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         vm.warp(INITIAL_BLOCK);
 
         kernel = new Kernel();
-        CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
+        DEPOS = new OlympusDepositPositionManager(address(kernel));
         mockERC721Receiver = new ERC721ReceiverMock(
             IERC721Receiver.onERC721Received.selector,
             ERC721ReceiverMock.RevertType.None
@@ -50,10 +50,10 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         convertibleDepositToken = address(mockERC20);
 
         // Generate fixtures
-        godmode = CDPOS.generateGodmodeFixture(type(OlympusConvertibleDepositPositionManager).name);
+        godmode = DEPOS.generateGodmodeFixture(type(OlympusDepositPositionManager).name);
 
         // Install modules and policies on Kernel
-        kernel.executeAction(Actions.InstallModule, address(CDPOS));
+        kernel.executeAction(Actions.InstallModule, address(DEPOS));
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 
@@ -78,7 +78,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint48 conversionExpiry_,
         bool wrap_
     ) internal view {
-        CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
+        DEPOSv1.Position memory position = DEPOS.getPosition(positionId_);
         assertEq(position.owner, owner_, "position.owner");
         assertEq(position.asset, convertibleDepositToken, "position.asset");
         assertEq(position.periodMonths, DEPOSIT_PERIOD, "position.periodMonths");
@@ -93,7 +93,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 positionId_,
         uint256 total_
     ) internal view {
-        uint256[] memory userPositions = CDPOS.getUserPositionIds(owner_);
+        uint256[] memory userPositions = DEPOS.getUserPositionIds(owner_);
         assertEq(userPositions.length, total_, "userPositions.length");
 
         // Iterate over the positions and assert that the positionId_ is in the array
@@ -109,15 +109,15 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
     function _assertERC721Owner(uint256 positionId_, address owner_, bool minted_) internal {
         if (minted_) {
-            assertEq(CDPOS.ownerOf(positionId_), owner_, "ownerOf");
+            assertEq(DEPOS.ownerOf(positionId_), owner_, "ownerOf");
         } else {
             vm.expectRevert("NOT_MINTED");
-            CDPOS.ownerOf(positionId_);
+            DEPOS.ownerOf(positionId_);
         }
     }
 
     function _assertERC721Balance(address owner_, uint256 balance_) internal view {
-        assertEq(CDPOS.balanceOf(owner_), balance_, "balanceOf");
+        assertEq(DEPOS.balanceOf(owner_), balance_, "balanceOf");
     }
 
     function _assertERC721PositionReceived(
@@ -160,7 +160,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         bool wrap_
     ) internal {
         vm.prank(godmode);
-        CDPOS.mint(
+        DEPOS.mint(
             owner_,
             convertibleDepositToken,
             DEPOSIT_PERIOD,
@@ -185,7 +185,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
     function _updatePosition(uint256 positionId_, uint256 remainingDeposit_) internal {
         vm.prank(godmode);
-        CDPOS.update(positionId_, remainingDeposit_);
+        DEPOS.update(positionId_, remainingDeposit_);
     }
 
     function _splitPosition(
@@ -196,12 +196,12 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         bool wrap_
     ) internal {
         vm.prank(owner_);
-        CDPOS.split(positionId_, amount_, to_, wrap_);
+        DEPOS.split(positionId_, amount_, to_, wrap_);
     }
 
     function _wrapPosition(address owner_, uint256 positionId_) internal {
         vm.prank(owner_);
-        CDPOS.wrap(positionId_);
+        DEPOS.wrap(positionId_);
     }
 
     modifier givenPositionWrapped(address owner_, uint256 positionId_) {
@@ -211,7 +211,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
     function _unwrapPosition(address owner_, uint256 positionId_) internal {
         vm.prank(owner_);
-        CDPOS.unwrap(positionId_);
+        DEPOS.unwrap(positionId_);
     }
 
     modifier givenPositionUnwrapped(address owner_, uint256 positionId_) {
