@@ -16,6 +16,7 @@ interface IDepositPositionManager {
     /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
     /// @param  expiry                  Timestamp of the position expiry
     /// @param  wrapped                 Whether the term is wrapped
+    /// @param  additionalData          Additional data for the position
     struct Position {
         address owner;
         address asset;
@@ -24,6 +25,7 @@ interface IDepositPositionManager {
         uint256 conversionPrice;
         uint48 expiry;
         bool wrapped;
+        bytes additionalData;
     }
 
     // ========== EVENTS ========== //
@@ -40,8 +42,11 @@ interface IDepositPositionManager {
         bool wrapped
     );
 
-    /// @notice Emitted when a position is updated
-    event PositionUpdated(uint256 indexed positionId, uint256 remainingDeposit);
+    /// @notice Emitted when a position's remaining deposit is updated
+    event PositionRemainingDepositUpdated(uint256 indexed positionId, uint256 remainingDeposit);
+
+    /// @notice Emitted when a position's additional data is updated
+    event PositionAdditionalDataUpdated(uint256 indexed positionId, bytes additionalData);
 
     /// @notice Emitted when a position is split
     event PositionSplit(
@@ -130,6 +135,7 @@ interface IDepositPositionManager {
     /// @param  conversionPrice_            The price of the reserve token in USD
     /// @param  expiry_                     The timestamp for the position expiry
     /// @param  wrap_                       Whether the position should be wrapped
+    /// @param  additionalData_             Additional data for the position
     /// @return _positionId                 The ID of the new position
     function mint(
         address owner_,
@@ -138,7 +144,8 @@ interface IDepositPositionManager {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 expiry_,
-        bool wrap_
+        bool wrap_,
+        bytes calldata additionalData_
     ) external returns (uint256 _positionId);
 
     /// @notice Updates the remaining deposit of a position
@@ -149,7 +156,17 @@ interface IDepositPositionManager {
     ///
     /// @param  positionId_ The ID of the position to update
     /// @param  amount_     The new amount of the position
-    function update(uint256 positionId_, uint256 amount_) external;
+    function setRemainingDeposit(uint256 positionId_, uint256 amount_) external;
+
+    /// @notice Updates the additional data of a position
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the position ID is valid
+    ///         - Update the additional data of the position
+    ///
+    /// @param  positionId_         The ID of the position to update
+    /// @param  additionalData_     The new additional data of the position
+    function setAdditionalData(uint256 positionId_, bytes calldata additionalData_) external;
 
     /// @notice Splits the specified amount of the position into a new position
     ///         This is useful if the position owner wants to split their position into multiple smaller positions.

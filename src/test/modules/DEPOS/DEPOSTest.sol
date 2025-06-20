@@ -174,7 +174,8 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
             remainingDeposit_,
             conversionPrice_,
             conversionExpiry_,
-            wrap_
+            wrap_,
+            ""
         );
     }
 
@@ -192,7 +193,7 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
 
     function _updatePosition(uint256 positionId_, uint256 remainingDeposit_) internal {
         vm.prank(godmode);
-        DEPOS.update(positionId_, remainingDeposit_);
+        DEPOS.setRemainingDeposit(positionId_, remainingDeposit_);
     }
 
     function _splitPosition(

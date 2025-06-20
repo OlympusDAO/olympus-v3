@@ -35,7 +35,8 @@ contract CreateDEPOSTest is DEPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            false
+            false,
+            ""
         );
     }
 
@@ -70,7 +71,8 @@ contract CreateDEPOSTest is DEPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            false
+            false,
+            ""
         );
     }
 
@@ -352,5 +354,25 @@ contract CreateDEPOSTest is DEPOSTest {
 
         // Assert that the owner's list of positions is updated
         _assertUserPosition(address(this), 0, 1);
+    }
+
+    // when the additional data is not empty
+    //  [X] it sets the additional data
+
+    function test_additionalDataIsNotEmpty() public {
+        vm.prank(godmode);
+        DEPOS.mint(
+            address(this),
+            convertibleDepositToken,
+            DEPOSIT_PERIOD,
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            false,
+            "test"
+        );
+
+        // Assert that the additional data is set
+        assertEq(DEPOS.getPosition(0).additionalData, bytes("test"));
     }
 }

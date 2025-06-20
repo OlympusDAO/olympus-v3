@@ -299,7 +299,7 @@ sequenceDiagram
 
     caller->>CDFacility: convert(positionIds, amounts)
     loop For each position
-        CDFacility->>DEPOS: update(positionId, remainingAmount)
+        CDFacility->>DEPOS: setRemainingDeposit(positionId, remainingAmount)
     end
     CDFacility->>DepositManager: withdraw(caller, amount)
     caller-->>DepositManager: burns receipt tokens
@@ -358,7 +358,7 @@ sequenceDiagram
 
     caller->>CDFacility: redeem(positionIds, amounts)
     loop For each position
-        CDFacility->>DEPOS: update(positionId, remainingAmount)
+        CDFacility->>DEPOS: setRemainingDeposit(positionId, remainingAmount)
     end
     CDFacility->>CDEPO: redeemFor(caller, amount)
     caller-->>CDEPO: cdReserve tokens

@@ -106,7 +106,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        bool wrap_
+        bool wrap_,
+        bytes memory additionalData_
     ) internal returns (uint256 positionId) {
         // Create the position record
         positionId = _positionCount++;
@@ -117,7 +118,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
             remainingDeposit: remainingDeposit_,
             conversionPrice: conversionPrice_,
             expiry: conversionExpiry_,
-            wrapped: wrap_
+            wrapped: wrap_,
+            additionalData: additionalData_
         });
 
         // Add the position ID to the user's list of positions
@@ -158,7 +160,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        bool wrap_
+        bool wrap_,
+        bytes calldata additionalData_
     ) external virtual override permissioned returns (uint256 positionId) {
         // Validate that the owner is not the zero address
         if (owner_ == address(0)) revert DEPOS_InvalidParams("owner");
@@ -186,7 +189,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
                 remainingDeposit_,
                 conversionPrice_,
                 conversionExpiry_,
-                wrap_
+                wrap_,
+                additionalData_
             );
     }
 
@@ -196,7 +200,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     ///             - The position ID is invalid
     ///
     ///             This is a permissioned function that can only be called by approved policies
-    function update(
+    function setRemainingDeposit(
         uint256 positionId_,
         uint256 amount_
     ) external virtual override permissioned onlyValidPosition(positionId_) {
@@ -205,7 +209,25 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         position.remainingDeposit = amount_;
 
         // Emit the event
-        emit PositionUpdated(positionId_, amount_);
+        emit PositionRemainingDepositUpdated(positionId_, amount_);
+    }
+
+    /// @inheritdoc IDepositPositionManager
+    /// @dev        This function reverts if:
+    ///             - The caller is not permissioned
+    ///             - The position ID is invalid
+    ///
+    ///             This is a permissioned function that can only be called by approved policies
+    function setAdditionalData(
+        uint256 positionId_,
+        bytes calldata additionalData_
+    ) external virtual override permissioned onlyValidPosition(positionId_) {
+        // Update the additional data of the position
+        Position storage position = _positions[positionId_];
+        position.additionalData = additionalData_;
+
+        // Emit the event
+        emit PositionAdditionalDataUpdated(positionId_, additionalData_);
     }
 
     /// @inheritdoc IDepositPositionManager
@@ -254,7 +276,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
             amount_,
             position.conversionPrice,
             position.expiry,
-            wrap_
+            wrap_,
+            position.additionalData
         );
 
         // Emit the event

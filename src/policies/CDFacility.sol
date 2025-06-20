@@ -79,7 +79,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
         permissions[3] = Permissions(cdposKeycode, DEPOS.mint.selector);
-        permissions[4] = Permissions(cdposKeycode, DEPOS.update.selector);
+        permissions[4] = Permissions(cdposKeycode, DEPOS.setRemainingDeposit.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -140,7 +140,8 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             actualAmount,
             params.conversionPrice,
             uint48(block.timestamp + uint48(params.periodMonths) * 30 days),
-            params.wrapPosition
+            params.wrapPosition,
+            ""
         );
 
         // Emit an event
@@ -318,7 +319,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             periodMonths = currentPeriodMonths;
 
             // Update the position
-            DEPOS.update(
+            DEPOS.setRemainingDeposit(
                 positionId,
                 DEPOS.getPosition(positionId).remainingDeposit - depositAmount
             );

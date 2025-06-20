@@ -3,12 +3,11 @@ pragma solidity >=0.8.20;
 
 import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Module} from "src/Kernel.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract UpdateDEPOSTest is DEPOSTest {
-    event PositionUpdated(uint256 indexed positionId, uint256 remainingDeposit);
+    event PositionRemainingDepositUpdated(uint256 indexed positionId, uint256 remainingDeposit);
 
     // when the position does not exist
     //  [X] it reverts
@@ -19,7 +18,7 @@ contract UpdateDEPOSTest is DEPOSTest {
     // when the amount is 0
     //  [X] it sets the remaining deposit to 0
     // [X] it updates the remaining deposit
-    // [X] it emits a PositionUpdated event
+    // [X] it emits a PositionRemainingDepositUpdated event
 
     function test_invalidPosition_reverts() public {
         // Expect revert
@@ -48,7 +47,7 @@ contract UpdateDEPOSTest is DEPOSTest {
 
         // Call function
         vm.prank(owner1);
-        DEPOS.update(0, 1e18);
+        DEPOS.setRemainingDeposit(0, 1e18);
     }
 
     function test_callerIsOwner_reverts()
@@ -67,7 +66,7 @@ contract UpdateDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        DEPOS.update(0, 1e18);
+        DEPOS.setRemainingDeposit(0, 1e18);
     }
 
     function test_amountIsZero()
@@ -84,7 +83,7 @@ contract UpdateDEPOSTest is DEPOSTest {
         _updatePosition(0, 0);
 
         // Assert
-        assertEq(DEPOS.getPosition(0).remainingDeposit, 0);
+        assertEq(DEPOS.getPosition(0).remainingDeposit, 0, "remaining deposit");
     }
 
     function test_updatesRemainingDeposit(
@@ -103,7 +102,7 @@ contract UpdateDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionUpdated(0, remainingDeposit);
+        emit PositionRemainingDepositUpdated(0, remainingDeposit);
 
         // Call function
         _updatePosition(0, remainingDeposit);

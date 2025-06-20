@@ -155,7 +155,8 @@ contract YieldDepositFacility is
             params.amount, // amount
             params.conversionPrice, // conversion price of max to indicate no conversion price
             uint48(block.timestamp + uint48(params.periodMonths) * 30 days), // expiry
-            params.wrapPosition // wrap
+            params.wrapPosition, // wrap
+            "" // additional data
         );
 
         // Set the initial yield conversion rate
