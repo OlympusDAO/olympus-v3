@@ -17,7 +17,7 @@
         "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json'",
         "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json'",
         "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json'",
-        "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
+        "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix --noPrompt",
         "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
         "markdownlint": "markdownlint --fix '**/*.md'",
         "markdownlint:check": "markdownlint '**/*.md'",
@@ -38,7 +38,7 @@
         "prettier-plugin-sh": "^0.14.0",
         "prettier-plugin-solidity": "^1.0.0-beta.19",
         "prettier-plugin-sort-json": "^4.0.0",
-        "solhint": "^3.3.7",
+        "solhint": "^5.1.0",
         "solidity-code-metrics": "^0.0.25"
     },
     "prettier": {
