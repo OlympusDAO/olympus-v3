@@ -9,8 +9,8 @@ import {IERC721Receiver} from "@openzeppelin-5.3.0/interfaces/IERC721Receiver.so
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
-import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 
 abstract contract DEPOSTest is Test, IERC721Receiver {
@@ -85,7 +85,7 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
         uint48 conversionExpiry_,
         bool wrap_
     ) internal view {
-        DEPOSv1.Position memory position = DEPOS.getPosition(positionId_);
+        IDepositPositionManager.Position memory position = DEPOS.getPosition(positionId_);
         assertEq(position.operator, godmode, "position.operator");
         assertEq(position.owner, owner_, "position.owner");
         assertEq(position.asset, convertibleDepositToken, "position.asset");

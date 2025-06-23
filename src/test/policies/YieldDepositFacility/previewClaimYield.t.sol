@@ -3,7 +3,6 @@ pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
-import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
