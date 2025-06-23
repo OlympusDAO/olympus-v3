@@ -8,7 +8,6 @@ This document describes the roles that are used in the Olympus protocol.
 |------|----------|-------------|
 | admin | CDAuctioneer | Update parameters, activate the policy |
 | admin | CDClearinghouse | Activate the policy |
-| admin | CDFacility | Create CD tokens, update reclaim rate, activate the policy |
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
 | admin | EmissionManager | Adjust yield, activate the policy |
