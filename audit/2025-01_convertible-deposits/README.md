@@ -221,12 +221,14 @@ flowchart TD
   admin((admin)) -- enable --> CDFacility
   admin((admin)) -- enable --> DepositManager
   admin((admin)) -- enable --> EmissionManager
+  admin((admin)) -- enable --> YieldDepositFacility
   admin((admin)) -- restart --> EmissionManager
   emergency((emergency)) -- disable --> CDAuctioneer
   emergency((emergency)) -- disable --> CDClearinghouse
   emergency((emergency)) -- disable --> CDFacility
   emergency((emergency)) -- disable --> DepositManager
   emergency((emergency)) -- disable --> EmissionManager
+  emergency((emergency)) -- disable --> YieldDepositFacility
 
   subgraph Policies
     CDAuctioneer
@@ -234,6 +236,7 @@ flowchart TD
     CDFacility
     DepositManager
     EmissionManager
+    YieldDepositFacility
   end
 ```
 
@@ -270,7 +273,7 @@ sequenceDiagram
 
     caller->>CDAuctioneer: bid(depositAmount)
     CDAuctioneer->>CDAuctioneer: determine conversion price
-    CDAuctioneer->>CDFacility: createPosition(depositToken, depositPeriod, caller, depositAmount, conversionPrice, expiry, wrapNft)
+    CDAuctioneer->>CDFacility: createPosition()
     CDFacility->>DepositManager: deposit(caller, depositAmount)
     DepositManager->>DepositToken: transferFrom(caller, depositAmount)
     caller-->>DepositManager: deposit tokens
@@ -318,7 +321,7 @@ sequenceDiagram
 
 #### Reclaim Deposit
 
-The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`getDepositReclaimRate()` on the DepositManager contract) is applied on the deposit that is returned. The forfeited asset quantity will be swept into the TRSRY module during the next heartbeat.
+The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`getDepositReclaimRate()` on the DepositManager contract) is applied on the deposit that is returned, which is transferred to the TRSRY.
 
 ```mermaid
 sequenceDiagram
@@ -343,32 +346,51 @@ sequenceDiagram
 
 #### Redeem Deposit
 
-TODO commit, uncommit, redeem
+##### Redeem Deposit - Commit
 
-After the convertible deposit conversion expiry and before the redemption expiry, a deposit owner can redeem their underlying deposit. The full underlying deposit is returned.
+A depositor can redeem the deposit amount by committing their receipt tokens into an operator contract. The deposit will be redeemable after the deposit period has passed.
 
 ```mermaid
 sequenceDiagram
     participant caller
     participant CDFacility
-    participant DEPOS
     participant DepositManager
-    participant MINTR
-    participant ReserveToken
-    participant VaultToken
-    participant cdReserve
 
-    caller->>CDFacility: redeem(positionIds, amounts)
-    loop For each position
-        CDFacility->>DEPOS: setRemainingDeposit(positionId, remainingAmount)
-    end
-    CDFacility->>DepositManager: redeemFor(caller, amount)
-    caller-->>DepositManager: cdReserve tokens
-    DepositManager->>cdReserve: burns tokens
-    DepositManager->>VaultToken: withdraw(amount, CDFacility, DepositManager)
-    ReserveToken-->>CDFacility: reserve tokens
-    CDFacility->>ReserveToken: transfer(amount, caller)
-    ReserveToken-->>caller: reserve tokens
+    caller->>CDFacility: commitRedeem(amount)
+    CDFacility->>DepositManager: transferFrom()
+    caller-->>CDFacility: receipt tokens
+    CDFacility-->>caller: commitment id
+```
+
+##### Redeem Deposit - Uncommit
+
+After committing receipt tokens, the depositor can uncommit and withdraw the receipt tokens. This will reset the timer for any subsequent commitments.
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant CDFacility
+    participant DepositManager
+
+    caller->>CDFacility: uncommitRedeem(id, amount)
+    CDFacility->>DepositManager: transfer()
+    CDFacility-->>caller: receipt tokens
+```
+
+##### Redeem Deposit - Redeem
+
+Once the receipt token's deposit period has passed, the depositor can complete the redemption.
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant CDFacility
+    participant DepositManager
+
+    caller->>CDFacility: redeem(id)
+    CDFacility->>DepositManager: withdraw()
+    CDFacility-->>DepositManager: receipt tokens
+    DepositManager-->>caller: deposit tokens
 ```
 
 #### Borrowing Against Receipt Tokens
