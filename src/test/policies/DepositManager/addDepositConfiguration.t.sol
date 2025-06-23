@@ -73,10 +73,12 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         uint256 reclaimRate_
     ) internal view {
         // Check if asset is configured
-        assertTrue(
-            depositManager.isConfiguredDeposit(IERC20(asset_), depositPeriod_),
-            "isConfiguredDeposit: asset is not configured as a deposit asset"
+        (bool isConfigured, bool isEnabled) = depositManager.isConfiguredDeposit(
+            IERC20(asset_),
+            depositPeriod_
         );
+        assertTrue(isConfigured, "isConfiguredDeposit: asset is not configured as a deposit asset");
+        assertTrue(isEnabled, "isConfiguredDeposit: asset is not enabled as a deposit asset");
 
         // Check deposit configuration using the receipt token ID
         IDepositManager.DepositConfiguration

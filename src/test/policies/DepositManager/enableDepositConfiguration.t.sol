@@ -89,5 +89,12 @@ contract DepositManagerEnableDepositConfigurationTest is DepositManagerTest {
         IDepositManager.DepositConfiguration memory configuration = depositManager
             .getDepositConfiguration(iAsset, DEPOSIT_PERIOD);
         assertEq(configuration.isEnabled, true, "DepositConfiguration: isEnabled mismatch");
+
+        (bool isConfigured, bool isEnabled) = depositManager.isConfiguredDeposit(
+            iAsset,
+            DEPOSIT_PERIOD
+        );
+        assertEq(isConfigured, true, "isConfiguredDeposit: isConfigured mismatch");
+        assertEq(isEnabled, true, "isConfiguredDeposit: isEnabled mismatch");
     }
 }

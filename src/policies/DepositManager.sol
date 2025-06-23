@@ -70,14 +70,18 @@ contract DepositManager is
 
     /// @notice Reverts if the deposit asset is not configured
     modifier onlyConfiguredDeposit(IERC20 asset_, uint8 depositPeriod_) {
-        if (!isConfiguredDeposit(asset_, depositPeriod_))
+        if (
+            address(_depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].asset) ==
+            address(0)
+        ) {
             revert DepositManager_InvalidConfiguration(address(asset_), depositPeriod_);
+        }
         _;
     }
 
+    /// @notice Reverts if the deposit asset is not enabled
     modifier onlyEnabledDeposit(IERC20 asset_, uint8 depositPeriod_) {
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_);
-        if (!_depositConfigurations[tokenId].isEnabled) {
+        if (!_depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].isEnabled) {
             revert DepositManager_ConfigurationDisabled(address(asset_), depositPeriod_);
         }
         _;
@@ -223,10 +227,12 @@ contract DepositManager is
     function isConfiguredDeposit(
         IERC20 asset_,
         uint8 depositPeriod_
-    ) public view override returns (bool) {
-        return
-            address(_depositConfigurations[getReceiptTokenId(asset_, depositPeriod_)].asset) !=
-            address(0);
+    ) public view override returns (bool isConfigured, bool isEnabled) {
+        uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_);
+        isConfigured = address(_depositConfigurations[receiptTokenId].asset) != address(0);
+        isEnabled = _depositConfigurations[receiptTokenId].isEnabled;
+
+        return (isConfigured, isEnabled);
     }
 
     /// @inheritdoc IDepositManager
@@ -255,7 +261,8 @@ contract DepositManager is
         if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
 
         // Validate that the asset and deposit period combination is not already configured
-        if (isConfiguredDeposit(asset_, depositPeriod_)) {
+        (bool isConfigured, ) = isConfiguredDeposit(asset_, depositPeriod_);
+        if (isConfigured) {
             revert DepositManager_ConfigurationExists(address(asset_), depositPeriod_);
         }
 

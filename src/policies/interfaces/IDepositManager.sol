@@ -210,11 +210,16 @@ interface IDepositManager {
     ) external view returns (DepositConfiguration memory configuration);
 
     /// @notice Returns whether a deposit asset and period combination are configured
+    /// @dev    A deposit configuration that is disabled will not accept further deposits
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
     /// @return isConfigured    Whether the deposit asset is configured
-    function isConfiguredDeposit(IERC20 asset_, uint8 depositPeriod_) external view returns (bool);
+    /// @return isEnabled       Whether the deposit asset is enabled
+    function isConfiguredDeposit(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external view returns (bool isConfigured, bool isEnabled);
 
     /// @notice Returns the deposit configurations
     ///
