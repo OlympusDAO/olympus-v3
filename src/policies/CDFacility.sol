@@ -213,7 +213,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         if (amount_ > position.remainingDeposit) revert CDF_InvalidAmount(positionId_, amount_);
 
         // Validate that the position supports conversion
-        if (position.conversionPrice == type(uint256).max) revert CDF_Unsupported(positionId_);
+        if (position.operator != address(this)) revert CDF_Unsupported(positionId_);
 
         // Set the asset, or validate
         currentAsset = position.asset;

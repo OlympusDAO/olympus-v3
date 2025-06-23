@@ -226,8 +226,8 @@ contract YieldDepositFacility is
             previousPeriodMonths_ != position.periodMonths
         ) revert YDF_InvalidArgs("multiple tokens");
 
-        // Validate that the position is not convertible
-        if (DEPOS.isConvertible(positionId_)) revert YDF_Unsupported(positionId_);
+        // Validate that the position is created by the YDF
+        if (position.operator != address(this)) revert YDF_Unsupported(positionId_);
 
         // Validate that the asset has a yield bearing vault
         // This is validated in the createPosition function, but is checked to be safe

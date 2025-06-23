@@ -545,4 +545,13 @@ contract ConvertibleDepositFacilityTest is Test {
             )
         );
     }
+
+    function _expectRevertUnsupported(uint256 positionId_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_Unsupported.selector,
+                positionId_
+            )
+        );
+    }
 }

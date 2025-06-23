@@ -41,6 +41,25 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         yieldDepositFacility.previewClaimYield(recipient, positionIds);
     }
 
+    // given the position was not created by the YDF
+    //  [X] it reverts
+
+    function test_givenPositionNotCreatedByYDF_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 1e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
+        givenAddressHasConvertibleDepositPosition(recipient, 1e18, 2e18)
+    {
+        // Expect revert
+        _expectRevertUnsupported(POSITION_ID);
+
+        // Attempt to preview harvest non-existent position
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = POSITION_ID;
+        yieldDepositFacility.previewClaimYield(recipient, positionIds);
+    }
+
     // when timestamp hints are provided
     //  when the number of hints is not the same as the number of positions
     //   [X] it reverts

@@ -619,4 +619,10 @@ contract YieldDepositFacilityTest is Test {
             )
         );
     }
+
+    function _expectRevertUnsupported(uint256 positionId_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IYieldDepositFacility.YDF_Unsupported.selector, positionId_)
+        );
+    }
 }

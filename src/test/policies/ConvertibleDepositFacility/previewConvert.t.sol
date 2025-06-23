@@ -310,10 +310,10 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
-    // when the position does not support conversion
+    // given any position has not been created by the CD facility
     //  [X] it reverts
 
-    function test_anyPositionDoesNotSupportConversion_reverts()
+    function test_anyPositionNotCreatedByCDFacility_reverts()
         public
         givenLocallyActive
         givenRecipientHasReserveToken
@@ -331,9 +331,7 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
 
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_Unsupported.selector, 1)
-        );
+        _expectRevertUnsupported(1);
 
         // Call function
         facility.previewConvert(recipient, positionIds_, amounts_);
