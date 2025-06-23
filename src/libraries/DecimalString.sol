@@ -2,7 +2,6 @@
 pragma solidity ^0.8;
 
 import {uint2str} from "./Uint2Str.sol";
-import {console2} from "forge-std/console2.sol";
 
 library DecimalString {
     /// @notice Converts a uint256 value to a string with a specified number of decimal places.
