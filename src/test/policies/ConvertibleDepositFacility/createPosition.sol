@@ -95,7 +95,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
     }
 
     // given the deposit asset has 6 decimals
-    //  [X] the amount of CD tokens minted is correct
+    //  [X] the amount of receipt tokens minted is correct
     //  [X] mint approval is not changed
 
     function test_reserveTokenHasSmallerDecimals()
@@ -139,7 +139,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         _assertMintApproval(0);
     }
 
-    // [X] it mints the CD tokens to account_
+    // [X] it mints the receipt tokens to account_
     // [X] it creates a new position in the DEPOS module
     // [X] mint approval is not changed
     // [X] the position conversion price matches

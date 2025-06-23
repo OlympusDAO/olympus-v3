@@ -85,46 +85,46 @@ interface IConvertibleDepositFacility {
         bool wrapReceipt_
     ) external returns (uint256 receiptTokenId, uint256 actualAmount);
 
-    /// @notice Converts CD tokens to OHM before conversion expiry
+    /// @notice Converts receipt tokens to OHM before conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that the token in the position is a supported CD token
+    ///         - Validating that the token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Validating that the conversion expiry for all of the positions has not passed
-    ///         - Burning the CD tokens
+    ///         - Burning the receipt tokens
     ///         - Minting OHM to `account_`
-    ///         - Transferring the vault token to the treasury
+    ///         - Transferring the deposit token to the treasury
     ///         - Emitting an event
     ///
     /// @param  positionIds_        An array of position ids that will be converted
-    /// @param  amounts_            An array of amounts of CD tokens to convert
+    /// @param  amounts_            An array of amounts of receipt tokens to convert
     /// @param  wrappedReceipt_     Whether the receipt tokens to use are wrapped as ERC20s
-    /// @return cdTokenIn           The total amount of CD tokens converted
+    /// @return receiptTokenIn           The total amount of receipt tokens converted
     /// @return convertedTokenOut   The amount of OHM minted during conversion
     function convert(
         uint256[] memory positionIds_,
         uint256[] memory amounts_,
         bool wrappedReceipt_
-    ) external returns (uint256 cdTokenIn, uint256 convertedTokenOut);
+    ) external returns (uint256 receiptTokenIn, uint256 convertedTokenOut);
 
-    /// @notice Preview the amount of CD tokens and OHM that would be converted
+    /// @notice Preview the amount of receipt tokens and OHM that would be converted
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that `account_` is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Validating that the conversion expiry for all of the positions has not passed
-    ///         - Returning the total amount of CD tokens and OHM that would be converted
+    ///         - Returning the total amount of receipt tokens and OHM that would be converted
     ///
     /// @param  account_            The address to preview the conversion for
     /// @param  positionIds_        An array of position ids that will be converted
-    /// @param  amounts_            An array of amounts of CD tokens to convert
-    /// @return cdTokenIn           The total amount of CD tokens converted
+    /// @param  amounts_            An array of amounts of receipt tokens to convert
+    /// @return receiptTokenIn      The total amount of receipt tokens converted
     /// @return convertedTokenOut   The amount of OHM minted during conversion
     function previewConvert(
         address account_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external view returns (uint256 cdTokenIn, uint256 convertedTokenOut);
+    ) external view returns (uint256 receiptTokenIn, uint256 convertedTokenOut);
 
     // ========== YIELD ========== //
 

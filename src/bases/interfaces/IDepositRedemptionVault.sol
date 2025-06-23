@@ -57,7 +57,7 @@ interface IDepositRedemptionVault {
 
     // ========== DATA STRUCTURES ========== //
 
-    /// @notice Data structure for a commitment to redeem a CD token
+    /// @notice Data structure for a commitment to redeem a receipt token
     ///
     /// @param  depositToken    The address of the deposit token
     /// @param  depositPeriod   The period of the deposit in months

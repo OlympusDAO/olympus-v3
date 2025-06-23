@@ -249,10 +249,10 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         facility.convert(positionIds_, amounts_, true);
     }
 
-    // when any position has a different CD token
+    // when any position has a different receipt token
     //  [X] it reverts
 
-    function test_anyPositionHasDifferentCDToken_reverts()
+    function test_anyPositionHasDifferentReceiptToken_reverts()
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
@@ -268,8 +268,8 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         uint256[] memory positionIds_ = new uint256[](2);
         uint256[] memory amounts_ = new uint256[](2);
 
-        positionIds_[0] = 0; // cdToken
-        positionIds_[1] = 2; // cdTokenTwo
+        positionIds_[0] = 0; // receiptToken
+        positionIds_[1] = 2; // receiptTokenTwo
 
         amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
         amounts_[1] = RESERVE_TOKEN_AMOUNT;
@@ -287,7 +287,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         facility.convert(positionIds_, amounts_, true);
     }
 
-    // when the caller has not approved CDEPO to spend the total amount of CD tokens
+    // when the caller has not approved DepositManager to spend the total amount of receipt tokens
     //  [X] it reverts
 
     function test_spendingIsNotApproved_reverts()
@@ -370,8 +370,8 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         uint256[] memory positionIds_ = new uint256[](2);
         uint256[] memory amounts_ = new uint256[](2);
 
-        positionIds_[0] = 0; // cdToken
-        positionIds_[1] = 1; // cdToken yield deposit
+        positionIds_[0] = 0; // receiptToken
+        positionIds_[1] = 1; // receiptToken yield deposit
 
         amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
         amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
@@ -385,7 +385,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
     }
 
     // given the deposit asset has 6 decimals
-    //  [X] the amount of CD tokens converted is correct
+    //  [X] the amount of receipt tokens converted is correct
     //  [X] the amount of OHM minted is correct
 
     function test_reserveTokenHasSmallerDecimals()

@@ -21,6 +21,7 @@ import {DepositManager} from "src/policies/DepositManager.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 
 // solhint-disable max-states-count
@@ -118,7 +119,7 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.prank(admin);
         facility.enable("");
 
-        // Create a CD token
+        // Create a receipt token
         vm.startPrank(admin);
         depositManager.configureAssetVault(IERC20(address(reserveToken)), IERC4626(address(vault)));
 
@@ -130,7 +131,7 @@ contract ConvertibleDepositFacilityTest is Test {
         );
         vm.stopPrank();
 
-        // Create a second CD token
+        // Create a second receipt token
         vm.startPrank(admin);
         depositManager.configureAssetVault(
             IERC20(address(reserveTokenTwo)),
@@ -264,7 +265,7 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.prank(account_);
         asset_.approve(address(depositManager), amount_);
 
-        // Mint the CD token to the account
+        // Mint the receipt token to the account
         vm.prank(account_);
         facility.deposit(asset_, depositPeriod_, amount_, false);
         _;
@@ -374,11 +375,11 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.prank(user_);
         reserveToken.approve(address(depositManager), amount_);
 
-        // Mint the CD token to the user
+        // Mint the receipt token to the user
         vm.prank(user_);
         facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
 
-        // Approve spending of the CD token
+        // Approve spending of the receipt token
         vm.prank(user_);
         depositManager.approve(address(facility), receiptTokenId, amount_);
 

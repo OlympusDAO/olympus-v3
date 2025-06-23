@@ -137,15 +137,15 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         yieldDepositFacility.claimYield(positionIds);
     }
 
-    // given any position has a different CD token
+    // given any position has a different receipt token
     //  [X] it reverts
 
-    function test_whenDifferentCDToken_reverts()
+    function test_whenDifferentReceiptToken_reverts()
         public
         givenLocallyActive
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
     {
-        // Create a yield position for the second CD token
+        // Create a yield position for the second receipt token
         _mintToken(iReserveTokenTwo, recipient, 1e18);
         _approveTokenSpending(iReserveTokenTwo, recipient, address(depositManager), 1e18);
         vm.prank(recipient);
@@ -165,7 +165,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             )
         );
 
-        // Attempt to harvest positions with different CD tokens
+        // Attempt to harvest positions with different receipt tokens
         uint256[] memory positionIds = new uint256[](2);
         positionIds[0] = POSITION_ID;
         positionIds[1] = positionId;
@@ -179,7 +179,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     //  [X] it transfers the yield fee to the treasury
     //  [X] it updates the last yield conversion rate
     //  [X] it emits a Harvest event
-    //  [X] it withdraws the yield from the CDEPO module
+    //  [X] it withdraws the yield from the DepositManager module
 
     function test_whenNeverClaimed()
         public
@@ -236,7 +236,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     //  [X] it transfers the yield fee to the treasury
     //  [X] it updates the last yield conversion rate
     //  [X] it emits a Harvest event
-    //  [X] it withdraws the yield from the CDEPO module
+    //  [X] it withdraws the yield from the DepositManager module
 
     function test_whenClaimed()
         public
@@ -525,7 +525,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     //  [X] it transfers the yield fee to the treasury
     //  [X] it updates the last yield conversion rate
     //  [X] it emits a Harvest event
-    //  [X] it withdraws the yield from the CDEPO module
+    //  [X] it withdraws the yield from the DepositManager module
 
     function test_onExpiry()
         public
@@ -649,7 +649,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     //  [X] it transfers the yield to the caller
     //  [X] it does not transfer the yield fee to the treasury
     //  [X] it emits a Harvest event
-    //  [X] it withdraws the yield from the CDEPO module
+    //  [X] it withdraws the yield from the DepositManager module
 
     function test_whenZeroFee()
         public

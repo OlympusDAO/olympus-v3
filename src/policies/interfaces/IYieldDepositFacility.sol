@@ -78,7 +78,7 @@ interface IYieldDepositFacility {
     /// @notice Preview the amount of yield that would be claimed for the given positions
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that `account_` is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Returning the total amount of yield that would be claimed
     ///
@@ -94,7 +94,7 @@ interface IYieldDepositFacility {
     /// @notice Preview the amount of yield that would be claimed for the given positions with timestamp hints
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that `account_` is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Using the provided timestamp hints if valid
     ///         - Returning the total amount of yield that would be claimed
@@ -113,9 +113,9 @@ interface IYieldDepositFacility {
     /// @notice Claims the yield for the given positions
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
-    ///         - Burning the CD tokens
+    ///         - Burning the receipt tokens
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
@@ -126,10 +126,10 @@ interface IYieldDepositFacility {
     /// @notice Claims the yield for the given positions with timestamp hints
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Using the provided timestamp hints if valid
-    ///         - Burning the CD tokens
+    ///         - Burning the receipt tokens
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///

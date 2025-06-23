@@ -21,11 +21,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the converted amount is as expected
         assertEq(returnedOhmOut_, expectedConvertedAmount_, "converted amount");
 
-        // Assert that the CD tokens were transferred to the recipient
+        // Assert that the receipt tokens were transferred to the recipient
         assertEq(
             depositManager.balanceOf(recipient, receiptTokenId),
             previousConvertibleDepositBalance_ + bidAmount_,
-            "CD token balance"
+            "receipt token balance"
         );
 
         // Assert that the reserve tokens were transferred from the recipient
@@ -55,7 +55,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             "position expiry"
         );
         assertEq(position.wrapped, false, "position wrapped");
-        assertEq(position.asset, address(reserveToken), "position cd token");
+        assertEq(position.asset, address(reserveToken), "position deposit token");
         assertEq(position.periodMonths, PERIOD_MONTHS, "position period months");
     }
 
@@ -70,7 +70,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         auctioneer.bid(1e18);
     }
 
-    // when the caller has not approved CDEPO to spend the bid token
+    // when the caller has not approved DepositManager to spend the bid token
     //  [X] it reverts
 
     function test_givenSpendingNotApproved_reverts()

@@ -57,7 +57,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         );
     }
 
-    // when the recipient has not approved CDEPO to spend the reserve tokens
+    // when the recipient has not approved DepositManager to spend the reserve tokens
     //  [X] it reverts
 
     function test_spendingNotApproved_reverts()
@@ -73,7 +73,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
     }
 
     // given the deposit asset has 6 decimals
-    //  [X] the amount of CD tokens minted is correct
+    //  [X] the amount of receipt tokens minted is correct
 
     function test_reserveTokenHasSmallerDecimals()
         public
@@ -112,7 +112,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         // Assert that the reserve token was transferred from the recipient
         _assertReserveTokenBalance(0);
 
-        // Assert that the CDEPO token was minted to the recipient
+        // Assert that the DepositManager token was minted to the recipient
         _assertReceiptTokenBalance(recipient, actualAmount, false);
 
         // Assert that the recipient has a DEPOS position
@@ -121,7 +121,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         assertEq(positionIds[0], 0, "positionIds[0]");
     }
 
-    // [X] it mints the CD tokens to account_
+    // [X] it mints the receipt tokens to account_
     // [X] it creates a new position in the DEPOS module
     // [X] the position does not have a conversion price
     // [X] it returns the position ID

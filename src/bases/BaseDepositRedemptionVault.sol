@@ -100,7 +100,7 @@ abstract contract BaseDepositRedemptionVault is
     // ========== REDEMPTION FLOW ========== //
 
     modifier onlyValidCommitmentId(address user_, uint16 commitmentId_) {
-        // If the CD token is the zero address, the commitment is invalid
+        // If the deposit token is the zero address, the commitment is invalid
         if (address(_userCommitments[user_][commitmentId_].depositToken) == address(0))
             revert RedemptionVault_InvalidCommitmentId(user_, commitmentId_);
         _;
@@ -192,7 +192,7 @@ abstract contract BaseDepositRedemptionVault is
     ///             - Checks that the commitment ID is valid
     ///             - Checks that the commitment is redeemable
     ///             - Updates the commitment
-    ///             - Redeems the CD tokens for the underlying asset
+    ///             - Redeems the receipt tokens for the underlying asset
     ///             - Transfers the underlying asset to the caller
     ///             - Emits the Redeemed event
     ///
@@ -274,8 +274,8 @@ abstract contract BaseDepositRedemptionVault is
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
-    ///             - The CD token is not supported
-    ///             - The amount of CD tokens to reclaim is 0
+    ///             - The deposit token is not supported
+    ///             - The amount of receipt tokens to reclaim is 0
     ///             - The reclaimed amount is 0
     function reclaimFor(
         IERC20 depositToken_,

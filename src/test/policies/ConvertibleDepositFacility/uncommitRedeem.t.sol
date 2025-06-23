@@ -167,8 +167,8 @@ contract ConvertibleDepositFacilityUncommitRedeemTest is ConvertibleDepositFacil
         vm.prank(recipient);
         facility.uncommitRedeem(0, firstAmount_);
 
-        // Get CD token balance before second uncommit
-        uint256 cdTokenBalanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        // Get receipt token balance before second uncommit
+        uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -184,13 +184,13 @@ contract ConvertibleDepositFacilityUncommitRedeemTest is ConvertibleDepositFacil
             0,
             iReserveToken,
             PERIOD_MONTHS,
-            cdTokenBalanceBefore,
+            receiptTokenBalanceBefore,
             secondAmount_,
             COMMITMENT_AMOUNT - firstAmount_
         );
     }
 
-    // [X] it transfers the CD tokens from the contract to the caller
+    // [X] it transfers the receipt tokens from the contract to the caller
     // [X] it reduces the commitment amount
     // [X] it emits an Uncommitted event
 
@@ -201,7 +201,7 @@ contract ConvertibleDepositFacilityUncommitRedeemTest is ConvertibleDepositFacil
         amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
 
         // Get receipt token balance before
-        uint256 cdTokenBalanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -217,7 +217,7 @@ contract ConvertibleDepositFacilityUncommitRedeemTest is ConvertibleDepositFacil
             0,
             iReserveToken,
             PERIOD_MONTHS,
-            cdTokenBalanceBefore,
+            receiptTokenBalanceBefore,
             amount_,
             COMMITMENT_AMOUNT
         );

@@ -15,7 +15,7 @@ import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.s
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
-///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim CD tokens
+///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim receipt tokens
 contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptionVault {
     // ========== CONSTANTS ========== //
 
@@ -182,7 +182,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     ///
     /// @param  depositor_            The depositor of the position
     /// @param  positionId_           The ID of the position
-    /// @param  amount_               The amount of CD tokens to convert
+    /// @param  amount_               The amount of receipt tokens to convert
     /// @param  previousAsset_        Used to validate that the asset is the same across positions (zero if the first position)
     /// @param  previousPeriodMonths_ Used to validate that the period is the same across positions (0 if the first position)
     /// @return convertedTokenOut     The amount of converted tokens
@@ -226,7 +226,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             revert CDF_InvalidArgs("multiple assets");
         }
 
-        // The deposit and CD token have the same decimals, so either can be used
+        // The deposit and receipt token have the same decimals, so either can be used
         convertedTokenOut =
             (amount_ * (10 ** IERC20(currentAsset).decimals())) /
             position.conversionPrice;
@@ -250,7 +250,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         address depositor_,
         uint256[] memory positionIds_,
         uint256[] memory amounts_
-    ) external view onlyEnabled returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
+    ) external view onlyEnabled returns (uint256 receiptTokenIn, uint256 convertedTokenOut) {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -260,7 +260,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             uint256 positionId = positionIds_[i];
             uint256 amount = amounts_[i];
 
-            cdTokenIn += amount;
+            receiptTokenIn += amount;
 
             (
                 uint256 previewConvertOut,
@@ -273,12 +273,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         }
 
         // If the amount is 0, revert
-        if (cdTokenIn == 0) revert CDF_InvalidArgs("amount");
+        if (receiptTokenIn == 0) revert CDF_InvalidArgs("amount");
 
         // If the converted amount is 0, revert
         if (convertedTokenOut == 0) revert CDF_InvalidArgs("converted amount");
 
-        return (cdTokenIn, convertedTokenOut);
+        return (receiptTokenIn, convertedTokenOut);
     }
 
     /// @inheritdoc IConvertibleDepositFacility
@@ -297,7 +297,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         uint256[] memory positionIds_,
         uint256[] memory amounts_,
         bool wrappedReceipt_
-    ) external nonReentrant onlyEnabled returns (uint256 cdTokenIn, uint256 convertedTokenOut) {
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        returns (uint256 receiptTokenIn, uint256 convertedTokenOut)
+    {
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -307,7 +312,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             uint256 positionId = positionIds_[i];
             uint256 depositAmount = amounts_[i];
 
-            cdTokenIn += depositAmount;
+            receiptTokenIn += depositAmount;
 
             (
                 uint256 previewConvertOut,
@@ -331,7 +336,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
             periodMonths,
             msg.sender,
             address(TRSRY),
-            cdTokenIn,
+            receiptTokenIn,
             wrappedReceipt_
         );
 
@@ -341,9 +346,9 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         MINTR.mintOhm(msg.sender, convertedTokenOut);
 
         // Emit event
-        emit ConvertedDeposit(asset, msg.sender, periodMonths, cdTokenIn, convertedTokenOut);
+        emit ConvertedDeposit(asset, msg.sender, periodMonths, receiptTokenIn, convertedTokenOut);
 
-        return (cdTokenIn, convertedTokenOut);
+        return (receiptTokenIn, convertedTokenOut);
     }
 
     // ========== YIELD ========== //

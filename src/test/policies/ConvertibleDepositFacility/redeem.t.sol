@@ -254,7 +254,7 @@ contract ConvertibleDepositFacilityRedeemTest is ConvertibleDepositFacilityTest 
         assertEq(reserveToken.balanceOf(recipient), 0, "User: reserve token balance mismatch");
     }
 
-    // given there has been an amount of CD tokens uncommitted
+    // given there has been an amount of receipt tokens uncommitted
     //  [X] the updated commitment amount is used
 
     function test_uncommitted(
@@ -286,7 +286,7 @@ contract ConvertibleDepositFacilityRedeemTest is ConvertibleDepositFacilityTest 
         );
     }
 
-    // [X] it burns the CD tokens
+    // [X] it burns the receipt tokens
     // [X] it transfers the underlying asset to the caller
     // [X] it sets the commitment amount to 0
     // [X] it emits a Redeemed event

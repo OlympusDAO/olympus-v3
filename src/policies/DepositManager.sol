@@ -44,7 +44,7 @@ contract DepositManager is
     // [X] Idle/vault strategy for deposited tokens
     // [X] ERC6909 migration
     // [X] Rename to receipt tokens
-    // [X] CDTokenSupply to depositor supply
+    // [X] ReceiptTokenSupply to depositor supply
     // [ ] borrowing and repayment of deposited funds
     // [X] consider shifting away from policy
     // [X] consider if asset configuration should require a different role

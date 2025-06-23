@@ -21,7 +21,7 @@ import {CDFacility} from "src/policies/CDFacility.sol";
 ///         - Auctions are of infinite duration
 ///         - Auctions are of infinite capacity
 ///         - Users place bids by supplying an amount of the configured bid token
-///         - The payout token is a CD token (managed by {CDEPO}), which can be converted to OHM at the price that was set at the time of the bid
+///         - The payout token is a receipt token (managed by {DepositManager}), which can be converted to OHM at the price that was set at the time of the bid
 ///         - During periods of greater demand, the conversion price will increase
 ///         - During periods of lower demand, the conversion price will decrease
 ///         - The auction has a minimum price, below which the conversion price will not decrease
@@ -129,7 +129,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - Updates the current tick based on the current state
     ///             - Determines the amount of OHM that can be purchased for the deposit amount, and the updated tick capacity and price
     ///             - Updates the day state, if necessary
-    ///             - Creates a convertible deposit position using the deposit amount, the average conversion price and the CD token period
+    ///             - Creates a convertible deposit position using the deposit amount, the average conversion price and the deposit period
     ///
     ///             This function reverts if:
     ///             - The contract is not active
@@ -171,7 +171,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // TODO give user option to mint position and receipt tokens
 
-        // Create the CD tokens and position
+        // Create the receipt tokens and position
         (positionId, , ) = CD_FACILITY.createPosition(
             BID_TOKEN,
             DEPOSIT_PERIOD_MONTHS,

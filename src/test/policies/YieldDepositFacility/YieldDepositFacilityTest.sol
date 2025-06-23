@@ -155,7 +155,7 @@ contract YieldDepositFacilityTest is Test {
         vm.prank(admin);
         cdFacility.enable("");
 
-        // Create a CD token
+        // Create a receipt token
         vm.startPrank(admin);
         depositManager.configureAssetVault(iReserveToken, iVault);
 
@@ -164,7 +164,7 @@ contract YieldDepositFacilityTest is Test {
         _receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         vm.stopPrank();
 
-        // Create a second CD token
+        // Create a second receipt token
         vm.startPrank(admin);
         depositManager.configureAssetVault(iReserveTokenTwo, iVaultTwo);
 
@@ -241,11 +241,11 @@ contract YieldDepositFacilityTest is Test {
         // Mint reserve tokens to the account
         MockERC20(address(asset_)).mint(account_, amount_);
 
-        // Approve CDEPO to spend the reserve tokens
+        // Approve DepositManager to spend the reserve tokens
         vm.prank(account_);
         asset_.approve(address(depositManager), amount_);
 
-        // Mint the CD token to the account
+        // Mint the receipt token to the account
         vm.prank(account_);
         (, uint256 actualAmount) = yieldDepositFacility.deposit(
             asset_,
@@ -273,7 +273,7 @@ contract YieldDepositFacilityTest is Test {
         internal
         returns (uint256 actualPositionId, uint256 actualReceiptTokenId, uint256 actualAmount)
     {
-        // Mint the CD token
+        // Mint the receipt token
         vm.prank(account_);
         (actualPositionId, actualReceiptTokenId, actualAmount) = yieldDepositFacility
             .createPosition(iReserveToken, PERIOD_MONTHS, amount_, false, false);
@@ -353,7 +353,7 @@ contract YieldDepositFacilityTest is Test {
         // Donate more of the asset into the given vault
         asset.mint(address(vault_), amount_);
 
-        // Update the treasury and CDEPO balances
+        // Update the treasury and DepositManager balances
         _updateReserveBalances();
         _updateCdepoVaultBalance();
     }
@@ -401,7 +401,7 @@ contract YieldDepositFacilityTest is Test {
         vm.prank(user_);
         asset_.approve(address(depositManager), amount_);
 
-        // Mint the CD token to the user
+        // Mint the receipt token to the user
         vm.prank(user_);
         (, uint256 actualAmount) = yieldDepositFacility.deposit(
             asset_,
@@ -411,7 +411,7 @@ contract YieldDepositFacilityTest is Test {
         );
         _previousDepositActualAmount = actualAmount;
 
-        // Approve spending of the CD token
+        // Approve spending of the receipt token
         vm.prank(user_);
         depositManager.approve(address(yieldDepositFacility), _receiptTokenId, actualAmount);
 
@@ -423,7 +423,7 @@ contract YieldDepositFacilityTest is Test {
 
     modifier givenRedeemed(address user_, uint16 commitmentId_) {
         // Adjust the amount of yield in the vault to avoid a rounding error
-        // NOTE: This is an issue with how CDEPO tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
+        // NOTE: This is an issue with how DepositManager tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
         reserveToken.mint(address(vault), 1e18);
 
         vm.prank(user_);

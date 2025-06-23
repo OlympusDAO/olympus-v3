@@ -169,7 +169,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         vm.prank(recipient);
         yieldDepositFacility.uncommitRedeem(0, firstAmount_);
 
-        // Get CD token balance before second uncommit
+        // Get receipt token balance before second uncommit
         uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, _receiptTokenId);
 
         // Expect event
@@ -192,7 +192,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         );
     }
 
-    // [X] it transfers the CD tokens from the contract to the caller
+    // [X] it transfers the receipt tokens from the contract to the caller
     // [X] it reduces the commitment amount
     // [X] it emits an Uncommitted event
 
@@ -206,7 +206,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         // Bound the amount to be between 1 and the commitment amount
         amount_ = bound(amount_, 1, _previousDepositActualAmount);
 
-        // Get CD token balance before
+        // Get receipt token balance before
         uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, _receiptTokenId);
 
         // Expect event

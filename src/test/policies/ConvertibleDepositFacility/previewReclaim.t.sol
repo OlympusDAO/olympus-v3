@@ -15,7 +15,7 @@ contract ConvertibleDepositFacilityPreviewReclaimTest is ConvertibleDepositFacil
         facility.previewReclaim(iReserveToken, PERIOD_MONTHS, 1e18);
     }
 
-    // when the amount of CD tokens to reclaim is 0
+    // when the amount of receipt tokens to reclaim is 0
     //  [X] it reverts
 
     function test_amountIsZero_reverts()

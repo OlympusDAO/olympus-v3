@@ -34,7 +34,7 @@ contract YieldDepositFacility is
     /// @notice The yield fee
     uint16 internal _yieldFee;
 
-    /// @notice Mapping between a position id and the last conversion rate between a CD token's vault and underlying asset
+    /// @notice Mapping between a position id and the last conversion rate between a vault and underlying asset
     /// @dev    This is used to calculate the yield since the last claim. The initial value should be set at the time of minting.
     mapping(uint256 => uint256) public positionLastYieldConversionRate;
 

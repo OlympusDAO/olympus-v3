@@ -79,10 +79,10 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         facility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
     }
 
-    // when the CD token is not supported by CDEPO
+    // when the deposit token is not supported by the deposit manager
     //  [X] it reverts
 
-    function test_cdTokenNotSupported_reverts() public givenLocallyActive {
+    function test_receiptTokenNotSupported_reverts() public givenLocallyActive {
         // Expect revert
         _expectRevertDepositNotConfigured(iReserveToken, PERIOD_MONTHS + 1);
 
@@ -103,10 +103,10 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         facility.commitRedeem(iReserveToken, PERIOD_MONTHS, 0);
     }
 
-    // when the caller has not approved spending of the CD token by the contract
+    // when the caller has not approved spending of the receipt token by the contract
     //  [X] it reverts
 
-    function test_cdTokenNotApproved_reverts()
+    function test_receiptTokenNotApproved_reverts()
         public
         givenLocallyActive
         givenAddressHasConvertibleDepositToken(
@@ -124,10 +124,10 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         facility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
     }
 
-    // when the caller does not have enough CD tokens
+    // when the caller does not have enough receipt tokens
     //  [X] it reverts
 
-    function test_cdTokenInsufficientBalance_reverts()
+    function test_receiptTokenInsufficientBalance_reverts()
         public
         givenLocallyActive
         givenAddressHasConvertibleDepositToken(
@@ -147,11 +147,11 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
     }
 
     // given there is an existing commitment for the caller
-    //  given the existing commitment is for the same CD token
+    //  given the existing commitment is for the same receipt token
     //   [X] it creates a new commitment for the caller
     //   [X] it returns a commitment ID of 1
 
-    function test_existingCommitment_sameCDToken()
+    function test_existingCommitment_sameReceiptToken()
         public
         givenLocallyActive
         givenCommitted(recipient, COMMITMENT_AMOUNT)
@@ -192,7 +192,7 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
     //  [X] it creates a new commitment for the caller
     //  [X] it returns a commitment ID of 1
 
-    function test_existingCommitment_differentCDToken()
+    function test_existingCommitment_differentReceiptToken()
         public
         givenLocallyActive
         givenCommitted(recipient, COMMITMENT_AMOUNT)
@@ -274,11 +274,11 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         );
     }
 
-    // [X] it transfers the CD tokens from the caller to the contract
+    // [X] it transfers the receipt tokens from the caller to the contract
     // [X] it creates a new commitment for the caller
-    // [X] the new commitment has the same CD token
-    // [X] the new commitment has an amount equal to the amount of CD tokens committed
-    // [X] the new commitment has a redeemable timestamp of the current timestamp + the number of months in the CD token's period * 30 days
+    // [X] the new commitment has the same receipt token
+    // [X] the new commitment has an amount equal to the amount of receipt tokens committed
+    // [X] the new commitment has a redeemable timestamp of the current timestamp + the number of months in the receipt token's period * 30 days
     // [X] it emits a Committed event
     // [X] it returns a commitment ID of 0
 

@@ -21,7 +21,7 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
         uint16 commitmentId_,
         IERC20 asset_,
         uint8 periodMonths_,
-        uint256 cdTokenBalanceBefore_,
+        uint256 receiptTokenBalanceBefore_,
         uint256 amount_,
         uint256 previousUserCommitmentAmount_,
         uint256 previousOtherUserCommitmentAmount_
@@ -47,11 +47,11 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
             "Commitment count mismatch"
         );
 
-        // Assert CD token balances
+        // Assert receipt token balances
         uint256 currentReceiptTokenId = depositManager.getReceiptTokenId(asset_, periodMonths_);
         assertEq(
             depositManager.balanceOf(user_, currentReceiptTokenId),
-            cdTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
+            receiptTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
             "user: receipt token balance mismatch"
         );
         assertEq(
@@ -73,10 +73,10 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
         yieldDepositFacility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
     }
 
-    // when the CD token is not supported by CDEPO
+    // when the receipt token is not supported by DepositManager
     //  [X] it reverts
 
-    function test_cdTokenNotSupported_reverts() public givenLocallyActive {
+    function test_receiptTokenNotSupported_reverts() public givenLocallyActive {
         // Expect revert
         _expectRevertRedemptionVaultInvalidToken(iReserveToken, PERIOD_MONTHS + 1);
 
@@ -97,10 +97,10 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
         yieldDepositFacility.commitRedeem(iReserveToken, PERIOD_MONTHS, 0);
     }
 
-    // when the caller has not approved spending of the CD token by the contract
+    // when the caller has not approved spending of the receipt token by the contract
     //  [X] it reverts
 
-    function test_cdTokenNotApproved_reverts()
+    function test_receiptTokenNotApproved_reverts()
         public
         givenLocallyActive
         givenAddressHasConvertibleDepositToken(
@@ -122,10 +122,10 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
         yieldDepositFacility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
     }
 
-    // when the caller does not have enough CD tokens
+    // when the caller does not have enough receipt tokens
     //  [X] it reverts
 
-    function test_cdTokenInsufficientBalance_reverts()
+    function test_receiptTokenInsufficientBalance_reverts()
         public
         givenLocallyActive
         givenAddressHasConvertibleDepositToken(recipient, iReserveToken, PERIOD_MONTHS, 2e18)
@@ -151,11 +151,11 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
     }
 
     // given there is an existing commitment for the caller
-    //  given the existing commitment is for the same CD token
+    //  given the existing commitment is for the same receipt token
     //   [X] it creates a new commitment for the caller
     //   [X] it returns a commitment ID of 1
 
-    function test_existingCommitment_sameCDToken()
+    function test_existingCommitment_sameReceiptToken()
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
@@ -206,7 +206,7 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
     //  [X] it creates a new commitment for the caller
     //  [X] it returns a commitment ID of 1
 
-    function test_existingCommitment_differentCDToken()
+    function test_existingCommitment_differentReceiptToken()
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
@@ -308,11 +308,11 @@ contract YieldDepositFacilityCommitRedeemTest is YieldDepositFacilityTest {
         );
     }
 
-    // [X] it transfers the CD tokens from the caller to the contract
+    // [X] it transfers the receipt tokens from the caller to the contract
     // [X] it creates a new commitment for the caller
-    // [X] the new commitment has the same CD token
-    // [X] the new commitment has an amount equal to the amount of CD tokens committed
-    // [X] the new commitment has a redeemable timestamp of the current timestamp + the number of months in the CD token's period * 30 days
+    // [X] the new commitment has the same receipt token
+    // [X] the new commitment has an amount equal to the amount of receipt tokens committed
+    // [X] the new commitment has a redeemable timestamp of the current timestamp + the number of months in the receipt token's period * 30 days
     // [X] it emits a Committed event
     // [X] it returns a commitment ID of 0
 

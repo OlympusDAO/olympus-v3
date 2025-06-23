@@ -23,7 +23,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         facility.reclaim(iReserveToken, PERIOD_MONTHS, 1e18);
     }
 
-    // when the amount of CD tokens to reclaim is 0
+    // when the amount of receipt tokens to reclaim is 0
     //  [X] it reverts
 
     function test_amountToReclaimIsZero_reverts()
@@ -72,7 +72,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         facility.reclaim(iReserveToken, PERIOD_MONTHS, amount);
     }
 
-    // given the caller has not approved CDEPO to spend the total amount of CD tokens
+    // given the caller has not approved DepositManager to spend the total amount of receipt tokens
     //  [X] it reverts
 
     function test_spendingIsNotApproved_reverts()

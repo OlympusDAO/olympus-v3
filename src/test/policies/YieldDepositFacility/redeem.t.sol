@@ -274,7 +274,7 @@ contract YieldDepositFacilityRedeemTest is YieldDepositFacilityTest {
         assertEq(reserveToken.balanceOf(recipient), 0, "User: reserve token balance mismatch");
     }
 
-    // given there has been an amount of CD tokens uncommitted
+    // given there has been an amount of receipt tokens uncommitted
     //  [X] the updated commitment amount is used
 
     function test_uncommitted(
@@ -311,12 +311,12 @@ contract YieldDepositFacilityRedeemTest is YieldDepositFacilityTest {
     }
 
     // given yield has been harvested
-    //  [ ] it burns the CD tokens
+    //  [ ] it burns the receipt tokens
     //  [ ] it transfers the underlying asset to the caller
     //  [ ] it sets the commitment amount to 0
     //  [ ] it emits a Redeemed event
 
-    // [X] it burns the CD tokens
+    // [X] it burns the receipt tokens
     // [X] it transfers the underlying asset to the caller
     // [X] it sets the commitment amount to 0
     // [X] it emits a Redeemed event
