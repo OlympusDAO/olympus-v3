@@ -51,7 +51,12 @@ abstract contract BaseAssetManager is IAssetManager {
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         // Pull the assets from the depositor
         ERC20 asset = ERC20(address(asset_));
+        uint256 balanceBefore = asset.balanceOf(address(this));
         asset.safeTransferFrom(depositor_, address(this), amount_);
+        // Revert if the asset is a fee-on-transfer token
+        if (asset.balanceOf(address(this)) != balanceBefore + amount_) {
+            revert AssetManager_InvalidAsset();
+        }
 
         // If the vault is the zero address, the asset is to be kept idle
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];

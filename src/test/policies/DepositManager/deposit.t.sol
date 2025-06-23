@@ -2,6 +2,10 @@
 pragma solidity >=0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract DepositManagerDepositTest is DepositManagerTest {
     // ========== EVENTS ========== //
@@ -142,6 +146,52 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, MINT_AMOUNT + 1, false);
+    }
+
+    // given the asset is fee-on-transfer
+    //  [X] it reverts
+
+    function test_givenAssetIsFeeOnTransfer_reverts() public givenIsEnabled {
+        // Create a fee-on-transfer asset
+        address feeRecipient = makeAddr("feeRecipient");
+        MockERC20FeeOnTransfer asset = new MockERC20FeeOnTransfer(
+            "Fee On Transfer",
+            "FOT",
+            feeRecipient
+        );
+
+        // Configure the asset vault
+        vm.prank(ADMIN);
+        depositManager.configureAssetVault(IERC20(address(asset)), IERC4626(address(0)));
+
+        // Configure deposit
+        vm.prank(ADMIN);
+        depositManager.addDepositConfiguration(
+            IERC20(address(asset)),
+            DEPOSIT_PERIOD,
+            RECLAIM_RATE
+        );
+
+        // Mint the asset to the depositor
+        vm.prank(ADMIN);
+        asset.mint(DEPOSITOR, MINT_AMOUNT);
+
+        // Approve spending of the asset
+        vm.prank(DEPOSITOR);
+        asset.approve(address(depositManager), MINT_AMOUNT);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IERC20(address(asset)),
+            DEPOSIT_PERIOD,
+            DEPOSITOR,
+            MINT_AMOUNT,
+            false
+        );
     }
 
     // given the asset configuration has the vault set to the zero address
