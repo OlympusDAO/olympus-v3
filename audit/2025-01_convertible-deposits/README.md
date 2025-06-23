@@ -10,19 +10,19 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 The Convertible Deposits system in the Olympus protocol seeks to incentivise deposits of reserve tokens, upon which the protocol earns yield, and provide opportunities for speculation around yield and the price of OHM.
 
-For a given reserve token, e.g. `USDS`, and deposit period, e.g. 3 months, there exists a convertible deposit (CD) token, e.g. `cdUSDS-3m`.
+For a given reserve token, e.g. `USDS`, and deposit period, e.g. 3 months, there exists a receipt (r) token, e.g. `rUSDS-3m`.
 
 The system offers two mutually-exclusive mechanisms:
 
 - Deposit with the option to convert to OHM before an expiry date
 - Deposit with the ability to earn yield from the ERC4626 vault strategy
 
-| Mechanism         | Conversion to OHM | Yield    |
-|-------------------|-------------------|----------|
-| OHM Call Option   | Yes               | No       |
-| Yield Deposit     | No                | Yes      |
+| Mechanism             | Conversion to OHM | Yield    |
+|-----------------------|-------------------|----------|
+| Convertible Deposit   | Yes               | No       |
+| Yield Deposit         | No                | Yes      |
 
-### OHM Call Option
+### Convertible Deposit
 
 This mechanism longs OHM, with the expectation that the issued conversion price will be lower than the market price at the time of conversion.
 
@@ -30,7 +30,7 @@ The conversion price is determined through an infinite duration and infinite cap
 
 #### Auction Design
 
-Bidders are required to deposit the configured token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+Bidders are required to deposit the configured token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a receipt token (`rUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited deposit token.
 
 The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
 
@@ -56,14 +56,14 @@ There are a few additional behaviours:
 
 ### Yield-Bearing Deposits
 
-The second approach enables depositors to claim the yield from the ERC4626 vault strategy, without a call option on OHM.
+The second approach enables depositors to claim the yield from the ERC4626 vault strategy, without the ability to convert to OHM.
 
 A user can deposit the configured token (e.g. USDS) into the facility (`YieldDepositFacility`), and in return receive:
 
-- An equivalent amount of a convertible deposit token (`cdUSDS-3m`)
+- An equivalent amount of a receipt token (e.g. `rUSDS-3m`)
 - A position record (optionally wrapped to a ERC721 token) with the deposit period
-    - The holder of this record/token can claim the vault token (e.g. `cdUSDS`) yield at any time, and in any frequency.
-    - A protocol fee will be deducted upon harveting yield.
+    - The holder of this record/token can claim the vault token yield at any time, and in any frequency.
+    - A protocol fee will be deducted upon harvesting yield.
     - The holder is free to do what they wish with the receipt token - it does not affect claiming yield.
 
 As the time that the yield is harvested is not fixed, flexibility is added to the system in the following manner:
@@ -76,20 +76,20 @@ As the time that the yield is harvested is not fixed, flexibility is added to th
 
 ### Convertible Deposit Token Design
 
-Across both mechanisms (call option and yield deposits), depositors will receive the following:
+Across both mechanisms (convertible and yield deposits), depositors will receive the following:
 
-- A quantity of receipt tokens, which is a fungible ERC20 token across all deposits of the same deposit token and deposit period.
+- A quantity of receipt tokens, which is a fungible ERC6909 (or optionally ERC20) token across all deposits of the same deposit token and deposit period.
     - e.g. `USDS` deposits with periods of 1, 3 and 6 months are distinct tokens: `rUSDS-1m`, `rUSDS-3m`, `rUSDS-6m`
 - The deposit position will be recorded and can be optionally wrapped to an ERC721 NFT. The position includes terms, such as:
     - deposit date
     - deposit period
-    - conversion price (call option only)
+    - conversion price (convertible only)
     - size of the convertible deposit
 
 Using the `CDFacility` policy, convertible deposit holders are able to:
 
-- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms. (Call option only)
-- Lock their receipt tokens into the redemption queue
+- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms (convertible only).
+- Commit their receipt tokens to redemption.
 - Reclaim the deposited tokens at any time, with a discount.
 
 ### Deposit Manager
@@ -468,7 +468,7 @@ The policy is a modified version of the existing [Clearinghouse policy](../../sr
 
 CDFacility is a policy that is responsible for taking deposits, issuing receipt tokens and handling subsequent interactions with receipt token holders.
 
-The CDAuctioneer is able to mint a call option:
+The CDAuctioneer is able to mint a convertible deposit:
 
 - `createPosition()`: results in the deposit of the configured reserve token (e.g. USDS) for a period period (e.g. 6 months), issuance of an equivalent amount of receipt tokens (rUSDS-6m) and creation of a convertible deposit position in the DEPOS module.
 
