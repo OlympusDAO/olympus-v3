@@ -93,7 +93,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](5);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
