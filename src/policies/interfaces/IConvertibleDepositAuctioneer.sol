@@ -1,10 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+
 /// @title  IConvertibleDepositAuctioneer
 /// @notice Interface for a contract that runs auctions for a single deposit token to convert to a convertible deposit token
 interface IConvertibleDepositAuctioneer {
     // ========== EVENTS ========== //
+
+    /// @notice Emitted when a bid is made
+    ///
+    /// @param  bidder            The address of the bidder
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    /// @param  depositAmount     The amount of deposit asset that was deposited
+    /// @param  positionId        The ID of the position created by the DEPOS module to represent the convertible deposit terms
+    event Bid(
+        address indexed bidder,
+        address indexed depositAsset,
+        uint8 indexed depositPeriod,
+        uint256 depositAmount,
+        uint256 positionId
+    );
 
     /// @notice Emitted when the auction parameters are updated
     ///
@@ -30,6 +47,18 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newAuctionTrackingPeriod The number of days that auction results are tracked for
     event AuctionTrackingPeriodUpdated(uint8 newAuctionTrackingPeriod);
 
+    /// @notice Emitted when a deposit period is enabled
+    ///
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    event DepositPeriodEnabled(address depositAsset, uint8 depositPeriod);
+
+    /// @notice Emitted when a deposit period is disabled
+    ///
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    event DepositPeriodDisabled(address depositAsset, uint8 depositPeriod);
+
     // ========== ERRORS ========== //
 
     /// @notice Emitted when the parameters are invalid
@@ -45,6 +74,12 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Emitted when the contract is not initialized
     error CDAuctioneer_NotInitialized();
+
+    /// @notice Emitted when the deposit period is already enabled for this asset
+    error CDAuctioneer_DepositPeriodAlreadyEnabled(address depositAsset, uint8 depositPeriod);
+
+    /// @notice Emitted when the deposit period is not enabled for this asset
+    error CDAuctioneer_DepositPeriodNotEnabled(address depositAsset, uint8 depositPeriod);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -63,11 +98,9 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Tracks auction activity for a given day
     ///
     /// @param  initTimestamp   Timestamp when the day state was initialized
-    /// @param  deposits        Quantity of bid tokens deposited for the day
     /// @param  convertible     Quantity of OHM that will be issued for the day's deposits
     struct Day {
         uint48 initTimestamp;
-        uint256 deposits;
         uint256 convertible;
     }
 
@@ -103,18 +136,33 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Deposit bid tokens to bid for convertible deposit tokens
     ///
-    /// @param  deposit_        Amount of bid tokens to deposit
+    /// @param  depositAsset_   The asset that is being deposited
+    /// @param  depositPeriod_  The deposit period
+    /// @param  depositAmount_  Amount of deposit asset to deposit
+    /// @param  wrapPosition_   Whether to wrap the position as an ERC721
+    /// @param  wrapReceipt_    Whether to wrap the receipt as an ERC20
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
     /// @return positionId      The ID of the position created by the DEPOS module to represent the convertible deposit terms
-    function bid(uint256 deposit_) external returns (uint256 ohmOut, uint256 positionId);
+    /// @return receiptTokenId  The ID of the receipt token created by the DepositManager to represent the deposit
+    function bid(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_,
+        uint256 depositAmount_,
+        bool wrapPosition_,
+        bool wrapReceipt_
+    ) external returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId);
 
     /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///
-    /// @param  bidAmount_      Amount of bid tokens
-    /// @return ohmOut          Amount of OHM tokens that the bid amount could be converted to
-    /// @return depositSpender  The address of the contract that would spend the bid tokens
+    /// @param  depositAsset_   The asset that is being deposited
+    /// @param  depositPeriod_  The deposit period
+    /// @param  deposit_        Amount of deposit asset to deposit
+    /// @return ohmOut          Amount of OHM tokens that the deposit could be converted to
+    /// @return depositSpender  The address of the contract that would spend the deposit asset
     function previewBid(
-        uint256 bidAmount_
+        IERC20 depositAsset_,
+        uint8 depositPeriod_,
+        uint256 deposit_
     ) external view returns (uint256 ohmOut, address depositSpender);
 
     // ========== STATE VARIABLES ========== //
@@ -122,13 +170,19 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Get the previous tick of the auction
     ///
     /// @return tick Tick info
-    function getPreviousTick() external view returns (Tick memory tick);
+    function getPreviousTick(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_
+    ) external view returns (Tick memory tick);
 
     /// @notice Calculate the current tick of the auction
     /// @dev    This function should calculate the current tick based on the previous tick and the time passed since the last update
     ///
     /// @return tick Tick info
-    function getCurrentTick() external view returns (Tick memory tick);
+    function getCurrentTick(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_
+    ) external view returns (Tick memory tick);
 
     /// @notice Get the current auction parameters
     ///
@@ -163,6 +217,49 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @return index The index where the next auction result will be stored
     function getAuctionResultsNextIndex() external view returns (uint8 index);
+
+    // ========== ASSET CONFIGURATION ========== //
+
+    /// @notice Get the deposit assets
+    ///
+    /// @return assets The deposit assets
+    function getDepositAssets() external view returns (IERC20[] memory assets);
+
+    /// @notice Get the deposit periods for a deposit asset
+    ///
+    /// @param  depositAsset_   The asset that is being deposited
+    /// @return periods The deposit periods
+    function getDepositPeriods(IERC20 depositAsset_) external view returns (uint8[] memory periods);
+
+    /// @notice Returns whether a deposit asset and period combination is enabled
+    ///
+    /// @param  depositAsset_   The asset that is being deposited
+    /// @param  depositPeriod_  The deposit period
+    /// @return isEnabled       Whether the deposit asset is enabled
+    function isDepositEnabled(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_
+    ) external view returns (bool isEnabled);
+
+    /// @notice Enables a deposit asset and period combination
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Enabling the deposit asset and period combination
+    ///         - Emitting an event
+    ///
+    /// @param  depositAsset_   The asset that is being deposited
+    /// @param  depositPeriod_  The deposit period
+    function enableDepositPeriod(IERC20 depositAsset_, uint8 depositPeriod_) external;
+
+    /// @notice Disables a deposit asset and period combination
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Disabling the deposit asset and period combination
+    ///         - Emitting an event
+    ///
+    /// @param  depositAsset_   The asset that is being deposited
+    /// @param  depositPeriod_  The deposit period
+    function disableDepositPeriod(IERC20 depositAsset_, uint8 depositPeriod_) external;
 
     // ========== ADMIN ========== //
 
