@@ -3,11 +3,10 @@ pragma solidity >=0.8.20;
 
 import {DEPOSTest} from "./DEPOSTest.sol";
 
-import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {Module} from "src/Kernel.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
-contract CreateDEPOSTest is DEPOSTest {
+contract MintDEPOSTest is DEPOSTest {
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
@@ -145,7 +144,7 @@ contract CreateDEPOSTest is DEPOSTest {
 
         // Assert that the owner has sequential position IDs
         for (uint256 i = 0; i < 10; i++) {
-            DEPOSv1.Position memory position = DEPOS.getPosition(i);
+            IDepositPositionManager.Position memory position = DEPOS.getPosition(i);
             assertEq(position.owner, address(this), "position.owner");
 
             // Assert that the ERC721 position is not updated
@@ -182,13 +181,13 @@ contract CreateDEPOSTest is DEPOSTest {
 
         // Assert that the owner1's positions are correct
         for (uint256 i = 0; i < 5; i++) {
-            DEPOSv1.Position memory position = DEPOS.getPosition(i);
+            IDepositPositionManager.Position memory position = DEPOS.getPosition(i);
             assertEq(position.owner, owner1, "position.owner");
         }
 
         // Assert that the owner2's positions are correct
         for (uint256 i = 5; i < 10; i++) {
-            DEPOSv1.Position memory position = DEPOS.getPosition(i);
+            IDepositPositionManager.Position memory position = DEPOS.getPosition(i);
             assertEq(position.owner, owner2, "position.owner");
         }
 

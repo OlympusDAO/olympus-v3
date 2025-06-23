@@ -2,7 +2,6 @@
 pragma solidity >=0.8.20;
 
 import {DEPOSTest} from "./DEPOSTest.sol";
-import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract SplitDEPOSTest is DEPOSTest {
