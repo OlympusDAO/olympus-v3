@@ -9,6 +9,7 @@ interface IDepositPositionManager {
 
     /// @notice Data structure for the terms of a deposit position
     ///
+    /// @param  operator                Address of the operator/creator of the position
     /// @param  owner                   Address of the owner of the position
     /// @param  asset                   Address of the asset
     /// @param  periodMonths            The period of the deposit
@@ -18,6 +19,7 @@ interface IDepositPositionManager {
     /// @param  wrapped                 Whether the term is wrapped
     /// @param  additionalData          Additional data for the position
     struct Position {
+        address operator;
         address owner;
         address asset;
         uint8 periodMonths;

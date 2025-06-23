@@ -86,6 +86,7 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
         bool wrap_
     ) internal view {
         DEPOSv1.Position memory position = DEPOS.getPosition(positionId_);
+        assertEq(position.operator, godmode, "position.operator");
         assertEq(position.owner, owner_, "position.owner");
         assertEq(position.asset, convertibleDepositToken, "position.asset");
         assertEq(position.periodMonths, DEPOSIT_PERIOD, "position.periodMonths");

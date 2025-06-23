@@ -188,6 +188,13 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         // Assert that the position is convertible
         assertEq(convertibleDepositPositions.isConvertible(positionId), true, "isConvertible");
 
+        // Assert that the operator is the CD facility
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).operator,
+            address(facility),
+            "operator"
+        );
+
         // Assert that the reserve token was transferred from the recipient
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
 
@@ -240,6 +247,13 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
 
         // Assert that the position is convertible
         assertEq(convertibleDepositPositions.isConvertible(positionId2), true, "isConvertible");
+
+        // Assert that the operator is the CD facility
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId2).operator,
+            address(facility),
+            "operator"
+        );
 
         // Assert that the reserve token was transferred from the recipient
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
@@ -297,6 +311,13 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
             convertibleDepositPositions.getPosition(positionId).conversionPrice,
             CONVERSION_PRICE,
             "conversionPrice"
+        );
+
+        // Assert that the operator is the CD facility
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).operator,
+            address(facility),
+            "operator"
         );
 
         // Assert that the position is convertible

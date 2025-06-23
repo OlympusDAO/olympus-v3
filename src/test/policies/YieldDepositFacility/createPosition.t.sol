@@ -180,6 +180,13 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
             "isConvertible"
         );
 
+        // Assert that the operator is the YDF
+        assertEq(
+            convertibleDepositPositions.getPosition(actualPositionId).operator,
+            address(yieldDepositFacility),
+            "operator"
+        );
+
         // Assert that the reserve token was transferred from the recipient
         _assertReserveTokenBalance(0);
 

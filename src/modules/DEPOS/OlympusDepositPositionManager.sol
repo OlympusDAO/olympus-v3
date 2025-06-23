@@ -100,6 +100,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     // ========== POSITION MANAGEMENT =========== //
 
     function _create(
+        address operator_,
         address owner_,
         address asset_,
         uint8 periodMonths_,
@@ -112,6 +113,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // Create the position record
         positionId = _positionCount++;
         _positions[positionId] = Position({
+            operator: operator_,
             owner: owner_,
             asset: asset_,
             periodMonths: periodMonths_,
@@ -183,6 +185,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
         return
             _create(
+                msg.sender, // Calling policy is the operator
                 owner_,
                 asset_,
                 periodMonths_,
@@ -270,6 +273,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
         // Create the new position
         newPositionId = _create(
+            position.operator, // Operator is the same as the existing position
             to_,
             position.asset,
             position.periodMonths,
