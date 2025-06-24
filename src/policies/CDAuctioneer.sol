@@ -49,11 +49,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     // ========== STRUCTS ========== //
 
-    struct DepositConfiguration {
-        bool isConfigured;
-        bool isEnabled;
-    }
-
     struct BidOutput {
         uint256 tickCapacity;
         uint256 tickPrice;
@@ -72,11 +67,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice Mapping between a deposit asset, deposit period and whether the configuration is enabled
-    mapping(IERC20 depositAsset => mapping(uint8 depositPeriod => DepositConfiguration depositConfiguration))
-        internal _depositConfigurations;
-    // TODO consider using an EnumerableMap with a bytes32 key for the deposit asset and deposit period
-    // This can probably also be a simple bool
+    /// @notice Whether the deposit asset and period combination is enabled
+    /// @dev    The key is derived from `_getDepositAssetPeriodKey()`
+    mapping(bytes32 depositAssetPeriodKey => bool isEnabled) internal _depositAssetPeriodsEnabled;
 
     /// @notice Array of deposit assets
     EnumerableSet.AddressSet internal _depositAssets;
@@ -88,10 +81,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice The number of deposit asset and period combinations that are enabled
     uint256 internal _depositAssetsAndPeriodsCount;
 
-    /// @notice Previous tick of the auction
+    /// @notice Previous tick for each deposit asset and period combination
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
-    mapping(IERC20 depositAsset => mapping(uint8 depositPeriod => Tick previousTick))
-        internal _depositAssetPreviousTicks;
+    ///         The key is derived from `_getDepositAssetPeriodKey()`
+    mapping(bytes32 depositAssetPeriodKey => Tick previousTick) internal _depositAssetPreviousTicks;
 
     /// @notice Address of the Convertible Deposit Facility
     CDFacility public immutable CD_FACILITY;
@@ -213,7 +206,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
             updatedTick.price = output.tickPrice;
             updatedTick.capacity = output.tickCapacity;
             updatedTick.lastUpdate = uint48(block.timestamp);
-            _depositAssetPreviousTicks[params.depositAsset][params.depositPeriod] = updatedTick;
+            _depositAssetPreviousTicks[
+                _getDepositAssetPeriodKey(params.depositAsset, params.depositPeriod)
+            ] = updatedTick;
 
             // Update the current tick size
             if (output.tickSize != _currentTickSize) {
@@ -390,7 +385,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // Find amount of time passed and new capacity to add
         uint256 newCapacity;
         {
-            Tick memory previousTick = _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
+            Tick memory previousTick = _depositAssetPreviousTicks[
+                _getDepositAssetPeriodKey(depositAsset_, depositPeriod_)
+            ];
             uint256 timePassed = block.timestamp - previousTick.lastUpdate;
             // The capacity to add is the day target multiplied by the proportion of time passed in a day
             // It is also adjusted by the number of deposit asset and period combinations that are enabled, otherwise each auction would have too much capacity added
@@ -460,7 +457,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         IERC20 depositAsset_,
         uint8 depositPeriod_
     ) public view override returns (Tick memory tick) {
-        return _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
+        return _depositAssetPreviousTicks[_getDepositAssetPeriodKey(depositAsset_, depositPeriod_)];
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -500,6 +497,14 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     // ========== ASSET CONFIGURATION ========== //
 
+    /// @notice Internal function to get the bytes32 key for the deposit asset and period
+    function _getDepositAssetPeriodKey(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(depositAsset_, depositPeriod_));
+    }
+
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getDepositAssets() external view override returns (IERC20[] memory) {
         uint256 length = _depositAssets.length();
@@ -529,7 +534,8 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         IERC20 depositAsset_,
         uint8 depositPeriod_
     ) public view override returns (bool) {
-        return _depositConfigurations[depositAsset_][depositPeriod_].isEnabled;
+        return
+            _depositAssetPeriodsEnabled[_getDepositAssetPeriodKey(depositAsset_, depositPeriod_)];
     }
 
     /// @notice Modifier to check if a deposit asset and period is enabled
@@ -549,12 +555,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint8 depositPeriod_
     ) external override onlyManagerOrAdminRole {
         // Validate that the deposit asset and period is not already enabled
-        if (_depositConfigurations[depositAsset_][depositPeriod_].isEnabled) {
+        bytes32 depositAssetPeriodKey = _getDepositAssetPeriodKey(depositAsset_, depositPeriod_);
+        if (_depositAssetPeriodsEnabled[depositAssetPeriodKey]) {
             revert CDAuctioneer_DepositPeriodAlreadyEnabled(address(depositAsset_), depositPeriod_);
         }
 
         // Enable the deposit period
-        _depositConfigurations[depositAsset_][depositPeriod_].isEnabled = true;
+        _depositAssetPeriodsEnabled[depositAssetPeriodKey] = true;
 
         // Add the deposit asset to the array if it is not already in it
         if (!_depositAssets.contains(address(depositAsset_))) {
@@ -567,7 +574,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         }
 
         // Initialise the tick
-        _depositAssetPreviousTicks[depositAsset_][depositPeriod_] = Tick(
+        _depositAssetPreviousTicks[depositAssetPeriodKey] = Tick(
             _auctionParameters.minPrice,
             _auctionParameters.tickSize,
             uint48(block.timestamp)
@@ -586,12 +593,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint8 depositPeriod_
     ) external override onlyManagerOrAdminRole {
         // Validate that the deposit asset and period is enabled
-        if (!_depositConfigurations[depositAsset_][depositPeriod_].isEnabled) {
+        bytes32 depositAssetPeriodKey = _getDepositAssetPeriodKey(depositAsset_, depositPeriod_);
+        if (!_depositAssetPeriodsEnabled[depositAssetPeriodKey]) {
             revert CDAuctioneer_DepositPeriodNotEnabled(address(depositAsset_), depositPeriod_);
         }
 
         // Disable the deposit period
-        _depositConfigurations[depositAsset_][depositPeriod_].isEnabled = false;
+        _depositAssetPeriodsEnabled[depositAssetPeriodKey] = false;
 
         // Remove the deposit period from the array
         _depositAssetPeriods[depositAsset_].remove(depositPeriod_);
@@ -602,7 +610,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         }
 
         // Remove the tick
-        delete _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
+        delete _depositAssetPreviousTicks[depositAssetPeriodKey];
 
         // Decrement the count
         _depositAssetsAndPeriodsCount--;
@@ -682,10 +690,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
                 uint8 period = uint8(_depositAssetPeriods[asset].at(j));
 
                 // Skip if the deposit period is not enabled
-                if (!_depositConfigurations[asset][period].isEnabled) continue;
+                bytes32 depositAssetPeriodKey = _getDepositAssetPeriodKey(asset, period);
+                if (!_depositAssetPeriodsEnabled[depositAssetPeriodKey]) continue;
 
                 // Get the previous tick
-                Tick storage previousTick = _depositAssetPreviousTicks[asset][period];
+                Tick storage previousTick = _depositAssetPreviousTicks[depositAssetPeriodKey];
 
                 // Ensure that the tick capacity is not larger than the new tick size
                 // Otherwise, excess OHM will be converted
