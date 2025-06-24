@@ -16,7 +16,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 previousConvertibleDepositBalance_,
         uint256 previousPositionCount_,
         uint256 returnedOhmOut_,
-        uint256 returnedPositionId_
+        uint256 returnedPositionId_,
+        uint256 returnedReceiptTokenId_
     ) internal view {
         // Assert that the converted amount is as expected
         assertEq(returnedOhmOut_, expectedConvertedAmount_, "converted amount");
@@ -57,6 +58,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(position.wrapped, false, "position wrapped");
         assertEq(position.asset, address(reserveToken), "position deposit token");
         assertEq(position.periodMonths, PERIOD_MONTHS, "position period months");
+
+        // Assert that the receipt token id is accurate
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        assertEq(returnedReceiptTokenId_, receiptTokenId, "receipt token id");
     }
 
     // when the contract is disabled
@@ -67,7 +72,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectNotEnabledRevert();
 
         // Call function
-        auctioneer.bid(1e18);
+        auctioneer.bid(iReserveToken, PERIOD_MONTHS, 1e18, false, false);
+    }
+
+    // given the deposit asset and period are not enabled
+    //  [X] it reverts
+
+    function test_givenDepositAssetAndPeriodNotEnabled_reverts() public givenEnabled {
+        // Expect revert
+        _expectDepositAssetAndPeriodNotEnabledRevert(iReserveToken, PERIOD_MONTHS);
+
+        // Call function
+        auctioneer.bid(iReserveToken, PERIOD_MONTHS, 1e18, false, false);
     }
 
     // when the caller has not approved DepositManager to spend the bid token
@@ -76,6 +92,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_givenSpendingNotApproved_reverts()
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 1e18)
     {
         // Expect revert
@@ -83,7 +100,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(1e18);
+        auctioneer.bid(iReserveToken, PERIOD_MONTHS, 1e18, false, false);
     }
 
     // when the "cd_auctioneer" role is not granted to the auctioneer contract
@@ -92,6 +109,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_givenAuctioneerRoleNotGranted_reverts()
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -103,7 +121,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(1e18);
+        auctioneer.bid(iReserveToken, PERIOD_MONTHS, 1e18, false, false);
     }
 
     // when the bid amount converted is 0
@@ -114,6 +132,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -132,7 +151,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(bidAmount);
+        auctioneer.bid(iReserveToken, PERIOD_MONTHS, bidAmount, false, false);
     }
 
     // given the deposit asset has 6 decimals
@@ -142,6 +161,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         public
         givenReserveTokenHasDecimals(6)
         givenEnabledWithParameters(TARGET, TICK_SIZE, 15e6)
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 3e6)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 3e6)
     {
@@ -151,14 +171,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 2e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -168,11 +194,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -200,6 +226,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_givenFirstBid()
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 3e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 3e18)
     {
@@ -209,14 +236,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 2e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -226,11 +259,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -255,6 +288,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_givenFirstBidOfDay()
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenRecipientHasBid(120e18)
         givenAddressHasReserveToken(recipient, 6e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 6e18)
@@ -267,7 +301,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Get the current tick for the new day
-        IConvertibleDepositAuctioneer.Tick memory beforeTick = auctioneer.getCurrentTick();
+        IConvertibleDepositAuctioneer.Tick memory beforeTick = auctioneer.getCurrentTick(
+            iReserveToken,
+            PERIOD_MONTHS
+        );
 
         // Expected converted amount
         // 6e18 * 1e9 / 15e18 = 4e8
@@ -275,14 +312,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 4e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -292,12 +335,12 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             120e18,
             1,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
         // Not affected by the previous day's bid
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -322,13 +365,14 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_secondBidUpdatesDayState()
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenRecipientHasBid(3e18)
         givenAddressHasReserveToken(recipient, 6e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 6e18)
     {
         // Previous converted amount
         // 3e18 * 1e9 / 15e18 = 2e8
-        uint256 previousBidAmount = 3e18;
+        // uint256 previousBidAmount = 3e18;
         uint256 previousConvertedAmount = 2e8;
 
         // Expected converted amount
@@ -337,14 +381,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 4e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -354,12 +404,12 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             3e18,
             1,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
         // Not affected by the previous day's bid
-        assertEq(auctioneer.getDayState().deposits, previousBidAmount + bidAmount, "day deposits");
         assertEq(
             auctioneer.getDayState().convertible,
             previousConvertedAmount + expectedConvertedAmount,
@@ -395,6 +445,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 150e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
     {
@@ -407,14 +458,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -424,11 +481,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -459,6 +516,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 151e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 151e18)
     {
@@ -473,14 +531,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 10e9;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -490,11 +554,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -522,6 +586,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         public
         givenEnabled
         givenTickStep(100e2)
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 151e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 151e18)
     {
@@ -536,14 +601,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 10e9;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -553,11 +624,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -578,6 +649,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 300e18)
     {
@@ -593,14 +665,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 tickTwoPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -610,11 +688,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -632,6 +710,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 40575e16)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 40575e16)
     {
@@ -660,15 +739,27 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             bidTwoAmount +
             (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
 
-        // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        {
+            // Check preview
+            (uint256 previewOhmOut, ) = auctioneer.previewBid(
+                iReserveToken,
+                PERIOD_MONTHS,
+                bidAmount
+            );
 
-        // Assert that the preview is as expected
-        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+            // Assert that the preview is as expected
+            assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+        }
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -678,11 +769,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -705,6 +796,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 796064875e12)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 796064875e12)
     {
@@ -741,14 +833,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         }
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -758,11 +856,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, expectedDepositIn, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -792,6 +890,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 300e18)
     {
@@ -809,14 +908,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = tickOneConvertedAmount + tickTwoConvertedAmount;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -826,11 +931,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -861,6 +966,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         public
         givenEnabled
         givenTickStep(100e2)
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 300e18)
     {
@@ -874,14 +980,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -891,11 +1003,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
 
         // Assert the day state
-        assertEq(auctioneer.getDayState().deposits, bidAmount, "day deposits");
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
@@ -915,6 +1027,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     )
         public
         givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -927,14 +1040,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(bidAmount);
+        (uint256 previewOhmOut, ) = auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId) = auctioneer.bid(bidAmount);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            iReserveToken,
+            PERIOD_MONTHS,
+            bidAmount,
+            false,
+            false
+        );
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -944,7 +1063,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             0,
             0,
             ohmOut,
-            positionId
+            positionId,
+            receiptTokenId
         );
     }
 }

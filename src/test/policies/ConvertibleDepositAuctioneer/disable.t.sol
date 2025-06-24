@@ -38,7 +38,12 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
     //  [X] the day state is unchanged
     //  [X] the auction results history and index are unchanged
 
-    function test_contractEnabled() public givenEnabled givenRecipientHasBid(1e18) {
+    function test_contractEnabled()
+        public
+        givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenRecipientHasBid(1e18)
+    {
         // Cache auction results
         int256[] memory auctionResults = auctioneer.getAuctionResults();
         uint8 nextIndex = auctioneer.getAuctionResultsNextIndex();
@@ -59,7 +64,7 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         // Assert state
         assertEq(auctioneer.isEnabled(), false);
         // lastUpdate has not changed
-        assertEq(auctioneer.getPreviousTick().lastUpdate, lastUpdate);
+        assertEq(auctioneer.getPreviousTick(iReserveToken, PERIOD_MONTHS).lastUpdate, lastUpdate);
         // Auction results are unchanged
         _assertAuctionResults(
             auctionResults[0],

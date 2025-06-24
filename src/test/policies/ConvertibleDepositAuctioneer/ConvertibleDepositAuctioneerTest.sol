@@ -95,12 +95,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         );
         depositManager = new DepositManager(address(kernel));
         facility = new CDFacility(address(kernel), address(depositManager));
-        auctioneer = new CDAuctioneer(
-            address(kernel),
-            address(facility),
-            address(reserveToken),
-            PERIOD_MONTHS
-        );
+        auctioneer = new CDAuctioneer(address(kernel), address(facility));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -153,6 +148,19 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vm.expectRevert(PolicyEnabler.NotDisabled.selector);
     }
 
+    function _expectDepositAssetAndPeriodNotEnabledRevert(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_DepositPeriodNotEnabled.selector,
+                address(depositAsset_),
+                depositPeriod_
+            )
+        );
+    }
+
     function _assertAuctionParameters(
         uint256 target_,
         uint256 tickSize_,
@@ -172,7 +180,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 tickSize_,
         uint48 lastUpdate_
     ) internal view {
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick();
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(
+            iReserveToken,
+            PERIOD_MONTHS
+        );
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
         assertEq(tick.price, price_, "previous tick price");
@@ -180,10 +191,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
     }
 
-    function _assertDayState(uint256 deposits_, uint256 convertible_) internal view {
+    function _assertDayState(uint256 convertible_) internal view {
         IConvertibleDepositAuctioneer.Day memory day = auctioneer.getDayState();
 
-        assertEq(day.deposits, deposits_, "deposits");
         assertEq(day.convertible, convertible_, "convertible");
     }
 
@@ -345,7 +355,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function _bid(address owner_, uint256 deposit_) internal {
         vm.prank(owner_);
-        auctioneer.bid(deposit_);
+        auctioneer.bid(iReserveToken, PERIOD_MONTHS, deposit_, false, false);
     }
 
     function _mintAndBid(address owner_, uint256 deposit_) internal {
@@ -372,6 +382,18 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
         // Re-create the stack
         _createStack();
+        _;
+    }
+
+    modifier givenDepositAssetAndPeriodEnabled(IERC20 depositAsset_, uint8 depositPeriod_) {
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(depositAsset_, depositPeriod_);
+        _;
+    }
+
+    modifier givenDepositAssetAndPeriodDisabled(IERC20 depositAsset_, uint8 depositPeriod_) {
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(depositAsset_, depositPeriod_);
         _;
     }
 }

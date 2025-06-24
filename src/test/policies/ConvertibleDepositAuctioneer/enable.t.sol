@@ -198,7 +198,13 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
     //  [X] it resets the day state
     //  [X] it resets the auction results history and index
 
-    function test_contractDisabled() public givenEnabled givenRecipientHasBid(1e18) givenDisabled {
+    function test_contractDisabled()
+        public
+        givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenRecipientHasBid(1e18)
+        givenDisabled
+    {
         uint48 lastUpdate = uint48(block.timestamp);
         uint48 newBlock = lastUpdate + 1;
 
@@ -244,7 +250,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         assertEq(auctioneer.isEnabled(), true, "enabled");
 
         // Day state is reset
-        _assertDayState(0, 0);
+        _assertDayState(0);
 
         _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, newBlock);
 

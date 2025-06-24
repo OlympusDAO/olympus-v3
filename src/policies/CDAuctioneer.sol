@@ -54,6 +54,22 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         bool isEnabled;
     }
 
+    struct BidOutput {
+        uint256 tickCapacity;
+        uint256 tickPrice;
+        uint256 tickSize;
+        uint256 depositIn;
+        uint256 ohmOut;
+    }
+
+    struct BidParams {
+        IERC20 depositAsset;
+        uint8 depositPeriod;
+        uint256 depositAmount;
+        bool wrapPosition;
+        bool wrapReceipt;
+    }
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice Mapping between a deposit asset, deposit period and whether the configuration is enabled
@@ -155,52 +171,73 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         nonReentrant
         onlyEnabled
         onlyDepositEnabled(depositAsset_, depositPeriod_)
-        returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId)
+        returns (uint256, uint256, uint256)
     {
-        // Get the current tick for the deposit asset and period
-        Tick memory updatedTick = _getCurrentTick(depositAsset_, depositPeriod_);
+        return
+            _bid(
+                BidParams({
+                    depositAsset: depositAsset_,
+                    depositPeriod: depositPeriod_,
+                    depositAmount: depositAmount_,
+                    wrapPosition: wrapPosition_,
+                    wrapReceipt: wrapReceipt_
+                })
+            );
+    }
 
-        // Get bid results
-        uint256 currentTickPrice;
-        uint256 currentTickCapacity;
-        uint256 currentTickSize;
+    /// @notice Internal function to submit an auction bid on the given deposit asset and period
+    /// @dev    This function expects the calling function to have already validated the contract state and deposit asset and period
+    function _bid(BidParams memory params) internal returns (uint256, uint256, uint256) {
+        uint256 ohmOut;
         uint256 depositIn;
-        (currentTickCapacity, currentTickPrice, currentTickSize, depositIn, ohmOut) = _previewBid(
-            depositAmount_,
-            updatedTick
-        );
+        {
+            // Get the current tick for the deposit asset and period
+            Tick memory updatedTick = _getCurrentTick(params.depositAsset, params.depositPeriod);
 
-        // Reject if the OHM out is 0
-        if (ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
+            // Get bid results
+            BidOutput memory output = _previewBid(params.depositAmount, updatedTick);
 
-        // Update state
-        _dayState.convertible += ohmOut;
+            // Reject if the OHM out is 0
+            if (output.ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
 
-        // Update current tick
-        updatedTick.price = currentTickPrice;
-        updatedTick.capacity = currentTickCapacity;
-        updatedTick.tickSize = currentTickSize;
-        updatedTick.lastUpdate = uint48(block.timestamp);
-        _depositAssetPreviousTicks[depositAsset_][depositPeriod_] = updatedTick;
+            // Update state
+            _dayState.convertible += output.ohmOut;
+
+            // Update current tick
+            updatedTick.price = output.tickPrice;
+            updatedTick.capacity = output.tickCapacity;
+            updatedTick.tickSize = output.tickSize;
+            updatedTick.lastUpdate = uint48(block.timestamp);
+            _depositAssetPreviousTicks[params.depositAsset][params.depositPeriod] = updatedTick;
+
+            // Set values for the rest of the function
+            ohmOut = output.ohmOut;
+            depositIn = output.depositIn;
+        }
 
         // Calculate average price based on the total deposit and ohmOut
         // This is the number of deposit tokens per OHM token
         // We round up to be conservative
-        uint256 conversionPrice = depositIn.mulDivUp(_ohmScale, ohmOut);
 
         // Create the receipt tokens and position
-        (positionId, receiptTokenId, ) = CD_FACILITY.createPosition(
-            depositAsset_,
-            depositPeriod_,
+        (uint256 positionId, uint256 receiptTokenId, ) = CD_FACILITY.createPosition(
+            params.depositAsset,
+            params.depositPeriod,
             msg.sender,
             depositIn,
-            conversionPrice,
-            wrapPosition_,
-            wrapReceipt_
+            depositIn.mulDivUp(_ohmScale, ohmOut),
+            params.wrapPosition,
+            params.wrapReceipt
         );
 
         // Emit event
-        emit Bid(msg.sender, address(depositAsset_), depositPeriod_, depositAmount_, positionId);
+        emit Bid(
+            msg.sender,
+            address(params.depositAsset),
+            params.depositPeriod,
+            depositIn,
+            positionId
+        );
 
         return (ohmOut, positionId, receiptTokenId);
     }
@@ -216,68 +253,50 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///         - If the capacity of a tick is depleted (but does not cross into the next tick), the current tick will be shifted to the next one. This ensures that `getCurrentTick()` will not return a tick that has been depleted.
     ///
     /// @param  deposit_            The amount of deposit to be bid
-    /// @return updatedTickCapacity The adjusted capacity of the current tick
-    /// @return updatedTickPrice    The adjusted price of the current tick
-    /// @return updatedTickSize     The adjusted size of the current tick
-    /// @return depositIn           The amount of deposit that was converted
-    /// @return ohmOut              The quantity of OHM tokens that can be purchased
+    /// @return output              The output of the bid
     function _previewBid(
         uint256 deposit_,
         Tick memory tick_
-    )
-        internal
-        view
-        returns (
-            uint256 updatedTickCapacity,
-            uint256 updatedTickPrice,
-            uint256 updatedTickSize,
-            uint256 depositIn,
-            uint256 ohmOut
-        )
-    {
+    ) internal view returns (BidOutput memory output) {
         uint256 remainingDeposit = deposit_;
-        updatedTickCapacity = tick_.capacity;
-        updatedTickPrice = tick_.price;
-        updatedTickSize = tick_.tickSize;
+        output.tickCapacity = tick_.capacity;
+        output.tickPrice = tick_.price;
+        output.tickSize = tick_.tickSize;
 
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
             uint256 depositAmount = remainingDeposit;
-            uint256 convertibleAmount = _getConvertedDeposit(remainingDeposit, updatedTickPrice);
+            uint256 convertibleAmount = _getConvertedDeposit(remainingDeposit, output.tickPrice);
 
             // No point in continuing if the converted amount is 0
             if (convertibleAmount == 0) break;
 
             // If there is not enough capacity in the current tick, use the remaining capacity
-            if (updatedTickCapacity <= convertibleAmount) {
-                convertibleAmount = updatedTickCapacity;
+            if (output.tickCapacity <= convertibleAmount) {
+                convertibleAmount = output.tickCapacity;
                 // Convertible = deposit * OHM scale / price, so this is the inverse
-                depositAmount = convertibleAmount.mulDiv(updatedTickPrice, _ohmScale);
+                depositAmount = convertibleAmount.mulDiv(output.tickPrice, _ohmScale);
 
                 // The tick has also been depleted, so update the price
-                updatedTickPrice = _getNewTickPrice(updatedTickPrice, _tickStep);
-                updatedTickSize = _getNewTickSize(
-                    _dayState.convertible + convertibleAmount + ohmOut
+                output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
+                output.tickSize = _getNewTickSize(
+                    _dayState.convertible + convertibleAmount + output.ohmOut
                 );
-                updatedTickCapacity = updatedTickSize;
+                output.tickCapacity = output.tickSize;
             }
             // Otherwise, the tick has enough capacity and needs to be updated
             else {
-                updatedTickCapacity -= convertibleAmount;
+                output.tickCapacity -= convertibleAmount;
             }
 
             // Record updates to the deposit and OHM
             remainingDeposit -= depositAmount;
-            ohmOut += convertibleAmount;
+            output.ohmOut += convertibleAmount;
         }
 
-        return (
-            updatedTickCapacity,
-            updatedTickPrice,
-            updatedTickSize,
-            deposit_ - remainingDeposit,
-            ohmOut
-        );
+        output.depositIn = deposit_ - remainingDeposit;
+
+        return output;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -285,12 +304,20 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         IERC20 depositAsset_,
         uint8 depositPeriod_,
         uint256 bidAmount_
-    ) external view override onlyEnabled onlyDepositEnabled(depositAsset_, depositPeriod_) returns (uint256 ohmOut, address depositSpender) {
+    )
+        external
+        view
+        override
+        onlyEnabled
+        onlyDepositEnabled(depositAsset_, depositPeriod_)
+        returns (uint256 ohmOut, address depositSpender)
+    {
         // Get the updated tick based on the current state
         Tick memory currentTick = _getCurrentTick(depositAsset_, depositPeriod_);
 
         // Preview the bid results
-        (, , , , ohmOut) = _previewBid(bidAmount_, currentTick);
+        BidOutput memory output = _previewBid(bidAmount_, currentTick);
+        ohmOut = output.ohmOut;
 
         return (ohmOut, address(CD_FACILITY.DEPOSIT_MANAGER()));
     }
@@ -345,7 +372,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         return newTickSize;
     }
 
-    function _getCurrentTick(IERC20 depositAsset_, uint8 depositPeriod_) internal view returns (Tick memory tick) {
+    function _getCurrentTick(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_
+    ) internal view returns (Tick memory tick) {
         // Find amount of time passed and new capacity to add
         uint256 newCapacity;
         {
@@ -391,14 +421,26 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - Calculate the added capacity based on the time passed since the last bid, and add it to the current capacity to get the new capacity
     ///             - Until the new capacity is <= to the tick size, reduce the capacity by the tick size and reduce the price by the tick step
     ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The deposit asset and period are not enabled
     function getCurrentTick(
         IERC20 depositAsset_,
         uint8 depositPeriod_
-    ) external view onlyEnabled onlyDepositEnabled(depositAsset_, depositPeriod_) returns (Tick memory tick) {
+    )
+        external
+        view
+        onlyEnabled
+        onlyDepositEnabled(depositAsset_, depositPeriod_)
+        returns (Tick memory tick)
+    {
         return _getCurrentTick(depositAsset_, depositPeriod_);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function returns the previous tick for the deposit asset and period
+    ///             If the deposit asset and period are not configured, all values will be 0
     function getPreviousTick(
         IERC20 depositAsset_,
         uint8 depositPeriod_

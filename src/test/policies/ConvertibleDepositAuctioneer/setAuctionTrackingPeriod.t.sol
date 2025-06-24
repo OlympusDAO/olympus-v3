@@ -177,7 +177,12 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
     // given there are previous auction results
     //  [X] it resets the auction results
 
-    function test_previousAuctionResults() public givenEnabled givenRecipientHasBid(1e18) {
+    function test_previousAuctionResults()
+        public
+        givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenRecipientHasBid(1e18)
+    {
         // Warp to the next day and trigger storage of the previous day's results
         vm.warp(block.timestamp + 1 days);
         vm.prank(emissionManager);
