@@ -8,12 +8,12 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
     // when the caller does not have the "admin" role
     //  [X] it reverts
 
-    function test_callerDoesNotHaveAdminRole_reverts(address caller_) public {
-        // Ensure caller is not admin
-        vm.assume(caller_ != admin);
+    function test_callerDoesNotHaveAdminOrManagerRole_reverts(address caller_) public {
+        // Ensure caller is not admin or manager
+        vm.assume(caller_ != admin && caller_ != manager);
 
         // Expect revert
-        _expectRoleRevert("admin");
+        _expectRevertNotAuthorised();
 
         // Call function
         vm.prank(caller_);

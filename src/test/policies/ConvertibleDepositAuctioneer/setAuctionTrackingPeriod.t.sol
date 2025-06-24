@@ -10,12 +10,15 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
     // given the caller does not have the admin role
     //  [X] it reverts
 
-    function test_callerDoesNotHaveAdminRole_reverts() public givenEnabled {
+    function test_callerDoesNotHaveManagerOrAdminRole_reverts(address caller_) public givenEnabled {
+        // Ensure caller is not manager or admin
+        vm.assume(caller_ != manager && caller_ != admin);
+
         // Expect revert
-        _expectRoleRevert("admin");
+        _expectRevertNotAuthorised();
 
         // Call function
-        vm.prank(recipient);
+        vm.prank(caller_);
         auctioneer.setAuctionTrackingPeriod(AUCTION_TRACKING_PERIOD);
     }
 

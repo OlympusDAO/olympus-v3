@@ -751,7 +751,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - The new tick step is < 100e2
     ///
     /// @param      newStep_    The new tick step
-    function setTickStep(uint24 newStep_) public override onlyAdminRole {
+    function setTickStep(uint24 newStep_) public override onlyManagerOrAdminRole {
         // Value must be more than 100e2
         if (newStep_ < ONE_HUNDRED_PERCENT) revert CDAuctioneer_InvalidParams("tick step");
 
@@ -767,7 +767,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - The new auction tracking period is 0
     ///
     /// @param      days_    The new auction tracking period
-    function setAuctionTrackingPeriod(uint8 days_) public override onlyAdminRole {
+    function setAuctionTrackingPeriod(uint8 days_) public override onlyManagerOrAdminRole {
         // Value must be non-zero
         if (days_ == 0) revert CDAuctioneer_InvalidParams("auction tracking period");
 
@@ -818,6 +818,4 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         _auctionResults = new int256[](_auctionTrackingPeriod);
         _auctionResultsNextIndex = 0;
     }
-
-    // TODO adminOrManager check
 }
