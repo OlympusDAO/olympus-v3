@@ -14,12 +14,14 @@ interface IConvertibleDepositAuctioneer {
     /// @param  depositAsset      The asset that is being deposited
     /// @param  depositPeriod     The deposit period
     /// @param  depositAmount     The amount of deposit asset that was deposited
+    /// @param  convertedAmount   The amount of OHM that can be converted
     /// @param  positionId        The ID of the position created by the DEPOS module to represent the convertible deposit terms
     event Bid(
         address indexed bidder,
         address indexed depositAsset,
         uint8 indexed depositPeriod,
         uint256 depositAmount,
+        uint256 convertedAmount,
         uint256 positionId
     );
 

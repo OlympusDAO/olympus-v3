@@ -20,6 +20,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositAuctioneerTest is Test {
@@ -39,10 +40,11 @@ contract ConvertibleDepositAuctioneerTest is Test {
     IERC20 public iReserveToken;
     uint256 public receiptTokenId;
 
-    address public recipient = address(0x1);
-    address public emissionManager = address(0x3);
-    address public admin = address(0x4);
-    address public emergency = address(0x5);
+    address public recipient;
+    address public emissionManager;
+    address public admin;
+    address public emergency;
+    address public manager;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
 
@@ -70,6 +72,13 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
+
+        // Addresses
+        recipient = makeAddr("recipient");
+        emissionManager = makeAddr("emissionManager");
+        admin = makeAddr("admin");
+        emergency = makeAddr("emergency");
+        manager = makeAddr("manager");
 
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
@@ -111,6 +120,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
+        rolesAdmin.grantRole(bytes32("manager"), manager);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
 
@@ -138,6 +148,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
+    }
+
+    function _expectRevertNotAuthorised() internal {
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
     }
 
     function _expectNotEnabledRevert() internal {
@@ -242,6 +256,44 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function _assertAuctionResultsNextIndex(uint8 nextIndex_) internal view {
         assertEq(auctioneer.getAuctionResultsNextIndex(), nextIndex_, "next index");
+    }
+
+    function _assertDepositAssetAndPeriodEnabled(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_,
+        uint256 otherDepositAssetCount_,
+        uint256 otherDepositPeriodCount_
+    ) internal view {
+        // Check the deposit asset is enabled
+        assertEq(
+            auctioneer.isDepositEnabled(depositAsset_, depositPeriod_),
+            true,
+            "deposit asset and period enabled"
+        );
+
+        // Check that the deposit asset is listed
+        IERC20[] memory depositAssets = auctioneer.getDepositAssets();
+        assertEq(depositAssets.length, otherDepositAssetCount_ + 1, "deposit assets length");
+        bool depositAssetFound = false;
+        for (uint256 i = 0; i < depositAssets.length; i++) {
+            if (depositAssets[i] == depositAsset_) {
+                depositAssetFound = true;
+                break;
+            }
+        }
+        assertEq(depositAssetFound, true, "deposit asset found");
+
+        // Check that the deposit period is listed
+        uint8[] memory depositPeriods = auctioneer.getDepositPeriods(depositAsset_);
+        assertEq(depositPeriods.length, otherDepositPeriodCount_ + 1, "deposit periods length");
+        bool depositPeriodFound = false;
+        for (uint256 i = 0; i < depositPeriods.length; i++) {
+            if (depositPeriods[i] == depositPeriod_) {
+                depositPeriodFound = true;
+                break;
+            }
+        }
+        assertEq(depositPeriodFound, true, "deposit period found");
     }
 
     // ========== MODIFIERS ========== //

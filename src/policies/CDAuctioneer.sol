@@ -236,6 +236,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
             address(params.depositAsset),
             params.depositPeriod,
             depositIn,
+            ohmOut,
             positionId
         );
 
@@ -578,6 +579,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         if (_depositAssetPeriods[depositAsset_].length() == 0) {
             _depositAssets.remove(address(depositAsset_));
         }
+
+        // Remove the tick
+        delete _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
 
         // Emit event
         emit DepositPeriodDisabled(address(depositAsset_), depositPeriod_);

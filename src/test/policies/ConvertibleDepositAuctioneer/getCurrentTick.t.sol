@@ -17,7 +17,15 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     }
 
     // given the deposit asset and period are not enabled
-    //  [ ] it reverts
+    //  [X] it reverts
+
+    function test_givenDepositAssetAndPeriodNotEnabled_reverts() public givenEnabled {
+        // Expect revert
+        _expectDepositAssetAndPeriodNotEnabledRevert(iReserveToken, PERIOD_MONTHS);
+
+        // Call function
+        auctioneer.getCurrentTick(iReserveToken, PERIOD_MONTHS);
+    }
 
     // given a bid has never been received and the tick price is at the minimum price
     //  given no time has passed
@@ -349,6 +357,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     //     [ ] the tick price is set to the minimum price
     //     [ ] the tick capacity is set to the current tick size
     //     [ ] the tick size does not change
+
     //    [X] the tick price is set to the minimum price
     //    [X] the capacity is set to the standard tick size
 

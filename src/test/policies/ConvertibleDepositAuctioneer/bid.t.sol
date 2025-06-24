@@ -9,6 +9,15 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibl
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
+    event Bid(
+        address indexed bidder,
+        address indexed depositAsset,
+        uint8 indexed depositPeriod,
+        uint256 depositAmount,
+        uint256 convertedAmount,
+        uint256 positionId
+    );
+
     function _assertConvertibleDepositPosition(
         uint256 bidAmount_,
         uint256 expectedConvertedAmount_,
@@ -62,6 +71,23 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the receipt token id is accurate
         uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         assertEq(returnedReceiptTokenId_, receiptTokenId, "receipt token id");
+    }
+
+    function _expectBidEvent(
+        uint256 bidAmount_,
+        uint256 convertedAmount_,
+        uint256 positionId_
+    ) internal {
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Bid(
+            recipient,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            bidAmount_,
+            convertedAmount_,
+            positionId_
+        );
     }
 
     // when the contract is disabled
@@ -176,6 +202,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -240,6 +269,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
@@ -317,6 +349,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 1);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -385,6 +420,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 1);
 
         // Call function
         vm.prank(recipient);
@@ -463,6 +501,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -536,6 +577,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -606,6 +650,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -669,6 +716,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Expect event
+        _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
@@ -750,6 +800,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             // Assert that the preview is as expected
             assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
         }
+
+        // Expect event
+        _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 0);
 
         // Call function
         vm.prank(recipient);
@@ -838,6 +891,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -913,6 +969,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -985,6 +1044,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -1045,6 +1107,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -1067,4 +1132,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             receiptTokenId
         );
     }
+
+    // TODO shared capacity for the day
 }
