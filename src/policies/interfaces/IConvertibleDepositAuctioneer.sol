@@ -110,12 +110,10 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  price           Price of the tick, in terms of the bid token
     /// @param  capacity        Capacity of the tick, in terms of OHM
-    /// @param  tickSize        Size of the tick, in terms of OHM
     /// @param  lastUpdate      Timestamp of last update to the tick
     struct Tick {
         uint256 price;
         uint256 capacity;
-        uint256 tickSize;
         uint48 lastUpdate;
     }
 
@@ -186,6 +184,11 @@ interface IConvertibleDepositAuctioneer {
         uint8 depositPeriod_
     ) external view returns (Tick memory tick);
 
+    /// @notice Get the current tick size
+    ///
+    /// @return tickSize The current tick size
+    function getCurrentTickSize() external view returns (uint256 tickSize);
+
     /// @notice Get the current auction parameters
     ///
     /// @return auctionParameters Auction parameters
@@ -232,6 +235,11 @@ interface IConvertibleDepositAuctioneer {
     /// @param  depositAsset_   The asset that is being deposited
     /// @return periods The deposit periods
     function getDepositPeriods(IERC20 depositAsset_) external view returns (uint8[] memory periods);
+
+    /// @notice Get the number of deposit asset and period combinations that are enabled
+    ///
+    /// @return count The number of deposit asset and period combinations
+    function getDepositAssetsAndPeriodsCount() external view returns (uint256 count);
 
     /// @notice Returns whether a deposit asset and period combination is enabled
     ///

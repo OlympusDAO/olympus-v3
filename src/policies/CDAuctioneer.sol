@@ -85,6 +85,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     mapping(IERC20 depositAsset => EnumerableSet.UintSet depositPeriods)
         internal _depositAssetPeriods;
 
+    /// @notice The number of deposit asset and period combinations that are enabled
+    uint256 internal _depositAssetsAndPeriodsCount;
+
     /// @notice Previous tick of the auction
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
     mapping(IERC20 depositAsset => mapping(uint8 depositPeriod => Tick previousTick))
@@ -96,6 +99,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice Auction parameters
     /// @dev    These values should only be set through the `setAuctionParameters()` function
     AuctionParameters internal _auctionParameters;
+
+    /// @notice The current tick size
+    uint256 internal _currentTickSize;
 
     /// @notice Auction state for the day
     Day internal _dayState;
@@ -206,9 +212,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
             // Update current tick
             updatedTick.price = output.tickPrice;
             updatedTick.capacity = output.tickCapacity;
-            updatedTick.tickSize = output.tickSize;
             updatedTick.lastUpdate = uint48(block.timestamp);
             _depositAssetPreviousTicks[params.depositAsset][params.depositPeriod] = updatedTick;
+
+            // Update the current tick size
+            if (output.tickSize != _currentTickSize) {
+                _currentTickSize = output.tickSize;
+            }
 
             // Set values for the rest of the function
             ohmOut = output.ohmOut;
@@ -262,7 +272,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint256 remainingDeposit = deposit_;
         output.tickCapacity = tick_.capacity;
         output.tickPrice = tick_.price;
-        output.tickSize = tick_.tickSize;
+        output.tickSize = _currentTickSize;
 
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
@@ -382,7 +392,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         {
             Tick memory previousTick = _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
             uint256 timePassed = block.timestamp - previousTick.lastUpdate;
-            uint256 capacityToAdd = (_auctionParameters.target * timePassed) / 1 days;
+            // The capacity to add is the day target multiplied by the proportion of time passed in a day
+            // It is also adjusted by the number of deposit asset and period combinations that are enabled, otherwise each auction would have too much capacity added
+            uint256 capacityToAdd = (_auctionParameters.target * timePassed) /
+                1 days /
+                _depositAssetsAndPeriodsCount;
 
             // Skip if the new capacity is 0
             if (capacityToAdd == 0) return previousTick;
@@ -393,9 +407,9 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
-        while (newCapacity > tick.tickSize) {
+        while (newCapacity > _currentTickSize) {
             // Reduce the capacity by the tick size
-            newCapacity -= tick.tickSize;
+            newCapacity -= _currentTickSize;
 
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
@@ -404,7 +418,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
             // Tick capacity is full if the min price is exceeded
             if (tick.price < _auctionParameters.minPrice) {
                 tick.price = _auctionParameters.minPrice;
-                newCapacity = tick.tickSize;
+                newCapacity = _currentTickSize;
                 break;
             }
         }
@@ -447,6 +461,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         uint8 depositPeriod_
     ) public view override returns (Tick memory tick) {
         return _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getCurrentTickSize() external view override returns (uint256) {
+        return _currentTickSize;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -551,9 +570,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         _depositAssetPreviousTicks[depositAsset_][depositPeriod_] = Tick(
             _auctionParameters.minPrice,
             _auctionParameters.tickSize,
-            _auctionParameters.tickSize,
             uint48(block.timestamp)
         );
+
+        // Increment the count
+        _depositAssetsAndPeriodsCount++;
 
         // Emit event
         emit DepositPeriodEnabled(address(depositAsset_), depositPeriod_);
@@ -583,8 +604,16 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         // Remove the tick
         delete _depositAssetPreviousTicks[depositAsset_][depositPeriod_];
 
+        // Decrement the count
+        _depositAssetsAndPeriodsCount--;
+
         // Emit event
         emit DepositPeriodDisabled(address(depositAsset_), depositPeriod_);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getDepositAssetsAndPeriodsCount() external view override returns (uint256) {
+        return _depositAssetsAndPeriodsCount;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -658,11 +687,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
                 // Get the previous tick
                 Tick storage previousTick = _depositAssetPreviousTicks[asset][period];
 
-                // Set the tick size
-                // This has the affect of resetting the tick size to the default
-                // The tick size may have been adjusted for the previous day if the target was met
-                previousTick.tickSize = tickSize_;
-
                 // Ensure that the tick capacity is not larger than the new tick size
                 // Otherwise, excess OHM will be converted
                 if (tickSize_ < previousTick.capacity || enforceCapacity_) {
@@ -681,6 +705,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
                 }
             }
         }
+
+        // Set the tick size
+        // This has the affect of resetting the tick size to the default
+        // The tick size may have been adjusted for the previous day if the target was met
+        _currentTickSize = tickSize_;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -789,4 +818,6 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         _auctionResults = new int256[](_auctionTrackingPeriod);
         _auctionResultsNextIndex = 0;
     }
+
+    // TODO adminOrManager check
 }

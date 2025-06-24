@@ -52,7 +52,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert current tick
         assertEq(tick.capacity, expectedTickCapacity, "capacity");
         assertEq(tick.price, expectedTickPrice, "price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //  [X] the tick price remains at the min price
@@ -90,7 +89,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert current tick
         assertEq(tick.capacity, expectedTickCapacity, "capacity");
         assertEq(tick.price, expectedTickPrice, "price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     // when the new capacity (current tick capacity + added capacity) is equal to the current tick size
@@ -135,7 +133,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, 1815e16, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //   [X] the tick price is unchanged
@@ -173,7 +170,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 5e9, "new tick capacity");
         assertEq(tick.price, 1815e16, "new tick price");
-        assertEq(tick.tickSize, 5e9, "new tick size");
     }
 
     //  [X] the tick price is unchanged
@@ -230,7 +226,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     // when the new capacity is less than the current tick size
@@ -262,7 +257,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 9e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     // when the new capacity is greater than the current tick size
@@ -298,7 +292,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 2e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //  given the tick step is > 100e2
@@ -351,7 +344,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //     [ ] the tick price is set to the minimum price
@@ -398,7 +390,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //   given the current tick size is 5e9
@@ -443,7 +434,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 2692072238, "new tick capacity");
         assertEq(tick.price, 165e17, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //    [X] it reduces the price by the tick step until the total capacity is less than the current tick size
@@ -482,7 +472,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 4173553720, "new tick capacity");
         assertEq(tick.price, 165e17, "new tick price");
-        assertEq(tick.tickSize, 5e9, "new tick size");
     }
 
     //   [X] it reduces the price by the tick step until the total capacity is less than the standard tick size
@@ -520,7 +509,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 227272728, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     function test_newCapacityGreaterThanTickSize()
@@ -551,7 +539,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     function test_tickStepSame_newCapacityLessThanTickSize()
@@ -581,7 +568,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 75e8, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     function test_tickStepSame_newCapacityEqualToTickSize()
@@ -611,7 +597,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, 15e18, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     // given there is another deposit asset and period enabled
@@ -643,7 +628,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick
         assertEq(tick.capacity, 10e9, "new tick capacity");
         assertEq(tick.price, MIN_PRICE, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //  given the tick capacity for the current deposit asset and period has been depleted
@@ -683,7 +667,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick
         assertEq(tick.capacity, 6477272728, "new tick capacity");
         assertEq(tick.price, 165e17, "new tick price");
-        assertEq(tick.tickSize, 10e9, "new tick size");
     }
 
     //  given the day target has been met by the other deposit asset and period
@@ -714,6 +697,5 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick
         assertEq(tick.capacity, 5e9, "new tick capacity");
         assertEq(tick.price, MIN_PRICE, "new tick price");
-        assertEq(tick.tickSize, 5e9, "new tick size");
     }
 }

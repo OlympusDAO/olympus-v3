@@ -89,7 +89,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Assert state
         _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
         // No assets defined, so tick is not initialized
-        _assertPreviousTick(0, 0, 0, 0);
+        _assertPreviousTick(0, 0, newTickSize, 0);
         _assertAuctionResultsEmpty(0);
         _assertAuctionResultsNextIndex(0);
     }

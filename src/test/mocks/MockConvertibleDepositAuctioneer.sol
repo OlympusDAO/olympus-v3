@@ -55,6 +55,10 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getCurrentTick(IERC20, uint8) external view override returns (Tick memory tick) {}
 
+    function getCurrentTickSize() external view override returns (uint256) {
+        return tickSize;
+    }
+
     function getAuctionParameters()
         external
         view
@@ -106,4 +110,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         IERC20 depositAsset_,
         uint8 depositPeriod_
     ) external view override returns (bool) {}
+
+    function getDepositAssetsAndPeriodsCount() external view override returns (uint256) {}
 }

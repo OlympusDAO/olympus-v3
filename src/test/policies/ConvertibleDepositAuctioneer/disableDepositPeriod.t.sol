@@ -61,9 +61,14 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         );
         assertEq(auctioneer.getDepositAssets().length, 0, "deposit assets length");
         assertEq(auctioneer.getDepositPeriods(iReserveToken).length, 0, "deposit periods length");
+        assertEq(
+            auctioneer.getDepositAssetsAndPeriodsCount(),
+            0,
+            "deposit assets and periods count"
+        );
 
         // Check the tick is removed
-        _assertPreviousTick(0, 0, 0, 0);
+        _assertPreviousTick(0, 0, TICK_SIZE, 0);
     }
 
     // [X] it removes the deposit period from the deposit asset's periods array
@@ -87,9 +92,9 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         auctioneer.disableDepositPeriod(iReserveToken, PERIOD_MONTHS);
 
         // Assert state
-        _assertDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1, 0, 0);
+        _assertDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1, 0, 0, 1);
 
         // Check the tick is removed
-        _assertPreviousTick(0, 0, 0, 0);
+        _assertPreviousTick(0, 0, TICK_SIZE, 0);
     }
 }

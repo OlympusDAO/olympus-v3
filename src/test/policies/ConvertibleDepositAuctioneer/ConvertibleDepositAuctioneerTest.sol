@@ -201,8 +201,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
         assertEq(tick.price, price_, "previous tick price");
-        assertEq(tick.tickSize, tickSize_, "previous tick size");
         assertEq(tick.lastUpdate, lastUpdate_, "previous tick lastUpdate");
+
+        assertEq(auctioneer.getCurrentTickSize(), tickSize_, "current tick size");
     }
 
     function _assertDayState(uint256 convertible_) internal view {
@@ -262,7 +263,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         IERC20 depositAsset_,
         uint8 depositPeriod_,
         uint256 otherDepositAssetCount_,
-        uint256 otherDepositPeriodCount_
+        uint256 otherDepositPeriodCount_,
+        uint256 totalDepositAssetAndPeriodCount_
     ) internal view {
         // Check the deposit asset is enabled
         assertEq(
@@ -294,6 +296,13 @@ contract ConvertibleDepositAuctioneerTest is Test {
             }
         }
         assertEq(depositPeriodFound, true, "deposit period found");
+
+        // Check that the total is correct
+        assertEq(
+            auctioneer.getDepositAssetsAndPeriodsCount(),
+            totalDepositAssetAndPeriodCount_,
+            "deposit assets and periods count"
+        );
     }
 
     // ========== MODIFIERS ========== //
