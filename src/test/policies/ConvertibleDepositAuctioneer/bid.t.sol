@@ -1132,6 +1132,4 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             receiptTokenId
         );
     }
-
-    // TODO shared capacity for the day
 }

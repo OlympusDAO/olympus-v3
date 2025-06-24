@@ -613,4 +613,107 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         assertEq(tick.price, 15e18, "new tick price");
         assertEq(tick.tickSize, 10e9, "new tick size");
     }
+
+    // given there is another deposit asset and period enabled
+    //  given the tick capacity for the other deposit asset and period has been depleted
+    //   [X] the tick price for the current deposit asset and period is the minimum price and not affected by the other deposit asset and period
+
+    function test_givenOtherDepositAssetAndPeriodEnabled_otherTickCapacityDepleted()
+        public
+        givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenRecipientHasBid(270e18)
+    {
+        // Bid size of 270e18 results in:
+        // 1. 270e18 * 1e9 / 15e18 = 18e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // This is for the other deposit asset and period
+        // The current deposit asset and period has 10e9 capacity and is at the minimum price
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            iReserveToken,
+            PERIOD_MONTHS + 1
+        );
+
+        // Assert tick
+        assertEq(tick.capacity, 10e9, "new tick capacity");
+        assertEq(tick.price, MIN_PRICE, "new tick price");
+        assertEq(tick.tickSize, 10e9, "new tick size");
+    }
+
+    //  given the tick capacity for the current deposit asset and period has been depleted
+    //   [X] the added capacity is based on half of the target and the time passed since the last bid
+
+    function test_givenOtherDepositAssetAndPeriodEnabled_tickCapacityDepleted()
+        public
+        givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenRecipientHasBid(270e18)
+    {
+        // Bid size of 270e18 results in:
+        // 1. 270e18 * 1e9 / 15e18 = 18e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (270e18 - 150e18) * 1e9 / 165e17 = 7272727272. Less than the tick size of 10e9, so the tick price remains unchanged.
+        // Remaining capacity is 10e9 - 7272727272 = 2727272728
+
+        // Day target is 20e9
+        // Number of active deposit assets and periods is 2
+        // Day target allocation is 20e9 / 2 = 10e9
+
+        // 10e9*32400/86400 = 3750000000
+        // Added capacity will be 3750000000
+        // New capacity will be 2727272728 + 3750000000 = 6477272728
+        // < 10e9, so the tick price remains unchanged
+
+        // Warp forward
+        uint48 timePassed = 32400;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            iReserveToken,
+            PERIOD_MONTHS
+        );
+
+        // Assert tick
+        assertEq(tick.capacity, 6477272728, "new tick capacity");
+        assertEq(tick.price, 165e17, "new tick price");
+        assertEq(tick.tickSize, 10e9, "new tick size");
+    }
+
+    //  given the day target has been met by the other deposit asset and period
+    //   [X] the tick size for the current deposit asset and period is half of the standard tick size
+
+    function test_givenOtherDepositAssetAndPeriodEnabled_otherDepositAssetAndPeriodDayTargetMet()
+        public
+        givenEnabled
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenRecipientHasBid(360375e15)
+    {
+        // Bid size of 360375e15 results in:
+        // 1. 360375e15 * 1e9 / 15e18 = 24,025,000,000. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (360375e15 - 150e18) * 1e9 / 165e17 = 12,750,000,000. Greater than the tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16. Day target met, so tick size becomes 5e9.
+        // 3. (360375e15 - 150e18 - 165e18) * 1e9 / 1815e16 = 25e8. Less than the tick size of 5e9.
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            iReserveToken,
+            PERIOD_MONTHS + 1
+        );
+
+        // Assert tick
+        assertEq(tick.capacity, 5e9, "new tick capacity");
+        assertEq(tick.price, MIN_PRICE, "new tick price");
+        assertEq(tick.tickSize, 5e9, "new tick size");
+    }
 }
