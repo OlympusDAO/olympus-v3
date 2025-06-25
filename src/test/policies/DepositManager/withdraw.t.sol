@@ -453,4 +453,31 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
         _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
+
+    // given the asset deposit cap has been exceeded
+    //  [X] it allows for withdrawals to be made
+
+    function test_givenAssetDepositCapIsExceeded()
+        public
+        givenIsEnabled
+        givenAssetVaultIsConfigured
+        givenDepositIsConfigured
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
+        givenAssetDepositCapIsSet(0)
+    {
+        uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
+
+        uint256 actualAmount = _withdraw(previousDepositorDepositActualAmount, false);
+
+        _assertAssetBalance(
+            expectedShares,
+            previousDepositorDepositActualAmount,
+            actualAmount,
+            false
+        );
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
+    }
 }

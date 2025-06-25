@@ -128,13 +128,13 @@ contract DepositManagerTest is Test {
 
     modifier givenAssetVaultIsConfigured() {
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, iVault);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max);
         _;
     }
 
     modifier givenAssetVaultIsConfiguredWithZeroAddress() {
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, IERC4626(address(0)));
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
         _;
     }
 
@@ -153,6 +153,11 @@ contract DepositManagerTest is Test {
     modifier givenDepositorHasApprovedSpendingAsset(uint256 amount_) {
         vm.prank(DEPOSITOR);
         asset.approve(address(depositManager), amount_);
+        _;
+    }
+
+    modifier givenDepositorHasAsset(uint256 amount_) {
+        asset.mint(DEPOSITOR, amount_);
         _;
     }
 
@@ -227,6 +232,16 @@ contract DepositManagerTest is Test {
 
     function _withdraw(uint256 amount_, bool wrapped_) internal returns (uint256 actualAmount) {
         return _withdraw(DEPOSITOR, amount_, wrapped_);
+    }
+
+    function _setAssetDepositCap(uint256 depositCap_) internal {
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, depositCap_);
+    }
+
+    modifier givenAssetDepositCapIsSet(uint256 depositCap_) {
+        _setAssetDepositCap(depositCap_);
+        _;
     }
 
     // ========== REVERT HELPERS ========== //
@@ -356,6 +371,17 @@ contract DepositManagerTest is Test {
                 IDepositManager.DepositManager_Insolvent.selector,
                 address(iAsset),
                 liabilities_
+            )
+        );
+    }
+
+    function _expectRevertDepositCapExceeded(uint256 balance_, uint256 depositCap_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_DepositCapExceeded.selector,
+                address(iAsset),
+                balance_,
+                depositCap_
             )
         );
     }

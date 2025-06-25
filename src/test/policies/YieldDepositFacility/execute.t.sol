@@ -121,7 +121,7 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
         // Configure an asset without a vault
         MockERC20 newAsset = new MockERC20("New Asset", "NEW", 18);
         vm.prank(admin);
-        depositManager.configureAssetVault(IERC20(address(newAsset)), IERC4626(address(0)));
+        depositManager.addAsset(IERC20(address(newAsset)), IERC4626(address(0)), type(uint256).max);
 
         // Set the timestamp to be anything but a multiple of 8 hours
         timestamp = uint48(bound(timestamp, INITIAL_BLOCK, INITIAL_BLOCK + 16 hours));

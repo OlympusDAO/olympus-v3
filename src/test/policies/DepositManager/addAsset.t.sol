@@ -12,16 +12,17 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
+contract DepositManagerAddAssetTest is DepositManagerTest {
     // ========== EVENTS ========== //
 
-    event AssetConfigured(address indexed asset, address indexed vault);
+    event AssetConfigured(address indexed asset, address indexed vault, uint256 depositCap);
 
     // ========== ASSERTIONS ========== //
 
     function _assertAssetConfiguration(
         IERC20 asset_,
         IERC4626 vault_,
+        uint256 depositCap_,
         bool isConfigured_
     ) internal view {
         // AssetConfiguration
@@ -37,6 +38,7 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
             address(vault_),
             "AssetConfiguration: vault mismatch"
         );
+        assertEq(configuration.depositCap, depositCap_, "AssetConfiguration: depositCap mismatch");
 
         // getConfiguredAssets
         IERC20[] memory assets = depositManager.getConfiguredAssets();
@@ -56,40 +58,43 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
 
     // when the caller is not the manager or admin
     //  [X] it reverts
+
     function test_givenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
         vm.assume(caller_ != ADMIN && caller_ != MANAGER);
 
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
 
         vm.prank(caller_);
-        depositManager.configureAssetVault(iAsset, iVault);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max);
     }
 
     // given the contract is disabled
     //  [X] it reverts
+
     function test_givenContractIsDisabled_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IPolicyEnabler.NotEnabled.selector));
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, iVault);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max);
     }
 
     // when the asset is the zero address
     //  when the vault is the zero address
     //   [X] it reverts
     //  [X] it reverts
+
     function test_whenAssetIsZeroAddress_whenVaultIsZeroAddress_reverts() public givenIsEnabled {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(IERC20(address(0)), IERC4626(address(0)));
+        depositManager.addAsset(IERC20(address(0)), IERC4626(address(0)), type(uint256).max);
     }
 
     function test_whenAssetIsZeroAddress_reverts() public givenIsEnabled {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(IERC20(address(0)), iVault);
+        depositManager.addAsset(IERC20(address(0)), iVault, type(uint256).max);
     }
 
     // given the asset is already configured
@@ -103,11 +108,11 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
         givenAssetVaultIsConfigured
     {
         vm.expectRevert(
-            abi.encodeWithSelector(IAssetManager.AssetManager_VaultAlreadySet.selector)
+            abi.encodeWithSelector(IAssetManager.AssetManager_AssetAlreadyConfigured.selector)
         );
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, IERC4626(address(0)));
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
     }
 
     function test_givenAssetIsAlreadyConfigured_reverts()
@@ -116,11 +121,11 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
         givenAssetVaultIsConfigured
     {
         vm.expectRevert(
-            abi.encodeWithSelector(IAssetManager.AssetManager_VaultAlreadySet.selector)
+            abi.encodeWithSelector(IAssetManager.AssetManager_AssetAlreadyConfigured.selector)
         );
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, iVault);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max);
     }
 
     // when the vault is the zero address
@@ -131,12 +136,12 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
 
     function test_whenVaultIsZeroAddress() public givenIsEnabled {
         vm.expectEmit(true, true, true, true);
-        emit AssetConfigured(address(asset), address(0));
+        emit AssetConfigured(address(asset), address(0), type(uint256).max);
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, IERC4626(address(0)));
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
 
-        _assertAssetConfiguration(iAsset, IERC4626(address(0)), true);
+        _assertAssetConfiguration(iAsset, IERC4626(address(0)), type(uint256).max, true);
     }
 
     // given the vault asset does not match the asset
@@ -152,7 +157,7 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, IERC4626(address(newVault)));
+        depositManager.addAsset(iAsset, IERC4626(address(newVault)), type(uint256).max);
     }
 
     // [X] the asset configuration has the vault set to the vault address
@@ -160,13 +165,13 @@ contract DepositManagerConfigureAssetVaultTest is DepositManagerTest {
     // [X] the configured assets array contains the asset
     // [X] it emits an event
 
-    function test_setsAssetVault() public givenIsEnabled {
+    function test_setsAssetVault(uint256 depositCap_) public givenIsEnabled {
         vm.expectEmit(true, true, true, true);
-        emit AssetConfigured(address(asset), address(vault));
+        emit AssetConfigured(address(asset), address(vault), depositCap_);
 
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(iAsset, iVault);
+        depositManager.addAsset(iAsset, iVault, depositCap_);
 
-        _assertAssetConfiguration(iAsset, iVault, true);
+        _assertAssetConfiguration(iAsset, iVault, depositCap_, true);
     }
 }

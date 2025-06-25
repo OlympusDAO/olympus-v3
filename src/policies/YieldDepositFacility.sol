@@ -142,7 +142,7 @@ contract YieldDepositFacility is
 
         // Set the initial yield conversion rate
         positionLastYieldConversionRate[positionId] = _getConversionRate(
-            DEPOSIT_MANAGER.getAssetConfiguration(params_.asset).vault
+            IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(params_.asset).vault)
         );
 
         // Emit an event
@@ -214,7 +214,9 @@ contract YieldDepositFacility is
 
         // Validate that the asset has a yield bearing vault
         // This is validated in the createPosition function, but is checked to be safe
-        IERC4626 assetVault = DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault;
+        IERC4626 assetVault = IERC4626(
+            DEPOSIT_MANAGER.getAssetConfiguration(IERC20(position.asset)).vault
+        );
         if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
 
         // Get the last snapshot rate
@@ -433,7 +435,7 @@ contract YieldDepositFacility is
 
         // Store snapshots for each vault
         for (uint256 i; i < assets.length; ++i) {
-            IERC4626 vault = DEPOSIT_MANAGER.getAssetConfiguration(assets[i]).vault;
+            IERC4626 vault = IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(assets[i]).vault);
 
             // Skip if the vault is not set
             if (address(vault) == address(0)) continue;

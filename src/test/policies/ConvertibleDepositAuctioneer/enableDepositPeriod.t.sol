@@ -55,7 +55,7 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         // Define a new asset and configure it
         IERC20 newAsset = IERC20(address(new MockERC20("New Asset", "NEW", 18)));
         vm.startPrank(admin);
-        depositManager.configureAssetVault(newAsset, IERC4626(address(0)));
+        depositManager.addAsset(newAsset, IERC4626(address(0)), type(uint256).max);
         depositManager.addAssetPeriod(newAsset, PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 

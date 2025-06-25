@@ -122,7 +122,11 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Create a receipt token
         vm.startPrank(admin);
-        depositManager.configureAssetVault(IERC20(address(reserveToken)), IERC4626(address(vault)));
+        depositManager.addAsset(
+            IERC20(address(reserveToken)),
+            IERC4626(address(vault)),
+            type(uint256).max
+        );
 
         depositManager.addAssetPeriod(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
 
@@ -134,9 +138,10 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Create a second receipt token
         vm.startPrank(admin);
-        depositManager.configureAssetVault(
+        depositManager.addAsset(
             IERC20(address(reserveTokenTwo)),
-            IERC4626(address(vaultTwo))
+            IERC4626(address(vaultTwo)),
+            type(uint256).max
         );
 
         depositManager.addAssetPeriod(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);

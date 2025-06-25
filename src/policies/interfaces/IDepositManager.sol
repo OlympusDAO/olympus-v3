@@ -168,15 +168,26 @@ interface IDepositManager {
 
     // ========== DEPOSIT CONFIGURATIONS ========== //
 
-    /// @notice Configures an asset to be deposited into a vault
+    /// @notice Adds a new asset
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Configuring the asset
     ///         - Emitting an event
     ///
-    /// @param  asset_  The address of the underlying asset
-    /// @param  vault_  The address of the vault to use for the receipt token (or the zero address)
-    function configureAssetVault(IERC20 asset_, IERC4626 vault_) external;
+    /// @param  asset_      The address of the underlying asset
+    /// @param  vault_      The address of the ERC4626 vault to deposit the asset into (or the zero address)
+    /// @param  depositCap_ The deposit cap of the asset
+    function addAsset(IERC20 asset_, IERC4626 vault_, uint256 depositCap_) external;
+
+    /// @notice Sets the deposit cap for an asset
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Setting the deposit cap for the asset
+    ///         - Emitting an event
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  depositCap_     The deposit cap to set for the asset
+    function setAssetDepositCap(IERC20 asset_, uint256 depositCap_) external;
 
     /// @notice Adds a new asset period
     /// @dev    The implementing contract is expected to handle the following:

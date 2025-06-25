@@ -246,11 +246,21 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
-    function configureAssetVault(
+    function addAsset(
         IERC20 asset_,
-        IERC4626 vault_
+        IERC4626 vault_,
+        uint256 depositCap_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        _configureAsset(asset_, address(vault_));
+        _addAsset(asset_, vault_, depositCap_);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by the manager or admin role
+    function setAssetDepositCap(
+        IERC20 asset_,
+        uint256 depositCap_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        _setAssetDepositCap(asset_, depositCap_);
     }
 
     /// @inheritdoc IDepositManager

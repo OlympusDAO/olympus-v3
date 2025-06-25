@@ -38,7 +38,7 @@ contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
         // Create a new asset
         MockERC20 newAsset = new MockERC20("New Asset", "NEW", 18);
         vm.prank(admin);
-        depositManager.configureAssetVault(IERC20(address(newAsset)), IERC4626(address(0)));
+        depositManager.addAsset(IERC20(address(newAsset)), IERC4626(address(0)), type(uint256).max);
         IERC20 iNewAsset = IERC20(address(newAsset));
 
         // Expect revert

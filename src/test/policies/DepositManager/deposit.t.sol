@@ -235,7 +235,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Configure the asset vault
         vm.prank(ADMIN);
-        depositManager.configureAssetVault(IERC20(address(asset)), IERC4626(address(0)));
+        depositManager.addAsset(IERC20(address(asset)), IERC4626(address(0)), type(uint256).max);
 
         // Configure deposit
         vm.prank(ADMIN);
@@ -265,7 +265,64 @@ contract DepositManagerDepositTest is DepositManagerTest {
         );
     }
 
+    // given the asset's deposit cap is zero
+    //  [X] it reverts
+
+    function test_givenAssetDepositCapIsZero_reverts()
+        public
+        givenIsEnabled
+        givenAssetVaultIsConfigured
+        givenDepositIsConfigured
+        givenAssetDepositCapIsSet(0)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertDepositCapExceeded(0, 0);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
     // given the asset configuration has the vault set to the zero address
+    //  given the existing deposit amount is greater than the deposit cap
+    //   [X] it reverts
+
+    function test_givenAssetVaultIsConfiguredWithZeroAddress_givenTotalAssetsAreGreaterThanDepositCap_reverts()
+        public
+        givenIsEnabled
+        givenAssetVaultIsConfiguredWithZeroAddress
+        givenAssetDepositCapIsSet(101e18)
+        givenDepositIsConfigured
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasAsset(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertDepositCapExceeded(previousAssetLiabilities, 101e18);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
     //  [X] the returned shares are the deposited amount
     //  [X] the asset is stored in the contract
     //  [X] the operator shares are updated with the deposited amount
@@ -383,6 +440,36 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _assertAssetBalance(expectedShares, expectedAssets, actualAmount, true);
         _assertReceiptToken(0, expectedAssets, true, true);
         _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - 10e18 - expectedAssets);
+    }
+
+    // given the existing deposit amount is greater than the deposit cap
+    //  [X] it reverts
+
+    function test_givenTotalAssetsAreGreaterThanDepositCap_reverts()
+        public
+        givenIsEnabled
+        givenAssetVaultIsConfigured
+        givenAssetDepositCapIsSet(101e18)
+        givenDepositIsConfigured
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasAsset(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertDepositCapExceeded(previousAssetLiabilities, 101e18);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
     }
 
     // [X] the returned shares are the deposited amount (in terms of vault shares)

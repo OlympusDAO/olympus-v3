@@ -135,7 +135,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Create a receipt token
         // Required at the time of activation of the auctioneer policy
         vm.startPrank(admin);
-        depositManager.configureAssetVault(iReserveToken, IERC4626(address(vault)));
+        depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max);
 
         depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, 90e2);
 

@@ -49,6 +49,20 @@ abstract contract BaseAssetManager is IAssetManager {
         address depositor_,
         uint256 amount_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
+        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
+
+        // Validate that adding the deposit will not exceed the deposit cap
+        {
+            (, uint256 assetAmountBefore) = getOperatorAssets(asset_, msg.sender);
+            if (assetAmountBefore + amount_ > assetConfiguration.depositCap) {
+                revert AssetManager_DepositCapExceeded(
+                    address(asset_),
+                    assetAmountBefore,
+                    assetConfiguration.depositCap
+                );
+            }
+        }
+
         // Pull the assets from the depositor
         ERC20 asset = ERC20(address(asset_));
         uint256 balanceBefore = asset.balanceOf(address(this));
@@ -59,21 +73,21 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         // If the vault is the zero address, the asset is to be kept idle
-        AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-        if (address(assetConfiguration.vault) == address(0)) {
+        if (assetConfiguration.vault == address(0)) {
             shares = amount_;
             actualAmount = amount_;
         }
         // Otherwise, deposit the assets into the vault
         else {
-            asset.safeApprove(address(assetConfiguration.vault), amount_);
-            shares = assetConfiguration.vault.deposit(amount_, address(this));
+            IERC4626 vault = IERC4626(assetConfiguration.vault);
+            asset.safeApprove(address(vault), amount_);
+            shares = vault.deposit(amount_, address(this));
 
             // The amount of assets redeemable by the shares can be different from the amount deposited
             // due to rounding errors in the ERC4626 vault
             // To avoid minting more receipt tokens than the actual redeemable amount,
             // we should use the previewRedeem function to get the actual amount of assets redeemable by the shares.
-            actualAmount = assetConfiguration.vault.previewRedeem(shares);
+            actualAmount = vault.previewRedeem(shares);
         }
 
         // Amount of shares must be non-zero
@@ -103,14 +117,18 @@ abstract contract BaseAssetManager is IAssetManager {
     ) internal onlyConfiguredAsset(asset_) returns (uint256 shares, uint256 assetAmount) {
         // If the vault is the zero address, the asset is idle and kept in this contract
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-        if (address(assetConfiguration.vault) == address(0)) {
+        if (assetConfiguration.vault == address(0)) {
             shares = amount_;
             assetAmount = amount_;
             ERC20(address(asset_)).safeTransfer(depositor_, amount_);
         }
         // Otherwise, withdraw the assets from the vault
         else {
-            shares = assetConfiguration.vault.withdraw(amount_, depositor_, address(this));
+            shares = IERC4626(assetConfiguration.vault).withdraw(
+                amount_,
+                depositor_,
+                address(this)
+            );
             assetAmount = amount_;
         }
 
@@ -133,10 +151,10 @@ abstract contract BaseAssetManager is IAssetManager {
 
         // Convert from shares to assets
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
-        if (address(assetConfiguration.vault) == address(0)) {
+        if (assetConfiguration.vault == address(0)) {
             sharesInAssets = shares;
         } else {
-            sharesInAssets = assetConfiguration.vault.previewRedeem(shares);
+            sharesInAssets = IERC4626(assetConfiguration.vault).previewRedeem(shares);
         }
 
         return (shares, sharesInAssets);
@@ -158,34 +176,54 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         - The asset is already configured
     ///         - The vault asset does not match the asset
     ///
-    /// @param asset_  The asset to configure
-    /// @param vault_  The vault to use
-    function _configureAsset(IERC20 asset_, address vault_) internal {
+    /// @param asset_       The asset to configure
+    /// @param vault_       The vault to use
+    /// @param depositCap_  The deposit cap of the asset
+    function _addAsset(IERC20 asset_, IERC4626 vault_, uint256 depositCap_) internal {
         // Validate that the asset is not the zero address
         if (address(asset_) == address(0)) {
             revert AssetManager_InvalidAsset();
         }
 
-        // Validate that the vault is not already approved
+        // Validate that the vault is not already configured
         if (_assetConfigurations[asset_].isConfigured) {
-            revert AssetManager_VaultAlreadySet();
+            revert AssetManager_AssetAlreadyConfigured();
         }
 
         // Validate that the vault asset matches
-        if (vault_ != address(0) && address(IERC4626(vault_).asset()) != address(asset_)) {
+        if (address(vault_) != address(0) && address(vault_.asset()) != address(asset_)) {
             revert AssetManager_VaultAssetMismatch();
         }
 
         // Configure the asset
         _assetConfigurations[asset_] = AssetConfiguration({
             isConfigured: true,
-            vault: IERC4626(vault_)
+            vault: address(vault_),
+            depositCap: depositCap_
         });
 
         // Add the asset to the array of configured assets
         _configuredAssets.push(asset_);
 
-        emit AssetConfigured(address(asset_), vault_);
+        emit AssetConfigured(address(asset_), address(vault_), depositCap_);
+        emit AssetDepositCapSet(address(asset_), depositCap_);
+    }
+
+    /// @notice Set the deposit cap for an asset
+    /// @dev    This function will set the deposit cap for an asset.
+    ///
+    ///         This function will revert if:
+    ///         - The asset is not configured
+    ///
+    /// @param asset_          The asset to set the deposit cap for
+    /// @param depositCap_     The deposit cap to set for the asset
+    function _setAssetDepositCap(IERC20 asset_, uint256 depositCap_) internal {
+        // Validate that the asset is configured
+        if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
+
+        // Set the deposit cap
+        _assetConfigurations[asset_].depositCap = depositCap_;
+        emit AssetDepositCapSet(address(asset_), depositCap_);
     }
 
     function _isConfiguredAsset(IERC20 asset_) internal view returns (bool) {

@@ -158,7 +158,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Create a receipt token
         vm.startPrank(admin);
-        depositManager.configureAssetVault(iReserveToken, iVault);
+        depositManager.addAsset(iReserveToken, iVault, type(uint256).max);
 
         depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, 90e2);
 
@@ -167,7 +167,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Create a second receipt token
         vm.startPrank(admin);
-        depositManager.configureAssetVault(iReserveTokenTwo, iVaultTwo);
+        depositManager.addAsset(iReserveTokenTwo, iVaultTwo, type(uint256).max);
 
         depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
 

@@ -2,7 +2,6 @@
 pragma solidity >=0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 /// @title  IAssetManager
 /// @notice This interface defines the functions for custodying assets.
@@ -12,14 +11,26 @@ interface IAssetManager {
     // ========== ERRORS ========== //
 
     error AssetManager_NotConfigured();
+
     error AssetManager_InvalidAsset();
-    error AssetManager_VaultAlreadySet();
+
+    error AssetManager_AssetAlreadyConfigured();
+
     error AssetManager_VaultAssetMismatch();
+
     error AssetManager_ZeroAmount();
+
+    error AssetManager_DepositCapExceeded(
+        address asset,
+        uint256 existingDepositAmount,
+        uint256 depositCap
+    );
 
     // ========== EVENTS ========== //
 
-    event AssetConfigured(address indexed asset, address indexed vault);
+    event AssetConfigured(address indexed asset, address indexed vault, uint256 depositCap);
+
+    event AssetDepositCapSet(address indexed asset, uint256 depositCap);
 
     event AssetDeposited(
         address indexed asset,
@@ -39,9 +50,15 @@ interface IAssetManager {
 
     // ========== DATA STRUCTURES ========== //
 
+    /// @notice Configuration for an asset
+    ///
+    /// @param isConfigured  Whether the asset is configured
+    /// @param depositCap    The maximum amount of assets that can be deposited. Set to 0 to disable deposits.
+    /// @param vault         The ERC4626 vault that the asset is deposited into
     struct AssetConfiguration {
         bool isConfigured;
-        IERC4626 vault;
+        uint256 depositCap;
+        address vault;
     }
 
     // ========== ASSET FUNCTIONS ========== //
