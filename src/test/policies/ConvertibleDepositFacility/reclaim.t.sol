@@ -3,6 +3,8 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest {
     event Reclaimed(
         address indexed user,
@@ -99,6 +101,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
     // [X] it emits a Reclaimed event
     // [X] the OHM mint approval is not changed
 
+    /// forge-config: default.isolate = true
     function test_success()
         public
         givenLocallyActive
@@ -125,9 +128,16 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
             expectedForfeitedAmount
         );
 
+        // Start gas snapshot
+        vm.startSnapshotGas("reclaim");
+
         // Call function
         vm.prank(recipient);
         uint256 reclaimed = facility.reclaim(iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
 
         // Assertion that the reclaimed amount is the sum of the amounts adjusted by the reclaim rate
         assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");

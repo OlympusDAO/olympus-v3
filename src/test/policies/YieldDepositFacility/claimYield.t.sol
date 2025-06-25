@@ -5,6 +5,8 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
 
@@ -579,6 +581,74 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedYieldShares,
             currentConversionRate
+        );
+    }
+
+    /// forge-config: default.isolate = true
+    function test_whenExpired_givenRateSnapshotOnExpiry()
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000)
+        givenDepositPeriodEnded(0)
+        givenRateSnapshotTaken
+        givenVaultAccruesYield(iVault, 1e18)
+    {
+        // Move beyond the end of the deposit period
+        vm.warp(YIELD_EXPIRY + 1);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = POSITION_ID;
+
+        // Calculate expected yield and fee
+        // As the expiry is in the past, this will take the last rate snapshot
+        // Last conversion rate = 1100000000000000000
+        // Current conversion rate = 1155000000000000000
+        // Deposit amount = 9000000000000000000
+        // Deposit shares = 8181818181818181818 (at the time of deposit)
+        // Yield/share = 1155000000000000000-1100000000000000000 = 55000000000000000 (in terms of assets per share)
+        // Actual yield = yield/share * shares
+        // Actual yield = 55000000000000000 * 8181818181818181818 / 1e18 = 449999999999999999.99
+        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
+            POSITION_ID
+        );
+        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
+        uint256 rateSnapshotConversionRate = yieldDepositFacility.vaultRateSnapshots(
+            iVault,
+            _getRoundedTimestamp(YIELD_EXPIRY)
+        );
+        uint256 expectedYield = ((rateSnapshotConversionRate - lastConversionRate) * lastShares) /
+            1e18;
+        assertEq(expectedYield, 449999999999999999, "Expected yield");
+        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+
+        // Start gas snapshot
+        vm.startSnapshotGas("claimYield");
+
+        // Claim yield
+        vm.prank(recipient);
+        yieldDepositFacility.claimYield(positionIds);
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
+
+        // Assert balances
+        _assertHarvestBalances(
+            recipient,
+            POSITION_ID,
+            expectedYield,
+            expectedFee,
+            expectedFee,
+            expectedYieldShares,
+            rateSnapshotConversionRate
         );
     }
 

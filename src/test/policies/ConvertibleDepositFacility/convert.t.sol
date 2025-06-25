@@ -7,6 +7,8 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {stdError} from "forge-std/StdError.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest {
     event ConvertedDeposit(
         address indexed asset,
@@ -470,6 +472,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
     // [X] it returns the total deposit amount and the converted amount
     // [X] it emits a ConvertedDeposit event
 
+    /// forge-config: default.isolate = true
     function test_success()
         public
         givenLocallyActive
@@ -504,6 +507,9 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
             expectedConvertedAmount
         );
 
+        // Start gas snapshot
+        vm.startSnapshotGas("convert");
+
         // Call function
         vm.prank(recipient);
         (uint256 totalDeposit, uint256 convertedAmount) = facility.convert(
@@ -511,6 +517,10 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
             amounts_,
             true
         );
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
 
         // Assert total deposit
         assertEq(totalDeposit, expectedAssets, "totalDeposit");

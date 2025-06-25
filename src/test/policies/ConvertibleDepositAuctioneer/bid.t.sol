@@ -8,6 +8,8 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
     event Bid(
         address indexed bidder,
@@ -397,6 +399,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it sets the current tick size to the standard tick size
     //  [X] it sets the lastUpdate to the current block timestamp
 
+    /// forge-config: default.isolate = true
     function test_secondBidUpdatesDayState()
         public
         givenEnabled
@@ -424,6 +427,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 1);
 
+        // Start gas snapshot
+        vm.startSnapshotGas("bid");
+
         // Call function
         vm.prank(recipient);
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
@@ -433,6 +439,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             false,
             false
         );
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
 
         // Assert returned values
         _assertConvertibleDepositPosition(

@@ -5,6 +5,8 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract YieldDepositFacilityRedeemTest is YieldDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
@@ -321,7 +323,51 @@ contract YieldDepositFacilityRedeemTest is YieldDepositFacilityTest {
     // [X] it sets the commitment amount to 0
     // [X] it emits a Redeemed event
 
-    function test_success(
+    /// forge-config: default.isolate = true
+    function test_success()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+    {
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = yieldDepositFacility.getRedeemCommitment(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Redeemed(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            _previousDepositActualAmount
+        );
+
+        // Start gas snapshot
+        vm.startSnapshotGas("redeem");
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.redeem(0);
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
+
+        // Assertions
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            _previousDepositActualAmount,
+            0,
+            0,
+            0
+        );
+    }
+
+    function test_success_fuzz(
         uint48 timestamp_
     )
         public

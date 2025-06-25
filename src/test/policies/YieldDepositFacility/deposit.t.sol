@@ -6,6 +6,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
     // given the contract is disabled
     //  [X] it reverts
@@ -140,6 +142,7 @@ contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
     // [X] it returns the actual deposit amount
     // [X] it does not create a position
 
+    /// forge-config: default.isolate = true
     function test_success()
         public
         givenLocallyActive
@@ -155,6 +158,9 @@ contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
             PERIOD_MONTHS
         );
 
+        // Start gas snapshot
+        vm.startSnapshotGas("deposit");
+
         // Call function
         vm.prank(recipient);
         (uint256 receiptTokenId, uint256 actualDepositAmount) = yieldDepositFacility.deposit(
@@ -163,6 +169,10 @@ contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
             RESERVE_TOKEN_AMOUNT,
             false
         );
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
 
         // Assert that the receipt token id is correct
         assertEq(receiptTokenId, expectedReceiptTokenId, "receiptTokenId");

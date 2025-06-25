@@ -3,6 +3,8 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest {
     // given the contract is disabled
     //  [X] it reverts
@@ -115,6 +117,7 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
     // [X] it returns the actual deposit amount
     // [X] it does not create a position
 
+    /// forge-config: default.isolate = true
     function test_success()
         public
         givenLocallyActive
@@ -126,6 +129,9 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
             PERIOD_MONTHS
         );
 
+        // Start gas snapshot
+        vm.startSnapshotGas("deposit");
+
         // Call function
         vm.prank(recipient);
         (uint256 receiptTokenId, uint256 actualDepositAmount) = facility.deposit(
@@ -134,6 +140,10 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
             RESERVE_TOKEN_AMOUNT,
             false
         );
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
 
         // Assert that the receipt token id is correct
         assertEq(receiptTokenId, expectedReceiptTokenId, "receiptTokenId");
