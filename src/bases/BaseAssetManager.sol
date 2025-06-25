@@ -26,7 +26,7 @@ abstract contract BaseAssetManager is IAssetManager {
     mapping(IERC20 asset => AssetConfiguration) internal _assetConfigurations;
 
     /// @notice Mapping of assets and operators to the number of shares they have deposited
-    mapping(IERC20 asset => mapping(address operator => uint256 shares)) internal _operatorShares;
+    mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
 
     // ========== ACTION FUNCTIONS ========== //
 
@@ -80,7 +80,7 @@ abstract contract BaseAssetManager is IAssetManager {
         if (shares == 0) revert AssetManager_ZeroAmount();
 
         // Update the shares deposited by the caller (operator)
-        _operatorShares[asset_][msg.sender] += shares;
+        _operatorShares[_getOperatorKey(asset_, msg.sender)] += shares;
 
         emit AssetDeposited(address(asset_), depositor_, msg.sender, actualAmount, shares);
         return (actualAmount, shares);
@@ -118,7 +118,7 @@ abstract contract BaseAssetManager is IAssetManager {
         if (shares == 0) revert AssetManager_ZeroAmount();
 
         // Update the shares deposited by the caller (operator)
-        _operatorShares[asset_][msg.sender] -= shares;
+        _operatorShares[_getOperatorKey(asset_, msg.sender)] -= shares;
 
         emit AssetWithdrawn(address(asset_), depositor_, msg.sender, assetAmount, shares);
         return (shares, assetAmount);
@@ -129,7 +129,7 @@ abstract contract BaseAssetManager is IAssetManager {
         IERC20 asset_,
         address operator_
     ) public view override returns (uint256 shares, uint256 sharesInAssets) {
-        shares = _operatorShares[asset_][operator_];
+        shares = _operatorShares[_getOperatorKey(asset_, operator_)];
 
         // Convert from shares to assets
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
@@ -140,6 +140,11 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         return (shares, sharesInAssets);
+    }
+
+    /// @notice Get the key for the operator shares
+    function _getOperatorKey(IERC20 asset_, address operator_) internal view returns (bytes32) {
+        return keccak256(abi.encode(address(asset_), operator_));
     }
 
     // ========== ADMIN FUNCTIONS ========== //
