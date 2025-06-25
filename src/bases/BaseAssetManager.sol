@@ -161,7 +161,7 @@ abstract contract BaseAssetManager is IAssetManager {
     }
 
     /// @notice Get the key for the operator shares
-    function _getOperatorKey(IERC20 asset_, address operator_) internal view returns (bytes32) {
+    function _getOperatorKey(IERC20 asset_, address operator_) internal pure returns (bytes32) {
         return keccak256(abi.encode(address(asset_), operator_));
     }
 
