@@ -9,6 +9,7 @@ import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -226,13 +227,15 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // Create the receipt tokens and position
         (uint256 positionId, uint256 receiptTokenId, ) = CD_FACILITY.createPosition(
-            params.depositAsset,
-            params.depositPeriod,
-            msg.sender,
-            depositIn,
-            depositIn.mulDivUp(_ohmScale, ohmOut),
-            params.wrapPosition,
-            params.wrapReceipt
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: params.depositAsset,
+                periodMonths: params.depositPeriod,
+                depositor: msg.sender,
+                amount: depositIn,
+                conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut),
+                wrapPosition: params.wrapPosition,
+                wrapReceipt: params.wrapReceipt
+            })
         );
 
         // Emit event

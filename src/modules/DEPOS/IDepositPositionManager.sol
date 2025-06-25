@@ -30,6 +30,27 @@ interface IDepositPositionManager {
         bytes additionalData;
     }
 
+    /// @notice Parameters for the {mint} function
+    ///
+    /// @param  owner                   Address of the owner of the position
+    /// @param  asset                   Address of the asset
+    /// @param  periodMonths            The period of the deposit
+    /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
+    /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
+    /// @param  expiry                  Timestamp of the position expiry
+    /// @param  wrapPosition            Whether the position should be wrapped
+    /// @param  additionalData          Additional data for the position
+    struct MintParams {
+        address owner;
+        address asset;
+        uint8 periodMonths;
+        uint256 remainingDeposit;
+        uint256 conversionPrice;
+        uint48 expiry;
+        bool wrapPosition;
+        bytes additionalData;
+    }
+
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a position is created
@@ -130,25 +151,9 @@ interface IDepositPositionManager {
     ///         - Create the position record
     ///         - Wrap the position if requested
     ///
-    /// @param  owner_                      The address of the owner of the position
-    /// @param  asset_                      The address of the asset
-    /// @param  periodMonths_               The period of the deposit
-    /// @param  remainingDeposit_           The amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice_            The price of the reserve token in USD
-    /// @param  expiry_                     The timestamp for the position expiry
-    /// @param  wrap_                       Whether the position should be wrapped
-    /// @param  additionalData_             Additional data for the position
+    /// @param  params_                     The parameters for the position creation
     /// @return _positionId                 The ID of the new position
-    function mint(
-        address owner_,
-        address asset_,
-        uint8 periodMonths_,
-        uint256 remainingDeposit_,
-        uint256 conversionPrice_,
-        uint48 expiry_,
-        bool wrap_,
-        bytes calldata additionalData_
-    ) external returns (uint256 _positionId);
+    function mint(MintParams calldata params_) external returns (uint256 _positionId);
 
     /// @notice Updates the remaining deposit of a position
     /// @dev    The implementing function should do the following:

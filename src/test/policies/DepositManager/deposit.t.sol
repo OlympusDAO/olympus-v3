@@ -6,6 +6,7 @@ import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol"
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
 contract DepositManagerDepositTest is DepositManagerTest {
     // ========== EVENTS ========== //
@@ -27,7 +28,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(ADMIN);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     // when the caller does not have the deposit operator role
@@ -39,7 +48,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertNotDepositOperator();
 
         vm.prank(caller_);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     // given the asset period does not exist
@@ -55,7 +72,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     function test_givenAssetPeriodDoesNotExist_reverts()
@@ -66,7 +91,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     // given the asset period is disabled
@@ -82,7 +115,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertConfigurationDisabled(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     // when the depositor address is the zero address
@@ -97,7 +138,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, address(0), 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: address(0),
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     // when the deposit amount is 0
@@ -112,7 +161,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         vm.expectRevert("ZERO_SHARES");
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 0, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 0,
+                shouldWrap: false
+            })
+        );
     }
 
     // given the depositor has not approved the contract to spend the asset
@@ -128,7 +185,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertERC20InsufficientAllowance();
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
     }
 
     // given the depositor does not have sufficient asset balance
@@ -145,7 +210,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _expectRevertERC20InsufficientBalance();
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, MINT_AMOUNT + 1, false);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT + 1,
+                shouldWrap: false
+            })
+        );
     }
 
     // given the asset is fee-on-transfer
@@ -182,11 +255,13 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.deposit(
-            IERC20(address(asset)),
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            MINT_AMOUNT,
-            false
+            IDepositManager.DepositParams({
+                asset: IERC20(address(asset)),
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
         );
     }
 
@@ -217,11 +292,13 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
         (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            amount_,
-            false
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
         );
 
         // Assert
@@ -253,11 +330,13 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
         (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            amount,
-            true
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount,
+                shouldWrap: true
+            })
         );
 
         // Assert
@@ -290,11 +369,13 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
         (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            amount,
-            true
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount,
+                shouldWrap: true
+            })
         );
 
         // Assert
@@ -341,11 +422,13 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
         (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            amount_,
-            false
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
         );
 
         // Assert

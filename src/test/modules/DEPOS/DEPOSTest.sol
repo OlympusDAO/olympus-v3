@@ -169,14 +169,16 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
     ) internal {
         vm.prank(godmode);
         DEPOS.mint(
-            owner_,
-            convertibleDepositToken,
-            DEPOSIT_PERIOD,
-            remainingDeposit_,
-            conversionPrice_,
-            conversionExpiry_,
-            wrap_,
-            ""
+            IDepositPositionManager.MintParams({
+                owner: owner_,
+                asset: convertibleDepositToken,
+                periodMonths: DEPOSIT_PERIOD,
+                remainingDeposit: remainingDeposit_,
+                conversionPrice: conversionPrice_,
+                expiry: conversionExpiry_,
+                wrapPosition: wrap_,
+                additionalData: ""
+            })
         );
     }
 

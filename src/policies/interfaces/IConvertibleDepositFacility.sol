@@ -41,6 +41,27 @@ interface IConvertibleDepositFacility {
 
     error CDF_Unsupported(uint256 positionId_);
 
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice Parameters for the {createPosition} function
+    ///
+    /// @param asset             The address of the asset
+    /// @param periodMonths      The period of the deposit
+    /// @param depositor         The address to create the position for
+    /// @param amount            The amount of asset to deposit
+    /// @param conversionPrice   The amount of converted tokens per asset token
+    /// @param wrapPosition      Whether the position should be wrapped
+    /// @param wrapReceipt       Whether the receipt token should be wrapped
+    struct CreatePositionParams {
+        IERC20 asset;
+        uint8 periodMonths;
+        address depositor;
+        uint256 amount;
+        uint256 conversionPrice;
+        bool wrapPosition;
+        bool wrapReceipt;
+    }
+
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
     /// @notice Creates a convertible deposit position
@@ -52,22 +73,10 @@ interface IConvertibleDepositFacility {
     ///         - Creating a new position in the DEPOS module
     ///         - Emitting an event
     ///
-    /// @param  asset_              The address of the asset
-    /// @param  periodMonths_       The period of the deposit
-    /// @param  account_            The address to create the position for
-    /// @param  amount_             The amount of asset to deposit
-    /// @param  conversionPrice_    The amount of converted tokens per asset token
-    /// @param  wrapPosition_       Whether the position should be wrapped
-    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
+    /// @param  params_             The parameters for the position creation
     /// @return positionId          The ID of the new position
     function createPosition(
-        IERC20 asset_,
-        uint8 periodMonths_,
-        address account_,
-        uint256 amount_,
-        uint256 conversionPrice_,
-        bool wrapPosition_,
-        bool wrapReceipt_
+        CreatePositionParams calldata params_
     ) external returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token. This function can be used to mint additional receipt tokens on a 1:1 basis, without creating a new position.

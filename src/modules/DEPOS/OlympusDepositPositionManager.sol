@@ -101,45 +101,38 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     function _create(
         address operator_,
-        address owner_,
-        address asset_,
-        uint8 periodMonths_,
-        uint256 remainingDeposit_,
-        uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        bool wrap_,
-        bytes memory additionalData_
+        IDepositPositionManager.MintParams memory params_
     ) internal returns (uint256 positionId) {
         // Create the position record
         positionId = _positionCount++;
         _positions[positionId] = Position({
             operator: operator_,
-            owner: owner_,
-            asset: asset_,
-            periodMonths: periodMonths_,
-            remainingDeposit: remainingDeposit_,
-            conversionPrice: conversionPrice_,
-            expiry: conversionExpiry_,
-            wrapped: wrap_,
-            additionalData: additionalData_
+            owner: params_.owner,
+            asset: params_.asset,
+            periodMonths: params_.periodMonths,
+            remainingDeposit: params_.remainingDeposit,
+            conversionPrice: params_.conversionPrice,
+            expiry: params_.expiry,
+            wrapped: params_.wrapPosition,
+            additionalData: params_.additionalData
         });
 
         // Add the position ID to the user's list of positions
-        _userPositions[owner_].push(positionId);
+        _userPositions[params_.owner].push(positionId);
 
         // If specified, wrap the position
-        if (wrap_) _safeMint(owner_, positionId);
+        if (params_.wrapPosition) _safeMint(params_.owner, positionId);
 
         // Emit the event
         emit PositionCreated(
             positionId,
-            owner_,
-            asset_,
-            periodMonths_,
-            remainingDeposit_,
-            conversionPrice_,
-            conversionExpiry_,
-            wrap_
+            params_.owner,
+            params_.asset,
+            params_.periodMonths,
+            params_.remainingDeposit,
+            params_.conversionPrice,
+            params_.expiry,
+            params_.wrapPosition
         );
 
         return positionId;
@@ -156,44 +149,30 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     ///
     ///             This is a permissioned function that can only be called by approved policies
     function mint(
-        address owner_,
-        address asset_,
-        uint8 periodMonths_,
-        uint256 remainingDeposit_,
-        uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        bool wrap_,
-        bytes calldata additionalData_
+        IDepositPositionManager.MintParams calldata params_
     ) external virtual override permissioned returns (uint256 positionId) {
         // Validate that the owner is not the zero address
-        if (owner_ == address(0)) revert DEPOS_InvalidParams("owner");
+        if (params_.owner == address(0)) revert DEPOS_InvalidParams("owner");
 
         // Validate that the asset is not the zero address
-        if (asset_ == address(0)) revert DEPOS_InvalidParams("asset");
+        if (params_.asset == address(0)) revert DEPOS_InvalidParams("asset");
 
         // Validate that the period is greater than 0
-        if (periodMonths_ == 0) revert DEPOS_InvalidParams("period");
+        if (params_.periodMonths == 0) revert DEPOS_InvalidParams("period");
 
         // Validate that the remaining deposit is greater than 0
-        if (remainingDeposit_ == 0) revert DEPOS_InvalidParams("deposit");
+        if (params_.remainingDeposit == 0) revert DEPOS_InvalidParams("deposit");
 
         // Validate that the conversion price is greater than 0
-        if (conversionPrice_ == 0) revert DEPOS_InvalidParams("conversion price");
+        if (params_.conversionPrice == 0) revert DEPOS_InvalidParams("conversion price");
 
         // Validate that the conversion expiry is in the future
-        if (conversionExpiry_ <= block.timestamp) revert DEPOS_InvalidParams("conversion expiry");
+        if (params_.expiry <= block.timestamp) revert DEPOS_InvalidParams("conversion expiry");
 
         return
             _create(
                 msg.sender, // Calling policy is the operator
-                owner_,
-                asset_,
-                periodMonths_,
-                remainingDeposit_,
-                conversionPrice_,
-                conversionExpiry_,
-                wrap_,
-                additionalData_
+                params_
             );
     }
 
@@ -274,14 +253,16 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // Create the new position
         newPositionId = _create(
             position.operator, // Operator is the same as the existing position
-            to_,
-            position.asset,
-            position.periodMonths,
-            amount_,
-            position.conversionPrice,
-            position.expiry,
-            wrap_,
-            position.additionalData
+            IDepositPositionManager.MintParams({
+                owner: to_,
+                asset: position.asset,
+                periodMonths: position.periodMonths,
+                remainingDeposit: amount_,
+                conversionPrice: position.conversionPrice,
+                expiry: position.expiry,
+                wrapPosition: wrap_,
+                additionalData: position.additionalData
+            })
         );
 
         // Emit the event

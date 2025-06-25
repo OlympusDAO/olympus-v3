@@ -3,6 +3,9 @@ pragma solidity >=0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
+// Interfaces
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+
 contract DepositManagerWithdrawTest is DepositManagerTest {
     // ========== TESTS ========== //
 
@@ -13,7 +16,16 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, false);
+        depositManager.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                isWrapped: false
+            })
+        );
     }
 
     // given the caller does not have the deposit operator role
@@ -27,7 +39,16 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _expectRevertNotDepositOperator();
 
         vm.prank(caller_);
-        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, false);
+        depositManager.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                isWrapped: false
+            })
+        );
     }
 
     // given the deposit asset configuration does not exist
@@ -37,7 +58,16 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _expectRevertInvalidReceiptTokenId(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.withdraw(iAsset, DEPOSIT_PERIOD, DEPOSITOR, DEPOSITOR, MINT_AMOUNT, false);
+        depositManager.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                isWrapped: false
+            })
+        );
     }
 
     // given wrapped is true
@@ -56,12 +86,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            previousDepositorDepositActualAmount,
-            true
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: previousDepositorDepositActualAmount,
+                isWrapped: true
+            })
         );
     }
 
@@ -81,12 +113,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            previousDepositorDepositActualAmount + 1,
-            true
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: previousDepositorDepositActualAmount + 1,
+                isWrapped: true
+            })
         );
     }
 
@@ -131,12 +165,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            previousDepositorDepositActualAmount,
-            false
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: previousDepositorDepositActualAmount,
+                isWrapped: false
+            })
         );
     }
 
@@ -159,12 +195,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            MINT_AMOUNT + 1,
-            false
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: MINT_AMOUNT + 1,
+                isWrapped: false
+            })
         );
     }
 
@@ -188,12 +226,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         vm.prank(DEPOSIT_OPERATOR);
         uint256 shares = depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            amount_,
-            false
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: amount_,
+                isWrapped: false
+            })
         );
 
         _assertAssetBalance(amount_, amount_, shares, false);
@@ -218,12 +258,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     {
         vm.prank(DEPOSIT_OPERATOR);
         uint256 shares = depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            MINT_AMOUNT,
-            false
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                isWrapped: false
+            })
         );
 
         _assertAssetBalance(MINT_AMOUNT, MINT_AMOUNT, shares, false);
@@ -352,12 +394,14 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         // Withdraw the full deposit
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            DEPOSITOR,
-            previousDepositorDepositActualAmount,
-            false
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: DEPOSITOR,
+                amount: previousDepositorDepositActualAmount,
+                isWrapped: false
+            })
         );
 
         // Operator shares

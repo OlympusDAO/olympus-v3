@@ -22,6 +22,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 
 // solhint-disable max-states-count
@@ -232,13 +233,15 @@ contract ConvertibleDepositFacilityTest is Test {
         // TODO add actual
         vm.prank(auctioneer);
         (positionId, , ) = facility.createPosition(
-            asset_,
-            depositPeriod_,
-            account_,
-            amount_,
-            conversionPrice_,
-            wrapPosition_,
-            wrapReceipt_
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: asset_,
+                periodMonths: depositPeriod_,
+                depositor: account_,
+                amount: amount_,
+                conversionPrice: conversionPrice_,
+                wrapPosition: wrapPosition_,
+                wrapReceipt: wrapReceipt_
+            })
         );
     }
 
@@ -278,11 +281,13 @@ contract ConvertibleDepositFacilityTest is Test {
     ) internal returns (uint256 positionId) {
         vm.prank(account_);
         (positionId, , ) = yieldDepositFacility.createPosition(
-            iReserveToken,
-            PERIOD_MONTHS,
-            amount_,
-            false,
-            false
+            IYieldDepositFacility.CreatePositionParams({
+                asset: iReserveToken,
+                periodMonths: PERIOD_MONTHS,
+                amount: amount_,
+                wrapPosition: false,
+                wrapReceipt: false
+            })
         );
     }
 

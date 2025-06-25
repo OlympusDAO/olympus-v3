@@ -126,28 +126,24 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
     function deposit(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address depositor_,
-        uint256 amount_,
-        bool shouldWrap_
+        DepositParams calldata params_
     )
         external
         onlyEnabled
         onlyRole(ROLE_DEPOSIT_OPERATOR)
-        onlyAssetPeriodEnabled(asset_, depositPeriod_)
+        onlyAssetPeriodEnabled(params_.asset, params_.depositPeriod)
         returns (uint256 receiptTokenId, uint256 actualAmount)
     {
         // Deposit into vault
         // This will revert if the asset is not configured
-        (actualAmount, ) = _depositAsset(asset_, depositor_, amount_);
+        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
 
         // Mint the receipt token to the caller
-        receiptTokenId = getReceiptTokenId(asset_, depositPeriod_);
-        _mint(depositor_, receiptTokenId, actualAmount, shouldWrap_);
+        receiptTokenId = getReceiptTokenId(params_.asset, params_.depositPeriod);
+        _mint(params_.depositor, receiptTokenId, actualAmount, params_.shouldWrap);
 
         // Update the asset liabilities for the caller (operator)
-        _assetLiabilities[_getAssetLiabilitiesKey(asset_, msg.sender)] += actualAmount;
+        _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
 
         return (receiptTokenId, actualAmount);
     }
@@ -193,26 +189,26 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
     function withdraw(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address depositor_,
-        address recipient_,
-        uint256 amount_,
-        bool wrapped_
+        WithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
         // Validate that the recipient is not the zero address
-        if (recipient_ == address(0)) revert DepositManager_ZeroAddress();
+        if (params_.recipient == address(0)) revert DepositManager_ZeroAddress();
 
         // Burn the receipt token from the depositor
         // Will revert if the asset configuration is not valid/invalid receipt token ID
-        _burn(depositor_, getReceiptTokenId(asset_, depositPeriod_), amount_, wrapped_);
+        _burn(
+            params_.depositor,
+            getReceiptTokenId(params_.asset, params_.depositPeriod),
+            params_.amount,
+            params_.isWrapped
+        );
 
         // Update the asset liabilities for the caller (operator)
-        _assetLiabilities[_getAssetLiabilitiesKey(asset_, msg.sender)] -= amount_;
+        _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] -= params_.amount;
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
-        (, actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
+        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         return actualAmount;
     }

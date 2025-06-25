@@ -4,6 +4,8 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -28,18 +30,6 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
 
     /// @notice The DEPOS module.
     DEPOSv1 public DEPOS;
-
-    // ========== STRUCTS ========== //
-
-    struct CreatePositionParams {
-        IERC20 asset;
-        uint8 periodMonths;
-        address depositor;
-        uint256 amount;
-        uint256 conversionPrice;
-        bool wrapPosition;
-        bool wrapReceipt;
-    }
 
     // ========== SETUP ========== //
 
@@ -97,13 +87,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     ///             - The contract is not enabled
     ///             - The asset and period are not supported
     function createPosition(
-        IERC20 asset_,
-        uint8 periodMonths_,
-        address depositor_,
-        uint256 amount_,
-        uint256 conversionPrice_,
-        bool wrapPosition_,
-        bool wrapReceipt_
+        CreatePositionParams calldata params_
     )
         external
         onlyRole(ROLE_AUCTIONEER)
@@ -111,45 +95,38 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         onlyEnabled
         returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount)
     {
-        // Load parameters into struct to avoid stack too deep
-        CreatePositionParams memory params = CreatePositionParams({
-            asset: asset_,
-            periodMonths: periodMonths_,
-            depositor: depositor_,
-            amount: amount_,
-            conversionPrice: conversionPrice_,
-            wrapPosition: wrapPosition_,
-            wrapReceipt: wrapReceipt_
-        });
-
         // Deposit the asset into the deposit manager
         // This will validate that the asset is supported, and mint the receipt token
         (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
-            params.asset,
-            params.periodMonths,
-            params.depositor,
-            params.amount,
-            params.wrapReceipt
+            IDepositManager.DepositParams({
+                asset: params_.asset,
+                depositPeriod: params_.periodMonths,
+                depositor: params_.depositor,
+                amount: params_.amount,
+                shouldWrap: params_.wrapReceipt
+            })
         );
 
         // Create a new position in the DEPOS module
         positionId = DEPOS.mint(
-            params.depositor,
-            address(params.asset),
-            params.periodMonths,
-            actualAmount,
-            params.conversionPrice,
-            uint48(block.timestamp + uint48(params.periodMonths) * 30 days),
-            params.wrapPosition,
-            ""
+            IDepositPositionManager.MintParams({
+                owner: params_.depositor,
+                asset: address(params_.asset),
+                periodMonths: params_.periodMonths,
+                remainingDeposit: actualAmount,
+                conversionPrice: params_.conversionPrice,
+                expiry: uint48(block.timestamp + uint48(params_.periodMonths) * 30 days),
+                wrapPosition: params_.wrapPosition,
+                additionalData: ""
+            })
         );
 
         // Emit an event
         emit CreatedDeposit(
-            address(params.asset),
-            params.depositor,
+            address(params_.asset),
+            params_.depositor,
             positionId,
-            params.periodMonths,
+            params_.periodMonths,
             actualAmount
         );
 
@@ -166,11 +143,13 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         // Deposit the asset into the deposit manager and get the receipt token back
         // This will revert if the asset is not supported
         (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
-            asset_,
-            periodMonths_,
-            msg.sender,
-            amount_,
-            wrapReceipt_
+            IDepositManager.DepositParams({
+                asset: asset_,
+                depositPeriod: periodMonths_,
+                depositor: msg.sender,
+                amount: amount_,
+                shouldWrap: wrapReceipt_
+            })
         );
 
         return (receiptTokenId, actualAmount);
@@ -336,12 +315,14 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
 
         // Withdraw the underlying asset and deposit into the treasury
         DEPOSIT_MANAGER.withdraw(
-            IERC20(asset),
-            periodMonths,
-            msg.sender,
-            address(TRSRY),
-            receiptTokenIn,
-            wrappedReceipt_
+            IDepositManager.WithdrawParams({
+                asset: IERC20(asset),
+                depositPeriod: periodMonths,
+                depositor: msg.sender,
+                recipient: address(TRSRY),
+                amount: receiptTokenIn,
+                isWrapped: wrappedReceipt_
+            })
         );
 
         // Mint OHM to the owner/caller

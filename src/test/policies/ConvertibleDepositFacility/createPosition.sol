@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 
 contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(
@@ -24,13 +25,15 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         // Call function
         vm.prank(auctioneer);
         facility.createPosition(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            RESERVE_TOKEN_AMOUNT,
-            CONVERSION_PRICE,
-            false,
-            true
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: iReserveToken,
+                periodMonths: PERIOD_MONTHS,
+                depositor: recipient,
+                amount: RESERVE_TOKEN_AMOUNT,
+                conversionPrice: CONVERSION_PRICE,
+                wrapPosition: false,
+                wrapReceipt: true
+            })
         );
     }
 
@@ -49,13 +52,15 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
 
         // Call function
         facility.createPosition(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            RESERVE_TOKEN_AMOUNT,
-            CONVERSION_PRICE,
-            false,
-            true
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: iReserveToken,
+                periodMonths: PERIOD_MONTHS,
+                depositor: recipient,
+                amount: RESERVE_TOKEN_AMOUNT,
+                conversionPrice: CONVERSION_PRICE,
+                wrapPosition: false,
+                wrapReceipt: true
+            })
         );
     }
 
@@ -69,13 +74,15 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         // Call function
         vm.prank(auctioneer);
         facility.createPosition(
-            iReserveToken,
-            PERIOD_MONTHS + 1,
-            recipient,
-            RESERVE_TOKEN_AMOUNT,
-            CONVERSION_PRICE,
-            false,
-            true
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: iReserveToken,
+                periodMonths: PERIOD_MONTHS + 1,
+                depositor: recipient,
+                amount: RESERVE_TOKEN_AMOUNT,
+                conversionPrice: CONVERSION_PRICE,
+                wrapPosition: false,
+                wrapReceipt: true
+            })
         );
     }
 

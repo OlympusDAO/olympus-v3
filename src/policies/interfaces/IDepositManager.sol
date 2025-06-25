@@ -61,6 +61,38 @@ interface IDepositManager {
 
     // ========== STRUCTS ========== //
 
+    /// @notice Parameters for the {deposit} function
+    ///
+    /// @param asset           The underlying ERC20 asset
+    /// @param depositPeriod   The deposit period, in months
+    /// @param depositor       The depositor
+    /// @param amount          The amount to deposit
+    /// @param shouldWrap      Whether the receipt token should be wrapped
+    struct DepositParams {
+        IERC20 asset;
+        uint8 depositPeriod;
+        address depositor;
+        uint256 amount;
+        bool shouldWrap;
+    }
+
+    /// @notice Parameters for the {withdraw} function
+    ///
+    /// @param asset            The underlying ERC20 asset
+    /// @param depositPeriod    The deposit period, in months
+    /// @param depositor        The depositor that is holding the receipt tokens
+    /// @param recipient        The recipient of the withdrawn asset
+    /// @param amount           The amount to withdraw
+    /// @param isWrapped        Whether the receipt token is wrapped
+    struct WithdrawParams {
+        IERC20 asset;
+        uint8 depositPeriod;
+        address depositor;
+        address recipient;
+        uint256 amount;
+        bool isWrapped;
+    }
+
     /// @notice An asset period configuration, representing an asset and period combination
     ///
     /// @param isEnabled       Whether the asset period is enabled for new deposits
@@ -83,19 +115,11 @@ interface IDepositManager {
     ///         - Minting the receipt token to the depositor
     ///         - Updating the amount of deposited funds
     ///
-    /// @param  asset_          The address of the underlying asset
-    /// @param  depositPeriod_  The deposit period, in months
-    /// @param  depositor_      The depositor
-    /// @param  amount_         The amount to deposit
-    /// @param  shouldWrap_     Whether the receipt token should be wrapped
+    /// @param  params_         The parameters for the deposit
     /// @return receiptTokenId  The ID of the receipt token
     /// @return actualAmount    The quantity of receipt tokens minted to the depositor
     function deposit(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address depositor_,
-        uint256 amount_,
-        bool shouldWrap_
+        DepositParams calldata params_
     ) external returns (uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Returns the maximum yield that can be claimed for an asset and operator pair
@@ -128,21 +152,9 @@ interface IDepositManager {
     ///         - Transferring the underlying asset from the contract to the recipient
     ///         - Updating the amount of deposited funds
     ///
-    /// @param  asset_          The address of the underlying asset
-    /// @param  depositPeriod_  The deposit period, in months
-    /// @param  depositor_      The depositor that is holding the receipt tokens
-    /// @param  recipient_      The recipient of the withdrawn asset
-    /// @param  amount_         The amount to withdraw
-    /// @param  wrapped_        Whether the receipt token is wrapped
+    /// @param  params_         The parameters for the withdrawal
     /// @return actualAmount    The quantity of underlying assets transferred to the recipient
-    function withdraw(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address depositor_,
-        address recipient_,
-        uint256 amount_,
-        bool wrapped_
-    ) external returns (uint256 actualAmount);
+    function withdraw(WithdrawParams calldata params_) external returns (uint256 actualAmount);
 
     /// @notice Returns the liabilities for an asset and operator pair
     ///

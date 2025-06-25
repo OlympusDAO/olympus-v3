@@ -34,6 +34,23 @@ interface IYieldDepositFacility {
 
     error YDF_NoSnapshotAvailable(address token, uint48 timestamp);
 
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice Parameters for the {createPosition} function
+    ///
+    /// @param asset             The address of the asset
+    /// @param periodMonths      The period of the deposit
+    /// @param amount            The amount of asset to deposit
+    /// @param wrapPosition      Whether the position should be wrapped
+    /// @param wrapReceipt       Whether the receipt token should be wrapped
+    struct CreatePositionParams {
+        IERC20 asset;
+        uint8 periodMonths;
+        uint256 amount;
+        bool wrapPosition;
+        bool wrapReceipt;
+    }
+
     // ========== MINT ========== //
 
     /// @notice Creates a position for a yield-bearing deposit
@@ -42,20 +59,12 @@ interface IYieldDepositFacility {
     ///         - Depositing the asset into the deposit manager and minting the receipt token
     ///         - Creating a new position in the DEPOS module
     ///
-    /// @param  asset_              The address of the asset
-    /// @param  periodMonths_       The period of the deposit
-    /// @param  amount_             The amount of token to deposit
-    /// @param  wrapPosition_       Whether the position should be wrapped
-    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
+    /// @param  params_             The parameters for the position creation
     /// @return positionId          The ID of the new position
     /// @return receiptTokenId      The ID of the receipt token
     /// @return actualAmount        The quantity of receipt tokens minted to the depositor
     function createPosition(
-        IERC20 asset_,
-        uint8 periodMonths_,
-        uint256 amount_,
-        bool wrapPosition_,
-        bool wrapReceipt_
+        CreatePositionParams calldata params_
     ) external returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token. This function can be used to mint additional receipt tokens on a 1:1 basis, without creating a new position.

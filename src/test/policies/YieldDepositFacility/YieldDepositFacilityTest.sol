@@ -24,6 +24,7 @@ import {CDFacility} from "src/policies/CDFacility.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 
 // solhint-disable max-states-count
 contract YieldDepositFacilityTest is Test {
@@ -276,7 +277,15 @@ contract YieldDepositFacilityTest is Test {
         // Mint the receipt token
         vm.prank(account_);
         (actualPositionId, actualReceiptTokenId, actualAmount) = yieldDepositFacility
-            .createPosition(iReserveToken, PERIOD_MONTHS, amount_, false, false);
+            .createPosition(
+                IYieldDepositFacility.CreatePositionParams({
+                    asset: iReserveToken,
+                    periodMonths: PERIOD_MONTHS,
+                    amount: amount_,
+                    wrapPosition: false,
+                    wrapReceipt: false
+                })
+            );
 
         _updateReserveBalances();
         _updateCdepoVaultBalance();
@@ -438,13 +447,15 @@ contract YieldDepositFacilityTest is Test {
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
         (positionId, , ) = cdFacility.createPosition(
-            iReserveToken,
-            PERIOD_MONTHS,
-            account_,
-            amount_,
-            conversionPrice_,
-            false,
-            false
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: iReserveToken,
+                periodMonths: PERIOD_MONTHS,
+                depositor: account_,
+                amount: amount_,
+                conversionPrice: conversionPrice_,
+                wrapPosition: false,
+                wrapReceipt: false
+            })
         );
     }
 

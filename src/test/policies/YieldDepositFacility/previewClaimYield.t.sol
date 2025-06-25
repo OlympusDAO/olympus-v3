@@ -143,11 +143,13 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         _approveTokenSpending(iReserveTokenTwo, recipient, address(depositManager), 1e18);
         vm.prank(recipient);
         (uint256 positionId, , ) = yieldDepositFacility.createPosition(
-            iReserveTokenTwo,
-            PERIOD_MONTHS,
-            1e18,
-            false,
-            false
+            IYieldDepositFacility.CreatePositionParams({
+                asset: iReserveTokenTwo,
+                periodMonths: PERIOD_MONTHS,
+                amount: 1e18,
+                wrapPosition: false,
+                wrapReceipt: false
+            })
         );
 
         // Expect revert

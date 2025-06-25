@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
 // Libraries
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
@@ -226,12 +227,14 @@ abstract contract BaseDepositRedemptionVault is
             commitmentAmount
         );
         DEPOSIT_MANAGER.withdraw(
-            commitment.depositToken,
-            commitment.depositPeriod,
-            address(this),
-            msg.sender,
-            commitmentAmount,
-            false
+            IDepositManager.WithdrawParams({
+                asset: commitment.depositToken,
+                depositPeriod: commitment.depositPeriod,
+                depositor: address(this),
+                recipient: msg.sender,
+                amount: commitmentAmount,
+                isWrapped: false
+            })
         );
 
         // Emit the redeemed event
@@ -291,12 +294,14 @@ abstract contract BaseDepositRedemptionVault is
         // Withdraw the deposit tokens from the deposit manager
         // This will burn the receipt tokens from the caller and send the released deposit tokens to this contract
         DEPOSIT_MANAGER.withdraw(
-            depositToken_,
-            depositPeriod_,
-            msg.sender,
-            address(this),
-            amount_,
-            false
+            IDepositManager.WithdrawParams({
+                asset: depositToken_,
+                depositPeriod: depositPeriod_,
+                depositor: msg.sender,
+                recipient: address(this),
+                amount: amount_,
+                isWrapped: false
+            })
         );
 
         // Transfer discounted amount of the deposit token to the recipient

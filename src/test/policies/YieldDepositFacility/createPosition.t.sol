@@ -5,6 +5,7 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 
 contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
     event CreatedDeposit(
@@ -25,11 +26,13 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         // Call function
         vm.prank(recipient);
         yieldDepositFacility.createPosition(
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT,
-            false,
-            false
+            IYieldDepositFacility.CreatePositionParams({
+                asset: iReserveToken,
+                periodMonths: PERIOD_MONTHS,
+                amount: RESERVE_TOKEN_AMOUNT,
+                wrapPosition: false,
+                wrapReceipt: false
+            })
         );
     }
 
@@ -49,11 +52,13 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         // Call function
         vm.prank(recipient);
         yieldDepositFacility.createPosition(
-            iNewAsset,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT,
-            false,
-            false
+            IYieldDepositFacility.CreatePositionParams({
+                asset: iNewAsset,
+                periodMonths: PERIOD_MONTHS,
+                amount: RESERVE_TOKEN_AMOUNT,
+                wrapPosition: false,
+                wrapReceipt: false
+            })
         );
     }
 

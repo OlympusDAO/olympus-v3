@@ -10,6 +10,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -44,18 +46,6 @@ contract YieldDepositFacility is
 
     /// @notice The interval between snapshots in seconds
     uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
-
-    // ========== STRUCTS ========== //
-
-    struct CreatePositionParams {
-        IERC20 asset;
-        uint8 periodMonths;
-        address depositor;
-        uint256 amount;
-        uint256 conversionPrice;
-        bool wrapPosition;
-        bool wrapReceipt;
-    }
 
     // ========== SETUP ========== //
 
@@ -114,63 +104,54 @@ contract YieldDepositFacility is
     ///             - The contract is not enabled
     ///             - The asset token is not supported
     function createPosition(
-        IERC20 asset_,
-        uint8 periodMonths_,
-        uint256 amount_,
-        bool wrapPosition_,
-        bool wrapReceipt_
+        CreatePositionParams calldata params_
     )
         external
         nonReentrant
         onlyEnabled
-        onlyYieldBearingAsset(asset_, periodMonths_)
+        onlyYieldBearingAsset(params_.asset, params_.periodMonths)
         returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount)
     {
-        // Load parameters into struct to avoid stack too deep
-        CreatePositionParams memory params = CreatePositionParams({
-            asset: asset_,
-            periodMonths: periodMonths_,
-            depositor: msg.sender,
-            amount: amount_,
-            conversionPrice: type(uint256).max,
-            wrapPosition: wrapPosition_,
-            wrapReceipt: wrapReceipt_
-        });
+        address depositor = msg.sender;
 
         // Deposit the asset into the deposit manager (and mint the receipt token)
         // This will validate that the asset is supported, and mint the receipt token
         (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
-            params.asset,
-            params.periodMonths,
-            params.depositor,
-            params.amount,
-            params.wrapReceipt
+            IDepositManager.DepositParams({
+                asset: params_.asset,
+                depositPeriod: params_.periodMonths,
+                depositor: depositor,
+                amount: params_.amount,
+                shouldWrap: params_.wrapReceipt
+            })
         );
 
         // Create a new term record in the DEPOS module
         positionId = DEPOS.mint(
-            params.depositor, // owner
-            address(params.asset), // asset
-            params.periodMonths, // period months
-            params.amount, // amount
-            params.conversionPrice, // conversion price of max to indicate no conversion price
-            uint48(block.timestamp + uint48(params.periodMonths) * 30 days), // expiry
-            params.wrapPosition, // wrap
-            "" // additional data
+            IDepositPositionManager.MintParams({
+                owner: depositor,
+                asset: address(params_.asset),
+                periodMonths: params_.periodMonths,
+                remainingDeposit: params_.amount,
+                conversionPrice: type(uint256).max,
+                expiry: uint48(block.timestamp + uint48(params_.periodMonths) * 30 days),
+                wrapPosition: params_.wrapPosition,
+                additionalData: ""
+            })
         );
 
         // Set the initial yield conversion rate
         positionLastYieldConversionRate[positionId] = _getConversionRate(
-            DEPOSIT_MANAGER.getAssetConfiguration(asset_).vault
+            DEPOSIT_MANAGER.getAssetConfiguration(params_.asset).vault
         );
 
         // Emit an event
         emit CreatedDeposit(
-            address(params.asset),
-            params.depositor,
+            address(params_.asset),
+            depositor,
             positionId,
-            params.periodMonths,
-            params.amount
+            params_.periodMonths,
+            params_.amount
         );
 
         return (positionId, receiptTokenId, actualAmount);
@@ -192,11 +173,13 @@ contract YieldDepositFacility is
         // Deposit the asset into the deposit manager (and mint the receipt token)
         // This will validate that the asset is supported, and mint the receipt token
         (receiptTokenId, actualAmount) = DEPOSIT_MANAGER.deposit(
-            asset_,
-            periodMonths_,
-            msg.sender,
-            amount_,
-            wrapReceipt_
+            IDepositManager.DepositParams({
+                asset: asset_,
+                depositPeriod: periodMonths_,
+                depositor: msg.sender,
+                amount: amount_,
+                shouldWrap: wrapReceipt_
+            })
         );
 
         return (receiptTokenId, actualAmount);

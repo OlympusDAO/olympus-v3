@@ -159,11 +159,13 @@ contract DepositManagerTest is Test {
     modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
         vm.prank(DEPOSIT_OPERATOR);
         (, previousDepositorDepositActualAmount) = depositManager.deposit(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            amount_,
-            shouldWrap_
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: shouldWrap_
+            })
         );
 
         // Update the previous balances
@@ -212,12 +214,14 @@ contract DepositManagerTest is Test {
     ) internal returns (uint256 actualAmount) {
         vm.prank(DEPOSIT_OPERATOR);
         actualAmount = depositManager.withdraw(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSITOR,
-            recipient_,
-            amount_,
-            wrapped_
+            IDepositManager.WithdrawParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: recipient_,
+                amount: amount_,
+                isWrapped: wrapped_
+            })
         );
     }
 

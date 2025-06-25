@@ -28,14 +28,16 @@ contract MintDEPOSTest is DEPOSTest {
 
         vm.prank(address(this));
         DEPOS.mint(
-            address(this),
-            convertibleDepositToken,
-            DEPOSIT_PERIOD,
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false,
-            ""
+            IDepositPositionManager.MintParams({
+                owner: address(this),
+                asset: convertibleDepositToken,
+                periodMonths: DEPOSIT_PERIOD,
+                remainingDeposit: REMAINING_DEPOSIT,
+                conversionPrice: CONVERSION_PRICE,
+                expiry: CONVERSION_EXPIRY,
+                wrapPosition: false,
+                additionalData: ""
+            })
         );
     }
 
@@ -64,14 +66,16 @@ contract MintDEPOSTest is DEPOSTest {
         // Call function
         vm.prank(godmode);
         DEPOS.mint(
-            address(this),
-            address(0),
-            DEPOSIT_PERIOD,
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false,
-            ""
+            IDepositPositionManager.MintParams({
+                owner: address(this),
+                asset: address(0),
+                periodMonths: DEPOSIT_PERIOD,
+                remainingDeposit: REMAINING_DEPOSIT,
+                conversionPrice: CONVERSION_PRICE,
+                expiry: CONVERSION_EXPIRY,
+                wrapPosition: false,
+                additionalData: ""
+            })
         );
     }
 
@@ -361,14 +365,16 @@ contract MintDEPOSTest is DEPOSTest {
     function test_additionalDataIsNotEmpty() public {
         vm.prank(godmode);
         DEPOS.mint(
-            address(this),
-            convertibleDepositToken,
-            DEPOSIT_PERIOD,
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false,
-            "test"
+            IDepositPositionManager.MintParams({
+                owner: address(this),
+                asset: convertibleDepositToken,
+                periodMonths: DEPOSIT_PERIOD,
+                remainingDeposit: REMAINING_DEPOSIT,
+                conversionPrice: CONVERSION_PRICE,
+                expiry: CONVERSION_EXPIRY,
+                wrapPosition: false,
+                additionalData: "test"
+            })
         );
 
         // Assert that the additional data is set
