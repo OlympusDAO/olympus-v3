@@ -56,11 +56,17 @@ interface IDepositManager {
 
     // ========== STRUCTS ========== //
 
+    /// @notice A deposit configuration, representing a deposit asset and period combination
+    ///
+    /// @param isEnabled       Whether the deposit configuration is enabled for new deposits
+    /// @param depositPeriod   The deposit period, in months
+    /// @param reclaimRate     The reclaim rate for the deposit (see the implementation contract for scale)
+    /// @param asset           The underlying ERC20 asset
     struct DepositConfiguration {
         bool isEnabled;
         uint8 depositPeriod;
         uint16 reclaimRate;
-        IERC20 asset;
+        address asset;
     }
 
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //

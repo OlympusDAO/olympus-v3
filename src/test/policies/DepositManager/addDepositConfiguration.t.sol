@@ -86,7 +86,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
                 depositManager.getReceiptTokenId(IERC20(asset_), depositPeriod_)
             );
         assertEq(
-            address(depositConfigurationFromReceiptTokenId.asset),
+            depositConfigurationFromReceiptTokenId.asset,
             asset_,
             "getDepositConfiguration from token id: asset mismatch"
         );
@@ -103,7 +103,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
                 depositPeriod_
             );
         assertEq(
-            address(depositConfigurationFromAssetAndPeriod.asset),
+            depositConfigurationFromAssetAndPeriod.asset,
             asset_,
             "getDepositConfiguration: asset mismatch"
         );
@@ -140,7 +140,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
                     "getDepositConfigurations: reclaim rate mismatch"
                 );
                 assertEq(
-                    address(depositAssets[i].asset),
+                    depositAssets[i].asset,
                     asset_,
                     "getDepositConfigurations: asset mismatch"
                 );

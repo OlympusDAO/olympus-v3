@@ -59,8 +59,8 @@ contract DepositManager is
     /// @notice Maps token ID to the deposit configuration
     mapping(uint256 tokenId => DepositConfiguration) internal _depositConfigurations;
 
-    /// @notice Array of deposit token IDs
-    uint256[] internal _depositTokenIds;
+    /// @notice Array of receipt token IDs
+    uint256[] internal _receiptTokenIds;
 
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
@@ -286,11 +286,11 @@ contract DepositManager is
             isEnabled: true,
             depositPeriod: depositPeriod_,
             reclaimRate: 0,
-            asset: asset_
+            asset: address(asset_)
         });
 
         // Add the deposit token ID to the array
-        _depositTokenIds.push(receiptTokenId);
+        _receiptTokenIds.push(receiptTokenId);
 
         // Set the reclaim rate (which does validation and emits an event)
         _setDepositReclaimRate(asset_, depositPeriod_, reclaimRate_);
@@ -342,10 +342,10 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     function getDepositConfigurations() external view returns (DepositConfiguration[] memory) {
         DepositConfiguration[] memory depositAssets = new DepositConfiguration[](
-            _depositTokenIds.length
+            _receiptTokenIds.length
         );
-        for (uint256 i; i < _depositTokenIds.length; ++i) {
-            depositAssets[i] = _depositConfigurations[_depositTokenIds[i]];
+        for (uint256 i; i < _receiptTokenIds.length; ++i) {
+            depositAssets[i] = _depositConfigurations[_receiptTokenIds[i]];
         }
         return depositAssets;
     }
@@ -468,7 +468,7 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     function getReceiptTokenAsset(uint256 tokenId_) external view override returns (IERC20) {
-        return _depositConfigurations[tokenId_].asset;
+        return IERC20(_depositConfigurations[tokenId_].asset);
     }
 
     /// @inheritdoc IDepositManager
