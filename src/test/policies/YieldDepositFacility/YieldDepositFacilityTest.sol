@@ -289,6 +289,7 @@ contract YieldDepositFacilityTest is Test {
 
         _updateReserveBalances();
         _updateCdepoVaultBalance();
+        _previousDepositActualAmount = actualAmount;
 
         return (actualPositionId, actualReceiptTokenId, actualAmount);
     }
@@ -427,6 +428,22 @@ contract YieldDepositFacilityTest is Test {
         // Commit
         vm.prank(user_);
         yieldDepositFacility.commitRedeem(asset_, depositPeriod_, actualAmount);
+        _;
+    }
+
+    modifier givenCommittedWithExistingPosition(
+        address user_,
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) {
+        // Approve spending of the receipt token
+        vm.prank(user_);
+        depositManager.approve(address(yieldDepositFacility), _receiptTokenId, amount_);
+
+        // Commit
+        vm.prank(user_);
+        yieldDepositFacility.commitRedeem(asset_, depositPeriod_, amount_);
         _;
     }
 

@@ -312,11 +312,63 @@ contract YieldDepositFacilityRedeemTest is YieldDepositFacilityTest {
         );
     }
 
-    // given yield has been harvested
-    //  [ ] it burns the receipt tokens
-    //  [ ] it transfers the underlying asset to the caller
-    //  [ ] it sets the commitment amount to 0
-    //  [ ] it emits a Redeemed event
+    // given yield has been claimed
+    //  [X] it burns the receipt tokens
+    //  [X] it transfers the underlying asset to the caller
+    //  [X] it sets the commitment amount to 0
+    //  [X] it emits a Redeemed event
+
+    function test_givenYieldClaimed()
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, COMMITMENT_AMOUNT)
+        givenCommittedWithExistingPosition(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            _previousDepositActualAmount
+        )
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000)
+        givenDepositPeriodEnded(0)
+        givenRateSnapshotTaken
+    {
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = yieldDepositFacility.getRedeemCommitment(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Claim yield
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = 0;
+        vm.prank(recipient);
+        uint256 yieldClaimed = yieldDepositFacility.claimYield(positionIds);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit Redeemed(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            _previousDepositActualAmount
+        );
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.redeem(0);
+
+        // Assertions
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            _previousDepositActualAmount,
+            0,
+            yieldClaimed,
+            0
+        );
+    }
 
     // [X] it burns the receipt tokens
     // [X] it transfers the underlying asset to the caller
