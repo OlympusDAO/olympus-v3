@@ -67,7 +67,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_givenAssetPeriodDoesNotExist_givenAssetVaultIsSet_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
+        givenAssetIsAdded
     {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
@@ -83,11 +83,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
         );
     }
 
-    function test_givenAssetPeriodDoesNotExist_reverts()
-        public
-        givenIsEnabled
-        givenAssetVaultIsConfigured
-    {
+    function test_givenAssetPeriodDoesNotExist_reverts() public givenIsEnabled givenAssetIsAdded {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
@@ -108,11 +104,11 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_givenAssetPeriodIsDisabled_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenAssetPeriodIsDisabled
     {
-        _expectRevertConfigurationDisabled(iAsset, DEPOSIT_PERIOD);
+        _expectRevertAssetPeriodDisabled(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.deposit(
@@ -132,8 +128,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_whenDepositorAddressIsZeroAddress_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         vm.expectRevert("TRANSFER_FROM_FAILED");
 
@@ -155,8 +151,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_whenDepositAmountIsZero_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         vm.expectRevert("ZERO_SHARES");
 
@@ -178,8 +174,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_givenDepositorHasNotApprovedSpendingAsset_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         // Expect revert
         _expectRevertERC20InsufficientAllowance();
@@ -202,8 +198,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_givenDepositorDoesNotHaveSufficientAssetBalance_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT + 1)
     {
         // Expect revert
@@ -271,8 +267,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_givenAssetDepositCapIsZero_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenAssetDepositCapIsSet(0)
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
     {
@@ -296,12 +292,12 @@ contract DepositManagerDepositTest is DepositManagerTest {
     //  given the existing deposit amount is greater than the deposit cap
     //   [X] it reverts
 
-    function test_givenAssetVaultIsConfiguredWithZeroAddress_givenTotalAssetsAreGreaterThanDepositCap_reverts()
+    function test_givenAssetIsAddedWithZeroAddress_givenTotalAssetsAreGreaterThanDepositCap_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfiguredWithZeroAddress
+        givenAssetIsAddedWithZeroAddress
         givenAssetDepositCapIsSet(101e18)
-        givenDepositIsConfigured
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasAsset(MINT_AMOUNT)
@@ -329,13 +325,13 @@ contract DepositManagerDepositTest is DepositManagerTest {
     //  [X] the wrapped receipt tokens are not minted to the depositor
     //  [X] the receipt tokens are minted to the depositor
 
-    function test_givenAssetVaultIsConfiguredWithZeroAddress(
+    function test_givenAssetIsAddedWithZeroAddress(
         uint256 amount_
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfiguredWithZeroAddress
-        givenDepositIsConfigured
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
     {
         amount_ = bound(amount_, 1e18, MINT_AMOUNT);
@@ -374,8 +370,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_whenShouldWrapIsTrue_givenReceiptTokenHasNotBeenWrapped()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
     {
         uint256 amount = 1e18;
@@ -412,8 +408,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_whenShouldWrapIsTrue_givenReceiptTokenHasBeenWrapped()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(10e18, true)
     {
@@ -448,9 +444,9 @@ contract DepositManagerDepositTest is DepositManagerTest {
     function test_givenTotalAssetsAreGreaterThanDepositCap_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
+        givenAssetIsAdded
         givenAssetDepositCapIsSet(101e18)
-        givenDepositIsConfigured
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasAsset(MINT_AMOUNT)
@@ -484,8 +480,8 @@ contract DepositManagerDepositTest is DepositManagerTest {
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
     {
         amount_ = bound(amount_, 1e18, MINT_AMOUNT);

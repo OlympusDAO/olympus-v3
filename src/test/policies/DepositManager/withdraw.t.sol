@@ -77,8 +77,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenWrappedIsTrue_givenDepositorHasNotApprovedContractToSpendWrappedReceiptToken_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
     {
@@ -103,8 +103,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenWrappedIsTrue_givenDepositorWrappedReceiptTokenBalanceIsInsufficient_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
         givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT + 1)
@@ -130,8 +130,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenWrappedIsTrue()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
         givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT)
@@ -156,8 +156,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenDepositorHasNotApprovedContractToSpendReceiptToken_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
@@ -182,8 +182,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenDepositorReceiptTokenBalanceIsInsufficient_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT + 1)
@@ -211,13 +211,13 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     //   [X] the operator shares are correct
     //   [X] the asset liabilities are correct
 
-    function test_givenAssetVaultIsConfiguredWithZeroAddress_givenRemainingDeposit(
+    function test_givenAssetIsAddedWithZeroAddress_givenRemainingDeposit(
         uint256 amount_
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfiguredWithZeroAddress
-        givenDepositIsConfigured
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -247,11 +247,11 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     //  [X] the asset is sent to the depositor
     //  [X] the operator shares are decreased by the withdrawn amount
 
-    function test_givenAssetVaultIsConfiguredWithZeroAddress()
+    function test_givenAssetIsAddedWithZeroAddress()
         public
         givenIsEnabled
-        givenAssetVaultIsConfiguredWithZeroAddress
-        givenDepositIsConfigured
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -279,8 +279,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenAssetPeriodIsDisabled()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -309,8 +309,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -332,8 +332,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenRecipientAddressIsDifferentToDepositor_zeroAddress_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -350,8 +350,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -375,8 +375,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenMaxYieldClaimed()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -434,8 +434,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_withdraw()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
@@ -460,8 +460,8 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenAssetDepositCapIsExceeded()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)

@@ -173,8 +173,8 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     function test_givenAssetIsAlreadyConfiguredWithSameDepositPeriod_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -199,11 +199,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
 
     // when the deposit period is 0
     //  [X] it reverts
-    function test_whenDepositPeriodIsZero_reverts()
-        public
-        givenIsEnabled
-        givenAssetVaultIsConfigured
-    {
+    function test_whenDepositPeriodIsZero_reverts() public givenIsEnabled givenAssetIsAdded {
         vm.expectRevert(
             abi.encodeWithSelector(IDepositManager.DepositManager_OutOfBounds.selector)
         );
@@ -217,7 +213,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     function test_whenReclaimRateIsGreaterThan100Percent_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
+        givenAssetIsAdded
     {
         vm.expectRevert(
             abi.encodeWithSelector(IDepositManager.DepositManager_OutOfBounds.selector)
@@ -243,8 +239,8 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     function test_givenAssetIsAlreadyConfiguredWithDifferentDepositPeriod()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         uint8 newDepositPeriod = DEPOSIT_PERIOD + 1;
 
@@ -274,7 +270,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     // [X] the returned receipt token ID matches
     // [X] the asset period is returned for the receipt token ID
     // [X] the asset and deposit period is recognised as a deposit asset
-    function test_configuresAsset() public givenIsEnabled givenAssetVaultIsConfigured {
+    function test_configuresAsset() public givenIsEnabled givenAssetIsAdded {
         vm.prank(ADMIN);
         uint256 receiptTokenId = depositManager.addAssetPeriod(
             iAsset,

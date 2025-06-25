@@ -235,7 +235,6 @@ contract ConvertibleDepositFacilityTest is Test {
         bool wrapPosition_,
         bool wrapReceipt_
     ) internal returns (uint256 positionId) {
-        // TODO add actual
         vm.prank(auctioneer);
         (positionId, , ) = facility.createPosition(
             IConvertibleDepositFacility.CreatePositionParams({

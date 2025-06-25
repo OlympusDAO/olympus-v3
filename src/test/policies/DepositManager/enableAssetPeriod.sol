@@ -53,8 +53,8 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     function test_givenAssetPeriodIsAlreadyEnabled_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         _expectRevertConfigurationEnabled(iAsset, DEPOSIT_PERIOD);
 
@@ -68,8 +68,8 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     function test_setsAssetPeriodToEnabled()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
     {
         // Disable the asset period
         vm.prank(ADMIN);

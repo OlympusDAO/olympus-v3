@@ -24,8 +24,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenContractIsDisabled()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenIsDisabled
@@ -54,8 +54,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenAssetPeriodIsDisabled()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenAssetPeriodIsDisabled
@@ -73,11 +73,11 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     // given the asset vault is configured with the zero address
     //  [X] it returns zero
 
-    function test_givenAssetVaultIsConfiguredWithZeroAddress()
+    function test_givenAssetIsAddedWithZeroAddress()
         public
         givenIsEnabled
-        givenAssetVaultIsConfiguredWithZeroAddress
-        givenDepositIsConfigured
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
@@ -91,8 +91,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenNoYieldToClaim()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
@@ -106,8 +106,8 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_maxClaimYield()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {

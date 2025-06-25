@@ -126,19 +126,19 @@ contract DepositManagerTest is Test {
         _;
     }
 
-    modifier givenAssetVaultIsConfigured() {
+    modifier givenAssetIsAdded() {
         vm.prank(ADMIN);
         depositManager.addAsset(iAsset, iVault, type(uint256).max);
         _;
     }
 
-    modifier givenAssetVaultIsConfiguredWithZeroAddress() {
+    modifier givenAssetIsAddedWithZeroAddress() {
         vm.prank(ADMIN);
         depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
         _;
     }
 
-    modifier givenDepositIsConfigured() {
+    modifier givenAssetPeriodIsAdded() {
         vm.prank(ADMIN);
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
         _;
@@ -299,7 +299,7 @@ contract DepositManagerTest is Test {
         );
     }
 
-    function _expectRevertConfigurationDisabled(IERC20 asset_, uint8 depositPeriod_) internal {
+    function _expectRevertAssetPeriodDisabled(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_AssetPeriodDisabled.selector,

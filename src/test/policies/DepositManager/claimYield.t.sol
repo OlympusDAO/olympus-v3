@@ -46,8 +46,8 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
@@ -83,8 +83,8 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenAssetPeriodIsDisabled
@@ -148,8 +148,8 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     function test_claimYield_givenVaultAddressIsZeroAddress()
         public
         givenIsEnabled
-        givenAssetVaultIsConfiguredWithZeroAddress
-        givenDepositIsConfigured
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
@@ -169,8 +169,8 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
-        givenDepositIsConfigured
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {

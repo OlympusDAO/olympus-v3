@@ -48,9 +48,7 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
     // [X] it sets the deposit cap
     // [X] it emits an event
 
-    function test_setDepositCap(
-        uint256 depositCap_
-    ) public givenIsEnabled givenAssetVaultIsConfigured {
+    function test_setDepositCap(uint256 depositCap_) public givenIsEnabled givenAssetIsAdded {
         // Expect emit
         vm.expectEmit(true, true, true, true);
         emit AssetDepositCapSet(address(iAsset), depositCap_);

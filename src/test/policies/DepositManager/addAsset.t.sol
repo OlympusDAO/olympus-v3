@@ -105,7 +105,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
     function test_givenAssetIsAlreadyConfigured_whenVaultIsZeroAddress_reverts()
         public
         givenIsEnabled
-        givenAssetVaultIsConfigured
+        givenAssetIsAdded
     {
         vm.expectRevert(
             abi.encodeWithSelector(IAssetManager.AssetManager_AssetAlreadyConfigured.selector)
@@ -115,11 +115,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
     }
 
-    function test_givenAssetIsAlreadyConfigured_reverts()
-        public
-        givenIsEnabled
-        givenAssetVaultIsConfigured
-    {
+    function test_givenAssetIsAlreadyConfigured_reverts() public givenIsEnabled givenAssetIsAdded {
         vm.expectRevert(
             abi.encodeWithSelector(IAssetManager.AssetManager_AssetAlreadyConfigured.selector)
         );

@@ -47,11 +47,7 @@ contract DepositManagersetAssetPeriodReclaimRateTest is DepositManagerTest {
     // given the asset period does not exist
     //  [X] it reverts
 
-    function test_givenAssetPeriodDoesNotExist_reverts()
-        public
-        givenIsEnabled
-        givenAssetVaultIsConfigured
-    {
+    function test_givenAssetPeriodDoesNotExist_reverts() public givenIsEnabled givenAssetIsAdded {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
@@ -63,7 +59,7 @@ contract DepositManagersetAssetPeriodReclaimRateTest is DepositManagerTest {
 
     function test_whenReclaimRateIsGreaterThan100_reverts(
         uint16 reclaimRate_
-    ) public givenIsEnabled givenAssetVaultIsConfigured givenDepositIsConfigured {
+    ) public givenIsEnabled givenAssetIsAdded givenAssetPeriodIsAdded {
         reclaimRate_ = uint16(bound(reclaimRate_, 100e2 + 1, type(uint16).max));
 
         vm.expectRevert(
@@ -79,7 +75,7 @@ contract DepositManagersetAssetPeriodReclaimRateTest is DepositManagerTest {
 
     function test_setsReclaimRate(
         uint16 reclaimRate_
-    ) public givenIsEnabled givenAssetVaultIsConfigured givenDepositIsConfigured {
+    ) public givenIsEnabled givenAssetIsAdded givenAssetPeriodIsAdded {
         reclaimRate_ = uint16(bound(reclaimRate_, 0, 100e2));
 
         // Expect event
