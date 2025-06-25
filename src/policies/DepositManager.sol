@@ -51,11 +51,10 @@ contract DepositManager is
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice Maps assets and operators to the number of receipt tokens that have been minted
+    /// @notice Maps asset liabilities key to the number of receipt tokens that have been minted
     /// @dev    This is used to ensure that the receipt tokens are solvent
     ///         As with the BaseAssetManager, deposited asset tokens with different deposit periods are co-mingled.
-    mapping(IERC20 asset => mapping(address operator => uint256 receiptTokenSupply))
-        internal _assetLiabilities;
+    mapping(bytes32 key => uint256 receiptTokenSupply) internal _assetLiabilities;
 
     /// @notice Maps token ID to the deposit configuration
     mapping(uint256 tokenId => DepositConfiguration) internal _depositConfigurations;
@@ -147,7 +146,7 @@ contract DepositManager is
         _mint(depositor_, receiptTokenId, actualAmount, shouldWrap_);
 
         // Update the asset liabilities for the caller (operator)
-        _assetLiabilities[asset_][msg.sender] += actualAmount;
+        _assetLiabilities[_getAssetLiabilitiesKey(asset_, msg.sender)] += actualAmount;
 
         return (receiptTokenId, actualAmount);
     }
@@ -155,7 +154,7 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     function maxClaimYield(IERC20 asset_, address operator_) external view returns (uint256) {
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, operator_);
-        uint256 operatorLiabilities = _assetLiabilities[asset_][operator_];
+        uint256 operatorLiabilities = _assetLiabilities[_getAssetLiabilitiesKey(asset_, operator_)];
 
         // Avoid reverting
         // Adjust by 1 to account for the different behaviour in ERC4626.previewRedeem and ERC4626.previewWithdraw, which could leave the receipt token insolvent
@@ -178,8 +177,12 @@ contract DepositManager is
 
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, msg.sender);
-        if (_assetLiabilities[asset_][msg.sender] > depositedSharesInAssets) {
-            revert DepositManager_Insolvent(address(asset_), _assetLiabilities[asset_][msg.sender]);
+        bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, msg.sender);
+        if (_assetLiabilities[assetLiabilitiesKey] > depositedSharesInAssets) {
+            revert DepositManager_Insolvent(
+                address(asset_),
+                _assetLiabilities[assetLiabilitiesKey]
+            );
         }
 
         // Emit an event
@@ -204,7 +207,7 @@ contract DepositManager is
         _burn(depositor_, getReceiptTokenId(asset_, depositPeriod_), amount_, wrapped_);
 
         // Update the asset liabilities for the caller (operator)
-        _assetLiabilities[asset_][msg.sender] -= amount_;
+        _assetLiabilities[_getAssetLiabilitiesKey(asset_, msg.sender)] -= amount_;
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
@@ -218,7 +221,16 @@ contract DepositManager is
         IERC20 asset_,
         address operator_
     ) external view returns (uint256) {
-        return _assetLiabilities[asset_][operator_];
+        return _assetLiabilities[_getAssetLiabilitiesKey(asset_, operator_)];
+    }
+
+    /// @notice Get the key for the asset liabilities mapping
+    /// @dev    The key is the keccak256 of the asset address and the operator address
+    function _getAssetLiabilitiesKey(
+        IERC20 asset_,
+        address operator_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(address(asset_), operator_));
     }
 
     // ========== DEPOSIT CONFIGURATION ========== //
