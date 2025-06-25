@@ -231,10 +231,10 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
     }
 
-    // given the deposit configuration is disabled
+    // given the asset period is disabled
     //  [X] the asset is withdrawn from the vault and sent to the depositor
 
-    function test_givenDepositConfigurationIsDisabled()
+    function test_givenAssetPeriodIsDisabled()
         public
         givenIsEnabled
         givenAssetVaultIsConfigured
@@ -242,7 +242,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
-        givenDepositConfigurationIsDisabled
+        givenAssetPeriodIsDisabled
     {
         uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
 

@@ -123,7 +123,7 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.startPrank(admin);
         depositManager.configureAssetVault(IERC20(address(reserveToken)), IERC4626(address(vault)));
 
-        depositManager.addDepositConfiguration(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
+        depositManager.addAssetPeriod(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
 
         receiptTokenId = depositManager.getReceiptTokenId(
             IERC20(address(reserveToken)),
@@ -138,11 +138,7 @@ contract ConvertibleDepositFacilityTest is Test {
             IERC4626(address(vaultTwo))
         );
 
-        depositManager.addDepositConfiguration(
-            IERC20(address(reserveTokenTwo)),
-            PERIOD_MONTHS,
-            90e2
-        );
+        depositManager.addAssetPeriod(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
 
         receiptTokenIdTwo = depositManager.getReceiptTokenId(
             IERC20(address(reserveTokenTwo)),
@@ -493,7 +489,7 @@ contract ConvertibleDepositFacilityTest is Test {
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_InvalidConfiguration.selector,
+                IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
                 depositPeriod_
             )

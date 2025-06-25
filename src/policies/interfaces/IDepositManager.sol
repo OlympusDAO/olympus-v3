@@ -4,8 +4,13 @@ pragma solidity >=0.8.15;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
-/// @title Deposit Manager
+/// @title  Deposit Manager
 /// @notice Defines an interface for a policy that manages deposits on behalf of other contracts. It is meant to be used by the facilities, and is not an end-user policy.
+///
+///         Key terms for the contract:
+///         - Asset: an ERC20 asset that can be deposited into the contract
+///         - Asset vault: an optional ERC4626 vault that assets are deposited into
+///         - Asset period: the combination of an asset and deposit period
 interface IDepositManager {
     // ========== EVENTS ========== //
 
@@ -16,25 +21,25 @@ interface IDepositManager {
         uint256 amount
     );
 
-    event DepositConfigured(
+    event AssetPeriodConfigured(
         uint256 indexed receiptTokenId,
         address indexed asset,
         uint8 depositPeriod
     );
 
-    event DepositConfigurationEnabled(
+    event AssetPeriodEnabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
         uint8 depositPeriod
     );
 
-    event DepositConfigurationDisabled(
+    event AssetPeriodDisabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
         uint8 depositPeriod
     );
 
-    event ReclaimRateUpdated(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
+    event AssetPeriodReclaimRateSet(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
 
     // ========== ERRORS ========== //
 
@@ -46,23 +51,23 @@ interface IDepositManager {
 
     error DepositManager_InvalidAsset();
 
-    error DepositManager_InvalidConfiguration(address asset, uint8 depositPeriod);
+    error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod);
 
-    error DepositManager_ConfigurationExists(address asset, uint8 depositPeriod);
+    error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod);
 
-    error DepositManager_ConfigurationEnabled(address asset, uint8 depositPeriod);
+    error DepositManager_AssetPeriodEnabled(address asset, uint8 depositPeriod);
 
-    error DepositManager_ConfigurationDisabled(address asset, uint8 depositPeriod);
+    error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod);
 
     // ========== STRUCTS ========== //
 
-    /// @notice A deposit configuration, representing a deposit asset and period combination
+    /// @notice An asset period configuration, representing an asset and period combination
     ///
-    /// @param isEnabled       Whether the deposit configuration is enabled for new deposits
+    /// @param isEnabled       Whether the asset period is enabled for new deposits
     /// @param depositPeriod   The deposit period, in months
-    /// @param reclaimRate     The reclaim rate for the deposit (see the implementation contract for scale)
+    /// @param reclaimRate     The reclaim rate for the asset period (see the implementation contract for scale)
     /// @param asset           The underlying ERC20 asset
-    struct DepositConfiguration {
+    struct AssetPeriod {
         bool isEnabled;
         uint8 depositPeriod;
         uint16 reclaimRate;
@@ -161,7 +166,7 @@ interface IDepositManager {
     /// @param  vault_  The address of the vault to use for the receipt token (or the zero address)
     function configureAssetVault(IERC20 asset_, IERC4626 vault_) external;
 
-    /// @notice Adds a new deposit configuration
+    /// @notice Adds a new asset period
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Creating a new receipt token
@@ -171,100 +176,97 @@ interface IDepositManager {
     /// @param  depositPeriod_  The deposit period, in months
     /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
-    function addDepositConfiguration(
+    function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
         uint16 reclaimRate_
     ) external returns (uint256 receiptTokenId);
 
-    /// @notice Disables a deposit configuration, which prevents new deposits
+    /// @notice Disables an asset period, which prevents new deposits
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
-    ///         - Disabling the deposit configuration
+    ///         - Disabling the asset period
     ///         - Emitting an event
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    function disableDepositConfiguration(IERC20 asset_, uint8 depositPeriod_) external;
+    function disableAssetPeriod(IERC20 asset_, uint8 depositPeriod_) external;
 
-    /// @notice Enables a deposit configuration, which allows new deposits
+    /// @notice Enables an asset period, which allows new deposits
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
-    ///         - Enabling the deposit configuration
+    ///         - Enabling the asset period
     ///         - Emitting an event
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    function enableDepositConfiguration(IERC20 asset_, uint8 depositPeriod_) external;
+    function enableAssetPeriod(IERC20 asset_, uint8 depositPeriod_) external;
 
-    /// @notice Returns the deposit configuration for an asset and period
+    /// @notice Returns the asset period for an asset and period
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @return configuration   The deposit configuration
-    function getDepositConfiguration(
+    /// @return configuration   The asset period
+    function getAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_
-    ) external view returns (DepositConfiguration memory configuration);
+    ) external view returns (AssetPeriod memory configuration);
 
-    /// @notice Returns the deposit configuration from a receipt token ID
+    /// @notice Returns the asset period from a receipt token ID
     ///
     /// @param  tokenId_        The ID of the receipt token
-    /// @return configuration   The deposit configuration
-    function getDepositConfiguration(
+    /// @return configuration   The asset period
+    function getAssetPeriod(
         uint256 tokenId_
-    ) external view returns (DepositConfiguration memory configuration);
+    ) external view returns (AssetPeriod memory configuration);
 
     /// @notice Returns whether a deposit asset and period combination are configured
-    /// @dev    A deposit configuration that is disabled will not accept further deposits
+    /// @dev    A asset period that is disabled will not accept further deposits
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
     /// @return isConfigured    Whether the deposit asset is configured
     /// @return isEnabled       Whether the deposit asset is enabled
-    function isConfiguredDeposit(
+    function isAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_
     ) external view returns (bool isConfigured, bool isEnabled);
 
-    /// @notice Returns the deposit configurations
+    /// @notice Returns the asset periods
     ///
-    /// @return depositConfigurations   The deposit configurations
-    function getDepositConfigurations()
-        external
-        view
-        returns (DepositConfiguration[] memory depositConfigurations);
+    /// @return depositConfigurations   The asset periods
+    function getAssetPeriods() external view returns (AssetPeriod[] memory depositConfigurations);
 
     // ========== RECLAIM RATE ========== //
 
-    /// @notice Sets the reclaim rate for a deposit
+    /// @notice Sets the reclaim rate for an asset period
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
-    ///         - Setting the reclaim rate for the deposit
+    ///         - Setting the reclaim rate for the asset period
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
     /// @param  reclaimRate_    The reclaim rate to set
-    function setDepositReclaimRate(
+    function setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
         uint16 reclaimRate_
     ) external;
 
-    /// @notice Returns the reclaim rate for a deposit
+    /// @notice Returns the reclaim rate for an asset period
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @return reclaimRate     The reclaim rate for the deposit
-    function getDepositReclaimRate(
+    /// @return reclaimRate     The reclaim rate for the asset period
+    function getAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_
     ) external view returns (uint16 reclaimRate);
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 
-    /// @notice Returns the ID of the receipt token for a deposit asset
-    /// @dev    The ID returned is not a guarantee that the asset is configured. {isDepositAsset} should be used for that purpose.
+    /// @notice Returns the ID of the receipt token for an asset period
+    /// @dev    The ID returned is not a guarantee that the asset period is configured or enabled. {isAssetPeriod} should be used for that purpose.
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months

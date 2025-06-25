@@ -137,7 +137,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vm.startPrank(admin);
         depositManager.configureAssetVault(iReserveToken, IERC4626(address(vault)));
 
-        depositManager.addDepositConfiguration(iReserveToken, PERIOD_MONTHS, 90e2);
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, 90e2);
 
         receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         vm.stopPrank();

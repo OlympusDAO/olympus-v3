@@ -42,12 +42,12 @@ contract DepositManagerDepositTest is DepositManagerTest {
         depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
     }
 
-    // given the deposit configuration does not exist
+    // given the asset period does not exist
     //  given the asset vault is set
     //   [X] it reverts
     //  [X] it reverts
 
-    function test_givenDepositConfigurationDoesNotExist_givenAssetVaultIsSet_reverts()
+    function test_givenAssetPeriodDoesNotExist_givenAssetVaultIsSet_reverts()
         public
         givenIsEnabled
         givenAssetVaultIsConfigured
@@ -58,7 +58,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
         depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
     }
 
-    function test_givenDepositConfigurationDoesNotExist_reverts()
+    function test_givenAssetPeriodDoesNotExist_reverts()
         public
         givenIsEnabled
         givenAssetVaultIsConfigured
@@ -69,15 +69,15 @@ contract DepositManagerDepositTest is DepositManagerTest {
         depositManager.deposit(iAsset, DEPOSIT_PERIOD, DEPOSITOR, 1e18, false);
     }
 
-    // given the deposit configuration is disabled
+    // given the asset period is disabled
     //  [X] it reverts
 
-    function test_givenDepositConfigurationIsDisabled_reverts()
+    function test_givenAssetPeriodIsDisabled_reverts()
         public
         givenIsEnabled
         givenAssetVaultIsConfigured
         givenDepositIsConfigured
-        givenDepositConfigurationIsDisabled
+        givenAssetPeriodIsDisabled
     {
         _expectRevertConfigurationDisabled(iAsset, DEPOSIT_PERIOD);
 
@@ -166,11 +166,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Configure deposit
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(
-            IERC20(address(asset)),
-            DEPOSIT_PERIOD,
-            RECLAIM_RATE
-        );
+        depositManager.addAssetPeriod(IERC20(address(asset)), DEPOSIT_PERIOD, RECLAIM_RATE);
 
         // Mint the asset to the depositor
         vm.prank(ADMIN);

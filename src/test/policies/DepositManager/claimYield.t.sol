@@ -75,10 +75,10 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         depositManager.claimYield(iAsset, ADMIN, amount_);
     }
 
-    // given the deposit configuration is disabled
+    // given the asset period is disabled
     //  [X] the asset is transferred to the recipient
 
-    function test_claimYield_givenDepositConfigurationIsDisabled(
+    function test_claimYield_givenAssetPeriodIsDisabled(
         uint256 amount_
     )
         public
@@ -87,7 +87,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         givenDepositIsConfigured
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenDepositConfigurationIsDisabled
+        givenAssetPeriodIsDisabled
     {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);

@@ -48,17 +48,17 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
         assertEq(maxYield, 0, "Max yield mismatch");
     }
 
-    // given the deposit configuration is disabled
+    // given the asset period is disabled
     //  [X] it returns the maximum yield that can be claimed
 
-    function test_givenDepositConfigurationIsDisabled()
+    function test_givenAssetPeriodIsDisabled()
         public
         givenIsEnabled
         givenAssetVaultIsConfigured
         givenDepositIsConfigured
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenDepositConfigurationIsDisabled
+        givenAssetPeriodIsDisabled
     {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);

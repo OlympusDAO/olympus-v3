@@ -321,7 +321,7 @@ sequenceDiagram
 
 #### Reclaim Deposit
 
-The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`getDepositReclaimRate()` on the DepositManager contract) is applied on the deposit that is returned, which is transferred to the TRSRY.
+The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`getAssetPeriodReclaimRate()` on the DepositManager contract) is applied on the deposit that is returned, which is transferred to the TRSRY.
 
 ```mermaid
 sequenceDiagram
@@ -516,8 +516,8 @@ Bophades policies with the `admin` or `manager` role are able to perform the fol
 - Configure a deposit asset and ERC4626 vault
     - Setting the vault is optional, as not all deposit assets will have an ERC4626 vault.
     - Setting the vault after the initial configuration is not supported, as it presents a security risk. For example, governance could install an ERC4626 vault under its control into which all assets are transferred.
-- Add deposit configurations (deposit asset and period combinations)
-- Enable/disable deposit configurations
+- Add asset periods (deposit asset and period combinations)
+- Enable/disable asset periods
 
 ### DEPOS (Module)
 

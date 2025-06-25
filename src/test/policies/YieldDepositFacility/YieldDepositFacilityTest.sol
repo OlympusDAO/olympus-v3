@@ -159,7 +159,7 @@ contract YieldDepositFacilityTest is Test {
         vm.startPrank(admin);
         depositManager.configureAssetVault(iReserveToken, iVault);
 
-        depositManager.addDepositConfiguration(iReserveToken, PERIOD_MONTHS, 90e2);
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, 90e2);
 
         _receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         vm.stopPrank();
@@ -168,7 +168,7 @@ contract YieldDepositFacilityTest is Test {
         vm.startPrank(admin);
         depositManager.configureAssetVault(iReserveTokenTwo, iVaultTwo);
 
-        depositManager.addDepositConfiguration(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
+        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
 
         _receiptTokenIdTwo = depositManager.getReceiptTokenId(iReserveTokenTwo, PERIOD_MONTHS);
         vm.stopPrank();
@@ -603,7 +603,7 @@ contract YieldDepositFacilityTest is Test {
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_InvalidConfiguration.selector,
+                IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
                 periodMonths_
             )

@@ -140,13 +140,13 @@ contract DepositManagerTest is Test {
 
     modifier givenDepositIsConfigured() {
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
         _;
     }
 
-    modifier givenDepositConfigurationIsDisabled() {
+    modifier givenAssetPeriodIsDisabled() {
         vm.prank(ADMIN);
-        depositManager.disableDepositConfiguration(iAsset, DEPOSIT_PERIOD);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD);
         _;
     }
 
@@ -263,7 +263,7 @@ contract DepositManagerTest is Test {
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_InvalidConfiguration.selector,
+                IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
                 depositPeriod_
             )
@@ -273,7 +273,7 @@ contract DepositManagerTest is Test {
     function _expectRevertConfigurationEnabled(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_ConfigurationEnabled.selector,
+                IDepositManager.DepositManager_AssetPeriodEnabled.selector,
                 address(asset_),
                 depositPeriod_
             )
@@ -283,7 +283,7 @@ contract DepositManagerTest is Test {
     function _expectRevertConfigurationDisabled(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_ConfigurationDisabled.selector,
+                IDepositManager.DepositManager_AssetPeriodDisabled.selector,
                 address(asset_),
                 depositPeriod_
             )

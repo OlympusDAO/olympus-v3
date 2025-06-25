@@ -5,10 +5,10 @@ import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 
-contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
+contract DepositManagersetAssetPeriodReclaimRateTest is DepositManagerTest {
     // ========== EVENTS ========== //
 
-    event ReclaimRateUpdated(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
+    event AssetPeriodReclaimRateSet(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
 
     // ========== TESTS ========== //
 
@@ -19,7 +19,7 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(ADMIN);
-        depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.setAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // when the caller is not the manager or admin
@@ -31,7 +31,7 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
         _expectRevertNotManagerOrAdmin();
 
         vm.prank(caller_);
-        depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.setAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // given the asset vault is not configured
@@ -41,13 +41,13 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
-        depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.setAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
-    // given the deposit configuration does not exist
+    // given the asset period does not exist
     //  [X] it reverts
 
-    function test_givenDepositConfigurationDoesNotExist_reverts()
+    function test_givenAssetPeriodDoesNotExist_reverts()
         public
         givenIsEnabled
         givenAssetVaultIsConfigured
@@ -55,7 +55,7 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
-        depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.setAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // when the reclaim rate is greater than 100%
@@ -71,7 +71,7 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, reclaimRate_);
+        depositManager.setAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD, reclaimRate_);
     }
 
     // [X] it sets the reclaim rate for the deposit asset
@@ -84,13 +84,13 @@ contract DepositManagerSetDepositReclaimRateTest is DepositManagerTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit ReclaimRateUpdated(address(iAsset), DEPOSIT_PERIOD, reclaimRate_);
+        emit AssetPeriodReclaimRateSet(address(iAsset), DEPOSIT_PERIOD, reclaimRate_);
 
         vm.prank(ADMIN);
-        depositManager.setDepositReclaimRate(iAsset, DEPOSIT_PERIOD, reclaimRate_);
+        depositManager.setAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD, reclaimRate_);
 
         assertEq(
-            depositManager.getDepositReclaimRate(iAsset, DEPOSIT_PERIOD),
+            depositManager.getAssetPeriodReclaimRate(iAsset, DEPOSIT_PERIOD),
             reclaimRate_,
             "Reclaim rate mismatch"
         );

@@ -112,7 +112,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         )
     {
         uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
-            depositManager.getDepositReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
+            depositManager.getAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
         // Expect event
@@ -170,7 +170,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
 
         // Calculate the amount that will be reclaimed
         uint256 expectedReclaimedAmount = (amountOne *
-            depositManager.getDepositReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
+            depositManager.getAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
         uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
 
         // Expect event

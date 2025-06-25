@@ -65,7 +65,7 @@ abstract contract BaseDepositRedemptionVault is
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
         // Validate that the asset is supported
-        (bool isConfigured, ) = DEPOSIT_MANAGER.isConfiguredDeposit(depositToken_, depositPeriod_);
+        (bool isConfigured, ) = DEPOSIT_MANAGER.isAssetPeriod(depositToken_, depositPeriod_);
         if (!isConfigured)
             revert RedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
 
@@ -262,7 +262,7 @@ abstract contract BaseDepositRedemptionVault is
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
         reclaimed = amount_.mulDiv(
-            DEPOSIT_MANAGER.getDepositReclaimRate(depositToken_, depositPeriod_),
+            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_),
             ONE_HUNDRED_PERCENT
         );
 

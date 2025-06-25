@@ -220,7 +220,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         currentPeriodMonths = position.periodMonths;
         if (previousAsset_ == address(0)) {
             // Validate that the asset is supported
-            (bool isConfigured, ) = DEPOSIT_MANAGER.isConfiguredDeposit(
+            (bool isConfigured, ) = DEPOSIT_MANAGER.isAssetPeriod(
                 IERC20(currentAsset),
                 currentPeriodMonths
             );

@@ -69,7 +69,7 @@ contract ConvertibleDepositFacilityPreviewReclaimTest is ConvertibleDepositFacil
 
         // Calculate the amount that will be reclaimed
         uint256 expectedReclaimed = (amount *
-            depositManager.getDepositReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
+            depositManager.getAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
 
         // Call function
         uint256 reclaimed = facility.previewReclaim(iReserveToken, PERIOD_MONTHS, amount);

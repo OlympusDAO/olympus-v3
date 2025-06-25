@@ -8,7 +8,7 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {uint2str} from "src/libraries/Uint2str.sol";
 import {String} from "src/libraries/String.sol";
 
-contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
+contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     // ========== ASSERTIONS ========== //
 
     function assertReceiptTokenConfigured(
@@ -73,49 +73,43 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         uint256 reclaimRate_
     ) internal view {
         // Check if asset is configured
-        (bool isConfigured, bool isEnabled) = depositManager.isConfiguredDeposit(
+        (bool isConfigured, bool isEnabled) = depositManager.isAssetPeriod(
             IERC20(asset_),
             depositPeriod_
         );
-        assertTrue(isConfigured, "isConfiguredDeposit: asset is not configured as a deposit asset");
-        assertTrue(isEnabled, "isConfiguredDeposit: asset is not enabled as a deposit asset");
+        assertTrue(isConfigured, "isAssetPeriod: asset is not configured as a deposit asset");
+        assertTrue(isEnabled, "isAssetPeriod: asset is not enabled as a deposit asset");
 
-        // Check deposit configuration using the receipt token ID
-        IDepositManager.DepositConfiguration
-            memory depositConfigurationFromReceiptTokenId = depositManager.getDepositConfiguration(
-                depositManager.getReceiptTokenId(IERC20(asset_), depositPeriod_)
-            );
+        // Check asset period using the receipt token ID
+        IDepositManager.AssetPeriod memory depositConfigurationFromReceiptTokenId = depositManager
+            .getAssetPeriod(depositManager.getReceiptTokenId(IERC20(asset_), depositPeriod_));
         assertEq(
             depositConfigurationFromReceiptTokenId.asset,
             asset_,
-            "getDepositConfiguration from token id: asset mismatch"
+            "getAssetPeriod from token id: asset mismatch"
         );
         assertEq(
             depositConfigurationFromReceiptTokenId.depositPeriod,
             depositPeriod_,
-            "getDepositConfiguration from token id: deposit period mismatch"
+            "getAssetPeriod from token id: deposit period mismatch"
         );
 
-        // Check deposit configuration using the asset and deposit period
-        IDepositManager.DepositConfiguration
-            memory depositConfigurationFromAssetAndPeriod = depositManager.getDepositConfiguration(
-                IERC20(asset_),
-                depositPeriod_
-            );
+        // Check asset period using the asset and deposit period
+        IDepositManager.AssetPeriod memory depositConfigurationFromAssetAndPeriod = depositManager
+            .getAssetPeriod(IERC20(asset_), depositPeriod_);
         assertEq(
             depositConfigurationFromAssetAndPeriod.asset,
             asset_,
-            "getDepositConfiguration: asset mismatch"
+            "getAssetPeriod: asset mismatch"
         );
         assertEq(
             depositConfigurationFromAssetAndPeriod.depositPeriod,
             depositPeriod_,
-            "getDepositConfiguration: deposit period mismatch"
+            "getAssetPeriod: deposit period mismatch"
         );
 
         // Check all deposit assets
-        IDepositManager.DepositConfiguration[] memory depositAssets = depositManager
-            .getDepositConfigurations();
+        IDepositManager.AssetPeriod[] memory depositAssets = depositManager.getAssetPeriods();
         bool found = false;
         for (uint256 i; i < depositAssets.length; ++i) {
             if (
@@ -124,30 +118,22 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
             ) {
                 found = true;
 
-                assertEq(
-                    depositAssets[i].isEnabled,
-                    true,
-                    "getDepositConfigurations: isEnabled mismatch"
-                );
+                assertEq(depositAssets[i].isEnabled, true, "getAssetPeriods: isEnabled mismatch");
                 assertEq(
                     depositAssets[i].depositPeriod,
                     depositPeriod_,
-                    "getDepositConfigurations: deposit period mismatch"
+                    "getAssetPeriods: deposit period mismatch"
                 );
                 assertEq(
                     depositAssets[i].reclaimRate,
                     reclaimRate_,
-                    "getDepositConfigurations: reclaim rate mismatch"
+                    "getAssetPeriods: reclaim rate mismatch"
                 );
-                assertEq(
-                    depositAssets[i].asset,
-                    asset_,
-                    "getDepositConfigurations: asset mismatch"
-                );
+                assertEq(depositAssets[i].asset, asset_, "getAssetPeriods: asset mismatch");
                 break;
             }
         }
-        assertTrue(found, "getDepositConfigurations: asset not found in deposit assets");
+        assertTrue(found, "getAssetPeriods: asset not found in deposit assets");
     }
 
     // ========== TESTS ========== //
@@ -158,7 +144,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // when the caller is not the manager or admin
@@ -169,7 +155,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         _expectRevertNotManagerOrAdmin();
 
         vm.prank(caller_);
-        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // given the asset vault has not been configured
@@ -179,7 +165,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_NotConfigured.selector));
 
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // given the asset is already configured with the same deposit period
@@ -192,14 +178,14 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
     {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_ConfigurationExists.selector,
+                IDepositManager.DepositManager_AssetPeriodExists.selector,
                 address(iAsset),
                 DEPOSIT_PERIOD
             )
         );
 
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // when the asset address is the zero address
@@ -208,7 +194,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_NotConfigured.selector));
 
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(IERC20(address(0)), DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(IERC20(address(0)), DEPOSIT_PERIOD, RECLAIM_RATE);
     }
 
     // when the deposit period is 0
@@ -223,7 +209,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(iAsset, 0, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, 0, RECLAIM_RATE);
     }
 
     // when the reclaim rate is greater than 100%
@@ -238,12 +224,12 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addDepositConfiguration(iAsset, DEPOSIT_PERIOD, 100e2 + 1);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, 100e2 + 1);
     }
 
     // given the asset is already configured with a different deposit period
-    //  [X] the deposit configuration is recorded with the derived receipt token ID
-    //  [X] the deposit configuration has the reclaim rate set
+    //  [X] the asset period is recorded with the derived receipt token ID
+    //  [X] the asset period has the reclaim rate set
     //  [X] the deposit reclaim rate is set
     //  [X] the receipt token has the name set
     //  [X] the receipt token has the symbol set
@@ -252,7 +238,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
     //  [X] the receipt token has the asset set
     //  [X] the receipt token has the deposit period set
     //  [X] the returned receipt token ID matches
-    //  [X] the deposit configuration is returned for the receipt token ID
+    //  [X] the asset period is returned for the receipt token ID
     //  [X] the asset and deposit period is recognised as a deposit asset
     function test_givenAssetIsAlreadyConfiguredWithDifferentDepositPeriod()
         public
@@ -263,7 +249,7 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         uint8 newDepositPeriod = DEPOSIT_PERIOD + 1;
 
         vm.prank(ADMIN);
-        uint256 receiptTokenId = depositManager.addDepositConfiguration(
+        uint256 receiptTokenId = depositManager.addAssetPeriod(
             iAsset,
             newDepositPeriod,
             RECLAIM_RATE
@@ -276,8 +262,8 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
         assertReceiptTokenConfigured(receiptTokenId, iAsset, newDepositPeriod);
     }
 
-    // [X] the deposit configuration is recorded with the derived receipt token ID
-    // [X] the deposit configuration has the reclaim rate set
+    // [X] the asset period is recorded with the derived receipt token ID
+    // [X] the asset period has the reclaim rate set
     // [X] the deposit reclaim rate is set
     // [X] the receipt token has the name set
     // [X] the receipt token has the symbol set
@@ -286,11 +272,11 @@ contract DepositManagerAddDepositConfigurationTest is DepositManagerTest {
     // [X] the receipt token has the asset set
     // [X] the receipt token has the deposit period set
     // [X] the returned receipt token ID matches
-    // [X] the deposit configuration is returned for the receipt token ID
+    // [X] the asset period is returned for the receipt token ID
     // [X] the asset and deposit period is recognised as a deposit asset
     function test_configuresAsset() public givenIsEnabled givenAssetVaultIsConfigured {
         vm.prank(ADMIN);
-        uint256 receiptTokenId = depositManager.addDepositConfiguration(
+        uint256 receiptTokenId = depositManager.addAssetPeriod(
             iAsset,
             DEPOSIT_PERIOD,
             RECLAIM_RATE
