@@ -401,28 +401,57 @@ Depositors that have committed to redeeming their deposit can borrow against tha
 sequenceDiagram
     participant caller
     participant CDFacility
+    participant DepositClearinghouse
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
-    participant VaultToken as Vault (ERC4626)
 
-    caller->>CDFacility: borrow(amount)
+    caller->>CDFacility: borrow(commitmentId, borrowAmount, cooler)
     note over caller, CDFacility: only if caller has committed to redemption
-    CDFacility->>DepositManager: borrow()
-    alt DepositToken has vault defined
-    DepositManager->>VaultToken: redeem()
-    VaultToken-->>DepositManager: deposit tokens
-    end
-    DepositManager->>DepositToken: transfer()
-    DepositManager-->>caller: deposit tokens
+    CDFacility->>DepositManager: borrow(borrowAmount)
+    DepositManager->>DepositToken: transfer(CDFacility, borrowAmount)
+    DepositManager-->>CDFacility: deposit tokens
+    CDFacility->>DepositClearinghouse: lendToCooler(cooler, commitmentId, borrowAmount)
+    DepositClearinghouse->>DepositManager: transferFrom(CDFacility, collateralAmount)
+    CDFacility-->>DepositClearinghouse: receipt tokens
+    DepositClearinghouse->>DepositToken: transferFrom(CDFacility, borrowAmount)
+    CDFacility-->>DepositClearinghouse: deposit tokens
+    DepositClearinghouse->>DepositToken: transfer(caller, borrowAmount)
+    DepositClearinghouse-->>caller: deposit tokens
 ```
 
-TODO liquidation
+The `DepositClearinghouse` contract is a modified version of the original `Clearinghouse` contract used by Cooler Loans v1. Unlike the original Clearinghouse, which was user-facing, the DepositClearinghouse is designed to be called by any of the Facility contracts, which custody the receipt tokens that have been committed towards redemption.
+
+This is a departure from the original design of the Clearinghouse (which pulled the funding into the contract periodically), but is necessary for the following reasons:
+
+- The deposit tokens are custodied in the DepositManager contract, and accessible only by the Facility that deposited them (e.g. CDFacility).
+- The Facility contract custodies the receipt tokens that have been committed by a depositor.
+
+For these reasons, the DepositClearinghouse pulls both the receipt tokens and deposit tokens from the Facility calling it. This should not pose any danger to the custodied funds or the depositor:
+
+- Functions on the DepositClearinghouse will be gated to callers with a role that is granted only to the Facility contracts
+- The calling Facility will need to provide both the receipt and deposit tokens to the DepositClearinghouse. As the receipt tokens can only be created by depositing the underlying asset, there is no economic reason to arrange for the tokens and then call DepositClearinghouse to lend out the tokens.
 
 #### Repayment Against Receipt Token Loan
 
 When a depositor has borrowed against their receipt tokens, they must repay the loan in order to complete the redemption.
 
+Issues:
+
+- Cooler repayment will transfer collateral back to the owner (depositor), and transfer debt tokens to the lender (deposit clearinghouse)
+
+alternatively, have the Cooler owned by the facility, and each loan maps to a depositor
+
 TODO repayment
+
+#### Extending a Receipt Token Loan
+
+#### Liquidation of Receipt Token Loan
+
+where is the collateral sent?
+
+what if a loan gets liquidated by the facility vs anyone else? Need to be able to clean up
+
+TODO liquidation
 
 ### EmissionManager (Policy)
 
