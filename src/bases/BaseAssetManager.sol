@@ -249,4 +249,10 @@ abstract contract BaseAssetManager is IAssetManager {
     function getConfiguredAssets() public view override returns (IERC20[] memory assets) {
         return _configuredAssets;
     }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+        return interfaceId == type(IAssetManager).interfaceId;
+    }
 }

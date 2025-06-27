@@ -448,4 +448,13 @@ contract YieldDepositFacility is
             }
         }
     }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IYieldDepositFacility).interfaceId ||
+            interfaceId == type(IPeriodicTask).interfaceId ||
+            super.supportsInterface(interfaceId);
+    }
 }

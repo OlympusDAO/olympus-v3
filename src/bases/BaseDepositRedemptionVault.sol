@@ -356,4 +356,10 @@ abstract contract BaseDepositRedemptionVault is
     ) external returns (uint256 reclaimed) {
         reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
     }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+        return interfaceId == type(IDepositRedemptionVault).interfaceId;
+    }
 }

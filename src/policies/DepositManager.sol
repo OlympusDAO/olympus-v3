@@ -477,4 +477,15 @@ contract DepositManager is
     function getReceiptTokenDepositPeriod(uint256 tokenId_) external view override returns (uint8) {
         return _assetPeriods[tokenId_].depositPeriod;
     }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(ERC6909Wrappable, BaseAssetManager) returns (bool) {
+        return
+            interfaceId == type(IDepositManager).interfaceId ||
+            ERC6909Wrappable.supportsInterface(interfaceId) ||
+            BaseAssetManager.supportsInterface(interfaceId);
+    }
 }
