@@ -10,7 +10,7 @@ import {DepositManager} from "src/policies/DepositManager.sol";
 
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
-import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -247,7 +247,7 @@ contract DepositManagerTest is Test {
     // ========== REVERT HELPERS ========== //
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(IPolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectRevertNotManagerOrAdmin() internal {

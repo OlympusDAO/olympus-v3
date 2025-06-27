@@ -482,10 +482,17 @@ contract DepositManager is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(ERC6909Wrappable, BaseAssetManager) returns (bool) {
+    )
+        public
+        view
+        virtual
+        override(ERC6909Wrappable, BaseAssetManager, PolicyEnabler)
+        returns (bool)
+    {
         return
             interfaceId == type(IDepositManager).interfaceId ||
             ERC6909Wrappable.supportsInterface(interfaceId) ||
-            BaseAssetManager.supportsInterface(interfaceId);
+            BaseAssetManager.supportsInterface(interfaceId) ||
+            PolicyEnabler.supportsInterface(interfaceId);
     }
 }

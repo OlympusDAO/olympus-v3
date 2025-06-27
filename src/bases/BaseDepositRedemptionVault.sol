@@ -19,6 +19,8 @@ import {DepositManager} from "src/policies/DepositManager.sol";
 
 /// @title  BaseDepositRedemptionVault
 /// @notice A contract that manages the redemption of receipt tokens
+/// @dev    This currently inherits from PolicyEnabler, and thus assumes that the inheriting contract is a Policy.
+///         It could be refactored to inherit from IEnabler instead.
 abstract contract BaseDepositRedemptionVault is
     IDepositRedemptionVault,
     PolicyEnabler,
@@ -26,9 +28,6 @@ abstract contract BaseDepositRedemptionVault is
 {
     using SafeTransferLib for ERC20;
     using FullMath for uint256;
-
-    // Tasks
-    // [ ] Consider if dependency on PolicyEnabler is needed
 
     // ========== CONSTANTS ========== //
 
@@ -359,7 +358,9 @@ abstract contract BaseDepositRedemptionVault is
 
     // ========== ERC165 ========== //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
-        return interfaceId == type(IDepositRedemptionVault).interfaceId;
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IDepositRedemptionVault).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }

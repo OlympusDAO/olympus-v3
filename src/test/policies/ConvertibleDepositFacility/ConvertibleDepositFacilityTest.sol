@@ -18,7 +18,7 @@ import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPos
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
@@ -492,7 +492,7 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {

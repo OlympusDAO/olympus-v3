@@ -18,7 +18,7 @@ import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPos
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
@@ -155,11 +155,11 @@ contract ConvertibleDepositAuctioneerTest is Test {
     }
 
     function _expectNotEnabledRevert() internal {
-        vm.expectRevert(PolicyEnabler.NotEnabled.selector);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
     }
 
     function _expectNotDisabledRevert() internal {
-        vm.expectRevert(PolicyEnabler.NotDisabled.selector);
+        vm.expectRevert(IEnabler.NotDisabled.selector);
     }
 
     function _expectDepositAssetAndPeriodNotEnabledRevert(

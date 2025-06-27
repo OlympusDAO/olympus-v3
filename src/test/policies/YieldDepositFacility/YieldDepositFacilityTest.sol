@@ -17,7 +17,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
@@ -568,7 +568,7 @@ contract YieldDepositFacilityTest is Test {
     // ========== REVERT HELPERS ========== //
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {
