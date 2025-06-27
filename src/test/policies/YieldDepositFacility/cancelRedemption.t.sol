@@ -5,34 +5,34 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
-contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
+contract YieldDepositFacilityCancelRedemptionTest is YieldDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
-    event Uncommitted(
+    event RedemptionCancelled(
         address indexed user,
-        uint16 indexed commitmentId,
+        uint16 indexed redemptionId,
         address indexed depositToken,
         uint8 depositPeriod,
         uint256 amount
     );
 
-    function _assertUncommitment(
+    function _assertRedemptionCancelled(
         address user_,
-        uint16 commitmentId_,
+        uint16 redemptionId_,
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 depositTokenBalanceBefore_,
         uint256 amount_,
         uint256 previousUserCommitmentAmount_
     ) internal view {
-        // Get commitment
-        IDepositRedemptionVault.UserCommitment memory commitment = yieldDepositFacility
-            .getRedeemCommitment(user_, commitmentId_);
+        // Get redemption
+        IDepositRedemptionVault.UserRedemption memory redemption = yieldDepositFacility
+            .getUserRedemption(user_, redemptionId_);
 
-        // Assert commitment values
-        assertEq(address(commitment.depositToken), address(depositToken_), "depositToken mismatch");
-        assertEq(commitment.depositPeriod, depositPeriod_, "depositPeriod mismatch");
-        assertEq(commitment.amount, previousUserCommitmentAmount_ - amount_, "Amount mismatch");
+        // Assert redemption values
+        assertEq(redemption.depositToken, address(depositToken_), "depositToken mismatch");
+        assertEq(redemption.depositPeriod, depositPeriod_, "depositPeriod mismatch");
+        assertEq(redemption.amount, previousUserCommitmentAmount_ - amount_, "Amount mismatch");
 
         // Assert receipt token balances
         uint256 receiptTokenId = depositManager.getReceiptTokenId(depositToken_, depositPeriod_);
@@ -57,10 +57,10 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, COMMITMENT_AMOUNT);
+        yieldDepositFacility.cancelRedemption(0, COMMITMENT_AMOUNT);
     }
 
-    // given the commitment ID does not exist
+    // given the redemption ID does not exist
     //  [X] it reverts
 
     function test_invalidCommitmentId_reverts()
@@ -71,7 +71,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidCommitmentId.selector,
+                IDepositRedemptionVault.RedemptionVault_InvalidRedemptionId.selector,
                 recipient,
                 1
             )
@@ -79,13 +79,13 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(1, COMMITMENT_AMOUNT);
+        yieldDepositFacility.cancelRedemption(1, COMMITMENT_AMOUNT);
     }
 
-    // given the commitment ID exists for a different user
+    // given the redemption ID exists for a different user
     //  [X] it reverts
 
-    function test_commitmentIdExistsForDifferentUser_reverts()
+    function test_redemptionIdExistsForDifferentUser_reverts()
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
@@ -93,7 +93,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidCommitmentId.selector,
+                IDepositRedemptionVault.RedemptionVault_InvalidRedemptionId.selector,
                 recipientTwo,
                 0
             )
@@ -101,10 +101,10 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipientTwo);
-        yieldDepositFacility.uncommitRedeem(0, _previousDepositActualAmount);
+        yieldDepositFacility.cancelRedemption(0, _previousDepositActualAmount);
     }
 
-    // given the amount to uncommit is 0
+    // given the amount to cancel is 0
     //  [X] it reverts
 
     function test_amountIsZero_reverts()
@@ -117,10 +117,10 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, 0);
+        yieldDepositFacility.cancelRedemption(0, 0);
     }
 
-    // given the amount to uncommit is more than the commitment
+    // given the amount to cancel is more than the redemption
     //  [X] it reverts
 
     function test_amountGreaterThanCommitment_reverts(
@@ -130,7 +130,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
     {
-        // Bound the amount to be greater than the commitment
+        // Bound the amount to be greater than the redemption
         amount_ = bound(amount_, _previousDepositActualAmount + 1, type(uint256).max);
 
         // Expect revert
@@ -145,13 +145,13 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, amount_);
+        yieldDepositFacility.cancelRedemption(0, amount_);
     }
 
-    // given there has been a partial uncommit
-    //  [X] it reduces the commitment amount
+    // given there has been a partial cancellation
+    //  [X] it reduces the redemption amount
 
-    function test_success_partialUncommitRedeem(
+    function test_success_partialCancellation(
         uint256 firstAmount_,
         uint256 secondAmount_
     )
@@ -159,29 +159,35 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
     {
-        // Bound the first amount to be between 1 and half the commitment amount
+        // Bound the first amount to be between 1 and half the redemption amount
         firstAmount_ = bound(firstAmount_, 1, _previousDepositActualAmount / 2);
 
-        // Bound the second amount to be between 1 and the remaining commitment amount
+        // Bound the second amount to be between 1 and the remaining redemption amount
         secondAmount_ = bound(secondAmount_, 1, _previousDepositActualAmount - firstAmount_);
 
-        // First uncommit
+        // First cancel
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, firstAmount_);
+        yieldDepositFacility.cancelRedemption(0, firstAmount_);
 
-        // Get receipt token balance before second uncommit
+        // Get receipt token balance before second cancel
         uint256 receiptTokenBalanceBefore = depositManager.balanceOf(recipient, _receiptTokenId);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Uncommitted(recipient, 0, address(iReserveToken), PERIOD_MONTHS, secondAmount_);
+        emit RedemptionCancelled(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            secondAmount_
+        );
 
         // Call function again
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, secondAmount_);
+        yieldDepositFacility.cancelRedemption(0, secondAmount_);
 
         // Assertions
-        _assertUncommitment(
+        _assertRedemptionCancelled(
             recipient,
             0,
             iReserveToken,
@@ -193,8 +199,8 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
     }
 
     // [X] it transfers the receipt tokens from the contract to the caller
-    // [X] it reduces the commitment amount
-    // [X] it emits an Uncommitted event
+    // [X] it reduces the redemption amount
+    // [X] it emits an RedemptionCancelled event
 
     function test_success(
         uint256 amount_
@@ -203,7 +209,7 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
     {
-        // Bound the amount to be between 1 and the commitment amount
+        // Bound the amount to be between 1 and the redemption amount
         amount_ = bound(amount_, 1, _previousDepositActualAmount);
 
         // Get receipt token balance before
@@ -211,14 +217,14 @@ contract YieldDepositFacilityUncommitRedeemTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Uncommitted(recipient, 0, address(iReserveToken), PERIOD_MONTHS, amount_);
+        emit RedemptionCancelled(recipient, 0, address(iReserveToken), PERIOD_MONTHS, amount_);
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.uncommitRedeem(0, amount_);
+        yieldDepositFacility.cancelRedemption(0, amount_);
 
         // Assertions
-        _assertUncommitment(
+        _assertRedemptionCancelled(
             recipient,
             0,
             iReserveToken,

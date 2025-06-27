@@ -44,11 +44,13 @@ abstract contract BaseDepositRedemptionVault is
     /// @dev    The inheriting contract must assign the TRSRY module address to this state variable using `configureDependencies()`
     TRSRYv1 public TRSRY;
 
-    /// @notice The number of commitments per user
-    mapping(address => uint16) internal _userCommitmentCount;
+    /// @notice The number of redemptions per user
+    mapping(address => uint16) internal _userRedemptionCount;
 
-    /// @notice The commitments for each user and commitment ID
-    mapping(address => mapping(uint16 => UserCommitment)) internal _userCommitments;
+    /// @notice The redemption for each user and redemption ID
+    /// @dev    Use `_getUserRedemptionKey()` to calculate the key for the mapping.
+    ///         A complex key is used to save gas compared to a nested mapping.
+    mapping(bytes32 => UserRedemption) internal _userRedemptions;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -79,171 +81,195 @@ abstract contract BaseDepositRedemptionVault is
         );
     }
 
-    // ========== USER COMMITMENTS ========== //
+    // ========== USER REDEMPTIONS ========== //
 
-    /// @inheritdoc IDepositRedemptionVault
-    function getRedeemCommitmentCount(address user_) external view returns (uint16 count) {
-        return _userCommitmentCount[user_];
+    function _getUserRedemptionKey(
+        address user_,
+        uint16 redemptionId_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(user_, redemptionId_));
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function getRedeemCommitment(
-        address user_,
-        uint16 commitmentId_
-    ) external view returns (UserCommitment memory commitment) {
-        commitment = _userCommitments[user_][commitmentId_];
-        // TODO should this be a revert?
-        if (address(commitment.depositToken) == address(0))
-            revert RedemptionVault_InvalidCommitmentId(user_, commitmentId_);
+    function getUserRedemptionCount(address user_) external view returns (uint16 count) {
+        return _userRedemptionCount[user_];
+    }
 
-        return commitment;
+    /// @inheritdoc IDepositRedemptionVault
+    function getUserRedemption(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (UserRedemption memory redemption) {
+        redemption = _userRedemptions[_getUserRedemptionKey(user_, redemptionId_)];
+        // TODO should this be a revert?
+        if (redemption.depositToken == address(0))
+            revert RedemptionVault_InvalidRedemptionId(user_, redemptionId_);
+
+        return redemption;
     }
 
     // ========== REDEMPTION FLOW ========== //
 
-    modifier onlyValidCommitmentId(address user_, uint16 commitmentId_) {
-        // If the deposit token is the zero address, the commitment is invalid
-        if (address(_userCommitments[user_][commitmentId_].depositToken) == address(0))
-            revert RedemptionVault_InvalidCommitmentId(user_, commitmentId_);
+    modifier onlyValidRedemptionId(address user_, uint16 redemptionId_) {
+        // If the deposit token is the zero address, the redemption is invalid
+        if (
+            _userRedemptions[_getUserRedemptionKey(user_, redemptionId_)].depositToken == address(0)
+        ) revert RedemptionVault_InvalidRedemptionId(user_, redemptionId_);
         _;
     }
 
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function performs the following:
-    ///             - Creates a new commitment for the user
+    ///             - Creates a new redemption for the user
     ///             - Transfers the receipt tokens from the caller to this contract
-    ///             - Emits the Committed event
-    ///             - Returns the new commitment ID
+    ///             - Emits the RedemptionStarted event
+    ///             - Returns the new redemption ID
     ///
     ///             The function will revert if:
     ///             - The deposit token and period are not supported
     ///             - The amount is 0
     ///             - The caller has not approved this contract to spend the receipt tokens
     ///             - The caller does not have enough receipt tokens
-    function commitRedeem(
+    function startRedemption(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_
-    ) external nonReentrant onlyEnabled returns (uint16 commitmentId) {
+    ) external nonReentrant onlyEnabled returns (uint16 redemptionId) {
         // Create a User Commitment
-        commitmentId = _userCommitmentCount[msg.sender]++;
-        _userCommitments[msg.sender][commitmentId] = UserCommitment({
-            depositToken: depositToken_,
+        redemptionId = _userRedemptionCount[msg.sender]++;
+        _userRedemptions[_getUserRedemptionKey(msg.sender, redemptionId)] = UserRedemption({
+            depositToken: address(depositToken_),
             depositPeriod: depositPeriod_,
-            amount: amount_,
-            redeemableAt: uint48(block.timestamp + uint48(depositPeriod_) * 30 days)
+            redeemableAt: uint48(block.timestamp + uint48(depositPeriod_) * 30 days),
+            amount: amount_
         });
 
         // Pull the receipt tokens from the caller
         // This will validate that the deposit token is supported
         _pullReceiptToken(depositToken_, depositPeriod_, amount_);
 
-        // Return the new commitment ID
-        emit Committed(msg.sender, commitmentId, address(depositToken_), depositPeriod_, amount_);
-        return commitmentId;
+        // Return the new redemption ID
+        emit RedemptionStarted(
+            msg.sender,
+            redemptionId,
+            address(depositToken_),
+            depositPeriod_,
+            amount_
+        );
+        return redemptionId;
     }
 
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function performs the following:
-    ///             - Checks that the commitment ID is valid
-    ///             - Checks that the amount is not greater than the commitment
-    ///             - Reduces the commitment amount
+    ///             - Checks that the redemption ID is valid
+    ///             - Checks that the amount is not greater than the redemption
+    ///             - Reduces the redemption amount
     ///             - Transfers the quantity of receipt tokens to the caller
-    ///             - Emits the Uncommitted event
+    ///             - Emits the RedemptionCancelled event
     ///
     ///             The function will revert if:
-    ///             - The commitment ID is invalid
+    ///             - The redemption ID is invalid
     ///             - The amount is 0
-    ///             - The amount is greater than the committed amount
-    function uncommitRedeem(
-        uint16 commitmentId_,
+    ///             - The amount is greater than the redemption amount
+    function cancelRedemption(
+        uint16 redemptionId_,
         uint256 amount_
-    ) external nonReentrant onlyEnabled onlyValidCommitmentId(msg.sender, commitmentId_) {
-        // Get the commitment
-        UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
+    ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
+        // Get the redemption
+        UserRedemption storage redemption = _userRedemptions[
+            _getUserRedemptionKey(msg.sender, redemptionId_)
+        ];
 
         // Check that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
-        // Check that the amount is not greater than the commitment
-        if (amount_ > commitment.amount)
-            revert RedemptionVault_InvalidAmount(msg.sender, commitmentId_, amount_);
+        // Check that the amount is not greater than the redemption
+        if (amount_ > redemption.amount)
+            revert RedemptionVault_InvalidAmount(msg.sender, redemptionId_, amount_);
 
-        // Update the commitment
-        commitment.amount -= amount_;
+        // Update the redemption
+        redemption.amount -= amount_;
 
         // Transfer the quantity of receipt tokens to the caller
         DEPOSIT_MANAGER.transfer(
             msg.sender,
-            DEPOSIT_MANAGER.getReceiptTokenId(commitment.depositToken, commitment.depositPeriod),
+            DEPOSIT_MANAGER.getReceiptTokenId(
+                IERC20(redemption.depositToken),
+                redemption.depositPeriod
+            ),
             amount_
         );
 
-        // Emit the uncommitted event
-        emit Uncommitted(
+        // Emit the cancelled event
+        emit RedemptionCancelled(
             msg.sender,
-            commitmentId_,
-            address(commitment.depositToken),
-            commitment.depositPeriod,
+            redemptionId_,
+            redemption.depositToken,
+            redemption.depositPeriod,
             amount_
         );
     }
 
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function performs the following:
-    ///             - Checks that the commitment ID is valid
-    ///             - Checks that the commitment is redeemable
-    ///             - Updates the commitment
+    ///             - Checks that the redemption ID is valid
+    ///             - Checks that the redemption is redeemable
+    ///             - Updates the redemption
     ///             - Redeems the receipt tokens for the underlying asset
     ///             - Transfers the underlying asset to the caller
-    ///             - Emits the Redeemed event
+    ///             - Emits the RedemptionFinished event
     ///
     ///             The function will revert if:
-    ///             - The commitment ID is invalid
-    ///             - The commitment is not yet redeemable
-    function redeem(
-        uint16 commitmentId_
-    ) external nonReentrant onlyEnabled onlyValidCommitmentId(msg.sender, commitmentId_) {
-        // Get the commitment
-        UserCommitment storage commitment = _userCommitments[msg.sender][commitmentId_];
+    ///             - The redemption ID is invalid
+    ///             - The redemption is not yet redeemable
+    function finishRedemption(
+        uint16 redemptionId_
+    ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
+        // Get the redemption
+        UserRedemption storage redemption = _userRedemptions[
+            _getUserRedemptionKey(msg.sender, redemptionId_)
+        ];
 
-        // Check that the commitment is not already redeemed
-        if (commitment.amount == 0)
-            revert RedemptionVault_AlreadyRedeemed(msg.sender, commitmentId_);
+        // Check that the redemption is not already redeemed
+        if (redemption.amount == 0)
+            revert RedemptionVault_AlreadyRedeemed(msg.sender, redemptionId_);
 
-        // Check that the commitment is redeemable
-        if (block.timestamp < commitment.redeemableAt)
-            revert RedemptionVault_TooEarly(msg.sender, commitmentId_);
+        // Check that the redemption is redeemable
+        if (block.timestamp < redemption.redeemableAt)
+            revert RedemptionVault_TooEarly(msg.sender, redemptionId_);
 
-        // Update the commitment
-        uint256 commitmentAmount = commitment.amount;
-        commitment.amount = 0;
+        // Update the redemption
+        uint256 redemptionAmount = redemption.amount;
+        redemption.amount = 0;
 
         // Withdraw the underlying asset from the deposit manager
         // This will burn the receipt tokens from this contract and send the released deposit tokens to the caller
         DEPOSIT_MANAGER.approve(
             address(DEPOSIT_MANAGER),
-            DEPOSIT_MANAGER.getReceiptTokenId(commitment.depositToken, commitment.depositPeriod),
-            commitmentAmount
+            DEPOSIT_MANAGER.getReceiptTokenId(
+                IERC20(redemption.depositToken),
+                redemption.depositPeriod
+            ),
+            redemptionAmount
         );
         DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
-                asset: commitment.depositToken,
-                depositPeriod: commitment.depositPeriod,
+                asset: IERC20(redemption.depositToken),
+                depositPeriod: redemption.depositPeriod,
                 depositor: address(this),
                 recipient: msg.sender,
-                amount: commitmentAmount,
+                amount: redemptionAmount,
                 isWrapped: false
             })
         );
 
         // Emit the redeemed event
-        emit Redeemed(
+        emit RedemptionFinished(
             msg.sender,
-            commitmentId_,
-            address(commitment.depositToken),
-            commitment.depositPeriod,
-            commitmentAmount
+            redemptionId_,
+            redemption.depositToken,
+            redemption.depositPeriod,
+            redemptionAmount
         );
     }
 

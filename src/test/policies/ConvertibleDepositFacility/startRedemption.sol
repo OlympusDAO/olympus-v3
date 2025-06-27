@@ -5,12 +5,12 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
-contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilityTest {
+contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFacilityTest {
     uint256 public constant COMMITMENT_AMOUNT = 1e18;
 
-    event Committed(
+    event RedemptionStarted(
         address indexed user,
-        uint16 indexed commitmentId,
+        uint16 indexed redemptionId,
         address indexed depositToken,
         uint8 depositPeriod,
         uint256 amount
@@ -18,7 +18,7 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
     function _assertCommitment(
         address user_,
-        uint16 commitmentId_,
+        uint16 redemptionId_,
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 receiptTokenBalanceBefore_,
@@ -26,30 +26,26 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         uint256 previousUserCommitmentAmount_,
         uint256 previousOtherUserCommitmentAmount_
     ) internal view {
-        // Get commitment
-        IDepositRedemptionVault.UserCommitment memory commitment = facility.getRedeemCommitment(
+        // Get redemption
+        IDepositRedemptionVault.UserRedemption memory redemption = facility.getUserRedemption(
             user_,
-            commitmentId_
+            redemptionId_
         );
 
-        // Assert commitment values
+        // Assert redemption values
+        assertEq(redemption.depositToken, address(depositToken_), "deposit token mismatch");
+        assertEq(redemption.depositPeriod, depositPeriod_, "deposit period mismatch");
+        assertEq(redemption.amount, amount_, "Amount mismatch");
         assertEq(
-            address(commitment.depositToken),
-            address(depositToken_),
-            "deposit token mismatch"
-        );
-        assertEq(commitment.depositPeriod, depositPeriod_, "deposit period mismatch");
-        assertEq(commitment.amount, amount_, "Amount mismatch");
-        assertEq(
-            commitment.redeemableAt,
+            redemption.redeemableAt,
             block.timestamp + depositPeriod_ * 30 days,
             "RedeemableAt mismatch"
         );
 
-        // Assert commitment count
+        // Assert redemption count
         assertEq(
-            facility.getRedeemCommitmentCount(user_),
-            commitmentId_ + 1,
+            facility.getUserRedemptionCount(user_),
+            redemptionId_ + 1,
             "Commitment count mismatch"
         );
 
@@ -76,7 +72,7 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(recipient);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
     }
 
     // when the deposit token is not supported by the deposit manager
@@ -88,7 +84,7 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(recipient);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS + 1, COMMITMENT_AMOUNT);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS + 1, COMMITMENT_AMOUNT);
     }
 
     // when the amount is 0
@@ -100,7 +96,7 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(recipient);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, 0);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, 0);
     }
 
     // when the caller has not approved spending of the receipt token by the contract
@@ -121,7 +117,7 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(recipient);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
     }
 
     // when the caller does not have enough receipt tokens
@@ -143,13 +139,13 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(recipient);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, 2e18);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, 2e18);
     }
 
-    // given there is an existing commitment for the caller
-    //  given the existing commitment is for the same receipt token
-    //   [X] it creates a new commitment for the caller
-    //   [X] it returns a commitment ID of 1
+    // given there is an existing redemption for the caller
+    //  given the existing redemption is for the same receipt token
+    //   [X] it creates a new redemption for the caller
+    //   [X] it returns a redemption ID of 1
 
     function test_existingCommitment_sameReceiptToken()
         public
@@ -165,21 +161,27 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Committed(recipient, 1, address(iReserveToken), PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        emit RedemptionStarted(
+            recipient,
+            1,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = facility.commitRedeem(
+        uint16 redemptionId = facility.startRedemption(
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT
         );
 
         // Assertions
-        assertEq(commitmentId, 1, "Commitment ID mismatch");
+        assertEq(redemptionId, 1, "Commitment ID mismatch");
         _assertCommitment(
             recipient,
-            commitmentId,
+            redemptionId,
             iReserveToken,
             PERIOD_MONTHS,
             2e18,
@@ -189,8 +191,8 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         );
     }
 
-    //  [X] it creates a new commitment for the caller
-    //  [X] it returns a commitment ID of 1
+    //  [X] it creates a new redemption for the caller
+    //  [X] it returns a redemption ID of 1
 
     function test_existingCommitment_differentReceiptToken()
         public
@@ -209,21 +211,27 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Committed(recipient, 1, address(iReserveTokenTwo), PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        emit RedemptionStarted(
+            recipient,
+            1,
+            address(iReserveTokenTwo),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = facility.commitRedeem(
+        uint16 redemptionId = facility.startRedemption(
             iReserveTokenTwo,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT
         );
 
         // Assertions
-        assertEq(commitmentId, 1, "Commitment ID mismatch");
+        assertEq(redemptionId, 1, "Commitment ID mismatch");
         _assertCommitment(
             recipient,
-            commitmentId,
+            redemptionId,
             iReserveTokenTwo,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
@@ -233,8 +241,8 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
         );
     }
 
-    // given there is an existing commitment for a different user
-    //  [X] it returns a commitment ID of 0
+    // given there is an existing redemption for a different user
+    //  [X] it returns a redemption ID of 0
 
     function test_existingCommitment_differentUser()
         public
@@ -250,21 +258,27 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Committed(recipientTwo, 0, address(iReserveToken), PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        emit RedemptionStarted(
+            recipientTwo,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
 
         // Call function
         vm.prank(recipientTwo);
-        uint16 commitmentId = facility.commitRedeem(
+        uint16 redemptionId = facility.startRedemption(
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT
         );
 
         // Assertions
-        assertEq(commitmentId, 0, "Commitment ID mismatch");
+        assertEq(redemptionId, 0, "Commitment ID mismatch");
         _assertCommitment(
             recipientTwo,
-            commitmentId,
+            redemptionId,
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
@@ -275,12 +289,12 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
     }
 
     // [X] it transfers the receipt tokens from the caller to the contract
-    // [X] it creates a new commitment for the caller
-    // [X] the new commitment has the same receipt token
-    // [X] the new commitment has an amount equal to the amount of receipt tokens committed
-    // [X] the new commitment has a redeemable timestamp of the current timestamp + the number of months in the receipt token's period * 30 days
-    // [X] it emits a Committed event
-    // [X] it returns a commitment ID of 0
+    // [X] it creates a new redemption for the caller
+    // [X] the new redemption has the same receipt token
+    // [X] the new redemption has an amount equal to the amount of receipt tokens for redemption
+    // [X] the new redemption has a redeemable timestamp of the current timestamp + the number of months in the receipt token's period * 30 days
+    // [X] it emits a RedemptionStarted event
+    // [X] it returns a redemption ID of 0
 
     function test_success(
         uint256 amount_
@@ -299,17 +313,17 @@ contract ConvertibleDepositFacilityCommitRedeemTest is ConvertibleDepositFacilit
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit Committed(recipient, 0, address(iReserveToken), PERIOD_MONTHS, amount_);
+        emit RedemptionStarted(recipient, 0, address(iReserveToken), PERIOD_MONTHS, amount_);
 
         // Call function
         vm.prank(recipient);
-        uint16 commitmentId = facility.commitRedeem(iReserveToken, PERIOD_MONTHS, amount_);
+        uint16 redemptionId = facility.startRedemption(iReserveToken, PERIOD_MONTHS, amount_);
 
         // Assertions
-        assertEq(commitmentId, 0, "Commitment ID mismatch");
+        assertEq(redemptionId, 0, "Commitment ID mismatch");
         _assertCommitment(
             recipient,
-            commitmentId,
+            redemptionId,
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,

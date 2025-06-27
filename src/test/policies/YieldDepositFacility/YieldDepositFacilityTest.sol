@@ -427,7 +427,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        yieldDepositFacility.commitRedeem(asset_, depositPeriod_, actualAmount);
+        yieldDepositFacility.startRedemption(asset_, depositPeriod_, actualAmount);
         _;
     }
 
@@ -443,17 +443,17 @@ contract YieldDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        yieldDepositFacility.commitRedeem(asset_, depositPeriod_, amount_);
+        yieldDepositFacility.startRedemption(asset_, depositPeriod_, amount_);
         _;
     }
 
-    modifier givenRedeemed(address user_, uint16 commitmentId_) {
+    modifier givenRedeemed(address user_, uint16 redemptionId_) {
         // Adjust the amount of yield in the vault to avoid a rounding error
         // NOTE: This is an issue with how DepositManager tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
         reserveToken.mint(address(vault), 1e18);
 
         vm.prank(user_);
-        yieldDepositFacility.redeem(commitmentId_);
+        yieldDepositFacility.finishRedemption(redemptionId_);
         _;
     }
 

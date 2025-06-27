@@ -390,13 +390,13 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, amount_);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
-    modifier givenRedeemed(address user_, uint16 commitmentId_) {
+    modifier givenRedeemed(address user_, uint16 redemptionId_) {
         vm.prank(user_);
-        facility.redeem(commitmentId_);
+        facility.finishRedemption(redemptionId_);
         _;
     }
 
