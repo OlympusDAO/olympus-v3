@@ -242,7 +242,7 @@ flowchart TD
 
 #### Auction Tuning
 
-As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameters on CDAuctioneer accordingly.
+As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameterson CDAuctioneer for the EmissionManager's configured reserve asset.
 
 ```mermaid
 sequenceDiagram
@@ -450,7 +450,7 @@ Other relevant functions are:
 
 TODO update this
 
-Each CDAuctioneer is deployed with a single, immutable bid token. The DepositManager module must have a CD token created for that bid token at the time of activating the policy.
+Each CDAuctioneer is deployed with a single, immutable bid token.
 
 ### CDClearinghouse (Policy)
 

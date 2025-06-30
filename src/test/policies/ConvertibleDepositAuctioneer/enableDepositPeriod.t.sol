@@ -40,6 +40,18 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         _assertPreviousTick(0, 0, 0, uint48(block.timestamp));
     }
 
+    // when the deposit period is zero
+    //  [X] it reverts
+
+    function test_whenDepositPeriodIsZero_reverts() public {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector, "deposit period"));
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(0);
+    }
+
     // given the deposit period is already enabled
     //  [X] it reverts
 
