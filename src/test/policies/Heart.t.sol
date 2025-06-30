@@ -125,11 +125,7 @@ contract HeartTest is Test {
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
-                IOperator(address(operator)),
                 IDistributor(address(distributor)),
-                IYieldRepo(address(yieldRepo)),
-                IReserveMigrator(address(reserveMigrator)),
-                IEmissionManager(address(emissionManager)),
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -157,6 +153,16 @@ contract HeartTest is Test {
             rolesAdmin.grantRole("heart_admin", policy);
         }
 
+        // Add periodic tasks
+        heart.addPeriodicTaskAtIndex(
+            address(reserveMigrator),
+            IReserveMigrator.migrate.selector,
+            0
+        );
+        heart.addPeriodicTaskAtIndex(address(operator), IOperator.operate.selector, 1);
+        heart.addPeriodicTaskAtIndex(address(yieldRepo), IYieldRepo.endEpoch.selector, 2);
+        heart.addPeriodicTaskAtIndex(address(emissionManager), bytes4(0), 3);
+
         // Do initial beat
         heart.beat();
     }
@@ -164,11 +170,10 @@ contract HeartTest is Test {
     // ======== SETUP DEPENDENCIES ======= //
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](4);
+        Keycode[] memory expectedDeps = new Keycode[](3);
         expectedDeps[0] = toKeycode("PRICE");
         expectedDeps[1] = toKeycode("ROLES");
         expectedDeps[2] = toKeycode("MINTR");
-        expectedDeps[3] = toKeycode("TRSRY");
 
         Keycode[] memory deps = heart.configureDependencies();
         // Check: configured dependencies storage
@@ -176,7 +181,6 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
-        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
     function testRevert_configureDependencies_invalidFrequency() public {
@@ -188,11 +192,7 @@ contract HeartTest is Test {
         // Deploy heart
         heart = new OlympusHeart(
             kernel,
-            IOperator(address(operator)),
             IDistributor(address(distributor)),
-            IYieldRepo(address(yieldRepo)),
-            IReserveMigrator(address(reserveMigrator)),
-            IEmissionManager(address(emissionManager)),
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
         );
@@ -230,7 +230,8 @@ contract HeartTest is Test {
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if PRICE or operator revert
     //     [X] reward auction functions correctly based on time since beat available
-    //     [ ] sweep yield from CDFacility into TRSRY
+    //     [ ] periodic tasks are executed
+    //     [ ] reverts if periodic task reverts
     // [X] Mints rewardToken correctly
 
     function testCorrectness_beat() public {
@@ -395,9 +396,9 @@ contract HeartTest is Test {
     // DONE
     // [X] resetBeat
     // [X] activate and deactivate
-    // [X] setOperator
     // [X] setRewardAuctionParams
     // [X] cannot call admin functions without permissions
+    // [ ] setDistributor
 
     function testCorrectness_resetBeat() public {
         // Try to beat the heart and expect the revert since not enough time has passed
@@ -437,15 +438,6 @@ contract HeartTest is Test {
         // Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
         assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
-    }
-
-    function testCorrectness_setOperator(address newOperator) public {
-        // Set the operator using the provided address
-        vm.prank(policy);
-        heart.setOperator(newOperator);
-
-        // Check that the operator has been updated
-        assertEq(address(heart.operator()), newOperator);
     }
 
     function testCorrectness_setRewardAuctionParams() public {

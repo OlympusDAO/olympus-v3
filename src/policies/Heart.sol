@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // External libraries
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
@@ -10,18 +10,16 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Interfaces
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
-import {IOperator} from "src/policies/interfaces/IOperator.sol";
-import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "src/policies/interfaces/IHeart.sol";
-import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
-import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
 
 // Modules
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+
+// Bophades
+import {BasePeriodicTaskManager} from "src/bases/BasePeriodicTaskManager.sol";
 
 // Kernel
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
@@ -33,8 +31,12 @@ import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 ///         market operations use up to date information.
 ///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward.
 ///         Rewards are issued in OHM.
-contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
+contract OlympusHeart is IHeart, Policy, ReentrancyGuard, BasePeriodicTaskManager {
     using TransferHelper for ERC20;
+
+    // [ ] Use PolicyEnabler
+    // [ ] Use PolicyAdmin
+    // [ ] Migrate tasks to IPeriodicTask
 
     // =========  STATE ========= //
 
@@ -53,14 +55,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Modules
     PRICEv1 internal PRICE;
     MINTRv1 internal MINTR;
-    TRSRYv1 internal TRSRY;
 
     // Policies
-    IOperator public operator;
     IDistributor public distributor;
-    IYieldRepo public yieldRepo;
-    IReserveMigrator public reserveMigrator;
-    IEmissionManager public emissionManager;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -70,19 +67,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     ///      Therefore, manually ensure that the value is valid when deploying the contract.
     constructor(
         Kernel kernel_,
-        IOperator operator_,
         IDistributor distributor_,
-        IYieldRepo yieldRepo_,
-        IReserveMigrator reserveMigrator_,
-        IEmissionManager emissionManager_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
-        operator = operator_;
         distributor = distributor_;
-        yieldRepo = yieldRepo_;
-        reserveMigrator = reserveMigrator_;
-        emissionManager = emissionManager_;
 
         active = true;
         auctionDuration = auctionDuration_;
@@ -93,26 +82,23 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
-        dependencies[3] = toKeycode("TRSRY");
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
 
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1, 1]);
-        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 1 || ROLES_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
 
         // Sync beat with distributor if called from kernel
@@ -155,22 +141,26 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         // Update the moving average on the Price module
+        // This cannot be a periodic task, because it requires a policy with permission to call the updateMovingAverage function
         PRICE.updateMovingAverage();
 
-        // Migrate reserves, if necessary
-        reserveMigrator.migrate();
+        // // Migrate reserves, if necessary
+        // reserveMigrator.migrate();
 
-        // Trigger price range update and market operations
-        operator.operate();
+        // // Trigger price range update and market operations
+        // operator.operate();
 
-        // Trigger protocol loop
-        yieldRepo.endEpoch();
+        // // Trigger protocol loop
+        // yieldRepo.endEpoch();
 
-        // Trigger rebase
-        distributor.triggerRebase();
+        // // Trigger rebase
+        // distributor.triggerRebase();
 
-        // Trigger emission manager
-        emissionManager.execute();
+        // // Trigger emission manager
+        // emissionManager.execute();
+
+        // Execute periodic tasks
+        _executePeriodicTasks();
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
@@ -220,29 +210,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function setOperator(address operator_) external onlyRole("heart_admin") {
-        operator = IOperator(operator_);
-    }
-
-    /// @inheritdoc IHeart
     function setDistributor(address distributor_) external onlyRole("heart_admin") {
         distributor = IDistributor(distributor_);
         _syncBeatWithDistributor();
-    }
-
-    /// @inheritdoc IHeart
-    function setYieldRepo(address yieldRepo_) external onlyRole("heart_admin") {
-        yieldRepo = IYieldRepo(yieldRepo_);
-    }
-
-    /// @inheritdoc IHeart
-    function setReserveMigrator(address reserveMigrator_) external onlyRole("heart_admin") {
-        reserveMigrator = IReserveMigrator(reserveMigrator_);
-    }
-
-    /// @inheritdoc IHeart
-    function setEmissionManager(address emissionManager_) external onlyRole("heart_admin") {
-        emissionManager = IEmissionManager(emissionManager_);
     }
 
     modifier notWhileBeatAvailable() {

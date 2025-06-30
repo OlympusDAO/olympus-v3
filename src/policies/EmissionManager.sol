@@ -13,6 +13,7 @@ import {IgOHM} from "interfaces/IgOHM.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {IGenericClearinghouse} from "policies/interfaces/IGenericClearinghouse.sol";
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -24,7 +25,7 @@ import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // solhint-disable max-states-count
-contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
+contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabler {
     using FullMath for uint256;
     using TransferHelper for ERC20;
 
@@ -172,9 +173,9 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
         return (major, minor);
     }
 
-    // ========== HEARTBEAT ========== //
+    // ========== PERIODIC TASK ========== //
 
-    /// @inheritdoc IEmissionManager
+    /// @inheritdoc IPeriodicTask
     function execute() external onlyRole(ROLE_HEART) {
         // Don't do anything if disabled
         if (!isEnabled) return;
@@ -563,5 +564,14 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
     /// @return minPrice for CD auction
     function getMinPriceFor(uint256 price) public view returns (uint256) {
         return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IPeriodicTask).interfaceId ||
+            interfaceId == type(IEmissionManager).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }
