@@ -81,15 +81,6 @@ interface IConvertibleDepositAuctioneer {
     /// @param  reason          Reason for invalid parameters
     error CDAuctioneer_InvalidParams(string reason);
 
-    /// @notice Emitted when the contract is not active
-    error CDAuctioneer_NotActive();
-
-    /// @notice Emitted when the state is invalid
-    error CDAuctioneer_InvalidState();
-
-    /// @notice Emitted when the contract is not initialized
-    error CDAuctioneer_NotInitialized();
-
     /// @notice Emitted when the deposit period is already enabled for this asset
     error CDAuctioneer_DepositPeriodAlreadyEnabled(address depositAsset, uint8 depositPeriod);
 
