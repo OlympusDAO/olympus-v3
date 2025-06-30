@@ -63,12 +63,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
     // Events
     event Enabled();
     event Disabled();
-    event TickStepUpdated(uint24 newTickStep);
-    event TimeToExpiryUpdated(uint48 newTimeToExpiry);
-    event RedemptionPeriodUpdated(uint48 newRedemptionPeriod);
-    event AuctionParametersUpdated(uint256 newTarget, uint256 newTickSize, uint256 newMinPrice);
-    event AuctionTrackingPeriodUpdated(uint8 newAuctionTrackingPeriod);
-    event AuctionResult(uint256 ohmConvertible, uint256 target, uint8 periodIndex);
+    event TickStepUpdated(address indexed depositAsset, uint24 newTickStep);
+    event AuctionParametersUpdated(
+        address indexed depositAsset,
+        uint256 newTarget,
+        uint256 newTickSize,
+        uint256 newMinPrice
+    );
+    event AuctionTrackingPeriodUpdated(
+        address indexed depositAsset,
+        uint8 newAuctionTrackingPeriod
+    );
+    event AuctionResult(
+        address indexed depositAsset,
+        uint256 ohmConvertible,
+        uint256 target,
+        uint8 periodIndex
+    );
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -104,7 +115,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         );
         depositManager = new DepositManager(address(kernel));
         facility = new CDFacility(address(kernel), address(depositManager));
-        auctioneer = new CDAuctioneer(address(kernel), address(facility));
+        auctioneer = new CDAuctioneer(address(kernel), address(facility), address(iReserveToken));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -194,10 +205,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 tickSize_,
         uint48 lastUpdate_
     ) internal view {
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
 
         assertEq(tick.capacity, capacity_, "previous tick capacity");
         assertEq(tick.price, price_, "previous tick price");
@@ -259,34 +267,15 @@ contract ConvertibleDepositAuctioneerTest is Test {
         assertEq(auctioneer.getAuctionResultsNextIndex(), nextIndex_, "next index");
     }
 
-    function _assertDepositAssetAndPeriodEnabled(
-        IERC20 depositAsset_,
+    function _assertPeriodEnabled(
         uint8 depositPeriod_,
-        uint256 otherDepositAssetCount_,
-        uint256 otherDepositPeriodCount_,
-        uint256 totalDepositAssetAndPeriodCount_
+        uint256 otherDepositPeriodCount_
     ) internal view {
-        // Check the deposit asset is enabled
-        assertEq(
-            auctioneer.isDepositEnabled(depositAsset_, depositPeriod_),
-            true,
-            "deposit asset and period enabled"
-        );
-
-        // Check that the deposit asset is listed
-        IERC20[] memory depositAssets = auctioneer.getDepositAssets();
-        assertEq(depositAssets.length, otherDepositAssetCount_ + 1, "deposit assets length");
-        bool depositAssetFound = false;
-        for (uint256 i = 0; i < depositAssets.length; i++) {
-            if (depositAssets[i] == depositAsset_) {
-                depositAssetFound = true;
-                break;
-            }
-        }
-        assertEq(depositAssetFound, true, "deposit asset found");
+        // Check the deposit period is enabled
+        assertEq(auctioneer.isDepositPeriodEnabled(depositPeriod_), true, "deposit period enabled");
 
         // Check that the deposit period is listed
-        uint8[] memory depositPeriods = auctioneer.getDepositPeriods(depositAsset_);
+        uint8[] memory depositPeriods = auctioneer.getDepositPeriods();
         assertEq(depositPeriods.length, otherDepositPeriodCount_ + 1, "deposit periods length");
         bool depositPeriodFound = false;
         for (uint256 i = 0; i < depositPeriods.length; i++) {
@@ -299,9 +288,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
         // Check that the total is correct
         assertEq(
-            auctioneer.getDepositAssetsAndPeriodsCount(),
-            totalDepositAssetAndPeriodCount_,
-            "deposit assets and periods count"
+            auctioneer.getDepositPeriodsCount(),
+            otherDepositPeriodCount_ + 1,
+            "deposit periods count"
         );
     }
 
@@ -416,7 +405,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
     function _bid(address owner_, uint256 deposit_) internal {
         vm.prank(owner_);
-        auctioneer.bid(iReserveToken, PERIOD_MONTHS, deposit_, false, false);
+        auctioneer.bid(PERIOD_MONTHS, deposit_, false, false);
     }
 
     function _mintAndBid(address owner_, uint256 deposit_) internal {
@@ -446,15 +435,15 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 
-    modifier givenDepositAssetAndPeriodEnabled(IERC20 depositAsset_, uint8 depositPeriod_) {
+    modifier givenDepositPeriodEnabled(uint8 depositPeriod_) {
         vm.prank(admin);
-        auctioneer.enableDepositPeriod(depositAsset_, depositPeriod_);
+        auctioneer.enableDepositPeriod(depositPeriod_);
         _;
     }
 
-    modifier givenDepositAssetAndPeriodDisabled(IERC20 depositAsset_, uint8 depositPeriod_) {
+    modifier givenDepositPeriodDisabled(uint8 depositPeriod_) {
         vm.prank(admin);
-        auctioneer.disableDepositPeriod(depositAsset_, depositPeriod_);
+        auctioneer.disableDepositPeriod(depositPeriod_);
         _;
     }
 }

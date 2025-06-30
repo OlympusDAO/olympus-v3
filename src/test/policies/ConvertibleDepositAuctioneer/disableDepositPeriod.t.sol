@@ -4,7 +4,7 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 
 contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepositAuctioneerTest {
-    event DepositPeriodDisabled(address depositAsset, uint8 depositPeriod);
+    event DepositPeriodDisabled(address indexed depositAsset, uint8 depositPeriod);
 
     // when the caller does not have the "admin" or "manager" role
     //  [X] it reverts
@@ -18,19 +18,19 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
 
         // Call function
         vm.prank(caller_);
-        auctioneer.disableDepositPeriod(iReserveToken, PERIOD_MONTHS);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
     }
 
-    // given the deposit asset and period are not enabled
+    // given the deposit period is not enabled
     //  [X] it reverts
 
-    function test_givenDepositAssetAndPeriodNotEnabled_reverts() public givenEnabled {
+    function test_givenDepositPeriodNotEnabled_reverts() public givenEnabled {
         // Expect revert
         _expectDepositAssetAndPeriodNotEnabledRevert(iReserveToken, PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
-        auctioneer.disableDepositPeriod(iReserveToken, PERIOD_MONTHS);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
     }
 
     // given there are no other deposit periods for the deposit asset
@@ -43,7 +43,7 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
     function test_givenNoOtherDepositPeriods()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -51,37 +51,31 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
 
         // Call function
         vm.prank(admin);
-        auctioneer.disableDepositPeriod(iReserveToken, PERIOD_MONTHS);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Assert state
         assertEq(
-            auctioneer.isDepositEnabled(iReserveToken, PERIOD_MONTHS),
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
             false,
-            "deposit asset and period disabled"
+            "deposit period disabled"
         );
-        assertEq(auctioneer.getDepositAssets().length, 0, "deposit assets length");
-        assertEq(auctioneer.getDepositPeriods(iReserveToken).length, 0, "deposit periods length");
-        assertEq(
-            auctioneer.getDepositAssetsAndPeriodsCount(),
-            0,
-            "deposit assets and periods count"
-        );
+        assertEq(auctioneer.getDepositPeriods().length, 0, "deposit periods length");
+        assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count");
 
         // Check the tick is removed
         _assertPreviousTick(0, 0, TICK_SIZE, 0);
     }
 
-    // [X] it removes the deposit period from the deposit asset's periods array
-    // [X] it does not remove the deposit asset from the deposit assets array
-    // [X] it disables the deposit asset and period
+    // [X] it removes the deposit period from the deposit periods array
+    // [X] it disables the deposit period
     // [X] the tick is removed
     // [X] an event is emitted
 
     function test_givenOtherDepositPeriods()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
     {
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -89,10 +83,10 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
 
         // Call function
         vm.prank(admin);
-        auctioneer.disableDepositPeriod(iReserveToken, PERIOD_MONTHS);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Assert state
-        _assertDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1, 0, 0, 1);
+        _assertPeriodEnabled(PERIOD_MONTHS + 1, 0);
 
         // Check the tick is removed
         _assertPreviousTick(0, 0, TICK_SIZE, 0);

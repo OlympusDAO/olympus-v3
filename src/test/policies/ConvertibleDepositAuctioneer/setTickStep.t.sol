@@ -64,7 +64,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit TickStepUpdated(tickStep);
+        emit TickStepUpdated(address(iReserveToken), tickStep);
 
         // Call function
         vm.prank(admin);
@@ -87,7 +87,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit TickStepUpdated(tickStep);
+        emit TickStepUpdated(address(iReserveToken), tickStep);
 
         // Call function
         vm.prank(admin);

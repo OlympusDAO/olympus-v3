@@ -102,7 +102,7 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
     function test_previousTrackingPeriodLess() public givenEnabled {
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit AuctionTrackingPeriodUpdated(AUCTION_TRACKING_PERIOD + 1);
+        emit AuctionTrackingPeriodUpdated(address(iReserveToken), AUCTION_TRACKING_PERIOD + 1);
 
         // Call function
         vm.prank(admin);
@@ -183,7 +183,7 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
     function test_previousAuctionResults()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(1e18)
     {
         // Warp to the next day and trigger storage of the previous day's results

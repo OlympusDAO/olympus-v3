@@ -13,7 +13,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         _expectNotEnabledRevert();
 
         // Call function
-        auctioneer.getCurrentTick(iReserveToken, PERIOD_MONTHS);
+        auctioneer.getCurrentTick(PERIOD_MONTHS);
     }
 
     // given the deposit asset and period are not enabled
@@ -24,7 +24,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         _expectDepositAssetAndPeriodNotEnabledRevert(iReserveToken, PERIOD_MONTHS);
 
         // Call function
-        auctioneer.getCurrentTick(iReserveToken, PERIOD_MONTHS);
+        auctioneer.getCurrentTick(PERIOD_MONTHS);
     }
 
     // given a bid has never been received and the tick price is at the minimum price
@@ -34,17 +34,14 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_fullCapacity_sameTime(
         uint48 secondsPassed_
-    ) public givenEnabled givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS) {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 0, 86400 - 1));
 
         // Warp to change the block timestamp
         vm.warp(block.timestamp + secondsPassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         uint256 expectedTickPrice = 15e18;
         uint256 expectedTickCapacity = 10e9;
@@ -59,7 +56,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_fullCapacity(
         uint48 secondsPassed_
-    ) public givenEnabled givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS) {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
 
         // Warp to change the block timestamp
@@ -81,10 +78,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         uint256 expectedTickCapacity = 10e9;
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert current tick
         assertEq(tick.capacity, expectedTickCapacity, "capacity");
@@ -100,7 +94,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_newCapacityEqualToTickSize_dayTargetMet_nextDay()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(378861111101700000000)
     {
         // 150e18 + 165e18 + 63861111101700000000 = 378861111101700000000
@@ -125,10 +119,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
@@ -142,7 +133,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_newCapacityEqualToTickSize_dayTargetMet()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(360375e15)
     {
         // Bid size of 360375e15 results in:
@@ -162,10 +153,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 5e9, "new tick capacity");
@@ -178,7 +166,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_newCapacityEqualToTickSize()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(75e18)
     {
         // Min price is 15e18
@@ -200,11 +188,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         );
 
         // Assert tick capacity
-        assertEq(
-            auctioneer.getCurrentTick(iReserveToken, PERIOD_MONTHS).capacity,
-            5e9,
-            "previous tick capacity"
-        );
+        assertEq(auctioneer.getCurrentTick(PERIOD_MONTHS).capacity, 5e9, "previous tick capacity");
 
         // Assert that the time passed will result in the correct capacity
         uint48 timePassed = 21600;
@@ -218,10 +202,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
@@ -235,7 +216,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_newCapacityLessThanTickSize()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(90e18)
     {
         // Bid size of 90e18 results in convertible amount of 6e9
@@ -249,10 +230,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 9e9, "new tick capacity");
@@ -268,7 +246,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         public
         givenEnabled
         givenTickStep(100e2)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(45e18)
     {
         // Bid size of 45e18 results in convertible amount of 3e9
@@ -284,10 +262,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 2e9, "new tick capacity");
@@ -304,7 +279,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_tickPriceAboveMinimum_newPriceBelowMinimum_dayTargetMet_nextDay()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -336,10 +311,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
@@ -356,7 +328,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_tickPriceAboveMinimum_newPriceBelowMinimum()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -382,10 +354,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
@@ -400,7 +369,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet_nextDay()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -426,10 +395,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 2692072238, "new tick capacity");
@@ -443,7 +409,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -464,10 +430,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 4173553720, "new tick capacity");
@@ -480,7 +443,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -501,10 +464,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 227272728, "new tick capacity");
@@ -514,7 +474,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_newCapacityGreaterThanTickSize()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(45e18)
     {
         // Bid size of 45e18 results in convertible amount of 3e9
@@ -531,10 +491,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
@@ -545,7 +502,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         public
         givenEnabled
         givenTickStep(100e2)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(75e18)
     {
         // Bid size of 75e18 results in convertible amount of 5e9
@@ -560,10 +517,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 75e8, "new tick capacity");
@@ -574,7 +528,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         public
         givenEnabled
         givenTickStep(100e2)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(75e18)
     {
         // Bid size of 75e18 results in convertible amount of 5e9
@@ -589,10 +543,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick capacity
         assertEq(tick.capacity, 10e9, "new tick capacity");
@@ -606,8 +557,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_givenOtherDepositAssetAndPeriodEnabled_otherTickCapacityDepleted()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -621,7 +572,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
             PERIOD_MONTHS + 1
         );
 
@@ -636,8 +586,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_givenOtherDepositAssetAndPeriodEnabled_tickCapacityDepleted()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -659,10 +609,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         vm.warp(block.timestamp + timePassed);
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
-            PERIOD_MONTHS
-        );
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert tick
         assertEq(tick.capacity, 6477272728, "new tick capacity");
@@ -675,8 +622,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_givenOtherDepositAssetAndPeriodEnabled_otherDepositAssetAndPeriodDayTargetMet()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
         givenRecipientHasBid(360375e15)
     {
         // Bid size of 360375e15 results in:
@@ -690,7 +637,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            iReserveToken,
             PERIOD_MONTHS + 1
         );
 

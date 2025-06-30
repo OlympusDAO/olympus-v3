@@ -122,7 +122,9 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
         // Max approve sReserve contract for reserve for deposits
         reserve.safeApprove(address(sReserve), type(uint256).max);
 
-        // TODO does reserve need to be the same as the CDAuctioneer bid token?
+        // Validate that the CDAuctioneer is configured for the reserve asset
+        if (address(cdAuctioneer.getDepositAsset()) != address(reserve_))
+            revert InvalidParam("CD Auctioneer not configured for reserve");
 
         // PolicyEnabler disables the policy by default
     }
