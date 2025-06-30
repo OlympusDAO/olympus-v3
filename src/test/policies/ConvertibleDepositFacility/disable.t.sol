@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 contract ConvertibleDepositFacilityDisableTest is ConvertibleDepositFacilityTest {
@@ -24,7 +24,7 @@ contract ConvertibleDepositFacilityDisableTest is ConvertibleDepositFacilityTest
 
     function test_contractInactive_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
 
         // Call function
         vm.prank(emergency);

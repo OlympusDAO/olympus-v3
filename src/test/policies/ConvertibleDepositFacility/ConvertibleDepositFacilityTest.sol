@@ -18,7 +18,7 @@ import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPos
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
@@ -390,13 +390,13 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        facility.commitRedeem(iReserveToken, PERIOD_MONTHS, amount_);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
-    modifier givenRedeemed(address user_, uint16 commitmentId_) {
+    modifier givenRedeemed(address user_, uint16 redemptionId_) {
         vm.prank(user_);
-        facility.redeem(commitmentId_);
+        facility.finishRedemption(redemptionId_);
         _;
     }
 
@@ -492,7 +492,7 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {

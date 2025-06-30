@@ -201,7 +201,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
     function test_contractDisabled()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(1e18)
         givenDisabled
     {
@@ -213,13 +213,13 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
 
         // Expect events
         vm.expectEmit(true, true, true, true);
-        emit AuctionParametersUpdated(TARGET, TICK_SIZE, MIN_PRICE);
+        emit AuctionParametersUpdated(address(iReserveToken), TARGET, TICK_SIZE, MIN_PRICE);
 
         vm.expectEmit(true, true, true, true);
-        emit TickStepUpdated(TICK_STEP);
+        emit TickStepUpdated(address(iReserveToken), TICK_STEP);
 
         vm.expectEmit(true, true, true, true);
-        emit AuctionTrackingPeriodUpdated(AUCTION_TRACKING_PERIOD);
+        emit AuctionTrackingPeriodUpdated(address(iReserveToken), AUCTION_TRACKING_PERIOD);
 
         vm.expectEmit(true, true, true, true);
         emit Enabled();

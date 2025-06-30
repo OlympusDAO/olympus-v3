@@ -289,7 +289,7 @@ contract EmissionManagerTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             // Deploy the mock CD auctioneer
-            cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel);
+            cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
 
             // Deploy the emission manager
             emissionManager = new EmissionManager(

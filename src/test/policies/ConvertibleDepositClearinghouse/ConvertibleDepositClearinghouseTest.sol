@@ -22,7 +22,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CDClearinghouse} from "src/policies/CDClearinghouse.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
@@ -168,11 +168,11 @@ contract ConvertibleDepositClearinghouseTest is Test {
     }
 
     function _expectNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectNotDisabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotDisabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {

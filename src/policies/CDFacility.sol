@@ -380,4 +380,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     function convertedToken() external view returns (address) {
         return address(MINTR.ohm());
     }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IConvertibleDepositFacility).interfaceId ||
+            super.supportsInterface(interfaceId);
+    }
 }

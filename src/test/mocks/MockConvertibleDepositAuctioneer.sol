@@ -11,11 +11,15 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     uint48 internal _initTimestamp;
     int256[] internal _auctionResults;
 
+    IERC20 internal immutable _depositAsset;
+
     uint256 public target;
     uint256 public tickSize;
     uint256 public minPrice;
 
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_, address depositAsset_) Policy(kernel_) {
+        _depositAsset = IERC20(depositAsset_);
+    }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
@@ -34,7 +38,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     {}
 
     function bid(
-        IERC20,
         uint8,
         uint256 depositAmount_,
         bool,
@@ -44,16 +47,15 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     }
 
     function previewBid(
-        IERC20,
         uint8,
         uint256 depositAmount_
     ) external view override returns (uint256 ohmOut, address depositSpender) {
         return (depositAmount_, address(this));
     }
 
-    function getPreviousTick(IERC20, uint8) external view override returns (Tick memory tick) {}
+    function getPreviousTick(uint8) external view override returns (Tick memory tick) {}
 
-    function getCurrentTick(IERC20, uint8) external view override returns (Tick memory tick) {}
+    function getCurrentTick(uint8) external view override returns (Tick memory tick) {}
 
     function getCurrentTickSize() external view override returns (uint256) {
         return tickSize;
@@ -96,20 +98,17 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function setAuctionTrackingPeriod(uint8 newPeriod) external override {}
 
-    function enableDepositPeriod(IERC20 depositAsset_, uint8 depositPeriod_) external override {}
+    function enableDepositPeriod(uint8 depositPeriod_) external override {}
 
-    function disableDepositPeriod(IERC20 depositAsset_, uint8 depositPeriod_) external override {}
+    function disableDepositPeriod(uint8 depositPeriod_) external override {}
 
-    function getDepositAssets() external view override returns (IERC20[] memory) {}
+    function getDepositAsset() external view override returns (IERC20) {
+        return _depositAsset;
+    }
 
-    function getDepositPeriods(
-        IERC20 depositAsset_
-    ) external view override returns (uint8[] memory) {}
+    function getDepositPeriods() external view override returns (uint8[] memory) {}
 
-    function isDepositEnabled(
-        IERC20 depositAsset_,
-        uint8 depositPeriod_
-    ) external view override returns (bool) {}
+    function isDepositPeriodEnabled(uint8 depositPeriod_) external view override returns (bool) {}
 
-    function getDepositAssetsAndPeriodsCount() external view override returns (uint256) {}
+    function getDepositPeriodsCount() external view override returns (uint256) {}
 }

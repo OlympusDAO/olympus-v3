@@ -17,7 +17,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
 import {DepositManager} from "src/policies/DepositManager.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
@@ -427,7 +427,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        yieldDepositFacility.commitRedeem(asset_, depositPeriod_, actualAmount);
+        yieldDepositFacility.startRedemption(asset_, depositPeriod_, actualAmount);
         _;
     }
 
@@ -443,17 +443,17 @@ contract YieldDepositFacilityTest is Test {
 
         // Commit
         vm.prank(user_);
-        yieldDepositFacility.commitRedeem(asset_, depositPeriod_, amount_);
+        yieldDepositFacility.startRedemption(asset_, depositPeriod_, amount_);
         _;
     }
 
-    modifier givenRedeemed(address user_, uint16 commitmentId_) {
+    modifier givenRedeemed(address user_, uint16 redemptionId_) {
         // Adjust the amount of yield in the vault to avoid a rounding error
         // NOTE: This is an issue with how DepositManager tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
         reserveToken.mint(address(vault), 1e18);
 
         vm.prank(user_);
-        yieldDepositFacility.redeem(commitmentId_);
+        yieldDepositFacility.finishRedemption(redemptionId_);
         _;
     }
 
@@ -568,7 +568,7 @@ contract YieldDepositFacilityTest is Test {
     // ========== REVERT HELPERS ========== //
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {

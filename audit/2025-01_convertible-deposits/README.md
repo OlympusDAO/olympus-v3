@@ -106,14 +106,14 @@ The deposit manager provides lifecycle management for deposits and receipt token
 
 #### Redemption
 
-Receipt token holders can redeem the underlying token quantity in full by depositing (committing) their receipt tokens to a operator (e.g. CDFacility or YieldDepositFacility).
+Receipt token holders can redeem the underlying token quantity in full by depositing their receipt tokens to a operator (e.g. CDFacility or YieldDepositFacility).
 
-- Receipt tokens can be committed towards redemption without a deposit position
+- Receipt tokens can be deposited towards redemption (`startRedemption()`) without a deposit position
     - As a position is not required and receipt tokens are fungible, receipt tokens created by one operator (e.g. CDFacility) can be redeemed through another (e.g. YieldDepositFacility). If the deposits for one of the operators were to be fully redeemed, it may seem to the depositor that their deposit is no longer available, however it would be redeemable through other operators.
 - The receipt tokens must remain in the vault for the deposit period in order to be redeemed.
 - A user can borrow against the receipt tokens while they are in the vault.
-- Withdrawing (uncommitting) receipt tokens from the vault will reset the counter.
-- After the receipt tokens have been in the vault for the deposit period, they can be redeemed 1:1 for the underlying tokens.
+- Withdrawing receipt tokens (`cancelRedemption()`) from the vault will reset the counter.
+- After the receipt tokens have been in the vault for the deposit period, they can be redeemed 1:1 for the underlying tokens (`finishRedemption()`).
 
 #### Handling of Deposited Funds
 
@@ -242,7 +242,7 @@ flowchart TD
 
 #### Auction Tuning
 
-As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameters on CDAuctioneer accordingly.
+As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameterson CDAuctioneer for the EmissionManager's configured reserve asset.
 
 ```mermaid
 sequenceDiagram
@@ -346,9 +346,9 @@ sequenceDiagram
 
 #### Redeem Deposit
 
-##### Redeem Deposit - Commit
+##### Redeem Deposit - Start
 
-A depositor can redeem the deposit amount by committing their receipt tokens into an operator contract. The deposit will be redeemable after the deposit period has passed.
+A depositor can start the process to redeem their deposit amount by providing the receipt tokens to an operator contract. The underlying deposit amount will be redeemable after the deposit period has passed.
 
 ```mermaid
 sequenceDiagram
@@ -356,15 +356,15 @@ sequenceDiagram
     participant CDFacility
     participant DepositManager
 
-    caller->>CDFacility: commitRedeem(amount)
+    caller->>CDFacility: startRedemption(amount)
     CDFacility->>DepositManager: transferFrom()
     caller-->>CDFacility: receipt tokens
-    CDFacility-->>caller: commitment id
+    CDFacility-->>caller: redemption id
 ```
 
-##### Redeem Deposit - Uncommit
+##### Redeem Deposit - Cancel
 
-After committing receipt tokens, the depositor can uncommit and withdraw the receipt tokens. This will reset the timer for any subsequent commitments.
+After starting redemption, the depositor can cancel and withdraw the receipt tokens. This will reset the timer for any subsequent redemptions.
 
 ```mermaid
 sequenceDiagram
@@ -372,14 +372,14 @@ sequenceDiagram
     participant CDFacility
     participant DepositManager
 
-    caller->>CDFacility: uncommitRedeem(id, amount)
+    caller->>CDFacility: cancelRedemption(id, amount)
     CDFacility->>DepositManager: transfer()
     CDFacility-->>caller: receipt tokens
 ```
 
-##### Redeem Deposit - Redeem
+##### Redeem Deposit - Finish
 
-Once the receipt token's deposit period has passed, the depositor can complete the redemption.
+Once the receipt token's deposit period has passed, the depositor can finish the redemption.
 
 ```mermaid
 sequenceDiagram
@@ -387,7 +387,7 @@ sequenceDiagram
     participant CDFacility
     participant DepositManager
 
-    caller->>CDFacility: redeem(id)
+    caller->>CDFacility: finishRedemption(id)
     CDFacility->>DepositManager: withdraw()
     CDFacility-->>DepositManager: receipt tokens
     DepositManager-->>caller: deposit tokens
@@ -395,7 +395,7 @@ sequenceDiagram
 
 #### Borrowing Against Receipt Tokens
 
-Depositors that have committed to redeeming their deposit can borrow against that deposit.
+Depositors that have started redemption of their deposit can borrow against that deposit.
 
 ```mermaid
 sequenceDiagram
@@ -479,7 +479,7 @@ Other relevant functions are:
 
 TODO update this
 
-Each CDAuctioneer is deployed with a single, immutable bid token. The DepositManager module must have a CD token created for that bid token at the time of activating the policy.
+Each CDAuctioneer is deployed with a single, immutable bid token.
 
 ### CDClearinghouse (Policy)
 
@@ -505,7 +505,7 @@ Receipt token holders can perform the following actions:
 
 - `convert()`: convert their deposit position into OHM before conversion expiry.
 - `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a DEPOS position ID.
-- `redeem()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
+- `finishRedemption()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
 
 ### YieldRepurchaseFacility (Policy)
 

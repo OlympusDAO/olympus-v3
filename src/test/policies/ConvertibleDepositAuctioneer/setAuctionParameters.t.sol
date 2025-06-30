@@ -106,15 +106,15 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_contractInactive()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(1e18)
         givenDisabled
     {
         uint256 lastConvertible = auctioneer.getDayState().convertible;
         int256[] memory lastAuctionResults = auctioneer.getAuctionResults();
         uint8 lastAuctionResultsIndex = auctioneer.getAuctionResultsNextIndex();
-        uint256 lastCapacity = auctioneer.getPreviousTick(iReserveToken, PERIOD_MONTHS).capacity;
-        uint256 lastPrice = auctioneer.getPreviousTick(iReserveToken, PERIOD_MONTHS).price;
+        uint256 lastCapacity = auctioneer.getPreviousTick(PERIOD_MONTHS).capacity;
+        uint256 lastPrice = auctioneer.getPreviousTick(PERIOD_MONTHS).price;
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp to the next day
@@ -126,7 +126,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit AuctionParametersUpdated(newTarget, newTickSize, newMinPrice);
+        emit AuctionParametersUpdated(address(iReserveToken), newTarget, newTickSize, newMinPrice);
 
         // Call function
         vm.prank(emissionManager);
@@ -161,7 +161,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newTickSizeLessThanCurrentTickCapacity(
         uint256 newTickSize_
-    ) public givenEnabled givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS) {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -186,7 +186,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newTickSizeGreaterThanCurrentTickCapacity(
         uint256 newTickSize_
-    ) public givenEnabled givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS) {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -211,7 +211,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newMinPriceGreaterThanCurrentTickPrice(
         uint256 newMinPrice_
-    ) public givenEnabled givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS) {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -236,7 +236,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newMinPriceLessThanCurrentTickPrice(
         uint256 newMinPrice_
-    ) public givenEnabled givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS) {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -275,7 +275,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_calledOnDayTwo()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(1e18)
     {
         uint256 dayOneTarget = TARGET;
@@ -286,7 +286,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit AuctionResult(dayOneConvertible, dayOneTarget, 0);
+        emit AuctionResult(address(iReserveToken), dayOneConvertible, dayOneTarget, 0);
 
         // Set parameters
         uint256 dayTwoTarget = TARGET + 1;
@@ -295,11 +295,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Bid
         uint256 dayTwoDeposit = 2e18;
-        (uint256 dayTwoConvertible, ) = auctioneer.previewBid(
-            iReserveToken,
-            PERIOD_MONTHS,
-            dayTwoDeposit
-        );
+        (uint256 dayTwoConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
         _mintAndBid(recipient, dayTwoDeposit);
 
         // Assert day state
@@ -315,7 +311,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_calledOnDayEight()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(1e18)
     {
         int256[] memory expectedAuctionResults = new int256[](7);
@@ -332,11 +328,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayTwoDeposit = 2e18;
             uint256 dayTwoTarget = TARGET + 1;
             _setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayTwoConvertible, ) = auctioneer.previewBid(
-                iReserveToken,
-                PERIOD_MONTHS,
-                dayTwoDeposit
-            );
+            (uint256 dayTwoConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
             _mintAndBid(recipient, dayTwoDeposit);
 
             expectedAuctionResults[1] = int256(dayTwoConvertible) - int256(dayTwoTarget);
@@ -348,11 +340,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayThreeDeposit = 3e18;
             uint256 dayThreeTarget = TARGET + 2;
             _setAuctionParameters(dayThreeTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayThreeConvertible, ) = auctioneer.previewBid(
-                iReserveToken,
-                PERIOD_MONTHS,
-                dayThreeDeposit
-            );
+            (uint256 dayThreeConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayThreeDeposit);
             _mintAndBid(recipient, dayThreeDeposit);
 
             expectedAuctionResults[2] = int256(dayThreeConvertible) - int256(dayThreeTarget);
@@ -364,11 +352,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayFourDeposit = 4e18;
             uint256 dayFourTarget = TARGET + 3;
             _setAuctionParameters(dayFourTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayFourConvertible, ) = auctioneer.previewBid(
-                iReserveToken,
-                PERIOD_MONTHS,
-                dayFourDeposit
-            );
+            (uint256 dayFourConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayFourDeposit);
             _mintAndBid(recipient, dayFourDeposit);
 
             expectedAuctionResults[3] = int256(dayFourConvertible) - int256(dayFourTarget);
@@ -380,11 +364,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayFiveDeposit = 5e18;
             uint256 dayFiveTarget = TARGET + 4;
             _setAuctionParameters(dayFiveTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayFiveConvertible, ) = auctioneer.previewBid(
-                iReserveToken,
-                PERIOD_MONTHS,
-                dayFiveDeposit
-            );
+            (uint256 dayFiveConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayFiveDeposit);
             _mintAndBid(recipient, dayFiveDeposit);
 
             expectedAuctionResults[4] = int256(dayFiveConvertible) - int256(dayFiveTarget);
@@ -396,11 +376,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 daySixDeposit = 6e18;
             uint256 daySixTarget = TARGET + 5;
             _setAuctionParameters(daySixTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 daySixConvertible, ) = auctioneer.previewBid(
-                iReserveToken,
-                PERIOD_MONTHS,
-                daySixDeposit
-            );
+            (uint256 daySixConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, daySixDeposit);
             _mintAndBid(recipient, daySixDeposit);
 
             expectedAuctionResults[5] = int256(daySixConvertible) - int256(daySixTarget);
@@ -413,11 +389,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         {
             uint256 daySevenDeposit = 7e18;
             _setAuctionParameters(daySevenTarget, TICK_SIZE, MIN_PRICE);
-            (daySevenConvertible, ) = auctioneer.previewBid(
-                iReserveToken,
-                PERIOD_MONTHS,
-                daySevenDeposit
-            );
+            (daySevenConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, daySevenDeposit);
             _mintAndBid(recipient, daySevenDeposit);
 
             expectedAuctionResults[6] = int256(daySevenConvertible) - int256(daySevenTarget);
@@ -428,7 +400,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit AuctionResult(daySevenConvertible, daySevenTarget, 6);
+        emit AuctionResult(address(iReserveToken), daySevenConvertible, daySevenTarget, 6);
 
         // Call function
         uint256 dayEightTarget = TARGET + 7;
@@ -437,11 +409,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Bid
         uint256 dayEightDeposit = 8e18;
-        (uint256 dayEightConvertible, ) = auctioneer.previewBid(
-            iReserveToken,
-            PERIOD_MONTHS,
-            dayEightDeposit
-        );
+        (uint256 dayEightConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayEightDeposit);
         _mintAndBid(recipient, dayEightDeposit);
 
         // Assert day state
@@ -457,7 +425,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     function test_calledOnDayNine()
         public
         givenEnabled
-        givenDepositAssetAndPeriodEnabled(iReserveToken, PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(1e18)
     {
         // Warp to day two
@@ -465,7 +433,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 dayTwoDeposit = 2e18;
         uint256 dayTwoTarget = TARGET + 1;
         _setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
-        auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, dayTwoDeposit);
+        auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
         _mintAndBid(recipient, dayTwoDeposit);
 
         // Warp to day three
@@ -473,7 +441,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 dayThreeDeposit = 3e18;
         uint256 dayThreeTarget = TARGET + 2;
         _setAuctionParameters(dayThreeTarget, TICK_SIZE, MIN_PRICE);
-        auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, dayThreeDeposit);
+        auctioneer.previewBid(PERIOD_MONTHS, dayThreeDeposit);
         _mintAndBid(recipient, dayThreeDeposit);
 
         // Warp to day four
@@ -481,7 +449,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 dayFourDeposit = 4e18;
         uint256 dayFourTarget = TARGET + 3;
         _setAuctionParameters(dayFourTarget, TICK_SIZE, MIN_PRICE);
-        auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, dayFourDeposit);
+        auctioneer.previewBid(PERIOD_MONTHS, dayFourDeposit);
         _mintAndBid(recipient, dayFourDeposit);
 
         // Warp to day five
@@ -489,7 +457,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 dayFiveDeposit = 5e18;
         uint256 dayFiveTarget = TARGET + 4;
         _setAuctionParameters(dayFiveTarget, TICK_SIZE, MIN_PRICE);
-        auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, dayFiveDeposit);
+        auctioneer.previewBid(PERIOD_MONTHS, dayFiveDeposit);
         _mintAndBid(recipient, dayFiveDeposit);
 
         // Warp to day six
@@ -497,7 +465,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 daySixDeposit = 6e18;
         uint256 daySixTarget = TARGET + 5;
         _setAuctionParameters(daySixTarget, TICK_SIZE, MIN_PRICE);
-        auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, daySixDeposit);
+        auctioneer.previewBid(PERIOD_MONTHS, daySixDeposit);
         _mintAndBid(recipient, daySixDeposit);
 
         // Warp to day seven
@@ -505,7 +473,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 daySevenDeposit = 7e18;
         uint256 daySevenTarget = TARGET + 6;
         _setAuctionParameters(daySevenTarget, TICK_SIZE, MIN_PRICE);
-        auctioneer.previewBid(iReserveToken, PERIOD_MONTHS, daySevenDeposit);
+        auctioneer.previewBid(PERIOD_MONTHS, daySevenDeposit);
         _mintAndBid(recipient, daySevenDeposit);
 
         // Warp to day eight
@@ -513,11 +481,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 dayEightDeposit = 8e18;
         uint256 dayEightTarget = TARGET + 7;
         _setAuctionParameters(dayEightTarget, TICK_SIZE, MIN_PRICE);
-        (uint256 dayEightConvertible, ) = auctioneer.previewBid(
-            iReserveToken,
-            PERIOD_MONTHS,
-            dayEightDeposit
-        );
+        (uint256 dayEightConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayEightDeposit);
         _mintAndBid(recipient, dayEightDeposit);
 
         // Warp to day nine
@@ -527,18 +491,14 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit AuctionResult(dayEightConvertible, dayEightTarget, 0);
+        emit AuctionResult(address(iReserveToken), dayEightConvertible, dayEightTarget, 0);
 
         // Call function
         vm.prank(emissionManager);
         auctioneer.setAuctionParameters(dayNineTarget, TICK_SIZE, MIN_PRICE);
 
         // Bid
-        (uint256 dayNineConvertible, ) = auctioneer.previewBid(
-            iReserveToken,
-            PERIOD_MONTHS,
-            dayNineDeposit
-        );
+        (uint256 dayNineConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayNineDeposit);
         _mintAndBid(recipient, dayNineDeposit);
 
         // Assert day state
