@@ -405,12 +405,12 @@ sequenceDiagram
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
 
-    caller->>CDFacility: borrow(commitmentId, borrowAmount, cooler)
-    note over caller, CDFacility: only if caller has committed to redemption
+    caller->>CDFacility: borrow(redemptionId, borrowAmount, cooler)
+    note over caller, CDFacility: only if caller has started redemption
     CDFacility->>DepositManager: borrow(borrowAmount)
     DepositManager->>DepositToken: transfer(CDFacility, borrowAmount)
     DepositManager-->>CDFacility: deposit tokens
-    CDFacility->>DepositClearinghouse: lendToCooler(cooler, commitmentId, borrowAmount)
+    CDFacility->>DepositClearinghouse: lendToCooler(cooler, redemptionId, borrowAmount)
     DepositClearinghouse->>DepositManager: transferFrom(CDFacility, collateralAmount)
     CDFacility-->>DepositClearinghouse: receipt tokens
     DepositClearinghouse->>DepositToken: transferFrom(CDFacility, borrowAmount)
