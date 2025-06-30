@@ -527,7 +527,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
         // Validate that the deposit period is not already enabled
         if (_depositPeriodsEnabled[depositPeriod_]) {
-            revert CDAuctioneer_DepositPeriodAlreadyEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+            revert CDAuctioneer_DepositPeriodAlreadyEnabled(
+                address(_DEPOSIT_ASSET),
+                depositPeriod_
+            );
         }
 
         // Enable the deposit period
