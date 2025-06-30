@@ -108,7 +108,7 @@ interface IConvertibleDepositFacility {
     /// @param  positionIds_        An array of position ids that will be converted
     /// @param  amounts_            An array of amounts of receipt tokens to convert
     /// @param  wrappedReceipt_     Whether the receipt tokens to use are wrapped as ERC20s
-    /// @return receiptTokenIn           The total amount of receipt tokens converted
+    /// @return receiptTokenIn      The total amount of receipt tokens converted
     /// @return convertedTokenOut   The amount of OHM minted during conversion
     function convert(
         uint256[] memory positionIds_,

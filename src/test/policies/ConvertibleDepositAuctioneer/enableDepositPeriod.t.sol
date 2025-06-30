@@ -45,7 +45,12 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_whenDepositPeriodIsZero_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector, "deposit period"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                "deposit period"
+            )
+        );
 
         // Call function
         vm.prank(admin);
