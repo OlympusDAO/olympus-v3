@@ -5,7 +5,6 @@ import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepos
 
 contract ConvertibleDepositFacilityClaimYieldTest is ConvertibleDepositFacilityTest {
     // ========== TESTS ========== //
-
     // given the facility is disabled
     //  [ ] it returns 0
     // given the asset is not supported
