@@ -686,26 +686,13 @@ contract OlympusDeploy is Script {
         // Log heart parameters
         console2.log("OlympusHeart parameters:");
         console2.log("   kernel", address(kernel));
-        console2.log("   operator", address(operator));
         console2.log("   zeroDistributor", address(zeroDistributor));
-        console2.log("   yieldRepo", address(yieldRepo));
-        console2.log("   reserveMigrator", address(reserveMigrator));
-        console2.log("   emissionManager", address(emissionManager));
         console2.log("   maxReward", maxReward);
         console2.log("   auctionDuration", auctionDuration);
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(
-            kernel,
-            operator,
-            zeroDistributor,
-            yieldRepo,
-            reserveMigrator,
-            emissionManager,
-            maxReward,
-            auctionDuration
-        );
+        heart = new OlympusHeart(kernel, zeroDistributor, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);

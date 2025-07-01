@@ -1,5 +1,6 @@
 src/bases/BaseAssetManager.sol
 src/bases/BaseDepositRedemptionVault.sol
+src/bases/BasePeriodicTaskManager.sol
 src/external/clones/CloneERC20.sol
 src/libraries/CloneableReceiptToken.sol
 src/libraries/DecimalString.sol

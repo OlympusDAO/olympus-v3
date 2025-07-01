@@ -14,6 +14,9 @@ echo "*** Setting up submodules"
 git submodule init
 git submodule update
 
+echo "*** Forge Version"
+forge --version
+
 echo "*** Running forge install"
 forge install
 

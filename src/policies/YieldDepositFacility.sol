@@ -8,7 +8,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IPeriodicTask} from "src/policies/interfaces/IPeriodicTask.sol";
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
@@ -451,7 +451,9 @@ contract YieldDepositFacility is
 
     // ========== ERC165 ========== //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(BaseDepositRedemptionVault, IPeriodicTask) returns (bool) {
         return
             interfaceId == type(IYieldDepositFacility).interfaceId ||
             interfaceId == type(IPeriodicTask).interfaceId ||

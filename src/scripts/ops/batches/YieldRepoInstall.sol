@@ -34,7 +34,7 @@ contract YieldRepoInstall is OlyBatch {
         // Yield Repo Install Script
 
         // 0. Deactivate the old heart
-        addToBatch(oldHeart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
+        addToBatch(oldHeart, abi.encodeWithSignature("deactivate()"));
 
         // A. Kernel Actions
         // A.1. Uninstall the old heart from the kernel
