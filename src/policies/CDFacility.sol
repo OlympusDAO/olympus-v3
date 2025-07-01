@@ -6,6 +6,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
 import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -18,7 +19,7 @@ import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.s
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim receipt tokens
-contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptionVault {
+contract CDFacility is Policy, IConvertibleDepositFacility, IPeriodicTask, BaseDepositRedemptionVault {
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
@@ -363,7 +364,7 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
     }
 
     /// @inheritdoc IConvertibleDepositFacility
-    function claimAllYield() external {
+    function claimAllYield() public {
         // Get the assets
         IERC20[] memory assets = DEPOSIT_MANAGER.getConfiguredAssets();
 
@@ -381,7 +382,15 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         return address(MINTR.ohm());
     }
 
-    // TODO IPeriodicTask
+    // ========== PERIODIC TASKS ========== //
+
+    /// @inheritdoc IPeriodicTask
+    function execute() external onlyRole(ROLE_HEART) {
+        // Don't do anything if disabled
+        if (!isEnabled) return;
+
+        claimAllYield();
+    }
 
     // ========== ERC165 ========== //
 
