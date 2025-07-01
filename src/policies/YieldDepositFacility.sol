@@ -451,7 +451,9 @@ contract YieldDepositFacility is
 
     // ========== ERC165 ========== //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(BaseDepositRedemptionVault, IPeriodicTask) returns (bool) {
         return
             interfaceId == type(IYieldDepositFacility).interfaceId ||
             interfaceId == type(IPeriodicTask).interfaceId ||

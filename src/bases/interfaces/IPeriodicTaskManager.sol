@@ -26,8 +26,11 @@ interface IPeriodicTaskManager {
     /// @notice Error thrown when trying to add a task that already exists
     error PeriodicTaskManager_TaskAlreadyExists(address task_);
 
-    /// @notice Error thrown when the provided task address is invalid
-    error PeriodicTaskManager_InvalidTaskAddress();
+    /// @notice Error thrown when the provided task address is zero
+    error PeriodicTaskManager_ZeroAddress();
+
+    /// @notice Error thrown when the provided task does not implement the IPeriodicTask interface
+    error PeriodicTaskManager_NotPeriodicTask(address task_);
 
     /// @notice Error thrown when a custom selector fails
     error PeriodicTaskManager_CustomSelectorFailed(

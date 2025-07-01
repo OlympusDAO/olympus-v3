@@ -381,6 +381,8 @@ contract CDFacility is Policy, IConvertibleDepositFacility, BaseDepositRedemptio
         return address(MINTR.ohm());
     }
 
+    // TODO IPeriodicTask
+
     // ========== ERC165 ========== //
 
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {

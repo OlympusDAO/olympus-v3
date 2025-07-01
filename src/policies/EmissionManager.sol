@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -568,7 +568,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     // ========== ERC165 ========== //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(PolicyEnabler, IPeriodicTask) returns (bool) {
         return
             interfaceId == type(IPeriodicTask).interfaceId ||
             interfaceId == type(IEmissionManager).interfaceId ||

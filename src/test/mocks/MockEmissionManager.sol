@@ -10,4 +10,10 @@ contract MockEmissionManager is IEmissionManager, IPeriodicTask {
     function execute() external override {
         // do nothing
     }
+
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
+        return
+            interfaceId == type(IEmissionManager).interfaceId ||
+            interfaceId == type(IPeriodicTask).interfaceId;
+    }
 }

@@ -32,14 +32,21 @@ abstract contract BasePeriodicTaskManager is IPeriodicTaskManager, PolicyEnabler
         if (hasPeriodicTask(task_)) revert PeriodicTaskManager_TaskAlreadyExists(task_);
 
         // Validate that the task is not a zero address
-        if (task_ == address(0)) revert PeriodicTaskManager_InvalidTaskAddress();
+        if (task_ == address(0)) revert PeriodicTaskManager_ZeroAddress();
 
         // If there is no custom selector, validate that the task implements the IPeriodicTask interface
         if (customSelector_ == bytes4(0)) {
             // Validate that the task implements the IPeriodicTask interface
-            if (!IERC165(task_).supportsInterface(type(IPeriodicTask).interfaceId))
-                revert PeriodicTaskManager_InvalidTaskAddress();
+            (bool success, bytes memory data) = task_.staticcall(
+                abi.encodeWithSelector(
+                    IERC165.supportsInterface.selector,
+                    type(IPeriodicTask).interfaceId
+                )
+            );
+            if (!success || abi.decode(data, (bool)) == false)
+                revert PeriodicTaskManager_NotPeriodicTask(task_);
         } else {
+            // Validation of the selector happens at the time of execution, as there is no way to validate it here
             _periodicTaskCustomSelectors[task_] = customSelector_;
         }
 
@@ -67,6 +74,9 @@ abstract contract BasePeriodicTaskManager is IPeriodicTaskManager, PolicyEnabler
     ///             - The task is already added
     ///             - The task is not a valid periodic task
     ///             - The index is out of bounds
+    ///
+    ///             If a custom selector is provided, care must be taken to ensure that the selector exists on {task_}.
+    ///             If the selector does not exist, all of the periodic tasks will revert.
     function addPeriodicTaskAtIndex(
         address task_,
         bytes4 customSelector_,
@@ -76,17 +86,14 @@ abstract contract BasePeriodicTaskManager is IPeriodicTaskManager, PolicyEnabler
     }
 
     function _removePeriodicTask(uint256 index_) internal {
-        // Get the task at the index
-        address task = _periodicTaskAddresses[index_];
-
         // Remove the task at the index
-        _periodicTaskAddresses.remove(index_);
+        address removedTask = _periodicTaskAddresses.remove(index_);
 
         // Clear the custom selector for the task
-        delete _periodicTaskCustomSelectors[task];
+        delete _periodicTaskCustomSelectors[removedTask];
 
         // Emit the event
-        emit PeriodicTaskRemoved(task, index_);
+        emit PeriodicTaskRemoved(removedTask, index_);
     }
 
     /// @inheritdoc IPeriodicTaskManager

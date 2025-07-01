@@ -12,4 +12,7 @@ interface IPeriodicTask {
     /// @dev    - The implementing function should avoid reverting, as that would cause the calling contract to revert.
     /// @dev    - The implementing function should be protected by a role check for the "heart" role.
     function execute() external;
+
+    /// @notice ERC165 interface support
+    function supportsInterface(bytes4 interfaceId) external view returns (bool);
 }

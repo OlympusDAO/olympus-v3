@@ -22,4 +22,8 @@ contract MockPeriodicTaskManager is Policy, BasePeriodicTaskManager {
         override
         returns (Permissions[] memory permissions)
     {}
+
+    function executeAllTasks() external {
+        _executePeriodicTasks();
+    }
 }
