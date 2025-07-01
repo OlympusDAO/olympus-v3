@@ -11,15 +11,16 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 // Interfaces
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {IHeart} from "src/policies/interfaces/IHeart.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Modules
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
-// Bophades
+// Base Contracts
 import {BasePeriodicTaskManager} from "src/bases/BasePeriodicTaskManager.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // Kernel
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
@@ -31,12 +32,11 @@ import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 ///         market operations use up to date information.
 ///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward.
 ///         Rewards are issued in OHM.
-contract OlympusHeart is IHeart, Policy, ReentrancyGuard, BasePeriodicTaskManager {
+contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePeriodicTaskManager {
     using TransferHelper for ERC20;
 
-    // [ ] Use PolicyEnabler
+    // [X] Use PolicyEnabler
     // [ ] Use PolicyAdmin
-    // [ ] Migrate tasks to IPeriodicTask
 
     // =========  STATE ========= //
 
@@ -48,9 +48,6 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, BasePeriodicTaskManage
 
     /// @notice Max reward for beating the Heart (in reward token decimals)
     uint256 public maxReward;
-
-    /// @notice Status of the Heart, false = stopped, true = beating
-    bool public active;
 
     // Modules
     PRICEv1 internal PRICE;
@@ -73,11 +70,12 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, BasePeriodicTaskManage
     ) Policy(kernel_) {
         distributor = distributor_;
 
-        active = true;
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
         emit RewardUpdated(maxReward_, auctionDuration_);
+
+        // Disabled by default by PolicyEnabler
     }
 
     /// @inheritdoc Policy
@@ -136,28 +134,13 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, BasePeriodicTaskManage
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
-        if (!active) revert Heart_BeatStopped();
+        if (!isEnabled) revert Heart_BeatStopped();
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         // Update the moving average on the Price module
         // This cannot be a periodic task, because it requires a policy with permission to call the updateMovingAverage function
         PRICE.updateMovingAverage();
-
-        // // Migrate reserves, if necessary
-        // reserveMigrator.migrate();
-
-        // // Trigger price range update and market operations
-        // operator.operate();
-
-        // // Trigger protocol loop
-        // yieldRepo.endEpoch();
-
-        // // Trigger rebase
-        // distributor.triggerRebase();
-
-        // // Trigger emission manager
-        // emissionManager.execute();
 
         // Execute periodic tasks
         _executePeriodicTasks();
@@ -198,15 +181,9 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, BasePeriodicTaskManage
         _resetBeat();
     }
 
-    /// @inheritdoc IHeart
-    function activate() external onlyRole("heart_admin") {
-        active = true;
+    /// @inheritdoc PolicyEnabler
+    function _enable(bytes calldata) internal override {
         _resetBeat();
-    }
-
-    /// @inheritdoc IHeart
-    function deactivate() external onlyRole("heart_admin") {
-        active = false;
     }
 
     /// @inheritdoc IHeart

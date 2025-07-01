@@ -31,6 +31,7 @@ import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // solhint-disable max-states-count
 contract HeartTest is Test {
@@ -170,6 +171,10 @@ contract HeartTest is Test {
         heart.addPeriodicTask(address(emissionManager));
         vm.stopPrank();
 
+        // Enable the heart
+        vm.prank(ADMIN);
+        heart.enable("");
+
         // Do initial beat
         heart.beat();
     }
@@ -273,8 +278,8 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotBeatIfInactive() public {
         // Set the heart to inactive
-        vm.prank(policy);
-        heart.deactivate();
+        vm.prank(ADMIN);
+        heart.disable("");
 
         // Try to beat the heart and expect revert
         bytes memory err = abi.encodeWithSignature("Heart_BeatStopped()");
@@ -415,7 +420,7 @@ contract HeartTest is Test {
     // =========  ADMIN FUNCTIONS ========= //
     // DONE
     // [X] resetBeat
-    // [X] activate and deactivate
+    // [X] enable and disable
     // [X] setRewardAuctionParams
     // [X] cannot call admin functions without permissions
     // [X] setDistributor
@@ -439,25 +444,25 @@ contract HeartTest is Test {
 
     function testCorrectness_activate_deactivate() public {
         // Expect the heart to be active to begin with
-        assertTrue(heart.active());
+        assertTrue(heart.isEnabled());
 
         uint256 lastBeat = heart.lastBeat();
 
         // Toggle the heart to make it inactive
-        vm.prank(policy);
-        heart.deactivate();
+        vm.prank(ADMIN);
+        heart.disable("");
 
         // Expect the heart to be inactive and lastBeat to remain the same
-        assertTrue(!heart.active());
-        assertEq(heart.lastBeat(), lastBeat);
+        assertTrue(!heart.isEnabled(), "isEnabled after disable");
+        assertEq(heart.lastBeat(), lastBeat, "lastBeat after disable");
 
         // Toggle the heart to make it active again
-        vm.prank(policy);
-        heart.activate();
+        vm.prank(ADMIN);
+        heart.enable("");
 
         // Expect the heart to be active again and lastBeat to be reset
-        assertTrue(heart.active());
-        assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
+        assertTrue(heart.isEnabled(), "isEnabled after enable");
+        assertEq(heart.lastBeat(), block.timestamp - heart.frequency(), "lastBeat after enable");
     }
 
     function testCorrectness_setRewardAuctionParams() public {
@@ -506,14 +511,21 @@ contract HeartTest is Test {
             bytes32("heart_admin")
         );
 
+        bytes memory adminErr = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("admin")
+        );
+
+        bytes memory notAuthorisedErr = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+
         vm.expectRevert(err);
         heart.resetBeat();
 
-        vm.expectRevert(err);
-        heart.deactivate();
+        vm.expectRevert(notAuthorisedErr);
+        heart.disable("");
 
-        vm.expectRevert(err);
-        heart.activate();
+        vm.expectRevert(adminErr);
+        heart.enable("");
 
         vm.expectRevert(err);
         heart.setRewardAuctionParams(uint256(2e18), uint48(12 * 25));

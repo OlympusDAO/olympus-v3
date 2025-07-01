@@ -92,7 +92,7 @@ contract USDSMigration is OlyBatch {
     function run(bool send_) external isDaoBatch(send_) {
         // 1. Deactivate existing contracts that are being replaced locally
         // 1a. Deactivate OlympusHeart
-        addToBatch(oldHeart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
+        addToBatch(oldHeart, abi.encodeWithSignature("deactivate()"));
         // 1b. Deactivate Operator
         addToBatch(oldOperator, abi.encodeWithSelector(Operator.deactivate.selector));
         // 1c. Shutdown YieldRepurchaseFacility

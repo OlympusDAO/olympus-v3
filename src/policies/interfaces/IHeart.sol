@@ -30,16 +30,6 @@ interface IHeart {
     /// @notice Access restricted
     function resetBeat() external;
 
-    /// @notice Turns the heart on and resets the beat
-    /// @notice Access restricted
-    /// @dev    This function is used to restart the heart after a pause
-    function activate() external;
-
-    /// @notice Turns the heart off
-    /// @notice Access restricted
-    /// @dev    Emergency stop function for the heart
-    function deactivate() external;
-
     /// @notice Updates the Distributor contract address that the Heart calls on a beat
     /// @notice Access restricted
     /// @param  distributor_ The address of the new Distributor contract
