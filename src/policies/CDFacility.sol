@@ -24,6 +24,10 @@ contract CDFacility is Policy, IConvertibleDepositFacility, IPeriodicTask, BaseD
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
 
+    /// @notice The role assigned to the Heart contract.
+    ///         This enables the Heart contract to call specific functions on this contract.
+    bytes32 public constant ROLE_HEART = "heart";
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice The MINTR module.
