@@ -19,7 +19,12 @@ import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.s
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim receipt tokens
-contract CDFacility is Policy, IConvertibleDepositFacility, IPeriodicTask, BaseDepositRedemptionVault {
+contract CDFacility is
+    Policy,
+    IConvertibleDepositFacility,
+    IPeriodicTask,
+    BaseDepositRedemptionVault
+{
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
@@ -398,9 +403,12 @@ contract CDFacility is Policy, IConvertibleDepositFacility, IPeriodicTask, BaseD
 
     // ========== ERC165 ========== //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(BaseDepositRedemptionVault, IPeriodicTask) returns (bool) {
         return
             interfaceId == type(IConvertibleDepositFacility).interfaceId ||
+            interfaceId == type(IPeriodicTask).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
