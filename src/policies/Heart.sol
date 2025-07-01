@@ -139,6 +139,9 @@ contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePer
         // This cannot be a periodic task, because it requires a policy with permission to call the updateMovingAverage function
         PRICE.updateMovingAverage();
 
+        // Trigger the rebase
+        distributor.triggerRebase();
+
         // Execute periodic tasks
         _executePeriodicTasks();
 

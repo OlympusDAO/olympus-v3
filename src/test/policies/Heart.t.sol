@@ -173,7 +173,6 @@ contract HeartTest is Test {
         );
         heart.addPeriodicTaskAtIndex(address(operator), IOperator.operate.selector, 1);
         heart.addPeriodicTaskAtIndex(address(yieldRepo), IYieldRepo.endEpoch.selector, 2);
-        heart.addPeriodicTaskAtIndex(address(distributor), IDistributor.triggerRebase.selector, 3);
         heart.addPeriodicTask(address(emissionManager));
         vm.stopPrank();
 
