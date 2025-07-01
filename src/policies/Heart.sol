@@ -35,9 +35,6 @@ import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePeriodicTaskManager {
     using TransferHelper for ERC20;
 
-    // [X] Use PolicyEnabler
-    // [ ] Use PolicyAdmin
-
     // =========  STATE ========= //
 
     /// @notice Timestamp of the last beat (UTC, in seconds)
@@ -177,7 +174,8 @@ contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePer
     }
 
     /// @inheritdoc IHeart
-    function resetBeat() external onlyRole("heart_admin") {
+    /// @dev        This function is gated to the ADMIN or MANAGER roles
+    function resetBeat() external onlyManagerOrAdminRole {
         _resetBeat();
     }
 
@@ -187,7 +185,8 @@ contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePer
     }
 
     /// @inheritdoc IHeart
-    function setDistributor(address distributor_) external onlyRole("heart_admin") {
+    /// @dev        This function is gated to the ADMIN role
+    function setDistributor(address distributor_) external onlyAdminRole {
         distributor = IDistributor(distributor_);
         _syncBeatWithDistributor();
     }
@@ -199,10 +198,11 @@ contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePer
     }
 
     /// @inheritdoc IHeart
+    /// @dev        This function is gated to the ADMIN role
     function setRewardAuctionParams(
         uint256 maxReward_,
         uint48 auctionDuration_
-    ) external onlyRole("heart_admin") notWhileBeatAvailable {
+    ) external onlyAdminRole notWhileBeatAvailable {
         // auction duration should be less than or equal to frequency, otherwise frequency will be used
         if (auctionDuration_ > frequency()) revert Heart_InvalidParams();
 

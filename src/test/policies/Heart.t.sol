@@ -42,6 +42,8 @@ contract HeartTest is Test {
     address internal bob;
     address internal policy;
     address internal ADMIN;
+    address internal MANAGER;
+    address internal EMERGENCY;
 
     MockERC20 internal ohm;
     MockERC20 internal reserveToken;
@@ -84,6 +86,8 @@ contract HeartTest is Test {
             policy = users[2];
 
             ADMIN = makeAddr("ADMIN");
+            MANAGER = makeAddr("MANAGER");
+            EMERGENCY = makeAddr("EMERGENCY");
         }
         {
             // Deploy token mocks
@@ -156,6 +160,8 @@ contract HeartTest is Test {
             // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
             rolesAdmin.grantRole("admin", ADMIN);
+            rolesAdmin.grantRole("manager", MANAGER);
+            rolesAdmin.grantRole("emergency", EMERGENCY);
         }
 
         // Add periodic tasks
@@ -432,14 +438,14 @@ contract HeartTest is Test {
         heart.beat();
 
         // Reset the beat so that it can be called without moving the time forward
-        vm.prank(policy);
+        vm.prank(ADMIN);
         heart.resetBeat();
 
         // Beat the heart and expect it to work
         heart.beat();
 
         // Check that the last beat has been updated to the current timestamp
-        assertEq(heart.lastBeat(), block.timestamp);
+        assertEq(heart.lastBeat(), block.timestamp, "lastBeat");
     }
 
     function testCorrectness_activate_deactivate() public {
@@ -477,7 +483,7 @@ contract HeartTest is Test {
         // Try to set new reward token and amount while a beat is available, expect to fail
         bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
         vm.expectRevert(err);
-        vm.prank(policy);
+        vm.prank(ADMIN);
         heart.setRewardAuctionParams(newMaxReward, newAuctionDuration);
 
         // Beat the heart
@@ -488,11 +494,11 @@ contract HeartTest is Test {
         emit RewardUpdated(newMaxReward, newAuctionDuration);
 
         // Set a new reward token and amount from the policy
-        vm.prank(policy);
+        vm.prank(ADMIN);
         heart.setRewardAuctionParams(newMaxReward, newAuctionDuration);
 
         // Expect the heart's reward to be updated
-        assertEq(heart.maxReward(), newMaxReward);
+        assertEq(heart.maxReward(), newMaxReward, "maxReward");
 
         // Expect the heart to reward the new token and amount on a beat
         uint256 startBalance = ohm.balanceOf(address(this));
@@ -501,47 +507,106 @@ contract HeartTest is Test {
         heart.beat();
 
         uint256 endBalance = ohm.balanceOf(address(this));
-        assertEq(endBalance, startBalance + heart.maxReward());
+        assertEq(endBalance, startBalance + heart.maxReward(), "endBalance");
     }
 
-    function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
-        // Try to call admin functions on the heart as non-policy and expect revert
-        bytes memory err = abi.encodeWithSelector(
-            ROLESv1.ROLES_RequireRole.selector,
-            bytes32("heart_admin")
-        );
+    function testCorrectness_enable(address caller_) public {
+        vm.assume(caller_ != ADMIN);
 
+        // Disable the heart (otherwise it will revert)
+        vm.prank(ADMIN);
+        heart.disable("");
+
+        // Revert if the caller is not ADMIN
         bytes memory adminErr = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             bytes32("admin")
         );
 
-        bytes memory notAuthorisedErr = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
-
-        vm.expectRevert(err);
-        heart.resetBeat();
-
-        vm.expectRevert(notAuthorisedErr);
-        heart.disable("");
-
         vm.expectRevert(adminErr);
+        vm.prank(caller_);
         heart.enable("");
 
-        vm.expectRevert(err);
+        // Successful otherwise
+        vm.prank(ADMIN);
+        heart.enable("");
+    }
+
+    function testCorrectness_disable(address caller_) public {
+        vm.assume(caller_ != ADMIN && caller_ != EMERGENCY);
+
+        // Revert if the caller is not ADMIN or EMERGENCY
+        bytes memory notAuthorisedErr = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+
+        vm.expectRevert(notAuthorisedErr);
+        vm.prank(caller_);
+        heart.disable("");
+
+        // Successful as ADMIN
+        vm.prank(ADMIN);
+        heart.disable("");
+
+        // Enable again
+        vm.prank(ADMIN);
+        heart.enable("");
+
+        // Successful as EMERGENCY
+        vm.prank(EMERGENCY);
+        heart.disable("");
+    }
+
+    function testCorrectness_resetBeat(address caller_) public {
+        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+
+        // Revert if the caller is not ADMIN or MANAGER
+        bytes memory notAuthorisedErr = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+
+        vm.expectRevert(notAuthorisedErr);
+        vm.prank(caller_);
+        heart.resetBeat();
+
+        // Successful as ADMIN
+        vm.prank(ADMIN);
+        heart.resetBeat();
+
+        // Successful as MANAGER
+        vm.prank(MANAGER);
+        heart.resetBeat();
+    }
+
+    function testCorrectness_setRewardAuctionParams(address caller_) public {
+        vm.assume(caller_ != ADMIN);
+
+        // Revert if the caller is not ADMIN
+        bytes memory adminErr = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("admin")
+        );
+
+        vm.expectRevert(adminErr);
+        vm.prank(caller_);
         heart.setRewardAuctionParams(uint256(2e18), uint48(12 * 25));
+
+        // Successful otherwise
+        vm.prank(ADMIN);
+        heart.setRewardAuctionParams(uint256(2e18), uint48(12 * 25));
+
+        // Validate that the reward auction params have been set
+        assertEq(heart.maxReward(), uint256(2e18), "maxReward");
+        assertEq(heart.auctionDuration(), uint48(12 * 25), "auctionDuration");
     }
 
     function testCorrectness_setDistributor() public {
         // Reverts if the caller is not "heart_admin"
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            bytes32("heart_admin")
+            bytes32("admin")
         );
         vm.expectRevert(err);
         heart.setDistributor(address(distributor));
 
         // Successful otherwise
-        vm.prank(policy);
+        vm.prank(ADMIN);
         heart.setDistributor(address(distributor));
 
         // Check that the distributor has been set

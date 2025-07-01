@@ -392,7 +392,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
-    /// @dev This function is restricted to the emissions_admin role
+    /// @dev This function is restricted to the ADMIN role
     /// @param token_ The address of the ERC20 token to rescue
     function rescue(address token_) external onlyAdminRole {
         ERC20 token = ERC20(token_);
