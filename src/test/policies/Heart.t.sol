@@ -30,7 +30,7 @@ import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
-import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 
 // solhint-disable max-states-count
 contract HeartTest is Test {
@@ -40,6 +40,7 @@ contract HeartTest is Test {
     address internal alice;
     address internal bob;
     address internal policy;
+    address internal ADMIN;
 
     MockERC20 internal ohm;
     MockERC20 internal reserveToken;
@@ -80,6 +81,8 @@ contract HeartTest is Test {
             alice = users[0];
             bob = users[1];
             policy = users[2];
+
+            ADMIN = makeAddr("ADMIN");
         }
         {
             // Deploy token mocks
@@ -151,9 +154,11 @@ contract HeartTest is Test {
 
             // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
+            rolesAdmin.grantRole("admin", ADMIN);
         }
 
         // Add periodic tasks
+        vm.startPrank(ADMIN);
         heart.addPeriodicTaskAtIndex(
             address(reserveMigrator),
             IReserveMigrator.migrate.selector,
@@ -161,7 +166,9 @@ contract HeartTest is Test {
         );
         heart.addPeriodicTaskAtIndex(address(operator), IOperator.operate.selector, 1);
         heart.addPeriodicTaskAtIndex(address(yieldRepo), IYieldRepo.endEpoch.selector, 2);
-        heart.addPeriodicTaskAtIndex(address(emissionManager), bytes4(0), 3);
+        heart.addPeriodicTaskAtIndex(address(distributor), IDistributor.triggerRebase.selector, 3);
+        heart.addPeriodicTask(address(emissionManager));
+        vm.stopPrank();
 
         // Do initial beat
         heart.beat();
@@ -230,8 +237,8 @@ contract HeartTest is Test {
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if PRICE or operator revert
     //     [X] reward auction functions correctly based on time since beat available
-    //     [ ] periodic tasks are executed
-    //     [ ] reverts if periodic task reverts
+    //     [X] periodic tasks are executed
+    //     [X] reverts if periodic task reverts
     // [X] Mints rewardToken correctly
 
     function testCorrectness_beat() public {
@@ -246,6 +253,9 @@ contract HeartTest is Test {
         // Check that the rebase can be triggered
         assertEq(0, staking.secondsToNextEpoch());
 
+        // Assert the EmissionManager count
+        assertEq(emissionManager.count(), 1, "emissionManager.count before");
+
         vm.expectEmit(false, false, false, true);
         emit Beat(block.timestamp);
 
@@ -256,6 +266,9 @@ contract HeartTest is Test {
         assertEq(heart.lastBeat(), block.timestamp);
         // Check that the last beat triggered a new rebase
         assertEq(epochLength, staking.secondsToNextEpoch());
+
+        // Check that the emission manager periodic task was executed
+        assertEq(emissionManager.count(), 2, "emissionManager.count");
     }
 
     function testCorrectness_cannotBeatIfInactive() public {
@@ -319,7 +332,14 @@ contract HeartTest is Test {
         operator.setResult(false);
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(MockOperator.Operator_CustomError.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPeriodicTaskManager.PeriodicTaskManager_CustomSelectorFailed.selector,
+                address(operator),
+                IOperator.operate.selector,
+                abi.encodeWithSelector(MockOperator.Operator_CustomError.selector)
+            )
+        );
 
         // Try to beat the heart and expect revert
         heart.beat();
@@ -398,7 +418,7 @@ contract HeartTest is Test {
     // [X] activate and deactivate
     // [X] setRewardAuctionParams
     // [X] cannot call admin functions without permissions
-    // [ ] setDistributor
+    // [X] setDistributor
 
     function testCorrectness_resetBeat() public {
         // Try to beat the heart and expect the revert since not enough time has passed
@@ -497,5 +517,22 @@ contract HeartTest is Test {
 
         vm.expectRevert(err);
         heart.setRewardAuctionParams(uint256(2e18), uint48(12 * 25));
+    }
+
+    function testCorrectness_setDistributor() public {
+        // Reverts if the caller is not "heart_admin"
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
+        vm.expectRevert(err);
+        heart.setDistributor(address(distributor));
+
+        // Successful otherwise
+        vm.prank(policy);
+        heart.setDistributor(address(distributor));
+
+        // Check that the distributor has been set
+        assertEq(address(heart.distributor()), address(distributor), "distributor");
     }
 }
