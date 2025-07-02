@@ -109,6 +109,9 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         // Assert that the recipient does not have a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 0, "positionIds.length");
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(actualDepositAmount);
     }
 
     // [X] it transfers the asset from the caller
@@ -157,5 +160,8 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         // Assert that the recipient does not have a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
         assertEq(positionIds.length, 0, "positionIds.length");
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(actualDepositAmount);
     }
 }

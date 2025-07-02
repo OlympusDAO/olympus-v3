@@ -279,6 +279,11 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenAddressHasPositionNoWrap(address account_, uint256 amount_) {
+        _createPosition(account_, amount_, CONVERSION_PRICE, false, false);
+        _;
+    }
+
     function _createYieldDepositPosition(
         address account_,
         uint256 amount_
@@ -485,6 +490,14 @@ contract ConvertibleDepositFacilityTest is Test {
         assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
     }
 
+    function _assertAvailableDeposits(uint256 expected_) internal view {
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            expected_,
+            "facility.getAvailableDeposits(iReserveToken)"
+        );
+    }
+
     // ========== REVERT HELPERS ========== //
 
     function _expectRoleRevert(bytes32 role_) internal {
@@ -557,6 +570,19 @@ contract ConvertibleDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IConvertibleDepositFacility.CDF_Unsupported.selector,
                 positionId_
+            )
+        );
+    }
+
+    function _expectRevertInsufficientAvailableDeposits(
+        uint256 requestedAmount_,
+        uint256 availableAmount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InsufficientAvailableDeposits.selector,
+                requestedAmount_,
+                availableAmount_
             )
         );
     }

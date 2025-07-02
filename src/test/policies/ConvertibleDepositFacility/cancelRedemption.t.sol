@@ -184,6 +184,9 @@ contract ConvertibleDepositFacilityCancelRedemptionTest is ConvertibleDepositFac
             secondAmount_,
             COMMITMENT_AMOUNT - firstAmount_
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(firstAmount_ + secondAmount_);
     }
 
     // [X] it transfers the receipt tokens from the contract to the caller
@@ -217,5 +220,8 @@ contract ConvertibleDepositFacilityCancelRedemptionTest is ConvertibleDepositFac
             amount_,
             COMMITMENT_AMOUNT
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(amount_);
     }
 }

@@ -55,6 +55,11 @@ interface IDepositRedemptionVault {
 
     error RedemptionVault_AlreadyRedeemed(address user, uint16 redemptionId);
 
+    error RedemptionVault_InsufficientAvailableDeposits(
+        uint256 requestedAmount,
+        uint256 availableAmount
+    );
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Data structure for a redemption of a receipt token
@@ -155,4 +160,11 @@ interface IDepositRedemptionVault {
         uint8 depositPeriod_,
         uint256 amount_
     ) external returns (uint256 reclaimed);
+
+    // ========== DEPOSITS ========== //
+
+    /// @notice Returns the amount of deposit tokens that are available to redeem or reclaim
+    function getAvailableDeposits(
+        IERC20 depositToken_
+    ) external view returns (uint256 availableDeposits);
 }

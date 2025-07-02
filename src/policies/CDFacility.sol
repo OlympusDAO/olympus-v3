@@ -209,12 +209,11 @@ contract CDFacility is
         currentPeriodMonths = position.periodMonths;
         if (previousAsset_ == address(0)) {
             // Validate that the asset is supported
-            (bool isConfigured, ) = DEPOSIT_MANAGER.isAssetPeriod(
-                IERC20(currentAsset),
-                currentPeriodMonths
-            );
-            if (!isConfigured)
-                revert CDF_InvalidToken(positionId_, currentAsset, currentPeriodMonths);
+            if (
+                !DEPOSIT_MANAGER
+                    .isAssetPeriod(IERC20(currentAsset), currentPeriodMonths)
+                    .isConfigured
+            ) revert CDF_InvalidToken(positionId_, currentAsset, currentPeriodMonths);
         } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {
             revert CDF_InvalidArgs("multiple assets");
         }

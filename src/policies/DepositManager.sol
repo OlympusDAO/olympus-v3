@@ -235,12 +235,12 @@ contract DepositManager is
     function isAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_
-    ) public view override returns (bool isConfigured, bool isEnabled) {
+    ) public view override returns (AssetPeriodStatus memory status) {
         uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_);
-        isConfigured = address(_assetPeriods[receiptTokenId].asset) != address(0);
-        isEnabled = _assetPeriods[receiptTokenId].isEnabled;
+        status.isConfigured = address(_assetPeriods[receiptTokenId].asset) != address(0);
+        status.isEnabled = _assetPeriods[receiptTokenId].isEnabled;
 
-        return (isConfigured, isEnabled);
+        return status;
     }
 
     /// @inheritdoc IDepositManager
@@ -279,8 +279,7 @@ contract DepositManager is
         if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
 
         // Validate that the asset and deposit period combination is not already configured
-        (bool isConfigured, ) = isAssetPeriod(asset_, depositPeriod_);
-        if (isConfigured) {
+        if (isAssetPeriod(asset_, depositPeriod_).isConfigured) {
             revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_);
         }
 

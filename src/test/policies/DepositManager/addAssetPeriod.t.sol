@@ -73,12 +73,15 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         uint256 reclaimRate_
     ) internal view {
         // Check if asset is configured
-        (bool isConfigured, bool isEnabled) = depositManager.isAssetPeriod(
+        IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
             IERC20(asset_),
             depositPeriod_
         );
-        assertTrue(isConfigured, "isAssetPeriod: asset is not configured as a deposit asset");
-        assertTrue(isEnabled, "isAssetPeriod: asset is not enabled as a deposit asset");
+        assertTrue(
+            status.isConfigured,
+            "isAssetPeriod: asset is not configured as a deposit asset"
+        );
+        assertTrue(status.isEnabled, "isAssetPeriod: asset is not enabled as a deposit asset");
 
         // Check asset period using the receipt token ID
         IDepositManager.AssetPeriod memory depositConfigurationFromReceiptTokenId = depositManager

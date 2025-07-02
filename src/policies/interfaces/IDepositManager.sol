@@ -106,6 +106,15 @@ interface IDepositManager {
         address asset;
     }
 
+    /// @notice Status of an asset period
+    ///
+    /// @param isConfigured    Whether the asset period is configured
+    /// @param isEnabled       Whether the asset period is enabled for new deposits
+    struct AssetPeriodStatus {
+        bool isConfigured;
+        bool isEnabled;
+    }
+
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
 
     /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token
@@ -248,12 +257,11 @@ interface IDepositManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @return isConfigured    Whether the deposit asset is configured
-    /// @return isEnabled       Whether the deposit asset is enabled
+    /// @return status          The status of the asset period
     function isAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_
-    ) external view returns (bool isConfigured, bool isEnabled);
+    ) external view returns (AssetPeriodStatus memory status);
 
     /// @notice Returns the asset periods
     ///

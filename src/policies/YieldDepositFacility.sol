@@ -294,8 +294,8 @@ contract YieldDepositFacility is
             periodMonths = position.periodMonths;
 
             // Validate that the asset is supported
-            (bool isConfigured, ) = DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths);
-            if (!isConfigured) revert YDF_Unsupported(positionIds_[0]);
+            if (!DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths).isConfigured)
+                revert YDF_Unsupported(positionIds_[0]);
         }
 
         for (uint256 i; i < positionIds_.length; ++i) {
@@ -337,8 +337,8 @@ contract YieldDepositFacility is
             periodMonths = position.periodMonths;
 
             // Validate that the asset is supported
-            (bool isConfigured, ) = DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths);
-            if (!isConfigured) revert YDF_Unsupported(positionIds_[0]);
+            if (!DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths).isConfigured)
+                revert YDF_Unsupported(positionIds_[0]);
         }
 
         uint256 yieldFee;

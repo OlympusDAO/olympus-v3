@@ -51,11 +51,17 @@ abstract contract BaseDepositRedemptionVault is
     ///         A complex key is used to save gas compared to a nested mapping.
     mapping(bytes32 => UserRedemption) internal _userRedemptions;
 
+    /// @notice The amount of deposit tokens that have been committed for redemption
+    /// @dev    This can be used to calculate the amount of available deposits
+    mapping(address => uint256) internal _committedDeposits;
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(address depositManager_) {
         DEPOSIT_MANAGER = DepositManager(depositManager_);
     }
+
+    // ========== ASSETS ========== //
 
     /// @notice Pull the receipt tokens from the caller
     function _pullReceiptToken(
@@ -63,14 +69,6 @@ abstract contract BaseDepositRedemptionVault is
         uint8 depositPeriod_,
         uint256 amount_
     ) internal {
-        // Check that the amount is not 0
-        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
-
-        // Validate that the asset is supported
-        (bool isConfigured, ) = DEPOSIT_MANAGER.isAssetPeriod(depositToken_, depositPeriod_);
-        if (!isConfigured)
-            revert RedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
-
         // Transfer the receipt tokens from the caller to this contract
         DEPOSIT_MANAGER.transferFrom(
             msg.sender,
@@ -100,7 +98,6 @@ abstract contract BaseDepositRedemptionVault is
         uint16 redemptionId_
     ) external view returns (UserRedemption memory redemption) {
         redemption = _userRedemptions[_getUserRedemptionKey(user_, redemptionId_)];
-        // TODO should this be a revert?
         if (redemption.depositToken == address(0))
             revert RedemptionVault_InvalidRedemptionId(user_, redemptionId_);
 
@@ -134,6 +131,16 @@ abstract contract BaseDepositRedemptionVault is
         uint8 depositPeriod_,
         uint256 amount_
     ) external nonReentrant onlyEnabled returns (uint16 redemptionId) {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
+
+        // Validate that the deposit token and period are supported
+        if (!DEPOSIT_MANAGER.isAssetPeriod(depositToken_, depositPeriod_).isConfigured)
+            revert RedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
+
+        // Check that there are enough available deposits
+        _validateAvailableDeposits(depositToken_, amount_);
+
         // Create a User Commitment
         redemptionId = _userRedemptionCount[msg.sender]++;
         _userRedemptions[_getUserRedemptionKey(msg.sender, redemptionId)] = UserRedemption({
@@ -142,6 +149,9 @@ abstract contract BaseDepositRedemptionVault is
             redeemableAt: uint48(block.timestamp + uint48(depositPeriod_) * 30 days),
             amount: amount_
         });
+
+        // Update the committed deposits
+        _committedDeposits[address(depositToken_)] += amount_;
 
         // Pull the receipt tokens from the caller
         // This will validate that the deposit token is supported
@@ -188,6 +198,9 @@ abstract contract BaseDepositRedemptionVault is
 
         // Update the redemption
         redemption.amount -= amount_;
+
+        // Update the committed deposits
+        _committedDeposits[address(redemption.depositToken)] -= amount_;
 
         // Transfer the quantity of receipt tokens to the caller
         DEPOSIT_MANAGER.transfer(
@@ -241,6 +254,9 @@ abstract contract BaseDepositRedemptionVault is
         uint256 redemptionAmount = redemption.amount;
         redemption.amount = 0;
 
+        // Update the committed deposits
+        _committedDeposits[address(redemption.depositToken)] -= redemptionAmount;
+
         // Withdraw the underlying asset from the deposit manager
         // This will burn the receipt tokens from this contract and send the released deposit tokens to the caller
         DEPOSIT_MANAGER.approve(
@@ -286,6 +302,9 @@ abstract contract BaseDepositRedemptionVault is
     ) public view onlyEnabled returns (uint256 reclaimed) {
         // Validate that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
+
+        // Validate that there are enough available deposits
+        _validateAvailableDeposits(depositToken_, amount_);
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
@@ -354,6 +373,36 @@ abstract contract BaseDepositRedemptionVault is
         uint256 amount_
     ) external returns (uint256 reclaimed) {
         reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
+    }
+
+    // ========== DEPOSITS ========== //
+
+    function _validateAvailableDeposits(IERC20 depositToken_, uint256 amount_) internal view {
+        uint256 availableDeposits = getAvailableDeposits(depositToken_);
+        if (amount_ > availableDeposits)
+            revert RedemptionVault_InsufficientAvailableDeposits(amount_, availableDeposits);
+    }
+
+    /// @inheritdoc IDepositRedemptionVault
+    function getAvailableDeposits(
+        IERC20 depositToken_
+    ) public view returns (uint256 availableDeposits) {
+        // Get the amount of committed deposits
+        uint256 committedDeposits = _committedDeposits[address(depositToken_)];
+
+        // Get the amount of available deposits
+        (, uint256 sharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
+            depositToken_,
+            address(this)
+        );
+
+        // Ensure it doesn't revert
+        if (committedDeposits > sharesInAssets) {
+            return 0;
+        }
+
+        // Return the difference
+        return sharesInAssets - committedDeposits;
     }
 
     // ========== ERC165 ========== //
