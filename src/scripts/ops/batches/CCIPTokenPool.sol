@@ -10,6 +10,7 @@ import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenA
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
+import {Ownable2Step} from "@chainlink-ccip-1.6.0/shared/access/Ownable2Step.sol";
 import {TokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -212,6 +213,52 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
         // Next steps:
         // - DAO MS must accept the admin role
+    }
+
+    /// @notice Transfers the ownership of the TokenPool to the DAO multisig
+    function transferTokenPoolOwnershipToDaoMS() external setUpWithChainId(false) {
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+
+        // Check if the owner is already the DAO MS
+        if (LockReleaseTokenPool(tokenPool).owner() == daoMS) {
+            console2.log("Owner already transferred to", daoMS, ". Skipping.");
+            return;
+        }
+
+        console2.log("Transferring ownership of", tokenPool, "to", daoMS);
+        addToBatch(
+            tokenPool,
+            abi.encodeWithSelector(Ownable2Step.transferOwnership.selector, daoMS)
+        );
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+
+        // Next steps:
+        // - DAO MS must accept the ownership
+    }
+
+    /// @notice Accepts the ownership of the TokenPool
+    function acceptTokenPoolOwnership() external setUpWithChainId(false) {
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+
+        // Check if the owner is already the DAO MS
+        if (LockReleaseTokenPool(tokenPool).owner() == daoMS) {
+            console2.log("Owner already transferred to", daoMS, ". Skipping.");
+            return;
+        }
+
+        console2.log("Accepting ownership of", tokenPool, "to", daoMS);
+        addToBatch(tokenPool, abi.encodeWithSelector(Ownable2Step.acceptOwnership.selector));
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
     }
 
     function _configureRemoteChainEVM(string memory remoteChain_, bool shouldReset_) internal {
