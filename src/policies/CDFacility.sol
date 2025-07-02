@@ -45,8 +45,8 @@ contract CDFacility is
 
     constructor(
         address kernel_,
-        address tokenManager_
-    ) Policy(Kernel(kernel_)) BaseDepositRedemptionVault(tokenManager_) {
+        address depositManager_
+    ) Policy(Kernel(kernel_)) BaseDepositRedemptionVault(depositManager_) {
         // Disabled by default by PolicyEnabler
     }
 
@@ -355,6 +355,9 @@ contract CDFacility is
 
     /// @inheritdoc IConvertibleDepositFacility
     function claimYield(IERC20 asset_) public returns (uint256 yieldAssets) {
+        // If disabled, don't do anything
+        if (!isEnabled) return 0;
+
         // Determine the yield
         yieldAssets = previewClaimYield(asset_);
 
