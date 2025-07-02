@@ -44,7 +44,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, 1e18, address(0x1), false);
+        _splitPosition(address(this), 0, 1e18, OTHER, false);
     }
 
     function test_callerIsNotOwner_reverts()
@@ -61,7 +61,7 @@ contract SplitDEPOSTest is DEPOSTest {
         vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
-        _splitPosition(address(0x1), 0, REMAINING_DEPOSIT, address(0x1), false);
+        _splitPosition(OTHER, 0, REMAINING_DEPOSIT, OTHER, false);
     }
 
     function test_callerIsPermissioned_reverts()
@@ -78,7 +78,7 @@ contract SplitDEPOSTest is DEPOSTest {
         vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
-        _splitPosition(godmode, 0, REMAINING_DEPOSIT, address(0x1), false);
+        _splitPosition(godmode, 0, REMAINING_DEPOSIT, OTHER, false);
     }
 
     function test_amountIsZero_reverts()
@@ -97,7 +97,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, 0, address(0x1), false);
+        _splitPosition(address(this), 0, 0, OTHER, false);
     }
 
     function test_amountIsGreaterThanRemainingDeposit_reverts(
@@ -120,7 +120,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, amount, address(0x1), false);
+        _splitPosition(address(this), 0, amount, OTHER, false);
     }
 
     function test_recipientIsZeroAddress_reverts()
@@ -158,18 +158,10 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(
-            0,
-            1,
-            convertibleDepositToken,
-            DEPOSIT_PERIOD,
-            amount,
-            address(0x1),
-            false
-        );
+        emit PositionSplit(0, 1, convertibleDepositToken, DEPOSIT_PERIOD, amount, OTHER, false);
 
         // Call function
-        _splitPosition(address(this), 0, amount, address(0x1), false);
+        _splitPosition(address(this), 0, amount, OTHER, false);
 
         // Assert old position
         _assertPosition(
@@ -182,17 +174,17 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Assert new position
-        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
+        _assertPosition(1, OTHER, amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 0);
         _assertERC721Owner(0, address(this), false);
-        _assertERC721Balance(address(0x1), 0);
-        _assertERC721Owner(1, address(0x1), false);
+        _assertERC721Balance(OTHER, 0);
+        _assertERC721Owner(1, OTHER, false);
 
         // Assert the ownership is updated
         _assertUserPosition(address(this), 0, 1);
-        _assertUserPosition(address(0x1), 1, 1);
+        _assertUserPosition(OTHER, 1, 1);
     }
 
     function test_sameRecipient(
@@ -263,18 +255,10 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(
-            0,
-            1,
-            convertibleDepositToken,
-            DEPOSIT_PERIOD,
-            amount,
-            address(0x1),
-            false
-        );
+        emit PositionSplit(0, 1, convertibleDepositToken, DEPOSIT_PERIOD, amount, OTHER, false);
 
         // Call function
-        _splitPosition(address(this), 0, amount, address(0x1), false);
+        _splitPosition(address(this), 0, amount, OTHER, false);
 
         // Assert old position
         _assertPosition(
@@ -287,17 +271,17 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Assert new position
-        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
+        _assertPosition(1, OTHER, amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 1);
         _assertERC721Owner(0, address(this), true);
-        _assertERC721Balance(address(0x1), 0);
-        _assertERC721Owner(1, address(0x1), false);
+        _assertERC721Balance(OTHER, 0);
+        _assertERC721Owner(1, OTHER, false);
 
         // Assert the ownership is updated
         _assertUserPosition(address(this), 0, 1);
-        _assertUserPosition(address(0x1), 1, 1);
+        _assertUserPosition(OTHER, 1, 1);
     }
 
     function test_newPositionIsWrapped(
@@ -316,18 +300,10 @@ contract SplitDEPOSTest is DEPOSTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit PositionSplit(
-            0,
-            1,
-            convertibleDepositToken,
-            DEPOSIT_PERIOD,
-            amount,
-            address(0x1),
-            true
-        );
+        emit PositionSplit(0, 1, convertibleDepositToken, DEPOSIT_PERIOD, amount, OTHER, true);
 
         // Call function
-        _splitPosition(address(this), 0, amount, address(0x1), true);
+        _splitPosition(address(this), 0, amount, OTHER, true);
 
         // Assert old position
         _assertPosition(
@@ -340,18 +316,18 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Assert new position
-        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, true);
+        _assertPosition(1, OTHER, amount, CONVERSION_PRICE, CONVERSION_EXPIRY, true);
 
         // ERC721 balances for the old position are not updated
         _assertERC721Balance(address(this), 0);
         _assertERC721Owner(0, address(this), false);
 
         // ERC721 balances for the new position are updated
-        _assertERC721Balance(address(0x1), 1);
-        _assertERC721Owner(1, address(0x1), true);
+        _assertERC721Balance(OTHER, 1);
+        _assertERC721Owner(1, OTHER, true);
 
         // Assert the ownership is updated
         _assertUserPosition(address(this), 0, 1);
-        _assertUserPosition(address(0x1), 1, 1);
+        _assertUserPosition(OTHER, 1, 1);
     }
 }

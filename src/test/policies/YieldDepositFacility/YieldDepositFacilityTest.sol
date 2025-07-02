@@ -52,12 +52,12 @@ contract YieldDepositFacilityTest is Test {
     IERC4626 internal iVaultTwo;
     uint256 internal _receiptTokenIdTwo;
 
-    address public recipient = address(0x1);
-    address public auctioneer = address(0x2);
-    address public recipientTwo = address(0x3);
-    address public emergency = address(0x4);
-    address public admin = address(0xEEEEEE);
-    address public heart = address(0x5);
+    address public recipient;
+    address public auctioneer;
+    address public recipientTwo;
+    address public emergency;
+    address public admin;
+    address public heart;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
@@ -72,6 +72,13 @@ contract YieldDepositFacilityTest is Test {
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
+
+        recipient = makeAddr("RECIPIENT");
+        auctioneer = makeAddr("AUCTIONEER");
+        recipientTwo = makeAddr("RECIPIENT_TWO");
+        emergency = makeAddr("EMERGENCY");
+        admin = makeAddr("ADMIN");
+        heart = makeAddr("HEART");
 
         ohm = new MockERC20("OHM", "OHM", 9);
 

@@ -42,8 +42,8 @@ contract TransferFromDEPOSTest is DEPOSTest {
         vm.expectRevert("NOT_AUTHORIZED");
 
         // Call function
-        vm.prank(address(0x1));
-        DEPOS.transferFrom(address(this), address(0x1), 0);
+        vm.prank(OTHER);
+        DEPOS.transferFrom(address(this), OTHER, 0);
     }
 
     function test_callerIsPermissioned_reverts()
@@ -61,7 +61,7 @@ contract TransferFromDEPOSTest is DEPOSTest {
 
         // Call function
         vm.prank(godmode);
-        DEPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), OTHER, 0);
     }
 
     function test_notMinted_reverts()
@@ -81,7 +81,7 @@ contract TransferFromDEPOSTest is DEPOSTest {
 
         // Call function
         vm.prank(address(this));
-        DEPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), OTHER, 0);
     }
 
     function test_success()
@@ -95,22 +95,15 @@ contract TransferFromDEPOSTest is DEPOSTest {
         )
     {
         // Call function
-        DEPOS.transferFrom(address(this), address(0x1), 0);
+        DEPOS.transferFrom(address(this), OTHER, 0);
 
         // ERC721 balance updated
         _assertERC721Balance(address(this), 0);
-        _assertERC721Balance(address(0x1), 1);
-        _assertERC721Owner(0, address(0x1), true);
+        _assertERC721Balance(OTHER, 1);
+        _assertERC721Owner(0, OTHER, true);
 
         // Position record updated
-        _assertPosition(
-            0,
-            address(0x1),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            true
-        );
+        _assertPosition(0, OTHER, REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, true);
 
         // Position ownership updated
         assertEq(
@@ -118,6 +111,6 @@ contract TransferFromDEPOSTest is DEPOSTest {
             0,
             "getUserPositionIds should return 0 length"
         );
-        _assertUserPosition(address(0x1), 0, 1);
+        _assertUserPosition(OTHER, 0, 1);
     }
 }

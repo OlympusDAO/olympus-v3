@@ -29,11 +29,11 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 contract ConvertibleDepositClearinghouseTest is Test {
     // using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
 
-    address internal constant EXECUTOR = address(0x1111);
-    address internal constant ADMIN = address(0xAAAA);
-    address internal constant EMERGENCY = address(0xEEEE);
-    address internal constant USER = address(0xBBBB);
-    address internal constant OTHERS = address(0xDDDD);
+    address internal EXECUTOR;
+    address internal ADMIN;
+    address internal EMERGENCY;
+    address internal USER;
+    address internal OTHERS;
 
     uint8 internal constant PERIOD_MONTHS = 6;
 
@@ -65,6 +65,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
     ICooler internal cooler;
 
     function setUp() public {
+        EXECUTOR = makeAddr("EXECUTOR");
+        ADMIN = makeAddr("ADMIN");
+        EMERGENCY = makeAddr("EMERGENCY");
+        USER = makeAddr("USER");
+        OTHERS = makeAddr("OTHERS");
+
         // Set up tokens
         asset = new MockERC20("Asset", "ASSET", 18);
         iAsset = IERC20(address(asset));
