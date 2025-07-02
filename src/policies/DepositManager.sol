@@ -13,6 +13,7 @@ import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {String} from "src/libraries/String.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -33,6 +34,7 @@ contract DepositManager is
 {
     using SafeTransferLib for ERC20;
     using String for string;
+    using EnumerableSet for EnumerableSet.UintSet;
 
     // ========== CONSTANTS ========== //
 
@@ -58,9 +60,6 @@ contract DepositManager is
 
     /// @notice Maps token ID to the asset period
     mapping(uint256 tokenId => AssetPeriod) internal _assetPeriods;
-
-    /// @notice Array of receipt token IDs
-    uint256[] internal _receiptTokenIds;
 
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
@@ -296,9 +295,6 @@ contract DepositManager is
             asset: address(asset_)
         });
 
-        // Add the deposit token ID to the array
-        _receiptTokenIds.push(receiptTokenId);
-
         // Set the reclaim rate (which does validation and emits an event)
         _setAssetPeriodReclaimRate(asset_, depositPeriod_, reclaimRate_);
 
@@ -348,9 +344,10 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     function getAssetPeriods() external view returns (AssetPeriod[] memory) {
-        AssetPeriod[] memory depositAssets = new AssetPeriod[](_receiptTokenIds.length);
-        for (uint256 i; i < _receiptTokenIds.length; ++i) {
-            depositAssets[i] = _assetPeriods[_receiptTokenIds[i]];
+        uint256 tokenIdsLength = _wrappableTokenIds.length();
+        AssetPeriod[] memory depositAssets = new AssetPeriod[](tokenIdsLength);
+        for (uint256 i; i < tokenIdsLength; ++i) {
+            depositAssets[i] = _assetPeriods[_wrappableTokenIds.at(i)];
         }
         return depositAssets;
     }
@@ -409,28 +406,21 @@ contract DepositManager is
         // Generate a unique token ID for the token and deposit period combination
         tokenId = getReceiptTokenId(asset_, depositPeriod_);
 
-        // Set the metadata for the receipt token
-        _setName(
+        // Create the receipt token
+        _createWrappableToken(
             tokenId,
             string
                 .concat(asset_.name(), " Receipt - ", uint2str(depositPeriod_), " months")
-                .truncate32()
+                .truncate32(),
+            string.concat("r", asset_.symbol(), "-", uint2str(depositPeriod_), "m").truncate32(),
+            asset_.decimals(),
+            abi.encodePacked(
+                address(this), // Owner
+                address(asset_), // Asset
+                depositPeriod_ // Deposit Period
+            ),
+            false
         );
-
-        _setSymbol(
-            tokenId,
-            string.concat("r", asset_.symbol(), "-", uint2str(depositPeriod_), "m").truncate32()
-        );
-
-        _setDecimals(tokenId, asset_.decimals());
-
-        // Set additional metadata
-        bytes memory additionalMetadata = abi.encodePacked(
-            address(this), // Owner
-            address(asset_), // Asset
-            depositPeriod_ // Deposit Period
-        );
-        _tokenMetadataAdditional[tokenId] = additionalMetadata;
 
         return tokenId;
     }

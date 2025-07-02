@@ -13,11 +13,7 @@ contract MockERC6909Wrappable is ERC6909Wrappable {
         uint8 decimals_,
         bytes memory additionalMetadata_
     ) external {
-        _setName(tokenId_, name_);
-        _setSymbol(tokenId_, symbol_);
-        _setDecimals(tokenId_, decimals_);
-
-        _tokenMetadataAdditional[tokenId_] = additionalMetadata_;
+        _createWrappableToken(tokenId_, name_, symbol_, decimals_, additionalMetadata_, false);
     }
 
     function createWrappedToken(uint256 tokenId_) external returns (address) {

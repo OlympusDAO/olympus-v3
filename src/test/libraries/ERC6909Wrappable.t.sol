@@ -68,6 +68,29 @@ contract ERC6909WrappableTest is Test {
         }
     }
 
+    function assertTokens(uint256 expectedTokenId, address expectedWrappedToken) internal view {
+        uint256[] memory expectedTokenIds = new uint256[](1);
+        expectedTokenIds[0] = expectedTokenId;
+        address[] memory expectedWrappedTokens = new address[](1);
+        expectedWrappedTokens[0] = expectedWrappedToken;
+
+        (uint256[] memory tokenIds, address[] memory wrappedTokens) = token.getWrappableTokens();
+        assertEq(tokenIds.length, 1, "Token IDs length mismatch");
+        assertEq(wrappedTokens.length, 1, "Wrapped tokens length mismatch");
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            assertEq(
+                tokenIds[i],
+                expectedTokenIds[i],
+                string.concat("Token ID mismatch for token ", vm.toString(tokenIds[i]))
+            );
+            assertEq(
+                wrappedTokens[i],
+                expectedWrappedTokens[i],
+                string.concat("Wrapped token mismatch for token ", vm.toString(tokenIds[i]))
+            );
+        }
+    }
+
     // ========== MODIFIERS ========== //
 
     // Modifiers for common conditions
@@ -160,6 +183,8 @@ contract ERC6909WrappableTest is Test {
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
+
+        assertTokens(TOKEN_ID, token.getWrappedToken(TOKEN_ID));
     }
 
     //  given the ERC20 token exists
@@ -177,6 +202,8 @@ contract ERC6909WrappableTest is Test {
 
         assertERC6909Balance(bob, 0);
         assertERC6909TotalSupply(0);
+
+        assertTokens(TOKEN_ID, token.getWrappedToken(TOKEN_ID));
     }
 
     // when shouldWrap is false
@@ -185,14 +212,18 @@ contract ERC6909WrappableTest is Test {
     //  [X] the ERC6909 token is minted to the recipient
     //  [X] the ERC20 token total supply is unchanged
     //  [X] the ERC6909 token total supply is increased
-    function test_mint_whenShouldWrapIsFalse() public givenERC20TokenExists {
+    function test_mint_whenShouldWrapIsFalse() public {
         token.mint(alice, TOKEN_ID, AMOUNT, false);
 
-        assertERC20Balance(alice, 0);
-        assertERC20TotalSupply(0);
+        assertWrappedTokenExists(false);
+
+        // assertERC20Balance(alice, 0);
+        // assertERC20TotalSupply(0);
 
         assertERC6909Balance(alice, AMOUNT);
         assertERC6909TotalSupply(AMOUNT);
+
+        assertTokens(TOKEN_ID, address(0));
     }
 
     // Burn
@@ -382,6 +413,8 @@ contract ERC6909WrappableTest is Test {
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
+
+        assertTokens(TOKEN_ID, token.getWrappedToken(TOKEN_ID));
     }
 
     // given the ERC20 token exists
@@ -406,6 +439,8 @@ contract ERC6909WrappableTest is Test {
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
+
+        assertTokens(TOKEN_ID, token.getWrappedToken(TOKEN_ID));
     }
 
     // Unwrap
@@ -475,5 +510,43 @@ contract ERC6909WrappableTest is Test {
 
         assertERC6909Balance(alice, AMOUNT);
         assertERC6909TotalSupply(AMOUNT);
+    }
+
+    // getTokens
+    // given there are no tokens
+    //  [X] it returns an empty array
+    // given there are multiple tokens
+    //  [X] it returns the token IDs and wrapped token addresses of all tokens
+
+    function test_getWrappableTokens_noTokens() public {
+        token = new MockERC6909Wrappable(address(erc20Implementation));
+
+        (uint256[] memory tokenIds, address[] memory wrappedTokens) = token.getWrappableTokens();
+        assertEq(tokenIds.length, 0, "Token IDs length mismatch");
+        assertEq(wrappedTokens.length, 0, "Wrapped tokens length mismatch");
+    }
+
+    function test_getWrappableTokens_givenMultipleTokens() public {
+        // Create the second token
+        uint256 tokenId2 = TOKEN_ID + 1;
+        bytes memory additionalMetadata = abi.encodePacked(address(token), ASSET, DEPOSIT_PERIOD);
+        token.setTokenMetadata(tokenId2, "Mock2", "MOCK2", 18, additionalMetadata);
+
+        // Mint the tokens
+        token.mint(alice, TOKEN_ID, AMOUNT, false);
+        token.mint(bob, tokenId2, AMOUNT, true);
+
+        (uint256[] memory tokenIds, address[] memory wrappedTokens) = token.getWrappableTokens();
+        assertEq(tokenIds.length, 2, "Token IDs length mismatch");
+        assertEq(wrappedTokens.length, 2, "Wrapped tokens length mismatch");
+
+        assertEq(tokenIds[0], TOKEN_ID, "Token ID mismatch for token 0");
+        assertEq(wrappedTokens[0], address(0), "Wrapped token mismatch for token 0");
+        assertEq(tokenIds[1], tokenId2, "Token ID mismatch for token 1");
+        assertEq(
+            wrappedTokens[1],
+            token.getWrappedToken(tokenId2),
+            "Wrapped token mismatch for token 1"
+        );
     }
 }

@@ -6,6 +6,7 @@ pragma solidity >=0.8.0;
 interface IERC6909Wrappable {
     // ========== ERRORS ========== //
 
+    error ERC6909Wrappable_TokenIdAlreadyExists(uint256 tokenId);
     error ERC6909Wrappable_InvalidTokenId(uint256 tokenId);
     error ERC6909Wrappable_InvalidERC20Implementation(address erc20Implementation);
     error ERC6909Wrappable_ZeroAmount();
@@ -44,4 +45,13 @@ interface IERC6909Wrappable {
     /// @param  tokenId_        The ID of the ERC6909 token
     /// @return isValid         Whether the token ID is valid
     function isValidTokenId(uint256 tokenId_) external view returns (bool isValid);
+
+    /// @notice Returns the token IDs and wrapped token addresses of all tokens
+    ///
+    /// @return tokenIds        The IDs of all tokens
+    /// @return wrappedTokens   The wrapped token addresses of all tokens
+    function getWrappableTokens()
+        external
+        view
+        returns (uint256[] memory tokenIds, address[] memory wrappedTokens);
 }
