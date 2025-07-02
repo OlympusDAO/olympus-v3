@@ -221,6 +221,9 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
             otherCommitmentId
         );
         assertEq(otherCommitment.amount, COMMITMENT_AMOUNT, "Other redemption amount mismatch");
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // given there is an existing redemption for a different user
@@ -266,6 +269,9 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
         );
         assertEq(otherCommitment.amount, COMMITMENT_AMOUNT, "Other redemption amount mismatch");
         assertEq(reserveToken.balanceOf(recipient), 0, "User: reserve token balance mismatch");
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // given there has been an amount of receipt tokens cancelled
@@ -298,6 +304,9 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
             0,
             cancelledAmount_
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(cancelledAmount_);
     }
 
     // [X] it burns the receipt tokens
@@ -334,6 +343,9 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
 
         // Assertions
         _assertRedeemed(recipient, 0, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, 0, 0, 0);
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     function test_success_fuzz(
@@ -360,5 +372,63 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
 
         // Assertions
         _assertRedeemed(recipient, 0, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, 0, 0, 0);
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
+    }
+
+    // given there are other deposits
+    //  [X] it updates the available deposits
+
+    function test_givenOtherDeposits()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, COMMITMENT_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        )
+    {
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = facility.getUserRedemption(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
+
+        // Start gas snapshot
+        vm.startSnapshotGas("redeem");
+
+        // Call function
+        vm.prank(recipient);
+        facility.finishRedemption(0);
+
+        // Stop gas snapshot
+        uint256 gasUsed = vm.stopSnapshotGas();
+        console2.log("Gas used", gasUsed);
+
+        // Assertions
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            0,
+            0,
+            COMMITMENT_AMOUNT
+        );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(COMMITMENT_AMOUNT);
     }
 }

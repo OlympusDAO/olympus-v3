@@ -41,18 +41,21 @@ contract ConvertibleDepositFacilityTest is Test {
     MockERC20 public reserveToken;
     MockERC4626 public vault;
     IERC20 internal iReserveToken;
+    IERC4626 internal iVault;
     uint256 public receiptTokenId;
 
     MockERC20 public reserveTokenTwo;
     MockERC4626 public vaultTwo;
     IERC20 internal iReserveTokenTwo;
+    IERC4626 internal iVaultTwo;
     uint256 public receiptTokenIdTwo;
 
-    address public recipient = address(0x1);
-    address public auctioneer = address(0x2);
-    address public recipientTwo = address(0x3);
-    address public emergency = address(0x4);
-    address public admin = address(0xEEEEEE);
+    address public recipient;
+    address public auctioneer;
+    address public recipientTwo;
+    address public emergency;
+    address public admin;
+    address public HEART;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -64,16 +67,25 @@ contract ConvertibleDepositFacilityTest is Test {
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
 
+        recipient = makeAddr("RECIPIENT");
+        auctioneer = makeAddr("AUCTIONEER");
+        recipientTwo = makeAddr("RECIPIENT_TWO");
+        emergency = makeAddr("EMERGENCY");
+        admin = makeAddr("ADMIN");
+        HEART = makeAddr("HEART");
+
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
         iReserveToken = IERC20(address(reserveToken));
         vault = new MockERC4626(reserveToken, "Vault", "VAULT");
+        iVault = IERC4626(address(vault));
         vm.label(address(reserveToken), "RES");
         vm.label(address(vault), "sRES");
 
         reserveTokenTwo = new MockERC20("Reserve Token Two", "RES2", 18);
         iReserveTokenTwo = IERC20(address(reserveTokenTwo));
         vaultTwo = new MockERC4626(reserveTokenTwo, "Vault Two", "VAULT2");
+        iVaultTwo = IERC4626(address(vaultTwo));
         vm.label(address(reserveTokenTwo), "RES2");
         vm.label(address(vaultTwo), "sRES2");
 
@@ -111,6 +123,7 @@ contract ConvertibleDepositFacilityTest is Test {
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(yieldDepositFacility));
+        rolesAdmin.grantRole(bytes32("heart"), HEART);
 
         // Enable the deposit manager
         vm.prank(admin);
@@ -279,6 +292,11 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenAddressHasPositionNoWrap(address account_, uint256 amount_) {
+        _createPosition(account_, amount_, CONVERSION_PRICE, false, false);
+        _;
+    }
+
     function _createYieldDepositPosition(
         address account_,
         uint256 amount_
@@ -412,6 +430,19 @@ contract ConvertibleDepositFacilityTest is Test {
             );
     }
 
+    function _accrueYield(IERC4626 vault_, uint256 amount_) internal {
+        // Get the vault asset
+        MockERC20 asset = MockERC20(vault_.asset());
+
+        // Donate more of the asset into the given vault
+        asset.mint(address(vault_), amount_);
+    }
+
+    modifier givenVaultAccruesYield(IERC4626 vault_, uint256 amount_) {
+        _accrueYield(vault_, amount_);
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _assertMintApproval(uint256 expected_) internal view {
@@ -483,6 +514,14 @@ contract ConvertibleDepositFacilityTest is Test {
         assertEq(vault.balanceOf(address(treasury)), 0, "vault.balanceOf(address(treasury))");
         assertEq(vault.balanceOf(address(facility)), 0, "vault.balanceOf(address(facility))");
         assertEq(vault.balanceOf(recipient), 0, "vault.balanceOf(recipient)");
+    }
+
+    function _assertAvailableDeposits(uint256 expected_) internal view {
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            expected_,
+            "facility.getAvailableDeposits(iReserveToken)"
+        );
     }
 
     // ========== REVERT HELPERS ========== //
@@ -557,6 +596,19 @@ contract ConvertibleDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IConvertibleDepositFacility.CDF_Unsupported.selector,
                 positionId_
+            )
+        );
+    }
+
+    function _expectRevertInsufficientAvailableDeposits(
+        uint256 requestedAmount_,
+        uint256 availableAmount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InsufficientAvailableDeposits.selector,
+                requestedAmount_,
+                availableAmount_
             )
         );
     }

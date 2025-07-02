@@ -92,8 +92,11 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         );
         assertEq(configuration.isEnabled, true, "AssetPeriod: isEnabled mismatch");
 
-        (bool isConfigured, bool isEnabled) = depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD);
-        assertEq(isConfigured, true, "isAssetPeriod: isConfigured mismatch");
-        assertEq(isEnabled, true, "isAssetPeriod: isEnabled mismatch");
+        IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
+            iAsset,
+            DEPOSIT_PERIOD
+        );
+        assertEq(status.isConfigured, true, "isAssetPeriod: isConfigured mismatch");
+        assertEq(status.isEnabled, true, "isAssetPeriod: isEnabled mismatch");
     }
 }

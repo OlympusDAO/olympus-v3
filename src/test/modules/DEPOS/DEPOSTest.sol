@@ -33,8 +33,12 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
 
     uint256[] public positions;
 
+    address public OTHER;
+
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
+
+        OTHER = makeAddr("OTHER");
 
         kernel = new Kernel();
         tokenURIRenderer = new PositionTokenRenderer();

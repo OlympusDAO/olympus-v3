@@ -51,7 +51,7 @@ contract WrapDEPOSTest is DEPOSTest {
         vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
-        _wrapPosition(address(0x1), 0);
+        _wrapPosition(OTHER, 0);
     }
 
     function test_callerIsPermissionedAddress_reverts()

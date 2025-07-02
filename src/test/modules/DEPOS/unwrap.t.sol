@@ -51,7 +51,7 @@ contract UnwrapDEPOSTest is DEPOSTest {
         vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
-        _unwrapPosition(address(0x1), 0);
+        _unwrapPosition(OTHER, 0);
     }
 
     function test_callerIsPermissionedAddress_reverts()
@@ -68,7 +68,7 @@ contract UnwrapDEPOSTest is DEPOSTest {
         vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
 
         // Call function
-        _unwrapPosition(address(0x1), 0);
+        _unwrapPosition(OTHER, 0);
     }
 
     function test_positionIsNotWrapped_reverts()

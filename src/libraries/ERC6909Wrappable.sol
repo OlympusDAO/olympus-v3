@@ -11,24 +11,29 @@ import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {ERC6909Metadata} from "@openzeppelin-5.3.0/token/ERC6909/extensions/draft-ERC6909Metadata.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 /// @title ERC6909Wrappable
 /// @notice This abstract contract extends ERC6909 to allow for wrapping and unwrapping of the token to an ERC20 token.
 ///         It extends the ERC6909Metadata contract, and additionally implements the IERC6909TokenSupply interface.
 abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC6909TokenSupply {
     using ClonesWithImmutableArgs for address;
+    using EnumerableSet for EnumerableSet.UintSet;
 
     /// @notice The address of the implementation of the ERC20 contract
     address private immutable _ERC20_IMPLEMENTATION;
 
+    /// @notice The set of all token IDs
+    EnumerableSet.UintSet internal _wrappableTokenIds;
+
     /// @notice The total supply of each token
-    mapping(uint256 id => uint256) private _totalSupplies;
+    mapping(uint256 tokenId => uint256) private _totalSupplies;
 
     /// @notice Additional metadata for each token
-    mapping(uint256 => bytes) internal _tokenMetadataAdditional;
+    mapping(uint256 tokenId => bytes) private _tokenMetadataAdditional;
 
     /// @notice The address of the wrapped ERC20 token for each token
-    mapping(uint256 => IERC20BurnableMintable) internal _wrappedTokens;
+    mapping(uint256 tokenId => address) internal _wrappedTokens;
 
     constructor(address erc20Implementation_) {
         // Validate that the ERC20 implementation implements the required interface
@@ -143,18 +148,19 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         if (decimals(tokenId_) == 0) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
 
         // If the wrapped token exists, return it
-        if (address(_wrappedTokens[tokenId_]) != address(0)) return _wrappedTokens[tokenId_];
+        if (_wrappedTokens[tokenId_] != address(0))
+            return IERC20BurnableMintable(_wrappedTokens[tokenId_]);
 
         // Otherwise, create a new wrapped token
         bytes memory tokenData = _getTokenData(tokenId_);
         wrappedToken = IERC20BurnableMintable(_ERC20_IMPLEMENTATION.clone(tokenData));
-        _wrappedTokens[tokenId_] = wrappedToken;
+        _wrappedTokens[tokenId_] = address(wrappedToken);
         return wrappedToken;
     }
 
     /// @inheritdoc IERC6909Wrappable
     function getWrappedToken(uint256 tokenId_) public view returns (address wrappedToken) {
-        return address(_wrappedTokens[tokenId_]);
+        return _wrappedTokens[tokenId_];
     }
 
     /// @inheritdoc IERC6909Wrappable
@@ -191,6 +197,49 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     modifier onlyValidTokenId(uint256 tokenId_) {
         if (!isValidTokenId(tokenId_)) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
         _;
+    }
+
+    /// @notice Creates a new wrappable token
+    /// @dev    Reverts if the token ID already exists
+    function _createWrappableToken(
+        uint256 tokenId_,
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_,
+        bytes memory additionalMetadata_,
+        bool createWrappedToken_
+    ) internal {
+        // If the token ID already exists, revert
+        if (_wrappableTokenIds.contains(tokenId_))
+            revert ERC6909Wrappable_TokenIdAlreadyExists(tokenId_);
+
+        _setName(tokenId_, name_);
+        _setSymbol(tokenId_, symbol_);
+        _setDecimals(tokenId_, decimals_);
+        _tokenMetadataAdditional[tokenId_] = additionalMetadata_;
+
+        if (createWrappedToken_) {
+            _getWrappedToken(tokenId_);
+        }
+
+        // Record the token ID
+        _wrappableTokenIds.add(tokenId_);
+    }
+
+    /// @inheritdoc IERC6909Wrappable
+    function getWrappableTokens()
+        public
+        view
+        override
+        returns (uint256[] memory tokenIds, address[] memory wrappedTokens)
+    {
+        tokenIds = _wrappableTokenIds.values();
+        wrappedTokens = new address[](tokenIds.length);
+        for (uint256 i; i < tokenIds.length; ++i) {
+            wrappedTokens[i] = _wrappedTokens[tokenIds[i]];
+        }
+
+        return (tokenIds, wrappedTokens);
     }
 
     // ========== ERC165 ========== //

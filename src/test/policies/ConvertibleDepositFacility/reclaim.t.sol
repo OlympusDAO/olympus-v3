@@ -74,6 +74,39 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         facility.reclaim(iReserveToken, PERIOD_MONTHS, amount);
     }
 
+    // given the facility does not have enough available deposits to fulfill the reclaim
+    //  [X] it reverts
+
+    function test_insufficientAvailableDeposits_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenCommitted(recipient, RESERVE_TOKEN_AMOUNT)
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(depositManager),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        amount_ = bound(amount_, 1, RESERVE_TOKEN_AMOUNT);
+
+        // At this stage:
+        // - The recipient has started redemption for 10e18 via the CDFacility
+        // - DepositManager has 10e18 in deposits from the CDFacility, of which 10e18 are committed for redemption
+        // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
+
+        // Expect revert
+        _expectRevertInsufficientAvailableDeposits(amount_, 0);
+
+        // Call function
+        vm.prank(recipient);
+        facility.reclaim(iReserveToken, PERIOD_MONTHS, amount_);
+    }
+
     // given the caller has not approved DepositManager to spend the total amount of receipt tokens
     //  [X] it reverts
 
@@ -160,6 +193,9 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
 
         // Vault shares are not transferred to the TRSRY
         _assertVaultBalance();
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     function test_success_fuzz(
@@ -218,5 +254,8 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
 
         // Vault shares are not transferred to the TRSRY
         _assertVaultBalance();
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(RESERVE_TOKEN_AMOUNT - amountOne);
     }
 }

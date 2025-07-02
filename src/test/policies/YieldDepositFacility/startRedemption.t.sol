@@ -103,23 +103,22 @@ contract YieldDepositFacilityStartRedemptionTest is YieldDepositFacilityTest {
     function test_receiptTokenNotApproved_reverts()
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            COMMITMENT_AMOUNT
-        )
+        givenAddressHasYieldDepositPosition(recipient, COMMITMENT_AMOUNT)
     {
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(
             address(yieldDepositFacility),
             0,
-            COMMITMENT_AMOUNT
+            _previousDepositActualAmount
         );
 
         // Call function
         vm.prank(recipient);
-        yieldDepositFacility.startRedemption(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        yieldDepositFacility.startRedemption(
+            iReserveToken,
+            PERIOD_MONTHS,
+            _previousDepositActualAmount
+        );
     }
 
     // when the caller does not have enough receipt tokens
@@ -128,17 +127,26 @@ contract YieldDepositFacilityStartRedemptionTest is YieldDepositFacilityTest {
     function test_receiptTokenInsufficientBalance_reverts()
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositToken(recipient, iReserveToken, PERIOD_MONTHS, 2e18)
+        givenAddressHasYieldDepositPosition(recipient, 2e18)
         givenConvertibleDepositTokenSpendingIsApproved(
             recipient,
             address(yieldDepositFacility),
-            _previousDepositActualAmount + 1
+            _previousDepositActualAmount
         )
     {
+        // Transfer the receipt tokens to reduce the balance
+        vm.startPrank(recipient);
+        depositManager.transfer(
+            address(this),
+            depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS),
+            1e17
+        );
+        vm.stopPrank();
+
         // Expect revert
         _expectRevertReceiptTokenInsufficientBalance(
-            _previousDepositActualAmount,
-            _previousDepositActualAmount + 1
+            _previousDepositActualAmount - 1e17,
+            _previousDepositActualAmount
         );
 
         // Call function
@@ -146,7 +154,7 @@ contract YieldDepositFacilityStartRedemptionTest is YieldDepositFacilityTest {
         yieldDepositFacility.startRedemption(
             iReserveToken,
             PERIOD_MONTHS,
-            _previousDepositActualAmount + 1
+            _previousDepositActualAmount
         );
     }
 

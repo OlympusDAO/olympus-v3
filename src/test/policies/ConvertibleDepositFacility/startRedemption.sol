@@ -132,14 +132,59 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT
         )
-        givenReceiptTokenSpendingIsApproved(recipient, address(facility), 2e18)
+        givenReceiptTokenSpendingIsApproved(recipient, address(facility), COMMITMENT_AMOUNT)
     {
+        // Transfer the receipt tokens to reduce the balance
+        vm.startPrank(recipient);
+        depositManager.transfer(
+            address(this),
+            depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS),
+            1e17
+        );
+        vm.stopPrank();
+
         // Expect revert
-        _expectRevertReceiptTokenInsufficientBalance(COMMITMENT_AMOUNT, 2e18);
+        _expectRevertReceiptTokenInsufficientBalance(COMMITMENT_AMOUNT - 1e17, COMMITMENT_AMOUNT);
 
         // Call function
         vm.prank(recipient);
-        facility.startRedemption(iReserveToken, PERIOD_MONTHS, 2e18);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+    }
+
+    // given the facility does not have enough available deposits to fulfill the redemption
+    //  [X] it reverts
+
+    function test_insufficientAvailableDeposits_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasYieldDepositPosition(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(facility), COMMITMENT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
+
+        // Reclaim the yield deposit via the CDFacility
+        vm.prank(recipient);
+        facility.reclaim(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+
+        // At this stage:
+        // - The recipient has reclaimed 1e18 via the CDFacility
+        // - DepositManager has 0 in deposits from the CDFacility
+        // - DepositManager has 1e18 in deposits from the YieldDepositFacility
+
+        // Expect revert
+        _expectRevertInsufficientAvailableDeposits(amount_, 0);
+
+        // Call function
+        vm.prank(recipient);
+        facility.startRedemption(iReserveToken, PERIOD_MONTHS, amount_);
     }
 
     // given there is an existing redemption for the caller
@@ -189,6 +234,9 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
             COMMITMENT_AMOUNT,
             0
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     //  [X] it creates a new redemption for the caller
@@ -239,6 +287,9 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
             0,
             0
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // given there is an existing redemption for a different user
@@ -286,6 +337,9 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
             0,
             COMMITMENT_AMOUNT
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // [X] it transfers the receipt tokens from the caller to the contract
@@ -331,5 +385,8 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
             0,
             0
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(COMMITMENT_AMOUNT - amount_);
     }
 }

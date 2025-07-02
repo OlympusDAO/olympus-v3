@@ -40,13 +40,11 @@ contract UpdateDEPOSTest is DEPOSTest {
             false
         )
     {
-        address owner1 = address(0x1);
-
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, owner1));
+        vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, OTHER));
 
         // Call function
-        vm.prank(owner1);
+        vm.prank(OTHER);
         DEPOS.setRemainingDeposit(0, 1e18);
     }
 
