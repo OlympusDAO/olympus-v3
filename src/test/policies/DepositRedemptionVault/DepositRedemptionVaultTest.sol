@@ -187,6 +187,10 @@ contract DepositRedemptionVaultTest is Test {
             PERIOD_MONTHS
         );
         vm.stopPrank();
+
+        // Disable the redemption vault
+        vm.prank(admin);
+        redemptionVault.disable("");
     }
 
     // ========== MODIFIERS ========== //
