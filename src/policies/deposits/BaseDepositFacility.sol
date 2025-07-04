@@ -40,10 +40,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(
-        address kernel_,
-        address depositManager_
-    ) Policy(Kernel(kernel_)) {
+    constructor(address kernel_, address depositManager_) Policy(Kernel(kernel_)) {
         DEPOSIT_MANAGER = IDepositManager(depositManager_);
     }
 
@@ -146,10 +143,16 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function getDepositBalance(IERC20 depositToken_) external view returns (uint256) {
         // Get the total deposited assets for this facility
-        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(depositToken_, address(this));
+        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
+            depositToken_,
+            address(this)
+        );
 
         // Get the current liabilities (receipt tokens minted)
-        uint256 operatorLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(depositToken_, address(this));
+        uint256 operatorLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(
+            depositToken_,
+            address(this)
+        );
 
         // Get the current borrowed amount
         uint256 borrowedAmount = DEPOSIT_MANAGER.getBorrowedAmount(depositToken_, address(this));
@@ -161,9 +164,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         }
 
         uint256 availableDeposits = totalAvailable - operatorLiabilities;
-        return availableDeposits > _committedDeposits[depositToken_]
-            ? availableDeposits - _committedDeposits[depositToken_]
-            : 0;
+        return
+            availableDeposits > _committedDeposits[depositToken_]
+                ? availableDeposits - _committedDeposits[depositToken_]
+                : 0;
     }
 
     /// @inheritdoc IDepositFacility
@@ -182,5 +186,13 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         } else if (amount_ < 0) {
             _committedDeposits[depositToken_] -= uint256(-amount_);
         }
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IDepositFacility).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }

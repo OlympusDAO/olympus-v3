@@ -6,6 +6,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
 
 // Libraries
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
@@ -16,18 +18,12 @@ import {FullMath} from "src/libraries/FullMath.sol";
 // Bophades
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {DepositManager} from "src/policies/deposits/DepositManager.sol";
-import {Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
+import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @title  DepositRedemptionVault
 /// @notice A contract that manages the redemption of receipt tokens with facility coordination and borrowing
-contract DepositRedemptionVault is
-    Policy,
-    IDepositRedemptionVault,
-    PolicyEnabler,
-    ReentrancyGuard
-{
+contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnabler, ReentrancyGuard {
     using SafeTransferLib for ERC20;
     using FullMath for uint256;
 
@@ -56,13 +52,10 @@ contract DepositRedemptionVault is
     // ========== STATE VARIABLES ========== //
 
     /// @notice The address of the token manager
-    DepositManager public immutable DEPOSIT_MANAGER;
+    IDepositManager public immutable DEPOSIT_MANAGER;
 
     /// @notice The TRSRY module.
     TRSRYv1 public TRSRY;
-
-    /// @notice The ROLES module.
-    ROLESv1 public ROLES;
 
     /// @notice The number of redemptions per user
     mapping(address => uint16) internal _userRedemptionCount;
@@ -93,11 +86,17 @@ contract DepositRedemptionVault is
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(
-        address kernel_,
-        address depositManager_
-    ) Policy(Kernel(kernel_)) {
-        DEPOSIT_MANAGER = DepositManager(depositManager_);
+    constructor(address kernel_, address depositManager_) Policy(Kernel(kernel_)) {
+        // Validate that the DepositManager implements IDepositManager
+        if (!IERC165(depositManager_).supportsInterface(type(IDepositManager).interfaceId)) {
+            revert RedemptionVault_InvalidDepositManager(depositManager_);
+        }
+        // Validate that the DepositManager implements IERC6909
+        if (!IERC165(depositManager_).supportsInterface(type(IERC6909).interfaceId)) {
+            revert RedemptionVault_InvalidDepositManager(depositManager_);
+        }
+
+        DEPOSIT_MANAGER = IDepositManager(depositManager_);
     }
 
     // ========== SETUP ========== //
@@ -137,7 +136,8 @@ contract DepositRedemptionVault is
 
     /// @inheritdoc IDepositRedemptionVault
     function deauthorizeFacility(address facility_) external onlyRole("admin") {
-        if (!_registeredFacilities[facility_]) revert RedemptionVault_FacilityNotRegistered(facility_);
+        if (!_registeredFacilities[facility_])
+            revert RedemptionVault_FacilityNotRegistered(facility_);
 
         _registeredFacilities[facility_] = false;
 
@@ -172,7 +172,7 @@ contract DepositRedemptionVault is
         uint256 amount_
     ) internal {
         // Transfer the receipt tokens from the caller to this contract
-        DEPOSIT_MANAGER.transferFrom(
+        IERC6909(address(DEPOSIT_MANAGER)).transferFrom(
             msg.sender,
             address(this),
             DEPOSIT_MANAGER.getReceiptTokenId(depositToken_, depositPeriod_),
@@ -217,7 +217,8 @@ contract DepositRedemptionVault is
     }
 
     modifier onlyValidFacility(address facility_) {
-        if (!_registeredFacilities[facility_]) revert RedemptionVault_FacilityNotRegistered(facility_);
+        if (!_registeredFacilities[facility_])
+            revert RedemptionVault_FacilityNotRegistered(facility_);
         _;
     }
 
@@ -294,7 +295,7 @@ contract DepositRedemptionVault is
         _totalCommittedDeposits[redemption.depositToken] -= amount_;
 
         // Transfer the quantity of receipt tokens to the caller
-        DEPOSIT_MANAGER.transfer(
+        IERC6909(address(DEPOSIT_MANAGER)).transfer(
             msg.sender,
             DEPOSIT_MANAGER.getReceiptTokenId(
                 IERC20(redemption.depositToken),
@@ -335,7 +336,9 @@ contract DepositRedemptionVault is
         redemption.amount = 0;
 
         // Update the committed deposits
-        _facilityCommittedDeposits[redemption.depositToken][redemption.facility] -= redemptionAmount;
+        _facilityCommittedDeposits[redemption.depositToken][
+            redemption.facility
+        ] -= redemptionAmount;
         _totalCommittedDeposits[redemption.depositToken] -= redemptionAmount;
 
         // Delegate to the facility for withdrawal
@@ -363,7 +366,14 @@ contract DepositRedemptionVault is
         uint16 redemptionId_,
         uint256 amount_,
         address facility_
-    ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) onlyValidFacility(facility_) returns (uint256 loanIndex) {
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(msg.sender, redemptionId_)
+        onlyValidFacility(facility_)
+        returns (uint256 loanIndex)
+    {
         // Get the redemption
         UserRedemption storage redemption = _userRedemptions[
             _getUserRedemptionKey(msg.sender, redemptionId_)
@@ -377,12 +387,14 @@ contract DepositRedemptionVault is
         if (borrowPct == 0) borrowPct = 8500; // default 85%
         uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
         uint256 availableBorrow = maxBorrow - _totalBorrowedPerRedemption[redemptionId_];
-        if (amount_ > availableBorrow) revert RedemptionVault_BorrowLimitExceeded(amount_, availableBorrow);
+        if (amount_ > availableBorrow)
+            revert RedemptionVault_BorrowLimitExceeded(amount_, availableBorrow);
 
         // Interest: annualized, prorated for period
         uint16 rate = interestRatePerYear[redemption.depositToken];
         if (rate == 0) rate = 500; // default 5%
-        uint256 interest = amount_.mulDiv(rate, ONE_HUNDRED_PERCENT) * redemption.depositPeriod / 12;
+        uint256 interest = (amount_.mulDiv(rate, ONE_HUNDRED_PERCENT) * redemption.depositPeriod) /
+            12;
 
         // Create loan
         Loan memory newLoan = Loan({
@@ -409,13 +421,7 @@ contract DepositRedemptionVault is
         );
 
         // Emit event
-        emit LoanCreated(
-            msg.sender,
-            redemptionId_,
-            amount_,
-            loanIndex,
-            facility_
-        );
+        emit LoanCreated(msg.sender, redemptionId_, amount_, loanIndex, facility_);
 
         return loanIndex;
     }
@@ -485,16 +491,27 @@ contract DepositRedemptionVault is
                 IERC20(redemption.depositToken),
                 redemption.depositPeriod
             );
-            uint256 receiptTokenBalance = DEPOSIT_MANAGER.balanceOf(address(this), receiptTokenId);
+            uint256 receiptTokenBalance = IERC6909(address(DEPOSIT_MANAGER)).balanceOf(
+                address(this),
+                receiptTokenId
+            );
 
             if (receiptTokenBalance > 0) {
-                DEPOSIT_MANAGER.transfer(msg.sender, receiptTokenId, receiptTokenBalance);
+                IERC6909(address(DEPOSIT_MANAGER)).transfer(
+                    msg.sender,
+                    receiptTokenId,
+                    receiptTokenBalance
+                );
             }
         }
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function extendLoan(uint16 redemptionId_, uint256 loanIndex_, uint48 newDueDate_) external onlyEnabled {
+    function extendLoan(
+        uint16 redemptionId_,
+        uint256 loanIndex_,
+        uint48 newDueDate_
+    ) external onlyEnabled {
         // Get the redemption
         UserRedemption storage redemption = _userRedemptions[
             _getUserRedemptionKey(msg.sender, redemptionId_)
@@ -505,7 +522,8 @@ contract DepositRedemptionVault is
 
         // Get loans for this redemption
         Loan[] storage loans = _redemptionLoans[redemptionId_];
-        if (loanIndex_ >= loans.length) revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
+        if (loanIndex_ >= loans.length)
+            revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
 
         Loan storage loan = loans[loanIndex_];
         if (loan.isDefaulted) revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
@@ -528,13 +546,15 @@ contract DepositRedemptionVault is
 
         // Get loans for this redemption
         Loan[] storage loans = _redemptionLoans[redemptionId_];
-        if (loanIndex_ >= loans.length) revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
+        if (loanIndex_ >= loans.length)
+            revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
 
         Loan storage loan = loans[loanIndex_];
         if (loan.isDefaulted) revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
 
         // Check if loan is expired
-        if (block.timestamp < loan.dueDate) revert RedemptionVault_LoanNotExpired(redemptionId_, loanIndex_);
+        if (block.timestamp < loan.dueDate)
+            revert RedemptionVault_LoanNotExpired(redemptionId_, loanIndex_);
 
         // Mark loan as defaulted
         loan.isDefaulted = true;
@@ -547,13 +567,16 @@ contract DepositRedemptionVault is
             IERC20(redemption.depositToken),
             redemption.depositPeriod
         );
-        DEPOSIT_MANAGER.burn(address(this), receiptTokenId, collateralToBurn);
+        // TODO burn receipt tokens
+        // DEPOSIT_MANAGER.burn(address(this), receiptTokenId, collateralToBurn);
 
         // Reduce redemption amount
         redemption.amount -= collateralToBurn;
 
         // Update committed deposits
-        _facilityCommittedDeposits[redemption.depositToken][redemption.facility] -= collateralToBurn;
+        _facilityCommittedDeposits[redemption.depositToken][
+            redemption.facility
+        ] -= collateralToBurn;
         _totalCommittedDeposits[redemption.depositToken] -= collateralToBurn;
 
         // Distribute residual value (keeper reward + treasury)
@@ -570,7 +593,13 @@ contract DepositRedemptionVault is
             ERC20(redemption.depositToken).safeTransfer(address(TRSRY), treasuryAmount);
         }
 
-        emit LoanDefaulted(redemptionId_, loanIndex_, loan.principal, loan.interest, collateralToBurn);
+        emit LoanDefaulted(
+            redemptionId_,
+            loanIndex_,
+            loan.principal,
+            loan.interest,
+            collateralToBurn
+        );
         emit RedemptionAmountDecreased(redemptionId_, collateralToBurn);
     }
 
@@ -684,7 +713,11 @@ contract DepositRedemptionVault is
 
     // ========== DEPOSITS ========== //
 
-    function _validateAvailableDeposits(IERC20 depositToken_, address facility_, uint256 amount_) internal view {
+    function _validateAvailableDeposits(
+        IERC20 depositToken_,
+        address facility_,
+        uint256 amount_
+    ) internal view {
         uint256 availableDeposits;
         if (facility_ == address(0)) {
             availableDeposits = getAvailableDeposits(depositToken_);
@@ -750,13 +783,16 @@ contract DepositRedemptionVault is
     }
 
     // ========== ADMIN FUNCTIONS ========== //
+
     function setMaxBorrowPercentage(address asset, uint16 percent) external onlyRole("admin") {
         require(percent <= 10000, "max 100%");
         maxBorrowPercentage[asset] = percent;
     }
+
     function setInterestRatePerYear(address asset, uint16 rate) external onlyRole("admin") {
         interestRatePerYear[asset] = rate;
     }
+
     function setKeeperRewardPercentage(uint16 percent) external onlyRole("admin") {
         require(percent <= 10000, "max 100%");
         keeperRewardPercentage = percent;

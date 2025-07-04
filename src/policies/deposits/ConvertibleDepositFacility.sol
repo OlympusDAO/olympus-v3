@@ -9,14 +9,13 @@ import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
 // Bophades
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
+import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol";
-import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
@@ -24,18 +23,11 @@ import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol
 contract ConvertibleDepositFacility is
     BaseDepositFacility,
     IConvertibleDepositFacility,
-    IPeriodicTask,
-    ReentrancyGuard
+    IPeriodicTask
 {
-    using EnumerableSet for EnumerableSet.AddressSet;
-
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
-
-    /// @notice The role assigned to the Heart contract.
-    ///         This enables the Heart contract to call specific functions on this contract.
-    bytes32 public constant ROLE_HEART = "heart";
 
     // ========== STATE VARIABLES ========== //
 
@@ -44,6 +36,9 @@ contract ConvertibleDepositFacility is
 
     /// @notice The DEPOS module.
     DEPOSv1 public DEPOS;
+
+    /// @notice The TRSRY module.
+    TRSRYv1 public TRSRY;
 
     // ========== SETUP ========== //
 
@@ -56,7 +51,7 @@ contract ConvertibleDepositFacility is
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](5);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
@@ -400,7 +395,7 @@ contract ConvertibleDepositFacility is
     // ========== PERIODIC TASKS ========== //
 
     /// @inheritdoc IPeriodicTask
-    function execute() external onlyRole(ROLE_HEART) {
+    function execute() external onlyRole(HEART_ROLE) {
         // Don't do anything if disabled
         if (!isEnabled) return;
 

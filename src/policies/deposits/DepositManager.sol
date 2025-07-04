@@ -415,13 +415,10 @@ contract DepositManager is
         // Validate that the recipient is not the zero address
         if (params_.recipient == address(0)) revert DepositManager_ZeroAddress();
 
-        // Validate that the asset is configured
-        if (!isConfiguredAsset(params_.asset)) revert DepositManager_InvalidAsset();
-
         // Get the borrowing key
         bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, params_.operator);
 
-                // Check borrowing capacity based on receipt token liabilities
+        // Check borrowing capacity based on receipt token liabilities
         uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
         uint256 operatorLiabilities = _assetLiabilities[borrowingKey];
         uint256 availableCapacity = operatorLiabilities - currentBorrowed;
@@ -439,10 +436,16 @@ contract DepositManager is
         _borrowedAmounts[borrowingKey] = currentBorrowed + params_.amount;
 
         // Withdraw the funds from the vault to the recipient
+        // Will revert if the asset is not configured
         (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         // Emit event
-        emit BorrowingWithdrawal(address(params_.asset), params_.operator, params_.recipient, actualAmount);
+        emit BorrowingWithdrawal(
+            address(params_.asset),
+            params_.operator,
+            params_.recipient,
+            actualAmount
+        );
 
         return actualAmount;
     }
@@ -453,7 +456,7 @@ contract DepositManager is
         BorrowingRepayParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
         // Validate that the asset is configured
-        if (!isConfiguredAsset(params_.asset)) revert DepositManager_InvalidAsset();
+        if (!_isConfiguredAsset(params_.asset)) revert DepositManager_InvalidAsset();
 
         // Get the borrowing key
         bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, params_.operator);
@@ -471,23 +474,32 @@ contract DepositManager is
 
         // Transfer funds from payer to this contract
         actualAmount = params_.asset.balanceOf(address(this));
-        params_.asset.safeTransferFrom(params_.payer, address(this), params_.amount);
+        ERC20(address(params_.asset)).safeTransferFrom(
+            params_.payer,
+            address(this),
+            params_.amount
+        );
         actualAmount = params_.asset.balanceOf(address(this)) - actualAmount;
 
         // Update borrowed amount
         _borrowedAmounts[borrowingKey] = currentBorrowed - actualAmount;
 
         // Emit event
-        emit BorrowingRepayment(address(params_.asset), params_.operator, params_.payer, actualAmount);
+        emit BorrowingRepayment(
+            address(params_.asset),
+            params_.operator,
+            params_.payer,
+            actualAmount
+        );
 
         return actualAmount;
     }
 
-        /// @inheritdoc IDepositManager
+    /// @inheritdoc IDepositManager
     function getBorrowedAmount(
         IERC20 asset_,
         address operator_
-    ) external view returns (uint256 borrowed) {
+    ) public view returns (uint256 borrowed) {
         bytes32 borrowingKey = _getAssetLiabilitiesKey(asset_, operator_);
         return _borrowedAmounts[borrowingKey];
     }
@@ -506,8 +518,6 @@ contract DepositManager is
 
         return operatorLiabilities - currentBorrowed;
     }
-
-
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 

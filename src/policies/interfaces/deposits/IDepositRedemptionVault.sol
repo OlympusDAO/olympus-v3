@@ -73,16 +73,15 @@ interface IDepositRedemptionVault {
         uint256 collateral
     );
 
-    event RedemptionAmountDecreased(
-        uint16 indexed redemptionId,
-        uint256 amount
-    );
+    event RedemptionAmountDecreased(uint16 indexed redemptionId, uint256 amount);
 
     event FacilityRegistered(address indexed facility);
     event FacilityDeauthorized(address indexed facility);
     event DepositsCommitted(address indexed token, address indexed facility, uint256 amount);
 
     // ========== ERRORS ========== //
+
+    error RedemptionVault_InvalidDepositManager(address depositManager);
 
     error RedemptionVault_InvalidToken(address depositToken, uint8 depositPeriod);
 

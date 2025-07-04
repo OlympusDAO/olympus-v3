@@ -14,7 +14,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // Bophades
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
@@ -22,11 +22,7 @@ import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol";
 
 /// @title YieldDepositFacility
-contract YieldDepositFacility is
-    BaseDepositFacility,
-    IYieldDepositFacility,
-    IPeriodicTask
-{
+contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPeriodicTask {
     // ========== STATE VARIABLES ========== //
 
     /// @notice The TRSRY module.
@@ -48,6 +44,8 @@ contract YieldDepositFacility is
 
     /// @notice The interval between snapshots in seconds
     uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
+
+    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     // ========== SETUP ========== //
 

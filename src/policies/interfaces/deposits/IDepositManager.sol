@@ -3,6 +3,7 @@ pragma solidity >=0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 /// @title  Deposit Manager
 /// @notice Defines an interface for a policy that manages deposits on behalf of other contracts. It is meant to be used by the facilities, and is not an end-user policy.
@@ -11,7 +12,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 ///         - Asset: an ERC20 asset that can be deposited into the contract
 ///         - Asset vault: an optional ERC4626 vault that assets are deposited into
 ///         - Asset period: the combination of an asset and deposit period
-interface IDepositManager {
+interface IDepositManager is IAssetManager {
     // ========== EVENTS ========== //
 
     event ClaimedYield(
@@ -75,7 +76,12 @@ interface IDepositManager {
     error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod);
 
     // Borrowing Errors
-    error DepositManager_BorrowingLimitExceeded(address asset, address operator, uint256 requested, uint256 available);
+    error DepositManager_BorrowingLimitExceeded(
+        address asset,
+        address operator,
+        uint256 requested,
+        uint256 available
+    );
 
     // ========== STRUCTS ========== //
 
