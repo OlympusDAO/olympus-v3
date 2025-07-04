@@ -28,10 +28,6 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
     //  [X] it reverts
 
     function test_contractDisabled_reverts() public {
-        // Disable the redemption vault
-        vm.prank(emergency);
-        redemptionVault.disable("");
-
         // Expect revert
         _expectRevertNotEnabled();
 

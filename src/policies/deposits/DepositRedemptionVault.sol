@@ -124,9 +124,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     // ========== FACILITY MANAGEMENT ========== //
 
     /// @inheritdoc IDepositRedemptionVault
-    function authorizeFacility(address facility_) external onlyRole("admin") {
+    function authorizeFacility(address facility_) external onlyAdminRole {
         if (facility_ == address(0)) revert RedemptionVault_InvalidFacility(facility_);
-        if (_registeredFacilities[facility_]) revert RedemptionVault_InvalidFacility(facility_);
+        if (_registeredFacilities[facility_]) revert RedemptionVault_FacilityExists(facility_);
 
         _registeredFacilities[facility_] = true;
         _facilitiesArray.push(facility_);
@@ -135,7 +135,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function deauthorizeFacility(address facility_) external onlyRole("admin") {
+    function deauthorizeFacility(address facility_) external onlyEmergencyOrAdminRole {
         if (!_registeredFacilities[facility_])
             revert RedemptionVault_FacilityNotRegistered(facility_);
 
@@ -801,16 +801,16 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    function setMaxBorrowPercentage(address asset, uint16 percent) external onlyRole("admin") {
+    function setMaxBorrowPercentage(address asset, uint16 percent) external onlyAdminRole {
         require(percent <= 10000, "max 100%");
         maxBorrowPercentage[asset] = percent;
     }
 
-    function setInterestRatePerYear(address asset, uint16 rate) external onlyRole("admin") {
+    function setInterestRatePerYear(address asset, uint16 rate) external onlyAdminRole {
         interestRatePerYear[asset] = rate;
     }
 
-    function setKeeperRewardPercentage(uint16 percent) external onlyRole("admin") {
+    function setKeeperRewardPercentage(uint16 percent) external onlyAdminRole {
         require(percent <= 10000, "max 100%");
         keeperRewardPercentage = percent;
     }

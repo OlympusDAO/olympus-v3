@@ -106,7 +106,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         givenFacilityIsDeauthorized(address(cdFacility))
     {
         // Expect revert
-        _expectRevertInvalidFacility(address(cdFacility));
+        _expectRevertFacilityNotRegistered(address(cdFacility));
 
         // Call function
         vm.prank(recipient);

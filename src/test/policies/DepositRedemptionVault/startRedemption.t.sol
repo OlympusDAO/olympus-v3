@@ -110,7 +110,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
 
     function test_facilityNotRegistered_reverts() public givenLocallyActive {
         // Expect revert
-        _expectRevertInvalidFacility(address(0x123));
+        _expectRevertFacilityNotRegistered(address(0x123));
 
         // Call function
         vm.prank(recipient);
@@ -138,7 +138,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         givenFacilityIsDeauthorized(address(cdFacility))
     {
         // Expect revert
-        _expectRevertInvalidFacility(address(cdFacility));
+        _expectRevertFacilityNotRegistered(address(cdFacility));
 
         // Call function
         vm.prank(recipient);

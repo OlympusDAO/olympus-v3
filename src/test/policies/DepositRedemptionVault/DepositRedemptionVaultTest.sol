@@ -713,6 +713,15 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
+    function _expectRevertFacilityNotRegistered(address facility_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_FacilityNotRegistered.selector,
+                facility_
+            )
+        );
+    }
+
     function _expectRevertFacilityExists(address facility_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
