@@ -3,8 +3,8 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
@@ -19,7 +19,7 @@ import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.s
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim receipt tokens
-contract CDFacility is
+contract ConvertibleDepositFacility is
     Policy,
     IConvertibleDepositFacility,
     IPeriodicTask,

@@ -57,7 +57,7 @@ contract YieldDepositFacilityStartRedemptionTest is YieldDepositFacilityTest {
         assertEq(
             depositManager.balanceOf(address(yieldDepositFacility), currentReceiptTokenId),
             amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
-            "CDFacility: receipt token balance mismatch"
+            "ConvertibleDepositFacility: receipt token balance mismatch"
         );
     }
 

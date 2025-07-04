@@ -4,7 +4,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
@@ -15,7 +15,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 // Bophades
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 
 /// @title  BaseDepositRedemptionVault
 /// @notice A contract that manages the redemption of receipt tokens

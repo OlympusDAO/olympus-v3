@@ -95,8 +95,8 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         amount_ = bound(amount_, 1, RESERVE_TOKEN_AMOUNT);
 
         // At this stage:
-        // - The recipient has started redemption for 10e18 via the CDFacility
-        // - DepositManager has 10e18 in deposits from the CDFacility, of which 10e18 are committed for redemption
+        // - The recipient has started redemption for 10e18 via the ConvertibleDepositFacility
+        // - DepositManager has 10e18 in deposits from the ConvertibleDepositFacility, of which 10e18 are committed for redemption
         // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
 
         // Expect revert

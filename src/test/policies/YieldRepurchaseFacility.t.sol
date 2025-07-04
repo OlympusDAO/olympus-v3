@@ -240,7 +240,7 @@ contract YieldRepurchaseFacilityTest is Test {
     // [X] shutdown
     // [X] getNextYield
     // [X] getReserveBalance
-    //  [ ] includes yield in the CDFacility
+    //  [ ] includes yield in the ConvertibleDepositFacility
 
     function test_setup() public view {
         // addresses are set correctly

@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -47,7 +47,7 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "deposit period"
             )
         );
@@ -68,7 +68,7 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_DepositPeriodAlreadyEnabled.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled.selector,
                 address(iReserveToken),
                 PERIOD_MONTHS
             )

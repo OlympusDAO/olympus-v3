@@ -6,7 +6,7 @@ import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol"
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract DepositManagerDepositTest is DepositManagerTest {
     // ========== EVENTS ========== //

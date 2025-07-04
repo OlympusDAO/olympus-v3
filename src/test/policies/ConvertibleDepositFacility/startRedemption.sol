@@ -59,7 +59,7 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
         assertEq(
             depositManager.balanceOf(address(facility), receiptTokenId_),
             amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
-            "CDFacility: receipt token balance mismatch"
+            "ConvertibleDepositFacility: receipt token balance mismatch"
         );
     }
 
@@ -170,13 +170,13 @@ contract ConvertibleDepositFacilityStartRedemptionTest is ConvertibleDepositFaci
     {
         amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
 
-        // Reclaim the yield deposit via the CDFacility
+        // Reclaim the yield deposit via the ConvertibleDepositFacility
         vm.prank(recipient);
         facility.reclaim(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
 
         // At this stage:
-        // - The recipient has reclaimed 1e18 via the CDFacility
-        // - DepositManager has 0 in deposits from the CDFacility
+        // - The recipient has reclaimed 1e18 via the ConvertibleDepositFacility
+        // - DepositManager has 0 in deposits from the ConvertibleDepositFacility
         // - DepositManager has 1e18 in deposits from the YieldDepositFacility
 
         // Expect revert

@@ -46,7 +46,7 @@ contract ConvertibleDepositFacilityCancelRedemptionTest is ConvertibleDepositFac
         assertEq(
             depositManager.balanceOf(address(facility), receiptTokenId_),
             previousUserCommitmentAmount_ - amount_,
-            "CDFacility: receipt token balance mismatch"
+            "ConvertibleDepositFacility: receipt token balance mismatch"
         );
     }
 

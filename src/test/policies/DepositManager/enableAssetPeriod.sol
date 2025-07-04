@@ -3,7 +3,7 @@ pragma solidity >=0.8.20;
 
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     // ========== EVENTS ========== //

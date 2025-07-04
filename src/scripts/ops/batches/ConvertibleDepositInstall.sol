@@ -40,8 +40,8 @@ contract ConvertibleDepositInstall is OlyBatch {
         // solhint-disable custom-errors
         // require(cdepo != address(0), "CDEPO address is not set");
         require(cdpos != address(0), "DEPOS address is not set");
-        require(cdAuctioneer != address(0), "CDAuctioneer address is not set");
-        require(cdFacility != address(0), "CDFacility address is not set");
+        require(cdAuctioneer != address(0), "ConvertibleDepositAuctioneer address is not set");
+        require(cdFacility != address(0), "ConvertibleDepositFacility address is not set");
         require(emissionManager != address(0), "EmissionManager address is not set");
         require(heart != address(0), "Heart address is not set");
         // solhint-enable custom-errors
@@ -59,7 +59,7 @@ contract ConvertibleDepositInstall is OlyBatch {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, cdpos)
         );
 
-        // A.3. Install the CDAuctioneer policy on the kernel
+        // A.3. Install the ConvertibleDepositAuctioneer policy on the kernel
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -69,7 +69,7 @@ contract ConvertibleDepositInstall is OlyBatch {
             )
         );
 
-        // A.4. Install the CDFacility policy on the kernel
+        // A.4. Install the ConvertibleDepositFacility policy on the kernel
         addToBatch(
             kernel,
             abi.encodeWithSelector(

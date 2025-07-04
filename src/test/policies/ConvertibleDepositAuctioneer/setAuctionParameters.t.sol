@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "cd_emissionmanager" role
@@ -30,7 +30,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "target"
             )
         );
@@ -47,7 +47,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "tick size"
             )
         );
@@ -64,7 +64,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "min price"
             )
         );

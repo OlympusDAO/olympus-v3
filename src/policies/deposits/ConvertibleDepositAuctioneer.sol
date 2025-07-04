@@ -8,14 +8,14 @@ import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 
 // Bophades dependencies
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 
 /// @title  Convertible Deposit Auctioneer
 /// @notice Implementation of the {IConvertibleDepositAuctioneer} interface for a specific deposit token and 1 or more deposit periods
@@ -30,7 +30,7 @@ import {CDFacility} from "src/policies/CDFacility.sol";
 ///         - The auction has a target amount of convertible OHM to sell per day
 ///         - When the target is reached, the amount of OHM required to increase the conversion price will decrease, resulting in more rapid price increases (assuming there is demand)
 ///         - The auction parameters are able to be updated in order to tweak the auction's behaviour
-contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
+contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
     using FullMath for uint256;
     using EnumerableSet for EnumerableSet.UintSet;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -84,7 +84,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     mapping(uint8 depositPeriod => Tick previousTick) internal _depositPeriodPreviousTicks;
 
     /// @notice Address of the Convertible Deposit Facility
-    CDFacility public immutable CD_FACILITY;
+    ConvertibleDepositFacility public immutable CD_FACILITY;
 
     /// @notice Auction parameters
     /// @dev    These values should only be set through the `setAuctionParameters()` function
@@ -117,10 +117,10 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
         address cdFacility_,
         address depositAsset_
     ) Policy(Kernel(kernel_)) {
-        if (cdFacility_ == address(0)) revert CDAuctioneer_InvalidParams("cd facility");
-        if (depositAsset_ == address(0)) revert CDAuctioneer_InvalidParams("deposit asset");
+        if (cdFacility_ == address(0)) revert ConvertibleDepositAuctioneer_InvalidParams("cd facility");
+        if (depositAsset_ == address(0)) revert ConvertibleDepositAuctioneer_InvalidParams("deposit asset");
 
-        CD_FACILITY = CDFacility(cdFacility_);
+        CD_FACILITY = ConvertibleDepositFacility(cdFacility_);
         _DEPOSIT_ASSET = IERC20(depositAsset_);
 
         // PolicyEnabler makes this disabled until enabled
@@ -198,7 +198,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
             BidOutput memory output = _previewBid(params.depositAmount, updatedTick);
 
             // Reject if the OHM out is 0
-            if (output.ohmOut == 0) revert CDAuctioneer_InvalidParams("converted amount");
+            if (output.ohmOut == 0) revert ConvertibleDepositAuctioneer_InvalidParams("converted amount");
 
             // Update state
             _dayState.convertible += output.ohmOut;
@@ -512,7 +512,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @notice Modifier to check if a deposit period is enabled
     modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
         if (!isDepositPeriodEnabled(depositPeriod_)) {
-            revert CDAuctioneer_DepositPeriodNotEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
         }
         _;
     }
@@ -523,11 +523,11 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - The deposit period is already enabled for this asset
     function enableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
         // Validate that the deposit period is not 0
-        if (depositPeriod_ == 0) revert CDAuctioneer_InvalidParams("deposit period");
+        if (depositPeriod_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
 
         // Validate that the deposit period is not already enabled
         if (_depositPeriodsEnabled[depositPeriod_]) {
-            revert CDAuctioneer_DepositPeriodAlreadyEnabled(
+            revert ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
                 address(_DEPOSIT_ASSET),
                 depositPeriod_
             );
@@ -559,7 +559,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     function disableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
         // Validate that the deposit period is enabled
         if (!_depositPeriodsEnabled[depositPeriod_]) {
-            revert CDAuctioneer_DepositPeriodNotEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
         }
 
         // Disable the deposit period
@@ -587,13 +587,13 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
         // Tick size must be non-zero
-        if (tickSize_ == 0) revert CDAuctioneer_InvalidParams("tick size");
+        if (tickSize_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
 
         // Min price must be non-zero
-        if (minPrice_ == 0) revert CDAuctioneer_InvalidParams("min price");
+        if (minPrice_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("min price");
 
         // Target must be non-zero
-        if (target_ == 0) revert CDAuctioneer_InvalidParams("target");
+        if (target_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("target");
 
         _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
 
@@ -719,7 +719,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @param      newStep_    The new tick step
     function setTickStep(uint24 newStep_) public override onlyManagerOrAdminRole {
         // Value must be more than 100e2
-        if (newStep_ < ONE_HUNDRED_PERCENT) revert CDAuctioneer_InvalidParams("tick step");
+        if (newStep_ < ONE_HUNDRED_PERCENT) revert ConvertibleDepositAuctioneer_InvalidParams("tick step");
 
         _tickStep = newStep_;
 
@@ -735,7 +735,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     /// @param      days_    The new auction tracking period
     function setAuctionTrackingPeriod(uint8 days_) public override onlyManagerOrAdminRole {
         // Value must be non-zero
-        if (days_ == 0) revert CDAuctioneer_InvalidParams("auction tracking period");
+        if (days_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("auction tracking period");
 
         _auctionTrackingPeriod = days_;
 
@@ -758,7 +758,7 @@ contract CDAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, R
     ///             - The auction tracking period is invalid
     function _enable(bytes calldata enableData_) internal override {
         if (enableData_.length != _ENABLE_PARAMS_LENGTH)
-            revert CDAuctioneer_InvalidParams("enable data");
+            revert ConvertibleDepositAuctioneer_InvalidParams("enable data");
 
         // Decode the enable data
         EnableParams memory params = abi.decode(enableData_, (EnableParams));

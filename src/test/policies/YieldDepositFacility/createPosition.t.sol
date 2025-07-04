@@ -5,7 +5,7 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 
 contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
     event CreatedDeposit(

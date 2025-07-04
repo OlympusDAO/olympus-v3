@@ -5,12 +5,12 @@ pragma solidity >=0.8.20;
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // Bophades

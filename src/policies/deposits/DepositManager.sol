@@ -3,7 +3,7 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries

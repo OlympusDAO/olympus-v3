@@ -4,7 +4,7 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 
 contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacilityTest {
     event CreatedDeposit(

@@ -4,7 +4,7 @@ pragma solidity >=0.8.20;
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 // Interfaces
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract DepositManagerWithdrawTest is DepositManagerTest {
     // ========== TESTS ========== //

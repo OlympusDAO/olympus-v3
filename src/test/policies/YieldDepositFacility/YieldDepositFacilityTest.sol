@@ -15,16 +15,16 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 
 // solhint-disable max-states-count
 contract YieldDepositFacilityTest is Test {
@@ -36,7 +36,7 @@ contract YieldDepositFacilityTest is Test {
     OlympusMinter public minter;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
-    CDFacility public cdFacility;
+    ConvertibleDepositFacility public cdFacility;
 
     MockERC20 public ohm;
 
@@ -130,7 +130,7 @@ contract YieldDepositFacilityTest is Test {
         depositManager = new DepositManager(address(kernel));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
-        cdFacility = new CDFacility(address(kernel), address(depositManager));
+        cdFacility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         minter = new OlympusMinter(kernel, address(ohm));
 
         // Install modules

@@ -49,7 +49,7 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
         assertEq(
             depositManager.balanceOf(address(facility), receiptTokenId_),
             otherUserCommitmentAmount_,
-            "CDFacility: receipt token balance mismatch"
+            "ConvertibleDepositFacility: receipt token balance mismatch"
         );
 
         // Assert underlying token balances
@@ -61,7 +61,7 @@ contract ConvertibleDepositFacilityFinishRedemptionTest is ConvertibleDepositFac
         assertEq(
             depositToken_.balanceOf(address(facility)),
             0,
-            "CDFacility: underlying token balance mismatch"
+            "ConvertibleDepositFacility: underlying token balance mismatch"
         );
     }
 

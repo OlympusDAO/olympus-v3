@@ -6,9 +6,9 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";

@@ -9,26 +9,26 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
-import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositFacilityTest is Test {
     Kernel public kernel;
-    CDFacility public facility;
+    ConvertibleDepositFacility public facility;
     YieldDepositFacility public yieldDepositFacility;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
@@ -103,7 +103,7 @@ contract ConvertibleDepositFacilityTest is Test {
             address(0)
         );
         depositManager = new DepositManager(address(kernel));
-        facility = new CDFacility(address(kernel), address(depositManager));
+        facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
 

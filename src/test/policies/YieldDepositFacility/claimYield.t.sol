@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";

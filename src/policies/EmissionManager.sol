@@ -11,7 +11,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IGenericClearinghouse} from "policies/interfaces/IGenericClearinghouse.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
