@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.15;
 
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyEnablerTest} from "./PolicyEnablerTest.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 contract PolicyEnablerOnlyEnabledTest is PolicyEnablerTest {
     // given the policy is disabled
@@ -11,7 +11,7 @@ contract PolicyEnablerOnlyEnabledTest is PolicyEnablerTest {
 
     function test_policyDisabled_reverts() public {
         // Expect revert
-        vm.expectRevert(PolicyEnabler.NotEnabled.selector);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
 
         // Call function
         policyEnabler.requiresEnabled();

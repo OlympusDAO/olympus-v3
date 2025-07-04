@@ -65,11 +65,4 @@ interface IEmissionManager {
         uint256 minPriceScalar;
         uint48 restartTimeframe;
     }
-
-    // ========== EXECUTE ========== //
-
-    /// @notice calculate and execute sale, if applicable, once per day (every 3 beats)
-    /// @dev this function is restricted to the heart role and is called on each heart beat
-    /// @dev if the contract is not active, the function does nothing
-    function execute() external;
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // Libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -13,6 +13,7 @@ import {IgOHM} from "interfaces/IgOHM.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
 import {IGenericClearinghouse} from "policies/interfaces/IGenericClearinghouse.sol";
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -24,7 +25,7 @@ import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // solhint-disable max-states-count
-contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
+contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabler {
     using FullMath for uint256;
     using TransferHelper for ERC20;
 
@@ -122,7 +123,9 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
         // Max approve sReserve contract for reserve for deposits
         reserve.safeApprove(address(sReserve), type(uint256).max);
 
-        // TODO does reserve need to be the same as the CDAuctioneer bid token?
+        // Validate that the CDAuctioneer is configured for the reserve asset
+        if (address(cdAuctioneer.getDepositAsset()) != address(reserve_))
+            revert InvalidParam("CD Auctioneer not configured for reserve");
 
         // PolicyEnabler disables the policy by default
     }
@@ -170,9 +173,9 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
         return (major, minor);
     }
 
-    // ========== HEARTBEAT ========== //
+    // ========== PERIODIC TASK ========== //
 
-    /// @inheritdoc IEmissionManager
+    /// @inheritdoc IPeriodicTask
     function execute() external onlyRole(ROLE_HEART) {
         // Don't do anything if disabled
         if (!isEnabled) return;
@@ -389,7 +392,7 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
     }
 
     /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
-    /// @dev This function is restricted to the emissions_admin role
+    /// @dev This function is restricted to the ADMIN role
     /// @param token_ The address of the ERC20 token to rescue
     function rescue(address token_) external onlyAdminRole {
         ERC20 token = ERC20(token_);
@@ -561,5 +564,16 @@ contract EmissionManager is IEmissionManager, Policy, PolicyEnabler {
     /// @return minPrice for CD auction
     function getMinPriceFor(uint256 price) public view returns (uint256) {
         return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(PolicyEnabler, IPeriodicTask) returns (bool) {
+        return
+            interfaceId == type(IPeriodicTask).interfaceId ||
+            interfaceId == type(IEmissionManager).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }

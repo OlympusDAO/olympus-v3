@@ -2,23 +2,22 @@
 pragma solidity 0.8.15;
 
 // Libraries
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
-import {IBondSDA} from "interfaces/IBondSDA.sol";
+import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 
 // Bophades
 import {Kernel, Policy, Permissions, Keycode, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
-import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 interface BurnableERC20 {
@@ -64,7 +63,6 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, PolicyEnabler {
     TRSRYv1 public TRSRY;
     PRICEv1 public PRICE;
     CHREGv1 public CHREG;
-    CDEPOv1 public CDEPO;
 
     // External contracts
     address public immutable teller; // = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
@@ -105,18 +103,16 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, PolicyEnabler {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](5);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("PRICE");
         dependencies[2] = toKeycode("CHREG");
         dependencies[3] = toKeycode("ROLES");
-        dependencies[4] = toKeycode("CDEPO");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
         CHREG = CHREGv1(getModuleAddress(dependencies[2]));
         ROLES = ROLESv1(getModuleAddress(dependencies[3]));
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[4]));
 
         _oracleDecimals = PRICE.decimals();
     }
@@ -335,7 +331,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, PolicyEnabler {
         }
 
         // CDEPO
-        sBalance += sReserve.balanceOf(address(CDEPO));
+        // sBalance += sReserve.balanceOf(address(CDEPO));
 
         balance = sReserve.previewRedeem(sBalance);
     }

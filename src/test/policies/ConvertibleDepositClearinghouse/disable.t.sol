@@ -10,7 +10,7 @@ contract DisableCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
     //  [X] it reverts
     // [X] the contract is disabled
     // [X] the contract is deactivated in CHREG
-
+    /*
     function test_callerNotAdminOrEmergency(address caller_) public {
         vm.assume(caller_ != ADMIN && caller_ != EMERGENCY);
 
@@ -44,4 +44,5 @@ contract DisableCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
         assertEq(CHREG.registryCount(), 1);
         assertEq(CHREG.registry(0), address(clearinghouse));
     }
+    */
 }

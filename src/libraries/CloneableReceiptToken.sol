@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity >=0.8.15;
+
+// Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
+import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
+
+// Libraries
+import {CloneERC20} from "src/external/clones/CloneERC20.sol";
+
+/// @title  CloneableReceiptToken
+/// @notice ERC20 implementation that is deployed as a clone
+///         with immutable arguments for each supported input token.
+contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositReceiptToken {
+    // ========== IMMUTABLE ARGS ========== //
+
+    // Storage layout:
+    // 0x00 - name, 32 bytes
+    // 0x20 - symbol, 32 bytes
+    // 0x40 - decimals, 1 byte
+    // 0x41 - owner, 20 bytes
+    // 0x55 - asset, 20 bytes
+    // 0x69 - depositPeriod, 1 byte
+
+    /// @notice The owner of the clone
+    /// @return _owner The owner address stored in immutable args
+    function owner() public pure returns (address _owner) {
+        _owner = _getArgAddress(0x41);
+    }
+
+    /// @notice The underlying asset
+    /// @return _asset The asset address stored in immutable args
+    function asset() public pure returns (IERC20 _asset) {
+        _asset = IERC20(_getArgAddress(0x55));
+    }
+
+    /// @notice The deposit period (in months)
+    /// @return _depositPeriod The deposit period stored in immutable args
+    function depositPeriod() public pure returns (uint8 _depositPeriod) {
+        _depositPeriod = _getArgUint8(0x69);
+    }
+
+    // ========== OWNER-ONLY FUNCTIONS ========== //
+
+    /// @notice Only the owner can call this function
+    modifier onlyOwner() {
+        if (msg.sender != owner()) revert OnlyOwner();
+        _;
+    }
+
+    /// @notice Mint tokens to the specified address
+    /// @dev    This is owner-only, as the underlying token is custodied by the owner.
+    ///         Minting should be performed through the owner contract.
+    ///
+    /// @param to_ The address to mint tokens to
+    /// @param amount_ The amount of tokens to mint
+    function mintFor(address to_, uint256 amount_) external onlyOwner {
+        _mint(to_, amount_);
+    }
+
+    /// @notice Burn tokens from the specified address
+    /// @dev    This is gated to the owner, as burning is controlled.
+    ///         Burning should be performed through the owner contract.
+    ///
+    /// @dev    This function reverts if:
+    ///         - The amount is greater than the allowance
+    ///
+    /// @param from_ The address to burn tokens from
+    /// @param amount_ The amount of tokens to burn
+    function burnFrom(address from_, uint256 amount_) external onlyOwner {
+        uint256 allowed = allowance[from_][msg.sender];
+
+        if (allowed != type(uint256).max) {
+            allowance[from_][msg.sender] = allowed - amount_;
+        }
+
+        _burn(from_, amount_);
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId_) public pure returns (bool) {
+        // super does not implement ERC165, so no need to call it
+        return
+            interfaceId_ == type(IERC20).interfaceId ||
+            interfaceId_ == type(IERC20BurnableMintable).interfaceId ||
+            interfaceId_ == type(IDepositReceiptToken).interfaceId;
+    }
+}

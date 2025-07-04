@@ -2,8 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 /// @title IYieldDepositFacility
 /// @notice Interface for the Yield Facility that can be used to mint yield-bearing deposits
@@ -11,13 +9,14 @@ interface IYieldDepositFacility {
     // ========== EVENTS ========== //
 
     event CreatedDeposit(
-        address indexed depositToken,
-        address indexed user,
+        address indexed asset,
+        address indexed depositor,
         uint256 indexed positionId,
+        uint8 periodMonths,
         uint256 depositAmount
     );
 
-    event Harvest(address indexed depositToken, address indexed user, uint256 yield);
+    event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
 
     event YieldFeeSet(uint16 yieldFee);
 
@@ -29,36 +28,66 @@ interface IYieldDepositFacility {
 
     error YDF_NotOwner(uint256 positionId_);
 
-    error YDF_InvalidToken(uint256 positionId_, address token_);
+    error YDF_InvalidToken(address token_, uint8 periodMonths_);
 
     error YDF_Unsupported(uint256 positionId_);
 
     error YDF_NoSnapshotAvailable(address token, uint48 timestamp);
 
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice Parameters for the {createPosition} function
+    ///
+    /// @param asset             The address of the asset
+    /// @param periodMonths      The period of the deposit
+    /// @param amount            The amount of asset to deposit
+    /// @param wrapPosition      Whether the position should be wrapped
+    /// @param wrapReceipt       Whether the receipt token should be wrapped
+    struct CreatePositionParams {
+        IERC20 asset;
+        uint8 periodMonths;
+        uint256 amount;
+        bool wrapPosition;
+        bool wrapReceipt;
+    }
+
     // ========== MINT ========== //
 
-    /// @notice Mints a position for a yield-bearing deposit
+    /// @notice Creates a position for a yield-bearing deposit
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the CD token is supported
-    ///         - Depositing the token into the CDEPO module and minting the CD token
-    ///         - Creating a new position in the CDPOS module
+    ///         - Validating that the asset is supported
+    ///         - Depositing the asset into the deposit manager and minting the receipt token
+    ///         - Creating a new position in the DEPOS module
     ///
-    /// @param  cdToken_            The address of the CD token
-    /// @param  amount_             The amount of token to deposit
-    /// @param  wrap_               Whether the position should be wrapped
+    /// @param  params_             The parameters for the position creation
     /// @return positionId          The ID of the new position
-    function mint(
-        IConvertibleDepositERC20 cdToken_,
+    /// @return receiptTokenId      The ID of the receipt token
+    /// @return actualAmount        The quantity of receipt tokens minted to the depositor
+    function createPosition(
+        CreatePositionParams calldata params_
+    ) external returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
+
+    /// @notice Deposits the given amount of the underlying asset in exchange for a receipt token. This function can be used to mint additional receipt tokens on a 1:1 basis, without creating a new position.
+    ///
+    /// @param  asset_              The address of the asset
+    /// @param  periodMonths_       The period of the deposit
+    /// @param  amount_             The amount of asset to deposit
+    /// @param  wrapReceipt_        Whether the receipt token should be wrapped
+    /// @return receiptTokenId      The ID of the receipt token
+    /// @return actualAmount        The quantity of receipt tokens minted to the depositor
+    function deposit(
+        IERC20 asset_,
+        uint8 periodMonths_,
         uint256 amount_,
-        bool wrap_
-    ) external returns (uint256 positionId);
+        bool wrapReceipt_
+    ) external returns (uint256 receiptTokenId, uint256 actualAmount);
 
     // ========== YIELD ========== //
 
     /// @notice Preview the amount of yield that would be claimed for the given positions
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that `account_` is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Returning the total amount of yield that would be claimed
     ///
@@ -66,7 +95,7 @@ interface IYieldDepositFacility {
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that would be claimed
     /// @return asset           The address of the asset that will be received
-    function previewHarvest(
+    function previewClaimYield(
         address account_,
         uint256[] memory positionIds_
     ) external view returns (uint256 yield, IERC20 asset);
@@ -74,7 +103,7 @@ interface IYieldDepositFacility {
     /// @notice Preview the amount of yield that would be claimed for the given positions with timestamp hints
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that `account_` is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Using the provided timestamp hints if valid
     ///         - Returning the total amount of yield that would be claimed
@@ -84,7 +113,7 @@ interface IYieldDepositFacility {
     /// @param  timestampHints_ An array of timestamp hints for each position
     /// @return yield           The amount of yield that would be claimed
     /// @return asset           The address of the asset that will be received
-    function previewHarvest(
+    function previewClaimYield(
         address account_,
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
@@ -93,51 +122,35 @@ interface IYieldDepositFacility {
     /// @notice Claims the yield for the given positions
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
-    ///         - Burning the CD tokens
+    ///         - Burning the receipt tokens
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that was claimed
-    function harvest(uint256[] memory positionIds_) external returns (uint256 yield);
+    function claimYield(uint256[] memory positionIds_) external returns (uint256 yield);
 
     /// @notice Claims the yield for the given positions with timestamp hints
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that token in the position is a supported CD token
+    ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
     ///         - Using the provided timestamp hints if valid
-    ///         - Burning the CD tokens
+    ///         - Burning the receipt tokens
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @param  timestampHints_ An array of timestamp hints for each position
     /// @return yield           The amount of yield that was claimed
-    function harvest(
+    function claimYield(
         uint256[] memory positionIds_,
         uint48[] memory timestampHints_
     ) external returns (uint256 yield);
 
     // ========== ADMIN FUNCTIONS ========== //
-
-    /// @notice Creates a new CD token
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Creating a new CD token
-    ///         - Emitting an event
-    ///
-    /// @param  vault_          The address of the vault to use for the CD token
-    /// @param  periodMonths_   The period of the CD token
-    /// @param  reclaimRate_    The reclaim rate to set for the CD token
-    /// @return cdToken         The address of the new CD token
-    function create(
-        IERC4626 vault_,
-        uint8 periodMonths_,
-        uint16 reclaimRate_
-    ) external returns (IConvertibleDepositERC20 cdToken);
 
     /// @notice Sets the percentage of yield that will be taken as a fee
     /// @dev    The implementing contract is expected to handle the following:

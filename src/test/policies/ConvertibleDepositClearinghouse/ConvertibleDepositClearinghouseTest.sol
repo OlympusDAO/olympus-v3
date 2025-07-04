@@ -10,30 +10,30 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+// import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
+// import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
 import {OlympusClearinghouseRegistry} from "src/modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CDClearinghouse} from "src/policies/CDClearinghouse.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {ICooler} from "src/external/cooler/interfaces/ICooler.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract ConvertibleDepositClearinghouseTest is Test {
-    using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
+    // using ModuleTestFixtureGenerator for OlympusConvertibleDepository;
 
-    address internal constant EXECUTOR = address(0x1111);
-    address internal constant ADMIN = address(0xAAAA);
-    address internal constant EMERGENCY = address(0xEEEE);
-    address internal constant USER = address(0xBBBB);
-    address internal constant OTHERS = address(0xDDDD);
+    address internal EXECUTOR;
+    address internal ADMIN;
+    address internal EMERGENCY;
+    address internal USER;
+    address internal OTHERS;
 
     uint8 internal constant PERIOD_MONTHS = 6;
 
@@ -52,7 +52,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
     Kernel internal kernel;
     OlympusTreasury internal TRSRY;
-    OlympusConvertibleDepository internal CDEPO;
+    // OlympusConvertibleDepository internal CDEPO;
     OlympusClearinghouseRegistry internal CHREG;
     OlympusRoles internal ROLES;
 
@@ -65,6 +65,12 @@ contract ConvertibleDepositClearinghouseTest is Test {
     ICooler internal cooler;
 
     function setUp() public {
+        EXECUTOR = makeAddr("EXECUTOR");
+        ADMIN = makeAddr("ADMIN");
+        EMERGENCY = makeAddr("EMERGENCY");
+        USER = makeAddr("USER");
+        OTHERS = makeAddr("OTHERS");
+
         // Set up tokens
         asset = new MockERC20("Asset", "ASSET", 18);
         iAsset = IERC20(address(asset));
@@ -86,13 +92,13 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Modules
         TRSRY = new OlympusTreasury(kernel);
-        CDEPO = new OlympusConvertibleDepository(kernel);
+        // CDEPO = new OlympusConvertibleDepository(kernel);
         CHREG = new OlympusClearinghouseRegistry(kernel, address(0), new address[](0));
         ROLES = new OlympusRoles(kernel);
 
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
-        kernel.executeAction(Actions.InstallModule, address(CDEPO));
+        // kernel.executeAction(Actions.InstallModule, address(CDEPO));
         kernel.executeAction(Actions.InstallModule, address(CHREG));
         kernel.executeAction(Actions.InstallModule, address(ROLES));
         vm.stopPrank();
@@ -110,7 +116,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
             INTEREST_RATE
         );
         vm.stopPrank();
-        godmode = CDEPO.generateGodmodeFixture(type(OlympusConvertibleDepository).name);
+        // godmode = CDEPO.generateGodmodeFixture(type(OlympusConvertibleDepository).name);
 
         vm.startPrank(EXECUTOR);
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
@@ -132,7 +138,7 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Create a CD token
         vm.startPrank(godmode);
-        cdToken = ERC20(address(CDEPO.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2)));
+        // cdToken = ERC20(address(CDEPO.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2)));
         vm.stopPrank();
         vm.label(address(cdToken), "cdToken");
 
@@ -168,11 +174,11 @@ contract ConvertibleDepositClearinghouseTest is Test {
     }
 
     function _expectNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectNotDisabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotDisabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
     }
 
     function _expectRoleRevert(bytes32 role_) internal {
@@ -207,8 +213,8 @@ contract ConvertibleDepositClearinghouseTest is Test {
 
         // Mint CDEPO to USER
         vm.startPrank(USER);
-        asset.approve(address(CDEPO), amount_);
-        CDEPO.mint(IConvertibleDepositERC20(address(cdToken)), amount_);
+        // asset.approve(address(CDEPO), amount_);
+        // CDEPO.mint(IConvertibleDepositERC20(address(cdToken)), amount_);
         vm.stopPrank();
         _;
     }

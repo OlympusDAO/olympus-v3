@@ -1,0 +1,260 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.8.15;
+
+/// @title  IDepositPositionManager
+/// @notice This interface defines the functions for the DEPOS module.
+///         The objective of this module is to track the terms of a deposit position.
+interface IDepositPositionManager {
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice Data structure for the terms of a deposit position
+    ///
+    /// @param  operator                Address of the operator/creator of the position
+    /// @param  owner                   Address of the owner of the position
+    /// @param  asset                   Address of the asset
+    /// @param  periodMonths            The period of the deposit
+    /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
+    /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
+    /// @param  expiry                  Timestamp of the position expiry
+    /// @param  wrapped                 Whether the term is wrapped
+    /// @param  additionalData          Additional data for the position
+    struct Position {
+        address operator;
+        address owner;
+        address asset;
+        uint8 periodMonths;
+        uint256 remainingDeposit;
+        uint256 conversionPrice;
+        uint48 expiry;
+        bool wrapped;
+        bytes additionalData;
+    }
+
+    /// @notice Parameters for the {mint} function
+    ///
+    /// @param  owner                   Address of the owner of the position
+    /// @param  asset                   Address of the asset
+    /// @param  periodMonths            The period of the deposit
+    /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
+    /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
+    /// @param  expiry                  Timestamp of the position expiry
+    /// @param  wrapPosition            Whether the position should be wrapped
+    /// @param  additionalData          Additional data for the position
+    struct MintParams {
+        address owner;
+        address asset;
+        uint8 periodMonths;
+        uint256 remainingDeposit;
+        uint256 conversionPrice;
+        uint48 expiry;
+        bool wrapPosition;
+        bytes additionalData;
+    }
+
+    // ========== EVENTS ========== //
+
+    /// @notice Emitted when a position is created
+    event PositionCreated(
+        uint256 indexed positionId,
+        address indexed owner,
+        address indexed asset,
+        uint8 periodMonths,
+        uint256 remainingDeposit,
+        uint256 conversionPrice,
+        uint48 expiry,
+        bool wrapped
+    );
+
+    /// @notice Emitted when a position's remaining deposit is updated
+    event PositionRemainingDepositUpdated(uint256 indexed positionId, uint256 remainingDeposit);
+
+    /// @notice Emitted when a position's additional data is updated
+    event PositionAdditionalDataUpdated(uint256 indexed positionId, bytes additionalData);
+
+    /// @notice Emitted when a position is split
+    event PositionSplit(
+        uint256 indexed positionId,
+        uint256 indexed newPositionId,
+        address indexed asset,
+        uint8 periodMonths,
+        uint256 amount,
+        address to,
+        bool wrap
+    );
+
+    /// @notice Emitted when a position is wrapped
+    event PositionWrapped(uint256 indexed positionId);
+
+    /// @notice Emitted when a position is unwrapped
+    event PositionUnwrapped(uint256 indexed positionId);
+
+    /// @notice Emitted when the token renderer is set
+    event TokenRendererSet(address indexed renderer);
+
+    // ========== ERRORS ========== //
+
+    /// @notice Error thrown when the caller is not the owner of the position
+    error DEPOS_NotOwner(uint256 positionId_);
+
+    /// @notice Error thrown when an invalid position ID is provided
+    error DEPOS_InvalidPositionId(uint256 id_);
+
+    /// @notice Error thrown when a position has already been wrapped
+    error DEPOS_AlreadyWrapped(uint256 positionId_);
+
+    /// @notice Error thrown when a position has not been wrapped
+    error DEPOS_NotWrapped(uint256 positionId_);
+
+    /// @notice Error thrown when an invalid parameter is provided
+    error DEPOS_InvalidParams(string reason_);
+
+    /// @notice Error thrown when a position does not support conversion
+    error DEPOS_NotConvertible(uint256 positionId_);
+
+    /// @notice Error thrown when the renderer contract does not implement the required interface
+    error DEPOS_InvalidRenderer(address renderer_);
+
+    // ========== WRAPPING ========== //
+
+    /// @notice Wraps a position into an ERC721 token
+    ///         This is useful if the position owner wants a tokenized representation of their position. It is functionally equivalent to the position itself.
+    ///
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is the owner of the position
+    ///         - Validate that the position is not already wrapped
+    ///         - Mint an ERC721 token to the position owner
+    ///
+    /// @param  positionId_ The ID of the position to wrap
+    function wrap(uint256 positionId_) external;
+
+    /// @notice Unwraps/burns an ERC721 position token
+    ///         This is useful if the position owner wants to unwrap their token back into the position.
+    ///
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is the owner of the position
+    ///         - Validate that the position is already wrapped
+    ///         - Burn the ERC721 token
+    ///
+    /// @param  positionId_ The ID of the position to unwrap
+    function unwrap(uint256 positionId_) external;
+
+    // ========== POSITION MANAGEMENT =========== //
+
+    /// @notice Creates a new deposit position
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the owner is not the zero address
+    ///         - Validate that the convertible deposit token is not the zero address
+    ///         - Validate that the remaining deposit is greater than 0
+    ///         - Validate that the conversion price is greater than 0
+    ///         - Validate that the expiry is in the future
+    ///         - Create the position record
+    ///         - Wrap the position if requested
+    ///
+    /// @param  params_                     The parameters for the position creation
+    /// @return _positionId                 The ID of the new position
+    function mint(MintParams calldata params_) external returns (uint256 _positionId);
+
+    /// @notice Updates the remaining deposit of a position
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the position ID is valid
+    ///         - Update the remaining deposit of the position
+    ///
+    /// @param  positionId_ The ID of the position to update
+    /// @param  amount_     The new amount of the position
+    function setRemainingDeposit(uint256 positionId_, uint256 amount_) external;
+
+    /// @notice Updates the additional data of a position
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the position ID is valid
+    ///         - Update the additional data of the position
+    ///
+    /// @param  positionId_         The ID of the position to update
+    /// @param  additionalData_     The new additional data of the position
+    function setAdditionalData(uint256 positionId_, bytes calldata additionalData_) external;
+
+    /// @notice Splits the specified amount of the position into a new position
+    ///         This is useful if the position owner wants to split their position into multiple smaller positions.
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is the owner of the position
+    ///         - Validate that the amount is greater than 0
+    ///         - Validate that the amount is less than or equal to the remaining deposit
+    ///         - Validate that `to_` is not the zero address
+    ///         - Update the remaining deposit of the original position
+    ///         - Create the new position record
+    ///         - Wrap the new position if requested
+    ///
+    /// @param  positionId_     The ID of the position to split
+    /// @param  amount_         The amount of the position to split
+    /// @param  to_             The address to split the position to
+    /// @param  wrap_           Whether the new position should be wrapped
+    /// @return _newPositionId  The ID of the new position
+    function split(
+        uint256 positionId_,
+        uint256 amount_,
+        address to_,
+        bool wrap_
+    ) external returns (uint256 _newPositionId);
+
+    // ========== POSITION INFORMATION ========== //
+
+    /// @notice Get the total number of positions
+    ///
+    /// @return _count The total number of positions
+    function getPositionCount() external view returns (uint256 _count);
+
+    /// @notice Get the IDs of all positions for a given user
+    ///
+    /// @param  user_           The address of the user
+    /// @return _positionIds    An array of position IDs
+    function getUserPositionIds(
+        address user_
+    ) external view returns (uint256[] memory _positionIds);
+
+    /// @notice Get the position for a given ID
+    ///
+    /// @param  positionId_ The ID of the position
+    /// @return _position   The position for the given ID
+    function getPosition(uint256 positionId_) external view returns (Position memory _position);
+
+    /// @notice Check if a position is expired
+    ///
+    /// @param  positionId_ The ID of the position
+    /// @return _expired    Whether the position is expired
+    function isExpired(uint256 positionId_) external view returns (bool _expired);
+
+    /// @notice Check if a position is convertible
+    ///
+    /// @param  positionId_     The ID of the position
+    /// @return _convertible    Whether the position is convertible
+    function isConvertible(uint256 positionId_) external view returns (bool _convertible);
+
+    /// @notice Preview the amount of OHM that would be received for a given amount of convertible deposit tokens
+    ///
+    /// @param  positionId_ The ID of the position
+    /// @param  amount_     The amount of convertible deposit tokens to convert
+    /// @return _ohmOut     The amount of OHM that would be received
+    function previewConvert(
+        uint256 positionId_,
+        uint256 amount_
+    ) external view returns (uint256 _ohmOut);
+
+    // ========== TOKEN URI RENDERER ========== //
+
+    /// @notice Set the token renderer contract
+    /// @dev    The implementing function should do the following:
+    ///         - Validate that the caller is permissioned
+    ///         - Validate that the renderer contract implements the required interface
+    ///         - Set the renderer contract
+    ///         - Emit an event
+    ///
+    /// @param  renderer_ The address of the renderer contract
+    function setTokenRenderer(address renderer_) external;
+
+    /// @notice Get the current token renderer contract
+    ///
+    /// @return _renderer The address of the current renderer contract (or zero address if not set)
+    function getTokenRenderer() external view returns (address _renderer);
+}

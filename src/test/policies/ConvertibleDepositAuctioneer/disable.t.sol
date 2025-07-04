@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
@@ -7,13 +7,6 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "emergency" role
     //  [X] it reverts
-    // when the contract is already disabled
-    //  [X] it reverts
-    // when the contract is enabled
-    //  [X] it deactivates the contract
-    //  [X] it emits an event
-    //  [X] the day state is unchanged
-    //  [X] the auction results history and index are unchanged
 
     function test_callerDoesNotHaveEmergencyRole_reverts(address caller_) public givenEnabled {
         // Ensure caller is not emergency or admin address
@@ -27,6 +20,9 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         auctioneer.disable("");
     }
 
+    // when the contract is already disabled
+    //  [X] it reverts
+
     function test_contractDisabled_reverts() public {
         // Expect revert
         _expectNotEnabledRevert();
@@ -36,7 +32,18 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         auctioneer.disable("");
     }
 
-    function test_contractEnabled() public givenEnabled givenRecipientHasBid(1e18) {
+    // when the contract is enabled
+    //  [X] it deactivates the contract
+    //  [X] it emits an event
+    //  [X] the day state is unchanged
+    //  [X] the auction results history and index are unchanged
+
+    function test_contractEnabled()
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenRecipientHasBid(1e18)
+    {
         // Cache auction results
         int256[] memory auctionResults = auctioneer.getAuctionResults();
         uint8 nextIndex = auctioneer.getAuctionResultsNextIndex();
@@ -57,7 +64,7 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         // Assert state
         assertEq(auctioneer.isEnabled(), false);
         // lastUpdate has not changed
-        assertEq(auctioneer.getPreviousTick().lastUpdate, lastUpdate);
+        assertEq(auctioneer.getPreviousTick(PERIOD_MONTHS).lastUpdate, lastUpdate);
         // Auction results are unchanged
         _assertAuctionResults(
             auctionResults[0],

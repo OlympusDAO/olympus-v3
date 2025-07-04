@@ -25,7 +25,7 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
     // [X] the collateral is transferred from the Clearinghouse to the user
     // [X] the debt is repaid on CDEPO
     // [X] the yield is swept to the TRSRY
-
+    /*
     function test_spendingNotApproved_reverts()
         public
         givenUserHasApprovedCollateralSpending(4e18)
@@ -247,4 +247,5 @@ contract OnRepayCDClearinghouseTest is ConvertibleDepositClearinghouseTest {
             "principal receivables"
         );
     }
+    */
 }

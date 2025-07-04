@@ -1,46 +1,24 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
-contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
+contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacilityTest {
     // given the contract is inactive
     //  [X] it reverts
-    // when the length of the positionIds_ array does not match the length of the amounts_ array
-    //  [X] it reverts
-    // when any position is not valid
-    //  [X] it reverts
-    // when any position has reached the conversion expiry
-    //  [X] it reverts
-    // when any position has an amount greater than the remaining deposit
-    //  [X] it reverts
-    // when the amount is 0
-    //  [X] it reverts
-    // when the converted amount is 0
-    //  [X] it reverts
-    // when the account is not the owner of all of the positions
-    //  [X] it reverts
-    // when any position has a different CD token
-    //  [X] it reverts
-    // when the position does not support conversion
-    //  [X] it reverts
-    // given the deposit asset has 6 decimals
-    //  [X] it returns the correct amount of CD tokens that would be converted
-    //  [X] it returns the correct amount of OHM that would be minted
-    // [X] it returns the total CD token amount that would be converted
-    // [X] it returns the amount of OHM that would be minted
-    // [X] it returns the address that will spend the convertible deposit tokens
 
     function test_contractInactive_reverts() public {
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        _expectRevertNotEnabled();
 
         // Call function
         facility.previewConvert(recipient, new uint256[](0), new uint256[](0));
     }
+
+    // when the length of the positionIds_ array does not match the length of the amounts_ array
+    //  [X] it reverts
 
     function test_arrayLengthMismatch_reverts() public givenLocallyActive {
         uint256[] memory positionIds_ = new uint256[](1);
@@ -58,17 +36,16 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
+    // when any position is not valid
+    //  [X] it reverts
+
     function test_anyPositionIsNotValid_reverts(
         uint256 positionIndex_
     )
         public
         givenLocallyActive
-        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
-        givenReserveTokenSpendingIsApproved(
-            recipient,
-            address(convertibleDepository),
-            RESERVE_TOKEN_AMOUNT
-        )
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
     {
@@ -91,75 +68,16 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         }
 
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(CDPOSv1.CDPOS_InvalidPositionId.selector, 2));
-
-        // Call function
-        facility.previewConvert(recipient, positionIds_, amounts_);
-    }
-
-    function test_anyPositionHasDifferentOwner_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-        givenAddressHasReserveToken(recipientTwo, 9e18)
-        givenReserveTokenSpendingIsApproved(recipientTwo, address(convertibleDepository), 9e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            uint256 positionId;
-            if (positionIndex == i) {
-                positionId = _createPosition(recipientTwo, 3e18, CONVERSION_PRICE, false);
-            } else {
-                positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
-            }
-
-            positionIds_[i] = positionId;
-            amounts_[i] = 3e18;
-        }
-
-        // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, positionIndex)
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidPositionId.selector, 2)
         );
 
         // Call function
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
-    function test_allPositionsHaveDifferentOwner_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-        givenAddressHasPosition(recipient, 3e18)
-        givenAddressHasPosition(recipient, 3e18)
-        givenAddressHasPosition(recipient, 3e18)
-    {
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        positionIds_[0] = 0;
-        amounts_[0] = 3e18;
-        positionIds_[1] = 1;
-        amounts_[1] = 3e18;
-        positionIds_[2] = 2;
-        amounts_[2] = 3e18;
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, 0)
-        );
-
-        // Call function
-        facility.previewConvert(recipientTwo, positionIds_, amounts_);
-    }
+    // when any position has reached the conversion expiry
+    //  [X] it reverts
 
     function test_anyPositionHasReachedConversionExpiry_reverts(
         uint48 warpTime_
@@ -167,7 +85,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
     {
         uint48 warpTime = uint48(bound(warpTime_, CONVERSION_EXPIRY, type(uint48).max));
 
@@ -194,13 +112,16 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
+    // when any position has an amount greater than the remaining deposit
+    //  [X] it reverts
+
     function test_anyAmountIsGreaterThanRemainingDeposit_reverts(
         uint256 positionIndex_
     )
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -236,11 +157,14 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
+    // when the amount is 0
+    //  [X] it reverts
+
     function test_amountIsZero_reverts()
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
         givenAddressHasPosition(recipient, 3e18)
     {
         uint256[] memory positionIds_ = new uint256[](1);
@@ -258,11 +182,14 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
+    // when the converted amount is 0
+    //  [X] it reverts
+
     function test_convertedAmountIsZero_reverts()
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
         givenAddressHasPosition(recipient, 3e18)
     {
         uint256[] memory positionIds_ = new uint256[](1);
@@ -283,6 +210,137 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         facility.previewConvert(recipient, positionIds_, amounts_);
     }
 
+    // when the account is not the owner of all of the positions
+    //  [X] it reverts
+
+    function test_anyPositionHasDifferentOwner_reverts(
+        uint256 positionIndex_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
+        givenAddressHasReserveToken(recipientTwo, 9e18)
+        givenReserveTokenSpendingIsApproved(recipientTwo, address(depositManager), 9e18)
+    {
+        uint256 positionIndex = bound(positionIndex_, 0, 2);
+
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        for (uint256 i; i < 3; i++) {
+            uint256 positionId;
+            if (positionIndex == i) {
+                positionId = _createPosition(recipientTwo, 3e18, CONVERSION_PRICE, false);
+            } else {
+                positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
+            }
+
+            positionIds_[i] = positionId;
+            amounts_[i] = 3e18;
+        }
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, positionIndex)
+        );
+
+        // Call function
+        facility.previewConvert(recipient, positionIds_, amounts_);
+    }
+
+    function test_allPositionsHaveDifferentOwner_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasPosition(recipient, 3e18)
+        givenAddressHasPosition(recipient, 3e18)
+    {
+        uint256[] memory positionIds_ = new uint256[](3);
+        uint256[] memory amounts_ = new uint256[](3);
+
+        positionIds_[0] = 0;
+        amounts_[0] = 3e18;
+        positionIds_[1] = 1;
+        amounts_[1] = 3e18;
+        positionIds_[2] = 2;
+        amounts_[2] = 3e18;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_NotOwner.selector, 0)
+        );
+
+        // Call function
+        facility.previewConvert(recipientTwo, positionIds_, amounts_);
+    }
+
+    // when any position has a different receipt token
+    //  [X] it reverts
+
+    function test_anyPositionHasDifferentReceiptToken_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // receiptToken
+        positionIds_[1] = 2; // receiptTokenTwo
+
+        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
+                "multiple assets"
+            )
+        );
+
+        // Call function
+        facility.previewConvert(recipient, positionIds_, amounts_);
+    }
+
+    // given any position has not been created by the CD facility
+    //  [X] it reverts
+
+    function test_anyPositionNotCreatedByCDFacility_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // receiptToken
+        positionIds_[1] = 1; // receiptToken yield deposit
+
+        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
+
+        // Expect revert
+        _expectRevertUnsupported(1);
+
+        // Call function
+        facility.previewConvert(recipient, positionIds_, amounts_);
+    }
+
+    // given the deposit asset has 6 decimals
+    //  [X] it returns the correct amount of receipt tokens that would be converted
+    //  [X] it returns the correct amount of OHM that would be minted
+
     function test_reserveTokenHasSmallerDecimals(
         uint256 amountOne_,
         uint256 amountTwo_,
@@ -292,7 +350,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         givenReserveTokenHasDecimals(6)
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e6)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e6)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e6)
     {
         uint256 amountOne = bound(amountOne_, 1e2, 3e6);
         uint256 amountTwo = bound(amountTwo_, 1e2, 3e6);
@@ -315,7 +373,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         _createPosition(recipient, 3e6, conversionPrice, false);
 
         // Call function
-        (uint256 totalDeposits, uint256 converted, address spender) = facility.previewConvert(
+        (uint256 totalDeposits, uint256 converted) = facility.previewConvert(
             recipient,
             positionIds_,
             amounts_
@@ -336,74 +394,11 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
                 conversionPrice,
             "converted"
         );
-
-        // Assertion that the spender is the convertible depository
-        assertEq(spender, address(convertibleDepository), "spender");
     }
 
-    function test_anyPositionHasDifferentCDToken_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
-        givenReserveTokenSpendingIsApproved(
-            recipient,
-            address(convertibleDepository),
-            RESERVE_TOKEN_AMOUNT
-        )
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
-        givenAddressHasDifferentTokenAndPosition(recipient, RESERVE_TOKEN_AMOUNT)
-    {
-        uint256[] memory positionIds_ = new uint256[](2);
-        uint256[] memory amounts_ = new uint256[](2);
-
-        positionIds_[0] = 0; // cdToken
-        positionIds_[1] = 2; // cdTokenTwo
-
-        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
-        amounts_[1] = RESERVE_TOKEN_AMOUNT;
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_InvalidArgs.selector,
-                "multiple CD tokens"
-            )
-        );
-
-        // Call function
-        facility.previewConvert(recipient, positionIds_, amounts_);
-    }
-
-    function test_anyPositionDoesNotSupportConversion_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
-        givenReserveTokenSpendingIsApproved(
-            recipient,
-            address(convertibleDepository),
-            RESERVE_TOKEN_AMOUNT
-        )
-        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
-        givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
-    {
-        uint256[] memory positionIds_ = new uint256[](2);
-        uint256[] memory amounts_ = new uint256[](2);
-
-        positionIds_[0] = 0; // cdToken
-        positionIds_[1] = 1; // cdToken yield deposit
-
-        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
-        amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_Unsupported.selector, 1)
-        );
-
-        // Call function
-        facility.previewConvert(recipient, positionIds_, amounts_);
-    }
+    // [X] it returns the total receipt token amount that would be converted
+    // [X] it returns the amount of OHM that would be minted
+    // [X] it returns the address that will spend the convertible deposit tokens
 
     function test_success(
         uint256 amountOne_,
@@ -413,7 +408,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 9e18)
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
@@ -433,7 +428,7 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
         amounts_[2] = amountThree;
 
         // Call function
-        (uint256 totalDeposits, uint256 converted, address spender) = facility.previewConvert(
+        (uint256 totalDeposits, uint256 converted) = facility.previewConvert(
             recipient,
             positionIds_,
             amounts_
@@ -454,8 +449,5 @@ contract PreviewConvertCDFTest is ConvertibleDepositFacilityTest {
                 CONVERSION_PRICE,
             "converted"
         );
-
-        // Assertion that the spender is the convertible depository
-        assertEq(spender, address(convertibleDepository), "spender");
     }
 }

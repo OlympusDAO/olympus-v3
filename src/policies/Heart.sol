@@ -1,27 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // External libraries
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // Internal libraries
-import {TransferHelper} from "libraries/TransferHelper.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Interfaces
-import {IDistributor} from "policies/interfaces/IDistributor.sol";
-import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
-import {IHeart} from "policies/interfaces/IHeart.sol";
-import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
-import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
+import {IHeart} from "src/policies/interfaces/IHeart.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Modules
-import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {CDEPOv1} from "modules/CDEPO/CDEPO.v1.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+
+// Base Contracts
+import {BasePeriodicTaskManager} from "src/bases/BasePeriodicTaskManager.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // Kernel
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
@@ -33,7 +32,7 @@ import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 ///         market operations use up to date information.
 ///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward.
 ///         Rewards are issued in OHM.
-contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
+contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePeriodicTaskManager {
     using TransferHelper for ERC20;
 
     // =========  STATE ========= //
@@ -47,21 +46,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Max reward for beating the Heart (in reward token decimals)
     uint256 public maxReward;
 
-    /// @notice Status of the Heart, false = stopped, true = beating
-    bool public active;
-
     // Modules
     PRICEv1 internal PRICE;
     MINTRv1 internal MINTR;
-    CDEPOv1 internal CDEPO;
-    TRSRYv1 internal TRSRY;
 
     // Policies
-    IOperator public operator;
     IDistributor public distributor;
-    IYieldRepo public yieldRepo;
-    IReserveMigrator public reserveMigrator;
-    IEmissionManager public emissionManager;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -71,58 +61,40 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     ///      Therefore, manually ensure that the value is valid when deploying the contract.
     constructor(
         Kernel kernel_,
-        IOperator operator_,
         IDistributor distributor_,
-        IYieldRepo yieldRepo_,
-        IReserveMigrator reserveMigrator_,
-        IEmissionManager emissionManager_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
-        operator = operator_;
         distributor = distributor_;
-        yieldRepo = yieldRepo_;
-        reserveMigrator = reserveMigrator_;
-        emissionManager = emissionManager_;
 
-        active = true;
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
         emit RewardUpdated(maxReward_, auctionDuration_);
+
+        // Disabled by default by PolicyEnabler
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](5);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
-        dependencies[3] = toKeycode("CDEPO");
-        dependencies[4] = toKeycode("TRSRY");
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
-        CDEPO = CDEPOv1(getModuleAddress(dependencies[3]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[4]));
 
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        (uint8 CDEPO_MAJOR, ) = CDEPO.VERSION();
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 1, 1, 1, 1]);
-        if (
-            MINTR_MAJOR != 1 ||
-            PRICE_MAJOR != 1 ||
-            ROLES_MAJOR != 1 ||
-            CDEPO_MAJOR != 1 ||
-            TRSRY_MAJOR != 1
-        ) revert Policy_WrongModuleVersion(expected);
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 1 || ROLES_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
 
         // Sync beat with distributor if called from kernel
         if (msg.sender == address(kernel)) {
@@ -139,11 +111,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](4);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(CDEPO.KEYCODE(), CDEPO.sweepAllYield.selector);
     }
 
     /// @notice Returns the version of the policy.
@@ -160,30 +131,19 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
-        if (!active) revert Heart_BeatStopped();
+        if (!isEnabled) revert Heart_BeatStopped();
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         // Update the moving average on the Price module
+        // This cannot be a periodic task, because it requires a policy with permission to call the updateMovingAverage function
         PRICE.updateMovingAverage();
 
-        // Migrate reserves, if necessary
-        reserveMigrator.migrate();
-
-        // Trigger price range update and market operations
-        operator.operate();
-
-        // Trigger protocol loop
-        yieldRepo.endEpoch();
-
-        // Trigger rebase
+        // Trigger the rebase
         distributor.triggerRebase();
 
-        // Trigger emission manager
-        emissionManager.execute();
-
-        // Sweep yield from CDEPO into TRSRY
-        CDEPO.sweepAllYield(address(TRSRY));
+        // Execute periodic tasks
+        _executePeriodicTasks();
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
@@ -217,45 +177,21 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function resetBeat() external onlyRole("heart_admin") {
+    /// @dev        This function is gated to the ADMIN or MANAGER roles
+    function resetBeat() external onlyManagerOrAdminRole {
+        _resetBeat();
+    }
+
+    /// @inheritdoc PolicyEnabler
+    function _enable(bytes calldata) internal override {
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function activate() external onlyRole("heart_admin") {
-        active = true;
-        _resetBeat();
-    }
-
-    /// @inheritdoc IHeart
-    function deactivate() external onlyRole("heart_admin") {
-        active = false;
-    }
-
-    /// @inheritdoc IHeart
-    function setOperator(address operator_) external onlyRole("heart_admin") {
-        operator = IOperator(operator_);
-    }
-
-    /// @inheritdoc IHeart
-    function setDistributor(address distributor_) external onlyRole("heart_admin") {
+    /// @dev        This function is gated to the ADMIN role
+    function setDistributor(address distributor_) external onlyAdminRole {
         distributor = IDistributor(distributor_);
         _syncBeatWithDistributor();
-    }
-
-    /// @inheritdoc IHeart
-    function setYieldRepo(address yieldRepo_) external onlyRole("heart_admin") {
-        yieldRepo = IYieldRepo(yieldRepo_);
-    }
-
-    /// @inheritdoc IHeart
-    function setReserveMigrator(address reserveMigrator_) external onlyRole("heart_admin") {
-        reserveMigrator = IReserveMigrator(reserveMigrator_);
-    }
-
-    /// @inheritdoc IHeart
-    function setEmissionManager(address emissionManager_) external onlyRole("heart_admin") {
-        emissionManager = IEmissionManager(emissionManager_);
     }
 
     modifier notWhileBeatAvailable() {
@@ -265,10 +201,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
+    /// @dev        This function is gated to the ADMIN role
     function setRewardAuctionParams(
         uint256 maxReward_,
         uint48 auctionDuration_
-    ) external onlyRole("heart_admin") notWhileBeatAvailable {
+    ) external onlyAdminRole notWhileBeatAvailable {
         // auction duration should be less than or equal to frequency, otherwise frequency will be used
         if (auctionDuration_ > frequency()) revert Heart_InvalidParams();
 

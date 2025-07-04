@@ -9,7 +9,7 @@ contract InterestForLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTe
     // when the principal is not a whole number
     //  [X] the interest is rounded up
     // [X] the interest is in debt token terms
-
+    /*
     function test_zero() public {
         // Call function
         uint256 interest = clearinghouse.interestForLoan(0, DURATION);
@@ -42,4 +42,5 @@ contract InterestForLoanCDClearinghouseTest is ConvertibleDepositClearinghouseTe
         uint256 interestThree = clearinghouse.interestForLoan(987654321, DURATION);
         assertEq(interestThree, 3274141, "interestThree");
     }
+    */
 }

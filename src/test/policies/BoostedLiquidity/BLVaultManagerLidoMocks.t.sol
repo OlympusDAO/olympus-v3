@@ -677,7 +677,7 @@ contract BLVaultManagerLidoTest is Test {
     /// [X]  getRewardTokens
     ///     [X]  returns correct reward token array
 
-    function testCorrectness_getRewardTokens() public {
+    function testCorrectness_getRewardTokens() public view {
         address[] memory tokens = vaultManager.getRewardTokens();
 
         assertEq(tokens.length, 2);
@@ -688,7 +688,7 @@ contract BLVaultManagerLidoTest is Test {
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
 
-    function testCorrectness_getRewardRate() public {
+    function testCorrectness_getRewardRate() public view {
         uint256 rate = vaultManager.getRewardRate(address(bal));
 
         assertEq(rate, 1e18);
@@ -933,7 +933,7 @@ contract BLVaultManagerLidoTest is Test {
 
         // Check state after
         (, uint48 ohmEthUpdateThreshold) = vaultManager.ohmEthPriceFeed();
-        (, uint48 ethUsdUpdateThreshold) = vaultManager.ethUsdPriceFeed();
+        // (, uint48 ethUsdUpdateThreshold) = vaultManager.ethUsdPriceFeed();
         (, uint48 stethUsdUpdateThreshold) = vaultManager.stethUsdPriceFeed();
 
         assertEq(ohmEthUpdateThreshold, ohmPriceThreshold_);

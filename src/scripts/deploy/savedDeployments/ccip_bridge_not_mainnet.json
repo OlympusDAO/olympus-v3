@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "CCIPBurnMintTokenPool",
+            "args": {}
+        },
+        {
+            "name": "CCIPCrossChainBridge",
+            "args": {}
+        }
+    ]
+}

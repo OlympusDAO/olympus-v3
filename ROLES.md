@@ -8,11 +8,11 @@ This document describes the roles that are used in the Olympus protocol.
 |------|----------|-------------|
 | admin | CDAuctioneer | Update parameters, activate the policy |
 | admin | CDClearinghouse | Activate the policy |
-| admin | CDFacility | Create CD tokens, update reclaim rate, activate the policy |
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
 | admin | EmissionManager | Adjust yield, activate the policy |
 | admin | EmissionManager | Set configuration parameters, activate the policy |
+| admin | Heart| Reset the heartbeat, enable the contract, disable the contract, set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
@@ -23,6 +23,7 @@ This document describes the roles that are used in the Olympus protocol.
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
+| deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | emergency | CDAuctioneer | Deactivate the policy |
 | emergency | CDClearinghouse | Deactivate the policy |
@@ -30,6 +31,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
 | emergency | CoolerTreasuryBorrower | Allows enable/disable on the CoolerTreasuryBorrower |
 | emergency | EmissionManager | Deactivate the EmissionManager |
+| emergency | Heart | Deactivate the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
@@ -38,8 +40,9 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
-| heart_admin | Heart | Allows configuring heart parameters and activation/deactivation |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
+| manager | DepositManager | Configure/enable/disable deposit assets |
+| manager | Heart | Reset the heartbeat |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |

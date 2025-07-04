@@ -3,31 +3,19 @@ ffi = true
 ast = true
 legacy_assertions = true
 assertions_revert = false
-remappings = [
-    'ds-test/=lib/ds-test/src/',
-    'forge-std/=lib/forge-std/src/',
-    'interfaces/=src/interfaces',
-    'modules/=src/modules',
-    'policies/=src/policies',
-    'libraries/=src/libraries',
-    'solmate/=lib/solmate/src/',
-    'balancer-v2/=lib/balancer-v2/',
-    'layer-zero/=lib/solidity-examples/contracts/',
-    '@openzeppelin/=lib/openzeppelin-contracts/',
-    'bonds/=lib/bonds/src/',
-    'clones/=lib/clones-with-immutable-args/src/',
-    'proposal-sim/=lib/forge-proposal-simulator/',
-]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
-    {access = "write", path = "./deployments/"},
+    {access = "read-write", path = "./deployments/"},
     {access = "read", path = "./src/scripts/"},
     {access = "read", path = "./src/proposals/addresses.json"},
+    {access = "read-write", path = "./src/scripts/env.json"},
 ]
-solc_version = "0.8.15"
+
+# The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
+# solc_version = "0.8.15"
+
 optimizer = true
 optimizer_runs = 10000
-chain_id = 1
 verbosity = 3
 
 # Operator is too large - it needs to only use 10 optimizer runs
@@ -38,10 +26,31 @@ additional_compiler_profiles = [
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
+    { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
+    { paths = "**", version = "0.8.15" },
 ]
+libs = ["dependencies"]
+
+[profile.deploy]
+script_execution_protection = false
 
 [fuzz]
 runs = 256
+
+[rpc_endpoints]
+# Place ALCHEMY_API_KEY in the environment or .env file
+mainnet = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+sepolia = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+base = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+base-sepolia = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+arbitrum = "https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+arbitrum-sepolia = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+optimism = "https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+optimism-sepolia = "https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+polygon = "https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+polygon-amoy = "https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+berachain = "https://berachain-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+berachain-bepolia = "https://berachain-bepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
 
 [soldeer]
 remappings_generate = false
@@ -49,5 +58,14 @@ remappings_generate = false
 [dependencies]
 surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", rev = "034c912ae9b5e707a5afd21f145b452ad8e800df" }
 base64 = { version = "1.1.0", git = "https://github.com/Brechtpd/base64.git", rev = "4d85607b18d981acff392d2e99ba654305552a97" }
-clones-with-immutable-args = { version = "1.1.2", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce" }
+chainlink-ccip = { version = "1.6.0", git = "https://github.com/smartcontractkit/chainlink.git", rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69" }
+chainlink-local = { version = "0.2.5", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "b429481536095867f9cd2c6480066c472b9594de" }
 forge-std = "1.9.6"
+safe-utils = { version = "0.0.13", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "bec514258acb85045a4b8590c5d695f3cc9599be" }
+base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }
+clones-with-immutable-args = { version = "1.1.2", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce" }
+layer-zero-endpoint-v1 = { version = "0.0.6", git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git", rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f" }
+solmate = { version = "6.2.0", git = "https://github.com/transmissions11/solmate.git", rev = "fadb2e2778adbf01c80275bfb99e5c14969d964b" }
+openzeppelin = { version = "4.8.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "49c0e4370d0cc50ea6090709e3835a3091e33ee2" }
+openzeppelin-new = { version = "5.3.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "e4f70216d759d8e6a64144a9e1f7bbeed78e7079" }
+forge-proposal-simulator = { version = "1.0.0", git = "https://github.com/OlympusDAO/forge-proposal-simulator.git", rev = "864b357b650f9dc7b2fb1ae23562454815d51def" }

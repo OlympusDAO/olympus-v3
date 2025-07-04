@@ -74,7 +74,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "- ConvertibleDepositFacility policy has been activated in the kernel\n",
                 "- ConvertibleDepositAuctioneer policy has been activated in the kernel\n",
                 "- CDEPO module has been installed in the kernel\n",
-                "- CDPOS module has been installed in the kernel\n",
+                "- DEPOS module has been installed in the kernel\n",
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
@@ -129,7 +129,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         // - ConvertibleDepositFacility policy has been activated in the kernel
         // - ConvertibleDepositAuctioneer policy has been activated in the kernel
         // - CDEPO module has been installed in the kernel
-        // - CDPOS module has been installed in the kernel
+        // - DEPOS module has been installed in the kernel
         // - CDEPO module has had an appropriate reclaim rate set at deployment-time
 
         // Revoke the "heart" role from the old Heart policy

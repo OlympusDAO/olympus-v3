@@ -17,7 +17,7 @@ contract DecimalStringTest is Test {
     // when the decimal value is smaller than 3 decimal places
     //  [X] it returns 0
 
-    function test_whenValueDecimalsIs0() public {
+    function test_whenValueDecimalsIs0() public pure {
         uint256 value = 123456789;
         uint8 valueDecimals = 0;
 
@@ -28,7 +28,7 @@ contract DecimalStringTest is Test {
         assertEq(DecimalString.toDecimalString(value, valueDecimals, 18), "123456789", "decimal places is 18");
     }
 
-    function test_whenValueDecimalsIs1() public {
+    function test_whenValueDecimalsIs1() public pure {
         uint256 value = 123456789;
         uint8 valueDecimals = 1;
 
@@ -39,7 +39,7 @@ contract DecimalStringTest is Test {
         assertEq(DecimalString.toDecimalString(value, valueDecimals, 18), "12345678.9", "decimal places is 18");
     }
 
-    function test_whenValueDecimalsIs2() public {
+    function test_whenValueDecimalsIs2() public pure {
         uint256 value = 123456789;
         uint8 valueDecimals = 2;
 
@@ -50,7 +50,7 @@ contract DecimalStringTest is Test {
         assertEq(DecimalString.toDecimalString(value, valueDecimals, 18), "1234567.89", "decimal places is 18");
     }
 
-    function test_whenValueDecimalsIs3() public {
+    function test_whenValueDecimalsIs3() public pure {
         uint256 value = 123456789;
         uint8 valueDecimals = 3;
 
@@ -61,7 +61,7 @@ contract DecimalStringTest is Test {
         assertEq(DecimalString.toDecimalString(value, valueDecimals, 18), "123456.789", "decimal places is 18");
     }
 
-    function test_whenValueDecimalValueIsLessThanOne() public {
+    function test_whenValueDecimalValueIsLessThanOne() public pure {
         uint256 value = 1234;
         uint8 valueDecimals = 4;
 
@@ -72,7 +72,7 @@ contract DecimalStringTest is Test {
         assertEq(DecimalString.toDecimalString(value, valueDecimals, 18), "0.1234", "decimal places is 18");
     }
 
-    function test_whenValueDecimalValueIsGreaterThanOne() public {
+    function test_whenValueDecimalValueIsGreaterThanOne() public pure {
         uint256 value = 1234567890000000000;
         uint8 valueDecimals = 18;
 
@@ -83,7 +83,7 @@ contract DecimalStringTest is Test {
         assertEq(DecimalString.toDecimalString(value, valueDecimals, 18), "1.23456789", "decimal places is 18");
     }
 
-    function test_whenValueDecimalValueIsLarge() public {
+    function test_whenValueDecimalValueIsLarge() public pure {
         uint256 value = 1234567890000000000000;
         uint8 valueDecimals = 18;
 
