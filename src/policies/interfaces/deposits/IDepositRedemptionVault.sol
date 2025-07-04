@@ -91,7 +91,7 @@ interface IDepositRedemptionVault {
 
     error RedemptionVault_InvalidAmount(address user, uint16 redemptionId, uint256 amount);
 
-    error RedemptionVault_TooEarly(address user, uint16 redemptionId);
+    error RedemptionVault_TooEarly(address user, uint16 redemptionId, uint48 redeemableAt);
 
     error RedemptionVault_AlreadyRedeemed(address user, uint16 redemptionId);
 
@@ -100,9 +100,12 @@ interface IDepositRedemptionVault {
         uint256 availableAmount
     );
 
-    // Borrowing Errors
+    // Facility Authorization
     error RedemptionVault_InvalidFacility(address facility);
+    error RedemptionVault_FacilityExists(address facility);
     error RedemptionVault_FacilityNotRegistered(address facility);
+
+    // Borrowing Errors
     error RedemptionVault_BorrowLimitExceeded(uint256 requested, uint256 available);
     error RedemptionVault_NoActiveLoans(uint16 redemptionId);
     error RedemptionVault_LoanNotExpired(uint16 redemptionId, uint256 loanIndex);
@@ -142,9 +145,9 @@ interface IDepositRedemptionVault {
 
     // ========== FACILITY MANAGEMENT ========== //
 
-    /// @notice Register a new facility
-    /// @param facility_ The address of the facility to register
-    function registerFacility(address facility_) external;
+    /// @notice Authorize a facility
+    /// @param facility_ The address of the facility to authorize
+    function authorizeFacility(address facility_) external;
 
     /// @notice Deauthorize a facility
     /// @param facility_ The address of the facility to deauthorize
@@ -258,11 +261,13 @@ interface IDepositRedemptionVault {
     /// @param  depositToken_   The address of the deposit token
     /// @param  depositPeriod_  The period of the deposit in months
     /// @param  amount_         The amount of deposit tokens to reclaim
+    /// @param  facility_       The facility to handle this reclaim
     /// @return reclaimed       The amount of deposit token returned to the caller
     function previewReclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
-        uint256 amount_
+        uint256 amount_,
+        address facility_
     ) external view returns (uint256 reclaimed);
 
     /// @notice Reclaims deposit tokens, after applying a discount
@@ -277,20 +282,28 @@ interface IDepositRedemptionVault {
     /// @param  depositPeriod_  The period of the deposit in months
     /// @param  recipient_      The address to reclaim the deposit token to
     /// @param  amount_         The amount of deposit tokens to reclaim
+    /// @param  facility_       The facility to handle this reclaim
     /// @return reclaimed       The amount of deposit token returned to the recipient
     function reclaimFor(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         address recipient_,
-        uint256 amount_
+        uint256 amount_,
+        address facility_
     ) external returns (uint256 reclaimed);
 
     /// @notice Reclaims deposit tokens, after applying a discount
     /// @dev    This variant reclaims the underlying asset to the caller
+    /// @param  depositToken_   The address of the deposit token
+    /// @param  depositPeriod_  The period of the deposit in months
+    /// @param  amount_         The amount of deposit tokens to reclaim
+    /// @param  facility_       The facility to handle this reclaim
+    /// @return reclaimed       The amount of deposit token returned to the caller
     function reclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
-        uint256 amount_
+        uint256 amount_,
+        address facility_
     ) external returns (uint256 reclaimed);
 
     // ========== DEPOSITS ========== //

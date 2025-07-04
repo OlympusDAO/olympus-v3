@@ -405,65 +405,6 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
-    modifier givenCommitted(
-        address user_,
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) {
-        // Mint reserve tokens to the user
-        MockERC20(address(asset_)).mint(user_, amount_);
-
-        // Approve spending of the reserve tokens
-        vm.prank(user_);
-        asset_.approve(address(depositManager), amount_);
-
-        // Mint the receipt token to the user
-        vm.prank(user_);
-        (, uint256 actualAmount) = yieldDepositFacility.deposit(
-            asset_,
-            depositPeriod_,
-            amount_,
-            false
-        );
-        _previousDepositActualAmount = actualAmount;
-
-        // Approve spending of the receipt token
-        vm.prank(user_);
-        depositManager.approve(address(yieldDepositFacility), _receiptTokenId, actualAmount);
-
-        // Commit
-        vm.prank(user_);
-        yieldDepositFacility.startRedemption(asset_, depositPeriod_, actualAmount);
-        _;
-    }
-
-    modifier givenCommittedWithExistingPosition(
-        address user_,
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) {
-        // Approve spending of the receipt token
-        vm.prank(user_);
-        depositManager.approve(address(yieldDepositFacility), _receiptTokenId, amount_);
-
-        // Commit
-        vm.prank(user_);
-        yieldDepositFacility.startRedemption(asset_, depositPeriod_, amount_);
-        _;
-    }
-
-    modifier givenRedeemed(address user_, uint16 redemptionId_) {
-        // Adjust the amount of yield in the vault to avoid a rounding error
-        // NOTE: This is an issue with how DepositManager tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
-        reserveToken.mint(address(vault), 1e18);
-
-        vm.prank(user_);
-        yieldDepositFacility.finishRedemption(redemptionId_);
-        _;
-    }
-
     function _createConvertibleDepositPosition(
         address account_,
         uint256 amount_,

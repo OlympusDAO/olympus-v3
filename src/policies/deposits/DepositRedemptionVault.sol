@@ -124,7 +124,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     // ========== FACILITY MANAGEMENT ========== //
 
     /// @inheritdoc IDepositRedemptionVault
-    function registerFacility(address facility_) external onlyRole("admin") {
+    function authorizeFacility(address facility_) external onlyRole("admin") {
         if (facility_ == address(0)) revert RedemptionVault_InvalidFacility(facility_);
         if (_registeredFacilities[facility_]) revert RedemptionVault_InvalidFacility(facility_);
 
@@ -329,7 +329,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Check that the redemption is redeemable
         if (block.timestamp < redemption.redeemableAt)
-            revert RedemptionVault_TooEarly(msg.sender, redemptionId_);
+            revert RedemptionVault_TooEarly(msg.sender, redemptionId_, redemption.redeemableAt);
 
         // Update the redemption
         uint256 redemptionAmount = redemption.amount;
@@ -361,6 +361,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== BORROWING FUNCTIONS ========== //
 
+    // NOTE: implementation not reviewed or tested yet
+
     /// @inheritdoc IDepositRedemptionVault
     function borrowAgainstRedemption(
         uint16 redemptionId_,
@@ -374,6 +376,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         onlyValidFacility(facility_)
         returns (uint256 loanIndex)
     {
+        // TODO derive facility from redemption
+
         // Get the redemption
         UserRedemption storage redemption = _userRedemptions[
             _getUserRedemptionKey(msg.sender, redemptionId_)
@@ -382,19 +386,24 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Check that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
-        // Use per-asset config
-        uint16 borrowPct = maxBorrowPercentage[redemption.depositToken];
-        if (borrowPct == 0) borrowPct = 8500; // default 85%
-        uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
-        uint256 availableBorrow = maxBorrow - _totalBorrowedPerRedemption[redemptionId_];
-        if (amount_ > availableBorrow)
-            revert RedemptionVault_BorrowLimitExceeded(amount_, availableBorrow);
+        // TODO Confirm that the borrow and interest rates are set
+
+        {
+            // Use per-asset config
+            uint16 borrowPct = maxBorrowPercentage[redemption.depositToken];
+            uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
+            uint256 availableBorrow = maxBorrow - _totalBorrowedPerRedemption[redemptionId_];
+            if (amount_ > availableBorrow)
+                revert RedemptionVault_BorrowLimitExceeded(amount_, availableBorrow);
+        }
 
         // Interest: annualized, prorated for period
-        uint16 rate = interestRatePerYear[redemption.depositToken];
-        if (rate == 0) rate = 500; // default 5%
-        uint256 interest = (amount_.mulDiv(rate, ONE_HUNDRED_PERCENT) * redemption.depositPeriod) /
-            12;
+        uint256 interest;
+        {
+            uint16 rate = interestRatePerYear[redemption.depositToken];
+            if (rate == 0) rate = 500; // default 5%
+            interest = (amount_.mulDiv(rate, ONE_HUNDRED_PERCENT) * redemption.depositPeriod) / 12;
+        }
 
         // Create loan
         Loan memory newLoan = Loan({
@@ -639,13 +648,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     function previewReclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
-        uint256 amount_
-    ) public view onlyEnabled returns (uint256 reclaimed) {
+        uint256 amount_,
+        address facility_
+    ) public view onlyEnabled onlyValidFacility(facility_) returns (uint256 reclaimed) {
         // Validate that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
         // Validate that there are enough available deposits
-        _validateAvailableDeposits(depositToken_, address(0), amount_);
+        _validateAvailableDeposits(depositToken_, facility_, amount_);
 
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
@@ -665,23 +675,27 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         IERC20 depositToken_,
         uint8 depositPeriod_,
         address recipient_,
-        uint256 amount_
-    ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
+        uint256 amount_,
+        address facility_
+    ) public nonReentrant onlyEnabled onlyValidFacility(facility_) returns (uint256 reclaimed) {
         // Calculate the quantity of deposit token to withdraw and return
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
+        uint256 discountedAssetsOut = previewReclaim(
+            depositToken_,
+            depositPeriod_,
+            amount_,
+            facility_
+        );
 
-        // Withdraw the deposit tokens from the deposit manager
-        // This will burn the receipt tokens from the caller and send the released deposit tokens to this contract
-        DEPOSIT_MANAGER.withdraw(
-            IDepositManager.WithdrawParams({
-                asset: depositToken_,
-                depositPeriod: depositPeriod_,
-                depositor: msg.sender,
-                recipient: address(this),
-                amount: amount_,
-                isWrapped: false
-            })
+        // Pull the receipt tokens from the caller
+        _pullReceiptToken(depositToken_, depositPeriod_, amount_);
+
+        // Delegate to the facility for withdrawal
+        IDepositFacility(facility_).handleWithdraw(
+            depositToken_,
+            depositPeriod_,
+            amount_,
+            address(this)
         );
 
         // Transfer discounted amount of the deposit token to the recipient
@@ -706,9 +720,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     function reclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
-        uint256 amount_
+        uint256 amount_,
+        address facility_
     ) external returns (uint256 reclaimed) {
-        reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
+        reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_, facility_);
     }
 
     // ========== DEPOSITS ========== //
@@ -735,6 +750,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ) public view returns (uint256 availableDeposits) {
         // Get the amount of committed deposits
         uint256 committedDeposits = _totalCommittedDeposits[address(depositToken_)];
+
+        // TODO does borrowed amount affect this?
 
         // Get the amount of available deposits
         (, uint256 sharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(

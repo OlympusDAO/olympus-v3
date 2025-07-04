@@ -51,10 +51,8 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
 
     constructor(
         address kernel_,
-        address depositManager_,
-        uint16 yieldFee_
+        address depositManager_
     ) BaseDepositFacility(kernel_, depositManager_) {
-        _yieldFee = yieldFee_;
         // Disabled by default by PolicyEnabler
     }
 
