@@ -18,7 +18,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";

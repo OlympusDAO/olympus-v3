@@ -14,17 +14,21 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
-import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.sol";
+import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol";
+import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 /// @title  Convertible Deposit Facility
 /// @notice Implementation of the {IConvertibleDepositFacility} interface
 ///         It is a general-purpose contract that can be used to create, mint, convert, redeem, and reclaim receipt tokens
 contract ConvertibleDepositFacility is
-    Policy,
+    BaseDepositFacility,
     IConvertibleDepositFacility,
     IPeriodicTask,
-    BaseDepositRedemptionVault
+    ReentrancyGuard
 {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
     // ========== CONSTANTS ========== //
 
     bytes32 public constant ROLE_AUCTIONEER = "cd_auctioneer";
@@ -46,7 +50,7 @@ contract ConvertibleDepositFacility is
     constructor(
         address kernel_,
         address depositManager_
-    ) Policy(Kernel(kernel_)) BaseDepositRedemptionVault(depositManager_) {
+    ) BaseDepositFacility(kernel_, depositManager_) {
         // Disabled by default by PolicyEnabler
     }
 
@@ -407,7 +411,7 @@ contract ConvertibleDepositFacility is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(BaseDepositRedemptionVault, IPeriodicTask) returns (bool) {
+    ) public view virtual override(BaseDepositFacility, IPeriodicTask) returns (bool) {
         return
             interfaceId == type(IConvertibleDepositFacility).interfaceId ||
             interfaceId == type(IPeriodicTask).interfaceId ||

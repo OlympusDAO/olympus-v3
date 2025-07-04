@@ -64,6 +64,12 @@ contract DepositManager is
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    // ========== BORROWING STATE VARIABLES ========== //
+
+    /// @notice Maps asset-operator key to current borrowed amounts
+    /// @dev    The key is the keccak256 of the asset address and the operator address
+    mapping(bytes32 key => uint256 borrowedAmount) internal _borrowedAmounts;
+
     // ========== MODIFIERS ========== //
 
     /// @notice Reverts if the asset period is not configured
@@ -150,13 +156,15 @@ contract DepositManager is
     /// @inheritdoc IDepositManager
     function maxClaimYield(IERC20 asset_, address operator_) external view returns (uint256) {
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, operator_);
-        uint256 operatorLiabilities = _assetLiabilities[_getAssetLiabilitiesKey(asset_, operator_)];
+        bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, operator_);
+        uint256 operatorLiabilities = _assetLiabilities[assetLiabilitiesKey];
+        uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
 
         // Avoid reverting
         // Adjust by 1 to account for the different behaviour in ERC4626.previewRedeem and ERC4626.previewWithdraw, which could leave the receipt token insolvent
-        if (depositedSharesInAssets < operatorLiabilities + 1) return 0;
+        if (depositedSharesInAssets + borrowedAmount < operatorLiabilities + 1) return 0;
 
-        return depositedSharesInAssets - operatorLiabilities - 1;
+        return depositedSharesInAssets + borrowedAmount - operatorLiabilities - 1;
     }
 
     /// @inheritdoc IDepositManager
@@ -174,7 +182,8 @@ contract DepositManager is
         // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, msg.sender);
         bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, msg.sender);
-        if (_assetLiabilities[assetLiabilitiesKey] > depositedSharesInAssets) {
+        uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
+        if (_assetLiabilities[assetLiabilitiesKey] > depositedSharesInAssets + borrowedAmount) {
             revert DepositManager_Insolvent(
                 address(asset_),
                 _assetLiabilities[assetLiabilitiesKey]
@@ -395,6 +404,110 @@ contract DepositManager is
     ) external view returns (uint16) {
         return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_)].reclaimRate;
     }
+
+    // ========== BORROWING FUNCTIONS ========== //
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by addresses with the deposit operator role
+    function borrowingWithdraw(
+        BorrowingWithdrawParams calldata params_
+    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
+        // Validate that the recipient is not the zero address
+        if (params_.recipient == address(0)) revert DepositManager_ZeroAddress();
+
+        // Validate that the asset is configured
+        if (!isConfiguredAsset(params_.asset)) revert DepositManager_InvalidAsset();
+
+        // Get the borrowing key
+        bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, params_.operator);
+
+                // Check borrowing capacity based on receipt token liabilities
+        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
+        uint256 operatorLiabilities = _assetLiabilities[borrowingKey];
+        uint256 availableCapacity = operatorLiabilities - currentBorrowed;
+
+        if (params_.amount > availableCapacity) {
+            revert DepositManager_BorrowingLimitExceeded(
+                address(params_.asset),
+                params_.operator,
+                params_.amount,
+                availableCapacity
+            );
+        }
+
+        // Update borrowed amount
+        _borrowedAmounts[borrowingKey] = currentBorrowed + params_.amount;
+
+        // Withdraw the funds from the vault to the recipient
+        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
+
+        // Emit event
+        emit BorrowingWithdrawal(address(params_.asset), params_.operator, params_.recipient, actualAmount);
+
+        return actualAmount;
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by addresses with the deposit operator role
+    function borrowingRepay(
+        BorrowingRepayParams calldata params_
+    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
+        // Validate that the asset is configured
+        if (!isConfiguredAsset(params_.asset)) revert DepositManager_InvalidAsset();
+
+        // Get the borrowing key
+        bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, params_.operator);
+
+        // Check current borrowed amount
+        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
+        if (currentBorrowed < params_.amount) {
+            revert DepositManager_BorrowingLimitExceeded(
+                address(params_.asset),
+                params_.operator,
+                params_.amount,
+                currentBorrowed
+            );
+        }
+
+        // Transfer funds from payer to this contract
+        actualAmount = params_.asset.balanceOf(address(this));
+        params_.asset.safeTransferFrom(params_.payer, address(this), params_.amount);
+        actualAmount = params_.asset.balanceOf(address(this)) - actualAmount;
+
+        // Update borrowed amount
+        _borrowedAmounts[borrowingKey] = currentBorrowed - actualAmount;
+
+        // Emit event
+        emit BorrowingRepayment(address(params_.asset), params_.operator, params_.payer, actualAmount);
+
+        return actualAmount;
+    }
+
+        /// @inheritdoc IDepositManager
+    function getBorrowedAmount(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 borrowed) {
+        bytes32 borrowingKey = _getAssetLiabilitiesKey(asset_, operator_);
+        return _borrowedAmounts[borrowingKey];
+    }
+
+    /// @inheritdoc IDepositManager
+    function getBorrowingCapacity(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 capacity) {
+        uint256 operatorLiabilities = _assetLiabilities[_getAssetLiabilitiesKey(asset_, operator_)];
+        uint256 currentBorrowed = getBorrowedAmount(asset_, operator_);
+
+        if (currentBorrowed >= operatorLiabilities) {
+            return 0;
+        }
+
+        return operatorLiabilities - currentBorrowed;
+    }
+
+
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 

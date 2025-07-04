@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
-import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";

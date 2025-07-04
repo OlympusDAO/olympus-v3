@@ -41,6 +41,21 @@ interface IDepositManager {
 
     event AssetPeriodReclaimRateSet(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
 
+    // Borrowing Events
+    event BorrowingWithdrawal(
+        address indexed asset,
+        address indexed operator,
+        address indexed recipient,
+        uint256 amount
+    );
+
+    event BorrowingRepayment(
+        address indexed asset,
+        address indexed operator,
+        address indexed payer,
+        uint256 amount
+    );
+
     // ========== ERRORS ========== //
 
     error DepositManager_Insolvent(address asset, uint256 requiredAssets);
@@ -58,6 +73,9 @@ interface IDepositManager {
     error DepositManager_AssetPeriodEnabled(address asset, uint8 depositPeriod);
 
     error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod);
+
+    // Borrowing Errors
+    error DepositManager_BorrowingLimitExceeded(address asset, address operator, uint256 requested, uint256 available);
 
     // ========== STRUCTS ========== //
 
@@ -114,6 +132,81 @@ interface IDepositManager {
         bool isConfigured;
         bool isEnabled;
     }
+
+    /// @notice Parameters for borrowing withdrawal operations
+    ///
+    /// @param asset           The underlying ERC20 asset
+    /// @param operator        The operator requesting the borrowing withdrawal
+    /// @param recipient       The recipient of the borrowed funds
+    /// @param amount          The amount to borrow
+    struct BorrowingWithdrawParams {
+        IERC20 asset;
+        address operator;
+        address recipient;
+        uint256 amount;
+    }
+
+    /// @notice Parameters for borrowing repayment operations
+    ///
+    /// @param asset           The underlying ERC20 asset
+    /// @param operator        The operator receiving the repayment
+    /// @param payer           The address making the repayment
+    /// @param amount          The amount to repay
+    struct BorrowingRepayParams {
+        IERC20 asset;
+        address operator;
+        address payer;
+        uint256 amount;
+    }
+
+    // ========== BORROWING FUNCTIONS ========== //
+
+    /// @notice Withdraws funds for borrowing purposes
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Validating borrowing limits and capacity
+    ///         - Transferring the underlying asset from the contract to the recipient
+    ///         - Updating borrowing state
+    ///         - Checking solvency
+    ///
+    /// @param  params_         The parameters for the borrowing withdrawal
+    /// @return actualAmount    The quantity of underlying assets transferred to the recipient
+    function borrowingWithdraw(
+        BorrowingWithdrawParams calldata params_
+    ) external returns (uint256 actualAmount);
+
+    /// @notice Repays borrowed funds
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Transferring the underlying asset from the payer to the contract
+    ///         - Updating borrowing state
+    ///         - Checking solvency
+    ///
+    /// @param  params_         The parameters for the borrowing repayment
+    /// @return actualAmount    The quantity of underlying assets received from the payer
+    function borrowingRepay(
+        BorrowingRepayParams calldata params_
+    ) external returns (uint256 actualAmount);
+
+    /// @notice Gets the current borrowed amount for an operator
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  operator_       The address of the operator
+    /// @return borrowed        The current borrowed amount for the operator
+    function getBorrowedAmount(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 borrowed);
+
+    /// @notice Gets the available borrowing capacity for an operator
+    ///
+    /// @param  asset_          The address of the underlying asset
+    /// @param  operator_       The address of the operator
+    /// @return capacity        The available borrowing capacity for the operator
+    function getBorrowingCapacity(
+        IERC20 asset_,
+        address operator_
+    ) external view returns (uint256 capacity);
 
     // ========== DEPOSIT/WITHDRAW FUNCTIONS ========== //
 

@@ -19,16 +19,18 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {BaseDepositRedemptionVault} from "src/bases/BaseDepositRedemptionVault.sol";
+import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol";
 
 /// @title YieldDepositFacility
 contract YieldDepositFacility is
-    Policy,
+    BaseDepositFacility,
     IYieldDepositFacility,
-    IPeriodicTask,
-    BaseDepositRedemptionVault
+    IPeriodicTask
 {
     // ========== STATE VARIABLES ========== //
+
+    /// @notice The TRSRY module.
+    TRSRYv1 public TRSRY;
 
     /// @notice The DEPOS module.
     DEPOSv1 public DEPOS;
@@ -51,14 +53,16 @@ contract YieldDepositFacility is
 
     constructor(
         address kernel_,
-        address depositManager_
-    ) Policy(Kernel(kernel_)) BaseDepositRedemptionVault(depositManager_) {
+        address depositManager_,
+        uint16 yieldFee_
+    ) BaseDepositFacility(kernel_, depositManager_) {
+        _yieldFee = yieldFee_;
         // Disabled by default by PolicyEnabler
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("DEPOS");
         dependencies[2] = toKeycode("TRSRY");
@@ -453,7 +457,7 @@ contract YieldDepositFacility is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(BaseDepositRedemptionVault, IPeriodicTask) returns (bool) {
+    ) public view virtual override(BaseDepositFacility, IPeriodicTask) returns (bool) {
         return
             interfaceId == type(IYieldDepositFacility).interfaceId ||
             interfaceId == type(IPeriodicTask).interfaceId ||
