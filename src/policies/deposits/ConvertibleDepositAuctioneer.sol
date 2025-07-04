@@ -30,7 +30,12 @@ import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepos
 ///         - The auction has a target amount of convertible OHM to sell per day
 ///         - When the target is reached, the amount of OHM required to increase the conversion price will decrease, resulting in more rapid price increases (assuming there is demand)
 ///         - The auction parameters are able to be updated in order to tweak the auction's behaviour
-contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, PolicyEnabler, ReentrancyGuard {
+contract ConvertibleDepositAuctioneer is
+    IConvertibleDepositAuctioneer,
+    Policy,
+    PolicyEnabler,
+    ReentrancyGuard
+{
     using FullMath for uint256;
     using EnumerableSet for EnumerableSet.UintSet;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -117,8 +122,10 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
         address cdFacility_,
         address depositAsset_
     ) Policy(Kernel(kernel_)) {
-        if (cdFacility_ == address(0)) revert ConvertibleDepositAuctioneer_InvalidParams("cd facility");
-        if (depositAsset_ == address(0)) revert ConvertibleDepositAuctioneer_InvalidParams("deposit asset");
+        if (cdFacility_ == address(0))
+            revert ConvertibleDepositAuctioneer_InvalidParams("cd facility");
+        if (depositAsset_ == address(0))
+            revert ConvertibleDepositAuctioneer_InvalidParams("deposit asset");
 
         CD_FACILITY = ConvertibleDepositFacility(cdFacility_);
         _DEPOSIT_ASSET = IERC20(depositAsset_);
@@ -198,7 +205,8 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
             BidOutput memory output = _previewBid(params.depositAmount, updatedTick);
 
             // Reject if the OHM out is 0
-            if (output.ohmOut == 0) revert ConvertibleDepositAuctioneer_InvalidParams("converted amount");
+            if (output.ohmOut == 0)
+                revert ConvertibleDepositAuctioneer_InvalidParams("converted amount");
 
             // Update state
             _dayState.convertible += output.ohmOut;
@@ -512,7 +520,10 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
     /// @notice Modifier to check if a deposit period is enabled
     modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
         if (!isDepositPeriodEnabled(depositPeriod_)) {
-            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
+                address(_DEPOSIT_ASSET),
+                depositPeriod_
+            );
         }
         _;
     }
@@ -523,7 +534,8 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
     ///             - The deposit period is already enabled for this asset
     function enableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
         // Validate that the deposit period is not 0
-        if (depositPeriod_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
+        if (depositPeriod_ == 0)
+            revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
 
         // Validate that the deposit period is not already enabled
         if (_depositPeriodsEnabled[depositPeriod_]) {
@@ -559,7 +571,10 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
     function disableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
         // Validate that the deposit period is enabled
         if (!_depositPeriodsEnabled[depositPeriod_]) {
-            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
+                address(_DEPOSIT_ASSET),
+                depositPeriod_
+            );
         }
 
         // Disable the deposit period
@@ -719,7 +734,8 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
     /// @param      newStep_    The new tick step
     function setTickStep(uint24 newStep_) public override onlyManagerOrAdminRole {
         // Value must be more than 100e2
-        if (newStep_ < ONE_HUNDRED_PERCENT) revert ConvertibleDepositAuctioneer_InvalidParams("tick step");
+        if (newStep_ < ONE_HUNDRED_PERCENT)
+            revert ConvertibleDepositAuctioneer_InvalidParams("tick step");
 
         _tickStep = newStep_;
 
@@ -735,7 +751,8 @@ contract ConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Policy, 
     /// @param      days_    The new auction tracking period
     function setAuctionTrackingPeriod(uint8 days_) public override onlyManagerOrAdminRole {
         // Value must be non-zero
-        if (days_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("auction tracking period");
+        if (days_ == 0)
+            revert ConvertibleDepositAuctioneer_InvalidParams("auction tracking period");
 
         _auctionTrackingPeriod = days_;
 

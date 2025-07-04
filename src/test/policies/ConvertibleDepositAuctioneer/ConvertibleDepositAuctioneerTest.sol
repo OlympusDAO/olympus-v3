@@ -115,7 +115,11 @@ contract ConvertibleDepositAuctioneerTest is Test {
         );
         depositManager = new DepositManager(address(kernel));
         facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
-        auctioneer = new ConvertibleDepositAuctioneer(address(kernel), address(facility), address(iReserveToken));
+        auctioneer = new ConvertibleDepositAuctioneer(
+            address(kernel),
+            address(facility),
+            address(iReserveToken)
+        );
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -179,7 +183,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_DepositPeriodNotEnabled.selector,
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodNotEnabled
+                    .selector,
                 address(depositAsset_),
                 depositPeriod_
             )

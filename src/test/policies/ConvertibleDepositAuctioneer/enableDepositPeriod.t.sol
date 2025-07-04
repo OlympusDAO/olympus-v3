@@ -68,7 +68,9 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled.selector,
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled
+                    .selector,
                 address(iReserveToken),
                 PERIOD_MONTHS
             )

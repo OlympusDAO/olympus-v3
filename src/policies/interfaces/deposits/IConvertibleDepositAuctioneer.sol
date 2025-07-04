@@ -82,10 +82,16 @@ interface IConvertibleDepositAuctioneer {
     error ConvertibleDepositAuctioneer_InvalidParams(string reason);
 
     /// @notice Emitted when the deposit period is already enabled for this asset
-    error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(address depositAsset, uint8 depositPeriod);
+    error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
+        address depositAsset,
+        uint8 depositPeriod
+    );
 
     /// @notice Emitted when the deposit period is not enabled for this asset
-    error ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(address depositAsset, uint8 depositPeriod);
+    error ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
+        address depositAsset,
+        uint8 depositPeriod
+    );
 
     // ========== DATA STRUCTURES ========== //
 
