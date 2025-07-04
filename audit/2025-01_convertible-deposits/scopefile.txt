@@ -1,5 +1,4 @@
 src/bases/BaseAssetManager.sol
-src/bases/BaseDepositRedemptionVault.sol
 src/bases/BasePeriodicTaskManager.sol
 src/external/clones/CloneERC20.sol
 src/libraries/CloneableReceiptToken.sol
@@ -10,9 +9,10 @@ src/libraries/Uint2Str.sol
 src/modules/DEPOS/DEPOS.v1.sol
 src/modules/DEPOS/OlympusDepositPositionManager.sol
 src/modules/DEPOS/PositionTokenRenderer.sol
-src/policies/CDAuctioneer.sol
-src/policies/CDClearinghouse.sol
-src/policies/CDFacility.sol
+src/policies/deposits/BaseDepositFacility.sol
+src/policies/deposits/ConvertibleDepositAuctioneer.sol
+src/policies/deposits/ConvertibleDepositFacility.sol
+src/policies/deposits/DepositRedemptionVault.sol
+src/policies/deposits/YieldDepositFacility.sol
 src/policies/EmissionManager.sol
 src/policies/Heart.sol
-src/policies/YieldDepositFacility.sol

@@ -30,7 +30,7 @@ The conversion price is determined through an infinite duration and infinite cap
 
 #### Auction Design
 
-Bidders are required to deposit the configured token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a receipt token (`rUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited deposit token.
+Bidders are required to deposit the configured token (e.g. USDS) into the auctioneer (`ConvertibleDepositAuctioneer`), and in return they receive a receipt token (`rUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited deposit token.
 
 The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
 
@@ -86,10 +86,9 @@ Across both mechanisms (convertible and yield deposits), depositors will receive
     - conversion price (convertible only)
     - size of the convertible deposit
 
-Using the `CDFacility` policy, convertible deposit holders are able to:
+Using the `ConvertibleDepositFacility` policy, convertible deposit holders are able to:
 
 - Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms (convertible only).
-- Commit their receipt tokens to redemption.
 - Reclaim the deposited tokens at any time, with a discount.
 
 ### Deposit Manager
@@ -99,25 +98,36 @@ The deposit manager provides lifecycle management for deposits and receipt token
 - Creating receipt tokens
 - Minting receipt tokens
 - Custodying of deposited funds
-- Redemption of deposited funds
-- Reclaiming of deposited funds (with a haircut)
+- Withdrawing deposited funds
 - Burning receipt tokens
 - Sweeping protocol yield
 
 #### Redemption
 
-Receipt token holders can redeem the underlying token quantity in full by depositing their receipt tokens to a operator (e.g. CDFacility or YieldDepositFacility).
+Receipt token holders can redeem the underlying token quantity in full through the centralized `DepositRedemptionVault` contract.
 
 - Receipt tokens can be deposited towards redemption (`startRedemption()`) without a deposit position
-    - As a position is not required and receipt tokens are fungible, receipt tokens created by one operator (e.g. CDFacility) can be redeemed through another (e.g. YieldDepositFacility). If the deposits for one of the operators were to be fully redeemed, it may seem to the depositor that their deposit is no longer available, however it would be redeemable through other operators.
+    - Users select which facility to use for redemption at initiation
+    - Receipt tokens are transferred to the redemption vault as collateral
+    - Deposits are committed to the selected facility
+    - Choosing a facility is required as the receipt tokens are fungible - receipt tokens created by one operator (e.g. ConvertibleDepositFacility) can be redeemed through another (e.g. YieldDepositFacility).
 - The receipt tokens must remain in the vault for the deposit period in order to be redeemed.
-- A user can borrow against the receipt tokens while they are in the vault.
-- Withdrawing receipt tokens (`cancelRedemption()`) from the vault will reset the counter.
 - After the receipt tokens have been in the vault for the deposit period, they can be redeemed 1:1 for the underlying tokens (`finishRedemption()`).
+- Users can cancel redemptions (`cancelRedemption()`) and receive their receipt tokens back.
+
+#### Borrowing Against Redemptions
+
+The architecture supports borrowing against active redemptions:
+
+- Users can borrow up to the configured percentage of their redemption amount against in-progress redemptions
+- Multiple loans can be taken against the same redemption
+- Loans have fixed interest rates and match the redemption period duration
+- Repayment is handled through the redemption vault
+- Defaulted loans result in collateral burning and redemption amount reduction
 
 #### Handling of Deposited Funds
 
-Funds deposited are custodied in the deposit manager, and attributed to the dependent contract (e.g. CDFacility and YieldDepositFacility). This results in the following:
+Funds deposited are custodied in the deposit manager, and attributed to the dependent contract (e.g. ConvertibleDepositFacility and YieldDepositFacility). This results in the following:
 
 - The deposited funds are separated from the protocol treasury
 - The deposited funds cannot be accessed by other components in the protocol
@@ -154,9 +164,9 @@ TODO update scope
             - [IConvertibleDepositFacility.sol](../../src/policies/interfaces/IConvertibleDepositFacility.sol)
             - [IEmissionManager.sol](../../src/policies/interfaces/IEmissionManager.sol)
             - [IGenericClearinghouse.sol](../../src/policies/interfaces/IGenericClearinghouse.sol)
-        - [CDAuctioneer.sol](../../src/policies/CDAuctioneer.sol)
+        - [ConvertibleDepositAuctioneer.sol](../../src/policies/ConvertibleDepositAuctioneer.sol)
         - [CDClearinghouse.sol](../../src/policies/CDClearinghouse.sol)
-        - [CDFacility.sol](../../src/policies/CDFacility.sol)
+        - [ConvertibleDepositFacility.sol](../../src/policies/ConvertibleDepositFacility.sol)
         - [EmissionManager.sol](../../src/policies/EmissionManager.sol)
         - [Heart.sol](../../src/policies/Heart.sol)
         - [YieldRepurchaseFacility.sol](../../src/policies/YieldRepurchaseFacility.sol)
@@ -212,29 +222,30 @@ The diagrams below illustrate the architecture of the components.
 
 #### Activation and Deactivation
 
-Callers with the appropriate permissions can activate and deactivate the functionality of the CDAuctioneer and CDFacility contracts.
+Callers with the appropriate permissions can activate and deactivate the functionality of the contracts.
 
 ```mermaid
 flowchart TD
-  admin((admin)) -- enable --> CDAuctioneer
-  admin((admin)) -- enable --> CDClearinghouse
-  admin((admin)) -- enable --> CDFacility
+  admin((admin)) -- enable --> ConvertibleDepositAuctioneer
+  admin((admin)) -- enable --> ConvertibleDepositFacility
   admin((admin)) -- enable --> DepositManager
+  admin((admin)) -- enable --> DepositRedemptionVault
   admin((admin)) -- enable --> EmissionManager
   admin((admin)) -- enable --> YieldDepositFacility
   admin((admin)) -- restart --> EmissionManager
-  emergency((emergency)) -- disable --> CDAuctioneer
-  emergency((emergency)) -- disable --> CDClearinghouse
-  emergency((emergency)) -- disable --> CDFacility
+  emergency((emergency)) -- disable --> ConvertibleDepositAuctioneer
+  emergency((emergency)) -- disable --> ConvertibleDepositFacility
   emergency((emergency)) -- disable --> DepositManager
+  emergency((emergency)) -- disable --> DepositRedemptionVault
   emergency((emergency)) -- disable --> EmissionManager
   emergency((emergency)) -- disable --> YieldDepositFacility
 
   subgraph Policies
-    CDAuctioneer
+    ConvertibleDepositAuctioneer
     CDClearinghouse
-    CDFacility
+    ConvertibleDepositFacility
     DepositManager
+    DepositRedemptionVault
     EmissionManager
     YieldDepositFacility
   end
@@ -242,39 +253,39 @@ flowchart TD
 
 #### Auction Tuning
 
-As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameterson CDAuctioneer for the EmissionManager's configured reserve asset.
+As part of the regular heartbeat, the EmissionManager contract will calculate the desired emission rate and set the auction parameterson ConvertibleDepositAuctioneer for the EmissionManager's configured reserve asset.
 
 ```mermaid
 sequenceDiagram
     participant caller
     participant Heart
     participant EmissionManager
-    participant CDAuctioneer
+    participant ConvertibleDepositAuctioneer
 
     caller->>Heart: beat
     Heart->>EmissionManager: execute
-    note over EmissionManager, CDAuctioneer: Once per day
-    EmissionManager->>CDAuctioneer: setAuctionParameters
+    note over EmissionManager, ConvertibleDepositAuctioneer: Once per day
+    EmissionManager->>ConvertibleDepositAuctioneer: setAuctionParameters
 ```
 
 #### Deposit Creation
 
-A bidder can call `bid()` on the CDAuctioneer to create a deposit. This will result in the caller receiving the receipt tokens and a DEPOS position.
+A bidder can call `bid()` on the ConvertibleDepositAuctioneer to create a deposit. This will result in the caller receiving the receipt tokens and a DEPOS position.
 
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDAuctioneer
-    participant CDFacility
+    participant ConvertibleDepositAuctioneer
+    participant ConvertibleDepositFacility
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
     participant VaultToken as Vault (ERC4626)
     participant DEPOS
 
-    caller->>CDAuctioneer: bid(depositAmount)
-    CDAuctioneer->>CDAuctioneer: determine conversion price
-    CDAuctioneer->>CDFacility: createPosition()
-    CDFacility->>DepositManager: deposit(caller, depositAmount)
+    caller->>ConvertibleDepositAuctioneer: bid(depositAmount)
+    ConvertibleDepositAuctioneer->>ConvertibleDepositAuctioneer: determine conversion price
+    ConvertibleDepositAuctioneer->>ConvertibleDepositFacility: createPosition()
+    ConvertibleDepositFacility->>DepositManager: deposit(caller, depositAmount)
     DepositManager->>DepositToken: transferFrom(caller, depositAmount)
     caller-->>DepositManager: deposit tokens
     alt DepositToken has vault defined
@@ -282,7 +293,7 @@ sequenceDiagram
         VaultToken-->>DepositManager: vault tokens
     end
     DepositManager-->>caller: receipt tokens
-    CDFacility->>DEPOS: mint(caller, depositToken, depositPeriod, depositAmount, conversionPrice, expiry, wrapNft)
+    ConvertibleDepositFacility->>DEPOS: mint(caller, depositToken, depositPeriod, depositAmount, conversionPrice, expiry, wrapNft)
     DEPOS-->>caller: DEPOS ERC721 token
 ```
 
@@ -293,7 +304,7 @@ Prior to the expiry of the convertible deposit, a deposit owner can convert thei
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDFacility
+    participant ConvertibleDepositFacility
     participant DEPOS
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
@@ -302,11 +313,11 @@ sequenceDiagram
     participant MINTR
     participant OHM
 
-    caller->>CDFacility: convert(positionIds, amounts)
+    caller->>ConvertibleDepositFacility: convert(positionIds, amounts)
     loop For each position
-        CDFacility->>DEPOS: setRemainingDeposit(positionId, remainingAmount)
+        ConvertibleDepositFacility->>DEPOS: setRemainingDeposit(positionId, remainingAmount)
     end
-    CDFacility->>DepositManager: withdraw(caller, amount)
+    ConvertibleDepositFacility->>DepositManager: withdraw(caller, amount)
     caller-->>DepositManager: burns receipt tokens
     alt DepositToken has vault defined
     DepositManager->>VaultToken: redeem()
@@ -314,7 +325,7 @@ sequenceDiagram
     end
     DepositManager->>DepositToken: transfer()
     DepositManager-->>TRSRY: reserve tokens
-    CDFacility->>MINTR: mintOhm(caller, convertedAmount)
+    ConvertibleDepositFacility->>MINTR: mintOhm(caller, convertedAmount)
     MINTR->>OHM: mint(caller, convertedAmount)
     OHM-->>caller: OHM tokens
 ```
@@ -326,13 +337,15 @@ The holder of convertible deposit tokens can reclaim their underlying deposit at
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDFacility
+    participant DepositRedemptionVault
+    participant ConvertibleDepositFacility
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
     participant VaultToken as Vault (ERC4626)
 
-    caller->>CDFacility: reclaim(amount)
-    CDFacility->>DepositManager: withdraw()
+    caller->>DepositRedemptionVault: reclaim(amount)
+    DepositRedemptionVault->>ConvertibleDepositFacility: handleWithdrawal()
+    ConvertibleDepositFacility->>DepositManager: withdraw()
     caller-->>DepositManager: burns receipt tokens
     alt DepositToken has vault defined
     DepositManager->>VaultToken: redeem()
@@ -348,18 +361,18 @@ sequenceDiagram
 
 ##### Redeem Deposit - Start
 
-A depositor can start the process to redeem their deposit amount by providing the receipt tokens to an operator contract. The underlying deposit amount will be redeemable after the deposit period has passed.
+A depositor can start the process to redeem their deposit amount by providing the receipt tokens to the centralized redemption vault. The underlying deposit amount will be redeemable after the deposit period has passed.
 
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDFacility
+    participant DepositRedemptionVault
     participant DepositManager
 
-    caller->>CDFacility: startRedemption(amount)
-    CDFacility->>DepositManager: transferFrom()
-    caller-->>CDFacility: receipt tokens
-    CDFacility-->>caller: redemption id
+    caller->>DepositRedemptionVault: startRedemption(token, period, amount, facility)
+    DepositRedemptionVault->>DepositManager: transferFrom(caller, amount)
+    caller-->>DepositRedemptionVault: receipt tokens
+    DepositRedemptionVault-->>caller: redemption id
 ```
 
 ##### Redeem Deposit - Cancel
@@ -393,83 +406,43 @@ sequenceDiagram
     DepositManager-->>caller: deposit tokens
 ```
 
-#### Borrowing Against Receipt Tokens
+#### Borrowing Against Redemptions
 
-Depositors that have started redemption of their deposit can borrow against that deposit.
+Depositors with active redemptions can borrow against their redemption amount.
 
 ```mermaid
 sequenceDiagram
     participant caller
-    participant CDFacility
-    participant DepositClearinghouse
+    participant DepositRedemptionVault
+    participant ConvertibleDepositFacility
     participant DepositManager
     participant DepositToken as Deposit (ERC20)
 
-    caller->>CDFacility: borrow(redemptionId, borrowAmount, cooler)
-    note over caller, CDFacility: only if caller has started redemption
-    CDFacility->>DepositManager: borrow(borrowAmount)
-    DepositManager->>DepositToken: transfer(CDFacility, borrowAmount)
-    DepositManager-->>CDFacility: deposit tokens
-    CDFacility->>DepositClearinghouse: lendToCooler(cooler, redemptionId, borrowAmount)
-    DepositClearinghouse->>DepositManager: transferFrom(CDFacility, collateralAmount)
-    CDFacility-->>DepositClearinghouse: receipt tokens
-    DepositClearinghouse->>DepositToken: transferFrom(CDFacility, borrowAmount)
-    CDFacility-->>DepositClearinghouse: deposit tokens
-    DepositClearinghouse->>DepositToken: transfer(caller, borrowAmount)
-    DepositClearinghouse-->>caller: deposit tokens
+    caller->>DepositRedemptionVault: borrowAgainstRedemption(redemptionId, amount, facility)
+    note over caller, DepositRedemptionVault: only if caller has active redemption
+    DepositRedemptionVault->>ConvertibleDepositFacility: handleBorrowing(redemption, caller, amount)
+    ConvertibleDepositFacility->>DepositManager: borrow(amount)
+    DepositManager->>DepositToken: transfer(caller, amount)
+    DepositRedemptionVault-->>caller: deposit tokens
 ```
-
-The `DepositClearinghouse` contract is a modified version of the original `Clearinghouse` contract used by Cooler Loans v1. Unlike the original Clearinghouse, which was user-facing, the DepositClearinghouse is designed to be called by any of the Facility contracts, which custody the receipt tokens that have been committed towards redemption.
-
-This is a departure from the original design of the Clearinghouse (which pulled the funding into the contract periodically), but is necessary for the following reasons:
-
-- The deposit tokens are custodied in the DepositManager contract, and accessible only by the Facility that deposited them (e.g. CDFacility).
-- The Facility contract custodies the receipt tokens that have been committed by a depositor.
-
-For these reasons, the DepositClearinghouse pulls both the receipt tokens and deposit tokens from the Facility calling it. This should not pose any danger to the custodied funds or the depositor:
-
-- Functions on the DepositClearinghouse will be gated to callers with a role that is granted only to the Facility contracts
-- The calling Facility will need to provide both the receipt and deposit tokens to the DepositClearinghouse. As the receipt tokens can only be created by depositing the underlying asset, there is no economic reason to arrange for the tokens and then call DepositClearinghouse to lend out the tokens.
-
-#### Repayment Against Receipt Token Loan
-
-When a depositor has borrowed against their receipt tokens, they must repay the loan in order to complete the redemption.
-
-Issues:
-
-- Cooler repayment will transfer collateral back to the owner (depositor), and transfer debt tokens to the lender (deposit clearinghouse)
-
-alternatively, have the Cooler owned by the facility, and each loan maps to a depositor
-
-TODO repayment
-
-#### Extending a Receipt Token Loan
-
-#### Liquidation of Receipt Token Loan
-
-where is the collateral sent?
-
-what if a loan gets liquidated by the facility vs anyone else? Need to be able to clean up
-
-TODO liquidation
 
 ### EmissionManager (Policy)
 
 This release contains an updated EmissionManager policy with the following changes:
 
 - In every third epoch, it:
-    - Tunes the auction run by CDAuctioneer
+    - Tunes the auction run by ConvertibleDepositAuctioneer
     - Launches an auction for the quantity of OHM unsold through auction over the configured tracking period
 - Uses the PolicyEnabler mix-in for enabling/disabling the functionality and role validation
 
-### CDAuctioneer (Policy)
+### ConvertibleDepositAuctioneer (Policy)
 
-CDAuctioneer is a policy that runs the aforementioned infinite duration and infinite capacity auction of deposits in exchange for future conversion to OHM.
+ConvertibleDepositAuctioneer is a policy that runs the aforementioned infinite duration and infinite capacity auction of deposits in exchange for future conversion to OHM.
 
 There are two main state-changing functions in this policy:
 
 - `setAuctionParameters()` is gated to a role held by the EmissionManager, which enables it to periodically tune the auction parameters
-- `bid()` is ungated and enables the caller to bid in the auction. The function determines the amount of OHM that is convertible for the given deposit amount, and uses CDFacility to issue the receipt tokens and deposit position.
+- `bid()` is ungated and enables the caller to bid in the auction. The function determines the amount of OHM that is convertible for the given deposit amount, and uses ConvertibleDepositFacility to issue the receipt tokens and deposit position.
 
 Other relevant functions are:
 
@@ -477,27 +450,13 @@ Other relevant functions are:
 - `previewBid()` indicates the amount of OHM that a given deposit could be converted to, given current tick capacity and pricing.
     - This function implements the logic of moving up ticks and prices until the bid amount is fulfilled, and adjusting the tick size after reaching multiples of the period target.
 
-TODO update this
+Each ConvertibleDepositAuctioneer is deployed with a single, immutable bid token.
 
-Each CDAuctioneer is deployed with a single, immutable bid token.
+### ConvertibleDepositFacility (Policy)
 
-### CDClearinghouse (Policy)
+ConvertibleDepositFacility is a policy that is responsible for taking deposits, issuing receipt tokens and handling subsequent interactions with receipt token holders.
 
-TODO update
-
-The CDClearinghouse policy enables CD token holders to borrow the underlying asset against their CD token. The purpose is to enable users with CD positions to utilise the paired asset before conversion or redemption.
-
-The policy is a modified version of the existing [Clearinghouse policy](../../src/policies/Clearinghouse.sol). It adheres to the interface (extracted into [IGenericClearinghouse](../../src/policies/interfaces/IGenericClearinghouse.sol)), but makes the following changes:
-
-- Users borrow the associated ERC4626 vault token (e.g. sUSDS) against the quantity of CD tokens
-- The loan-to-collateral ratio is in terms of the underlying asset (e.g. USDS), and converted to vault token (e.g. sUSDS) terms at the time of loan origination.
-- Does not store funding in the CDClearinghouse contract (unlike the original Clearinghouse), and instead incurs debt from DepositManager.
-
-### CDFacility (Policy)
-
-CDFacility is a policy that is responsible for taking deposits, issuing receipt tokens and handling subsequent interactions with receipt token holders.
-
-The CDAuctioneer is able to mint a convertible deposit:
+The ConvertibleDepositAuctioneer is able to mint a convertible deposit:
 
 - `createPosition()`: results in the deposit of the configured reserve token (e.g. USDS) for a period period (e.g. 6 months), issuance of an equivalent amount of receipt tokens (rUSDS-6m) and creation of a convertible deposit position in the DEPOS module.
 
@@ -505,7 +464,25 @@ Receipt token holders can perform the following actions:
 
 - `convert()`: convert their deposit position into OHM before conversion expiry.
 - `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a DEPOS position ID.
-- `finishRedemption()`: redeem their deposit position for the underlying asset, USDS, after conversion expiry and before redemption expiry.
+
+The facility also implements the `IDepositFacility` interface to support the centralized redemption system:
+
+- `handleRedemptionWithdrawal()`: handles withdrawal requests from the redemption vault
+- `getDepositBalance()`: reports current deposit balances to the redemption vault
+
+### DepositRedemptionVault (Policy)
+
+The `DepositRedemptionVault` is a centralized contract that manages all redemption operations, separating redemption logic from the facility contracts. This enables better modularity and future borrowing functionality.
+
+Key functions:
+
+- `startRedemption()`: initiates redemption with facility selection
+- `finishRedemption()`: completes redemption through the selected facility
+- `cancelRedemption()`: cancels redemption and returns receipt tokens
+- `borrowAgainstRedemption()`: allows borrowing against active redemptions
+- `repayBorrow()`: handles loan repayment
+
+The vault coordinates with registered facilities through the `IDepositFacility` interface and maintains centralized state for all redemption operations.
 
 ### YieldRepurchaseFacility (Policy)
 
@@ -517,18 +494,30 @@ The changes to this policy are:
 
 ### YieldDepositFacility (Policy)
 
-TODO
+The YieldDepositFacility enables users to create yield-bearing deposits. The redemption functionality has been separated into the centralized `DepositRedemptionVault` contract.
 
 The public can mint a yield-bearing deposit:
 
-- `mintYieldDeposit()`: results in the deposit of the configured deposit token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the DEPOS module.
-- `claimYield()`: transfers the variable yield accrued from the vault token (e.g. sUSDS) after deducting the yield fee. However, when the deposit is in the redemption queue, the yield is fixed.
+- `mintYieldDeposit()`: results in the deposit of the configured deposit token (USDS), issuance of an equivalent amount of receipt tokens (rUSDS) and creation of a yield deposit position in the DEPOS module.
+- `claimYield()`: transfers the variable yield accrued from the vault token (e.g. sUSDS) after deducting the yield fee.
+
+The facility also implements the `IDepositFacility` interface to support the centralized redemption system:
+
+- `handleRedemptionWithdrawal()`: handles withdrawal requests from the redemption vault
+- `getDepositBalance()`: reports current deposit balances to the redemption vault
 
 ### Deposit Manager (Policy)
 
 The deposit manager is responsible for custodying deposits and issuing receipt tokens in return. It is designed to prevent any party other than the operator from accessing funds, in order to protect depositor funds - this includes from other permissioned Policies that governance may install.
 
 Each receipt token is an ERC6909 token (optionally wrapped into an ERC20 clone contract) managed by the deposit manager. The receipt token represents the deposit of the underlying asset in a 1:1 ratio. The receipt token can be referred to as an "rToken" and will have the deposit period appended, e.g. "rUSDS-6m".
+
+The DepositManager now supports borrowing operations:
+
+- Borrowing withdrawal functionality for facility contracts
+- Repayment deposit functionality for loan repayments
+- Operator/facility borrowing permissions and limits
+- Borrowing state tracking per operator
 
 Unpermissioned callers are able to perform the following actions:
 
@@ -539,6 +528,7 @@ Bophades policies with the `deposit_operator` role are able to perform the follo
 - Deposit assets into the DepositManager
 - Withdraw assets from the DepositManager
 - Claim yield on deposited assets
+- Borrow against available deposits (for authorized facilities)
 
 Bophades policies with the `admin` or `manager` role are able to perform the following actions:
 
