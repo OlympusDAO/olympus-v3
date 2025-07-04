@@ -105,7 +105,7 @@ contract BurnCDEPOTest is CDEPOTest {
 
         // Sweeping yield should bring total shares to 0
         vm.prank(address(godmode));
-        CDEPO.sweepYield(iReserveToken, address(this));
+        CDEPO.sweepYield(cdToken, address(this));
 
         assertEq(_getTotalShares(), 0, "total shares after sweep");
     }

@@ -1,31 +1,28 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.15;
 
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
-import {MockERC20} from "forge-std/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC721ReceiverMock} from "@openzeppelin/contracts/mocks/ERC721ReceiverMock.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/interfaces/IERC721Receiver.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {CDPOSv1} from "src/modules/CDPOS/CDPOS.v1.sol";
 
 abstract contract CDPOSTest is Test, IERC721Receiver {
-    using ModuleTestFixtureGenerator for OlympusConvertibleDepositPositions;
+    using ModuleTestFixtureGenerator for OlympusConvertibleDepositPositionManager;
 
     uint256 public constant REMAINING_DEPOSIT = 25e18;
     uint256 public constant CONVERSION_PRICE = 2e18;
     uint48 public constant CONVERSION_EXPIRY_DELAY = 1 days;
-    uint48 public constant REDEMPTION_PERIOD = 2 days;
     uint48 public constant INITIAL_BLOCK = 100000000;
     uint48 public constant CONVERSION_EXPIRY = uint48(INITIAL_BLOCK + CONVERSION_EXPIRY_DELAY);
-    uint48 public constant REDEMPTION_EXPIRY =
-        uint48(INITIAL_BLOCK + CONVERSION_EXPIRY_DELAY + REDEMPTION_PERIOD);
 
     Kernel public kernel;
-    OlympusConvertibleDepositPositions public CDPOS;
+    OlympusConvertibleDepositPositionManager public CDPOS;
     ERC721ReceiverMock public mockERC721Receiver;
     address public godmode;
     address public convertibleDepositToken;
@@ -37,19 +34,22 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         vm.warp(INITIAL_BLOCK);
 
         kernel = new Kernel();
-        CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
+        CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
         mockERC721Receiver = new ERC721ReceiverMock(
             IERC721Receiver.onERC721Received.selector,
             ERC721ReceiverMock.Error.None
         );
 
         // Set up the convertible deposit token
-        MockERC20 mockERC20 = new MockERC20();
-        mockERC20.initialize("Convertible Deposit Token", "CDT", convertibleDepositTokenDecimals);
+        MockERC20 mockERC20 = new MockERC20(
+            "Convertible Deposit Token",
+            "CDT",
+            convertibleDepositTokenDecimals
+        );
         convertibleDepositToken = address(mockERC20);
 
         // Generate fixtures
-        godmode = CDPOS.generateGodmodeFixture(type(OlympusConvertibleDepositPositions).name);
+        godmode = CDPOS.generateGodmodeFixture(type(OlympusConvertibleDepositPositionManager).name);
 
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(CDPOS));
@@ -75,9 +75,8 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
-    ) internal {
+    ) internal view {
         CDPOSv1.Position memory position = CDPOS.getPosition(positionId_);
         assertEq(position.owner, owner_, "position.owner");
         assertEq(
@@ -87,12 +86,15 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         );
         assertEq(position.remainingDeposit, remainingDeposit_, "position.remainingDeposit");
         assertEq(position.conversionPrice, conversionPrice_, "position.conversionPrice");
-        assertEq(position.conversionExpiry, conversionExpiry_, "position.conversionExpiry");
-        assertEq(position.redemptionExpiry, redemptionExpiry_, "position.redemptionExpiry");
+        assertEq(position.expiry, conversionExpiry_, "position.expiry");
         assertEq(position.wrapped, wrap_, "position.wrapped");
     }
 
-    function _assertUserPosition(address owner_, uint256 positionId_, uint256 total_) internal {
+    function _assertUserPosition(
+        address owner_,
+        uint256 positionId_,
+        uint256 total_
+    ) internal view {
         uint256[] memory userPositions = CDPOS.getUserPositionIds(owner_);
         assertEq(userPositions.length, total_, "userPositions.length");
 
@@ -116,7 +118,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         }
     }
 
-    function _assertERC721Balance(address owner_, uint256 balance_) internal {
+    function _assertERC721Balance(address owner_, uint256 balance_) internal view {
         assertEq(CDPOS.balanceOf(owner_), balance_, "balanceOf");
     }
 
@@ -124,7 +126,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 positionId_,
         uint256 total_,
         bool received_
-    ) internal {
+    ) internal view {
         assertEq(positions.length, total_, "positions.length");
 
         // Iterate over the positions and assert that the positionId_ is in the array
@@ -147,8 +149,7 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
 
     modifier givenConvertibleDepositTokenDecimals(uint8 decimals_) {
         // Create a new token with the given decimals
-        MockERC20 mockERC20 = new MockERC20();
-        mockERC20.initialize("Convertible Deposit Token", "CDT", decimals_);
+        MockERC20 mockERC20 = new MockERC20("Convertible Deposit Token", "CDT", decimals_);
         convertibleDepositToken = address(mockERC20);
         _;
     }
@@ -158,7 +159,6 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) internal {
         vm.prank(godmode);
@@ -168,7 +168,6 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
             remainingDeposit_,
             conversionPrice_,
             conversionExpiry_,
-            redemptionExpiry_,
             wrap_
         );
     }
@@ -178,18 +177,10 @@ abstract contract CDPOSTest is Test, IERC721Receiver {
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
         uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) {
         // Create a new position
-        _createPosition(
-            owner_,
-            remainingDeposit_,
-            conversionPrice_,
-            conversionExpiry_,
-            redemptionExpiry_,
-            wrap_
-        );
+        _createPosition(owner_, remainingDeposit_, conversionPrice_, conversionExpiry_, wrap_);
         _;
     }
 

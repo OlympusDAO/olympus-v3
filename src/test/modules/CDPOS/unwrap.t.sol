@@ -42,7 +42,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -60,7 +59,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -78,7 +76,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -96,7 +93,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -114,7 +110,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
@@ -133,7 +128,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
         givenPositionCreated(
@@ -141,7 +135,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -155,7 +148,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
         _assertPosition(
@@ -164,7 +156,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         );
 
@@ -185,7 +176,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
         givenPositionCreated(
@@ -193,7 +183,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -207,7 +196,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         );
         _assertPosition(
@@ -216,7 +204,6 @@ contract UnwrapCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 

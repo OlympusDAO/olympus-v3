@@ -27,8 +27,6 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when any position has not reached the conversion expiry
     //  [X] it reverts
-    // when any position has reached the redemption expiry
-    //  [X] it reverts
     // when any position has an amount greater than the remaining deposit
     //  [X] it reverts
     // when the caller has not approved CDEPO to spend the total amount of CD tokens
@@ -84,23 +82,9 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
         for (uint256 i; i < 3; i++) {
             uint256 positionId;
             if (positionIndex == i) {
-                positionId = _createPosition(
-                    recipientTwo,
-                    5e18,
-                    CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
-                    false
-                );
+                positionId = _createPosition(recipientTwo, 5e18, CONVERSION_PRICE, false);
             } else {
-                positionId = _createPosition(
-                    recipient,
-                    5e18,
-                    CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
-                    false
-                );
+                positionId = _createPosition(recipient, 5e18, CONVERSION_PRICE, false);
             }
 
             positionIds_[i] = positionId;
@@ -196,96 +180,32 @@ contract RedeemCDFTest is ConvertibleDepositFacilityTest {
     }
 
     function test_anyPositionHasNotReachedConversionExpiry_reverts(
-        uint256 positionIndex_
+        uint48 warpTime_
     )
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
     {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
+        uint48 warpTime = uint48(bound(warpTime_, INITIAL_BLOCK, CONVERSION_EXPIRY - 1));
 
         uint256[] memory positionIds_ = new uint256[](3);
         uint256[] memory amounts_ = new uint256[](3);
 
         for (uint256 i; i < 3; i++) {
-            uint48 expiry = CONVERSION_EXPIRY;
-            if (positionIndex == i) {
-                expiry = CONVERSION_EXPIRY + 1;
-            }
-
             // Create position
-            uint256 positionId = _createPosition(
-                recipient,
-                3e18,
-                CONVERSION_PRICE,
-                expiry,
-                REDEMPTION_EXPIRY,
-                false
-            );
+            uint256 positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
 
             positionIds_[i] = positionId;
             amounts_[i] = 3e18;
         }
 
-        // Warp to beyond the normal expiry
-        vm.warp(CONVERSION_EXPIRY);
+        // Warp to before the conversion expiry
+        vm.warp(warpTime);
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionNotExpired.selector,
-                positionIndex
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.redeem(positionIds_, amounts_);
-    }
-
-    function test_anyPositionHasReachedRedemptionExpiry_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            uint48 redemptionExpiry = REDEMPTION_EXPIRY;
-            if (positionIndex == i) {
-                redemptionExpiry = REDEMPTION_EXPIRY - 1;
-            }
-
-            // Create position
-            uint256 positionId = _createPosition(
-                recipient,
-                3e18,
-                CONVERSION_PRICE,
-                CONVERSION_EXPIRY,
-                redemptionExpiry,
-                false
-            );
-
-            positionIds_[i] = positionId;
-            amounts_[i] = 3e18;
-        }
-
-        // Warp to before the normal redemption expiry
-        vm.warp(REDEMPTION_EXPIRY - 1);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionExpired.selector,
-                positionIndex
-            )
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_PositionNotExpired.selector, 0)
         );
 
         // Call function

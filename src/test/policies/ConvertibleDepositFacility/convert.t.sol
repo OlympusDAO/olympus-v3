@@ -26,8 +26,6 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     //  [X] it reverts
     // when any position has reached the conversion expiry
     //  [X] it reverts
-    // when any position has reached the redemption expiry
-    //  [X] it reverts
     // when any position has an amount greater than the remaining deposit
     //  [X] it reverts
     // when any position has a different CD token
@@ -35,6 +33,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     // when the caller has not approved CDEPO to spend the total amount of CD tokens
     //  [X] it reverts
     // when the converted amount is 0
+    //  [X] it reverts
+    // when the position does not support conversion
     //  [X] it reverts
     // given the deposit asset has 6 decimals
     //  [X] the amount of CD tokens converted is correct
@@ -128,23 +128,9 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         for (uint256 i; i < 3; i++) {
             uint256 positionId;
             if (positionIndex == i) {
-                positionId = _createPosition(
-                    recipientTwo,
-                    5e18,
-                    CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
-                    false
-                );
+                positionId = _createPosition(recipientTwo, 5e18, CONVERSION_PRICE, false);
             } else {
-                positionId = _createPosition(
-                    recipient,
-                    5e18,
-                    CONVERSION_PRICE,
-                    CONVERSION_EXPIRY,
-                    REDEMPTION_EXPIRY,
-                    false
-                );
+                positionId = _createPosition(recipient, 5e18, CONVERSION_PRICE, false);
             }
 
             positionIds_[i] = positionId;
@@ -191,98 +177,32 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
     }
 
     function test_anyPositionHasReachedConversionExpiry_reverts(
-        uint256 positionIndex_
+        uint48 warpTime_
     )
         public
         givenLocallyActive
         givenAddressHasReserveToken(recipient, 9e18)
         givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
     {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
+        uint48 warpTime = uint48(bound(warpTime_, CONVERSION_EXPIRY, type(uint48).max));
 
         uint256[] memory positionIds_ = new uint256[](3);
         uint256[] memory amounts_ = new uint256[](3);
 
         for (uint256 i; i < 3; i++) {
-            uint48 expiry = uint48(block.timestamp + 1 days);
-            if (positionIndex == i) {
-                expiry = uint48(block.timestamp + 1);
-            }
-
             // Create position
-            uint256 positionId = _createPosition(
-                recipient,
-                3e18,
-                CONVERSION_PRICE,
-                expiry,
-                REDEMPTION_EXPIRY,
-                false
-            );
+            uint256 positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
 
             positionIds_[i] = positionId;
             amounts_[i] = 3e18;
         }
 
-        // Warp to beyond the expiry of positionIndex
-        vm.warp(INITIAL_BLOCK + 1);
+        // Warp to the expiry of positionIndex
+        vm.warp(warpTime);
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionExpired.selector,
-                positionIndex
-            )
-        );
-
-        // Call function
-        vm.prank(recipient);
-        facility.convert(positionIds_, amounts_);
-    }
-
-    function test_anyPositionHasReachedRedemptionExpiry_reverts(
-        uint256 positionIndex_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, 9e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(convertibleDepository), 9e18)
-    {
-        uint256 positionIndex = bound(positionIndex_, 0, 2);
-
-        uint256[] memory positionIds_ = new uint256[](3);
-        uint256[] memory amounts_ = new uint256[](3);
-
-        for (uint256 i; i < 3; i++) {
-            uint48 expiry = uint48(block.timestamp + 1 days);
-            uint48 redemptionExpiry = uint48(block.timestamp + 2 days);
-            if (positionIndex == i) {
-                expiry = uint48(block.timestamp + 1);
-                redemptionExpiry = uint48(block.timestamp + 2);
-            }
-
-            // Create position
-            uint256 positionId = _createPosition(
-                recipient,
-                3e18,
-                CONVERSION_PRICE,
-                expiry,
-                redemptionExpiry,
-                false
-            );
-
-            positionIds_[i] = positionId;
-            amounts_[i] = 3e18;
-        }
-
-        // Warp to beyond the expiry of positionIndex
-        vm.warp(INITIAL_BLOCK + 2);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositFacility.CDF_PositionExpired.selector,
-                positionIndex
-            )
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_PositionExpired.selector, 0)
         );
 
         // Call function
@@ -422,22 +342,8 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
         uint256 expectedVaultShares = vault.previewDeposit(10e6);
 
         // Create positions
-        _createPosition(
-            recipient,
-            10e6 / 2,
-            conversionPrice,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
-        _createPosition(
-            recipient,
-            10e6 / 2,
-            conversionPrice,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
+        _createPosition(recipient, 10e6 / 2, conversionPrice, false);
+        _createPosition(recipient, 10e6 / 2, conversionPrice, false);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -525,6 +431,37 @@ contract ConvertCDFTest is ConvertibleDepositFacilityTest {
                 IConvertibleDepositFacility.CDF_InvalidArgs.selector,
                 "multiple CD tokens"
             )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        facility.convert(positionIds_, amounts_);
+    }
+
+    function test_anyPositionDoesNotSupportConversion_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(convertibleDepository),
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+        givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
+    {
+        uint256[] memory positionIds_ = new uint256[](2);
+        uint256[] memory amounts_ = new uint256[](2);
+
+        positionIds_[0] = 0; // cdToken
+        positionIds_[1] = 1; // cdToken yield deposit
+
+        amounts_[0] = RESERVE_TOKEN_AMOUNT / 2;
+        amounts_[1] = RESERVE_TOKEN_AMOUNT / 2;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleDepositFacility.CDF_Unsupported.selector, 1)
         );
 
         // Call function

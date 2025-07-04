@@ -51,7 +51,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -69,7 +68,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -87,7 +85,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -107,7 +104,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -127,7 +123,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -147,7 +142,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -167,20 +161,11 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
         // Assert new position
-        _assertPosition(
-            1,
-            address(0x1),
-            amount,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
+        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 0);
@@ -202,7 +187,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -222,20 +206,11 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
         // Assert new position
-        _assertPosition(
-            1,
-            address(this),
-            amount,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
+        _assertPosition(1, address(this), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 0);
@@ -256,7 +231,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         )
     {
@@ -276,20 +250,11 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             true
         );
 
         // Assert new position
-        _assertPosition(
-            1,
-            address(0x1),
-            amount,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
+        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, false);
 
         // ERC721 balances are not updated
         _assertERC721Balance(address(this), 1);
@@ -311,7 +276,6 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         )
     {
@@ -331,20 +295,11 @@ contract SplitCDPOSTest is CDPOSTest {
             REMAINING_DEPOSIT - amount,
             CONVERSION_PRICE,
             CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
             false
         );
 
         // Assert new position
-        _assertPosition(
-            1,
-            address(0x1),
-            amount,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            true
-        );
+        _assertPosition(1, address(0x1), amount, CONVERSION_PRICE, CONVERSION_EXPIRY, true);
 
         // ERC721 balances for the old position are not updated
         _assertERC721Balance(address(this), 0);

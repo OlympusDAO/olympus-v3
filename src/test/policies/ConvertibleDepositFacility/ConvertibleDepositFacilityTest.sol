@@ -11,11 +11,12 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {CDFacility} from "src/policies/CDFacility.sol";
+import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
-import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
@@ -23,11 +24,12 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 contract ConvertibleDepositFacilityTest is Test {
     Kernel public kernel;
     CDFacility public facility;
+    YieldDepositFacility public yieldDepositFacility;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
     OlympusConvertibleDepository public convertibleDepository;
-    OlympusConvertibleDepositPositions public convertibleDepositPositions;
+    OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
 
     MockERC20 public ohm;
@@ -49,10 +51,10 @@ contract ConvertibleDepositFacilityTest is Test {
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
-    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + 1 days;
-    uint48 public constant REDEMPTION_EXPIRY = INITIAL_BLOCK + 2 days;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
     uint16 public constant RECLAIM_RATE = 90e2;
+    uint8 public constant PERIOD_MONTHS = 6;
+    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
     function setUp() public {
         vm.warp(INITIAL_BLOCK);
@@ -80,8 +82,9 @@ contract ConvertibleDepositFacilityTest is Test {
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         convertibleDepository = new OlympusConvertibleDepository(kernel);
-        convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
+        convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
         facility = new CDFacility(address(kernel));
+        yieldDepositFacility = new YieldDepositFacility(address(kernel));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -91,6 +94,7 @@ contract ConvertibleDepositFacilityTest is Test {
         kernel.executeAction(Actions.InstallModule, address(convertibleDepository));
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldDepositFacility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
@@ -104,19 +108,23 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Create a CD token
         vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        cdToken = facility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
         vm.label(address(cdToken), "cdToken");
 
         // Create a CD token
         vm.startPrank(admin);
-        cdTokenTwo = facility.create(IERC4626(address(vaultTwo)), 90e2);
+        cdTokenTwo = facility.create(IERC4626(address(vaultTwo)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
         vm.label(address(cdTokenTwo), "cdTokenTwo");
 
         // Disable the facility
         vm.prank(emergency);
         facility.disable("");
+
+        // Enable the yield deposit facility
+        vm.prank(admin);
+        yieldDepositFacility.enable("");
     }
 
     // ========== MODIFIERS ========== //
@@ -140,20 +148,9 @@ contract ConvertibleDepositFacilityTest is Test {
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) internal returns (uint256 positionId) {
-        return
-            _createPosition(
-                cdToken,
-                account_,
-                amount_,
-                conversionPrice_,
-                conversionExpiry_,
-                redemptionExpiry_,
-                wrap_
-            );
+        return _createPosition(cdToken, account_, amount_, conversionPrice_, wrap_);
     }
 
     function _createPosition(
@@ -161,20 +158,10 @@ contract ConvertibleDepositFacilityTest is Test {
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        positionId = facility.mint(
-            cdToken_,
-            account_,
-            amount_,
-            conversionPrice_,
-            conversionExpiry_,
-            redemptionExpiry_,
-            wrap_
-        );
+        positionId = facility.mint(cdToken_, account_, amount_, conversionPrice_, wrap_);
     }
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
@@ -184,14 +171,20 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
-        _createPosition(
-            account_,
-            amount_,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
+        _createPosition(account_, amount_, CONVERSION_PRICE, false);
+        _;
+    }
+
+    function _createYieldDepositPosition(
+        address account_,
+        uint256 amount_
+    ) internal returns (uint256 positionId) {
+        vm.prank(account_);
+        positionId = yieldDepositFacility.mint(cdToken, amount_, false);
+    }
+
+    modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
+        _createYieldDepositPosition(account_, amount_);
         _;
     }
 
@@ -204,15 +197,7 @@ contract ConvertibleDepositFacilityTest is Test {
         reserveTokenTwo.approve(address(convertibleDepository), amount_);
 
         // Create position
-        _createPosition(
-            cdTokenTwo,
-            account_,
-            amount_,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            REDEMPTION_EXPIRY,
-            false
-        );
+        _createPosition(cdTokenTwo, account_, amount_, CONVERSION_PRICE, false);
         _;
     }
 

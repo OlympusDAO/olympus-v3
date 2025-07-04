@@ -8,11 +8,31 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 ## Design
 
-The CD contracts provide a mechanism for the protocol to operate an auction that is infinite duration and infinite capacity. Bidders are required to deposit the configured reserve token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+The Convertible Deposits system in the Olympus protocol seeks to incentivise deposits of reserve tokens, upon which the protocol earns yield, and provide opportunities for speculation around yield and the price of OHM.
 
-### Auction Design
+For a given reserve token, e.g. `USDS`, and deposit period, e.g. 3 months, there exists a convertible deposit (CD) token, e.g. `cdUSDS-3m`.
 
-The auction is designed to be infinite duration and infinite capacity. The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
+The system offers two mutually-exclusive mechanisms to mint and use CD tokens:
+
+- Deposit with the option to convert to OHM before an expiry date
+- Deposit with the ability to earn yield from the ERC4626 vault strategy
+
+| Mechanism         | Conversion to OHM | Yield    |
+|-------------------|-------------------|----------|
+| OHM Call Option   | Yes               | No       |
+| Yield Deposit     | No                | Yes      |
+
+### OHM Call Option
+
+This mechanism longs OHM, with the expectation that the issued conversion price will be lower than the market price at the time of conversion.
+
+The conversion price is determined through an infinite duration and infinite capacity auction.
+
+#### Auction Design
+
+Bidders are required to deposit the configured token (e.g. USDS) into the auctioneer (`CDAuctioneer`), and in return they receive a convertible deposit token (`cdUSDS-3m`) that can be converted into the configured bid token (OHM) or redeemed for the deposited reserve token.
+
+The auction is made up of "ticks", where each tick is a price and capacity (number of OHM that can be purchased).
 
 The auction has a number of parameters that affect its behaviour:
 
@@ -34,18 +54,52 @@ There are a few additional behaviours:
 - At the end of each period, when `setAuctionParameters()` is called, the day's auction results will be stored on a rolling basis for the configured auction tracking period.
     - If there is an under-selling of OHM capacity at the end of the tracking period, EmissionManager will create a bond market for the remaining OHM capacity. This ensures that the emission target per period is reached.
 
-### Convertible Deposit Design
+### Yield-Bearing Deposits
 
-A successful bidder will receive a convertible deposit that can be converted into OHM or redeemed for the deposited reserve token. The deposit is composed of:
+The second approach enables depositors to claim the yield from the ERC4626 vault strategy, without a call option on OHM.
 
-- A quantity of CD tokens, which is a fungible ERC20 token across all deposits and terms.
-- A `CDPOS` ERC721 token, which represents the non-fungible position of the bidder. This includes terms such as the conversion expiry date, redemption expiry date, conversion price and size of the convertible deposit.
+A user can deposit the configured token (e.g. USDS) into the facility (`YieldDepositFacility`), and in return receive:
+
+- An equivalent amount of a convertible deposit token (`cdUSDS-3m`)
+- A position record (optionally wrapped to a ERC721 token) with the deposit period
+    - The holder of this record/token can claim the vault token (e.g. `cdUSDS`) yield at any time, and in any frequency.
+    - A protocol fee will be deducted upon harveting yield.
+    - The holder is free to do what they wish with the CD token - it does not affect claiming yield.
+
+As the time that the yield is harvested is not fixed, flexibility is added to the system in the following manner:
+
+- The conversion rate between each vault shares and its assets is periodically recorded (every 8 hours).
+- When claiming yield, the difference between the current and previous vault conversion rate is used to determine how much yield to transfer to the position owner.
+- If the position has not yet expired, the current conversion rate between the vault shares and assets will be used.
+- If the position has expired in the past, by default the function call will revert. This is because the function has no mechanism to find the conversion rate nearest to the expiry time.
+    - The caller can provide a timestamp hint as a parameter, which is then used to find the conversion rate. Provided there is a stored conversion rate, that will be used.
+
+### Convertible Deposit Token Design
+
+Across both mechanisms (call option and yield deposits), depositors will receive the following:
+
+- A quantity of CD tokens, which is a fungible ERC20 token across all deposits of the same deposit token and deposit period.
+    - e.g. `USDS` deposits with periods of 1, 3 and 6 months are distinct tokens: `cdUSDS-1m`, `cdUSDS-3m`, `cdUSDS-6m`
+- The deposit position will be recorded and can be optionally wrapped to an ERC721 NFT. The position includes terms, such as:
+    - deposit date
+    - deposit period
+    - conversion price (call option only)
+    - size of the convertible deposit
 
 Using the `CDFacility` policy, convertible deposit holders are able to:
 
-- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms.
-- Redeem the deposited reserve tokens after conversion expiry and before redemption expiry.
-- Reclaim the deposited reserve tokens at any time, with a discount.
+- Convert their deposit into OHM before conversion expiry, at the conversion price of the deposit terms. (Call option only)
+- Lock their CD tokens into the redemption queue
+- Reclaim the deposited tokens at any time, with a discount.
+
+### Redemption Queue
+
+CD token holders can redeem the underlying token quantity in full by locking their CD tokens in the redemption queue.
+
+- The CD tokens must remain in the queue for the deposit period in order to be redeemed.
+- A user can borrow against the CD tokens while they are in the queue.
+- Withdrawing CD tokens from the queue will reset the counter.
+- After the CD tokens have been in the queue for the deposit period, they can be reclaimed 1:1 for the underlying tokens.
 
 ## Scope
 
@@ -69,7 +123,7 @@ Using the `CDFacility` policy, convertible deposit holders are able to:
             - [OlympusConvertibleDepository.sol](../../src/modules/CDEPO/OlympusConvertibleDepository.sol)
         - [CDPOS/](../../src/modules/CDPOS)
             - [CDPOS.v1.sol](../../src/modules/CDPOS/CDPOS.v1.sol)
-            - [OlympusConvertibleDepositPositions.sol](../../src/modules/CDPOS/OlympusConvertibleDepositPositions.sol)
+            - [OlympusConvertibleDepositPositionManager.sol](../../src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol)
     - [policies/](../../src/policies)
         - [interfaces/](../../src/policies/interfaces)
             - [IConvertibleDepositAuctioneer.sol](../../src/policies/interfaces/IConvertibleDepositAuctioneer.sol)
@@ -192,7 +246,6 @@ sequenceDiagram
     participant CDFacility
     participant CDPOS
     participant CDEPO
-    participant MINTR
     participant ReserveToken as Reserve (ERC20)
     participant VaultToken as Vault (ERC4626)
     participant cdReserve
@@ -356,9 +409,14 @@ The policy is a modified version of the existing [Clearinghouse policy](../../sr
 
 CDFacility is a policy that is responsible for issuing CD tokens and handling subsequent interactions with CD token holders.
 
-The CDAuctioneer is able to call the following function:
+The CDAuctioneer is able to mint a call option:
 
 - `mint()`: results in the deposit of the configured reserve token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+
+The public can mint a yield-bearing deposit:
+
+- `mintYieldDeposit()`: results in the deposit of the configured deposit token (USDS), issuance of an equivalent amount of CD tokens (cdUSDS) and creation of a convertible deposit position in the CDPOS module.
+- `claimYield()`: transfers the variable yield accrued from the vault token (e.g. sUSDS) after deducting the yield fee. However, when the deposit is in the redemption queue, the yield is fixed.
 
 CD token holders can perform the following actions:
 
@@ -374,6 +432,10 @@ The changes to this policy are:
 
 - Includes the vault token balance in CDEPO in yield calculations
 
+### YieldDepositFacility (Policy)
+
+TODO
+
 ### CDEPO (Module)
 
 CDEPO is a Module that owns and manages the CD tokens that have been created.
@@ -388,7 +450,6 @@ Unpermissioned callers are able to perform the following actions:
 
 Bophades policies with the correct permissions are able to perform the additional following actions:
 
-- Convert CD tokens into the conversion token (OHM)
 - Redeem CD tokens in exchange for the underlying asset (without applying a discount)
 - Sweep any forfeited yield and assets into the caller's address
 - Manage debt (in terms of ERC4626 vault tokens)

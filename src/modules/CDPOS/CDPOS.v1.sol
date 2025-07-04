@@ -6,26 +6,24 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 
 /// @title  CDPOSv1
 /// @notice This defines the interface for the CDPOS module.
-///         The objective of this module is to track the terms of a convertible deposit.
+///         The objective of this module is to track the terms of a deposit position.
 abstract contract CDPOSv1 is Module, ERC721 {
     // ========== DATA STRUCTURES ========== //
 
-    /// @notice Data structure for the terms of a convertible deposit
+    /// @notice Data structure for the terms of a deposit position
     ///
     /// @param  owner                   Address of the owner of the position
     /// @param  convertibleDepositToken Address of the convertible deposit token
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token
-    /// @param  conversionExpiry        Timestamp when the deposit can no longer be converted
-    /// @param  redemptionExpiry        Timestamp when the deposit can no longer be redeemed
+    /// @param  conversionPrice         The amount of convertible deposit tokens per OHM token (only for convertible positions)
+    /// @param  expiry                  Timestamp of the position expiry
     /// @param  wrapped                 Whether the term is wrapped
     struct Position {
         address owner;
         address convertibleDepositToken;
         uint256 remainingDeposit;
         uint256 conversionPrice;
-        uint48 conversionExpiry;
-        uint48 redemptionExpiry;
+        uint48 expiry;
         bool wrapped;
     }
 
@@ -38,8 +36,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
         address indexed convertibleDepositToken,
         uint256 remainingDeposit,
         uint256 conversionPrice,
-        uint48 conversionExpiry,
-        uint48 redemptionExpiry,
+        uint48 expiry,
         bool wrapped
     );
 
@@ -61,6 +58,14 @@ abstract contract CDPOSv1 is Module, ERC721 {
 
     /// @notice Emitted when a position is unwrapped
     event PositionUnwrapped(uint256 indexed positionId);
+
+    // ========== CONSTANTS ========== //
+
+    /// @notice The value used for the conversion price if conversion is not supported
+    uint256 public constant NON_CONVERSION_PRICE = type(uint256).max;
+
+    /// @notice The value used for the conversion expiry if conversion is not supported
+    uint48 public constant NON_CONVERSION_EXPIRY = type(uint48).max;
 
     // ========== STATE VARIABLES ========== //
 
@@ -92,6 +97,9 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @notice Error thrown when an invalid parameter is provided
     error CDPOS_InvalidParams(string reason_);
 
+    /// @notice Error thrown when a position does not support conversion
+    error CDPOS_NotConvertible(uint256 positionId_);
+
     // ========== WRAPPING ========== //
 
     /// @notice Wraps a position into an ERC721 token
@@ -106,7 +114,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
     function wrap(uint256 positionId_) external virtual;
 
     /// @notice Unwraps/burns an ERC721 position token
-    ///         This is useful if the position owner wants to convert their token back into the position.
+    ///         This is useful if the position owner wants to unwrap their token back into the position.
     ///
     /// @dev    The implementing function should do the following:
     ///         - Validate that the caller is the owner of the position
@@ -118,15 +126,14 @@ abstract contract CDPOSv1 is Module, ERC721 {
 
     // ========== POSITION MANAGEMENT =========== //
 
-    /// @notice Creates a new convertible deposit position
+    /// @notice Creates a new deposit position
     /// @dev    The implementing function should do the following:
     ///         - Validate that the caller is permissioned
     ///         - Validate that the owner is not the zero address
     ///         - Validate that the convertible deposit token is not the zero address
     ///         - Validate that the remaining deposit is greater than 0
     ///         - Validate that the conversion price is greater than 0
-    ///         - Validate that the conversion expiry is in the future
-    ///         - Validate that the redemption expiry is after the conversion expiry
+    ///         - Validate that the expiry is in the future
     ///         - Create the position record
     ///         - Wrap the position if requested
     ///
@@ -134,8 +141,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  convertibleDepositToken_    The address of the convertible deposit token
     /// @param  remainingDeposit_           The amount of reserve tokens remaining to be converted
     /// @param  conversionPrice_            The price of the reserve token in USD
-    /// @param  conversionExpiry_           The timestamp when the position can no longer be converted
-    /// @param  redemptionExpiry_           The timestamp when the position can no longer be redeemed
+    /// @param  expiry_                     The timestamp for the position expiry
     /// @param  wrap_                       Whether the position should be wrapped
     /// @return positionId                  The ID of the new position
     function mint(
@@ -143,8 +149,7 @@ abstract contract CDPOSv1 is Module, ERC721 {
         address convertibleDepositToken_,
         uint256 remainingDeposit_,
         uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
+        uint48 expiry_,
         bool wrap_
     ) external virtual returns (uint256 positionId);
 
@@ -202,6 +207,12 @@ abstract contract CDPOSv1 is Module, ERC721 {
     /// @param  positionId_ The ID of the position
     /// @return expired_    Whether the position is expired
     function isExpired(uint256 positionId_) external view virtual returns (bool);
+
+    /// @notice Check if a position is convertible
+    ///
+    /// @param  positionId_     The ID of the position
+    /// @return convertible_    Whether the position is convertible
+    function isConvertible(uint256 positionId_) external view virtual returns (bool);
 
     /// @notice Preview the amount of OHM that would be received for a given amount of convertible deposit tokens
     ///

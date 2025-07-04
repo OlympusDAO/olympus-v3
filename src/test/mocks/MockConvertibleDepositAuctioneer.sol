@@ -69,17 +69,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         _auctionResults = results;
     }
 
-    function setTimeToExpiry(uint48 newTime) external override {}
-
-    function setRedemptionPeriod(uint48 newPeriod) external override {}
-
     function setTickStep(uint24 newStep) external override {}
 
     function getTickStep() external view override returns (uint24) {}
-
-    function getTimeToExpiry() external view override returns (uint48) {}
-
-    function getRedemptionPeriod() external view override returns (uint48) {}
 
     function getAuctionTrackingPeriod() external view override returns (uint8) {}
 

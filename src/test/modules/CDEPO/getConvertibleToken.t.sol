@@ -16,7 +16,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
 
     function test_notSupported() public {
         assertEq(
-            address(CDEPO.getConvertibleDepositToken(address(vault))),
+            address(CDEPO.getConvertibleDepositToken(address(vault), PERIOD_MONTHS)),
             address(0),
             "getConvertibleDepositToken: vault"
         );
@@ -25,7 +25,11 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
             address(0),
             "getDepositToken: vault"
         );
-        assertEq(CDEPO.isDepositToken(address(vault)), false, "isDepositToken: vault");
+        assertEq(
+            CDEPO.isDepositToken(address(vault), PERIOD_MONTHS),
+            false,
+            "isDepositToken: vault"
+        );
         assertEq(
             CDEPO.isConvertibleDepositToken(address(vault)),
             false,
@@ -35,7 +39,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
 
     function test_supported() public {
         assertEq(
-            address(CDEPO.getConvertibleDepositToken(address(iReserveToken))),
+            address(CDEPO.getConvertibleDepositToken(address(iReserveToken), PERIOD_MONTHS)),
             address(cdToken),
             "getConvertibleDepositToken: iReserveToken"
         );
@@ -45,7 +49,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
             "getDepositToken: cdToken"
         );
         assertEq(
-            CDEPO.isDepositToken(address(iReserveToken)),
+            CDEPO.isDepositToken(address(iReserveToken), PERIOD_MONTHS),
             true,
             "isDepositToken: iReserveToken"
         );
@@ -58,10 +62,14 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
 
     function test_multipleTokens() public {
         vm.prank(address(godmode));
-        IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(iReserveTokenTwoVault, 99e2);
+        IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(
+            iReserveTokenTwoVault,
+            PERIOD_MONTHS,
+            99e2
+        );
 
         assertEq(
-            address(CDEPO.getConvertibleDepositToken(address(iReserveToken))),
+            address(CDEPO.getConvertibleDepositToken(address(iReserveToken), PERIOD_MONTHS)),
             address(cdToken),
             "getConvertibleDepositToken: iReserveToken"
         );
@@ -71,7 +79,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
             "getDepositToken: cdToken"
         );
         assertEq(
-            CDEPO.isDepositToken(address(iReserveToken)),
+            CDEPO.isDepositToken(address(iReserveToken), PERIOD_MONTHS),
             true,
             "isDepositToken: iReserveToken"
         );
@@ -82,7 +90,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
         );
 
         assertEq(
-            address(CDEPO.getConvertibleDepositToken(address(iReserveTokenTwo))),
+            address(CDEPO.getConvertibleDepositToken(address(iReserveTokenTwo), PERIOD_MONTHS)),
             address(cdTokenTwo),
             "getConvertibleDepositToken: iReserveTokenTwo"
         );
@@ -92,7 +100,7 @@ contract GetConvertibleTokenCDEPOTest is CDEPOTest {
             "getDepositToken: cdTokenTwo"
         );
         assertEq(
-            CDEPO.isDepositToken(address(iReserveTokenTwo)),
+            CDEPO.isDepositToken(address(iReserveTokenTwo), PERIOD_MONTHS),
             true,
             "isDepositToken: iReserveTokenTwo"
         );

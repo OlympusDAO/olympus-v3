@@ -7,6 +7,17 @@ import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC
 /// @title  IConvertibleDepository
 /// @notice Interface for the Olympus Convertible Depository module
 interface IConvertibleDepository {
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice A struct representing a deposit token and its supported periods
+    ///
+    /// @param token    Deposit token
+    /// @param periods  Supported periods
+    struct DepositToken {
+        IERC20 token;
+        uint8[] periods;
+    }
+
     // ========== ERRORS ========== //
 
     /// @notice Thrown when the caller provides invalid arguments
@@ -159,8 +170,15 @@ interface IConvertibleDepository {
 
     /// @notice Get all supported deposit tokens
     ///
-    /// @return tokens  Array of supported token addresses
-    function getDepositTokens() external view returns (IERC20[] memory tokens);
+    /// @return tokens  Array of supported token addresses and periods
+    function getDepositTokens() external view returns (DepositToken[] memory tokens);
+
+    /// @notice Get all supported deposit periods
+    ///
+    /// @return periods  Array of supported period months, or an empty array if no periods are supported
+    function getDepositTokenPeriods(
+        address depositToken_
+    ) external view returns (uint8[] memory periods);
 
     /// @notice Get all supported convertible deposit tokens
     ///
@@ -176,19 +194,25 @@ interface IConvertibleDepository {
     /// @return depositToken    The deposit token address, or address(0) if not supported
     function getDepositToken(address cdToken_) external view returns (IERC20 depositToken);
 
-    /// @notice Get the convertible deposit token for a deposit token
+    /// @notice Get the convertible deposit token for a deposit token and period
     ///
-    /// @param  depositToken_  The deposit token to check
-    /// @return cdToken      The convertible deposit token address, or address(0) if not supported
+    /// @param  depositToken_   The deposit token to check
+    /// @param  periodMonths_   The period (months) to check
+    /// @return cdToken         The convertible deposit token address, or address(0) if not supported
     function getConvertibleDepositToken(
-        address depositToken_
+        address depositToken_,
+        uint8 periodMonths_
     ) external view returns (IConvertibleDepositERC20 cdToken);
 
-    /// @notice Check if `depositToken_` is a supported deposit token
+    /// @notice Check if `depositToken_` is a supported deposit token for a given period
     ///
     /// @param  depositToken_  The deposit token to check
-    /// @return result         True if the token is a supported deposit token
-    function isDepositToken(address depositToken_) external view returns (bool result);
+    /// @param  periodMonths_  The period (months) to check
+    /// @return result         True if the token is a supported deposit token for the given period
+    function isDepositToken(
+        address depositToken_,
+        uint8 periodMonths_
+    ) external view returns (bool result);
 
     /// @notice Check if `cdToken_` is a supported convertible deposit token
     ///

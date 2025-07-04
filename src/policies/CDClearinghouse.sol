@@ -133,7 +133,8 @@ contract CDClearinghouse is IGenericClearinghouse, Policy, PolicyEnabler, Cooler
             revert Policy_WrongModuleVersion(expected);
 
         // Validate that the debt token's underlying asset is supported by the CDEPO module
-        _collateralToken = CDEPO.getConvertibleDepositToken(address(_DEBT_TOKEN.asset()));
+        // TODO configure period months
+        _collateralToken = CDEPO.getConvertibleDepositToken(address(_DEBT_TOKEN.asset()), 6);
         if (address(_collateralToken) == address(0)) revert InvalidParams("debt token");
 
         // Validate that the decimals are the same

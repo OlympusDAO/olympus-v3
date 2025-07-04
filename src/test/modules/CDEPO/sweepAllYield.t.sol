@@ -34,7 +34,7 @@ contract SweepAllYieldCDEPOTest is CDEPOTest {
         // Emit event
         vm.expectEmit(true, true, true, true);
         emit YieldSwept(
-            address(iReserveToken),
+            address(iReserveTokenVault),
             yieldRecipient,
             INITIAL_VAULT_BALANCE,
             expectedSReserveYield
@@ -81,7 +81,11 @@ contract SweepAllYieldCDEPOTest is CDEPOTest {
 
         // Create the CD token
         vm.prank(godmode);
-        IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(iReserveTokenTwoVault, 99e2);
+        IConvertibleDepositERC20 cdTokenTwo = CDEPO.create(
+            iReserveTokenTwoVault,
+            PERIOD_MONTHS,
+            99e2
+        );
 
         // Deposit the second token
         uint256 tokenTwoDeposit = 10e18;

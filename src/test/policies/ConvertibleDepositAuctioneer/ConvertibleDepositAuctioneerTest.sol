@@ -15,7 +15,7 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusConvertibleDepository} from "src/modules/CDEPO/OlympusConvertibleDepository.sol";
-import {OlympusConvertibleDepositPositions} from "src/modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "src/modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
@@ -30,7 +30,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     OlympusMinter public minter;
     OlympusRoles public roles;
     OlympusConvertibleDepository public convertibleDepository;
-    OlympusConvertibleDepositPositions public convertibleDepositPositions;
+    OlympusConvertibleDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
 
     MockERC20 public ohm;
@@ -52,10 +52,10 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint24 public constant TICK_STEP = 110e2; // 110%
     uint256 public constant MIN_PRICE = 15e18;
     uint256 public constant TARGET = 20e9;
-    uint48 public constant TIME_TO_EXPIRY = 1 days;
-    uint48 public constant REDEMPTION_PERIOD = 2 days;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
+    uint8 public constant PERIOD_MONTHS = 6;
+    uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
     // Events
     event Enabled();
@@ -88,9 +88,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
         minter = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         convertibleDepository = new OlympusConvertibleDepository(kernel);
-        convertibleDepositPositions = new OlympusConvertibleDepositPositions(address(kernel));
+        convertibleDepositPositions = new OlympusConvertibleDepositPositionManager(address(kernel));
         facility = new CDFacility(address(kernel));
-        auctioneer = new CDAuctioneer(address(kernel), address(facility), address(reserveToken));
+        auctioneer = new CDAuctioneer(
+            address(kernel),
+            address(facility),
+            address(reserveToken),
+            PERIOD_MONTHS
+        );
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -115,7 +120,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Create a CD token
         // Required at the time of activation of the auctioneer policy
         vm.startPrank(admin);
-        cdToken = facility.create(IERC4626(address(vault)), 90e2);
+        cdToken = facility.create(IERC4626(address(vault)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 
         // Activate the auctioneer policy
@@ -226,8 +231,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
                     tickStep: TICK_STEP,
-                    timeToExpiry: TIME_TO_EXPIRY,
-                    redemptionPeriod: REDEMPTION_PERIOD,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
             )
@@ -248,8 +251,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     tickSize: tickSize_,
                     minPrice: minPrice_,
                     tickStep: TICK_STEP,
-                    timeToExpiry: TIME_TO_EXPIRY,
-                    redemptionPeriod: REDEMPTION_PERIOD,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
             )
@@ -297,12 +298,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
     ) {
         vm.prank(owner_);
         cdToken.approve(spender_, amount_);
-        _;
-    }
-
-    modifier givenTimeToExpiry(uint48 timeToExpiry_) {
-        vm.prank(admin);
-        auctioneer.setTimeToExpiry(timeToExpiry_);
         _;
     }
 

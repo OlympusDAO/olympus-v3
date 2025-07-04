@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConvertibleDepositERC20} from "src/modules/CDEPO/IConvertibleDepositERC20.sol";
+import {IConvertibleDepository} from "src/modules/CDEPO/IConvertibleDepository.sol";
 
 /// @title  IConvertibleDepositFacility
 /// @notice Interface for a contract that can perform functions related to convertible deposit (CD) tokens
@@ -48,12 +48,13 @@ interface IConvertibleDepositFacility {
 
     error CDF_InvalidToken(uint256 positionId_, address token_);
 
+    error CDF_Unsupported(uint256 positionId_);
+
     // ========== CONVERTIBLE DEPOSIT ACTIONS ========== //
 
-    /// @notice Mints a new CD position
-    ///
+    /// @notice Mints a position for a call option
     /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the deposit token is supported
+    ///         - Validating that the CD token is supported
     ///         - Validating that the caller has the correct role
     ///         - Depositing the token into the CDEPO module and minting the CD token
     ///         - Creating a new position in the CDPOS module
@@ -63,19 +64,15 @@ interface IConvertibleDepositFacility {
     /// @param  account_            The address to create the position for
     /// @param  amount_             The amount of token to deposit
     /// @param  conversionPrice_    The amount of CD tokens per OHM token
-    /// @param  conversionExpiry_   The timestamp when the position can no longer be converted
-    /// @param  redemptionExpiry_   The timestamp when the position can no longer be redeemed
     /// @param  wrap_               Whether the position should be wrapped
-    /// @return termId              The ID of the new term
+    /// @return positionId          The ID of the new position
     function mint(
         IConvertibleDepositERC20 cdToken_,
         address account_,
         uint256 amount_,
         uint256 conversionPrice_,
-        uint48 conversionExpiry_,
-        uint48 redemptionExpiry_,
         bool wrap_
-    ) external returns (uint256 termId);
+    ) external returns (uint256 positionId);
 
     /// @notice Converts CD tokens to OHM before conversion expiry
     /// @dev    The implementing contract is expected to handle the following:
@@ -194,17 +191,22 @@ interface IConvertibleDepositFacility {
     ///         - Emitting an event
     ///
     /// @param  vault_          The address of the vault to use for the CD token
+    /// @param  periodMonths_   The period of the CD token
     /// @param  reclaimRate_    The reclaim rate to set for the CD token
     /// @return cdToken         The address of the new CD token
     function create(
         IERC4626 vault_,
+        uint8 periodMonths_,
         uint16 reclaimRate_
     ) external returns (IConvertibleDepositERC20 cdToken);
 
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice The addresses of deposit tokens accepted by the facility
-    function getDepositTokens() external view returns (IERC20[] memory);
+    function getDepositTokens()
+        external
+        view
+        returns (IConvertibleDepository.DepositToken[] memory);
 
     /// @notice The addresses of the CD tokens that are minted by the facility
     function getConvertibleDepositTokens()

@@ -30,6 +30,11 @@ interface IConvertibleDeposit {
     /// @return _vault The vault address
     function vault() external view returns (IERC4626 _vault);
 
+    /// @notice The period of the deposit token (in months)
+    ///
+    /// @return _periodMonths The period months
+    function periodMonths() external view returns (uint8 _periodMonths);
+
     // ===== MINT/BURN ===== //
 
     /// @notice Mint tokens to the specified address

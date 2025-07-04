@@ -50,14 +50,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(position.remainingDeposit, bidAmount_, "position remaining deposit");
         assertEq(position.conversionPrice, conversionPrice, "position conversion price");
         assertEq(
-            position.conversionExpiry,
-            uint48(block.timestamp) + TIME_TO_EXPIRY,
+            position.expiry,
+            uint48(block.timestamp) + (30 days) * PERIOD_MONTHS,
             "position expiry"
-        );
-        assertEq(
-            position.redemptionExpiry,
-            uint48(block.timestamp) + TIME_TO_EXPIRY + REDEMPTION_PERIOD,
-            "position redemption expiry"
         );
         assertEq(position.wrapped, false, "position wrapped");
         assertEq(position.convertibleDepositToken, address(cdToken), "position cd token");
@@ -81,6 +76,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  [X] it deducts the converted amount from the tick capacity
     //  [X] it sets the current tick size to the standard tick size
     //  [X] it does not update the tick price
+    //  [X] the position is not wrapped as an ERC721
     // when the bid is the first bid of the day
     //  [X] the day state is not reset
     //  [X] it updates the day's deposit balance

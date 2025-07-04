@@ -47,7 +47,7 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {OlympusConvertibleDepository} from "modules/CDEPO/OlympusConvertibleDepository.sol";
-import {OlympusConvertibleDepositPositions} from "modules/CDPOS/OlympusConvertibleDepositPositions.sol";
+import {OlympusConvertibleDepositPositionManager} from "modules/CDPOS/OlympusConvertibleDepositPositionManager.sol";
 
 // Bophades Policies
 import {Operator} from "policies/Operator.sol";
@@ -120,7 +120,7 @@ contract OlympusDeploy is Script {
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
     OlympusConvertibleDepository public CDEPO;
-    OlympusConvertibleDepositPositions public CDPOS;
+    OlympusConvertibleDepositPositionManager public CDPOS;
     OlympusGovDelegation public DLGTE;
 
     /// Policies
@@ -247,8 +247,8 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
         selectorMap["OlympusConvertibleDepository"] = this._deployConvertibleDepository.selector;
-        selectorMap["OlympusConvertibleDepositPositions"] = this
-            ._deployConvertibleDepositPositions
+        selectorMap["OlympusConvertibleDepositPositionManager"] = this
+            ._deployConvertibleDepositPositionManager
             .selector;
         selectorMap["OlympusGovDelegation"] = this._deployGovDelegation.selector;
         selectorMap["DelegateEscrowFactory"] = this._deployDelegateEscrowFactory.selector;
@@ -1600,33 +1600,40 @@ contract OlympusDeploy is Script {
         return address(CDEPO);
     }
 
-    function _deployConvertibleDepositPositions(bytes calldata) public returns (address) {
-        // No additional arguments for ConvertibleDepositPositions
+    function _deployConvertibleDepositPositionManager(bytes calldata) public returns (address) {
+        // No additional arguments for ConvertibleDepositPositionManager
 
         // Log dependencies
-        console2.log("ConvertibleDepositPositions parameters:");
+        console2.log("ConvertibleDepositPositionManager parameters:");
         console2.log("   kernel", address(kernel));
 
-        // Deploy ConvertibleDepositPositions
+        // Deploy ConvertibleDepositPositionManager
         vm.broadcast();
-        CDPOS = new OlympusConvertibleDepositPositions(address(kernel));
-        console2.log("ConvertibleDepositPositions deployed at:", address(CDPOS));
+        CDPOS = new OlympusConvertibleDepositPositionManager(address(kernel));
+        console2.log("ConvertibleDepositPositionManager deployed at:", address(CDPOS));
 
         return address(CDPOS);
     }
 
-    function _deployConvertibleDepositAuctioneer(bytes calldata) public returns (address) {
+    function _deployConvertibleDepositAuctioneer(bytes calldata args_) public returns (address) {
         // No additional arguments for ConvertibleDepositAuctioneer
+        uint8 depositPeriodMonths = abi.decode(args_, (uint8));
 
         // Log dependencies
         console2.log("ConvertibleDepositAuctioneer parameters:");
         console2.log("   kernel", address(kernel));
         console2.log("   cdFacility", address(cdFacility));
         console2.log("   reserveToken", address(reserve));
+        console2.log("   depositPeriodMonths", depositPeriodMonths);
 
         // Deploy ConvertibleDepositAuctioneer
         vm.broadcast();
-        cdAuctioneer = new CDAuctioneer(address(kernel), address(cdFacility), address(reserve));
+        cdAuctioneer = new CDAuctioneer(
+            address(kernel),
+            address(cdFacility),
+            address(reserve),
+            depositPeriodMonths
+        );
         console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
 
         return address(cdAuctioneer);

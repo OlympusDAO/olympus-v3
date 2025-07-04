@@ -32,4 +32,5 @@ solidity-examples/=lib/solidity-examples/contracts/
 surl-1.0.0/=dependencies/surl-1.0.0/src/
 base64-1.1.0/=dependencies/base64-1.1.0/
 @clones-with-immutable-args-1.1.2/=dependencies/clones-with-immutable-args-1.1.2/src/
+@forge-std-1.9.6/=dependencies/forge-std-1.9.6/src/
 lib/forge-proposal-simulator:Governors/=lib/forge-proposal-simulator/Governors/
