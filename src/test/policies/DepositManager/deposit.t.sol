@@ -468,6 +468,41 @@ contract DepositManagerDepositTest is DepositManagerTest {
         );
     }
 
+    // when the amount is less than one share
+    //  [X] it reverts
+
+    function test_whenAmountLessThanOneShare(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Earn yield
+        asset.mint(address(vault), 10e18);
+
+        // Calculate amount
+        uint256 oneShareInAssets = vault.previewMint(1);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
+
+        // Expect revert
+        vm.expectRevert("ZERO_SHARES");
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
+        );
+    }
+
     // [X] the returned shares are the deposited amount (in terms of vault shares)
     // [X] the asset is deposited into the vault
     // [X] the operator shares are increased by the deposited amount (in terms of vault shares)

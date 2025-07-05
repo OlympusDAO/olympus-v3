@@ -65,8 +65,6 @@ interface IDepositManager is IAssetManager {
 
     error DepositManager_OutOfBounds();
 
-    error DepositManager_InvalidAsset();
-
     error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod);
 
     error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod);
@@ -81,6 +79,13 @@ interface IDepositManager is IAssetManager {
         address operator,
         uint256 requested,
         uint256 available
+    );
+
+    error DepositManager_BorrowedAmountExceeded(
+        address asset,
+        address operator,
+        uint256 amount,
+        uint256 borrowed
     );
 
     // ========== STRUCTS ========== //
@@ -142,12 +147,10 @@ interface IDepositManager is IAssetManager {
     /// @notice Parameters for borrowing withdrawal operations
     ///
     /// @param asset           The underlying ERC20 asset
-    /// @param operator        The operator requesting the borrowing withdrawal
     /// @param recipient       The recipient of the borrowed funds
     /// @param amount          The amount to borrow
     struct BorrowingWithdrawParams {
         IERC20 asset;
-        address operator;
         address recipient;
         uint256 amount;
     }
@@ -155,19 +158,17 @@ interface IDepositManager is IAssetManager {
     /// @notice Parameters for borrowing repayment operations
     ///
     /// @param asset           The underlying ERC20 asset
-    /// @param operator        The operator receiving the repayment
     /// @param payer           The address making the repayment
     /// @param amount          The amount to repay
     struct BorrowingRepayParams {
         IERC20 asset;
-        address operator;
         address payer;
         uint256 amount;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
 
-    /// @notice Withdraws funds for borrowing purposes
+    /// @notice Borrows funds from deposits
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
     ///         - Validating borrowing limits and capacity

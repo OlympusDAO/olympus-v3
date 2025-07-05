@@ -30,6 +30,7 @@ contract DepositManagerTest is Test {
     address public MANAGER;
     address public DEPOSIT_OPERATOR;
     address public DEPOSITOR;
+    address public RECIPIENT;
 
     Kernel public kernel;
     OlympusRoles public roles;
@@ -48,6 +49,7 @@ contract DepositManagerTest is Test {
     uint256 public previousDepositorReceiptTokenBalance;
     uint256 public previousDepositorWrappedTokenBalance;
     uint256 public previousAssetLiabilities;
+    uint256 public previousRecipientBorrowActualAmount;
 
     uint8 public constant DEPOSIT_PERIOD = 1;
     uint256 public constant MINT_AMOUNT = 100e18;
@@ -58,6 +60,7 @@ contract DepositManagerTest is Test {
         MANAGER = makeAddr("MANAGER");
         DEPOSIT_OPERATOR = makeAddr("DEPOSIT_OPERATOR");
         DEPOSITOR = makeAddr("DEPOSITOR");
+        RECIPIENT = makeAddr("RECIPIENT");
 
         // Kernel
         vm.startPrank(ADMIN);
@@ -156,6 +159,12 @@ contract DepositManagerTest is Test {
         _;
     }
 
+    modifier givenRecipientHasApprovedSpendingAsset(uint256 amount_) {
+        vm.prank(RECIPIENT);
+        asset.approve(address(depositManager), amount_);
+        _;
+    }
+
     modifier givenDepositorHasAsset(uint256 amount_) {
         asset.mint(DEPOSITOR, amount_);
         _;
@@ -244,6 +253,18 @@ contract DepositManagerTest is Test {
         _;
     }
 
+    modifier givenBorrow(uint256 amount_) {
+        vm.prank(DEPOSIT_OPERATOR);
+        previousRecipientBorrowActualAmount = depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: amount_
+            })
+        );
+        _;
+    }
+
     // ========== REVERT HELPERS ========== //
 
     function _expectRevertNotEnabled() internal {
@@ -260,13 +281,8 @@ contract DepositManagerTest is Test {
         );
     }
 
-    function _expectRevertNotConfiguredAsset(IERC20 asset_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAssetManager.AssetManager_NotConfigured.selector,
-                address(asset_)
-            )
-        );
+    function _expectRevertNotConfiguredAsset() internal {
+        vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_NotConfigured.selector));
     }
 
     function _expectRevertInvalidReceiptTokenId(IERC20 asset_, uint8 depositPeriod_) internal {
@@ -382,6 +398,30 @@ contract DepositManagerTest is Test {
                 address(iAsset),
                 balance_,
                 depositCap_
+            )
+        );
+    }
+
+    function _expectRevertBorrowingLimitExceeded(uint256 requested_, uint256 available_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_BorrowingLimitExceeded.selector,
+                address(iAsset),
+                DEPOSIT_OPERATOR,
+                requested_,
+                available_
+            )
+        );
+    }
+
+    function _expectRevertBorrowedAmountExceeded(uint256 amount_, uint256 borrowed_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_BorrowedAmountExceeded.selector,
+                address(iAsset),
+                DEPOSIT_OPERATOR,
+                amount_,
+                borrowed_
             )
         );
     }
@@ -616,5 +656,16 @@ contract DepositManagerTest is Test {
         // If there's any remainder in the division, we'll lose 1 wei
         uint256 remainder = (shares * (currentAssets + depositAmount_)) % (currentSupply + shares);
         return depositAmount_ - (remainder > 0 ? 1 : 0);
+    }
+
+    function _getExpectedWithdrawnAssets(uint256 withdrawAmount_) internal view returns (uint256) {
+        uint256 shares = vault.previewWithdraw(withdrawAmount_);
+        uint256 currentSupply = vault.totalSupply();
+        uint256 currentAssets = vault.totalAssets();
+
+        // Calculate if we'll lose 1 wei due to rounding in mulDivDown
+        // If there's any remainder in the division, we'll lose 1 wei
+        uint256 remainder = (shares * (currentAssets - withdrawAmount_)) % (currentSupply - shares);
+        return withdrawAmount_ - (remainder > 0 ? 1 : 0);
     }
 }

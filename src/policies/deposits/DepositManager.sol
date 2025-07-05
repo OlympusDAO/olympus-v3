@@ -141,7 +141,7 @@ contract DepositManager is
     {
         // Deposit into vault
         // This will revert if the asset is not configured
-        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
+        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount, true);
 
         // Mint the receipt token to the caller
         receiptTokenId = getReceiptTokenId(params_.asset, params_.depositPeriod);
@@ -175,7 +175,7 @@ contract DepositManager is
         uint256 amount_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
         // Withdraw the funds from the vault
-        (, uint256 actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
+        (, uint256 actualAmount) = _withdrawAsset(asset_, recipient_, amount_, true);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
@@ -216,7 +216,7 @@ contract DepositManager is
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
-        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
+        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount, true);
 
         return actualAmount;
     }
@@ -415,34 +415,31 @@ contract DepositManager is
         // Validate that the recipient is not the zero address
         if (params_.recipient == address(0)) revert DepositManager_ZeroAddress();
 
-        // Get the borrowing key
-        bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, params_.operator);
+        // Validate that the asset is configured
+        if (!_isConfiguredAsset(params_.asset)) revert AssetManager_NotConfigured();
 
-        // Check borrowing capacity based on receipt token liabilities
-        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
-        uint256 operatorLiabilities = _assetLiabilities[borrowingKey];
-        uint256 availableCapacity = operatorLiabilities - currentBorrowed;
-
+        // Check borrowing capacity
+        uint256 availableCapacity = getBorrowingCapacity(params_.asset, msg.sender);
         if (params_.amount > availableCapacity) {
             revert DepositManager_BorrowingLimitExceeded(
                 address(params_.asset),
-                params_.operator,
+                msg.sender,
                 params_.amount,
                 availableCapacity
             );
         }
 
-        // Update borrowed amount
-        _borrowedAmounts[borrowingKey] = currentBorrowed + params_.amount;
-
         // Withdraw the funds from the vault to the recipient
-        // Will revert if the asset is not configured
-        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
+        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount, false);
+
+        // Update borrowed amount
+        // This is done after the withdraw, as the actual amount is not known ahead of time
+        _borrowedAmounts[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
 
         // Emit event
         emit BorrowingWithdrawal(
             address(params_.asset),
-            params_.operator,
+            msg.sender,
             params_.recipient,
             actualAmount
         );
@@ -456,43 +453,34 @@ contract DepositManager is
         BorrowingRepayParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
         // Validate that the asset is configured
-        if (!_isConfiguredAsset(params_.asset)) revert DepositManager_InvalidAsset();
+        if (!_isConfiguredAsset(params_.asset)) revert AssetManager_NotConfigured();
 
         // Get the borrowing key
-        bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, params_.operator);
+        bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, msg.sender);
 
-        // Check current borrowed amount
+        // Check that the operator is not over-paying
+        // This would cause accounting issues
         uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
         if (currentBorrowed < params_.amount) {
-            revert DepositManager_BorrowingLimitExceeded(
+            revert DepositManager_BorrowedAmountExceeded(
                 address(params_.asset),
-                params_.operator,
+                msg.sender,
                 params_.amount,
                 currentBorrowed
             );
         }
 
         // Transfer funds from payer to this contract
-        actualAmount = params_.asset.balanceOf(address(this));
-        ERC20(address(params_.asset)).safeTransferFrom(
-            params_.payer,
-            address(this),
-            params_.amount
-        );
-        actualAmount = params_.asset.balanceOf(address(this)) - actualAmount;
+        // We ignore the actual amount deposited into the vault, as the payer will not be able to over-pay in case of an off-by-one issue
+        _depositAsset(params_.asset, params_.payer, params_.amount, false);
 
         // Update borrowed amount
-        _borrowedAmounts[borrowingKey] = currentBorrowed - actualAmount;
+        _borrowedAmounts[borrowingKey] -= params_.amount;
 
         // Emit event
-        emit BorrowingRepayment(
-            address(params_.asset),
-            params_.operator,
-            params_.payer,
-            actualAmount
-        );
+        emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, params_.amount);
 
-        return actualAmount;
+        return params_.amount;
     }
 
     /// @inheritdoc IDepositManager
@@ -500,18 +488,18 @@ contract DepositManager is
         IERC20 asset_,
         address operator_
     ) public view returns (uint256 borrowed) {
-        bytes32 borrowingKey = _getAssetLiabilitiesKey(asset_, operator_);
-        return _borrowedAmounts[borrowingKey];
+        return _borrowedAmounts[_getAssetLiabilitiesKey(asset_, operator_)];
     }
 
     /// @inheritdoc IDepositManager
     function getBorrowingCapacity(
         IERC20 asset_,
         address operator_
-    ) external view returns (uint256 capacity) {
+    ) public view returns (uint256 capacity) {
         uint256 operatorLiabilities = _assetLiabilities[_getAssetLiabilitiesKey(asset_, operator_)];
         uint256 currentBorrowed = getBorrowedAmount(asset_, operator_);
 
+        // This is unlikely to happen, but included to avoid a revert
         if (currentBorrowed >= operatorLiabilities) {
             return 0;
         }

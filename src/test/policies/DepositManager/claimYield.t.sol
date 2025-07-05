@@ -32,7 +32,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     //  [X] it reverts
 
     function test_givenDepositAssetIsNotConfigured_reverts() public givenIsEnabled {
-        _expectRevertNotConfiguredAsset(iAsset);
+        _expectRevertNotConfiguredAsset();
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.claimYield(iAsset, ADMIN, 1);
