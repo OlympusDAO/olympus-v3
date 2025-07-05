@@ -15,6 +15,8 @@ interface IDepositFacility {
 
     // ========== ERRORS ========== //
 
+    error DepositFacility_InvalidAddress(address operator);
+
     error DepositFacility_UnauthorizedOperator(address operator);
     error DepositFacility_InvalidRedemption();
     error DepositFacility_InsufficientDeposits(uint256 requested, uint256 available);
@@ -36,54 +38,81 @@ interface IDepositFacility {
 
     // ========== REDEMPTION HANDLING ========== //
 
-    /// @notice Handle withdrawal through this facility
-    /// @dev This function is called by an authorized operator to process withdrawals
+    /// @notice Allows an operator to commit funds. This will ensure that enough funds are available to honour the commitments.
+    ///
+    /// @param depositToken_ The deposit token committed
+    /// @param depositPeriod_ The deposit period in months
+    /// @param amount_ The amount to commit
+    function handleCommit(IERC20 depositToken_, uint8 depositPeriod_, uint256 amount_) external;
+
+    /// @notice Allows an operator to cancel committed funds.
+    ///
+    /// @param depositToken_ The deposit token committed
+    /// @param depositPeriod_ The deposit period in months
+    /// @param amount_ The amount to cancel the committed funds by
+    function handleCommitCancel(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external;
+
+    /// @notice Allows an operator to withdraw committed funds
+    ///
     /// @param depositToken_ The deposit token to withdraw
     /// @param depositPeriod_ The deposit period in months
     /// @param amount_ The amount to withdraw
     /// @param recipient_ The address to receive the deposit tokens
-    function handleWithdraw(
+    /// @return actualAmount The amount of tokens transferred
+    function handleCommitWithdraw(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
         address recipient_
-    ) external;
+    ) external returns (uint256 actualAmount);
 
-    /// @notice Handle borrowing against a redemption through this facility
-    /// @dev This function is called by an authorized operator to process borrowing
+    /// @notice Allows an operator to borrow against deposits owned by this facility
+    ///
     /// @param depositToken_ The deposit token to borrow against
     /// @param depositPeriod_ The deposit period in months
     /// @param amount_ The amount to borrow
     /// @param recipient_ The address to receive the borrowed tokens
+    /// @return actualAmount The amount of tokens borrowed
     function handleBorrow(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
         address recipient_
-    ) external;
+    ) external returns (uint256 actualAmount);
 
-    /// @notice Handle loan repayment through this facility
-    /// @dev This function is called by an authorized operator to process loan repayments
+    /// @notice Allows an operator to repay borrowed funds
+    ///
     /// @param depositToken_ The deposit token being repaid
     /// @param depositPeriod_ The deposit period in months
     /// @param amount_ The amount being repaid
     /// @param payer_ The address making the repayment
+    /// @return actualAmount The amount of tokens borrowed
     function handleRepay(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
         address payer_
-    ) external;
+    ) external returns (uint256 actualAmount);
 
     // ========== BALANCE QUERIES ========== //
 
-    /// @notice Get the available deposit balance for a specific token
+    /// @notice Get the available deposit balance for a specific token. This excludes any committed funds.
+    ///
     /// @param depositToken_ The deposit token to query
-    /// @return The available deposit balance
-    function getDepositBalance(IERC20 depositToken_) external view returns (uint256);
+    /// @return balance     The available deposit balance
+    function getAvailableDeposits(IERC20 depositToken_) external view returns (uint256 balance);
 
-    /// @notice Get the total committed deposits for a specific token
+    /// @notice Get the committed deposits for a specific token and operator
+    ///
     /// @param depositToken_ The deposit token to query
-    /// @return The total committed deposits
-    function getCommittedDeposits(IERC20 depositToken_) external view returns (uint256);
+    /// @param operator_     The operator
+    /// @return committed   The total committed deposits
+    function getCommittedDeposits(
+        IERC20 depositToken_,
+        address operator_
+    ) external view returns (uint256 committed);
 }

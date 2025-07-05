@@ -24,6 +24,8 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositFacilityTest is Test {
@@ -56,6 +58,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public emergency;
     address public admin;
     address public HEART;
+    address public OPERATOR;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -64,7 +67,9 @@ contract ConvertibleDepositFacilityTest is Test {
     uint8 public constant PERIOD_MONTHS = 6;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
-    function setUp() public {
+    uint256 previousDepositActual;
+
+    function setUp() public virtual {
         vm.warp(INITIAL_BLOCK);
 
         recipient = makeAddr("RECIPIENT");
@@ -73,6 +78,7 @@ contract ConvertibleDepositFacilityTest is Test {
         emergency = makeAddr("EMERGENCY");
         admin = makeAddr("ADMIN");
         HEART = makeAddr("HEART");
+        OPERATOR = makeAddr("OPERATOR");
 
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
@@ -264,7 +270,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
+        (, previousDepositActual) = facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
         _;
     }
 
@@ -283,7 +289,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Mint the receipt token to the account
         vm.prank(account_);
-        facility.deposit(asset_, depositPeriod_, amount_, false);
+        (, previousDepositActual) = facility.deposit(asset_, depositPeriod_, amount_, false);
         _;
     }
 
@@ -415,6 +421,12 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenOperatorAuthorized(address operator_) {
+        vm.prank(admin);
+        facility.authorizeOperator(operator_);
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _assertMintApproval(uint256 expected_) internal view {
@@ -506,6 +518,19 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
+    function _expectRevertNotAuthorized() internal {
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+    }
+
+    function _expectRevertInvalidAddress(address operator_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InvalidAddress.selector,
+                operator_
+            )
+        );
+    }
+
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -572,15 +597,11 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
-    function _expectRevertInsufficientAvailableDeposits(
-        uint256 requestedAmount_,
-        uint256 availableAmount_
-    ) internal {
+    function _expectRevertUnauthorizedOperator(address operator_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InsufficientAvailableDeposits.selector,
-                requestedAmount_,
-                availableAmount_
+                IDepositFacility.DepositFacility_UnauthorizedOperator.selector,
+                operator_
             )
         );
     }

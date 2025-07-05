@@ -47,13 +47,21 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     // ========== AUTHORIZATION ========== //
 
     /// @inheritdoc IDepositFacility
-    function authorizeOperator(address operator_) external onlyAdminRole {
+    function authorizeOperator(address operator_) external onlyEnabled onlyAdminRole {
+        // Validate not zero address or existing
+        if (operator_ == address(0) || _authorizedOperators.contains(operator_))
+            revert DepositFacility_InvalidAddress(operator_);
+
         _authorizedOperators.add(operator_);
         emit OperatorAuthorized(operator_);
     }
 
     /// @inheritdoc IDepositFacility
-    function deauthorizeOperator(address operator_) external onlyEmergencyOrAdminRole {
+    function deauthorizeOperator(address operator_) external onlyEnabled onlyEmergencyOrAdminRole {
+        // Validate authorized
+        if (!_authorizedOperators.contains(operator_))
+            revert DepositFacility_InvalidAddress(operator_);
+
         _authorizedOperators.remove(operator_);
         emit OperatorDeauthorized(operator_);
     }
@@ -66,31 +74,42 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     // ========== CALLBACKS ========== //
 
     /// @inheritdoc IDepositFacility
-    function handleWithdraw(
+    function handleCommit(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external onlyEnabled onlyAuthorizedOperator {
+        //
+    }
+
+    /// @inheritdoc IDepositFacility
+    function handleCommitCancel(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external onlyEnabled onlyAuthorizedOperator {
+        //
+    }
+
+    /// @inheritdoc IDepositFacility
+    function handleCommitWithdraw(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
         address recipient_
-    ) external onlyAuthorizedOperator {
-        // Validate that we have enough committed deposits
-        if (amount_ > _committedDeposits[depositToken_]) {
-            revert DepositFacility_InsufficientDeposits(amount_, _committedDeposits[depositToken_]);
-        }
-
+    ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the withdrawal through DepositManager
-        DEPOSIT_MANAGER.withdraw(
-            IDepositManager.WithdrawParams({
-                asset: depositToken_,
-                depositPeriod: depositPeriod_,
-                depositor: msg.sender,
-                recipient: recipient_,
-                amount: amount_,
-                isWrapped: false
-            })
-        );
-
-        // Update committed deposits
-        _committedDeposits[depositToken_] -= amount_;
+        return
+            DEPOSIT_MANAGER.withdraw(
+                IDepositManager.WithdrawParams({
+                    asset: depositToken_,
+                    depositPeriod: depositPeriod_,
+                    depositor: msg.sender,
+                    recipient: recipient_,
+                    amount: amount_,
+                    isWrapped: false
+                })
+            );
     }
 
     /// @inheritdoc IDepositFacility
@@ -99,24 +118,17 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8 depositPeriod_,
         uint256 amount_,
         address recipient_
-    ) external onlyAuthorizedOperator {
-        // Validate that we have enough committed deposits
-        if (amount_ > _committedDeposits[depositToken_]) {
-            revert DepositFacility_InsufficientDeposits(amount_, _committedDeposits[depositToken_]);
-        }
-
+    ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the borrowing through DepositManager
-        DEPOSIT_MANAGER.borrowingWithdraw(
-            IDepositManager.BorrowingWithdrawParams({
-                asset: depositToken_,
-                operator: address(this),
-                recipient: recipient_,
-                amount: amount_
-            })
-        );
-
-        // Update committed deposits
-        _committedDeposits[depositToken_] -= amount_;
+        // It will revert if more is being borrowed than available
+        return
+            DEPOSIT_MANAGER.borrowingWithdraw(
+                IDepositManager.BorrowingWithdrawParams({
+                    asset: depositToken_,
+                    recipient: recipient_,
+                    amount: amount_
+                })
+            );
     }
 
     /// @inheritdoc IDepositFacility
@@ -125,23 +137,21 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8 depositPeriod_,
         uint256 amount_,
         address payer_
-    ) external onlyAuthorizedOperator {
+    ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the repayment through DepositManager
-        DEPOSIT_MANAGER.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: depositToken_,
-                operator: address(this),
-                payer: payer_,
-                amount: amount_
-            })
-        );
-
-        // Update committed deposits (repayment increases available deposits)
-        _committedDeposits[depositToken_] += amount_;
+        // It will revert if more is being repaid than borrowed
+        return
+            DEPOSIT_MANAGER.borrowingRepay(
+                IDepositManager.BorrowingRepayParams({
+                    asset: depositToken_,
+                    payer: payer_,
+                    amount: amount_
+                })
+            );
     }
 
     /// @inheritdoc IDepositFacility
-    function getDepositBalance(IERC20 depositToken_) external view returns (uint256) {
+    function getAvailableDeposits(IERC20 depositToken_) external view returns (uint256) {
         // Get the total deposited assets for this facility
         (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
             depositToken_,
@@ -171,7 +181,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
-    function getCommittedDeposits(IERC20 depositToken_) external view returns (uint256) {
+    function getCommittedDeposits(
+        IERC20 depositToken_,
+        address operator_
+    ) external view returns (uint256) {
         return _committedDeposits[depositToken_];
     }
 

@@ -342,12 +342,12 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _totalCommittedDeposits[redemption.depositToken] -= redemptionAmount;
 
         // Delegate to the facility for withdrawal
-        IDepositFacility(redemption.facility).handleWithdraw(
-            IERC20(redemption.depositToken),
-            redemption.depositPeriod,
-            redemptionAmount,
-            msg.sender
-        );
+        // IDepositFacility(redemption.facility).handleWithdraw(
+        //     IERC20(redemption.depositToken),
+        //     redemption.depositPeriod,
+        //     redemptionAmount,
+        //     msg.sender
+        // );
 
         // Emit the redeemed event
         emit RedemptionFinished(
@@ -691,12 +691,12 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _pullReceiptToken(depositToken_, depositPeriod_, amount_);
 
         // Delegate to the facility for withdrawal
-        IDepositFacility(facility_).handleWithdraw(
-            depositToken_,
-            depositPeriod_,
-            amount_,
-            address(this)
-        );
+        // IDepositFacility(facility_).handleWithdraw(
+        //     depositToken_,
+        //     depositPeriod_,
+        //     amount_,
+        //     address(this)
+        // );
 
         // Transfer discounted amount of the deposit token to the recipient
         ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
@@ -733,12 +733,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         address facility_,
         uint256 amount_
     ) internal view {
-        uint256 availableDeposits;
-        if (facility_ == address(0)) {
-            availableDeposits = getAvailableDeposits(depositToken_);
-        } else {
-            availableDeposits = getAvailableDepositsForFacility(depositToken_, facility_);
-        }
+        uint256 availableDeposits = getAvailableDepositsForFacility(depositToken_, facility_);
 
         if (amount_ > availableDeposits)
             revert RedemptionVault_InsufficientAvailableDeposits(amount_, availableDeposits);
@@ -790,13 +785,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         address facility_
     ) public view returns (uint256) {
         // Get the facility's deposit balance
-        uint256 facilityBalance = IDepositFacility(facility_).getDepositBalance(depositToken_);
+        // uint256 facilityBalance = IDepositFacility(facility_).getDepositBalance(depositToken_);
 
-        // Get the facility's committed deposits
-        uint256 committedDeposits = _facilityCommittedDeposits[address(depositToken_)][facility_];
+        // // Get the facility's committed deposits
+        // uint256 committedDeposits = _facilityCommittedDeposits[address(depositToken_)][facility_];
 
-        // Return available deposits
-        return committedDeposits > facilityBalance ? 0 : facilityBalance - committedDeposits;
+        // // Return available deposits
+        // return committedDeposits > facilityBalance ? 0 : facilityBalance - committedDeposits;
+        return 0;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
