@@ -41,6 +41,9 @@ contract DepositRedemptionVaultTest is Test {
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
 
+    address public cdFacilityAddress;
+    address public ydFacilityAddress;
+
     MockERC20 public ohm;
     MockERC20 public reserveToken;
     MockERC4626 public vault;
@@ -112,7 +115,9 @@ contract DepositRedemptionVaultTest is Test {
         depositManager = new DepositManager(address(kernel));
         redemptionVault = new DepositRedemptionVault(address(kernel), address(depositManager));
         cdFacility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
+        cdFacilityAddress = address(cdFacility);
         ydFacility = new YieldDepositFacility(address(kernel), address(depositManager));
+        ydFacilityAddress = address(ydFacility);
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -188,6 +193,10 @@ contract DepositRedemptionVaultTest is Test {
         );
         vm.stopPrank();
 
+        // Authorize the redemption vault to interact with CD Facility
+        vm.prank(admin);
+        cdFacility.authorizeOperator(address(redemptionVault));
+
         // Disable the redemption vault
         vm.prank(admin);
         redemptionVault.disable("");
@@ -216,8 +225,9 @@ contract DepositRedemptionVaultTest is Test {
     }
 
     modifier givenReserveTokenSpendingIsApprovedByRecipient() {
-        vm.prank(recipient);
+        vm.startPrank(recipient);
         reserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT);
+        vm.stopPrank();
         _;
     }
 
@@ -299,8 +309,9 @@ contract DepositRedemptionVaultTest is Test {
         MockERC20(address(asset_)).mint(account_, amount_);
 
         // Approve deposit manager to spend the reserve tokens
-        vm.prank(account_);
+        vm.startPrank(account_);
         asset_.approve(address(depositManager), amount_);
+        vm.stopPrank();
 
         // Mint the receipt token to the account
         vm.prank(account_);
@@ -350,8 +361,9 @@ contract DepositRedemptionVaultTest is Test {
         reserveTokenTwo.mint(account_, amount_);
 
         // Approve
-        vm.prank(account_);
+        vm.startPrank(account_);
         reserveTokenTwo.approve(address(depositManager), amount_);
+        vm.stopPrank();
 
         // Create position
         _createCDPosition(
@@ -396,6 +408,16 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
+    modifier givenReceiptTokenTwoSpendingIsApproved(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) {
+        vm.prank(owner_);
+        depositManager.approve(spender_, receiptTokenIdTwo, amount_);
+        _;
+    }
+
     modifier givenLocallyActive() {
         vm.prank(admin);
         redemptionVault.enable("");
@@ -427,24 +449,27 @@ contract DepositRedemptionVaultTest is Test {
         MockERC20(address(asset_)).mint(user_, amount_);
 
         // Approve spending of the reserve tokens
-        vm.prank(user_);
+        vm.startPrank(user_);
         asset_.approve(address(depositManager), amount_);
+        vm.stopPrank();
 
         // Mint the receipt token to the user
         vm.prank(user_);
         cdFacility.deposit(asset_, depositPeriod_, amount_, false);
 
         // Approve spending of the receipt token
-        vm.prank(user_);
+        vm.startPrank(user_);
         depositManager.approve(
             address(redemptionVault),
             depositManager.getReceiptTokenId(asset_, depositPeriod_),
             amount_
         );
+        vm.stopPrank();
 
         // Start redemption
-        vm.prank(user_);
+        vm.startPrank(user_);
         redemptionVault.startRedemption(asset_, depositPeriod_, amount_, address(cdFacility));
+        vm.stopPrank();
         _;
     }
 
@@ -510,6 +535,13 @@ contract DepositRedemptionVaultTest is Test {
     modifier givenRateSnapshotTaken() {
         // Force a snapshot to be taken at the given timestamp
         _takeRateSnapshot();
+        _;
+    }
+
+    modifier givenDeauthorizedByFacility(address facility_) {
+        vm.startPrank(admin);
+        IDepositFacility(facility_).deauthorizeOperator(address(redemptionVault));
+        vm.stopPrank();
         _;
     }
 
@@ -647,7 +679,7 @@ contract DepositRedemptionVaultTest is Test {
     function _expectRevertDepositNotConfigured(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
+                IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
                 depositPeriod_
             )

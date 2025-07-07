@@ -116,6 +116,23 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         redemptionVault.finishRedemption(0);
     }
 
+    // given the facility is deauthorized
+    //  [X] it reverts
+
+    function test_deauthorizedFacility_reverts()
+        public
+        givenLocallyActive
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+        givenFacilityIsDeauthorized(address(cdFacility))
+    {
+        // Expect revert
+        _expectRevertFacilityNotRegistered(cdFacilityAddress);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+    }
+
     // given it is before the redeemable timestamp
     //  [X] it reverts
 

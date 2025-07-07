@@ -4,10 +4,12 @@ pragma solidity >=0.8.20;
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+
 contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVaultTest {
-    address public testFacility = address(0x123);
-    address public testFacilityTwo = address(0x456);
-    address public testFacilityThree = address(0x789);
+    address public testFacility = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacilityTwo = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacilityThree = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
 
     event FacilityDeauthorized(address indexed facility);
 
@@ -144,6 +146,10 @@ contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVault
         redemptionVault.deauthorizeFacility(testFacility);
         vm.prank(admin);
         redemptionVault.deauthorizeFacility(testFacilityTwo);
+        vm.prank(admin);
+        redemptionVault.deauthorizeFacility(cdFacilityAddress);
+        vm.prank(admin);
+        redemptionVault.deauthorizeFacility(ydFacilityAddress);
 
         // Assert all facilities are deauthorized
         assertFalse(

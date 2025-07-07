@@ -84,7 +84,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
     }
 
@@ -101,7 +101,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS + 1,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
     }
 
@@ -135,10 +135,10 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             COMMITMENT_AMOUNT
         )
         givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
-        givenFacilityIsDeauthorized(address(cdFacility))
+        givenFacilityIsDeauthorized(cdFacilityAddress)
     {
         // Expect revert
-        _expectRevertFacilityNotRegistered(address(cdFacility));
+        _expectRevertFacilityNotRegistered(cdFacilityAddress);
 
         // Call function
         vm.prank(recipient);
@@ -146,7 +146,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
     }
 
@@ -159,7 +159,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.startRedemption(iReserveToken, PERIOD_MONTHS, 0, address(cdFacility));
+        redemptionVault.startRedemption(iReserveToken, PERIOD_MONTHS, 0, cdFacilityAddress);
     }
 
     // given the caller has not approved the redemption vault to spend the receipt tokens
@@ -188,7 +188,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
     }
 
@@ -224,7 +224,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
     }
 
@@ -249,12 +249,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
 
         // Reclaim the yield deposit via the redemption vault
         vm.prank(recipient);
-        redemptionVault.reclaim(
-            iReserveToken,
-            PERIOD_MONTHS,
-            COMMITMENT_AMOUNT,
-            address(cdFacility)
-        );
+        redemptionVault.reclaim(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, cdFacilityAddress);
 
         // At this stage:
         // - The recipient has reclaimed 1e18 via the ConvertibleDepositFacility
@@ -266,7 +261,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.startRedemption(iReserveToken, PERIOD_MONTHS, amount_, address(cdFacility));
+        redemptionVault.startRedemption(iReserveToken, PERIOD_MONTHS, amount_, cdFacilityAddress);
     }
 
     // given there is an existing redemption for the caller
@@ -294,7 +289,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             address(iReserveToken),
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Call function
@@ -303,7 +298,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assertions
@@ -317,7 +312,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             COMMITMENT_AMOUNT,
             COMMITMENT_AMOUNT,
             0,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assert that the available deposits are correct
@@ -337,11 +332,12 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT
         )
+        givenReceiptTokenTwoSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            COMMITMENT_AMOUNT
+        )
     {
-        // Approve spending of the second receipt token
-        vm.prank(recipient);
-        depositManager.approve(address(redemptionVault), receiptTokenIdTwo, COMMITMENT_AMOUNT);
-
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit RedemptionStarted(
@@ -350,7 +346,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             address(iReserveTokenTwo),
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Call function
@@ -359,7 +355,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveTokenTwo,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assertions
@@ -373,7 +369,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             COMMITMENT_AMOUNT,
             0,
             0,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assert that the available deposits are correct
@@ -407,7 +403,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             address(iReserveToken),
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Call function
@@ -416,7 +412,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assertions
@@ -430,7 +426,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             COMMITMENT_AMOUNT,
             0,
             COMMITMENT_AMOUNT,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assert that the available deposits are correct
@@ -468,7 +464,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             address(iReserveToken),
             PERIOD_MONTHS,
             amount_,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Call function
@@ -477,7 +473,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             iReserveToken,
             PERIOD_MONTHS,
             amount_,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assertions
@@ -491,7 +487,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             amount_,
             0,
             0,
-            address(cdFacility)
+            cdFacilityAddress
         );
 
         // Assert that the available deposits are correct

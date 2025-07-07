@@ -52,10 +52,6 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
     //  [X] it reverts
 
     function test_contractDisabled_reverts() public {
-        // Disable the redemption vault
-        vm.prank(emergency);
-        redemptionVault.disable("");
-
         // Expect revert
         _expectRevertNotEnabled();
 
@@ -106,7 +102,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         givenFacilityIsDeauthorized(address(cdFacility))
     {
         // Expect revert
-        _expectRevertFacilityNotRegistered(address(cdFacility));
+        _expectRevertFacilityNotRegistered(cdFacilityAddress);
 
         // Call function
         vm.prank(recipient);
@@ -248,7 +244,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
 
         // Assert committed deposits are 0
         assertEq(
-            redemptionVault.getFacilityCommittedDeposits(iReserveToken, address(cdFacility)),
+            redemptionVault.getFacilityCommittedDeposits(iReserveToken, cdFacilityAddress),
             0,
             "committed deposits should be 0"
         );

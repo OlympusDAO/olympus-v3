@@ -3,9 +3,12 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+
 contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTest {
-    address public testFacility = address(0x123);
-    address public testFacilityTwo = address(0x456);
+    address public testFacility = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacilityTwo = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
 
     event FacilityRegistered(address indexed facility);
 
@@ -40,23 +43,25 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
     function test_facilityAlreadyRegistered_reverts() public {
         // Expect revert
-        _expectRevertFacilityExists(address(cdFacility));
+        _expectRevertFacilityExists(cdFacilityAddress);
 
         // Call function
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(cdFacility));
+        redemptionVault.authorizeFacility(cdFacilityAddress);
     }
 
     // given the facility does not implement the IDepositFacility interface
     //  [X] it reverts
 
     function test_facilityDoesNotImplementIDepositFacility_reverts() public {
+        address notFacility = address(new MockERC20("Test Facility", "TF", 18));
+
         // Expect revert
-        _expectRevertInvalidFacility(testFacility);
+        _expectRevertInvalidFacility(notFacility);
 
         // Call function
         vm.prank(admin);
-        redemptionVault.authorizeFacility(testFacility);
+        redemptionVault.authorizeFacility(notFacility);
     }
 
     // given the facility is not already registered
@@ -65,18 +70,18 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
     //  [X] it emits a FacilityRegistered event
     //  [X] it returns true when checking if the facility is registered
 
-    function test_success() public givenFacilityIsDeauthorized(address(cdFacility)) {
+    function test_success() public givenFacilityIsDeauthorized(cdFacilityAddress) {
         // Expect event
         vm.expectEmit(true, false, false, false);
-        emit FacilityRegistered(address(cdFacility));
+        emit FacilityRegistered(cdFacilityAddress);
 
         // Call function
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(cdFacility));
+        redemptionVault.authorizeFacility(cdFacilityAddress);
 
         // Assert facility is registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(address(cdFacility)),
+            redemptionVault.isRegisteredFacility(cdFacilityAddress),
             "Facility should be registered"
         );
 
@@ -84,7 +89,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
         address[] memory facilities = redemptionVault.getRegisteredFacilities();
         bool found = false;
         for (uint256 i = 0; i < facilities.length; i++) {
-            if (facilities[i] == address(cdFacility)) {
+            if (facilities[i] == cdFacilityAddress) {
                 found = true;
                 break;
             }
@@ -99,12 +104,12 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
     function test_multipleFacilities()
         public
-        givenFacilityIsDeauthorized(address(cdFacility))
+        givenFacilityIsDeauthorized(cdFacilityAddress)
         givenFacilityIsDeauthorized(address(ydFacility))
     {
         // Authorize first facility
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(cdFacility));
+        redemptionVault.authorizeFacility(cdFacilityAddress);
 
         // Authorize second facility
         vm.prank(admin);
@@ -112,7 +117,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
         // Assert both facilities are registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(address(cdFacility)),
+            redemptionVault.isRegisteredFacility(cdFacilityAddress),
             "First facility should be registered"
         );
         assertTrue(
@@ -125,7 +130,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
         bool foundFirst = false;
         bool foundSecond = false;
         for (uint256 i = 0; i < facilities.length; i++) {
-            if (facilities[i] == address(cdFacility)) {
+            if (facilities[i] == cdFacilityAddress) {
                 foundFirst = true;
             }
             if (facilities[i] == address(ydFacility)) {
@@ -141,26 +146,26 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
     function test_reauthorizeAfterDeauthorization()
         public
-        givenFacilityIsDeauthorized(address(cdFacility))
+        givenFacilityIsDeauthorized(cdFacilityAddress)
     {
         // Authorize facility
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(cdFacility));
+        redemptionVault.authorizeFacility(cdFacilityAddress);
 
         // Deauthorize facility
         vm.prank(admin);
-        redemptionVault.deauthorizeFacility(address(cdFacility));
+        redemptionVault.deauthorizeFacility(cdFacilityAddress);
 
         // Re-authorize facility
         vm.expectEmit(true, false, false, false);
-        emit FacilityRegistered(address(cdFacility));
+        emit FacilityRegistered(cdFacilityAddress);
 
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(cdFacility));
+        redemptionVault.authorizeFacility(cdFacilityAddress);
 
         // Assert facility is registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(address(cdFacility)),
+            redemptionVault.isRegisteredFacility(cdFacilityAddress),
             "Facility should be re-registered"
         );
     }

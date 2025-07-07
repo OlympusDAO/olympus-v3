@@ -128,6 +128,18 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (facility_ == address(0)) revert RedemptionVault_InvalidFacility(facility_);
         if (_registeredFacilities[facility_]) revert RedemptionVault_FacilityExists(facility_);
 
+        // Validate that the facility implements IDepositFacility (even if it doesn't have the function)
+        {
+            (bool success, bytes memory data) = facility_.staticcall(
+                abi.encodeWithSelector(
+                    IERC165.supportsInterface.selector,
+                    type(IDepositFacility).interfaceId
+                )
+            );
+            if (!success || abi.decode(data, (bool)) == false)
+                revert RedemptionVault_InvalidFacility(facility_);
+        }
+
         _registeredFacilities[facility_] = true;
         _facilitiesArray.push(facility_);
 
@@ -216,9 +228,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _;
     }
 
-    modifier onlyValidFacility(address facility_) {
+    function _validateFacility(address facility_) internal view {
         if (!_registeredFacilities[facility_])
             revert RedemptionVault_FacilityNotRegistered(facility_);
+    }
+
+    modifier onlyValidFacility(address facility_) {
+        _validateFacility(facility_);
         _;
     }
 
@@ -232,13 +248,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Validate that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
-        // Validate that the deposit token and period are supported
-        if (!DEPOSIT_MANAGER.isAssetPeriod(depositToken_, depositPeriod_).isConfigured)
-            revert RedemptionVault_InvalidToken(address(depositToken_), depositPeriod_);
-
-        // Check that there are enough available deposits at the facility
-        _validateAvailableDeposits(depositToken_, facility_, amount_);
-
         // Create a User Redemption
         redemptionId = _userRedemptionCount[msg.sender]++;
         _userRedemptions[_getUserRedemptionKey(msg.sender, redemptionId)] = UserRedemption({
@@ -249,9 +258,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             facility: facility_
         });
 
-        // Update the committed deposits
-        _facilityCommittedDeposits[address(depositToken_)][facility_] += amount_;
-        _totalCommittedDeposits[address(depositToken_)] += amount_;
+        // Mark the funds as committed
+        IDepositFacility(facility_).handleCommit(depositToken_, depositPeriod_, amount_);
 
         // Pull the receipt tokens from the caller
         _pullReceiptToken(depositToken_, depositPeriod_, amount_);
@@ -265,7 +273,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             amount_,
             facility_
         );
-        emit DepositsCommitted(address(depositToken_), facility_, amount_);
 
         return redemptionId;
     }
@@ -280,6 +287,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             _getUserRedemptionKey(msg.sender, redemptionId_)
         ];
 
+        // Check that the facility is authorized
+        _validateFacility(redemption.facility);
+
         // Check that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
@@ -290,11 +300,15 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Update the redemption
         redemption.amount -= amount_;
 
-        // Update the committed deposits
-        _facilityCommittedDeposits[redemption.depositToken][redemption.facility] -= amount_;
-        _totalCommittedDeposits[redemption.depositToken] -= amount_;
+        // Reduce the committed funds
+        IDepositFacility(redemption.facility).handleCommitCancel(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            amount_
+        );
 
         // Transfer the quantity of receipt tokens to the caller
+        // Redemptions are only accessible to the owner, so msg.sender is safe here
         IERC6909(address(DEPOSIT_MANAGER)).transfer(
             msg.sender,
             DEPOSIT_MANAGER.getReceiptTokenId(
@@ -323,6 +337,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             _getUserRedemptionKey(msg.sender, redemptionId_)
         ];
 
+        // Validate that the facility is authorized
+        _validateFacility(redemption.facility);
+
         // Check that the redemption is not already redeemed
         if (redemption.amount == 0)
             revert RedemptionVault_AlreadyRedeemed(msg.sender, redemptionId_);
@@ -335,19 +352,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint256 redemptionAmount = redemption.amount;
         redemption.amount = 0;
 
-        // Update the committed deposits
-        _facilityCommittedDeposits[redemption.depositToken][
-            redemption.facility
-        ] -= redemptionAmount;
-        _totalCommittedDeposits[redemption.depositToken] -= redemptionAmount;
-
-        // Delegate to the facility for withdrawal
-        // IDepositFacility(redemption.facility).handleWithdraw(
-        //     IERC20(redemption.depositToken),
-        //     redemption.depositPeriod,
-        //     redemptionAmount,
-        //     msg.sender
-        // );
+        // Handle the withdrawal
+        // Redemptions are only accessible to the owner, so msg.sender is safe here
+        IDepositFacility(redemption.facility).handleCommitWithdraw(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            redemptionAmount,
+            msg.sender
+        );
 
         // Emit the redeemed event
         emit RedemptionFinished(

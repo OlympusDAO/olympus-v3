@@ -19,7 +19,7 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
     // Helper to call reclaim on the vault, or skip if not implemented
     function _callReclaim(address user_, IERC20 asset_, uint8 period_, uint256 amount_) internal {
         vm.prank(user_);
-        redemptionVault.reclaim(asset_, period_, amount_, address(cdFacility));
+        redemptionVault.reclaim(asset_, period_, amount_, cdFacilityAddress);
     }
 
     // ========== TESTS ========== //
