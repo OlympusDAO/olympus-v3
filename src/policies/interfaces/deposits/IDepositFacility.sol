@@ -13,6 +13,10 @@ interface IDepositFacility {
     event OperatorAuthorized(address indexed operator);
     event OperatorDeauthorized(address indexed operator);
 
+    event AssetCommitted(address indexed asset, address indexed operator, uint256 amount);
+    event AssetCommitCancelled(address indexed asset, address indexed operator, uint256 amount);
+    event AssetCommitWithdrawn(address indexed asset, address indexed operator, uint256 amount);
+
     // ========== ERRORS ========== //
 
     error DepositFacility_InvalidAddress(address operator);
@@ -20,6 +24,11 @@ interface IDepositFacility {
     error DepositFacility_UnauthorizedOperator(address operator);
     error DepositFacility_InvalidRedemption();
     error DepositFacility_InsufficientDeposits(uint256 requested, uint256 available);
+    error DepositFacility_InsufficientCommitment(
+        address operator,
+        uint256 requested,
+        uint256 available
+    );
 
     // ========== OPERATOR AUTHORIZATION ========== //
 
@@ -41,20 +50,14 @@ interface IDepositFacility {
     /// @notice Allows an operator to commit funds. This will ensure that enough funds are available to honour the commitments.
     ///
     /// @param depositToken_ The deposit token committed
-    /// @param depositPeriod_ The deposit period in months
     /// @param amount_ The amount to commit
-    function handleCommit(IERC20 depositToken_, uint8 depositPeriod_, uint256 amount_) external;
+    function handleCommit(IERC20 depositToken_, uint256 amount_) external;
 
     /// @notice Allows an operator to cancel committed funds.
     ///
     /// @param depositToken_ The deposit token committed
-    /// @param depositPeriod_ The deposit period in months
     /// @param amount_ The amount to cancel the committed funds by
-    function handleCommitCancel(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) external;
+    function handleCommitCancel(IERC20 depositToken_, uint256 amount_) external;
 
     /// @notice Allows an operator to withdraw committed funds
     ///
@@ -105,6 +108,12 @@ interface IDepositFacility {
     /// @param depositToken_ The deposit token to query
     /// @return balance     The available deposit balance
     function getAvailableDeposits(IERC20 depositToken_) external view returns (uint256 balance);
+
+    /// @notice Get the committed deposits for a specific token
+    ///
+    /// @param depositToken_    The deposit token to query
+    /// @return committed       The total committed deposits
+    function getCommittedDeposits(IERC20 depositToken_) external view returns (uint256 committed);
 
     /// @notice Get the committed deposits for a specific token and operator
     ///

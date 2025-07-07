@@ -25,8 +25,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @notice Set of authorized operators
     EnumerableSet.AddressSet private _authorizedOperators;
 
-    /// @notice Mapping of committed deposits per token
-    mapping(IERC20 => uint256) private _committedDeposits;
+    mapping(IERC20 asset => uint256 committedDeposits) private _assetCommittedDeposits;
+
+    mapping(bytes32 assetOperatorKey => uint256 committedDeposits)
+        private _assetOperatorCommittedDeposits;
 
     // ========== MODIFIERS ========== //
 
@@ -73,22 +75,51 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     // ========== CALLBACKS ========== //
 
+    function _getCommittedDepositsKey(
+        IERC20 depositToken_,
+        address operator_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(address(depositToken_), operator_));
+    }
+
     /// @inheritdoc IDepositFacility
     function handleCommit(
         IERC20 depositToken_,
-        uint8 depositPeriod_,
         uint256 amount_
     ) external onlyEnabled onlyAuthorizedOperator {
-        //
+        // Validate that there are enough uncommitted funds
+        uint256 availableDeposits = getAvailableDeposits(depositToken_);
+        if (amount_ > availableDeposits)
+            revert DepositFacility_InsufficientDeposits(amount_, availableDeposits);
+
+        // Record the commitment
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] += amount_;
+        _assetCommittedDeposits[depositToken_] += amount_;
+
+        // Emit event
+        emit AssetCommitted(address(depositToken_), msg.sender, amount_);
     }
 
     /// @inheritdoc IDepositFacility
     function handleCommitCancel(
         IERC20 depositToken_,
-        uint8 depositPeriod_,
         uint256 amount_
     ) external onlyEnabled onlyAuthorizedOperator {
-        //
+        // Validate that there are enough committed funds
+        uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
+        if (amount_ > operatorCommitments)
+            revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
+
+        // Reduce the commitment
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
+        // Emit event
+        emit AssetCommitCancelled(address(depositToken_), msg.sender, amount_);
     }
 
     /// @inheritdoc IDepositFacility
@@ -98,18 +129,33 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_,
         address recipient_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
+        // Validate that there are enough committed funds
+        uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
+        if (amount_ > operatorCommitments)
+            revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
+
+        // Reduce the commitment
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
         // Process the withdrawal through DepositManager
-        return
-            DEPOSIT_MANAGER.withdraw(
-                IDepositManager.WithdrawParams({
-                    asset: depositToken_,
-                    depositPeriod: depositPeriod_,
-                    depositor: msg.sender,
-                    recipient: recipient_,
-                    amount: amount_,
-                    isWrapped: false
-                })
-            );
+        uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: depositToken_,
+                depositPeriod: depositPeriod_,
+                depositor: msg.sender,
+                recipient: recipient_,
+                amount: amount_,
+                isWrapped: false
+            })
+        );
+
+        // Emit event
+        emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
+
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositFacility
@@ -151,54 +197,31 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
-    function getAvailableDeposits(IERC20 depositToken_) external view returns (uint256) {
-        // Get the total deposited assets for this facility
-        (, uint256 depositedSharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
+    function getAvailableDeposits(IERC20 depositToken_) public view returns (uint256) {
+        // Available deposits are the assets - commitments
+        (, uint256 sharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
             depositToken_,
             address(this)
         );
+        uint256 committedDeposits = _assetCommittedDeposits[depositToken_];
 
-        // Get the current liabilities (receipt tokens minted)
-        uint256 operatorLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(
-            depositToken_,
-            address(this)
-        );
+        // This should not happen, but prevent a revert anyway
+        if (committedDeposits > sharesInAssets) return 0;
 
-        // Get the current borrowed amount
-        uint256 borrowedAmount = DEPOSIT_MANAGER.getBorrowedAmount(depositToken_, address(this));
-
-        // Available balance = deposited + borrowed - liabilities - committed
-        uint256 totalAvailable = depositedSharesInAssets + borrowedAmount;
-        if (totalAvailable <= operatorLiabilities) {
-            return 0;
-        }
-
-        uint256 availableDeposits = totalAvailable - operatorLiabilities;
-        return
-            availableDeposits > _committedDeposits[depositToken_]
-                ? availableDeposits - _committedDeposits[depositToken_]
-                : 0;
+        return sharesInAssets - committedDeposits;
     }
 
     /// @inheritdoc IDepositFacility
     function getCommittedDeposits(
         IERC20 depositToken_,
         address operator_
-    ) external view returns (uint256) {
-        return _committedDeposits[depositToken_];
+    ) public view returns (uint256) {
+        return _assetOperatorCommittedDeposits[_getCommittedDepositsKey(depositToken_, operator_)];
     }
 
-    // ========== INTERNAL FUNCTIONS ========== //
-
-    /// @notice Internal function to update committed deposits
-    /// @param depositToken_ The deposit token
-    /// @param amount_ The amount to add (positive) or subtract (negative)
-    function _updateCommittedDeposits(IERC20 depositToken_, int256 amount_) internal {
-        if (amount_ > 0) {
-            _committedDeposits[depositToken_] += uint256(amount_);
-        } else if (amount_ < 0) {
-            _committedDeposits[depositToken_] -= uint256(-amount_);
-        }
+    /// @inheritdoc IDepositFacility
+    function getCommittedDeposits(IERC20 depositToken_) public view returns (uint256) {
+        return _assetCommittedDeposits[depositToken_];
     }
 
     // ========== ERC165 ========== //

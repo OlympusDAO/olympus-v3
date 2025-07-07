@@ -293,6 +293,25 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenAddressHasConvertibleDepositTokenDefault(address recipient_) {
+        // Mint reserve tokens to the account
+        MockERC20(address(iReserveToken)).mint(recipient_, RESERVE_TOKEN_AMOUNT);
+
+        // Approve deposit manager to spend the reserve tokens
+        vm.prank(recipient_);
+        iReserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT);
+
+        // Mint the receipt token to the account
+        vm.prank(recipient_);
+        (, previousDepositActual) = facility.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT,
+            false
+        );
+        _;
+    }
+
     modifier givenAddressHasPosition(address account_, uint256 amount_) {
         _createPosition(account_, amount_, CONVERSION_PRICE, false);
         _;
@@ -424,6 +443,18 @@ contract ConvertibleDepositFacilityTest is Test {
     modifier givenOperatorAuthorized(address operator_) {
         vm.prank(admin);
         facility.authorizeOperator(operator_);
+        _;
+    }
+
+    modifier givenOperatorDeuthorized(address operator_) {
+        vm.prank(admin);
+        facility.deauthorizeOperator(operator_);
+        _;
+    }
+
+    modifier givenCommitted(address operator_, uint256 amount_) {
+        vm.prank(operator_);
+        facility.handleCommit(iReserveToken, amount_);
         _;
     }
 
@@ -602,6 +633,31 @@ contract ConvertibleDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IDepositFacility.DepositFacility_UnauthorizedOperator.selector,
                 operator_
+            )
+        );
+    }
+
+    function _expectRevertInsufficientDeposits(uint256 requested_, uint256 available_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InsufficientDeposits.selector,
+                requested_,
+                available_
+            )
+        );
+    }
+
+    function _expectRevertInsufficientCommitments(
+        address operator_,
+        uint256 requested_,
+        uint256 available_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InsufficientCommitment.selector,
+                operator_,
+                requested_,
+                available_
             )
         );
     }
