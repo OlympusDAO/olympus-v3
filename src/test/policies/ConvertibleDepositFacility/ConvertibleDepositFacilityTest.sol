@@ -454,7 +454,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier givenCommitted(address operator_, uint256 amount_) {
         vm.prank(operator_);
-        facility.handleCommit(iReserveToken, amount_);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
@@ -566,16 +566,6 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_InvalidAssetPeriod.selector,
-                address(asset_),
-                depositPeriod_
-            )
-        );
-    }
-
-    function _expectRevertDepositNotConfigured(IERC20 asset_, uint8 depositPeriod_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
                 address(asset_),
                 depositPeriod_
             )

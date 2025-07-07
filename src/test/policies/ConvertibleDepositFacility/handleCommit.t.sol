@@ -20,7 +20,7 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommit(iReserveToken, COMMIT_AMOUNT);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, COMMIT_AMOUNT);
     }
 
     // given the caller is not an authorized operator
@@ -36,7 +36,23 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(caller_);
-        facility.handleCommit(iReserveToken, COMMIT_AMOUNT);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, COMMIT_AMOUNT);
+    }
+
+    // given the asset and period are not supported
+    //  [X] it reverts
+
+    function test_givenAssetNotSupported_reverts()
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+    {
+        // Expect revert
+        _expectRevertInvalidConfiguration(iReserveToken, PERIOD_MONTHS + 1);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS + 1, COMMIT_AMOUNT);
     }
 
     // given there are no committed funds
@@ -53,7 +69,7 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommit(iReserveToken, amount_);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
     }
 
     // when the amount is greater than the available deposits
@@ -79,7 +95,7 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommit(iReserveToken, amount_);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
     }
 
     // given an operator has committed funds
@@ -111,7 +127,7 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(OPERATOR_TWO);
-        facility.handleCommit(iReserveToken, amount_);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
 
         // Assert state
         assertEq(
@@ -157,7 +173,7 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommit(iReserveToken, amount_);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
 
         // Assert state
         assertEq(facility.getCommittedDeposits(iReserveToken), amount_, "committed deposits");

@@ -85,8 +85,16 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function handleCommit(
         IERC20 depositToken_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) external onlyEnabled onlyAuthorizedOperator {
+        // Validate that the deposit token and period are supported
+        if (!DEPOSIT_MANAGER.isAssetPeriod(depositToken_, depositPeriod_).isConfigured)
+            revert IDepositManager.DepositManager_InvalidAssetPeriod(
+                address(depositToken_),
+                depositPeriod_
+            );
+
         // Validate that there are enough uncommitted funds
         uint256 availableDeposits = getAvailableDeposits(depositToken_);
         if (amount_ > availableDeposits)
@@ -105,6 +113,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function handleCommitCancel(
         IERC20 depositToken_,
+        uint8 depositPeriod_,
         uint256 amount_
     ) external onlyEnabled onlyAuthorizedOperator {
         // Validate that there are enough committed funds

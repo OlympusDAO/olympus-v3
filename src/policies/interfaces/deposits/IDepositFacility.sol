@@ -49,23 +49,29 @@ interface IDepositFacility {
 
     /// @notice Allows an operator to commit funds. This will ensure that enough funds are available to honour the commitments.
     ///
-    /// @param depositToken_ The deposit token committed
+    /// @param depositToken_    The deposit token committed
+    /// @param depositPeriod_   The deposit period in months
     /// @param amount_ The amount to commit
-    function handleCommit(IERC20 depositToken_, uint256 amount_) external;
+    function handleCommit(IERC20 depositToken_, uint8 depositPeriod_, uint256 amount_) external;
 
     /// @notice Allows an operator to cancel committed funds.
     ///
-    /// @param depositToken_ The deposit token committed
+    /// @param depositToken_    The deposit token committed
+    /// @param depositPeriod_   The deposit period in months
     /// @param amount_ The amount to cancel the committed funds by
-    function handleCommitCancel(IERC20 depositToken_, uint256 amount_) external;
+    function handleCommitCancel(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external;
 
     /// @notice Allows an operator to withdraw committed funds
     ///
-    /// @param depositToken_ The deposit token to withdraw
-    /// @param depositPeriod_ The deposit period in months
-    /// @param amount_ The amount to withdraw
-    /// @param recipient_ The address to receive the deposit tokens
-    /// @return actualAmount The amount of tokens transferred
+    /// @param depositToken_    The deposit token to withdraw
+    /// @param depositPeriod_   The deposit period in months
+    /// @param amount_          The amount to withdraw
+    /// @param recipient_       The address to receive the deposit tokens
+    /// @return actualAmount    The amount of tokens transferred
     function handleCommitWithdraw(
         IERC20 depositToken_,
         uint8 depositPeriod_,

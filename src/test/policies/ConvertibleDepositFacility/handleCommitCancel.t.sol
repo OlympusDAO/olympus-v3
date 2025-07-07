@@ -19,7 +19,7 @@ contract ConvertibleDepositFacilityHandleCommitCancelTest is ConvertibleDepositF
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommitCancel(iReserveToken, COMMIT_AMOUNT);
+        facility.handleCommitCancel(iReserveToken, PERIOD_MONTHS, COMMIT_AMOUNT);
     }
 
     // given the caller is not an authorized operator
@@ -35,7 +35,7 @@ contract ConvertibleDepositFacilityHandleCommitCancelTest is ConvertibleDepositF
 
         // Call function
         vm.prank(caller_);
-        facility.handleCommitCancel(iReserveToken, COMMIT_AMOUNT);
+        facility.handleCommitCancel(iReserveToken, PERIOD_MONTHS, COMMIT_AMOUNT);
     }
 
     // when the amount is greater than the committed amount
@@ -62,7 +62,7 @@ contract ConvertibleDepositFacilityHandleCommitCancelTest is ConvertibleDepositF
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommitCancel(iReserveToken, amount_);
+        facility.handleCommitCancel(iReserveToken, PERIOD_MONTHS, amount_);
     }
 
     // [X] it does not transfer any tokens
@@ -92,7 +92,7 @@ contract ConvertibleDepositFacilityHandleCommitCancelTest is ConvertibleDepositF
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleCommitCancel(iReserveToken, amount_);
+        facility.handleCommitCancel(iReserveToken, PERIOD_MONTHS, amount_);
 
         // Assert state
         assertEq(
