@@ -14,6 +14,7 @@ import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Bophades
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -26,6 +27,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnabler, ReentrancyGuard {
     using SafeTransferLib for ERC20;
     using FullMath for uint256;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // ========== CONSTANTS ========== //
 
@@ -67,11 +69,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     mapping(address => uint256) internal _totalCommittedDeposits;
 
     /// @notice Registered facilities
-    // TODO shift to enumerableset
-    mapping(address => bool) internal _registeredFacilities;
-
-    /// @notice Array of registered facilities for iteration
-    address[] internal _facilitiesArray;
+    EnumerableSet.AddressSet internal _authorizedFacilities;
 
     /// @notice Loans for each redemption
     mapping(uint16 => Loan[]) internal _redemptionLoans;
@@ -121,7 +119,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc IDepositRedemptionVault
     function authorizeFacility(address facility_) external onlyAdminRole {
         if (facility_ == address(0)) revert RedemptionVault_InvalidFacility(facility_);
-        if (_registeredFacilities[facility_]) revert RedemptionVault_FacilityExists(facility_);
+        if (_authorizedFacilities.contains(facility_)) revert RedemptionVault_FacilityExists(facility_);
 
         // Validate that the facility implements IDepositFacility (even if it doesn't have the function)
         {
@@ -135,39 +133,29 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 revert RedemptionVault_InvalidFacility(facility_);
         }
 
-        _registeredFacilities[facility_] = true;
-        _facilitiesArray.push(facility_);
+        _authorizedFacilities.add(facility_);
 
         emit FacilityAuthorized(facility_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
     function deauthorizeFacility(address facility_) external onlyEmergencyOrAdminRole {
-        if (!_registeredFacilities[facility_])
+        if (!_authorizedFacilities.contains(facility_))
             revert RedemptionVault_FacilityNotRegistered(facility_);
 
-        _registeredFacilities[facility_] = false;
-
-        // Remove from array (keep order for gas efficiency)
-        for (uint256 i = 0; i < _facilitiesArray.length; i++) {
-            if (_facilitiesArray[i] == facility_) {
-                _facilitiesArray[i] = _facilitiesArray[_facilitiesArray.length - 1];
-                _facilitiesArray.pop();
-                break;
-            }
-        }
+        _authorizedFacilities.remove(facility_);
 
         emit FacilityDeauthorized(facility_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function isRegisteredFacility(address facility_) external view returns (bool) {
-        return _registeredFacilities[facility_];
+    function isAuthorizedFacility(address facility_) external view returns (bool) {
+        return _authorizedFacilities.contains(facility_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function getRegisteredFacilities() external view returns (address[] memory) {
-        return _facilitiesArray;
+    function getAuthorizedFacilities() external view returns (address[] memory) {
+        return _authorizedFacilities.values();
     }
 
     // ========== ASSETS ========== //
@@ -224,7 +212,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     function _validateFacility(address facility_) internal view {
-        if (!_registeredFacilities[facility_])
+        if (!_authorizedFacilities.contains(facility_))
             revert RedemptionVault_FacilityNotRegistered(facility_);
     }
 

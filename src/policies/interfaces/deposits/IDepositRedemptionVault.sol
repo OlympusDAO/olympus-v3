@@ -135,21 +135,25 @@ interface IDepositRedemptionVault {
     // ========== FACILITY MANAGEMENT ========== //
 
     /// @notice Authorize a facility
-    /// @param facility_ The address of the facility to authorize
+    ///
+    /// @param facility_    The address of the facility to authorize
     function authorizeFacility(address facility_) external;
 
     /// @notice Deauthorize a facility
-    /// @param facility_ The address of the facility to deauthorize
+    ///
+    /// @param facility_    The address of the facility to deauthorize
     function deauthorizeFacility(address facility_) external;
 
-    /// @notice Check if a facility is registered
-    /// @param facility_ The address of the facility to check
-    /// @return True if the facility is registered
-    function isRegisteredFacility(address facility_) external view returns (bool);
+    /// @notice Check if a facility is authorized
+    ///
+    /// @param facility_        The address of the facility to check
+    /// @return isAuthorized    True if the facility is authorized
+    function isAuthorizedFacility(address facility_) external view returns (bool isAuthorized);
 
-    /// @notice Get all registered facilities
-    /// @return Array of registered facility addresses
-    function getRegisteredFacilities() external view returns (address[] memory);
+    /// @notice Get all authorized facilities
+    ///
+    /// @return facilities  Array of authorized facility addresses
+    function getAuthorizedFacilities() external view returns (address[] memory facilities);
 
     // ========== REDEMPTION FLOW ========== //
 

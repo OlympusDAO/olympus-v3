@@ -83,12 +83,12 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
         // Assert facility is registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(cdFacilityAddress),
+            redemptionVault.isAuthorizedFacility(cdFacilityAddress),
             "Facility should be registered"
         );
 
         // Assert facility is in the facilities array
-        address[] memory facilities = redemptionVault.getRegisteredFacilities();
+        address[] memory facilities = redemptionVault.getAuthorizedFacilities();
         bool found = false;
         for (uint256 i = 0; i < facilities.length; i++) {
             if (facilities[i] == cdFacilityAddress) {
@@ -119,16 +119,16 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
         // Assert both facilities are registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(cdFacilityAddress),
+            redemptionVault.isAuthorizedFacility(cdFacilityAddress),
             "First facility should be registered"
         );
         assertTrue(
-            redemptionVault.isRegisteredFacility(address(ydFacility)),
+            redemptionVault.isAuthorizedFacility(address(ydFacility)),
             "Second facility should be registered"
         );
 
         // Assert both facilities are in the facilities array
-        address[] memory facilities = redemptionVault.getRegisteredFacilities();
+        address[] memory facilities = redemptionVault.getAuthorizedFacilities();
         bool foundFirst = false;
         bool foundSecond = false;
         for (uint256 i = 0; i < facilities.length; i++) {
@@ -167,7 +167,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
         // Assert facility is registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(cdFacilityAddress),
+            redemptionVault.isAuthorizedFacility(cdFacilityAddress),
             "Facility should be re-registered"
         );
     }

@@ -64,12 +64,12 @@ contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVault
 
         // Assert facility is not registered
         assertFalse(
-            redemptionVault.isRegisteredFacility(testFacility),
+            redemptionVault.isAuthorizedFacility(testFacility),
             "Facility should not be registered"
         );
 
         // Assert facility is not in the facilities array
-        address[] memory facilities = redemptionVault.getRegisteredFacilities();
+        address[] memory facilities = redemptionVault.getAuthorizedFacilities();
         bool found = false;
         for (uint256 i = 0; i < facilities.length; i++) {
             if (facilities[i] == testFacility) {
@@ -100,20 +100,20 @@ contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVault
 
         // Assert only the specified facility is deauthorized
         assertFalse(
-            redemptionVault.isRegisteredFacility(testFacility),
+            redemptionVault.isAuthorizedFacility(testFacility),
             "First facility should not be registered"
         );
         assertTrue(
-            redemptionVault.isRegisteredFacility(testFacilityTwo),
+            redemptionVault.isAuthorizedFacility(testFacilityTwo),
             "Second facility should still be registered"
         );
         assertTrue(
-            redemptionVault.isRegisteredFacility(testFacilityThree),
+            redemptionVault.isAuthorizedFacility(testFacilityThree),
             "Third facility should still be registered"
         );
 
         // Assert only the specified facility is removed from the facilities array
-        address[] memory facilities = redemptionVault.getRegisteredFacilities();
+        address[] memory facilities = redemptionVault.getAuthorizedFacilities();
         bool foundFirst = false;
         bool foundSecond = false;
         bool foundThird = false;
@@ -156,16 +156,16 @@ contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVault
 
         // Assert all facilities are deauthorized
         assertFalse(
-            redemptionVault.isRegisteredFacility(testFacility),
+            redemptionVault.isAuthorizedFacility(testFacility),
             "First facility should not be registered"
         );
         assertFalse(
-            redemptionVault.isRegisteredFacility(testFacilityTwo),
+            redemptionVault.isAuthorizedFacility(testFacilityTwo),
             "Second facility should not be registered"
         );
 
         // Assert facilities array is empty
-        address[] memory facilities = redemptionVault.getRegisteredFacilities();
+        address[] memory facilities = redemptionVault.getAuthorizedFacilities();
         assertEq(facilities.length, 0, "Facilities array should be empty");
     }
 
@@ -183,14 +183,14 @@ contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVault
 
         // Assert facility is registered
         assertTrue(
-            redemptionVault.isRegisteredFacility(testFacility),
+            redemptionVault.isAuthorizedFacility(testFacility),
             "Facility should be re-registered"
         );
 
         // Test that the facility can be used (e.g., for starting redemptions)
         // This would require setting up the necessary state, but the basic functionality should work
         assertTrue(
-            redemptionVault.isRegisteredFacility(testFacility),
+            redemptionVault.isAuthorizedFacility(testFacility),
             "Facility should be usable after re-authorization"
         );
     }
