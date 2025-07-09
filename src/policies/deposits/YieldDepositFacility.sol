@@ -136,9 +136,12 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         );
 
         // Set the initial yield conversion rate
-        positionLastYieldConversionRate[positionId] = _getConversionRate(
-            IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(params_.asset).vault)
-        );
+        // We add 1 to account for ERC4626 rounding errors, otherwise the DepositManager will be left insolvent
+        positionLastYieldConversionRate[positionId] =
+            _getConversionRate(
+                IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(params_.asset).vault)
+            ) +
+            1;
 
         // Emit an event
         emit CreatedDeposit(
@@ -242,19 +245,24 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             endRate = expiryRate;
         }
 
-        // Calculate the number of shares for the position
+        // Calculate the number of shares for the position at the last snapshot rate
         uint256 lastShares = FullMath.mulDiv(
             position.remainingDeposit, // assets
             10 ** assetVault.decimals(), // decimals
             lastSnapshotRate // assets per share
         );
 
-        // Calculate the yield
-        uint256 yield = FullMath.mulDiv(
-            endRate - lastSnapshotRate, // assets per share
+        // Calculate what the position would be worth at the current rate
+        uint256 currentValue = FullMath.mulDiv(
             lastShares, // shares
+            endRate, // assets per share
             10 ** assetVault.decimals() // decimals
         );
+
+        // Calculate the yield as the difference between current value and original deposit
+        uint256 yield = currentValue > position.remainingDeposit
+            ? currentValue - position.remainingDeposit
+            : 0;
 
         // Calculate fees
         yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
@@ -356,19 +364,22 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             yieldFee += previewYieldFee;
 
             // If there is yield, update the last yield conversion rate
+            // We add 1 to account for ERC4626 rounding errors, otherwise the DepositManager will be left insolvent
             if (previewYieldMinusFee > 0) {
-                positionLastYieldConversionRate[positionId] = endRate;
+                positionLastYieldConversionRate[positionId] = endRate + 1;
             }
         }
 
-        // Withdraw the yield from the deposit manager to this contract
-        // This will validate that the deposits are still solvent
-        // This is also done as one call, to avoid off-by-one rounding errors with ERC4626
-        DEPOSIT_MANAGER.claimYield(asset, address(this), yieldMinusFee + yieldFee);
-        // Transfer the yield (minus fee) to the caller
-        IERC20(asset).transfer(msg.sender, yieldMinusFee);
-        // Transfer the yield fee to the treasury
-        IERC20(asset).transfer(address(TRSRY), yieldFee);
+        if (yieldMinusFee > 0) {
+            // Withdraw the yield from the deposit manager to this contract
+            // This will validate that the deposits are still solvent
+            // This is also done as one call, to avoid off-by-one rounding errors with ERC4626
+            DEPOSIT_MANAGER.claimYield(asset, address(this), yieldMinusFee + yieldFee);
+            // Transfer the yield (minus fee) to the caller
+            IERC20(asset).transfer(msg.sender, yieldMinusFee);
+            // Transfer the yield fee to the treasury
+            if (yieldFee > 0) IERC20(asset).transfer(address(TRSRY), yieldFee);
+        }
 
         // Emit event
         emit YieldClaimed(address(asset), msg.sender, yieldMinusFee);

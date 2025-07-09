@@ -206,7 +206,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         // Assert that the last yield conversion rate is set
         assertEq(
             yieldDepositFacility.positionLastYieldConversionRate(actualPositionId),
-            lastYieldConversionRate,
+            lastYieldConversionRate + 1,
             "positionLastYieldConversionRate"
         );
     }

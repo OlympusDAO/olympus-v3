@@ -455,7 +455,12 @@ contract DepositRedemptionVaultTest is Test {
 
         // Mint the receipt token to the user
         vm.prank(user_);
-        (,_previousDepositActualAmount) = cdFacility.deposit(asset_, depositPeriod_, amount_, false);
+        (, _previousDepositActualAmount) = cdFacility.deposit(
+            asset_,
+            depositPeriod_,
+            amount_,
+            false
+        );
 
         // Approve spending of the receipt token
         vm.startPrank(user_);

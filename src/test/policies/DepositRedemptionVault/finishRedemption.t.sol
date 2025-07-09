@@ -401,10 +401,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             iReserveToken,
             PERIOD_MONTHS,
-            _previousDepositActualAmount,
+            RESERVE_TOKEN_AMOUNT, // Includes the redemption
             0,
             yieldClaimed,
-            0
+            COMMITMENT_AMOUNT // Yield deposit position
         );
     }
 
