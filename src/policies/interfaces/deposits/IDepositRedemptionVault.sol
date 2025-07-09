@@ -53,7 +53,8 @@ interface IDepositRedemptionVault {
         address indexed user,
         uint16 indexed redemptionId,
         uint16 indexed loanId,
-        uint256 amount
+        uint256 principal,
+        uint256 interest
     );
 
     event LoanExtended(
@@ -95,10 +96,14 @@ interface IDepositRedemptionVault {
     error RedemptionVault_FacilityNotRegistered(address facility);
 
     // Borrowing Errors
+    error RedemptionVault_MaxLoans(address user, uint16 redemptionId);
+    error RedemptionVault_InterestRateNotSet(address asset);
     error RedemptionVault_BorrowLimitExceeded(uint256 requested, uint256 available);
-    error RedemptionVault_NoActiveLoans(uint16 redemptionId);
-    error RedemptionVault_LoanNotExpired(uint16 redemptionId, uint256 loanId);
-    error RedemptionVault_InvalidLoanId(uint16 redemptionId, uint256 loanId);
+    error RedemptionVault_NoActiveLoans(address user, uint16 redemptionId);
+    error RedemptionVault_LoanAlreadyDefaulted(address user, uint16 redemptionId, uint256 loanId);
+    error RedemptionVault_LoanExpired(address user, uint16 redemptionId, uint256 loanId);
+    error RedemptionVault_LoanNotExpired(address user, uint16 redemptionId, uint256 loanId);
+    error RedemptionVault_InvalidLoanId(address user, uint16 redemptionId, uint256 loanId);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -122,13 +127,11 @@ interface IDepositRedemptionVault {
     /// @param  principal       The principal amount borrowed
     /// @param  interest        The interest amount
     /// @param  dueDate         The timestamp when the loan is due
-    /// @param  facility        The facility that handled this borrowing
     /// @param  isDefaulted     Whether the loan has defaulted
     struct Loan {
         uint256 principal;
         uint256 interest;
         uint48 dueDate;
-        address facility;
         bool isDefaulted;
     }
 
@@ -202,46 +205,65 @@ interface IDepositRedemptionVault {
     // ========== BORROWING FUNCTIONS ========== //
 
     /// @notice Borrow against an active redemption
-    /// @param redemptionId_ The ID of the redemption to borrow against
-    /// @param amount_ The amount to borrow
-    /// @param facility_ The facility to handle this borrowing
-    /// @return loanId The ID of the created loan
+    ///
+    /// @param redemptionId_    The ID of the redemption to borrow against
+    /// @param amount_          The amount to borrow
+    /// @return loanId          The ID of the created loan
     function borrowAgainstRedemption(
         uint16 redemptionId_,
-        uint256 amount_,
-        address facility_
-    ) external returns (uint256 loanId);
+        uint256 amount_
+    ) external returns (uint16 loanId);
 
-    /// @notice Repay a loan (FIFO order)
-    /// @param redemptionId_ The ID of the redemption
-    /// @param amount_ The amount to repay
-    function repayBorrow(uint16 redemptionId_, uint256 amount_) external;
+    /// @notice Repay a loan
+    ///
+    /// @param redemptionId_    The ID of the redemption
+    /// @param loanId_          The ID of the loan to repay
+    /// @param amount_          The amount to repay
+    function repayBorrow(uint16 redemptionId_, uint16 loanId_, uint256 amount_) external;
 
     /// @notice Extend a loan's due date
-    /// @param redemptionId_ The ID of the redemption
-    /// @param loanId_ The ID of the loan to extend
-    /// @param newDueDate_ The new due date
-    function extendLoan(uint16 redemptionId_, uint256 loanId_, uint48 newDueDate_) external;
+    ///
+    /// @param redemptionId_    The ID of the redemption
+    /// @param loanId_          The ID of the loan to extend
+    /// @param months_          The number of months to extend the loan
+    function extendLoan(uint16 redemptionId_, uint16 loanId_, uint8 months_) external;
 
     /// @notice Handle loan default
-    /// @param redemptionId_ The ID of the redemption
-    /// @param loanId_ The ID of the loan to default
-    function handleLoanDefault(uint16 redemptionId_, uint256 loanId_) external;
+    ///
+    /// @param user_            The address of the user
+    /// @param redemptionId_    The ID of the redemption
+    /// @param loanId_          The ID of the loan to default
+    function handleLoanDefault(address user_, uint16 redemptionId_, uint16 loanId_) external;
 
     // ========== BORROWING VIEW FUNCTIONS ========== //
 
     /// @notice Get the available borrow amount for a redemption
-    /// @param redemptionId_ The ID of the redemption
-    /// @return The available borrow amount
-    function getAvailableBorrowForRedemption(uint16 redemptionId_) external view returns (uint256);
+    ///
+    /// @param user_                The address of the user
+    /// @param redemptionId_        The ID of the redemption
+    /// @return borrowableAmount    The available borrow amount
+    function getAvailableBorrowForRedemption(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (uint256 borrowableAmount);
 
     /// @notice Get all loans for a redemption
-    /// @param redemptionId_ The ID of the redemption
-    /// @return Array of loans
-    function getRedemptionLoans(uint16 redemptionId_) external view returns (Loan[] memory);
+    ///
+    /// @param user_            The address of the user
+    /// @param redemptionId_    The ID of the redemption
+    /// @return loans           Array of loans
+    function getRedemptionLoans(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (Loan[] memory loans);
 
     /// @notice Get the total borrowed amount for a redemption
-    /// @param redemptionId_ The ID of the redemption
-    /// @return The total borrowed amount
-    function getTotalBorrowedForRedemption(uint16 redemptionId_) external view returns (uint256);
+    ///
+    /// @param user_            The address of the user
+    /// @param redemptionId_    The ID of the redemption
+    /// @return totalBorrowed   The total borrowed amount
+    function getTotalBorrowedForRedemption(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (uint256 totalBorrowed);
 }

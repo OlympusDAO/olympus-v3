@@ -61,21 +61,18 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///         A complex key is used to save gas compared to a nested mapping.
     mapping(bytes32 => UserRedemption) internal _userRedemptions;
 
-    /// @notice The amount of deposit tokens that have been committed for redemption per facility
-    /// @dev    This tracks committed deposits per facility for better coordination
-    mapping(address => mapping(address => uint256)) internal _facilityCommittedDeposits;
-
-    /// @notice The total committed deposits per token across all facilities
-    mapping(address => uint256) internal _totalCommittedDeposits;
-
     /// @notice Registered facilities
     EnumerableSet.AddressSet internal _authorizedFacilities;
 
     /// @notice Loans for each redemption
-    mapping(uint16 => Loan[]) internal _redemptionLoans;
+    /// @dev    Use `_getUserRedemptionKey()` to calculate the key for the mapping.
+    ///         A complex key is used to save gas compared to a nested mapping.
+    mapping(bytes32 => Loan[]) internal _redemptionLoans;
 
     /// @notice The total borrowed amount per redemption
-    mapping(uint16 => uint256) internal _totalBorrowedPerRedemption;
+    /// @dev    Use `_getUserRedemptionKey()` to calculate the key for the mapping.
+    ///         A complex key is used to save gas compared to a nested mapping.
+    mapping(bytes32 => uint256) internal _totalBorrowedPerRedemption;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -119,7 +116,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc IDepositRedemptionVault
     function authorizeFacility(address facility_) external onlyAdminRole {
         if (facility_ == address(0)) revert RedemptionVault_InvalidFacility(facility_);
-        if (_authorizedFacilities.contains(facility_)) revert RedemptionVault_FacilityExists(facility_);
+        if (_authorizedFacilities.contains(facility_))
+            revert RedemptionVault_FacilityExists(facility_);
 
         // Validate that the facility implements IDepositFacility (even if it doesn't have the function)
         {
@@ -364,38 +362,53 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== BORROWING FUNCTIONS ========== //
 
+    modifier onlyValidLoanId(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_
+    ) {
+        if (loanId_ >= _redemptionLoans[_getUserRedemptionKey(user_, redemptionId_)].length)
+            revert RedemptionVault_InvalidLoanId(user_, redemptionId_, loanId_);
+        _;
+    }
+
     // NOTE: implementation not reviewed or tested yet
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function will revert if:
+    ///             - The contract is not enabled
+    ///             - The redemption ID is invalid
+    ///             - The facility is not authorized
+    ///             - The amount is 0
+    ///             - The borrow limit is exceeded
+    ///             - The interest rate is not set
     function borrowAgainstRedemption(
         uint16 redemptionId_,
-        uint256 amount_,
-        address facility_
+        uint256 amount_
     )
         external
         nonReentrant
         onlyEnabled
         onlyValidRedemptionId(msg.sender, redemptionId_)
-        onlyValidFacility(facility_)
-        returns (uint256 loanIndex)
+        returns (uint16 loanId)
     {
-        // TODO derive facility from redemption
-
         // Get the redemption
-        UserRedemption storage redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
+        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
+        UserRedemption storage redemption = _userRedemptions[redemptionKey];
+
+        // Check that the facility is still authorized
+        if (!_authorizedFacilities.contains(redemption.facility))
+            revert RedemptionVault_FacilityNotRegistered(redemption.facility);
 
         // Check that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
 
-        // TODO Confirm that the borrow and interest rates are set
-
+        // Check that the borrow limit is not exceeded
         {
             // Use per-asset config
             uint16 borrowPct = maxBorrowPercentage[redemption.depositToken];
             uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
-            uint256 availableBorrow = maxBorrow - _totalBorrowedPerRedemption[redemptionId_];
+            uint256 availableBorrow = maxBorrow - _totalBorrowedPerRedemption[redemptionKey];
             if (amount_ > availableBorrow)
                 revert RedemptionVault_BorrowLimitExceeded(amount_, availableBorrow);
         }
@@ -404,7 +417,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint256 interest;
         {
             uint16 rate = interestRatePerYear[redemption.depositToken];
-            if (rate == 0) rate = 500; // default 5%
+            if (rate == 0) revert RedemptionVault_InterestRateNotSet(redemption.depositToken);
+
             interest = (amount_.mulDiv(rate, ONE_HUNDRED_PERCENT) * redemption.depositPeriod) / 12;
         }
 
@@ -413,19 +427,22 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             principal: amount_,
             interest: interest,
             dueDate: redemption.redeemableAt,
-            facility: facility_,
             isDefaulted: false
         });
 
+        // Check that the max loans per redemption is not exceeded
+        if (_redemptionLoans[redemptionKey].length >= type(uint16).max)
+            revert RedemptionVault_MaxLoans(msg.sender, redemptionId_);
+
         // Add loan to the redemption
-        _redemptionLoans[redemptionId_].push(newLoan);
-        loanIndex = _redemptionLoans[redemptionId_].length - 1;
+        _redemptionLoans[redemptionKey].push(newLoan);
+        loanId = uint16(_redemptionLoans[redemptionKey].length) - 1;
 
         // Update total borrowed
-        _totalBorrowedPerRedemption[redemptionId_] += amount_;
+        _totalBorrowedPerRedemption[redemptionKey] += amount_;
 
         // Delegate to the facility for borrowing
-        IDepositFacility(facility_).handleBorrow(
+        IDepositFacility(redemption.facility).handleBorrow(
             IERC20(redemption.depositToken),
             redemption.depositPeriod,
             amount_,
@@ -433,169 +450,189 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         );
 
         // Emit event
-        emit LoanCreated(msg.sender, redemptionId_, amount_, loanIndex, facility_);
+        emit LoanCreated(msg.sender, redemptionId_, loanId, amount_, redemption.facility);
 
-        return loanIndex;
+        return loanId;
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function repayBorrow(uint16 redemptionId_, uint256 amount_) external nonReentrant onlyEnabled {
+    /// @dev        This function will revert if:
+    ///             - The contract is not enabled
+    ///             - The redemption ID is invalid
+    ///             - The loan ID is invalid
+    ///             - The amount is 0
+    ///             - The loan is repaid
+    function repayBorrow(
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint256 amount_
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(msg.sender, redemptionId_)
+        onlyValidLoanId(msg.sender, redemptionId_, loanId_)
+    {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
+
         // Get the redemption
-        UserRedemption storage redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
+        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
+        UserRedemption memory redemption = _userRedemptions[redemptionKey];
 
-        if (redemption.depositToken == address(0))
-            revert RedemptionVault_InvalidRedemptionId(msg.sender, redemptionId_);
+        // Get the loan
+        Loan storage loan = _redemptionLoans[redemptionKey][loanId_];
 
-        // Get loans for this redemption
-        Loan[] storage loans = _redemptionLoans[redemptionId_];
-        if (loans.length == 0) revert RedemptionVault_NoActiveLoans(redemptionId_);
+        // Validate that the loan is not repaid
+        if (loan.principal == 0)
+            revert RedemptionVault_InvalidLoanId(msg.sender, redemptionId_, loanId_);
 
-        uint256 remainingAmount = amount_;
-        uint256 totalRepaid = 0;
+        // Delegate to the facility for repayment
+        // This will revert if there is an over-payment
+        IDepositFacility(redemption.facility).handleRepay(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            amount_,
+            msg.sender
+        );
 
-        // Repay loans in FIFO order
-        for (uint256 i = 0; i < loans.length && remainingAmount > 0; i++) {
-            if (loans[i].isDefaulted) continue; // Skip defaulted loans
+        // Update loan state
+        // Partial repayment (pay interest first, then principal)
+        uint256 principalRepaid;
+        uint256 interestRepaid;
+        if (amount_ <= loan.interest) {
+            loan.interest -= amount_;
 
-            uint256 loanTotal = loans[i].principal + loans[i].interest;
-            uint256 repayAmount = remainingAmount > loanTotal ? loanTotal : remainingAmount;
+            // Update loan data
+            interestRepaid = amount_;
+        } else {
+            uint256 remainingRepay = amount_ - loan.interest;
+            loan.interest = 0;
+            loan.principal -= remainingRepay;
 
-            if (repayAmount > 0) {
-                // Delegate repayment handling to the facility
-                IDepositFacility(loans[i].facility).handleRepay(
-                    IERC20(redemption.depositToken),
-                    redemption.depositPeriod,
-                    repayAmount,
-                    msg.sender
-                );
+            // Update loan data
+            interestRepaid = loan.interest;
+            principalRepaid = remainingRepay;
 
-                // Update loan state
-                if (repayAmount >= loanTotal) {
-                    // Full repayment
-                    loans[i].principal = 0;
-                    loans[i].interest = 0;
-                } else {
-                    // Partial repayment (pay interest first, then principal)
-                    if (repayAmount <= loans[i].interest) {
-                        loans[i].interest -= repayAmount;
-                    } else {
-                        uint256 remainingRepay = repayAmount - loans[i].interest;
-                        loans[i].interest = 0;
-                        loans[i].principal -= remainingRepay;
-                    }
-                }
-
-                remainingAmount -= repayAmount;
-                totalRepaid += repayAmount;
-
-                emit LoanRepaid(msg.sender, redemptionId_, repayAmount, i);
-            }
+            // Update total principal borrowed
+            _totalBorrowedPerRedemption[redemptionKey] -= principalRepaid;
         }
 
-        // Update total borrowed
-        _totalBorrowedPerRedemption[redemptionId_] -= totalRepaid;
+        // Receipt tokens are not returned here.
+        // They are only returned through cancelRedemption() or finishRedemption().
 
-        // Return receipt tokens if fully repaid
-        if (_totalBorrowedPerRedemption[redemptionId_] == 0) {
-            uint256 receiptTokenId = DEPOSIT_MANAGER.getReceiptTokenId(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod
-            );
-            uint256 receiptTokenBalance = IERC6909(address(DEPOSIT_MANAGER)).balanceOf(
-                address(this),
-                receiptTokenId
-            );
-
-            if (receiptTokenBalance > 0) {
-                IERC6909(address(DEPOSIT_MANAGER)).transfer(
-                    msg.sender,
-                    receiptTokenId,
-                    receiptTokenBalance
-                );
-            }
-        }
+        emit LoanRepaid(msg.sender, redemptionId_, loanId_, principalRepaid, interestRepaid);
     }
 
     /// @inheritdoc IDepositRedemptionVault
     function extendLoan(
         uint16 redemptionId_,
-        uint256 loanIndex_,
-        uint48 newDueDate_
-    ) external onlyEnabled {
+        uint16 loanId_,
+        uint8 months_
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(msg.sender, redemptionId_)
+        onlyValidLoanId(msg.sender, redemptionId_, loanId_)
+    {
+        // Validate that the months is not 0
+        if (months_ == 0) revert RedemptionVault_ZeroAmount();
+
         // Get the redemption
-        UserRedemption storage redemption = _userRedemptions[
+        UserRedemption memory redemption = _userRedemptions[
             _getUserRedemptionKey(msg.sender, redemptionId_)
         ];
 
-        if (redemption.depositToken == address(0))
-            revert RedemptionVault_InvalidRedemptionId(msg.sender, redemptionId_);
+        // Get the loan
+        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
+        Loan storage loan = _redemptionLoans[redemptionKey][loanId_];
 
-        // Get loans for this redemption
-        Loan[] storage loans = _redemptionLoans[redemptionId_];
-        if (loanIndex_ >= loans.length)
-            revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
+        // Check that the loan is not defaulted
+        if (loan.isDefaulted)
+            revert RedemptionVault_LoanExpired(msg.sender, redemptionId_, loanId_);
 
-        Loan storage loan = loans[loanIndex_];
-        if (loan.isDefaulted) revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
+        // Check that the loan is not repaid
+        if (loan.principal == 0)
+            revert RedemptionVault_InvalidLoanId(msg.sender, redemptionId_, loanId_);
 
-        // Update due date
-        loan.dueDate = newDueDate_;
+        // Update due date by the number of months
+        loan.dueDate += months_ * 30 days;
 
-        emit LoanExtended(msg.sender, redemptionId_, loanIndex_, newDueDate_);
+        // Update interest
+        loan.interest +=
+            (loan.principal.mulDiv(
+                interestRatePerYear[redemption.depositToken],
+                ONE_HUNDRED_PERCENT
+            ) * months_) /
+            12;
+
+        emit LoanExtended(msg.sender, redemptionId_, loanId_, loan.dueDate);
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function handleLoanDefault(uint16 redemptionId_, uint256 loanIndex_) external {
-        // Get the redemption
-        UserRedemption storage redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
-
-        if (redemption.depositToken == address(0))
-            revert RedemptionVault_InvalidRedemptionId(msg.sender, redemptionId_);
-
-        // Get loans for this redemption
-        Loan[] storage loans = _redemptionLoans[redemptionId_];
-        if (loanIndex_ >= loans.length)
-            revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
-
-        Loan storage loan = loans[loanIndex_];
-        if (loan.isDefaulted) revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
+    /// @dev        This function will revert if:
+    ///             - The contract is not enabled
+    ///             - The redemption ID is invalid
+    ///             - The loan ID is invalid
+    ///             - The loan is not expired
+    ///             - The loan is already defaulted
+    function handleLoanDefault(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(user_, redemptionId_)
+        onlyValidLoanId(user_, redemptionId_, loanId_)
+    {
+        // Get the redemption and loan
+        UserRedemption storage redemption;
+        Loan storage loan;
+        {
+            bytes32 redemptionKey = _getUserRedemptionKey(user_, redemptionId_);
+            redemption = _userRedemptions[redemptionKey];
+            loan = _redemptionLoans[redemptionKey][loanId_];
+        }
 
         // Check if loan is expired
         if (block.timestamp < loan.dueDate)
-            revert RedemptionVault_LoanNotExpired(redemptionId_, loanIndex_);
+            revert RedemptionVault_LoanNotExpired(user_, redemptionId_, loanId_);
+
+        // Check that the loan is not already defaulted
+        if (loan.isDefaulted)
+            revert RedemptionVault_LoanAlreadyDefaulted(user_, redemptionId_, loanId_);
+
+        // Check that the loan is not repaid
+        if (loan.principal == 0)
+            revert RedemptionVault_InvalidLoanId(user_, redemptionId_, loanId_);
 
         // Mark loan as defaulted
+        uint256 previousPrincipal = loan.principal;
         loan.isDefaulted = true;
+        loan.principal = 0;
+        loan.interest = 0;
 
-        // Calculate collateral to burn (receipt tokens)
-        uint256 collateralToBurn = loan.principal + loan.interest;
-
-        // Burn collateral
-        uint256 receiptTokenId = DEPOSIT_MANAGER.getReceiptTokenId(
+        // Withdraw deposit
+        // This will burn the receipt tokens and return the deposit tokens
+        IDepositFacility(redemption.facility).handleCommitWithdraw(
             IERC20(redemption.depositToken),
-            redemption.depositPeriod
+            redemption.depositPeriod,
+            previousPrincipal,
+            address(this)
         );
-        // TODO burn receipt tokens
-        // DEPOSIT_MANAGER.burn(address(this), receiptTokenId, collateralToBurn);
 
         // Reduce redemption amount
-        redemption.amount -= collateralToBurn;
-
-        // Update committed deposits
-        _facilityCommittedDeposits[redemption.depositToken][
-            redemption.facility
-        ] -= collateralToBurn;
-        _totalCommittedDeposits[redemption.depositToken] -= collateralToBurn;
+        redemption.amount -= previousPrincipal;
 
         // Distribute residual value (keeper reward + treasury)
-        uint16 keeperPct = keeperRewardPercentage;
-        if (keeperPct == 0) keeperPct = 500; // default 5%
-        uint256 keeperReward = collateralToBurn.mulDiv(keeperPct, ONE_HUNDRED_PERCENT);
-        uint256 treasuryAmount = collateralToBurn - keeperReward;
+        uint256 keeperReward = previousPrincipal.mulDiv(
+            keeperRewardPercentage,
+            ONE_HUNDRED_PERCENT
+        );
+        uint256 treasuryAmount = previousPrincipal - keeperReward;
 
         if (keeperReward > 0) {
             ERC20(redemption.depositToken).safeTransfer(msg.sender, keeperReward);
@@ -606,42 +643,57 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         }
 
         emit LoanDefaulted(
+            user_,
             redemptionId_,
-            loanIndex_,
+            loanId_,
             loan.principal,
             loan.interest,
-            collateralToBurn
+            previousPrincipal
         );
-        emit RedemptionAmountDecreased(redemptionId_, collateralToBurn);
+        emit RedemptionCancelled(
+            user_,
+            redemptionId_,
+            address(redemption.depositToken),
+            redemption.depositPeriod,
+            previousPrincipal
+        );
     }
 
     // ========== BORROWING VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IDepositRedemptionVault
-    function getAvailableBorrowForRedemption(uint16 redemptionId_) public view returns (uint256) {
+    function getAvailableBorrowForRedemption(
+        address user_,
+        uint16 redemptionId_
+    ) public view returns (uint256) {
         // Get the redemption
-        UserRedemption memory redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
+        bytes32 redemptionKey = _getUserRedemptionKey(user_, redemptionId_);
+        UserRedemption memory redemption = _userRedemptions[redemptionKey];
 
         if (redemption.depositToken == address(0)) return 0;
 
         // No need to check for the asset in maxBorrowPercentage, as the borrowPct will end up as 0.
         uint16 borrowPct = maxBorrowPercentage[redemption.depositToken];
         uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
-        uint256 totalBorrowed = _totalBorrowedPerRedemption[redemptionId_];
+        uint256 totalBorrowed = _totalBorrowedPerRedemption[redemptionKey];
 
         return totalBorrowed >= maxBorrow ? 0 : maxBorrow - totalBorrowed;
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function getRedemptionLoans(uint16 redemptionId_) external view returns (Loan[] memory) {
-        return _redemptionLoans[redemptionId_];
+    function getRedemptionLoans(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (Loan[] memory) {
+        return _redemptionLoans[_getUserRedemptionKey(user_, redemptionId_)];
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function getTotalBorrowedForRedemption(uint16 redemptionId_) external view returns (uint256) {
-        return _totalBorrowedPerRedemption[redemptionId_];
+    function getTotalBorrowedForRedemption(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (uint256) {
+        return _totalBorrowedPerRedemption[_getUserRedemptionKey(user_, redemptionId_)];
     }
 
     // ========== ADMIN FUNCTIONS ========== //
