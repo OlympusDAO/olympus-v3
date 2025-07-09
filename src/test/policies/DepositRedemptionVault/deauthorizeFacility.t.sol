@@ -7,9 +7,12 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 
 contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVaultTest {
-    address public testFacility = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
-    address public testFacilityTwo = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
-    address public testFacilityThree = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacility =
+        address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacilityTwo =
+        address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacilityThree =
+        address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
 
     event FacilityDeauthorized(address indexed facility);
 

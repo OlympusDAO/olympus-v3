@@ -76,10 +76,6 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
     //  [X] it reverts
 
     function test_contractDisabled_reverts() public {
-        // Disable the redemption vault
-        vm.prank(emergency);
-        redemptionVault.disable("");
-
         // Expect revert
         _expectRevertNotEnabled();
 
@@ -366,6 +362,8 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
     function test_givenYieldClaimed()
         public
         givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
         givenAddressHasYieldDepositPosition(recipient, COMMITMENT_AMOUNT)
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, _previousDepositActualAmount)
         givenVaultAccruesYield(iVault, 1e18)

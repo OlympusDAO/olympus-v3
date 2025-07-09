@@ -6,16 +6,29 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 
+// Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
+
 // Bophades
 import {Kernel, Policy} from "src/Kernel.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 /// @title Base Deposit Facility
 /// @notice Abstract base contract for deposit facilities with shared functionality
 abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility, ReentrancyGuard {
+    using FullMath for uint256;
+    using SafeTransferLib for ERC20;
     using EnumerableSet for EnumerableSet.AddressSet;
+
+    // ========== CONSTANTS ========== //
+
+    /// @notice The number representing 100%
+    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     // ========== STATE VARIABLES ========== //
 
@@ -25,10 +38,15 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @notice Set of authorized operators
     EnumerableSet.AddressSet private _authorizedOperators;
 
+    /// @notice The amount of assets committed
     mapping(IERC20 asset => uint256 committedDeposits) private _assetCommittedDeposits;
 
+    /// @notice The amount of assets committed per operator
     mapping(bytes32 assetOperatorKey => uint256 committedDeposits)
         private _assetOperatorCommittedDeposits;
+
+    /// @notice The TRSRY module
+    TRSRYv1 public TRSRY;
 
     // ========== MODIFIERS ========== //
 
@@ -73,6 +91,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         return _authorizedOperators.contains(operator_);
     }
 
+    /// @inheritdoc IDepositFacility
+    function getOperators() external view returns (address[] memory operators) {
+        return _authorizedOperators.values();
+    }
+
     // ========== CALLBACKS ========== //
 
     function _getCommittedDepositsKey(
@@ -113,7 +136,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function handleCommitCancel(
         IERC20 depositToken_,
-        uint8 depositPeriod_,
+        uint8,
         uint256 amount_
     ) external onlyEnabled onlyAuthorizedOperator {
         // Validate that there are enough committed funds
@@ -170,7 +193,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function handleBorrow(
         IERC20 depositToken_,
-        uint8 depositPeriod_,
+        uint8,
         uint256 amount_,
         address recipient_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
@@ -189,7 +212,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function handleRepay(
         IERC20 depositToken_,
-        uint8 depositPeriod_,
+        uint8,
         uint256 amount_,
         address payer_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
@@ -231,6 +254,93 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     function getCommittedDeposits(IERC20 depositToken_) public view returns (uint256) {
         return _assetCommittedDeposits[depositToken_];
+    }
+
+    // ========== RECLAIM ========== //
+
+    function _validateAvailableDeposits(IERC20 depositToken_, uint256 amount_) internal view {
+        uint256 availableDeposits = getAvailableDeposits(depositToken_);
+
+        if (amount_ > availableDeposits)
+            revert DepositFacility_InsufficientDeposits(amount_, availableDeposits);
+    }
+
+    /// @inheritdoc IDepositFacility
+    function previewReclaim(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) public view onlyEnabled returns (uint256 reclaimed) {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
+        // Validate that there are enough available deposits
+        _validateAvailableDeposits(depositToken_, amount_);
+
+        // This is rounded down to keep assets in the vault, otherwise the contract may end up
+        // in a state where there are not enough of the assets in the vault to redeem/reclaim
+        reclaimed = amount_.mulDiv(
+            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_),
+            ONE_HUNDRED_PERCENT
+        );
+
+        // If the reclaimed amount is 0, revert
+        if (reclaimed == 0) revert DepositFacility_ZeroAmount();
+
+        return reclaimed;
+    }
+
+    /// @inheritdoc IDepositFacility
+    function reclaimFor(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        address recipient_,
+        uint256 amount_
+    ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
+        // Calculate the quantity of deposit token to withdraw and return
+        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
+        uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
+
+        // Withdraw the deposit
+        uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: depositToken_,
+                depositPeriod: depositPeriod_,
+                depositor: msg.sender,
+                recipient: address(this),
+                amount: amount_,
+                isWrapped: false
+            })
+        );
+
+        // Transfer discounted amount of the deposit token to the recipient
+        ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
+
+        // Transfer the remaining deposit tokens to the TRSRY
+        ERC20(address(depositToken_)).safeTransfer(
+            address(TRSRY),
+            actualAmount - discountedAssetsOut
+        );
+
+        // Emit event
+        emit Reclaimed(
+            recipient_,
+            address(depositToken_),
+            depositPeriod_,
+            discountedAssetsOut,
+            actualAmount - discountedAssetsOut
+        );
+
+        return discountedAssetsOut;
+    }
+
+    /// @inheritdoc IDepositFacility
+    function reclaim(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external returns (uint256 reclaimed) {
+        reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
     }
 
     // ========== ERC165 ========== //

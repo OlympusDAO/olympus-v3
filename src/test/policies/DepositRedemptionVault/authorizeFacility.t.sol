@@ -7,8 +7,10 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 
 contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTest {
-    address public testFacility = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
-    address public testFacilityTwo = address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacility =
+        address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
+    address public testFacilityTwo =
+        address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
 
     event FacilityRegistered(address indexed facility);
 

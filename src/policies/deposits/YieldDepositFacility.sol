@@ -25,9 +25,6 @@ import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol
 contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPeriodicTask {
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The TRSRY module.
-    TRSRYv1 public TRSRY;
-
     /// @notice The DEPOS module.
     DEPOSv1 public DEPOS;
 
@@ -44,8 +41,6 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
 
     /// @notice The interval between snapshots in seconds
     uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
-
-    uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
     // ========== SETUP ========== //
 

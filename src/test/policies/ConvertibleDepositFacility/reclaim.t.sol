@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.20;
 
-import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
-import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
-contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
+contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest {
     event Reclaimed(
         address indexed user,
         address indexed depositToken,
@@ -19,7 +19,7 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
     // Helper to call reclaim on the vault, or skip if not implemented
     function _callReclaim(address user_, IERC20 asset_, uint8 period_, uint256 amount_) internal {
         vm.prank(user_);
-        redemptionVault.reclaim(asset_, period_, amount_, cdFacilityAddress);
+        facility.reclaim(asset_, period_, amount_);
     }
 
     // ========== TESTS ========== //
@@ -51,12 +51,12 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
         )
         givenReceiptTokenSpendingIsApproved(
             recipient,
-            address(redemptionVault),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
         // Expect revert
-        _expectRevertRedemptionVaultZeroAmount();
+        _expectRevertZeroAmount();
 
         // Call function
         _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, 0);
@@ -78,7 +78,7 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
         )
         givenReceiptTokenSpendingIsApproved(
             recipient,
-            address(redemptionVault),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -86,7 +86,7 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
         uint256 amount = 1;
 
         // Expect revert
-        _expectRevertRedemptionVaultZeroAmount();
+        _expectRevertZeroAmount();
 
         // Call function
         _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, amount);
@@ -100,15 +100,17 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
     )
         public
         givenLocallyActive
-        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
         givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT)
         givenReceiptTokenSpendingIsApproved(
             recipient,
-            address(redemptionVault),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
+        givenOperatorAuthorized(OPERATOR)
+        givenCommitted(OPERATOR, RESERVE_TOKEN_AMOUNT)
     {
         amount_ = bound(amount_, 1, RESERVE_TOKEN_AMOUNT);
 
@@ -116,9 +118,10 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
         // - The recipient has started redemption for 10e18 via the ConvertibleDepositFacility
         // - DepositManager has 10e18 in deposits from the ConvertibleDepositFacility, of which 10e18 are committed for redemption
         // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
+        // - The recipient has committed 10e18 of funds from the ConvertibleDepositFacility via the OPERATOR
 
         // Expect revert
-        _expectRevertInsufficientAvailableDeposits(amount_, 0);
+        _expectRevertInsufficientDeposits(amount_, 0);
 
         // Call function
         _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, amount_);
@@ -141,7 +144,7 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
     {
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(
-            address(redemptionVault),
+            address(depositManager),
             0,
             RESERVE_TOKEN_AMOUNT
         );
@@ -158,8 +161,6 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
     function test_success()
         public
         givenLocallyActive
-        givenRecipientHasReserveToken
-        givenReserveTokenSpendingIsApprovedByRecipient
         givenAddressHasConvertibleDepositToken(
             recipient,
             iReserveToken,
@@ -168,7 +169,7 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
         )
         givenReceiptTokenSpendingIsApproved(
             recipient,
-            address(redemptionVault),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -205,6 +206,6 @@ contract DepositRedemptionVaultReclaimTest is DepositRedemptionVaultTest {
         );
 
         // Assert that the available deposits are correct (should be 0)
-        // TODO: Use redemptionVault.getAvailableDeposits if needed
+        assertEq(facility.getAvailableDeposits(iReserveToken), 0, "available deposits should be 0");
     }
 }

@@ -11,19 +11,35 @@ interface IDepositFacility {
     // ========== EVENTS ========== //
 
     event OperatorAuthorized(address indexed operator);
+
     event OperatorDeauthorized(address indexed operator);
 
     event AssetCommitted(address indexed asset, address indexed operator, uint256 amount);
+
     event AssetCommitCancelled(address indexed asset, address indexed operator, uint256 amount);
+
     event AssetCommitWithdrawn(address indexed asset, address indexed operator, uint256 amount);
 
+    event Reclaimed(
+        address indexed user,
+        address indexed depositToken,
+        uint8 depositPeriod,
+        uint256 reclaimedAmount,
+        uint256 forfeitedAmount
+    );
+
     // ========== ERRORS ========== //
+
+    error DepositFacility_ZeroAmount();
 
     error DepositFacility_InvalidAddress(address operator);
 
     error DepositFacility_UnauthorizedOperator(address operator);
+
     error DepositFacility_InvalidRedemption();
+
     error DepositFacility_InsufficientDeposits(uint256 requested, uint256 available);
+
     error DepositFacility_InsufficientCommitment(
         address operator,
         uint256 requested,
@@ -33,17 +49,25 @@ interface IDepositFacility {
     // ========== OPERATOR AUTHORIZATION ========== //
 
     /// @notice Authorize an operator (e.g., a redemption vault) to handle actions through this facility
-    /// @param operator_ The address of the operator to authorize
+    ///
+    /// @param  operator_   The address of the operator to authorize
     function authorizeOperator(address operator_) external;
 
     /// @notice Deauthorize an operator
-    /// @param operator_ The address of the operator to deauthorize
+    ///
+    /// @param  operator_   The address of the operator to deauthorize
     function deauthorizeOperator(address operator_) external;
 
     /// @notice Check if an operator is authorized
-    /// @param operator_ The address of the operator to check
-    /// @return True if the operator is authorized
-    function isAuthorizedOperator(address operator_) external view returns (bool);
+    ///
+    /// @param  operator_       The address of the operator to check
+    /// @return isAuthorized    True if the operator is authorized
+    function isAuthorizedOperator(address operator_) external view returns (bool isAuthorized);
+
+    /// @notice Get the list of operators authorized to handle actions through this facility
+    ///
+    /// @return operators   The list of operators
+    function getOperators() external view returns (address[] memory operators);
 
     // ========== REDEMPTION HANDLING ========== //
 
@@ -106,6 +130,55 @@ interface IDepositFacility {
         uint256 amount_,
         address payer_
     ) external returns (uint256 actualAmount);
+
+    // ========== RECLAIM ========== //
+
+    /// @notice Preview the amount of deposit token that would be reclaimed
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Returning the total amount of deposit tokens that would be reclaimed
+    ///
+    /// @param  depositToken_   The address of the deposit token
+    /// @param  depositPeriod_  The period of the deposit in months
+    /// @param  amount_         The amount of deposit tokens to reclaim
+    /// @return reclaimed       The amount of deposit token returned to the caller
+    function previewReclaim(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external view returns (uint256 reclaimed);
+
+    /// @notice Reclaims deposit tokens, after applying a discount
+    ///         Deposit tokens can be reclaimed at any time.
+    ///         The caller is not required to have a position in the facility.
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Burning the receipt tokens
+    ///         - Transferring the deposit token to `recipient_`
+    ///         - Emitting an event
+    ///
+    /// @param  depositToken_   The address of the deposit token
+    /// @param  depositPeriod_  The period of the deposit in months
+    /// @param  recipient_      The address to reclaim the deposit token to
+    /// @param  amount_         The amount of deposit tokens to reclaim
+    /// @return reclaimed       The amount of deposit token returned to the recipient
+    function reclaimFor(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        address recipient_,
+        uint256 amount_
+    ) external returns (uint256 reclaimed);
+
+    /// @notice Reclaims deposit tokens, after applying a discount
+    /// @dev    This variant reclaims the underlying asset to the caller
+    ///
+    /// @param  depositToken_   The address of the deposit token
+    /// @param  depositPeriod_  The period of the deposit in months
+    /// @param  amount_         The amount of deposit tokens to reclaim
+    /// @return reclaimed       The amount of deposit token returned to the caller
+    function reclaim(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external returns (uint256 reclaimed);
 
     // ========== BALANCE QUERIES ========== //
 

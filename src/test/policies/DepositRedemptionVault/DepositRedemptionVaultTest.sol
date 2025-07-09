@@ -455,7 +455,7 @@ contract DepositRedemptionVaultTest is Test {
 
         // Mint the receipt token to the user
         vm.prank(user_);
-        cdFacility.deposit(asset_, depositPeriod_, amount_, false);
+        (,_previousDepositActualAmount) = cdFacility.deposit(asset_, depositPeriod_, amount_, false);
 
         // Approve spending of the receipt token
         vm.startPrank(user_);
@@ -644,14 +644,6 @@ contract DepositRedemptionVaultTest is Test {
         assertEq(redemption.facility, facility_, "facility mismatch");
     }
 
-    function _assertCommittedDeposits(address facility_, uint256 expected_) internal view {
-        assertEq(
-            redemptionVault.getFacilityCommittedDeposits(iReserveToken, facility_),
-            expected_,
-            "committed deposits mismatch"
-        );
-    }
-
     // ========== REVERT HELPERS ========== //
 
     function _expectRoleRevert(bytes32 role_) internal {
@@ -729,7 +721,7 @@ contract DepositRedemptionVaultTest is Test {
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InsufficientAvailableDeposits.selector,
+                IDepositFacility.DepositFacility_InsufficientDeposits.selector,
                 requestedAmount_,
                 availableAmount_
             )

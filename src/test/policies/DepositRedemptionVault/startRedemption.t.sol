@@ -65,7 +65,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
 
         // Assert committed deposits
         assertEq(
-            redemptionVault.getFacilityCommittedDeposits(depositToken_, facility_),
+            cdFacility.getCommittedDeposits(depositToken_, address(redemptionVault)),
             amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
             "committed deposits mismatch"
         );
@@ -249,7 +249,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
 
         // Reclaim the yield deposit via the redemption vault
         vm.prank(recipient);
-        redemptionVault.reclaim(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, cdFacilityAddress);
+        cdFacility.reclaim(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
 
         // At this stage:
         // - The recipient has reclaimed 1e18 via the ConvertibleDepositFacility

@@ -572,12 +572,6 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
-    function _expectRevertRedemptionVaultZeroAmount() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
-        );
-    }
-
     function _expectRevertReceiptTokenInsufficientAllowance(
         address spender_,
         uint256 currentAllowance_,
@@ -615,6 +609,12 @@ contract ConvertibleDepositFacilityTest is Test {
                 IConvertibleDepositFacility.CDF_Unsupported.selector,
                 positionId_
             )
+        );
+    }
+
+    function _expectRevertZeroAmount() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositFacility.DepositFacility_ZeroAmount.selector)
         );
     }
 

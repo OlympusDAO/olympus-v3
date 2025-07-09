@@ -536,12 +536,6 @@ contract YieldDepositFacilityTest is Test {
         );
     }
 
-    function _expectRevertRedemptionVaultZeroAmount() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
-        );
-    }
-
     function _expectRevertReceiptTokenInsufficientAllowance(
         address spender_,
         uint256 currentAllowance_,

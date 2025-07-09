@@ -34,14 +34,6 @@ interface IDepositRedemptionVault {
         uint256 amount
     );
 
-    event Reclaimed(
-        address indexed user,
-        address indexed depositToken,
-        uint8 depositPeriod,
-        uint256 reclaimedAmount,
-        uint256 forfeitedAmount
-    );
-
     // Borrowing Events
     event LoanCreated(
         address indexed user,
@@ -251,79 +243,4 @@ interface IDepositRedemptionVault {
     /// @param redemptionId_ The ID of the redemption
     /// @return The total borrowed amount
     function getTotalBorrowedForRedemption(uint16 redemptionId_) external view returns (uint256);
-
-    // ========== RECLAIM ========== //
-
-    /// @notice Preview the amount of deposit token that would be reclaimed
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Returning the total amount of deposit tokens that would be reclaimed
-    ///
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
-    /// @param  amount_         The amount of deposit tokens to reclaim
-    /// @param  facility_       The facility to handle this reclaim
-    /// @return reclaimed       The amount of deposit token returned to the caller
-    function previewReclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        uint256 amount_,
-        address facility_
-    ) external view returns (uint256 reclaimed);
-
-    /// @notice Reclaims deposit tokens, after applying a discount
-    ///         Deposit tokens can be reclaimed at any time.
-    ///         The caller is not required to have a position in the facility.
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Burning the receipt tokens
-    ///         - Transferring the deposit token to `recipient_`
-    ///         - Emitting an event
-    ///
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
-    /// @param  recipient_      The address to reclaim the deposit token to
-    /// @param  amount_         The amount of deposit tokens to reclaim
-    /// @param  facility_       The facility to handle this reclaim
-    /// @return reclaimed       The amount of deposit token returned to the recipient
-    function reclaimFor(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        address recipient_,
-        uint256 amount_,
-        address facility_
-    ) external returns (uint256 reclaimed);
-
-    /// @notice Reclaims deposit tokens, after applying a discount
-    /// @dev    This variant reclaims the underlying asset to the caller
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
-    /// @param  amount_         The amount of deposit tokens to reclaim
-    /// @param  facility_       The facility to handle this reclaim
-    /// @return reclaimed       The amount of deposit token returned to the caller
-    function reclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        uint256 amount_,
-        address facility_
-    ) external returns (uint256 reclaimed);
-
-    // ========== DEPOSITS ========== //
-
-    /// @notice Returns the amount of deposit tokens that are available to redeem or reclaim
-    function getAvailableDeposits(
-        IERC20 depositToken_
-    ) external view returns (uint256 availableDeposits);
-
-    /// @notice Get the total committed deposits for a specific token and facility
-    /// @param depositToken_ The deposit token to query
-    /// @param facility_ The facility to query
-    /// @return The committed deposits for this facility
-    function getFacilityCommittedDeposits(
-        IERC20 depositToken_,
-        address facility_
-    ) external view returns (uint256);
-
-    /// @notice Get the total committed deposits for a specific token across all facilities
-    /// @param depositToken_ The deposit token to query
-    /// @return The total committed deposits
-    function getTotalCommittedDeposits(IERC20 depositToken_) external view returns (uint256);
 }

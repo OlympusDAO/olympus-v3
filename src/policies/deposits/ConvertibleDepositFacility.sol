@@ -37,9 +37,6 @@ contract ConvertibleDepositFacility is
     /// @notice The DEPOS module.
     DEPOSv1 public DEPOS;
 
-    /// @notice The TRSRY module.
-    TRSRYv1 public TRSRY;
-
     // ========== SETUP ========== //
 
     constructor(

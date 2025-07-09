@@ -244,7 +244,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
 
         // Assert committed deposits are 0
         assertEq(
-            redemptionVault.getFacilityCommittedDeposits(iReserveToken, cdFacilityAddress),
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
             0,
             "committed deposits should be 0"
         );
