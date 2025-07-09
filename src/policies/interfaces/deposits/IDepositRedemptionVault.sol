@@ -34,48 +34,50 @@ interface IDepositRedemptionVault {
         uint256 amount
     );
 
+    event RedemptionAmountDecreased(
+        address indexed user,
+        uint16 indexed redemptionId,
+        uint256 amount
+    );
+
     // Borrowing Events
     event LoanCreated(
         address indexed user,
         uint16 indexed redemptionId,
+        uint16 indexed loanId,
         uint256 amount,
-        uint256 loanIndex,
         address facility
     );
 
     event LoanRepaid(
         address indexed user,
         uint16 indexed redemptionId,
-        uint256 amount,
-        uint256 loanIndex
+        uint16 indexed loanId,
+        uint256 amount
     );
 
     event LoanExtended(
         address indexed user,
         uint16 indexed redemptionId,
-        uint256 loanIndex,
+        uint16 indexed loanId,
         uint256 newDueDate
     );
 
     event LoanDefaulted(
+        address indexed user,
         uint16 indexed redemptionId,
-        uint256 loanIndex,
+        uint16 indexed loanId,
         uint256 principal,
         uint256 interest,
         uint256 collateral
     );
 
-    event RedemptionAmountDecreased(uint16 indexed redemptionId, uint256 amount);
-
-    event FacilityRegistered(address indexed facility);
+    event FacilityAuthorized(address indexed facility);
     event FacilityDeauthorized(address indexed facility);
-    event DepositsCommitted(address indexed token, address indexed facility, uint256 amount);
 
     // ========== ERRORS ========== //
 
     error RedemptionVault_InvalidDepositManager(address depositManager);
-
-    error RedemptionVault_InvalidToken(address depositToken, uint8 depositPeriod);
 
     error RedemptionVault_ZeroAmount();
 
@@ -87,11 +89,6 @@ interface IDepositRedemptionVault {
 
     error RedemptionVault_AlreadyRedeemed(address user, uint16 redemptionId);
 
-    error RedemptionVault_InsufficientAvailableDeposits(
-        uint256 requestedAmount,
-        uint256 availableAmount
-    );
-
     // Facility Authorization
     error RedemptionVault_InvalidFacility(address facility);
     error RedemptionVault_FacilityExists(address facility);
@@ -100,8 +97,8 @@ interface IDepositRedemptionVault {
     // Borrowing Errors
     error RedemptionVault_BorrowLimitExceeded(uint256 requested, uint256 available);
     error RedemptionVault_NoActiveLoans(uint16 redemptionId);
-    error RedemptionVault_LoanNotExpired(uint16 redemptionId, uint256 loanIndex);
-    error RedemptionVault_InvalidLoanIndex(uint16 redemptionId, uint256 loanIndex);
+    error RedemptionVault_LoanNotExpired(uint16 redemptionId, uint256 loanId);
+    error RedemptionVault_InvalidLoanId(uint16 redemptionId, uint256 loanId);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -204,12 +201,12 @@ interface IDepositRedemptionVault {
     /// @param redemptionId_ The ID of the redemption to borrow against
     /// @param amount_ The amount to borrow
     /// @param facility_ The facility to handle this borrowing
-    /// @return loanIndex The index of the created loan
+    /// @return loanId The ID of the created loan
     function borrowAgainstRedemption(
         uint16 redemptionId_,
         uint256 amount_,
         address facility_
-    ) external returns (uint256 loanIndex);
+    ) external returns (uint256 loanId);
 
     /// @notice Repay a loan (FIFO order)
     /// @param redemptionId_ The ID of the redemption
@@ -218,14 +215,14 @@ interface IDepositRedemptionVault {
 
     /// @notice Extend a loan's due date
     /// @param redemptionId_ The ID of the redemption
-    /// @param loanIndex_ The index of the loan to extend
+    /// @param loanId_ The ID of the loan to extend
     /// @param newDueDate_ The new due date
-    function extendLoan(uint16 redemptionId_, uint256 loanIndex_, uint48 newDueDate_) external;
+    function extendLoan(uint16 redemptionId_, uint256 loanId_, uint48 newDueDate_) external;
 
     /// @notice Handle loan default
     /// @param redemptionId_ The ID of the redemption
-    /// @param loanIndex_ The index of the loan to default
-    function handleLoanDefault(uint16 redemptionId_, uint256 loanIndex_) external;
+    /// @param loanId_ The ID of the loan to default
+    function handleLoanDefault(uint16 redemptionId_, uint256 loanId_) external;
 
     // ========== BORROWING VIEW FUNCTIONS ========== //
 

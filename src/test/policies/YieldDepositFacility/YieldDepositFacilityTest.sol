@@ -523,19 +523,6 @@ contract YieldDepositFacilityTest is Test {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
-    function _expectRevertRedemptionVaultInvalidToken(
-        IERC20 asset_,
-        uint8 depositPeriod_
-    ) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
-                address(asset_),
-                depositPeriod_
-            )
-        );
-    }
-
     function _expectRevertReceiptTokenInsufficientAllowance(
         address spender_,
         uint256 currentAllowance_,

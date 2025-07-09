@@ -12,7 +12,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
     address public testFacilityTwo =
         address(new ConvertibleDepositFacility(address(kernel), address(depositManager)));
 
-    event FacilityRegistered(address indexed facility);
+    event FacilityAuthorized(address indexed facility);
 
     // given the caller does not have the admin role
     //  [X] it reverts
@@ -69,13 +69,13 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
     // given the facility is not already registered
     //  [X] it registers the facility
     //  [X] it adds the facility to the facilities array
-    //  [X] it emits a FacilityRegistered event
+    //  [X] it emits a FacilityAuthorized event
     //  [X] it returns true when checking if the facility is registered
 
     function test_success() public givenFacilityIsDeauthorized(cdFacilityAddress) {
         // Expect event
         vm.expectEmit(true, false, false, false);
-        emit FacilityRegistered(cdFacilityAddress);
+        emit FacilityAuthorized(cdFacilityAddress);
 
         // Call function
         vm.prank(admin);
@@ -160,7 +160,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
         // Re-authorize facility
         vm.expectEmit(true, false, false, false);
-        emit FacilityRegistered(cdFacilityAddress);
+        emit FacilityAuthorized(cdFacilityAddress);
 
         vm.prank(admin);
         redemptionVault.authorizeFacility(cdFacilityAddress);

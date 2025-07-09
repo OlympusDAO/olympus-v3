@@ -138,7 +138,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _registeredFacilities[facility_] = true;
         _facilitiesArray.push(facility_);
 
-        emit FacilityRegistered(facility_);
+        emit FacilityAuthorized(facility_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
@@ -547,10 +547,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Get loans for this redemption
         Loan[] storage loans = _redemptionLoans[redemptionId_];
         if (loanIndex_ >= loans.length)
-            revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
+            revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
 
         Loan storage loan = loans[loanIndex_];
-        if (loan.isDefaulted) revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
+        if (loan.isDefaulted) revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
 
         // Update due date
         loan.dueDate = newDueDate_;
@@ -571,10 +571,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Get loans for this redemption
         Loan[] storage loans = _redemptionLoans[redemptionId_];
         if (loanIndex_ >= loans.length)
-            revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
+            revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
 
         Loan storage loan = loans[loanIndex_];
-        if (loan.isDefaulted) revert RedemptionVault_InvalidLoanIndex(redemptionId_, loanIndex_);
+        if (loan.isDefaulted) revert RedemptionVault_InvalidLoanId(redemptionId_, loanIndex_);
 
         // Check if loan is expired
         if (block.timestamp < loan.dueDate)

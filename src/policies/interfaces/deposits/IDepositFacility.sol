@@ -36,8 +36,6 @@ interface IDepositFacility {
 
     error DepositFacility_UnauthorizedOperator(address operator);
 
-    error DepositFacility_InvalidRedemption();
-
     error DepositFacility_InsufficientDeposits(uint256 requested, uint256 available);
 
     error DepositFacility_InsufficientCommitment(
