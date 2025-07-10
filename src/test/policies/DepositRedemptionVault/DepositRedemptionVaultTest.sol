@@ -63,6 +63,7 @@ contract DepositRedemptionVaultTest is Test {
     address public emergency;
     address public admin;
     address public HEART;
+    address public defaultRewardClaimer;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -83,6 +84,7 @@ contract DepositRedemptionVaultTest is Test {
         emergency = makeAddr("EMERGENCY");
         admin = makeAddr("ADMIN");
         HEART = makeAddr("HEART");
+        defaultRewardClaimer = makeAddr("DEFAULT_REWARD_CLAIMER");
 
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
@@ -439,12 +441,12 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
-    modifier givenCommitted(
+    function _startRedemption(
         address user_,
         IERC20 asset_,
         uint8 depositPeriod_,
         uint256 amount_
-    ) {
+    ) internal {
         // Mint reserve tokens to the user
         MockERC20(address(asset_)).mint(user_, amount_);
 
@@ -475,6 +477,20 @@ contract DepositRedemptionVaultTest is Test {
         vm.startPrank(user_);
         redemptionVault.startRedemption(asset_, depositPeriod_, amount_, address(cdFacility));
         vm.stopPrank();
+    }
+
+    modifier givenCommitted(
+        address user_,
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) {
+        _startRedemption(user_, asset_, depositPeriod_, amount_);
+        _;
+    }
+
+    modifier givenCommittedDefault(uint256 amount_) {
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
@@ -547,6 +563,34 @@ contract DepositRedemptionVaultTest is Test {
         vm.startPrank(admin);
         IDepositFacility(facility_).deauthorizeOperator(address(redemptionVault));
         vm.stopPrank();
+        _;
+    }
+
+    modifier givenMaxBorrowPercentage(IERC20 asset_, uint16 percent_) {
+        vm.prank(admin);
+        redemptionVault.setMaxBorrowPercentage(asset_, percent_);
+        _;
+    }
+
+    modifier givenAnnualInterestRate(IERC20 asset_, uint16 rate_) {
+        vm.prank(admin);
+        redemptionVault.setAnnualInterestRate(asset_, rate_);
+        _;
+    }
+
+    modifier givenClaimDefaultRewardPercentage(uint16 percent_) {
+        vm.prank(admin);
+        redemptionVault.setClaimDefaultRewardPercentage(percent_);
+        _;
+    }
+
+    modifier givenLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint256 amount_
+    ) {
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(redemptionId_, amount_);
         _;
     }
 
@@ -646,6 +690,108 @@ contract DepositRedemptionVaultTest is Test {
         assertEq(redemption.depositPeriod, depositPeriod_, "depositPeriod mismatch");
         assertEq(redemption.amount, amount_, "amount mismatch");
         assertEq(redemption.facility, facility_, "facility mismatch");
+    }
+
+    function _assertLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint256 principal_,
+        uint256 interest_,
+        bool isDefaulted_,
+        uint48 dueDate_
+    ) internal view {
+        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
+            user_,
+            redemptionId_
+        );
+
+        assertTrue(loans.length >= loanId_ + 1, "loans length incorrect");
+
+        IDepositRedemptionVault.Loan memory loan = loans[loanId_];
+
+        assertEq(loan.principal, principal_, "principal mismatch");
+        assertEq(loan.interest, interest_, "interest mismatch");
+        assertEq(loan.isDefaulted, isDefaulted_, "isDefaulted mismatch");
+        assertEq(loan.dueDate, dueDate_, "dueDate mismatch");
+    }
+
+    function _assertLoanCount(
+        address user_,
+        uint16 redemptionId_,
+        uint16 expectedCount_
+    ) internal view {
+        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
+            user_,
+            redemptionId_
+        );
+        assertEq(loans.length, expectedCount_, "loans length mismatch");
+    }
+
+    function _assertTotalBorrowed(
+        address user_,
+        uint16 redemptionId_,
+        uint256 expected_
+    ) internal view {
+        assertEq(
+            redemptionVault.getTotalBorrowedForRedemption(user_, redemptionId_),
+            expected_,
+            "totalBorrowed mismatch"
+        );
+    }
+
+    function _assertAvailableBorrow(
+        address user_,
+        uint16 redemptionId_,
+        uint256 expected_
+    ) internal view {
+        assertEq(
+            redemptionVault.getAvailableBorrowForRedemption(user_, redemptionId_),
+            expected_,
+            "availableBorrow mismatch"
+        );
+    }
+
+    function _assertDepositTokenBalances(
+        address user_,
+        uint256 userExpected_,
+        uint256 treasuryExpected_,
+        uint256 claimerExpected_
+    ) internal view {
+        assertEq(reserveToken.balanceOf(user_), userExpected_, "user balance mismatch");
+        assertEq(
+            reserveToken.balanceOf(address(treasury)),
+            treasuryExpected_,
+            "treasury balance mismatch"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(defaultRewardClaimer)),
+            claimerExpected_,
+            "claimer balance mismatch"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(redemptionVault)),
+            0,
+            "redemption vault balance mismatch"
+        );
+        assertEq(reserveToken.balanceOf(address(cdFacility)), 0, "cd facility balance mismatch");
+    }
+
+    function _assertReceiptTokenBalances(
+        address user_,
+        uint256 userExpected_,
+        uint256 redemptionVaultExpected_
+    ) internal view {
+        assertEq(
+            depositManager.balanceOf(user_, receiptTokenId),
+            userExpected_,
+            "user balance mismatch"
+        );
+        assertEq(
+            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            redemptionVaultExpected_,
+            "redemption vault balance mismatch"
+        );
     }
 
     // ========== REVERT HELPERS ========== //
@@ -763,6 +909,35 @@ contract DepositRedemptionVaultTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_InvalidRedemptionId.selector,
+                user_,
+                redemptionId_
+            )
+        );
+    }
+
+    function _expectRevertBorrowLimitExceeded(uint256 amount_, uint256 maxBorrow_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_BorrowLimitExceeded.selector,
+                amount_,
+                maxBorrow_
+            )
+        );
+    }
+
+    function _expectRevertInterestRateNotSet(IERC20 asset_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InterestRateNotSet.selector,
+                address(asset_)
+            )
+        );
+    }
+
+    function _expectRevertMaxLoans(address user_, uint16 redemptionId_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_MaxLoans.selector,
                 user_,
                 redemptionId_
             )
