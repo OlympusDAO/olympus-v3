@@ -247,6 +247,16 @@ interface IDepositRedemptionVault {
         uint16 redemptionId_
     ) external view returns (uint256 borrowableAmount);
 
+    /// @notice Preview the interest payable for extending a loan
+    ///
+    /// @param user_            The address of the user
+    /// @param redemptionId_    The ID of the redemption
+    /// @param loanId_          The ID of the loan to extend
+    /// @param months_          The number of months to extend the loan
+    /// @return newDueDate      The new due date
+    /// @return interestPayable The interest payable upon extension
+    function previewExtendLoan(address user_, uint16 redemptionId_, uint16 loanId_, uint8 months_) external view returns (uint256 newDueDate, uint256 interestPayable);
+
     /// @notice Get all loans for a redemption
     ///
     /// @param user_            The address of the user
@@ -266,4 +276,23 @@ interface IDepositRedemptionVault {
         address user_,
         uint16 redemptionId_
     ) external view returns (uint256 totalBorrowed);
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Set the maximum borrow percentage for an asset
+    ///
+    /// @param asset_   The address of the asset
+    /// @param percent_ The maximum borrow percentage
+    function setMaxBorrowPercentage(IERC20 asset_, uint16 percent_) external;
+
+    /// @notice Set the annual interest rate for an asset
+    ///
+    /// @param asset_   The address of the asset
+    /// @param rate_    The annual interest rate
+    function setAnnualInterestRate(IERC20 asset_, uint16 rate_) external;
+
+    /// @notice Set the reward percentage when a claiming a defaulted loan
+    ///
+    /// @param percent_  The claim default reward percentage
+    function setClaimDefaultRewardPercentage(uint16 percent_) external;
 }

@@ -662,6 +662,15 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     // ========== BORROWING VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IDepositRedemptionVault
+    function previewExtendLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint8 months_
+    ) external view returns (uint256 newDueDate, uint256 interestPayable) {
+    }
+
+    /// @inheritdoc IDepositRedemptionVault
     function getAvailableBorrowForRedemption(
         address user_,
         uint16 redemptionId_
@@ -698,18 +707,21 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    function setMaxBorrowPercentage(address asset, uint16 percent) external onlyAdminRole {
-        require(percent <= 10000, "max 100%");
-        maxBorrowPercentage[asset] = percent;
+    /// @inheritdoc IDepositRedemptionVault
+    function setMaxBorrowPercentage(IERC20 asset_, uint16 percent_) external onlyAdminRole {
+        require(percent_ <= 10000, "max 100%");
+        maxBorrowPercentage[address(asset_)] = percent_;
     }
 
-    function setInterestRatePerYear(address asset, uint16 rate) external onlyAdminRole {
-        interestRatePerYear[asset] = rate;
+    /// @inheritdoc IDepositRedemptionVault
+    function setAnnualInterestRate(IERC20 asset_, uint16 rate_) external onlyAdminRole {
+        interestRatePerYear[address(asset_)] = rate_;
     }
 
-    function setKeeperRewardPercentage(uint16 percent) external onlyAdminRole {
-        require(percent <= 10000, "max 100%");
-        keeperRewardPercentage = percent;
+    /// @inheritdoc IDepositRedemptionVault
+    function setClaimDefaultRewardPercentage(uint16 percent_) external onlyAdminRole {
+        require(percent_ <= 10000, "max 100%");
+        keeperRewardPercentage = percent_;
     }
 
     // ========== ERC165 ========== //
