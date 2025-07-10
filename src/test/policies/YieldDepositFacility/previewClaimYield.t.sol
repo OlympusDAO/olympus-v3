@@ -194,8 +194,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
             POSITION_ID
         );
-        uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
@@ -246,8 +244,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
             POSITION_ID
         );
-        uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
         uint256 expectedYield = 437956204379562030;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
@@ -393,7 +389,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
 
         // Take a rate snapshot
         _takeRateSnapshot();
-        uint256 rateSnapshotConversionRate = vault.convertToAssets(1e18);
 
         // Accrue yield (which would change the rate snapshot)
         _accrueYield(iVault, 1e18);
@@ -420,7 +415,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
             POSITION_ID
         );
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
@@ -520,7 +514,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
             POSITION_ID
         );
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
         uint256 currentConversionRate = iVault.convertToAssets(1e18);
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 0;
