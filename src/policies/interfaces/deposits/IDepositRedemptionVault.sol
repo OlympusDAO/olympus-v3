@@ -255,7 +255,12 @@ interface IDepositRedemptionVault {
     /// @param months_          The number of months to extend the loan
     /// @return newDueDate      The new due date
     /// @return interestPayable The interest payable upon extension
-    function previewExtendLoan(address user_, uint16 redemptionId_, uint16 loanId_, uint8 months_) external view returns (uint256 newDueDate, uint256 interestPayable);
+    function previewExtendLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint8 months_
+    ) external view returns (uint256 newDueDate, uint256 interestPayable);
 
     /// @notice Get all loans for a redemption
     ///

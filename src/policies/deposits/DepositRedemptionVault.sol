@@ -667,8 +667,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint16 redemptionId_,
         uint16 loanId_,
         uint8 months_
-    ) external view returns (uint256 newDueDate, uint256 interestPayable) {
-    }
+    ) external view returns (uint256 newDueDate, uint256 interestPayable) {}
 
     /// @inheritdoc IDepositRedemptionVault
     function getAvailableBorrowForRedemption(
