@@ -462,7 +462,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///             - The loan ID is invalid
     ///             - The amount is 0
     ///             - The loan is repaid
-    function repayBorrow(
+    function repayLoan(
         uint16 redemptionId_,
         uint16 loanId_,
         uint256 amount_
@@ -577,7 +577,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///             - The loan ID is invalid
     ///             - The loan is not expired
     ///             - The loan is already defaulted
-    function handleLoanDefault(
+    function claimDefaultedLoan(
         address user_,
         uint16 redemptionId_,
         uint16 loanId_

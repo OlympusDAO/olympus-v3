@@ -480,7 +480,7 @@ Key functions:
 - `finishRedemption()`: completes redemption through the selected facility
 - `cancelRedemption()`: cancels redemption and returns receipt tokens
 - `borrowAgainstRedemption()`: allows borrowing against active redemptions
-- `repayBorrow()`: handles loan repayment
+- `repayLoan()`: handles loan repayment
 
 The vault coordinates with registered facilities through the `IDepositFacility` interface and maintains centralized state for all redemption operations.
 

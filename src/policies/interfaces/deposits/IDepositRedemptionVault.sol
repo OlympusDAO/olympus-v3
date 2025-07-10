@@ -219,7 +219,7 @@ interface IDepositRedemptionVault {
     /// @param redemptionId_    The ID of the redemption
     /// @param loanId_          The ID of the loan to repay
     /// @param amount_          The amount to repay
-    function repayBorrow(uint16 redemptionId_, uint16 loanId_, uint256 amount_) external;
+    function repayLoan(uint16 redemptionId_, uint16 loanId_, uint256 amount_) external;
 
     /// @notice Extend a loan's due date
     ///
@@ -228,12 +228,12 @@ interface IDepositRedemptionVault {
     /// @param months_          The number of months to extend the loan
     function extendLoan(uint16 redemptionId_, uint16 loanId_, uint8 months_) external;
 
-    /// @notice Handle loan default
+    /// @notice Claim a defaulted loan and collect the reward
     ///
     /// @param user_            The address of the user
     /// @param redemptionId_    The ID of the redemption
     /// @param loanId_          The ID of the loan to default
-    function handleLoanDefault(address user_, uint16 redemptionId_, uint16 loanId_) external;
+    function claimDefaultedLoan(address user_, uint16 redemptionId_, uint16 loanId_) external;
 
     // ========== BORROWING VIEW FUNCTIONS ========== //
 
