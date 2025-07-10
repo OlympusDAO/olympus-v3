@@ -624,12 +624,11 @@ contract DepositRedemptionVaultTest is Test {
     }
 
     function _assertAvailableDeposits(uint256 expected_) internal view {
-        // TODO confirm this
-        // assertEq(
-        //     cdFacility.getAvailableDeposits(iReserveToken),
-        //     expected_,
-        //     "cdFacility.getAvailableDeposits(iReserveToken)"
-        // );
+        assertEq(
+            cdFacility.getAvailableDeposits(iReserveToken),
+            expected_,
+            "cdFacility.getAvailableDeposits(iReserveToken)"
+        );
     }
 
     function _assertRedemption(
