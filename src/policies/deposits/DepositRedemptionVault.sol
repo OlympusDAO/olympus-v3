@@ -397,8 +397,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         UserRedemption storage redemption = _userRedemptions[redemptionKey];
 
         // Check that the facility is still authorized
-        if (!_authorizedFacilities.contains(redemption.facility))
-            revert RedemptionVault_FacilityNotRegistered(redemption.facility);
+        _validateFacility(redemption.facility);
 
         // Check that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
@@ -480,21 +479,18 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         UserRedemption memory redemption = _userRedemptions[redemptionKey];
 
+        // Check that the facility is still authorized
+        _validateFacility(redemption.facility);
+
         // Get the loan
         Loan storage loan = _redemptionLoans[redemptionKey][loanId_];
 
-        // Validate that the loan is not repaid
-        if (loan.principal == 0)
-            revert RedemptionVault_InvalidLoanId(msg.sender, redemptionId_, loanId_);
-
-        // Delegate to the facility for repayment
-        // This will revert if there is an over-payment
-        IDepositFacility(redemption.facility).handleRepay(
-            IERC20(redemption.depositToken),
-            redemption.depositPeriod,
-            amount_,
-            msg.sender
-        );
+        // Validate that the loan is not:
+        // - expired
+        // - defaulted
+        // - fully repaid
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+            revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_, loanId_);
 
         // Update loan state
         // Partial repayment (pay interest first, then principal)
@@ -506,17 +502,43 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             // Update loan data
             interestRepaid = amount_;
         } else {
-            uint256 remainingRepay = amount_ - loan.interest;
-            loan.interest = 0;
-            loan.principal -= remainingRepay;
+            interestRepaid = loan.interest;
+            principalRepaid = amount_ - loan.interest;
+
+            if (principalRepaid > loan.principal)
+                revert RedemptionVault_LoanAmountExceeded(
+                    msg.sender,
+                    redemptionId_,
+                    loanId_,
+                    loan.principal
+                );
 
             // Update loan data
-            interestRepaid = loan.interest;
-            principalRepaid = remainingRepay;
+            loan.interest = 0;
+            loan.principal -= principalRepaid;
 
             // Update total principal borrowed
             _totalBorrowedPerRedemption[redemptionKey] -= principalRepaid;
         }
+
+        // Pull in the deposit tokens from the caller
+        ERC20(redemption.depositToken).safeTransferFrom(msg.sender, address(this), amount_);
+
+        // Delegate to the facility for repayment of principal
+        // This will revert if there is an over-payment
+        if (principalRepaid > 0) {
+            ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), principalRepaid);
+
+            IDepositFacility(redemption.facility).handleRepay(
+                IERC20(redemption.depositToken),
+                redemption.depositPeriod,
+                principalRepaid,
+                address(this)
+            );
+        }
+
+        // Transfer interest to the TRSRY
+        ERC20(redemption.depositToken).safeTransfer(address(TRSRY), interestRepaid);
 
         // Receipt tokens are not returned here.
         // They are only returned through cancelRedemption() or finishRedemption().
@@ -540,32 +562,40 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (months_ == 0) revert RedemptionVault_ZeroAmount();
 
         // Get the redemption
-        UserRedemption memory redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
+        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
+        UserRedemption memory redemption = _userRedemptions[redemptionKey];
+
+        // Check that the facility is still authorized
+        _validateFacility(redemption.facility);
 
         // Get the loan
-        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         Loan storage loan = _redemptionLoans[redemptionKey][loanId_];
 
-        // Check that the loan is not defaulted
-        if (loan.isDefaulted)
-            revert RedemptionVault_LoanExpired(msg.sender, redemptionId_, loanId_);
+        // Validate that the loan is not:
+        // - expired
+        // - defaulted
+        // - fully repaid
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+            revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_, loanId_);
 
-        // Check that the loan is not repaid
-        if (loan.principal == 0)
-            revert RedemptionVault_InvalidLoanId(msg.sender, redemptionId_, loanId_);
+        (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
+            redemption.depositToken,
+            loan.principal,
+            loan.dueDate,
+            months_
+        );
 
         // Update due date by the number of months
-        loan.dueDate += months_ * 30 days;
+        loan.dueDate = newDueDate;
 
-        // Update interest
-        loan.interest +=
-            (loan.principal.mulDiv(
-                interestRatePerYear[redemption.depositToken],
-                ONE_HUNDRED_PERCENT
-            ) * months_) /
-            12;
+        // No need to update the interest payable, as it is collected immediately
+
+        // Transfer the interest from the caller to the TRSRY
+        ERC20(redemption.depositToken).safeTransferFrom(
+            msg.sender,
+            address(TRSRY),
+            interestPayable
+        );
 
         emit LoanExtended(msg.sender, redemptionId_, loanId_, loan.dueDate);
     }
@@ -602,8 +632,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             revert RedemptionVault_LoanNotExpired(user_, redemptionId_, loanId_);
 
         // Check that the loan is not already defaulted
-        if (loan.isDefaulted)
-            revert RedemptionVault_LoanAlreadyDefaulted(user_, redemptionId_, loanId_);
+        if (loan.isDefaulted) revert RedemptionVault_LoanDefaulted(user_, redemptionId_, loanId_);
 
         // Check that the loan is not repaid
         if (loan.principal == 0)
@@ -661,13 +690,52 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== BORROWING VIEW FUNCTIONS ========== //
 
+    function _previewExtendLoan(
+        address asset_,
+        uint256 principal_,
+        uint48 dueDate_,
+        uint8 extensionMonths_
+    ) internal view returns (uint48, uint256) {
+        uint16 interestRate = interestRatePerYear[asset_];
+        if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(asset_);
+
+        uint256 interestPayable = principal_.mulDivUp(
+            uint256(interestRate) * uint256(extensionMonths_),
+            uint256(12) * uint256(ONE_HUNDRED_PERCENT)
+        );
+
+        uint48 newDueDate = dueDate_ + uint48(extensionMonths_) * uint48(30 days);
+
+        return (newDueDate, interestPayable);
+    }
+
     /// @inheritdoc IDepositRedemptionVault
     function previewExtendLoan(
         address user_,
         uint16 redemptionId_,
         uint16 loanId_,
         uint8 months_
-    ) external view returns (uint256 newDueDate, uint256 interestPayable) {}
+    ) external view returns (uint48, uint256) {
+        // Validate that the months is not 0
+        if (months_ == 0) revert RedemptionVault_ZeroAmount();
+
+        // Get the redemption
+        bytes32 redemptionKey = _getUserRedemptionKey(user_, redemptionId_);
+        UserRedemption memory redemption = _userRedemptions[redemptionKey];
+
+        // Get the loan
+        Loan memory loan = _redemptionLoans[redemptionKey][loanId_];
+
+        // Preview the new due date and interest payable
+        (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
+            redemption.depositToken,
+            loan.principal,
+            loan.dueDate,
+            months_
+        );
+
+        return (newDueDate, interestPayable);
+    }
 
     /// @inheritdoc IDepositRedemptionVault
     function getAvailableBorrowForRedemption(

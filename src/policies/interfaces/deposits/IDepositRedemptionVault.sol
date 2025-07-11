@@ -99,8 +99,17 @@ interface IDepositRedemptionVault {
     error RedemptionVault_MaxLoans(address user, uint16 redemptionId);
     error RedemptionVault_InterestRateNotSet(address asset);
     error RedemptionVault_BorrowLimitExceeded(uint256 requested, uint256 available);
-    error RedemptionVault_NoActiveLoans(address user, uint16 redemptionId);
-    error RedemptionVault_LoanAlreadyDefaulted(address user, uint16 redemptionId, uint256 loanId);
+
+    error RedemptionVault_LoanIncorrectState(address user, uint16 redemptionId, uint256 loanId);
+
+    error RedemptionVault_LoanAmountExceeded(
+        address user,
+        uint16 redemptionId,
+        uint256 loanId,
+        uint256 actualAmount
+    );
+
+    error RedemptionVault_LoanDefaulted(address user, uint16 redemptionId, uint256 loanId);
     error RedemptionVault_LoanExpired(address user, uint16 redemptionId, uint256 loanId);
     error RedemptionVault_LoanNotExpired(address user, uint16 redemptionId, uint256 loanId);
     error RedemptionVault_InvalidLoanId(address user, uint16 redemptionId, uint256 loanId);
@@ -260,7 +269,7 @@ interface IDepositRedemptionVault {
         uint16 redemptionId_,
         uint16 loanId_,
         uint8 months_
-    ) external view returns (uint256 newDueDate, uint256 interestPayable);
+    ) external view returns (uint48 newDueDate, uint256 interestPayable);
 
     /// @notice Get all loans for a redemption
     ///

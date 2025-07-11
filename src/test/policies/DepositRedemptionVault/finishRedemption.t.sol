@@ -8,8 +8,6 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTest {
-    uint256 public constant COMMITMENT_AMOUNT = 1e18;
-
     event RedemptionFinished(
         address indexed user,
         uint16 indexed redemptionId,

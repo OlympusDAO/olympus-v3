@@ -6,8 +6,6 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest {
-    uint256 public constant COMMITMENT_AMOUNT = 1e18;
-
     event RedemptionStarted(
         address indexed user,
         uint16 indexed redemptionId,

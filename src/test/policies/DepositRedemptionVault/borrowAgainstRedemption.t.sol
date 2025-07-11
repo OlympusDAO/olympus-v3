@@ -7,8 +7,6 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 
 contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionVaultTest {
-    uint256 public constant COMMITMENT_AMOUNT = 1e18;
-
     event LoanCreated(
         address indexed user,
         uint16 indexed redemptionId,
@@ -83,6 +81,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+        givenMaxBorrowPercentage(iReserveToken, 0)
     {
         // Expect revert
         _expectRevertBorrowLimitExceeded(1, 0);
@@ -99,7 +98,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-        givenMaxBorrowPercentage(iReserveToken, 90e2)
+        givenAnnualInterestRate(iReserveToken, 0)
     {
         // Expect revert
         _expectRevertInterestRateNotSet(iReserveToken);
@@ -116,8 +115,6 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-        givenMaxBorrowPercentage(iReserveToken, 90e2)
-        givenAnnualInterestRate(iReserveToken, 10e2)
     {
         // Create uint16 max number of loans
         for (uint16 i = 0; i < type(uint16).max; i++) {
@@ -142,13 +139,11 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-        givenMaxBorrowPercentage(iReserveToken, 90e2)
-        givenAnnualInterestRate(iReserveToken, 10e2)
     {
-        amount_ = bound(amount_, (COMMITMENT_AMOUNT * 90e2) / 100e2 + 1, type(uint256).max);
+        amount_ = bound(amount_, LOAN_AMOUNT + 1, type(uint256).max);
 
         // Expect revert
-        _expectRevertBorrowLimitExceeded(amount_, (COMMITMENT_AMOUNT * 90e2) / 100e2);
+        _expectRevertBorrowLimitExceeded(amount_, LOAN_AMOUNT);
 
         // Call function
         vm.prank(recipient);
@@ -165,8 +160,6 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         public
         givenLocallyActive
         givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-        givenMaxBorrowPercentage(iReserveToken, 90e2)
-        givenAnnualInterestRate(iReserveToken, 10e2)
         givenLoan(recipient, 0, 8e17)
     {
         amount_ = bound(amount_, 1e17 + 1, type(uint256).max);
@@ -196,8 +189,6 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         public
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
-        givenMaxBorrowPercentage(iReserveToken, 90e2)
-        givenAnnualInterestRate(iReserveToken, 10e2)
         givenLoan(recipient, 0, 8e17)
     {
         amount_ = bound(amount_, 1, 1e17);
@@ -222,7 +213,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         _assertTotalBorrowed(recipient, 0, 8e17 + amount_);
 
         // Assert available borrow
-        _assertAvailableBorrow(recipient, 0, (COMMITMENT_AMOUNT * 90e2) / 100e2 - 8e17 - amount_);
+        _assertAvailableBorrow(recipient, 0, LOAN_AMOUNT - 8e17 - amount_);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(recipient, 8e17 + amount_, 0, 0);
@@ -243,14 +234,8 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
     function test_success(
         uint256 amount_
-    )
-        public
-        givenLocallyActive
-        givenCommittedDefault(COMMITMENT_AMOUNT)
-        givenMaxBorrowPercentage(iReserveToken, 90e2)
-        givenAnnualInterestRate(iReserveToken, 10e2)
-    {
-        amount_ = bound(amount_, 1, (COMMITMENT_AMOUNT * 90e2) / 100e2);
+    ) public givenLocallyActive givenCommittedDefault(COMMITMENT_AMOUNT) {
+        amount_ = bound(amount_, 1, LOAN_AMOUNT);
 
         // Calculations
         uint256 expectedInterest = (amount_ * 10e2 * PERIOD_MONTHS) / (100e2 * 12);
@@ -276,7 +261,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         _assertTotalBorrowed(recipient, 0, amount_);
 
         // Assert available borrow
-        _assertAvailableBorrow(recipient, 0, (COMMITMENT_AMOUNT * 90e2) / 100e2 - amount_);
+        _assertAvailableBorrow(recipient, 0, LOAN_AMOUNT - amount_);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(recipient, amount_, 0, 0);

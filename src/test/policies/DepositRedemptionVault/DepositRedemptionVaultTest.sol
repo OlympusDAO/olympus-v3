@@ -72,6 +72,11 @@ contract DepositRedemptionVaultTest is Test {
     uint8 public constant PERIOD_MONTHS = 6;
     uint48 public constant YIELD_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
+    uint256 public constant COMMITMENT_AMOUNT = 1e18;
+
+    uint16 public constant ANNUAL_INTEREST_RATE = 10e2;
+    uint16 public constant MAX_BORROW_PERCENTAGE = 90e2;
+    uint256 public constant LOAN_AMOUNT = (COMMITMENT_AMOUNT * 90e2) / 100e2;
 
     uint256 internal _previousDepositActualAmount;
 
@@ -199,6 +204,14 @@ contract DepositRedemptionVaultTest is Test {
         vm.prank(admin);
         cdFacility.authorizeOperator(address(redemptionVault));
 
+        // Set the annual interest rate
+        vm.prank(admin);
+        redemptionVault.setAnnualInterestRate(iReserveToken, ANNUAL_INTEREST_RATE);
+
+        // Set the max borrow percentage
+        vm.prank(admin);
+        redemptionVault.setMaxBorrowPercentage(iReserveToken, MAX_BORROW_PERCENTAGE);
+
         // Disable the redemption vault
         vm.prank(admin);
         redemptionVault.disable("");
@@ -229,6 +242,13 @@ contract DepositRedemptionVaultTest is Test {
     modifier givenReserveTokenSpendingIsApprovedByRecipient() {
         vm.startPrank(recipient);
         reserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT);
+        vm.stopPrank();
+        _;
+    }
+
+    modifier givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient() {
+        vm.startPrank(recipient);
+        reserveToken.approve(address(redemptionVault), RESERVE_TOKEN_AMOUNT);
         vm.stopPrank();
         _;
     }
@@ -594,6 +614,51 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
+    modifier givenLoanDefault() {
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0, LOAN_AMOUNT);
+        _;
+    }
+
+    modifier givenLoanExpired(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_
+    ) {
+        vm.warp(block.timestamp + PERIOD_MONTHS * 30 days);
+        _;
+    }
+
+    modifier givenLoanClaimedDefault(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_
+    ) {
+        vm.prank(defaultRewardClaimer);
+        redemptionVault.claimDefaultedLoan(user_, redemptionId_, loanId_);
+        _;
+    }
+
+    function _repayLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint256 amount_
+    ) internal {
+        vm.prank(user_);
+        redemptionVault.repayLoan(redemptionId_, loanId_, amount_);
+    }
+
+    modifier givenLoanRepaid(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint256 amount_
+    ) {
+        _repayLoan(user_, redemptionId_, loanId_, amount_);
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _assertMintApproval(uint256 expected_) internal view {
@@ -915,12 +980,44 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
+    function _expectRevertInvalidLoanId(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InvalidLoanId.selector,
+                user_,
+                redemptionId_,
+                loanId_
+            )
+        );
+    }
+
     function _expectRevertBorrowLimitExceeded(uint256 amount_, uint256 maxBorrow_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_BorrowLimitExceeded.selector,
                 amount_,
                 maxBorrow_
+            )
+        );
+    }
+
+    function _expectRevertBorrowAmountExceeded(
+        address recipient_,
+        uint16 redemptionId_,
+        uint16 loanId_,
+        uint256 borrowAmount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_LoanAmountExceeded.selector,
+                recipient_,
+                redemptionId_,
+                loanId_,
+                borrowAmount_
             )
         );
     }
@@ -942,5 +1039,24 @@ contract DepositRedemptionVaultTest is Test {
                 redemptionId_
             )
         );
+    }
+
+    function _expectRevertLoanIncorrectState(
+        address user_,
+        uint16 redemptionId_,
+        uint16 loanId_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_LoanIncorrectState.selector,
+                user_,
+                redemptionId_,
+                loanId_
+            )
+        );
+    }
+
+    function _expectRevertERC20InsufficientAllowance() internal {
+        vm.expectRevert("TRANSFER_FROM_FAILED");
     }
 }
