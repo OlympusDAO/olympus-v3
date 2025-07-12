@@ -10,6 +10,7 @@ fs_permissions = [
     {access = "read", path = "./src/proposals/addresses.json"},
     {access = "read-write", path = "./src/scripts/env.json"},
 ]
+gas_limit = "18446744073709551615"
 
 # The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
 # solc_version = "0.8.15"
