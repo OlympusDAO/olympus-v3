@@ -37,13 +37,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     // ========== CONFIGURABLE PARAMETERS ========== //
 
     /// @notice Per-asset max borrow percentage (in 100e2, e.g. 8500 = 85%)
-    mapping(address => uint16) public maxBorrowPercentage;
+    mapping(address => uint16) internal _assetMaxBorrowPercentages;
 
     /// @notice Per-asset interest rate (annual, in 100e2, e.g. 500 = 5%)
-    mapping(address => uint16) public interestRatePerYear;
+    mapping(address => uint16) internal _assetAnnualInterestRates;
 
     /// @notice Keeper reward percentage (in 100e2, e.g. 500 = 5%)
-    uint16 public keeperRewardPercentage;
+    uint16 internal _claimDefaultRewardPercentage;
 
     // ========== STATE VARIABLES ========== //
 
@@ -405,7 +405,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Check that the borrow limit is not exceeded
         {
             // Use per-asset config
-            uint16 borrowPct = maxBorrowPercentage[redemption.depositToken];
+            uint16 borrowPct = _assetMaxBorrowPercentages[redemption.depositToken];
             uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
             uint256 availableBorrow = maxBorrow - _totalBorrowedPerRedemption[redemptionKey];
             if (amount_ > availableBorrow)
@@ -415,7 +415,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Interest: annualized, prorated for period
         uint256 interest;
         {
-            uint16 rate = interestRatePerYear[redemption.depositToken];
+            uint16 rate = _assetAnnualInterestRates[redemption.depositToken];
             if (rate == 0) revert RedemptionVault_InterestRateNotSet(redemption.depositToken);
 
             interest = (amount_.mulDiv(rate, ONE_HUNDRED_PERCENT) * redemption.depositPeriod) / 12;
@@ -658,7 +658,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Distribute residual value (keeper reward + treasury)
         uint256 keeperReward = previousPrincipal.mulDiv(
-            keeperRewardPercentage,
+            _claimDefaultRewardPercentage,
             ONE_HUNDRED_PERCENT
         );
         uint256 treasuryAmount = previousPrincipal - keeperReward;
@@ -696,7 +696,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint48 dueDate_,
         uint8 extensionMonths_
     ) internal view returns (uint48, uint256) {
-        uint16 interestRate = interestRatePerYear[asset_];
+        uint16 interestRate = _assetAnnualInterestRates[asset_];
         if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(asset_);
 
         uint256 interestPayable = principal_.mulDivUp(
@@ -749,7 +749,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (redemption.depositToken == address(0)) return 0;
 
         // No need to check for the asset in maxBorrowPercentage, as the borrowPct will end up as 0.
-        uint16 borrowPct = maxBorrowPercentage[redemption.depositToken];
+        uint16 borrowPct = _assetMaxBorrowPercentages[redemption.depositToken];
         uint256 maxBorrow = redemption.amount.mulDiv(borrowPct, ONE_HUNDRED_PERCENT);
         uint256 totalBorrowed = _totalBorrowedPerRedemption[redemptionKey];
 
@@ -775,20 +775,53 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IDepositRedemptionVault
-    function setMaxBorrowPercentage(IERC20 asset_, uint16 percent_) external onlyAdminRole {
-        require(percent_ <= 10000, "max 100%");
-        maxBorrowPercentage[address(asset_)] = percent_;
+    function setMaxBorrowPercentage(
+        IERC20 asset_,
+        uint16 percent_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        if (percent_ > 100e2) revert RedemptionVault_OutOfBounds(percent_);
+
+        _assetMaxBorrowPercentages[address(asset_)] = percent_;
+
+        emit MaxBorrowPercentageSet(address(asset_), percent_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function setAnnualInterestRate(IERC20 asset_, uint16 rate_) external onlyAdminRole {
-        interestRatePerYear[address(asset_)] = rate_;
+    function getMaxBorrowPercentage(IERC20 asset_) external view returns (uint16) {
+        return _assetMaxBorrowPercentages[address(asset_)];
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function setClaimDefaultRewardPercentage(uint16 percent_) external onlyAdminRole {
-        require(percent_ <= 10000, "max 100%");
-        keeperRewardPercentage = percent_;
+    function setAnnualInterestRate(
+        IERC20 asset_,
+        uint16 rate_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        if (rate_ > 100e2) revert RedemptionVault_OutOfBounds(rate_);
+
+        _assetAnnualInterestRates[address(asset_)] = rate_;
+
+        emit AnnualInterestRateSet(address(asset_), rate_);
+    }
+
+    /// @inheritdoc IDepositRedemptionVault
+    function getAnnualInterestRate(IERC20 asset_) external view returns (uint16) {
+        return _assetAnnualInterestRates[address(asset_)];
+    }
+
+    /// @inheritdoc IDepositRedemptionVault
+    function setClaimDefaultRewardPercentage(
+        uint16 percent_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        if (percent_ > 100e2) revert RedemptionVault_OutOfBounds(percent_);
+
+        _claimDefaultRewardPercentage = percent_;
+
+        emit ClaimDefaultRewardPercentageSet(percent_);
+    }
+
+    /// @inheritdoc IDepositRedemptionVault
+    function getClaimDefaultRewardPercentage() external view returns (uint16) {
+        return _claimDefaultRewardPercentage;
     }
 
     // ========== ERC165 ========== //

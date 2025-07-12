@@ -63,6 +63,7 @@ contract DepositRedemptionVaultTest is Test {
     address public emergency;
     address public admin;
     address public HEART;
+    address public manager;
     address public defaultRewardClaimer;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
@@ -89,6 +90,7 @@ contract DepositRedemptionVaultTest is Test {
         emergency = makeAddr("EMERGENCY");
         admin = makeAddr("ADMIN");
         HEART = makeAddr("HEART");
+        manager = makeAddr("MANAGER");
         defaultRewardClaimer = makeAddr("DEFAULT_REWARD_CLAIMER");
 
         ohm = new MockERC20("Olympus", "OHM", 9);
@@ -145,6 +147,7 @@ contract DepositRedemptionVaultTest is Test {
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(cdFacility));
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(ydFacility));
         rolesAdmin.grantRole(bytes32("heart"), HEART);
+        rolesAdmin.grantRole(bytes32("manager"), manager);
 
         // Enable the deposit manager
         vm.prank(admin);
@@ -1058,5 +1061,14 @@ contract DepositRedemptionVaultTest is Test {
 
     function _expectRevertERC20InsufficientAllowance() internal {
         vm.expectRevert("TRANSFER_FROM_FAILED");
+    }
+
+    function _expectRevertOutOfBounds(uint16 rate_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_OutOfBounds.selector,
+                rate_
+            )
+        );
     }
 }

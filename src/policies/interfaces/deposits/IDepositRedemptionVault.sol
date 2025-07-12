@@ -76,6 +76,10 @@ interface IDepositRedemptionVault {
     event FacilityAuthorized(address indexed facility);
     event FacilityDeauthorized(address indexed facility);
 
+    event AnnualInterestRateSet(address indexed asset, uint16 rate);
+    event MaxBorrowPercentageSet(address indexed asset, uint16 percent);
+    event ClaimDefaultRewardPercentageSet(uint16 percent);
+
     // ========== ERRORS ========== //
 
     error RedemptionVault_InvalidDepositManager(address depositManager);
@@ -89,6 +93,8 @@ interface IDepositRedemptionVault {
     error RedemptionVault_TooEarly(address user, uint16 redemptionId, uint48 redeemableAt);
 
     error RedemptionVault_AlreadyRedeemed(address user, uint16 redemptionId);
+
+    error RedemptionVault_OutOfBounds(uint16 rate);
 
     // Facility Authorization
     error RedemptionVault_InvalidFacility(address facility);
@@ -110,7 +116,6 @@ interface IDepositRedemptionVault {
     );
 
     error RedemptionVault_LoanDefaulted(address user, uint16 redemptionId, uint256 loanId);
-    error RedemptionVault_LoanExpired(address user, uint16 redemptionId, uint256 loanId);
     error RedemptionVault_LoanNotExpired(address user, uint16 redemptionId, uint256 loanId);
     error RedemptionVault_InvalidLoanId(address user, uint16 redemptionId, uint256 loanId);
 
@@ -299,14 +304,31 @@ interface IDepositRedemptionVault {
     /// @param percent_ The maximum borrow percentage
     function setMaxBorrowPercentage(IERC20 asset_, uint16 percent_) external;
 
+    /// @notice Get the maximum borrow percentage for an asset
+    ///
+    /// @param asset_   The address of the asset
+    /// @return percent The maximum borrow percentage, in terms of 100e2
+    function getMaxBorrowPercentage(IERC20 asset_) external view returns (uint16 percent);
+
     /// @notice Set the annual interest rate for an asset
     ///
     /// @param asset_   The address of the asset
     /// @param rate_    The annual interest rate
     function setAnnualInterestRate(IERC20 asset_, uint16 rate_) external;
 
+    /// @notice Get the annual interest rate for an asset
+    ///
+    /// @param asset_   The address of the asset
+    /// @return rate    The annual interest rate, in terms of 100e2
+    function getAnnualInterestRate(IERC20 asset_) external view returns (uint16 rate);
+
     /// @notice Set the reward percentage when a claiming a defaulted loan
     ///
     /// @param percent_  The claim default reward percentage
     function setClaimDefaultRewardPercentage(uint16 percent_) external;
+
+    /// @notice Get the claim default reward percentage
+    ///
+    /// @return percent The claim default reward percentage, in terms of 100e2
+    function getClaimDefaultRewardPercentage() external view returns (uint16 percent);
 }
