@@ -607,58 +607,40 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
-    modifier givenLoan(
-        address user_,
-        uint16 redemptionId_,
-        uint256 amount_
-    ) {
+    modifier givenLoan(address user_, uint16 redemptionId_) {
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(redemptionId_, amount_);
+        redemptionVault.borrowAgainstRedemption(redemptionId_);
         _;
     }
 
     modifier givenLoanDefault() {
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, LOAN_AMOUNT);
+        redemptionVault.borrowAgainstRedemption(0);
         _;
     }
 
-    modifier givenLoanExpired(
-        address user_,
-        uint16 redemptionId_,
-        uint16 loanId_
-    ) {
+    modifier givenLoanExpired(address user_, uint16 redemptionId_) {
         vm.warp(block.timestamp + PERIOD_MONTHS * 30 days);
         _;
     }
 
-    modifier givenLoanClaimedDefault(
-        address user_,
-        uint16 redemptionId_,
-        uint16 loanId_
-    ) {
+    modifier givenLoanClaimedDefault(address user_, uint16 redemptionId_) {
         vm.prank(defaultRewardClaimer);
-        redemptionVault.claimDefaultedLoan(user_, redemptionId_, loanId_);
+        redemptionVault.claimDefaultedLoan(user_, redemptionId_);
         _;
     }
 
-    function _repayLoan(
-        address user_,
-        uint16 redemptionId_,
-        uint16 loanId_,
-        uint256 amount_
-    ) internal {
+    function _repayLoan(address user_, uint16 redemptionId_, uint256 amount_) internal {
         vm.prank(user_);
-        redemptionVault.repayLoan(redemptionId_, loanId_, amount_);
+        redemptionVault.repayLoan(redemptionId_, amount_);
     }
 
     modifier givenLoanRepaid(
         address user_,
         uint16 redemptionId_,
-        uint16 loanId_,
         uint256 amount_
     ) {
-        _repayLoan(user_, redemptionId_, loanId_, amount_);
+        _repayLoan(user_, redemptionId_, amount_);
         _;
     }
 
@@ -763,61 +745,21 @@ contract DepositRedemptionVaultTest is Test {
     function _assertLoan(
         address user_,
         uint16 redemptionId_,
-        uint16 loanId_,
         uint256 principal_,
         uint256 interest_,
         bool isDefaulted_,
         uint48 dueDate_
     ) internal view {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(
             user_,
             redemptionId_
         );
 
-        assertTrue(loans.length >= loanId_ + 1, "loans length incorrect");
-
-        IDepositRedemptionVault.Loan memory loan = loans[loanId_];
-
+        assertEq(loan.initialPrincipal, LOAN_AMOUNT, "initialPrincipal mismatch");
         assertEq(loan.principal, principal_, "principal mismatch");
         assertEq(loan.interest, interest_, "interest mismatch");
         assertEq(loan.isDefaulted, isDefaulted_, "isDefaulted mismatch");
         assertEq(loan.dueDate, dueDate_, "dueDate mismatch");
-    }
-
-    function _assertLoanCount(
-        address user_,
-        uint16 redemptionId_,
-        uint16 expectedCount_
-    ) internal view {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            user_,
-            redemptionId_
-        );
-        assertEq(loans.length, expectedCount_, "loans length mismatch");
-    }
-
-    function _assertTotalBorrowed(
-        address user_,
-        uint16 redemptionId_,
-        uint256 expected_
-    ) internal view {
-        assertEq(
-            redemptionVault.getTotalBorrowedForRedemption(user_, redemptionId_),
-            expected_,
-            "totalBorrowed mismatch"
-        );
-    }
-
-    function _assertAvailableBorrow(
-        address user_,
-        uint16 redemptionId_,
-        uint256 expected_
-    ) internal view {
-        assertEq(
-            redemptionVault.getAvailableBorrowForRedemption(user_, redemptionId_),
-            expected_,
-            "availableBorrow mismatch"
-        );
     }
 
     function _assertDepositTokenBalances(
@@ -983,44 +925,36 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
-    function _expectRevertInvalidLoanId(
+    function _expectRevertInvalidLoan(address user_, uint16 redemptionId_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InvalidLoan.selector,
+                user_,
+                redemptionId_
+            )
+        );
+    }
+
+    function _expectRevertLoanAmountExceeded(
         address user_,
         uint16 redemptionId_,
-        uint16 loanId_
-    ) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidLoanId.selector,
-                user_,
-                redemptionId_,
-                loanId_
-            )
-        );
-    }
-
-    function _expectRevertBorrowLimitExceeded(uint256 amount_, uint256 maxBorrow_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_BorrowLimitExceeded.selector,
-                amount_,
-                maxBorrow_
-            )
-        );
-    }
-
-    function _expectRevertBorrowAmountExceeded(
-        address recipient_,
-        uint16 redemptionId_,
-        uint16 loanId_,
-        uint256 borrowAmount_
+        uint256 amount_
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_LoanAmountExceeded.selector,
-                recipient_,
+                user_,
                 redemptionId_,
-                loanId_,
-                borrowAmount_
+                amount_
+            )
+        );
+    }
+
+    function _expectRevertMaxBorrowPercentageNotSet(IERC20 asset_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_MaxBorrowPercentageNotSet.selector,
+                address(asset_)
             )
         );
     }
@@ -1034,27 +968,12 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
-    function _expectRevertMaxLoans(address user_, uint16 redemptionId_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_MaxLoans.selector,
-                user_,
-                redemptionId_
-            )
-        );
-    }
-
-    function _expectRevertLoanIncorrectState(
-        address user_,
-        uint16 redemptionId_,
-        uint16 loanId_
-    ) internal {
+    function _expectRevertLoanIncorrectState(address user_, uint16 redemptionId_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_LoanIncorrectState.selector,
                 user_,
-                redemptionId_,
-                loanId_
+                redemptionId_
             )
         );
     }

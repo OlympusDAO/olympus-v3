@@ -47,7 +47,7 @@ contract DepositManager is
     // [X] ERC6909 migration
     // [X] Rename to receipt tokens
     // [X] ReceiptTokenSupply to depositor supply
-    // [ ] borrowing and repayment of deposited funds
+    // [X] borrowing and repayment of deposited funds
     // [X] consider shifting away from policy
     // [X] consider if asset configuration should require a different role
 
@@ -481,6 +481,49 @@ contract DepositManager is
         emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, params_.amount);
 
         return params_.amount;
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function is only callable by addresses with the deposit operator role
+    function borrowingDefault(
+        BorrowingDefaultParams calldata params_
+    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) {
+        // Validate that the asset is configured
+        if (!_isConfiguredAsset(params_.asset)) revert AssetManager_NotConfigured();
+
+        // Get the borrowing key
+        bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, msg.sender);
+
+        // Check that the operator is not over-paying
+        // This would cause accounting issues
+        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
+        if (currentBorrowed < params_.amount) {
+            revert DepositManager_BorrowedAmountExceeded(
+                address(params_.asset),
+                msg.sender,
+                params_.amount,
+                currentBorrowed
+            );
+        }
+
+        // Burn the receipt tokens from the payer
+        _burn(
+            params_.payer,
+            getReceiptTokenId(params_.asset, params_.depositPeriod),
+            params_.amount,
+            false
+        );
+
+        // Update the asset liabilities for the caller (operator)
+        _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] -= params_.amount;
+
+        // Update the borrowed amount
+        _borrowedAmounts[borrowingKey] -= params_.amount;
+
+        // TODO Update the operator shares
+
+        // Emit event
+        emit BorrowingDefault(address(params_.asset), msg.sender, params_.payer, params_.amount);
     }
 
     /// @inheritdoc IDepositManager

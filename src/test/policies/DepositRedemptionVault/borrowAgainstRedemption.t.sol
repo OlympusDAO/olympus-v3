@@ -10,7 +10,6 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
     event LoanCreated(
         address indexed user,
         uint16 indexed redemptionId,
-        uint16 indexed loanId,
         uint256 amount,
         address facility
     );
@@ -26,7 +25,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 1);
+        redemptionVault.borrowAgainstRedemption(0);
     }
 
     // given the redemption id is invalid
@@ -38,7 +37,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 1);
+        redemptionVault.borrowAgainstRedemption(0);
     }
 
     // given the facility is not authorized
@@ -55,23 +54,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 1);
-    }
-
-    // when the amount is 0
-    //  [X] it reverts
-
-    function test_givenAmountIsZero_reverts()
-        public
-        givenLocallyActive
-        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-    {
-        // Expect revert
-        _expectRevertRedemptionVaultZeroAmount();
-
-        // Call function
-        vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 0);
+        redemptionVault.borrowAgainstRedemption(0);
     }
 
     // given the borrow percentage is 0
@@ -84,11 +67,11 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         givenMaxBorrowPercentage(iReserveToken, 0)
     {
         // Expect revert
-        _expectRevertBorrowLimitExceeded(1, 0);
+        _expectRevertMaxBorrowPercentageNotSet(iReserveToken);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 1);
+        redemptionVault.borrowAgainstRedemption(0);
     }
 
     // given the interest rate is 0
@@ -105,121 +88,24 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 1);
+        redemptionVault.borrowAgainstRedemption(0);
     }
 
-    // given the number of loans exceeds uint16 max
+    // given there is already a loan against the redemption
     //  [X] it reverts
 
-    function test_givenNumberOfLoansExceedsUint16Max_reverts()
-        public
-        givenLocallyActive
-        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-    {
-        // Create uint16 max number of loans
-        for (uint16 i = 0; i < type(uint16).max; i++) {
-            vm.prank(recipient);
-            redemptionVault.borrowAgainstRedemption(0, 1);
-        }
-
-        // Expect revert
-        _expectRevertMaxLoans(recipient, 0);
-
-        // Call function
-        vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, 1);
-    }
-
-    // when the amount is greater than the allowed percentage of the redemption amount
-    //  [X] it reverts
-
-    function test_whenAmountIsGreaterThanMaxBorrow_reverts(
-        uint256 amount_
-    )
-        public
-        givenLocallyActive
-        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-    {
-        amount_ = bound(amount_, LOAN_AMOUNT + 1, type(uint256).max);
-
-        // Expect revert
-        _expectRevertBorrowLimitExceeded(amount_, LOAN_AMOUNT);
-
-        // Call function
-        vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, amount_);
-    }
-
-    // given there is an existing loan
-    //  when the previous amount plus new amount is greater than the allowed percentage of the redemption amount
-    //   [X] it reverts
-
-    function test_givenLoan_whenAmountIsGreaterThanMaxBorrow_reverts(
-        uint256 amount_
-    )
-        public
-        givenLocallyActive
-        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
-        givenLoan(recipient, 0, 8e17)
-    {
-        amount_ = bound(amount_, 1e17 + 1, type(uint256).max);
-
-        // Expect revert
-        _expectRevertBorrowLimitExceeded(amount_, 1e17);
-
-        // Call function
-        vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0, amount_);
-    }
-
-    //  [X] it creates a new loan record
-    //  [X] the due date is the deposit period term in the future from now
-    //  [X] the principal is the amount specified
-    //  [X] the interest is the principal * interest rate * deposit period / 12
-    //  [X] isDefaulted is false
-    //  [X] the loan id is one greater than the previous loan id
-    //  [X] the total borrowed is the sum of the previous amount and the new amount
-    //  [X] it emits a LoanCreated event
-    //  [X] it transfers the deposit tokens to the caller
-    //  [X] the redemption vault retains custody of the receipt tokens
-
-    function test_givenLoan_whenAmountIsLessThanMaxBorrow(
-        uint256 amount_
-    )
+    function test_givenLoanAlreadyExists_reverts()
         public
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
-        givenLoan(recipient, 0, 8e17)
+        givenLoan(recipient, 0)
     {
-        amount_ = bound(amount_, 1, 1e17);
-
-        // Calculations
-        uint256 expectedInterest = (amount_ * 10e2 * PERIOD_MONTHS) / (100e2 * 12);
-        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit LoanCreated(recipient, 0, 1, amount_, address(cdFacility));
+        // Expect revert
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        uint16 loanId = redemptionVault.borrowAgainstRedemption(0, amount_);
-
-        // Assert loan
-        assertEq(loanId, 1, "loan id mismatch");
-        _assertLoan(recipient, 0, 1, amount_, expectedInterest, false, expectedDueDate);
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, 8e17 + amount_);
-
-        // Assert available borrow
-        _assertAvailableBorrow(recipient, 0, LOAN_AMOUNT - 8e17 - amount_);
-
-        // Assert deposit token balances
-        _assertDepositTokenBalances(recipient, 8e17 + amount_, 0, 0);
-
-        // Assert receipt token balances
-        _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+        redemptionVault.borrowAgainstRedemption(0);
     }
 
     // [X] it creates a new loan record
@@ -233,38 +119,32 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
     // [X] the redemption vault retains custody of the receipt tokens
 
     function test_success(
-        uint256 amount_
+        uint48 elapsed_
     ) public givenLocallyActive givenCommittedDefault(COMMITMENT_AMOUNT) {
-        amount_ = bound(amount_, 1, LOAN_AMOUNT);
+        elapsed_ = uint48(bound(elapsed_, 0, PERIOD_MONTHS * 30 days));
+        vm.warp(block.timestamp + elapsed_);
 
         // Calculations
-        uint256 expectedInterest = (amount_ * 10e2 * PERIOD_MONTHS) / (100e2 * 12);
+        uint256 expectedInterest = (LOAN_AMOUNT * 10e2 * PERIOD_MONTHS) / (100e2 * 12);
         uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit LoanCreated(recipient, 0, 0, amount_, address(cdFacility));
+        emit LoanCreated(recipient, 0, LOAN_AMOUNT, address(cdFacility));
 
         vm.startSnapshotGas("borrowAgainstRedemption");
 
         // Call function
         vm.prank(recipient);
-        uint16 loanId = redemptionVault.borrowAgainstRedemption(0, amount_);
+        redemptionVault.borrowAgainstRedemption(0);
 
         vm.stopSnapshotGas();
 
         // Assert loan
-        assertEq(loanId, 0, "loan id mismatch");
-        _assertLoan(recipient, 0, 0, amount_, expectedInterest, false, expectedDueDate);
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, amount_);
-
-        // Assert available borrow
-        _assertAvailableBorrow(recipient, 0, LOAN_AMOUNT - amount_);
+        _assertLoan(recipient, 0, LOAN_AMOUNT, expectedInterest, false, expectedDueDate);
 
         // Assert deposit token balances
-        _assertDepositTokenBalances(recipient, amount_, 0, 0);
+        _assertDepositTokenBalances(recipient, LOAN_AMOUNT, 0, 0);
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);

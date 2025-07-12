@@ -57,6 +57,13 @@ interface IDepositManager is IAssetManager {
         uint256 amount
     );
 
+    event BorrowingDefault(
+        address indexed asset,
+        address indexed operator,
+        address indexed payer,
+        uint256 amount
+    );
+
     // ========== ERRORS ========== //
 
     error DepositManager_Insolvent(address asset, uint256 requiredAssets);
@@ -166,6 +173,19 @@ interface IDepositManager is IAssetManager {
         uint256 amount;
     }
 
+    /// @notice Parameters for borrowing default operations
+    ///
+    /// @param asset           The underlying ERC20 asset
+    /// @param depositPeriod   The deposit period, in months
+    /// @param payer           The address making the default
+    /// @param amount          The amount to default
+    struct BorrowingDefaultParams {
+        IERC20 asset;
+        uint8 depositPeriod;
+        address payer;
+        uint256 amount;
+    }
+
     // ========== BORROWING FUNCTIONS ========== //
 
     /// @notice Borrows funds from deposits
@@ -194,6 +214,14 @@ interface IDepositManager is IAssetManager {
     function borrowingRepay(
         BorrowingRepayParams calldata params_
     ) external returns (uint256 actualAmount);
+
+    /// @notice Defaults on a borrowed amount
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Transferring the underlying asset from the payer to the contract
+    ///         - Updating borrowing state
+    ///         - Checking solvency
+    function borrowingDefault(BorrowingDefaultParams calldata params_) external;
 
     /// @notice Gets the current borrowed amount for an operator
     ///

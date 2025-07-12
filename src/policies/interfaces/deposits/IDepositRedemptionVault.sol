@@ -34,17 +34,10 @@ interface IDepositRedemptionVault {
         uint256 amount
     );
 
-    event RedemptionAmountDecreased(
-        address indexed user,
-        uint16 indexed redemptionId,
-        uint256 amount
-    );
-
     // Borrowing Events
     event LoanCreated(
         address indexed user,
         uint16 indexed redemptionId,
-        uint16 indexed loanId,
         uint256 amount,
         address facility
     );
@@ -52,25 +45,18 @@ interface IDepositRedemptionVault {
     event LoanRepaid(
         address indexed user,
         uint16 indexed redemptionId,
-        uint16 indexed loanId,
         uint256 principal,
         uint256 interest
     );
 
-    event LoanExtended(
-        address indexed user,
-        uint16 indexed redemptionId,
-        uint16 indexed loanId,
-        uint256 newDueDate
-    );
+    event LoanExtended(address indexed user, uint16 indexed redemptionId, uint256 newDueDate);
 
     event LoanDefaulted(
         address indexed user,
         uint16 indexed redemptionId,
-        uint16 indexed loanId,
         uint256 principal,
         uint256 interest,
-        uint256 collateral
+        uint256 remainingCollateral
     );
 
     event FacilityAuthorized(address indexed facility);
@@ -102,22 +88,12 @@ interface IDepositRedemptionVault {
     error RedemptionVault_FacilityNotRegistered(address facility);
 
     // Borrowing Errors
-    error RedemptionVault_MaxLoans(address user, uint16 redemptionId);
     error RedemptionVault_InterestRateNotSet(address asset);
-    error RedemptionVault_BorrowLimitExceeded(uint256 requested, uint256 available);
+    error RedemptionVault_MaxBorrowPercentageNotSet(address asset);
+    error RedemptionVault_LoanAmountExceeded(address user, uint16 redemptionId, uint256 amount);
 
-    error RedemptionVault_LoanIncorrectState(address user, uint16 redemptionId, uint256 loanId);
-
-    error RedemptionVault_LoanAmountExceeded(
-        address user,
-        uint16 redemptionId,
-        uint256 loanId,
-        uint256 actualAmount
-    );
-
-    error RedemptionVault_LoanDefaulted(address user, uint16 redemptionId, uint256 loanId);
-    error RedemptionVault_LoanNotExpired(address user, uint16 redemptionId, uint256 loanId);
-    error RedemptionVault_InvalidLoanId(address user, uint16 redemptionId, uint256 loanId);
+    error RedemptionVault_LoanIncorrectState(address user, uint16 redemptionId);
+    error RedemptionVault_InvalidLoan(address user, uint16 redemptionId);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -138,11 +114,13 @@ interface IDepositRedemptionVault {
 
     /// @notice Data structure for a loan against a redemption
     ///
-    /// @param  principal       The principal amount borrowed
-    /// @param  interest        The interest amount
-    /// @param  dueDate         The timestamp when the loan is due
-    /// @param  isDefaulted     Whether the loan has defaulted
+    /// @param  initialPrincipal    The initial principal amount borrowed
+    /// @param  principal           The principal owed
+    /// @param  interest            The interest owed
+    /// @param  dueDate             The timestamp when the loan is due
+    /// @param  isDefaulted         Whether the loan has defaulted
     struct Loan {
+        uint256 initialPrincipal;
         uint256 principal;
         uint256 interest;
         uint48 dueDate;
@@ -218,83 +196,65 @@ interface IDepositRedemptionVault {
 
     // ========== BORROWING FUNCTIONS ========== //
 
-    /// @notice Borrow against an active redemption
+    /// @notice Borrow the maximum amount against an active redemption
     ///
     /// @param redemptionId_    The ID of the redemption to borrow against
-    /// @param amount_          The amount to borrow
-    /// @return loanId          The ID of the created loan
-    function borrowAgainstRedemption(
-        uint16 redemptionId_,
-        uint256 amount_
-    ) external returns (uint16 loanId);
+    function borrowAgainstRedemption(uint16 redemptionId_) external;
+
+    /// @notice Preview the maximum amount that can be borrowed against an active redemption
+    ///
+    /// @param user_            The address of the user
+    /// @param redemptionId_    The ID of the redemption to borrow against
+    /// @return principal       The principal amount that can be borrowed
+    /// @return interest        The interest amount that will be charged
+    /// @return dueDate         The due date of the loan
+    function previewBorrowAgainstRedemption(
+        address user_,
+        uint16 redemptionId_
+    ) external view returns (uint256 principal, uint256 interest, uint48 dueDate);
 
     /// @notice Repay a loan
     ///
     /// @param redemptionId_    The ID of the redemption
-    /// @param loanId_          The ID of the loan to repay
     /// @param amount_          The amount to repay
-    function repayLoan(uint16 redemptionId_, uint16 loanId_, uint256 amount_) external;
-
-    /// @notice Extend a loan's due date
-    ///
-    /// @param redemptionId_    The ID of the redemption
-    /// @param loanId_          The ID of the loan to extend
-    /// @param months_          The number of months to extend the loan
-    function extendLoan(uint16 redemptionId_, uint16 loanId_, uint8 months_) external;
-
-    /// @notice Claim a defaulted loan and collect the reward
-    ///
-    /// @param user_            The address of the user
-    /// @param redemptionId_    The ID of the redemption
-    /// @param loanId_          The ID of the loan to default
-    function claimDefaultedLoan(address user_, uint16 redemptionId_, uint16 loanId_) external;
-
-    // ========== BORROWING VIEW FUNCTIONS ========== //
-
-    /// @notice Get the available borrow amount for a redemption
-    ///
-    /// @param user_                The address of the user
-    /// @param redemptionId_        The ID of the redemption
-    /// @return borrowableAmount    The available borrow amount
-    function getAvailableBorrowForRedemption(
-        address user_,
-        uint16 redemptionId_
-    ) external view returns (uint256 borrowableAmount);
+    function repayLoan(uint16 redemptionId_, uint256 amount_) external;
 
     /// @notice Preview the interest payable for extending a loan
     ///
     /// @param user_            The address of the user
     /// @param redemptionId_    The ID of the redemption
-    /// @param loanId_          The ID of the loan to extend
     /// @param months_          The number of months to extend the loan
     /// @return newDueDate      The new due date
     /// @return interestPayable The interest payable upon extension
     function previewExtendLoan(
         address user_,
         uint16 redemptionId_,
-        uint16 loanId_,
         uint8 months_
     ) external view returns (uint48 newDueDate, uint256 interestPayable);
+
+    /// @notice Extend a loan's due date
+    ///
+    /// @param redemptionId_    The ID of the redemption
+    /// @param months_          The number of months to extend the loan
+    function extendLoan(uint16 redemptionId_, uint8 months_) external;
+
+    /// @notice Claim a defaulted loan and collect the reward
+    ///
+    /// @param user_            The address of the user
+    /// @param redemptionId_    The ID of the redemption
+    function claimDefaultedLoan(address user_, uint16 redemptionId_) external;
+
+    // ========== BORROWING VIEW FUNCTIONS ========== //
 
     /// @notice Get all loans for a redemption
     ///
     /// @param user_            The address of the user
     /// @param redemptionId_    The ID of the redemption
-    /// @return loans           Array of loans
-    function getRedemptionLoans(
+    /// @return loan            The loan
+    function getRedemptionLoan(
         address user_,
         uint16 redemptionId_
-    ) external view returns (Loan[] memory loans);
-
-    /// @notice Get the total borrowed amount for a redemption
-    ///
-    /// @param user_            The address of the user
-    /// @param redemptionId_    The ID of the redemption
-    /// @return totalBorrowed   The total borrowed amount
-    function getTotalBorrowedForRedemption(
-        address user_,
-        uint16 redemptionId_
-    ) external view returns (uint256 totalBorrowed);
+    ) external view returns (Loan memory loan);
 
     // ========== ADMIN FUNCTIONS ========== //
 

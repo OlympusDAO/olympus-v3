@@ -9,7 +9,6 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     event LoanRepaid(
         address indexed user,
         uint16 indexed redemptionId,
-        uint16 indexed loanId,
         uint256 principal,
         uint256 interest
     );
@@ -25,7 +24,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // given the redemption id is invalid
@@ -37,23 +36,23 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
-    // given the loan id is invalid
+    // given a loan has not been created
     //  [X] it reverts
 
-    function test_givenLoanIdIsInvalid_reverts()
+    function test_givenLoanHasNotBeenCreated_reverts()
         public
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
     {
         // Expect revert
-        _expectRevertInvalidLoanId(recipient, 0, 0);
+        _expectRevertInvalidLoan(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // given the facility is not authorized
@@ -71,7 +70,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // when the amount is 0
@@ -88,7 +87,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 0);
+        redemptionVault.repayLoan(0, 0);
     }
 
     // given the loan has expired
@@ -103,11 +102,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         vm.warp(elapsed_);
 
         // Expect revert
-        _expectRevertLoanIncorrectState(recipient, 0, 0);
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // given the loan is defaulted
@@ -118,15 +117,15 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
         givenLoanDefault
-        givenLoanExpired(recipient, 0, 0)
-        givenLoanClaimedDefault(recipient, 0, 0)
+        givenLoanExpired(recipient, 0)
+        givenLoanClaimedDefault(recipient, 0)
     {
         // Expect revert
-        _expectRevertLoanIncorrectState(recipient, 0, 0);
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // given the loan is already repaid in full
@@ -144,19 +143,16 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
-        uint256 amountToRepay = loans[0].principal + loans[0].interest;
-        _repayLoan(recipient, 0, 0, amountToRepay);
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 amountToRepay = loan.principal + loan.interest;
+        _repayLoan(recipient, 0, amountToRepay);
 
         // Expect revert
-        _expectRevertLoanIncorrectState(recipient, 0, 0);
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // when the amount is greater than the principal and interest owed
@@ -176,18 +172,15 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
-        amount_ = bound(amount_, loans[0].principal + loans[0].interest + 1, RESERVE_TOKEN_AMOUNT);
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        amount_ = bound(amount_, loan.principal + loan.interest + 1, RESERVE_TOKEN_AMOUNT);
 
         // Expect revert
-        _expectRevertBorrowAmountExceeded(recipient, 0, 0, loans[0].principal);
+        _expectRevertLoanAmountExceeded(recipient, 0, loan.principal);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, amount_);
+        redemptionVault.repayLoan(0, amount_);
     }
 
     // given the caller has not approved the redemption vault to spend the deposit tokens
@@ -205,7 +198,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, 1);
+        redemptionVault.repayLoan(0, 1);
     }
 
     // when the amount is less than or equal to the interest owed
@@ -230,37 +223,20 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
-        amount_ = bound(amount_, 1, loans[0].interest);
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        amount_ = bound(amount_, 1, loan.interest);
 
         // Emit event
         vm.expectEmit(true, true, true, true);
-        emit LoanRepaid(recipient, 0, 0, 0, amount_);
+        emit LoanRepaid(recipient, 0, 0, amount_);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, amount_);
+        redemptionVault.repayLoan(0, amount_);
 
         // Assertions
         // Assert loan
-        _assertLoan(
-            recipient,
-            0,
-            0,
-            loans[0].principal,
-            loans[0].interest - amount_,
-            false,
-            loans[0].dueDate
-        );
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, loans[0].principal);
-
-        // Assert available to borrow
-        _assertAvailableBorrow(recipient, 0, 0);
+        _assertLoan(recipient, 0, loan.principal, loan.interest - amount_, false, loan.dueDate);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(
@@ -296,43 +272,26 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             RESERVE_TOKEN_AMOUNT
         )
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
-        principalAmount_ = bound(principalAmount_, 1, loans[0].principal);
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        principalAmount_ = bound(principalAmount_, 1, loan.principal);
 
         // Emit event
         vm.expectEmit(true, true, true, true);
-        emit LoanRepaid(recipient, 0, 0, principalAmount_, loans[0].interest);
+        emit LoanRepaid(recipient, 0, principalAmount_, loan.interest);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.repayLoan(0, 0, principalAmount_ + loans[0].interest);
+        redemptionVault.repayLoan(0, principalAmount_ + loan.interest);
 
         // Assertions
         // Assert loan
-        _assertLoan(
-            recipient,
-            0,
-            0,
-            loans[0].principal - principalAmount_,
-            0,
-            false,
-            loans[0].dueDate
-        );
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, loans[0].principal - principalAmount_);
-
-        // Assert available to borrow
-        _assertAvailableBorrow(recipient, 0, principalAmount_);
+        _assertLoan(recipient, 0, loan.principal - principalAmount_, 0, false, loan.dueDate);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(
             recipient,
-            LOAN_AMOUNT + RESERVE_TOKEN_AMOUNT - principalAmount_ - loans[0].interest,
-            loans[0].interest,
+            LOAN_AMOUNT + RESERVE_TOKEN_AMOUNT - principalAmount_ - loan.interest,
+            loan.interest,
             0
         );
 

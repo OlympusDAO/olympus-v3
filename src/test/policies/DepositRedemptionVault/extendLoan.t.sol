@@ -7,12 +7,7 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {FullMath} from "src/libraries/FullMath.sol";
 
 contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
-    event LoanExtended(
-        address indexed user,
-        uint16 indexed redemptionId,
-        uint16 indexed loanId,
-        uint256 newDueDate
-    );
+    event LoanExtended(address indexed user, uint16 indexed redemptionId, uint256 newDueDate);
 
     // ===== TESTS ===== //
 
@@ -25,7 +20,7 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the redemption id is invalid
@@ -37,23 +32,23 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
-    // given the loan id is invalid
+    // given a loan has not been created
     //  [X] it reverts
 
-    function test_givenLoanIdIsInvalid_reverts()
+    function test_givenLoanHasNotBeenCreated_reverts()
         public
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
     {
         // Expect revert
-        _expectRevertInvalidLoanId(recipient, 0, 0);
+        _expectRevertInvalidLoan(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the facility is not authorized
@@ -71,7 +66,7 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // when the months is 0
@@ -88,7 +83,7 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 0);
+        redemptionVault.extendLoan(0, 0);
     }
 
     // given the loan has expired
@@ -103,11 +98,11 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         vm.warp(elapsed_);
 
         // Expect revert
-        _expectRevertLoanIncorrectState(recipient, 0, 0);
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the loan is defaulted
@@ -118,15 +113,15 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
         givenLoanDefault
-        givenLoanExpired(recipient, 0, 0)
-        givenLoanClaimedDefault(recipient, 0, 0)
+        givenLoanExpired(recipient, 0)
+        givenLoanClaimedDefault(recipient, 0)
     {
         // Expect revert
-        _expectRevertLoanIncorrectState(recipient, 0, 0);
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the loan is repaid
@@ -140,19 +135,16 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenRecipientHasReserveToken
         givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
-        uint256 amountToRepay = loans[0].principal + loans[0].interest;
-        _repayLoan(recipient, 0, 0, amountToRepay);
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 amountToRepay = loan.principal + loan.interest;
+        _repayLoan(recipient, 0, amountToRepay);
 
         // Expect revert
-        _expectRevertLoanIncorrectState(recipient, 0, 0);
+        _expectRevertLoanIncorrectState(recipient, 0);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the annual interest rate is not set
@@ -170,7 +162,7 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the caller has not approved the redemption vault to spend the deposit tokens
@@ -188,7 +180,7 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, 1);
+        redemptionVault.extendLoan(0, 1);
     }
 
     // given the loan interest has been partially repaid
@@ -209,67 +201,45 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenRecipientHasReserveToken
         givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
-        amount_ = bound(amount_, 1, loans[0].interest);
+        amount_ = bound(amount_, 1, loan.interest);
         months_ = uint8(bound(months_, 1, 12));
-        _repayLoan(recipient, 0, 0, amount_);
+        _repayLoan(recipient, 0, amount_);
 
         // Call function
         (uint48 newDueDate, uint256 interestPayable) = redemptionVault.previewExtendLoan(
             recipient,
             0,
-            0,
             months_
         );
 
         // Assert due date
-        assertEq(
-            newDueDate,
-            loans[0].dueDate + uint48(months_) * uint48(30 days),
-            "due date mismatch"
-        );
+        assertEq(newDueDate, loan.dueDate + uint48(months_) * uint48(30 days), "due date mismatch");
 
         // Assert interest payable
         assertEq(
             interestPayable,
-            FullMath.mulDivUp(loans[0].principal, uint256(months_) * 10e2, 12 * 100e2),
+            FullMath.mulDivUp(loan.principal, uint256(months_) * 10e2, 12 * 100e2),
             "interest payable mismatch"
         );
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit LoanExtended(recipient, 0, 0, newDueDate);
+        emit LoanExtended(recipient, 0, newDueDate);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, months_);
+        redemptionVault.extendLoan(0, months_);
 
         // Assertions
         // Assert loan
-        _assertLoan(
-            recipient,
-            0,
-            0,
-            loans[0].principal,
-            loans[0].interest - amount_,
-            false,
-            newDueDate
-        );
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, loans[0].principal);
-
-        // Assert available to borrow
-        _assertAvailableBorrow(recipient, 0, 0);
+        _assertLoan(recipient, 0, loan.principal, loan.interest - amount_, false, newDueDate);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(
             recipient,
-            loans[0].principal + RESERVE_TOKEN_AMOUNT - amount_ - interestPayable,
+            loan.principal + RESERVE_TOKEN_AMOUNT - amount_ - interestPayable,
             amount_ + interestPayable,
             0
         );
@@ -296,15 +266,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenRecipientHasReserveToken
         givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
     {
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
-        principalAmount_ = bound(principalAmount_, 1, loans[0].principal - 1);
+        principalAmount_ = bound(principalAmount_, 1, loan.principal - 1);
         months_ = uint8(bound(months_, 1, 12));
-        _repayLoan(recipient, 0, 0, loans[0].interest + principalAmount_);
-        uint256 remainingPrincipal = loans[0].principal - principalAmount_;
+        _repayLoan(recipient, 0, loan.interest + principalAmount_);
+        uint256 remainingPrincipal = loan.principal - principalAmount_;
 
         // Determine interest to be paid
         uint256 expectedInterest = FullMath.mulDivUp(
@@ -317,47 +284,36 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         (uint48 newDueDate, uint256 interestPayable) = redemptionVault.previewExtendLoan(
             recipient,
             0,
-            0,
             months_
         );
 
         // Assert due date
-        assertEq(
-            newDueDate,
-            loans[0].dueDate + uint48(months_) * uint48(30 days),
-            "due date mismatch"
-        );
+        assertEq(newDueDate, loan.dueDate + uint48(months_) * uint48(30 days), "due date mismatch");
 
         // Assert interest payable
         assertEq(interestPayable, expectedInterest, "interest payable mismatch");
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit LoanExtended(recipient, 0, 0, newDueDate);
+        emit LoanExtended(recipient, 0, newDueDate);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, months_);
+        redemptionVault.extendLoan(0, months_);
 
         // Assertions
         // Assert loan
-        _assertLoan(recipient, 0, 0, remainingPrincipal, 0, false, newDueDate);
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, remainingPrincipal);
-
-        // Assert available to borrow
-        _assertAvailableBorrow(recipient, 0, LOAN_AMOUNT - remainingPrincipal);
+        _assertLoan(recipient, 0, remainingPrincipal, 0, false, newDueDate);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(
             recipient,
-            loans[0].principal +
+            loan.principal +
                 RESERVE_TOKEN_AMOUNT -
                 principalAmount_ -
-                loans[0].interest -
+                loan.interest -
                 expectedInterest,
-            expectedInterest + loans[0].interest,
+            expectedInterest + loan.interest,
             0
         );
 
@@ -383,14 +339,11 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
     {
         months_ = uint8(bound(months_, 1, 12));
 
-        IDepositRedemptionVault.Loan[] memory loans = redemptionVault.getRedemptionLoans(
-            recipient,
-            0
-        );
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
         // Determine interest to be paid
         uint256 expectedInterest = FullMath.mulDivUp(
-            loans[0].principal,
+            loan.principal,
             uint256(months_) * 10e2,
             12 * 100e2
         );
@@ -399,42 +352,31 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         (uint48 newDueDate, uint256 interestPayable) = redemptionVault.previewExtendLoan(
             recipient,
             0,
-            0,
             months_
         );
 
         // Assert due date
-        assertEq(
-            newDueDate,
-            loans[0].dueDate + uint48(months_) * uint48(30 days),
-            "due date mismatch"
-        );
+        assertEq(newDueDate, loan.dueDate + uint48(months_) * uint48(30 days), "due date mismatch");
 
         // Assert interest payable
         assertEq(interestPayable, expectedInterest, "interest payable mismatch");
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit LoanExtended(recipient, 0, 0, newDueDate);
+        emit LoanExtended(recipient, 0, newDueDate);
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.extendLoan(0, 0, months_);
+        redemptionVault.extendLoan(0, months_);
 
         // Assertions
         // Assert loan
-        _assertLoan(recipient, 0, 0, loans[0].principal, loans[0].interest, false, newDueDate);
-
-        // Assert total borrowed
-        _assertTotalBorrowed(recipient, 0, loans[0].principal);
-
-        // Assert available to borrow
-        _assertAvailableBorrow(recipient, 0, 0);
+        _assertLoan(recipient, 0, loan.principal, loan.interest, false, newDueDate);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(
             recipient,
-            loans[0].principal + RESERVE_TOKEN_AMOUNT - expectedInterest,
+            loan.principal + RESERVE_TOKEN_AMOUNT - expectedInterest,
             expectedInterest,
             0
         );
