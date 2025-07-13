@@ -191,9 +191,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
@@ -241,9 +238,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         // Yield/share = 1211204379562043795 - 1155000000000000001 = 56204379562043794 (in terms of assets per share)
         // Actual yield = yield/share * shares
         // Actual yield = 56204379562043794 * 7792207792207792201 / 1e18 = 437956204379562030
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
         uint256 expectedYield = 437956204379562030;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
@@ -412,9 +406,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
@@ -511,10 +502,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
-        uint256 currentConversionRate = iVault.convertToAssets(1e18);
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 0;
 

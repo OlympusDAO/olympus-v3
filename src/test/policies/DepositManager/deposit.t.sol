@@ -471,7 +471,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
     // when the amount is less than one share
     //  [X] it reverts
 
-    function test_whenAmountLessThanOneShare(
+    function test_whenAmountLessThanOneShare_reverts(
         uint256 amount_
     )
         public
@@ -492,7 +492,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
-        (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
+        depositManager.deposit(
             IDepositManager.DepositParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,

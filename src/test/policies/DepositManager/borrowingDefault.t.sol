@@ -27,7 +27,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
+                payer: DEPOSITOR,
                 amount: 1e18
             })
         );
@@ -48,7 +48,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
+                payer: DEPOSITOR,
                 amount: 1e18
             })
         );
@@ -67,7 +67,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
+                payer: DEPOSITOR,
                 amount: 1e18
             })
         );
@@ -93,7 +93,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
+                payer: DEPOSITOR,
                 amount: 1e18
             })
         );
@@ -112,11 +112,12 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenBorrow(1e18)
+        givenDepositorHasApprovedSpendingReceiptToken(previousRecipientBorrowActualAmount)
     {
-        amount_ = bound(amount_, 1e18, 1e18 * 100);
+        amount_ = bound(amount_, 1e18 + 1, 1e18 * 100);
 
         // Expect revert
-        _expectRevertBorrowedAmountExceeded(1e18, 0);
+        _expectRevertBorrowedAmountExceeded(amount_, 1e18);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -124,8 +125,8 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
-                amount: 1e18
+                payer: DEPOSITOR,
+                amount: amount_
             })
         );
     }
@@ -143,7 +144,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenBorrow(1e18)
     {
         // Expect revert
-        _expectRevertERC20InsufficientAllowance();
+        _expectRevertReceiptTokenInsufficientAllowance(0, previousRecipientBorrowActualAmount);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -151,7 +152,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
+                payer: DEPOSITOR,
                 amount: previousRecipientBorrowActualAmount
             })
         );
@@ -174,19 +175,15 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenBorrow(1e18)
-        givenRecipientHasApprovedSpendingAsset(previousRecipientBorrowActualAmount)
+        givenDepositorHasApprovedSpendingReceiptToken(previousRecipientBorrowActualAmount)
     {
         // Calculate amount
-        uint256 oneShareInAssets = vault.previewMint(1);
-        amount_ = bound(amount_, oneShareInAssets, previousRecipientBorrowActualAmount);
+        amount_ = bound(amount_, vault.previewMint(1), previousRecipientBorrowActualAmount);
 
         // Determine the amount of shares that are expected
         uint256 expectedShares;
         {
-            (uint256 beforeShares, uint256 beforeSharesInAssets) = depositManager.getOperatorAssets(
-                iAsset,
-                DEPOSIT_OPERATOR
-            );
+            (uint256 beforeShares, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
 
             // Calculate the amount of shares that will be burned
             // TODO is this going to be accurate, given the amount has already been withdrawn?
@@ -203,7 +200,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit BorrowingDefault(address(iAsset), DEPOSIT_OPERATOR, RECIPIENT, amount_);
+        emit BorrowingDefault(address(iAsset), DEPOSIT_OPERATOR, DEPOSITOR, amount_);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -211,7 +208,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             IDepositManager.BorrowingDefaultParams({
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
-                payer: RECIPIENT,
+                payer: DEPOSITOR,
                 amount: amount_
             })
         );
@@ -220,10 +217,10 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         // Assert receipt token balances
         assertEq(
             depositManager.balanceOf(
-                RECIPIENT,
+                DEPOSITOR,
                 depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD)
             ),
-            MINT_AMOUNT - amount_,
+            previousDepositorDepositActualAmount - amount_,
             "receipt token balance"
         );
 
@@ -244,7 +241,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         // Assert asset liabilities
         assertEq(
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
-            MINT_AMOUNT - amount_,
+            previousDepositorDepositActualAmount - amount_,
             "asset liabilities"
         );
 

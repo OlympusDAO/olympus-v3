@@ -22,8 +22,6 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 /// @title  DepositRedemptionVault
 /// @notice A contract that manages the redemption of receipt tokens with facility coordination and borrowing
 contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnabler, ReentrancyGuard {
@@ -682,14 +680,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // The remainder (20) will be sent to the treasury.
         uint256 previousPrincipal = loan.principal;
         uint256 previousInterest = loan.interest;
-
-        uint256 borrowerRetainedCollateral = loan.initialPrincipal - previousPrincipal; // Repayment amount
         uint256 retainedCollateral = redemption.amount - loan.initialPrincipal; // Buffer amount
-
-        console2.log("redemption.amount", redemption.amount);
-        console2.log("loan.initialPrincipal", loan.initialPrincipal);
-        console2.log("previousPrincipal", previousPrincipal);
-        console2.log("retainedCollateral", retainedCollateral);
 
         // Mark loan as defaulted
         loan.isDefaulted = true;
@@ -705,7 +696,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             retainedCollateral + previousPrincipal
         );
         // Burn the receipt tokens for the principal
-        IERC6909(address(DEPOSIT_MANAGER)).borrowDefault(
+        DEPOSIT_MANAGER.borrowingDefault(
             IDepositManager.BorrowingDefaultParams({
                 asset: IERC20(redemption.depositToken),
                 depositPeriod: redemption.depositPeriod,
