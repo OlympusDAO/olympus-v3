@@ -42,14 +42,12 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param  asset_          The asset to deposit
     /// @param  depositor_      The depositor
     /// @param  amount_         The amount of assets to deposit
-    /// @param  update_         Whether the operator shares should be updated (when borrowing, false)
     /// @return actualAmount    The actual amount of assets redeemable by the shares
     /// @return shares          The number of shares received
     function _depositAsset(
         IERC20 asset_,
         address depositor_,
-        uint256 amount_,
-        bool update_
+        uint256 amount_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
 
@@ -96,7 +94,7 @@ abstract contract BaseAssetManager is IAssetManager {
         if (shares == 0) revert AssetManager_ZeroAmount();
 
         // Update the shares deposited by the caller (operator)
-        if (update_) _operatorShares[_getOperatorKey(asset_, msg.sender)] += shares;
+        _operatorShares[_getOperatorKey(asset_, msg.sender)] += shares;
 
         emit AssetDeposited(address(asset_), depositor_, msg.sender, actualAmount, shares);
         return (actualAmount, shares);
@@ -111,13 +109,11 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param  asset_      The asset to withdraw
     /// @param  depositor_  The depositor
     /// @param  amount_     The amount of assets to withdraw
-    /// @param  update_     Whether the operator shares should be updated (when borrowing, false)
     /// @return shares      The number of shares withdrawn
     function _withdrawAsset(
         IERC20 asset_,
         address depositor_,
-        uint256 amount_,
-        bool update_
+        uint256 amount_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 shares, uint256 assetAmount) {
         // If the vault is the zero address, the asset is idle and kept in this contract
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
@@ -140,7 +136,7 @@ abstract contract BaseAssetManager is IAssetManager {
         if (shares == 0) revert AssetManager_ZeroAmount();
 
         // Update the shares deposited by the caller (operator)
-        if (update_) _operatorShares[_getOperatorKey(asset_, msg.sender)] -= shares;
+        _operatorShares[_getOperatorKey(asset_, msg.sender)] -= shares;
 
         emit AssetWithdrawn(address(asset_), depositor_, msg.sender, assetAmount, shares);
         return (shares, assetAmount);

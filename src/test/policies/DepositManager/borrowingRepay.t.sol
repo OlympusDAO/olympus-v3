@@ -182,6 +182,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     // [X] it returns the actual amount of transferred assets
     // [X] it reduces the borrowed amount by the actual amount repaid
     // [X] it increases the borrowing capacity by the actual amount repaid
+    // [X] it increases the operator shares by the actual amount (in terms of shares) repaid
 
     function test_success(
         uint256 amount_
@@ -230,17 +231,21 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             "borrowing capacity"
         );
 
-        // Operator assets should be the same
+        // Operator assets should be increased
         (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
             iAsset,
             DEPOSIT_OPERATOR
         );
 
-        assertEq(operatorShares, _operatorSharesBefore, "operator shares");
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore + _expectedDepositedShares,
+            "operator shares"
+        );
 
         assertApproxEqAbs(
             operatorSharesInAssets,
-            _operatorSharesInAssetsBefore,
+            _operatorSharesInAssetsBefore + amount_,
             1,
             "operator shares in assets"
         );

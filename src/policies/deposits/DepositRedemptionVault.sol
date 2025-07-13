@@ -518,7 +518,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (principalRepaid > 0) {
             ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), principalRepaid);
 
-            IDepositFacility(redemption.facility).handleRepay(
+            IDepositFacility(redemption.facility).handleLoanRepay(
                 IERC20(redemption.depositToken),
                 redemption.depositPeriod,
                 principalRepaid,
@@ -696,13 +696,11 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             retainedCollateral + previousPrincipal
         );
         // Burn the receipt tokens for the principal
-        DEPOSIT_MANAGER.borrowingDefault(
-            IDepositManager.BorrowingDefaultParams({
-                asset: IERC20(redemption.depositToken),
-                depositPeriod: redemption.depositPeriod,
-                payer: address(this),
-                amount: previousPrincipal
-            })
+        IDepositFacility(redemption.facility).handleLoanDefault(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            previousPrincipal,
+            address(this)
         );
         // Withdraw deposit for retained collateral
         IDepositFacility(redemption.facility).handleCommitWithdraw(

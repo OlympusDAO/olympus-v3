@@ -3,7 +3,7 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepositFacility/ConvertibleDepositFacilityTest.sol";
 
-contract ConvertibleDepositFacilityHandleRepayTest is ConvertibleDepositFacilityTest {
+contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFacilityTest {
     // ========== TESTS ========== //
     // given the contract is disabled
     //  [ ] it reverts
@@ -11,5 +11,5 @@ contract ConvertibleDepositFacilityHandleRepayTest is ConvertibleDepositFacility
     //  [ ] it reverts
     // when the amount is greater than the borrowed amount
     //  [ ] it reverts
-    // [ ] it transfers the tokens to the deposit manager
+    // [ ] it transfers the tokens from the payer to the deposit manager
 }

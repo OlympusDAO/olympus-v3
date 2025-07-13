@@ -122,12 +122,25 @@ interface IDepositFacility {
     /// @param amount_ The amount being repaid
     /// @param payer_ The address making the repayment
     /// @return actualAmount The amount of tokens borrowed
-    function handleRepay(
+    function handleLoanRepay(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
         address payer_
     ) external returns (uint256 actualAmount);
+
+    /// @notice Allows an operator to default on a loan
+    ///
+    /// @param depositToken_ The deposit token being defaulted
+    /// @param depositPeriod_ The deposit period in months
+    /// @param amount_ The amount being defaulted
+    /// @param payer_ The address making the default
+    function handleLoanDefault(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_,
+        address payer_
+    ) external;
 
     // ========== RECLAIM ========== //
 

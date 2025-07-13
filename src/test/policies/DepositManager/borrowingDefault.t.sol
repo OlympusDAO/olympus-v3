@@ -181,17 +181,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         amount_ = bound(amount_, vault.previewMint(1), previousRecipientBorrowActualAmount);
 
         // Determine the amount of shares that are expected
-        uint256 expectedShares;
-        {
-            (uint256 beforeShares, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
-
-            // Calculate the amount of shares that will be burned
-            // TODO is this going to be accurate, given the amount has already been withdrawn?
-            uint256 sharesToBurn = iVault.previewWithdraw(amount_);
-
-            // Calculate the amount of shares that will be retained
-            expectedShares = beforeShares - sharesToBurn;
-        }
+        (, uint256 expectedAssets) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
 
         uint256 expectedBorrowingCapacity = depositManager.getBorrowingCapacity(
             iAsset,
@@ -245,8 +235,8 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             "asset liabilities"
         );
 
-        // Assert operator shares
-        (uint256 shares, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
-        assertEq(shares, expectedShares, "operator shares");
+        // Assert operator assets
+        (, uint256 sharesInAssets) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        assertEq(sharesInAssets, expectedAssets, "operator assets");
     }
 }

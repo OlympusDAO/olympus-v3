@@ -218,9 +218,9 @@ interface IDepositManager is IAssetManager {
     /// @notice Defaults on a borrowed amount
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
-    ///         - Transferring the underlying asset from the payer to the contract
+    ///         - Burning the receipt tokens from the payer for the default amount
     ///         - Updating borrowing state
-    ///         - Checking solvency
+    ///         - Updating liabilities
     function borrowingDefault(BorrowingDefaultParams calldata params_) external;
 
     /// @notice Gets the current borrowed amount for an operator

@@ -163,6 +163,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     //  [X] it returns the actual amount of transferred assets
     //  [X] it increases the borrowed amount by the actual amount withdrawn
     //  [X] it reduces the borrowing capacity by the actual amount withdrawn
+    //  [X] it reduces the operator shares by the actual amount (in terms of shares) withdrawn
 
     function test_givenNoBorrow(
         uint256 amount_
@@ -207,17 +208,21 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             "borrowing capacity"
         );
 
-        // Operator assets should be the same
+        // Operator assets should be reduced
         (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
             iAsset,
             DEPOSIT_OPERATOR
         );
 
-        assertEq(operatorShares, _operatorSharesBefore, "operator shares");
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore - _expectedWithdrawnShares,
+            "operator shares"
+        );
 
         assertApproxEqAbs(
             operatorSharesInAssets,
-            _operatorSharesInAssetsBefore,
+            _operatorSharesInAssetsBefore - amount_,
             1,
             "operator shares in assets"
         );
@@ -288,6 +293,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     // [X] it returns the actual amount of transferred assets
     // [X] it increases the borrowed amount by the actual amount withdrawn
     // [X] it reduces the borrowing capacity by the actual amount withdrawn
+    // [X] it reduces the operator shares by the actual amount (in terms of shares) withdrawn
 
     function test_success(
         uint256 amount_
@@ -341,17 +347,21 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             "borrowing capacity"
         );
 
-        // Operator assets should be the same
+        // Operator assets should be reduced
         (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
             iAsset,
             DEPOSIT_OPERATOR
         );
 
-        assertEq(operatorShares, _operatorSharesBefore, "operator shares");
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore - _expectedWithdrawnShares,
+            "operator shares"
+        );
 
         assertApproxEqAbs(
             operatorSharesInAssets,
-            _operatorSharesInAssetsBefore,
+            _operatorSharesInAssetsBefore - amount_,
             1,
             "operator shares in assets"
         );

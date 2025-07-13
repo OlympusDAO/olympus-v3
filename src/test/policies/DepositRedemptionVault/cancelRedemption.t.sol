@@ -251,6 +251,14 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
     // given there is an open loan position
     //  [ ] it reverts
 
+    // function test_givenLoan_reverts()
+    // public
+    //     givenLocallyActive
+    //     givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT)
+    // {
+
+    // }
+
     // given there is a fully-paid loan position
     //  [ ] it transfers the receipt tokens from the contract to the caller
     //  [ ] it reduces the redemption amount

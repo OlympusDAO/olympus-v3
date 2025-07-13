@@ -210,7 +210,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
-    function handleRepay(
+    function handleLoanRepay(
         IERC20 depositToken_,
         uint8,
         uint256 amount_,
@@ -226,6 +226,25 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                     amount: amount_
                 })
             );
+    }
+
+    /// @inheritdoc IDepositFacility
+    function handleLoanDefault(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_,
+        address payer_
+    ) external onlyEnabled onlyAuthorizedOperator {
+        // Process the default through DepositManager
+        // It will revert if more is being defaulted than borrowed
+        DEPOSIT_MANAGER.borrowingDefault(
+            IDepositManager.BorrowingDefaultParams({
+                asset: depositToken_,
+                depositPeriod: depositPeriod_,
+                payer: payer_,
+                amount: amount_
+            })
+        );
     }
 
     /// @inheritdoc IDepositFacility

@@ -768,23 +768,31 @@ contract DepositRedemptionVaultTest is Test {
         uint256 treasuryExpected_,
         uint256 claimerExpected_
     ) internal view {
-        assertEq(reserveToken.balanceOf(user_), userExpected_, "user balance mismatch");
+        assertEq(
+            reserveToken.balanceOf(user_),
+            userExpected_,
+            "deposit token: user balance mismatch"
+        );
         assertEq(
             reserveToken.balanceOf(address(treasury)),
             treasuryExpected_,
-            "treasury balance mismatch"
+            "deposit token: treasury balance mismatch"
         );
         assertEq(
             reserveToken.balanceOf(address(defaultRewardClaimer)),
             claimerExpected_,
-            "claimer balance mismatch"
+            "deposit token: claimer balance mismatch"
         );
         assertEq(
             reserveToken.balanceOf(address(redemptionVault)),
             0,
-            "redemption vault balance mismatch"
+            "deposit token: redemption vault balance mismatch"
         );
-        assertEq(reserveToken.balanceOf(address(cdFacility)), 0, "cd facility balance mismatch");
+        assertEq(
+            reserveToken.balanceOf(address(cdFacility)),
+            0,
+            "deposit token: cd facility balance mismatch"
+        );
     }
 
     function _assertReceiptTokenBalances(
@@ -795,12 +803,12 @@ contract DepositRedemptionVaultTest is Test {
         assertEq(
             depositManager.balanceOf(user_, receiptTokenId),
             userExpected_,
-            "user balance mismatch"
+            "receipt token: user balance mismatch"
         );
         assertEq(
             depositManager.balanceOf(address(redemptionVault), receiptTokenId),
             redemptionVaultExpected_,
-            "redemption vault balance mismatch"
+            "receipt token: redemption vault balance mismatch"
         );
     }
 

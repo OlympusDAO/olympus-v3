@@ -208,7 +208,11 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         );
 
         // Assert receipt token balances
-        _assertReceiptTokenBalances(recipient, 0, 0);
+        _assertReceiptTokenBalances(
+            recipient,
+            0,
+            principalAmount_ // redemption vault still custodies the repaid amount
+        );
 
         // Assert the redemption amount
         assertEq(

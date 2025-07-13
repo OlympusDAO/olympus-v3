@@ -141,7 +141,7 @@ contract DepositManager is
     {
         // Deposit into vault
         // This will revert if the asset is not configured
-        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount, true);
+        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
 
         // Mint the receipt token to the caller
         receiptTokenId = getReceiptTokenId(params_.asset, params_.depositPeriod);
@@ -175,7 +175,7 @@ contract DepositManager is
         uint256 amount_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
         // Withdraw the funds from the vault
-        (, uint256 actualAmount) = _withdrawAsset(asset_, recipient_, amount_, true);
+        (, uint256 actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
@@ -216,7 +216,7 @@ contract DepositManager is
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
-        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount, true);
+        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         return actualAmount;
     }
@@ -430,7 +430,7 @@ contract DepositManager is
         }
 
         // Withdraw the funds from the vault to the recipient
-        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount, false);
+        (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         // Update borrowed amount
         // This is done after the withdraw, as the actual amount is not known ahead of time
@@ -472,7 +472,7 @@ contract DepositManager is
 
         // Transfer funds from payer to this contract
         // We ignore the actual amount deposited into the vault, as the payer will not be able to over-pay in case of an off-by-one issue
-        _depositAsset(params_.asset, params_.payer, params_.amount, false);
+        _depositAsset(params_.asset, params_.payer, params_.amount);
 
         // Update borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
@@ -520,7 +520,7 @@ contract DepositManager is
         // Update the borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
 
-        // TODO Update the operator shares
+        // No need to update the operator shares, as the balance has already been adjusted upon withdraw/repay
 
         // Emit event
         emit BorrowingDefault(address(params_.asset), msg.sender, params_.payer, params_.amount);
