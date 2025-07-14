@@ -324,12 +324,12 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
-    modifier givenAddressHasConvertibleDepositToken(
+    function _createDeposit(
         address account_,
         IERC20 asset_,
         uint8 depositPeriod_,
         uint256 amount_
-    ) {
+    ) internal returns (uint256) {
         // Mint reserve tokens to the account
         MockERC20(address(asset_)).mint(account_, amount_);
 
@@ -343,6 +343,22 @@ contract DepositRedemptionVaultTest is Test {
         (, uint256 actualAmount) = cdFacility.deposit(asset_, depositPeriod_, amount_, false);
 
         _previousDepositActualAmount = actualAmount;
+
+        return actualAmount;
+    }
+
+    modifier givenAddressHasConvertibleDepositToken(
+        address account_,
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) {
+        _createDeposit(account_, asset_, depositPeriod_, amount_);
+        _;
+    }
+
+    modifier givenAddressHasConvertibleDepositTokenDefault(uint256 amount_) {
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
@@ -995,6 +1011,41 @@ contract DepositRedemptionVaultTest is Test {
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_OutOfBounds.selector,
                 rate_
+            )
+        );
+    }
+
+    function _expectRevertRedemptionVaultUnpaidLoan(address user_, uint16 redemptionId_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_UnpaidLoan.selector,
+                user_,
+                redemptionId_
+            )
+        );
+    }
+
+    function _expectRevertInvalidAmount(
+        address user_,
+        uint16 redemptionId_,
+        uint256 amount_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_InvalidAmount.selector,
+                user_,
+                redemptionId_,
+                amount_
+            )
+        );
+    }
+
+    function _expectRevertAlreadyRedeemed(address user_, uint16 redemptionId_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.RedemptionVault_AlreadyRedeemed.selector,
+                user_,
+                redemptionId_
             )
         );
     }

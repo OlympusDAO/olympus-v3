@@ -259,9 +259,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint256 amount_
     ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
         // Get the redemption
-        UserRedemption storage redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
+        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
+        UserRedemption storage redemption = _userRedemptions[redemptionKey];
 
         // Check that the facility is authorized
         _validateFacility(redemption.facility);
@@ -272,6 +271,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Check that the amount is not greater than the redemption
         if (amount_ > redemption.amount)
             revert RedemptionVault_InvalidAmount(msg.sender, redemptionId_, amount_);
+
+        // Check that there isn't an unpaid loan
+        if (_redemptionLoan[redemptionKey].principal > 0)
+            revert RedemptionVault_UnpaidLoan(msg.sender, redemptionId_);
 
         // Update the redemption
         redemption.amount -= amount_;
@@ -300,7 +303,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemptionId_,
             redemption.depositToken,
             redemption.depositPeriod,
-            amount_
+            amount_,
+            redemption.amount
         );
     }
 
@@ -309,9 +313,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint16 redemptionId_
     ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
         // Get the redemption
-        UserRedemption storage redemption = _userRedemptions[
-            _getUserRedemptionKey(msg.sender, redemptionId_)
-        ];
+        bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
+        UserRedemption storage redemption = _userRedemptions[redemptionKey];
 
         // Validate that the facility is authorized
         _validateFacility(redemption.facility);
@@ -323,6 +326,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Check that the redemption is redeemable
         if (block.timestamp < redemption.redeemableAt)
             revert RedemptionVault_TooEarly(msg.sender, redemptionId_, redemption.redeemableAt);
+
+        // Check that there isn't an unpaid loan
+        if (_redemptionLoan[redemptionKey].principal > 0)
+            revert RedemptionVault_UnpaidLoan(msg.sender, redemptionId_);
 
         // Update the redemption
         uint256 redemptionAmount = redemption.amount;
@@ -740,7 +747,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemptionId_,
             address(redemption.depositToken),
             redemption.depositPeriod,
-            retainedCollateral + previousPrincipal
+            retainedCollateral + previousPrincipal,
+            redemption.amount
         );
     }
 

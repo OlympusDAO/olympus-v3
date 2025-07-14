@@ -12,7 +12,8 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         uint16 indexed redemptionId,
         address indexed depositToken,
         uint8 depositPeriod,
-        uint256 amount
+        uint256 amount,
+        uint256 remainingAmount
     );
 
     event LoanDefaulted(
@@ -188,7 +189,8 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             0,
             address(iReserveToken),
             PERIOD_MONTHS,
-            COMMITMENT_AMOUNT - principalAmount_
+            COMMITMENT_AMOUNT - principalAmount_,
+            principalAmount_
         );
 
         // Call function
@@ -252,7 +254,8 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             0,
             address(iReserveToken),
             PERIOD_MONTHS,
-            COMMITMENT_AMOUNT
+            COMMITMENT_AMOUNT,
+            0
         );
 
         // Call function
@@ -312,7 +315,8 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             0,
             address(iReserveToken),
             PERIOD_MONTHS,
-            COMMITMENT_AMOUNT
+            COMMITMENT_AMOUNT,
+            0
         );
 
         // Call function

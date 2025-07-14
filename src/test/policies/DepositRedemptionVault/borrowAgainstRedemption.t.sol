@@ -148,5 +148,50 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+
+        // Assert that the available deposits are correct
+        // Deposited amount - committed amount = 0
+        _assertAvailableDeposits(0);
+    }
+
+    function test_givenOtherDeposits(
+        uint48 elapsed_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositTokenDefault(COMMITMENT_AMOUNT)
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+    {
+        elapsed_ = uint48(bound(elapsed_, 0, PERIOD_MONTHS * 30 days));
+        vm.warp(block.timestamp + elapsed_);
+
+        // Calculations
+        uint256 expectedInterest = (LOAN_AMOUNT * 10e2 * PERIOD_MONTHS) / (100e2 * 12);
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit LoanCreated(recipient, 0, LOAN_AMOUNT, address(cdFacility));
+
+        vm.startSnapshotGas("borrowAgainstRedemption");
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        vm.stopSnapshotGas();
+
+        // Assert loan
+        _assertLoan(recipient, 0, LOAN_AMOUNT, expectedInterest, false, expectedDueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(recipient, LOAN_AMOUNT, 0, 0);
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(recipient, _previousDepositActualAmount, COMMITMENT_AMOUNT);
+
+        // Assert that the available deposits are correct
+        // Only the deposit amount for which redemption has not started
+        _assertAvailableDeposits(_previousDepositActualAmount);
     }
 }

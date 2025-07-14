@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -172,13 +173,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         givenRedeemed(recipient, 0)
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_AlreadyRedeemed.selector,
-                recipient,
-                0
-            )
-        );
+        _expectRevertAlreadyRedeemed(recipient, 0);
 
         // Call function
         vm.prank(recipient);
@@ -235,6 +230,9 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             _previousDepositActualAmount,
             "Other redemption amount mismatch"
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // given there is an existing redemption for a different user
@@ -282,25 +280,185 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             "Other redemption amount mismatch"
         );
         assertEq(reserveToken.balanceOf(recipient), 0, "User: reserve token balance mismatch");
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // given there is an open loan position
-    //  [ ] it reverts
+    //  [X] it reverts
+
+    function test_givenLoanPosition_unpaid_reverts()
+        public
+        givenLocallyActive
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenCommitmentPeriodElapsed(0)
+    {
+        // Expect revert
+        _expectRevertRedemptionVaultUnpaidLoan(recipient, 0);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+    }
+
+    // given there is a partially-paid loan position
+    //  [X] it reverts
+
+    function test_givenLoanPosition_partiallyPaid_reverts()
+        public
+        givenLocallyActive
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
+    {
+        // Repay the loan
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, LOAN_AMOUNT / 2);
+
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Expect revert
+        _expectRevertRedemptionVaultUnpaidLoan(recipient, 0);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+    }
 
     // given there is a fully-paid loan position
-    //  [ ] it transfers the deposit tokens from the facility to the caller
-    //  [ ] it burns the receipt tokens
-    //  [ ] it removes the redemption from the user's redemptions
-    //  [ ] it emits a RedemptionFinished event
-    //  [ ] it returns the amount of deposit tokens transferred
+    //  [X] it transfers the deposit tokens from the facility to the caller
+    //  [X] it burns the receipt tokens
+    //  [X] it removes the redemption from the user's redemptions
+    //  [X] it emits a RedemptionFinished event
+    //  [X] it returns the amount of deposit tokens transferred
+
+    function test_givenLoanPosition_paid()
+        public
+        givenLocallyActive
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
+    {
+        // Repay the full amount of the loan
+        {
+            IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(
+                recipient,
+                0
+            );
+            uint256 loanPayable = loan.principal + loan.interest;
+
+            // Mint the required amount of the reserve token
+            MockERC20(address(iReserveToken)).mint(recipient, loan.interest);
+
+            // Approve the redemption vault to spend the reserve token
+            iReserveToken.approve(address(redemptionVault), loanPayable);
+
+            vm.prank(recipient);
+            redemptionVault.repayLoan(0, loanPayable);
+        }
+
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT
+        );
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+
+        // Assertions
+        _assertRedeemed(recipient, 0, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, 0, 0, 0);
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
+    }
 
     // given there is a loan position that has been defaulted
-    //  [ ] it uses the reduced redemption amount
-    //  [ ] it transfers the deposit tokens from the facility to the caller
-    //  [ ] it burns the receipt tokens
-    //  [ ] it removes the redemption from the user's redemptions
-    //  [ ] it emits a RedemptionFinished event
-    //  [ ] it returns the amount of deposit tokens transferred
+    //  given there is no retained redemption amount
+    //   [X] it reverts
+
+    function test_givenLoanPosition_givenDefaultedWithoutRetainedRedemption_reverts()
+        public
+        givenLocallyActive
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenLoanExpired(recipient, 0)
+        givenLoanClaimedDefault(recipient, 0)
+        givenCommitmentPeriodElapsed(0)
+    {
+        // Expect revert
+        _expectRevertAlreadyRedeemed(recipient, 0);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+    }
+
+    //  [X] it uses the reduced redemption amount
+    //  [X] it transfers the deposit tokens from the facility to the caller
+    //  [X] it burns the receipt tokens
+    //  [X] it removes the redemption from the user's redemptions
+    //  [X] it emits a RedemptionFinished event
+    //  [X] it returns the amount of deposit tokens transferred
+
+    function test_givenLoanPosition_givenDefaultedWithRetainedRedemption()
+        public
+        givenLocallyActive
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
+        givenLoanRepaid(recipient, 0, LOAN_AMOUNT / 2)
+        givenLoanExpired(recipient, 0)
+        givenLoanClaimedDefault(recipient, 0)
+        givenCommitmentPeriodElapsed(0)
+    {
+        // Get the remaining redemption amount
+        uint256 remainingRedemptionAmount = redemptionVault.getUserRedemption(recipient, 0).amount;
+
+        uint256 depositTokenBalanceBefore = iReserveToken.balanceOf(recipient);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            remainingRedemptionAmount
+        );
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+
+        // Assertions
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            remainingRedemptionAmount,
+            0,
+            depositTokenBalanceBefore,
+            0
+        );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
+    }
 
     // given there has been an amount of receipt tokens cancelled
     //  [X] the updated redemption amount is used
@@ -349,6 +507,9 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             cancelledAmount_
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(cancelledAmount_);
     }
 
     // given yield has been claimed
@@ -373,11 +534,14 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
         vm.warp(redeemableAt);
 
-        // Claim yield
+        // Claim yield from yield deposit position
         uint256[] memory positionIds = new uint256[](1);
         positionIds[0] = 0;
         vm.prank(recipient);
         uint256 yieldClaimed = ydFacility.claimYield(positionIds);
+
+        // Claim yield from convertible deposits
+        cdFacility.claimYield(iReserveToken);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -404,6 +568,9 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             yieldClaimed,
             COMMITMENT_AMOUNT // Yield deposit position
         );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
     }
 
     // [X] it transfers the deposit tokens from the facility to the caller

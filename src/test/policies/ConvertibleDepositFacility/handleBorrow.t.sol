@@ -50,6 +50,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             PERIOD_MONTHS,
             RESERVE_TOKEN_AMOUNT
         )
+        givenCommitted(OPERATOR, previousDepositActual)
     {
         amount_ = bound(amount_, previousDepositActual + 1, type(uint256).max);
 
@@ -70,6 +71,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
     }
 
     // [X] it transfers the tokens to the recipient
+    // [X] it updates the operator shares
 
     function test_success(
         uint256 amount_
@@ -83,8 +85,15 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             PERIOD_MONTHS,
             RESERVE_TOKEN_AMOUNT
         )
+        givenCommitted(OPERATOR, previousDepositActual)
     {
         amount_ = bound(amount_, 1e18, previousDepositActual);
+
+        uint256 recipientBalanceBefore = iReserveToken.balanceOf(recipient);
+        (, uint256 operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
+        );
 
         // Call function
         vm.prank(OPERATOR);
@@ -95,8 +104,32 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             recipient
         );
 
-        // Assert
+        // Assert that the actual amount is the amount
         assertEq(actualAmount, amount_, "actual amount");
-        assertEq(iReserveToken.balanceOf(recipient), amount_, "recipient balance");
+
+        // Assert that the recipient's balance has increased by the amount
+        assertEq(
+            iReserveToken.balanceOf(recipient),
+            recipientBalanceBefore + amount_,
+            "recipient balance"
+        );
+
+        // Assert that the operator's shares in assets have decreased by the amount
+        (, uint256 operatorSharesInAssetsAfter) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
+        );
+        assertEq(
+            operatorSharesInAssetsAfter,
+            operatorSharesInAssetsBefore - amount_,
+            "operator shares in assets"
+        );
+
+        // Assert that the available deposits have decreased by the amount
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            operatorSharesInAssetsAfter - (previousDepositActual - amount_),
+            "available deposits"
+        );
     }
 }

@@ -38,7 +38,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @notice Set of authorized operators
     EnumerableSet.AddressSet private _authorizedOperators;
 
-    /// @notice The amount of assets committed
+    /// @notice The amount of assets committed, excluding the assets that have been lent out
     mapping(IERC20 asset => uint256 committedDeposits) private _assetCommittedDeposits;
 
     /// @notice The amount of assets committed per operator
@@ -199,14 +199,18 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the borrowing through DepositManager
         // It will revert if more is being borrowed than available
-        return
-            DEPOSIT_MANAGER.borrowingWithdraw(
-                IDepositManager.BorrowingWithdrawParams({
-                    asset: depositToken_,
-                    recipient: recipient_,
-                    amount: amount_
-                })
-            );
+        uint256 actualAmount = DEPOSIT_MANAGER.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: depositToken_,
+                recipient: recipient_,
+                amount: amount_
+            })
+        );
+
+        // Reduce committed deposits by the amount borrowed
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositFacility
@@ -216,6 +220,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_,
         address payer_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
+        // Repayment increases the committed deposits
+        _assetCommittedDeposits[depositToken_] += amount_;
+
         // Process the repayment through DepositManager
         // It will revert if more is being repaid than borrowed
         return
@@ -235,6 +242,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_,
         address payer_
     ) external onlyEnabled onlyAuthorizedOperator {
+        // Default has no impact on the committed deposits
+
         // Process the default through DepositManager
         // It will revert if more is being defaulted than borrowed
         DEPOSIT_MANAGER.borrowingDefault(
@@ -249,11 +258,14 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     /// @inheritdoc IDepositFacility
     function getAvailableDeposits(IERC20 depositToken_) public view returns (uint256) {
-        // Available deposits are the assets - commitments
+        // getOperatorAssets returns the assets currently in the DepositManager
+        // This includes the assets that are committed
+        // But excludes the assets that have been lent out
         (, uint256 sharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
             depositToken_,
             address(this)
         );
+        // Committed deposits does not include the assets that have been lent out
         uint256 committedDeposits = _assetCommittedDeposits[depositToken_];
 
         // This should not happen, but prevent a revert anyway

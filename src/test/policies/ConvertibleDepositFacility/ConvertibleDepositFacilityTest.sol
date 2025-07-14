@@ -68,6 +68,7 @@ contract ConvertibleDepositFacilityTest is Test {
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
     uint256 previousDepositActual;
+    uint256 previousBorrowActual;
 
     function setUp() public virtual {
         vm.warp(INITIAL_BLOCK);
@@ -458,6 +459,21 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenBorrowed(
+        address operator_,
+        uint256 amount_,
+        address recipient_
+    ) {
+        vm.prank(operator_);
+        previousBorrowActual = facility.handleBorrow(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            recipient_
+        );
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _assertMintApproval(uint256 expected_) internal view {
@@ -588,6 +604,10 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
+    function _expectRevertReserveTokenInsufficientAllowance() internal {
+        vm.expectRevert("TRANSFER_FROM_FAILED");
+    }
+
     function _expectRevertReceiptTokenInsufficientBalance(
         uint256 currentBalance_,
         uint256 amount_
@@ -648,6 +668,18 @@ contract ConvertibleDepositFacilityTest is Test {
                 operator_,
                 requested_,
                 available_
+            )
+        );
+    }
+
+    function _expectRevertExceedsBorrowed(uint256 amount_, uint256 borrowed_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_BorrowedAmountExceeded.selector,
+                address(iReserveToken),
+                address(facility),
+                amount_,
+                borrowed_
             )
         );
     }
