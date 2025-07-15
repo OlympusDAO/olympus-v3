@@ -18,3 +18,4 @@ src/policies/deposits/DepositRedemptionVault.sol
 src/policies/deposits/YieldDepositFacility.sol
 src/policies/EmissionManager.sol
 src/policies/Heart.sol
+src/policies/ReserveWrapper.sol
