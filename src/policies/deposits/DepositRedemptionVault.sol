@@ -99,12 +99,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc Policy
     function requestPermissions()
         external
-        view
+        pure
         override
         returns (Permissions[] memory permissions)
-    {
-        permissions = new Permissions[](0);
-    }
+    {}
 
     // ========== FACILITY MANAGEMENT ========== //
 
