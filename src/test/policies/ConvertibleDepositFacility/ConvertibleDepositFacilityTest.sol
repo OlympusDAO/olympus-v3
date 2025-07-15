@@ -9,26 +9,28 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
-import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
-import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositFacilityTest is Test {
     Kernel public kernel;
-    CDFacility public facility;
+    ConvertibleDepositFacility public facility;
     YieldDepositFacility public yieldDepositFacility;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
@@ -56,6 +58,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public emergency;
     address public admin;
     address public HEART;
+    address public OPERATOR;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -64,7 +67,10 @@ contract ConvertibleDepositFacilityTest is Test {
     uint8 public constant PERIOD_MONTHS = 6;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
-    function setUp() public {
+    uint256 previousDepositActual;
+    uint256 previousBorrowActual;
+
+    function setUp() public virtual {
         vm.warp(INITIAL_BLOCK);
 
         recipient = makeAddr("RECIPIENT");
@@ -73,6 +79,7 @@ contract ConvertibleDepositFacilityTest is Test {
         emergency = makeAddr("EMERGENCY");
         admin = makeAddr("ADMIN");
         HEART = makeAddr("HEART");
+        OPERATOR = makeAddr("OPERATOR");
 
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
@@ -103,7 +110,7 @@ contract ConvertibleDepositFacilityTest is Test {
             address(0)
         );
         depositManager = new DepositManager(address(kernel));
-        facility = new CDFacility(address(kernel), address(depositManager));
+        facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
 
@@ -264,7 +271,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
+        (, previousDepositActual) = facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
         _;
     }
 
@@ -283,7 +290,26 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Mint the receipt token to the account
         vm.prank(account_);
-        facility.deposit(asset_, depositPeriod_, amount_, false);
+        (, previousDepositActual) = facility.deposit(asset_, depositPeriod_, amount_, false);
+        _;
+    }
+
+    modifier givenAddressHasConvertibleDepositTokenDefault(address recipient_) {
+        // Mint reserve tokens to the account
+        MockERC20(address(iReserveToken)).mint(recipient_, RESERVE_TOKEN_AMOUNT);
+
+        // Approve deposit manager to spend the reserve tokens
+        vm.prank(recipient_);
+        iReserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT);
+
+        // Mint the receipt token to the account
+        vm.prank(recipient_);
+        (, previousDepositActual) = facility.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT,
+            false
+        );
         _;
     }
 
@@ -390,34 +416,6 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
-    modifier givenCommitted(address user_, uint256 amount_) {
-        // Mint reserve tokens to the user
-        reserveToken.mint(user_, amount_);
-
-        // Approve spending of the reserve tokens
-        vm.prank(user_);
-        reserveToken.approve(address(depositManager), amount_);
-
-        // Mint the receipt token to the user
-        vm.prank(user_);
-        facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
-
-        // Approve spending of the receipt token
-        vm.prank(user_);
-        depositManager.approve(address(facility), receiptTokenId, amount_);
-
-        // Commit
-        vm.prank(user_);
-        facility.startRedemption(iReserveToken, PERIOD_MONTHS, amount_);
-        _;
-    }
-
-    modifier givenRedeemed(address user_, uint16 redemptionId_) {
-        vm.prank(user_);
-        facility.finishRedemption(redemptionId_);
-        _;
-    }
-
     function _getWrappedReceiptToken(
         IERC20 asset_,
         uint8 depositPeriod_
@@ -440,6 +438,39 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier givenVaultAccruesYield(IERC4626 vault_, uint256 amount_) {
         _accrueYield(vault_, amount_);
+        _;
+    }
+
+    modifier givenOperatorAuthorized(address operator_) {
+        vm.prank(admin);
+        facility.authorizeOperator(operator_);
+        _;
+    }
+
+    modifier givenOperatorDeuthorized(address operator_) {
+        vm.prank(admin);
+        facility.deauthorizeOperator(operator_);
+        _;
+    }
+
+    modifier givenCommitted(address operator_, uint256 amount_) {
+        vm.prank(operator_);
+        facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
+        _;
+    }
+
+    modifier givenBorrowed(
+        address operator_,
+        uint256 amount_,
+        address recipient_
+    ) {
+        vm.prank(operator_);
+        previousBorrowActual = facility.handleBorrow(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            recipient_
+        );
         _;
     }
 
@@ -517,11 +548,11 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     function _assertAvailableDeposits(uint256 expected_) internal view {
-        assertEq(
-            facility.getAvailableDeposits(iReserveToken),
-            expected_,
-            "facility.getAvailableDeposits(iReserveToken)"
+        (, uint256 sharesInAssets) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
         );
+        assertEq(sharesInAssets, expected_, "sharesInAssets");
     }
 
     // ========== REVERT HELPERS ========== //
@@ -534,6 +565,19 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
+    function _expectRevertNotAuthorized() internal {
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+    }
+
+    function _expectRevertInvalidAddress(address operator_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InvalidAddress.selector,
+                operator_
+            )
+        );
+    }
+
     function _expectRevertInvalidConfiguration(IERC20 asset_, uint8 depositPeriod_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -541,22 +585,6 @@ contract ConvertibleDepositFacilityTest is Test {
                 address(asset_),
                 depositPeriod_
             )
-        );
-    }
-
-    function _expectRevertDepositNotConfigured(IERC20 asset_, uint8 depositPeriod_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
-                address(asset_),
-                depositPeriod_
-            )
-        );
-    }
-
-    function _expectRevertRedemptionVaultZeroAmount() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
         );
     }
 
@@ -574,6 +602,10 @@ contract ConvertibleDepositFacilityTest is Test {
                 depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
             )
         );
+    }
+
+    function _expectRevertReserveTokenInsufficientAllowance() internal {
+        vm.expectRevert("TRANSFER_FROM_FAILED");
     }
 
     function _expectRevertReceiptTokenInsufficientBalance(
@@ -600,15 +632,54 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 
-    function _expectRevertInsufficientAvailableDeposits(
-        uint256 requestedAmount_,
-        uint256 availableAmount_
+    function _expectRevertZeroAmount() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositFacility.DepositFacility_ZeroAmount.selector)
+        );
+    }
+
+    function _expectRevertUnauthorizedOperator(address operator_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_UnauthorizedOperator.selector,
+                operator_
+            )
+        );
+    }
+
+    function _expectRevertInsufficientDeposits(uint256 requested_, uint256 available_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InsufficientDeposits.selector,
+                requested_,
+                available_
+            )
+        );
+    }
+
+    function _expectRevertInsufficientCommitments(
+        address operator_,
+        uint256 requested_,
+        uint256 available_
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InsufficientAvailableDeposits.selector,
-                requestedAmount_,
-                availableAmount_
+                IDepositFacility.DepositFacility_InsufficientCommitment.selector,
+                operator_,
+                requested_,
+                available_
+            )
+        );
+    }
+
+    function _expectRevertExceedsBorrowed(uint256 amount_, uint256 borrowed_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_BorrowedAmountExceeded.selector,
+                address(iReserveToken),
+                address(facility),
+                amount_,
+                borrowed_
             )
         );
     }

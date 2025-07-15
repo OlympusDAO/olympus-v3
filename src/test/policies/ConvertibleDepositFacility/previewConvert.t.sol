@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacilityTest {
@@ -313,7 +313,7 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
     // given any position has not been created by the CD facility
     //  [X] it reverts
 
-    function test_anyPositionNotCreatedByCDFacility_reverts()
+    function test_anyPositionNotCreatedByConvertibleDepositFacility_reverts()
         public
         givenLocallyActive
         givenRecipientHasReserveToken

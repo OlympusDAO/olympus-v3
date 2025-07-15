@@ -4,6 +4,32 @@ pragma solidity >=0.8.20;
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 contract DepositManagerClaimYieldTest is DepositManagerTest {
+    function _getExpectedMaxYield() internal view returns (uint256) {
+        // This won't work for multiple operators, as the vault share balance would be for all of them. It's ok for this example, so as not to rely on the getOperatorAssets function.
+        uint256 vaultShares = iVault.balanceOf(address(depositManager));
+        uint256 vaultAssets = iVault.previewRedeem(vaultShares);
+        uint256 vaultBorrowed = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+
+        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        return vaultAssets + vaultBorrowed - operatorLiabilities - 1;
+    }
+
+    uint256 internal _operatorSharesBefore;
+    uint256 internal _operatorSharesInAssetsBefore;
+    uint256 internal _operatorLiabilitiesBefore;
+
+    function _takeSnapshot() internal {
+        _operatorSharesBefore = iVault.balanceOf(address(depositManager));
+        _operatorSharesInAssetsBefore = iVault.previewRedeem(_operatorSharesBefore);
+        _operatorLiabilitiesBefore = depositManager.getOperatorLiabilities(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+    }
+
     // ========== TESTS ========== //
 
     // given the contract is disabled
@@ -32,7 +58,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     //  [X] it reverts
 
     function test_givenDepositAssetIsNotConfigured_reverts() public givenIsEnabled {
-        _expectRevertNotConfiguredAsset(iAsset);
+        _expectRevertNotConfiguredAsset();
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.claimYield(iAsset, ADMIN, 1);
@@ -53,20 +79,12 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
-        (, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
+
+        // Determine an amount that will result in the shares being less than the liabilities
+        amount_ = bound(amount_, _getExpectedMaxYield() + 1, previousDepositorDepositActualAmount);
         uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
             iAsset,
             DEPOSIT_OPERATOR
-        );
-
-        // Determine an amount that will result in the shares being less than the liabilities
-        amount_ = bound(
-            amount_,
-            operatorSharesInAssets - operatorLiabilities + 1,
-            operatorSharesInAssets
         );
 
         _expectRevertInsolvent(operatorLiabilities);
@@ -91,17 +109,14 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
-        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
+
+        // Determine an amount that will result in the vault still being solvent
+        amount_ = bound(amount_, 1000, _getExpectedMaxYield());
+        uint256 operatorShares = iVault.balanceOf(address(depositManager));
         uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
             iAsset,
             DEPOSIT_OPERATOR
         );
-
-        // Determine an amount that will result in the vault still being solvent
-        amount_ = bound(amount_, 1000, operatorSharesInAssets - operatorLiabilities - 1);
         uint256 expectedShares = vault.previewWithdraw(amount_);
 
         address recipient = makeAddr("recipient");
@@ -159,6 +174,77 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         depositManager.claimYield(iAsset, ADMIN, 1);
     }
 
+    // given funds have been borrowed
+    //  [X] the asset is transferred to the recipient
+    //  [X] the operator shares are decreased by the claimed yield
+    //  [X] the asset liabilities are not decreased
+    //  [X] the receipt token supply is not decreased
+
+    function test_givenBorrowed_claimYield(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(1e18)
+    {
+        // Simulate yield being accrued to the vault
+        asset.mint(address(vault), 10e18);
+
+        _takeSnapshot();
+
+        // Determine an amount that will result in the vault still being solvent
+        amount_ = bound(amount_, 1000, _getExpectedMaxYield());
+        uint256 expectedShares = vault.previewWithdraw(amount_);
+
+        address recipient = makeAddr("recipient");
+
+        // Claim the yield
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.claimYield(iAsset, recipient, amount_);
+
+        // Operator shares
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        assertApproxEqAbs(
+            operatorSharesAfter,
+            _operatorSharesBefore - expectedShares,
+            1,
+            "Operator shares mismatch"
+        );
+
+        // Assert solvency
+        // Assets + borrowed >= liabilities
+        assertGe(
+            operatorSharesInAssetsAfter +
+                depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "insolvent"
+        );
+
+        // Vault balance
+        assertApproxEqAbs(
+            vault.balanceOf(address(depositManager)),
+            _operatorSharesBefore - expectedShares,
+            1,
+            "Vault balance mismatch"
+        );
+
+        // Asset liabilities
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "Asset liabilities mismatch"
+        );
+
+        _assertReceiptToken(0, 0, false, false); // Unaffected
+        _assertDepositAssetBalance(DEPOSITOR, 0);
+        _assertDepositAssetBalance(recipient, amount_);
+    }
+
     // [X] the asset is transferred to the recipient
     // [X] the operator shares are decreased by the claimed yield
     // [X] the asset liabilities are not decreased
@@ -176,17 +262,11 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
-        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
+
+        _takeSnapshot();
 
         // Determine an amount that will result in the vault still being solvent
-        amount_ = bound(amount_, 1000, operatorSharesInAssets - operatorLiabilities - 1);
+        amount_ = bound(amount_, 1000, _getExpectedMaxYield());
         uint256 expectedShares = vault.previewWithdraw(amount_);
 
         address recipient = makeAddr("recipient");
@@ -196,21 +276,28 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         depositManager.claimYield(iAsset, recipient, amount_);
 
         // Operator shares
-        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
         assertApproxEqAbs(
             operatorSharesAfter,
-            operatorShares - expectedShares,
+            _operatorSharesBefore - expectedShares,
             1,
             "Operator shares mismatch"
+        );
+
+        // Assert solvency
+        // Assets + borrowed >= liabilities
+        assertGe(
+            operatorSharesInAssetsAfter +
+                depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "insolvent"
         );
 
         // Vault balance
         assertApproxEqAbs(
             vault.balanceOf(address(depositManager)),
-            operatorShares - expectedShares,
+            _operatorSharesBefore - expectedShares,
             1,
             "Vault balance mismatch"
         );
@@ -218,7 +305,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         // Asset liabilities
         assertEq(
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
-            operatorLiabilities,
+            _operatorLiabilitiesBefore,
             "Asset liabilities mismatch"
         );
 

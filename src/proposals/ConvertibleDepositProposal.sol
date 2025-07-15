@@ -14,7 +14,7 @@ import {Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
 /// @notice Activates the Convertible Deposit contracts
 contract ConvertibleDepositProposal is GovernorBravoProposal {

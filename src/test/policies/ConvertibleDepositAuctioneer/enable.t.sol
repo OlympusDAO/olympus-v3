@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "admin" role
@@ -60,7 +60,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "enable data"
             )
         );
@@ -85,7 +85,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "tick size"
             )
         );
@@ -112,7 +112,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "min price"
             )
         );
@@ -141,7 +141,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "tick step"
             )
         );
@@ -168,7 +168,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_InvalidParams.selector,
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
                 "auction tracking period"
             )
         );

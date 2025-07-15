@@ -330,9 +330,6 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, PolicyEnabler {
             sBalance += sReserve.balanceOf(CHREG.active(i));
         }
 
-        // CDEPO
-        // sBalance += sReserve.balanceOf(address(CDEPO));
-
         balance = sReserve.previewRedeem(sBalance);
     }
 

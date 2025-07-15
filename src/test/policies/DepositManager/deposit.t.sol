@@ -6,7 +6,7 @@ import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol"
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract DepositManagerDepositTest is DepositManagerTest {
     // ========== EVENTS ========== //
@@ -463,6 +463,41 @@ contract DepositManagerDepositTest is DepositManagerTest {
                 depositPeriod: DEPOSIT_PERIOD,
                 depositor: DEPOSITOR,
                 amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // when the amount is less than one share
+    //  [X] it reverts
+
+    function test_whenAmountLessThanOneShare_reverts(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Earn yield
+        asset.mint(address(vault), 10e18);
+
+        // Calculate amount
+        uint256 oneShareInAssets = vault.previewMint(1);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
+
+        // Expect revert
+        vm.expectRevert("ZERO_SHARES");
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
                 shouldWrap: false
             })
         );

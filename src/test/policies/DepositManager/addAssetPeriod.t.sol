@@ -3,7 +3,7 @@ pragma solidity >=0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {String} from "src/libraries/String.sol";

@@ -2,9 +2,10 @@
 pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
     uint256 public DEPOSIT_AMOUNT = 9e18;
@@ -182,20 +183,15 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
-        // Last conversion rate = 1100000000000000000
-        // Current conversion rate = 1155000000000000000
+        // Last conversion rate = 1100000000000000000 + 1
         // Deposit amount = 9000000000000000000
-        // Deposit shares = 8181818181818181818 (at the time of deposit)
-        // Yield/share = 1155000000000000000-1100000000000000000 = 55000000000000000 (in terms of assets per share)
-        // Actual yield = yield/share * shares
-        // Actual yield = 55000000000000000 * 8181818181818181818 / 1e18 = 449999999999999999.99
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
-        uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
-        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * lastShares) / 1e18;
-        assertEq(expectedYield, 449999999999999999, "Expected yield");
+        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
+        // End conversion rate = 1155000000000000000
+        // Current shares value = last shares * end rate / 1e18
+        // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
+        // Yield = current shares value - receipt tokens
+        // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
+        uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
         // Preview harvest yield
@@ -235,20 +231,14 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
-        // last conversion rate = 1155000000000000000
+        // last conversion rate = 1155000000000000000 + 1
         // current conversion rate = 1211204379562043795
         // deposit amount = 9000000000000000000
-        // deposit shares = 7792207792207792207 (at the time of last claim)
-        // Yield/share = 1211204379562043795 - 1155000000000000000 = 56204379562043795 (in terms of assets per share)
+        // deposit shares = 7792207792207792201 (at the time of last claim)
+        // Yield/share = 1211204379562043795 - 1155000000000000001 = 56204379562043794 (in terms of assets per share)
         // Actual yield = yield/share * shares
-        // Actual yield = 56204379562043795 * 7792207792207792207 / 1e18 = 437956204379562038
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
-        uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
-        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * lastShares) / 1e18;
-        assertEq(expectedYield, 437956204379562038, "Expected yield");
+        // Actual yield = 56204379562043794 * 7792207792207792201 / 1e18 = 437956204379562030
+        uint256 expectedYield = 437956204379562030;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
         // Preview harvest yield
@@ -393,7 +383,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
 
         // Take a rate snapshot
         _takeRateSnapshot();
-        uint256 rateSnapshotConversionRate = vault.convertToAssets(1e18);
 
         // Accrue yield (which would change the rate snapshot)
         _accrueYield(iVault, 1e18);
@@ -409,21 +398,15 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         positionTimestampHints[0] = timestampHint_;
 
         // Calculate expected yield and fee
-        // As the expiry is in the past, this will take the last rate snapshot
-        // Last conversion rate = 1100000000000000000
-        // Rate snapshot conversion rate = 1155000000000000000
+        // Last conversion rate = 1100000000000000000 + 1
         // Deposit amount = 9000000000000000000
-        // Deposit shares = 8181818181818181818 (at the time of deposit)
-        // Yield/share = 1155000000000000000-1100000000000000000 = 55000000000000000 (in terms of assets per share)
-        // Actual yield = yield/share * shares
-        // Actual yield = 55000000000000000 * 8181818181818181818 / 1e18 = 449999999999999999.99
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
-        uint256 expectedYield = ((rateSnapshotConversionRate - lastConversionRate) * lastShares) /
-            1e18;
-        assertEq(expectedYield, 449999999999999999, "Expected yield");
+        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
+        // End conversion rate = 1155000000000000000
+        // Current shares value = last shares * end rate / 1e18
+        // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
+        // Yield = current shares value - receipt tokens
+        // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
+        uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = (expectedYield * 1000) / 10000;
 
         // Preview claim yield
@@ -511,20 +494,15 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
-        // Last conversion rate = 1100000000000000000
-        // Current conversion rate = 1155000000000000000
+        // Last conversion rate = 1100000000000000000 + 1
         // Deposit amount = 9000000000000000000
-        // Deposit shares = 8181818181818181818 (at the time of deposit)
-        // Yield/share = 1155000000000000000-1100000000000000000 = 55000000000000000 (in terms of assets per share)
-        // Actual yield = yield/share * shares
-        // Actual yield = 55000000000000000 * 8181818181818181818 / 1e18 = 449999999999999999.99
-        uint256 lastConversionRate = yieldDepositFacility.positionLastYieldConversionRate(
-            POSITION_ID
-        );
-        uint256 lastShares = (DEPOSIT_AMOUNT * 1e18) / lastConversionRate;
-        uint256 currentConversionRate = iVault.convertToAssets(1e18);
-        uint256 expectedYield = ((currentConversionRate - lastConversionRate) * lastShares) / 1e18;
-        assertEq(expectedYield, 449999999999999999, "Expected yield");
+        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
+        // End conversion rate = 1155000000000000000
+        // Current shares value = last shares * end rate / 1e18
+        // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
+        // Yield = current shares value - receipt tokens
+        // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
+        uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 0;
 
         // Preview harvest yield

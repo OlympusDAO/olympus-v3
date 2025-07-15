@@ -9,24 +9,24 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
-import {CDAuctioneer} from "src/policies/CDAuctioneer.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/IConvertibleDepositAuctioneer.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositAuctioneerTest is Test {
     Kernel public kernel;
-    CDFacility public facility;
-    CDAuctioneer public auctioneer;
+    ConvertibleDepositFacility public facility;
+    ConvertibleDepositAuctioneer public auctioneer;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
@@ -114,8 +114,12 @@ contract ConvertibleDepositAuctioneerTest is Test {
             address(0)
         );
         depositManager = new DepositManager(address(kernel));
-        facility = new CDFacility(address(kernel), address(depositManager));
-        auctioneer = new CDAuctioneer(address(kernel), address(facility), address(iReserveToken));
+        facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
+        auctioneer = new ConvertibleDepositAuctioneer(
+            address(kernel),
+            address(facility),
+            address(iReserveToken)
+        );
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -179,7 +183,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.CDAuctioneer_DepositPeriodNotEnabled.selector,
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodNotEnabled
+                    .selector,
                 address(depositAsset_),
                 depositPeriod_
             )

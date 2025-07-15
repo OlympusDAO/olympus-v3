@@ -4,7 +4,7 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepositFacility/ConvertibleDepositFacilityTest.sol";
 
 import {Actions} from "src/Kernel.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 
 contract ConvertibleDepositFacilityExecuteTest is ConvertibleDepositFacilityTest {
     event ClaimedYield(address indexed asset, uint256 amount);
@@ -65,7 +65,7 @@ contract ConvertibleDepositFacilityExecuteTest is ConvertibleDepositFacilityTest
 
     function test_givenNoSupportedAssets() public {
         // Create a new facility
-        facility = new CDFacility(address(kernel), address(depositManager));
+        facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
 

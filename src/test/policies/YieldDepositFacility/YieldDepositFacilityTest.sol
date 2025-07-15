@@ -15,16 +15,16 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YieldDepositFacility} from "src/policies/YieldDepositFacility.sol";
-import {DepositManager} from "src/policies/DepositManager.sol";
+import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IDepositRedemptionVault} from "src/bases/interfaces/IDepositRedemptionVault.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
-import {CDFacility} from "src/policies/CDFacility.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {IDepositManager} from "src/policies/interfaces/IDepositManager.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
-import {IConvertibleDepositFacility} from "src/policies/interfaces/IConvertibleDepositFacility.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
+import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 
 // solhint-disable max-states-count
 contract YieldDepositFacilityTest is Test {
@@ -36,7 +36,7 @@ contract YieldDepositFacilityTest is Test {
     OlympusMinter public minter;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
-    CDFacility public cdFacility;
+    ConvertibleDepositFacility public cdFacility;
 
     MockERC20 public ohm;
 
@@ -130,7 +130,7 @@ contract YieldDepositFacilityTest is Test {
         depositManager = new DepositManager(address(kernel));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
-        cdFacility = new CDFacility(address(kernel), address(depositManager));
+        cdFacility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         minter = new OlympusMinter(kernel, address(ohm));
 
         // Install modules
@@ -405,65 +405,6 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
-    modifier givenCommitted(
-        address user_,
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) {
-        // Mint reserve tokens to the user
-        MockERC20(address(asset_)).mint(user_, amount_);
-
-        // Approve spending of the reserve tokens
-        vm.prank(user_);
-        asset_.approve(address(depositManager), amount_);
-
-        // Mint the receipt token to the user
-        vm.prank(user_);
-        (, uint256 actualAmount) = yieldDepositFacility.deposit(
-            asset_,
-            depositPeriod_,
-            amount_,
-            false
-        );
-        _previousDepositActualAmount = actualAmount;
-
-        // Approve spending of the receipt token
-        vm.prank(user_);
-        depositManager.approve(address(yieldDepositFacility), _receiptTokenId, actualAmount);
-
-        // Commit
-        vm.prank(user_);
-        yieldDepositFacility.startRedemption(asset_, depositPeriod_, actualAmount);
-        _;
-    }
-
-    modifier givenCommittedWithExistingPosition(
-        address user_,
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) {
-        // Approve spending of the receipt token
-        vm.prank(user_);
-        depositManager.approve(address(yieldDepositFacility), _receiptTokenId, amount_);
-
-        // Commit
-        vm.prank(user_);
-        yieldDepositFacility.startRedemption(asset_, depositPeriod_, amount_);
-        _;
-    }
-
-    modifier givenRedeemed(address user_, uint16 redemptionId_) {
-        // Adjust the amount of yield in the vault to avoid a rounding error
-        // NOTE: This is an issue with how DepositManager tracks deposited funds. It is likely to be fixed when funds custodying is shifted to the policy.
-        reserveToken.mint(address(vault), 1e18);
-
-        vm.prank(user_);
-        yieldDepositFacility.finishRedemption(redemptionId_);
-        _;
-    }
-
     function _createConvertibleDepositPosition(
         address account_,
         uint256 amount_,
@@ -580,25 +521,6 @@ contract YieldDepositFacilityTest is Test {
 
     function _expectRoleRevert(bytes32 role_) internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
-    }
-
-    function _expectRevertRedemptionVaultInvalidToken(
-        IERC20 asset_,
-        uint8 depositPeriod_
-    ) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_InvalidToken.selector,
-                address(asset_),
-                depositPeriod_
-            )
-        );
-    }
-
-    function _expectRevertRedemptionVaultZeroAmount() internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
-        );
     }
 
     function _expectRevertReceiptTokenInsufficientAllowance(

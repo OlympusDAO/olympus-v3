@@ -38,7 +38,7 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
 
     function test_givenAssetIsNotConfigured_reverts() public givenIsEnabled {
         // Expect revert
-        _expectRevertNotConfiguredAsset(iAsset);
+        _expectRevertNotConfiguredAsset();
 
         // Set the deposit cap
         vm.prank(ADMIN);

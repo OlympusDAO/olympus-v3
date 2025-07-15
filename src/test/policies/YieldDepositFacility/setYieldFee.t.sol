@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/IYieldDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 
 contract YieldDepositFacilitySetYieldFeeTest is YieldDepositFacilityTest {
     event YieldFeeSet(uint16 yieldFee);

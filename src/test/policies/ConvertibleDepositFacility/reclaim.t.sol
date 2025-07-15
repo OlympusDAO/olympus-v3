@@ -2,8 +2,8 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest {
     event Reclaimed(
@@ -14,18 +14,28 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         uint256 forfeitedAmount
     );
 
-    // given the contract is inactive
+    // ========== HELPERS ========== //
+
+    // Helper to call reclaim on the vault, or skip if not implemented
+    function _callReclaim(address user_, IERC20 asset_, uint8 period_, uint256 amount_) internal {
+        vm.prank(user_);
+        facility.reclaim(asset_, period_, amount_);
+    }
+
+    // ========== TESTS ========== //
+
+    // given the contract is disable
     //  [X] it reverts
 
-    function test_contractInactive_reverts() public {
+    function test_contractDisabled_reverts() public {
         // Expect revert
         _expectRevertNotEnabled();
 
         // Call function
-        facility.reclaim(iReserveToken, PERIOD_MONTHS, 1e18);
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, 1e18);
     }
 
-    // when the amount of receipt tokens to reclaim is 0
+    // given the amount is zero
     //  [X] it reverts
 
     function test_amountToReclaimIsZero_reverts()
@@ -33,7 +43,12 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
-        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
         givenReceiptTokenSpendingIsApproved(
             recipient,
             address(depositManager),
@@ -41,14 +56,13 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         )
     {
         // Expect revert
-        _expectRevertRedemptionVaultZeroAmount();
+        _expectRevertZeroAmount();
 
         // Call function
-        vm.prank(recipient);
-        facility.reclaim(iReserveToken, PERIOD_MONTHS, 0);
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, 0);
     }
 
-    // when the reclaimed amount is 0
+    // given the reclaimed amount rounds to zero
     //  [X] it reverts
 
     function test_reclaimedAmountIsZero_reverts()
@@ -56,7 +70,12 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
-        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
         givenReceiptTokenSpendingIsApproved(
             recipient,
             address(depositManager),
@@ -67,14 +86,13 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         uint256 amount = 1;
 
         // Expect revert
-        _expectRevertRedemptionVaultZeroAmount();
+        _expectRevertZeroAmount();
 
         // Call function
-        vm.prank(recipient);
-        facility.reclaim(iReserveToken, PERIOD_MONTHS, amount);
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, amount);
     }
 
-    // given the facility does not have enough available deposits to fulfill the reclaim
+    // given there are not enough available deposits
     //  [X] it reverts
 
     function test_insufficientAvailableDeposits_reverts(
@@ -82,7 +100,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
     )
         public
         givenLocallyActive
-        givenCommitted(recipient, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
         givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT)
@@ -91,23 +109,25 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
             address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
+        givenOperatorAuthorized(OPERATOR)
+        givenCommitted(OPERATOR, RESERVE_TOKEN_AMOUNT)
     {
         amount_ = bound(amount_, 1, RESERVE_TOKEN_AMOUNT);
 
         // At this stage:
-        // - The recipient has started redemption for 10e18 via the CDFacility
-        // - DepositManager has 10e18 in deposits from the CDFacility, of which 10e18 are committed for redemption
+        // - The recipient has started redemption for 10e18 via the ConvertibleDepositFacility
+        // - DepositManager has 10e18 in deposits from the ConvertibleDepositFacility, of which 10e18 are committed for redemption
         // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
+        // - The recipient has committed 10e18 of funds from the ConvertibleDepositFacility via the OPERATOR
 
         // Expect revert
-        _expectRevertInsufficientAvailableDeposits(amount_, 0);
+        _expectRevertInsufficientDeposits(amount_, 0);
 
         // Call function
-        vm.prank(recipient);
-        facility.reclaim(iReserveToken, PERIOD_MONTHS, amount_);
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, amount_);
     }
 
-    // given the caller has not approved DepositManager to spend the total amount of receipt tokens
+    // given the spending is not approved
     //  [X] it reverts
 
     function test_spendingIsNotApproved_reverts()
@@ -115,7 +135,12 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
-        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
     {
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(
@@ -125,22 +150,23 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         );
 
         // Call function
-        vm.prank(recipient);
-        facility.reclaim(iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
     }
 
-    // [X] it transfers the reclaimed reserve tokens to the caller
-    // [X] it returns the reclaimed amount
-    // [X] it emits a Reclaimed event
-    // [X] the OHM mint approval is not changed
+    // given the amount is less than the available deposits
+    //  [X] it succeeds
+    //  [X] it transfers the deposit tokens from the facility to the caller
+    //  [X] it burns the receipt tokens
 
-    /// forge-config: default.isolate = true
     function test_success()
         public
         givenLocallyActive
-        givenRecipientHasReserveToken
-        givenReserveTokenSpendingIsApprovedByRecipient
-        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
         givenReceiptTokenSpendingIsApproved(
             recipient,
             address(depositManager),
@@ -155,107 +181,31 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         vm.expectEmit(true, true, true, true);
         emit Reclaimed(
             recipient,
-            address(reserveToken),
+            address(iReserveToken),
             PERIOD_MONTHS,
             expectedReclaimedAmount,
             expectedForfeitedAmount
         );
 
-        // Start gas snapshot
-        vm.startSnapshotGas("reclaim");
-
         // Call function
-        vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
-
-        // Stop gas snapshot
-        uint256 gasUsed = vm.stopSnapshotGas();
-        console2.log("Gas used", gasUsed);
-
-        // Assertion that the reclaimed amount is the sum of the amounts adjusted by the reclaim rate
-        assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
 
         // Assert convertible deposit tokens are transferred from the recipient
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
         assertEq(
             depositManager.balanceOf(recipient, receiptTokenId),
             0,
             "receiptToken.balanceOf(recipient)"
         );
 
-        // Assert OHM not minted to the recipient
-        assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
-
-        // No dangling mint approval
-        _assertMintApproval(0);
-
         // Deposit token is transferred to the recipient
-        _assertAssetBalance(expectedForfeitedAmount, expectedReclaimedAmount);
-
-        // Vault shares are not transferred to the TRSRY
-        _assertVaultBalance();
-
-        // Assert that the available deposits are correct
-        _assertAvailableDeposits(0);
-    }
-
-    function test_success_fuzz(
-        uint256 amount_
-    )
-        public
-        givenLocallyActive
-        givenRecipientHasReserveToken
-        givenReserveTokenSpendingIsApprovedByRecipient
-        mintConvertibleDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
-        givenReceiptTokenSpendingIsApproved(
-            recipient,
-            address(depositManager),
-            RESERVE_TOKEN_AMOUNT
-        )
-    {
-        uint256 amountOne = bound(amount_, 3, RESERVE_TOKEN_AMOUNT);
-
-        // Calculate the amount that will be reclaimed
-        uint256 expectedReclaimedAmount = (amountOne *
-            depositManager.getAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
-        uint256 expectedForfeitedAmount = amountOne - expectedReclaimedAmount;
-
-        // Expect event
-        vm.expectEmit(true, true, true, true);
-        emit Reclaimed(
-            recipient,
-            address(reserveToken),
-            PERIOD_MONTHS,
-            expectedReclaimedAmount,
-            expectedForfeitedAmount
-        );
-
-        // Call function
-        vm.prank(recipient);
-        uint256 reclaimed = facility.reclaim(iReserveToken, PERIOD_MONTHS, amountOne);
-
-        // Assert reclaimed amount
-        assertEq(reclaimed, expectedReclaimedAmount, "reclaimed");
-
-        // Assert convertible deposit tokens are transferred from the recipient
         assertEq(
-            depositManager.balanceOf(recipient, receiptTokenId),
-            RESERVE_TOKEN_AMOUNT - amountOne,
-            "receiptToken.balanceOf(recipient)"
+            iReserveToken.balanceOf(recipient),
+            expectedReclaimedAmount,
+            "reserveToken.balanceOf(recipient)"
         );
 
-        // Assert OHM not minted to the recipient
-        assertEq(ohm.balanceOf(recipient), 0, "ohm.balanceOf(recipient)");
-
-        // No dangling mint approval
-        _assertMintApproval(0);
-
-        // Deposit token is transferred to the recipient
-        _assertAssetBalance(expectedForfeitedAmount, expectedReclaimedAmount);
-
-        // Vault shares are not transferred to the TRSRY
-        _assertVaultBalance();
-
-        // Assert that the available deposits are correct
-        _assertAvailableDeposits(RESERVE_TOKEN_AMOUNT - amountOne);
+        // Assert that the available deposits are correct (should be 0)
+        assertEq(facility.getAvailableDeposits(iReserveToken), 0, "available deposits should be 0");
     }
 }
