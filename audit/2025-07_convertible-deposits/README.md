@@ -145,6 +145,7 @@ The receipt tokens are also issued from the DepositManager via the ERC6909Wrappa
             - [YieldDepositFacility.sol](../../src/policies/deposits/YieldDepositFacility.sol)
         - [EmissionManager.sol](../../src/policies/EmissionManager.sol)
         - [Heart.sol](../../src/policies/Heart.sol)
+        - [ReserveWrapper.sol](../../src/policies/ReserveWrapper.sol)
 
 The following pull requests can be referred to for the in-scope contracts:
 
@@ -613,6 +614,10 @@ Bophades policies with the `admin` or `manager` role are able to perform the fol
 The Heart is a long-standing policy that acts as the interface for a third-party keeper to trigger a heartbeat.
 
 The major change to this contract is the addition of the `BasePeriodicTaskManager` abstract contract. Previous versions of the heart required re-deployment whenever a new version of a policy or a new policy needed to be added to the configuration. Instead, the new version of the Heart policy has an ordered array of periodic tasks that will be performed at each heartbeat.
+
+### ReserveWrapper (Policy)
+
+A small periodic task (callable by the Heart policy) that will wrap any balance of a specified ERC20 into an ERC4626 vault, provided there is a balance in the TRSRY module.
 
 ### DEPOS (Module)
 
