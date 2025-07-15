@@ -1,6 +1,7 @@
 src/bases/BaseAssetManager.sol
 src/bases/BasePeriodicTaskManager.sol
 src/external/clones/CloneERC20.sol
+src/libraries/AddressStorageArray.sol
 src/libraries/CloneableReceiptToken.sol
 src/libraries/DecimalString.sol
 src/libraries/ERC6909Wrappable.sol
@@ -12,6 +13,7 @@ src/modules/DEPOS/PositionTokenRenderer.sol
 src/policies/deposits/BaseDepositFacility.sol
 src/policies/deposits/ConvertibleDepositAuctioneer.sol
 src/policies/deposits/ConvertibleDepositFacility.sol
+src/policies/deposits/DepositManager.sol
 src/policies/deposits/DepositRedemptionVault.sol
 src/policies/deposits/YieldDepositFacility.sol
 src/policies/EmissionManager.sol
