@@ -761,6 +761,7 @@ contract DepositRedemptionVaultTest is Test {
     function _assertLoan(
         address user_,
         uint16 redemptionId_,
+        uint256 initialPrincipal_,
         uint256 principal_,
         uint256 interest_,
         bool isDefaulted_,
@@ -771,11 +772,30 @@ contract DepositRedemptionVaultTest is Test {
             redemptionId_
         );
 
-        assertEq(loan.initialPrincipal, LOAN_AMOUNT, "initialPrincipal mismatch");
+        assertEq(loan.initialPrincipal, initialPrincipal_, "initialPrincipal mismatch");
         assertEq(loan.principal, principal_, "principal mismatch");
         assertEq(loan.interest, interest_, "interest mismatch");
         assertEq(loan.isDefaulted, isDefaulted_, "isDefaulted mismatch");
         assertEq(loan.dueDate, dueDate_, "dueDate mismatch");
+    }
+
+    function _assertLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint256 principal_,
+        uint256 interest_,
+        bool isDefaulted_,
+        uint48 dueDate_
+    ) internal view {
+        _assertLoan(
+            user_,
+            redemptionId_,
+            LOAN_AMOUNT,
+            principal_,
+            interest_,
+            isDefaulted_,
+            dueDate_
+        );
     }
 
     function _assertDepositTokenBalances(

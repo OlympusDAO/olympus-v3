@@ -703,19 +703,23 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             retainedCollateral + previousPrincipal
         );
         // Burn the receipt tokens for the principal
-        IDepositFacility(redemption.facility).handleLoanDefault(
-            IERC20(redemption.depositToken),
-            redemption.depositPeriod,
-            previousPrincipal,
-            address(this)
-        );
+        if (previousPrincipal > 0) {
+            IDepositFacility(redemption.facility).handleLoanDefault(
+                IERC20(redemption.depositToken),
+                redemption.depositPeriod,
+                previousPrincipal,
+                address(this)
+            );
+        }
         // Withdraw deposit for retained collateral
-        IDepositFacility(redemption.facility).handleCommitWithdraw(
-            IERC20(redemption.depositToken),
-            redemption.depositPeriod,
-            retainedCollateral,
-            address(this)
-        );
+        if (retainedCollateral > 0) {
+            IDepositFacility(redemption.facility).handleCommitWithdraw(
+                IERC20(redemption.depositToken),
+                redemption.depositPeriod,
+                retainedCollateral,
+                address(this)
+            );
+        }
 
         // Reduce redemption amount by the burned and retained collateral
         redemption.amount -= retainedCollateral + previousPrincipal;
