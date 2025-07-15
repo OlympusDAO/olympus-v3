@@ -15,6 +15,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
+| admin | ReserveWrapper | Enable/disable contract |
 | admin | YieldDepositFacility | Set yield fee, enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
@@ -37,6 +38,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
+| emergency | ReserveWrapper | Disable contract |
 | emergency | YieldDepositFacility | Disable the contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
