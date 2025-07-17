@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IPositionTokenRenderer} from "src/modules/DEPOS/IPositionTokenRenderer.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -11,7 +12,7 @@ import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 import {Base64} from "@openzeppelin-5.3.0/utils/Base64.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {DecimalString} from "src/libraries/DecimalString.sol";
-import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // solhint-disable quotes
 
@@ -24,6 +25,8 @@ contract PositionTokenRenderer is IPositionTokenRenderer {
 
     /// @notice The number of decimal places to display when rendering values as decimal strings
     uint8 public constant DISPLAY_DECIMALS = 2;
+
+    uint8 public constant OHM_DECIMALS = 9;
 
     // ========== FUNCTIONS ========== //
 
@@ -165,9 +168,13 @@ contract PositionTokenRenderer is IPositionTokenRenderer {
                     ? string.concat(
                         '<text xml:space="preserve" class="standard-text"><tspan x="42" y="575">Convertible To</tspan><tspan x="457" y="575" text-anchor="end">',
                         DecimalString.toDecimalString(
-                            (position_.remainingDeposit * 1e9) / position_.conversionPrice,
-                            9,
-                            2
+                            FullMath.mulDiv(
+                                position_.remainingDeposit,
+                                10 ** OHM_DECIMALS,
+                                position_.conversionPrice
+                            ),
+                            OHM_DECIMALS,
+                            DISPLAY_DECIMALS
                         ),
                         " OHM</tspan></text>"
                     )

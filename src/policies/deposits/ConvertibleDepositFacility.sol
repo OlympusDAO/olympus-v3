@@ -8,6 +8,9 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
+// Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
+
 // Bophades
 import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -215,9 +218,11 @@ contract ConvertibleDepositFacility is
         }
 
         // The deposit and receipt token have the same decimals, so either can be used
-        convertedTokenOut =
-            (amount_ * (10 ** IERC20(currentAsset).decimals())) /
-            position.conversionPrice;
+        convertedTokenOut = FullMath.mulDiv(
+            amount_,
+            10 ** IERC20(currentAsset).decimals(),
+            position.conversionPrice
+        );
 
         return (convertedTokenOut, currentAsset, currentPeriodMonths);
     }
