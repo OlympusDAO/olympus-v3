@@ -7,10 +7,10 @@ import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "src/test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
-import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
+import {RolesAuthority, Authority as SolmateAuthority} from "@solmate-6.2.0/auth/authorities/RolesAuthority.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC20, ERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockGohm} from "src/test/mocks/MockGohm.sol";

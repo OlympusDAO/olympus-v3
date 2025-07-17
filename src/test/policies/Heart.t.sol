@@ -4,7 +4,7 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
@@ -17,7 +17,7 @@ import {MockYieldRepo} from "src/test/mocks/MockYieldRepo.sol";
 import {MockReserveMigrator} from "src/test/mocks/MockReserveMigrator.sol";
 import {MockEmissionManager} from "src/test/mocks/MockEmissionManager.sol";
 
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {MockOperator} from "src/test/mocks/MockOperator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";

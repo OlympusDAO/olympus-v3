@@ -16,9 +16,9 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";

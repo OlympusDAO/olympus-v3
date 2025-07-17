@@ -2,26 +2,26 @@
 pragma solidity >=0.8.15;
 
 // Libraries
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Interfaces
-import {IBondSDA} from "interfaces/IBondSDA.sol";
-import {IgOHM} from "interfaces/IgOHM.sol";
-import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IBondSDA} from "src/interfaces/IBondSDA.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
+import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
-import {IGenericClearinghouse} from "policies/interfaces/IGenericClearinghouse.sol";
+import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 // solhint-disable max-states-count

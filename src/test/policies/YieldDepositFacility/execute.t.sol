@@ -5,7 +5,7 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
     event RateSnapshotTaken(address indexed vault, uint48 timestamp, uint256 rate);

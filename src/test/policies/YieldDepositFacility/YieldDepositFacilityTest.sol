@@ -2,8 +2,8 @@
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -21,7 +21,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
