@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-interface IERC20BurnableMintable {
+import {IERC20} from "src/interfaces/IERC20.sol";
+
+interface IERC20BurnableMintable is IERC20 {
     /// @notice Mints tokens to the specified address
     ///
     /// @param to_      The address to mint tokens to
