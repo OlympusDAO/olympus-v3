@@ -7,10 +7,10 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 
 // Bophades policies
-import {OlympusHeart} from "policies/Heart.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
+import {IHeart} from "src/policies/interfaces/IHeart_v1_6.sol";
 
 /// @notice     Installs the YieldRepo contract and the new Heart which calls it
 contract YieldRepoInstall is OlyBatch {
@@ -34,7 +34,7 @@ contract YieldRepoInstall is OlyBatch {
         // Yield Repo Install Script
 
         // 0. Deactivate the old heart
-        addToBatch(oldHeart, abi.encodeWithSignature("deactivate()"));
+        addToBatch(oldHeart, abi.encodeWithSelector(IHeart.deactivate.selector));
 
         // A. Kernel Actions
         // A.1. Uninstall the old heart from the kernel
