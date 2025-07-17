@@ -2,6 +2,9 @@
 pragma solidity >=0.8.15;
 
 library String {
+    error EndBeforeStartIndex(uint256 startIndex, uint256 endIndex);
+    error EndIndexOutOfBounds(uint256 endIndex, uint256 length);
+
     /// @notice Truncates a string to 32 bytes
     function truncate32(string memory str_) internal pure returns (string memory) {
         return string(abi.encodePacked(bytes32(abi.encodePacked(str_))));
@@ -19,6 +22,10 @@ library String {
         uint256 endIndex_
     ) internal pure returns (string memory) {
         bytes memory strBytes = bytes(str_);
+
+        if (endIndex_ < startIndex_) revert EndBeforeStartIndex(startIndex_, endIndex_);
+        if (endIndex_ > strBytes.length) revert EndIndexOutOfBounds(endIndex_, strBytes.length);
+
         bytes memory result = new bytes(endIndex_ - startIndex_);
         for (uint256 i = startIndex_; i < endIndex_; i++) {
             result[i - startIndex_] = strBytes[i];
