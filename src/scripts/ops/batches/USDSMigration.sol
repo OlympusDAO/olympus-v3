@@ -7,12 +7,12 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 
 // Bophades policies
-import {OlympusHeart} from "policies/Heart.sol";
-import {Operator} from "policies/Operator.sol";
-import {Clearinghouse} from "policies/Clearinghouse.sol";
-import {BondCallback} from "policies/BondCallback.sol";
-import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
+import {Operator} from "src/policies/Operator.sol";
+import {Clearinghouse} from "src/policies/Clearinghouse.sol";
+import {BondCallback} from "src/policies/BondCallback.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
+import {IHeart} from "src/policies/interfaces/IHeart_v1_6.sol";
 
 /// @notice
 /// @dev Deactivates old heart, operator, yield repo, and clearinghouse contracts.
@@ -92,7 +92,7 @@ contract USDSMigration is OlyBatch {
     function run(bool send_) external isDaoBatch(send_) {
         // 1. Deactivate existing contracts that are being replaced locally
         // 1a. Deactivate OlympusHeart
-        addToBatch(oldHeart, abi.encodeWithSignature("deactivate()"));
+        addToBatch(oldHeart, abi.encodeWithSelector(IHeart.deactivate.selector));
         // 1b. Deactivate Operator
         addToBatch(oldOperator, abi.encodeWithSelector(Operator.deactivate.selector));
         // 1c. Shutdown YieldRepurchaseFacility
