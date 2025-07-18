@@ -122,6 +122,9 @@ abstract contract BasePeriodicTaskManager is IPeriodicTaskManager, PolicyEnabler
 
     // ========== TASK EXECUTION ========== //
 
+    /// @dev This function does not implement any logic to catch errors from the periodic tasks.
+    /// @dev The logic is that if a periodic task fails, it should fail loudly and revert.
+    /// @dev Any tasks that are non-essential can include a try-catch block to handle the error internally.
     function _executePeriodicTasks() internal {
         for (uint256 i = 0; i < _periodicTaskAddresses.length; i++) {
             // Get the custom selector for the task
