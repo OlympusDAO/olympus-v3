@@ -420,7 +420,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
 
     /// @notice Get the conversion rate between a vault and underlying asset
     function _getConversionRate(IERC4626 vault_) internal view returns (uint256) {
-        return vault_.convertToAssets(1e18);
+        return vault_.convertToAssets(10 ** vault_.decimals());
     }
 
     // ========== PERIODIC TASK ========== //
