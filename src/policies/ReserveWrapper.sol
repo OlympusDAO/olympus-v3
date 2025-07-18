@@ -36,6 +36,7 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
 
     constructor(address kernel_, address reserve_, address sReserve_) Policy(Kernel(kernel_)) {
         // Validate that the reserve address is not null
+        // No need to check for sReserve being null, as the next line will revert if it is
         if (reserve_ == address(0)) revert ReserveWrapper_ZeroAddress();
 
         // Validate that the sReserve asset is the same as the reserve
@@ -126,6 +127,7 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
         TRSRY.withdrawReserves(address(this), _RESERVE, reserveBalance);
 
         // Wrap into sReserve and deposit into the TRSRY
+        // This is unlikely to revert, as the appropriate checks have been performed already
         _RESERVE.safeApprove(address(_SRESERVE), reserveBalance);
         _SRESERVE.deposit(reserveBalance, address(TRSRY));
 
