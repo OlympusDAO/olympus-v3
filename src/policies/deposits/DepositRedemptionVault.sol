@@ -10,11 +10,11 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
 
 // Libraries
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Bophades
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -25,7 +25,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 /// @title  DepositRedemptionVault
 /// @notice A contract that manages the redemption of receipt tokens with facility coordination and borrowing
 contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnabler, ReentrancyGuard {
-    using SafeTransferLib for ERC20;
+    using TransferHelper for ERC20;
     using FullMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
 

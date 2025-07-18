@@ -8,12 +8,12 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {String} from "src/libraries/String.sol";
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -32,7 +32,7 @@ contract DepositManager is
     BaseAssetManager,
     ERC6909Wrappable
 {
-    using SafeTransferLib for ERC20;
+    using TransferHelper for ERC20;
     using String for string;
     using EnumerableSet for EnumerableSet.UintSet;
 

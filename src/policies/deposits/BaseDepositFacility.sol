@@ -8,8 +8,8 @@ import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacilit
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Bophades
 import {Kernel, Policy} from "src/Kernel.sol";
@@ -22,7 +22,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 /// @notice Abstract base contract for deposit facilities with shared functionality
 abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility, ReentrancyGuard {
     using FullMath for uint256;
-    using SafeTransferLib for ERC20;
+    using TransferHelper for ERC20;
     using EnumerableSet for EnumerableSet.AddressSet;
 
     // ========== CONSTANTS ========== //

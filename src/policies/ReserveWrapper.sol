@@ -9,7 +9,7 @@ import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Bophades
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
@@ -22,7 +22,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @title  ReserveWrapper
 /// @notice Periodic task to wrap the reserve tokens in the TRSRY module into sReserve tokens
 contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper {
-    using SafeTransferLib for ERC20;
+    using TransferHelper for ERC20;
 
     // ========== STATE VARIABLES ========== //
 
