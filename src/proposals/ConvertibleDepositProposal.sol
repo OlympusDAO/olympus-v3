@@ -295,13 +295,10 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         );
 
         // Validate that the Timelock has the "admin" role
-        require(
-            roles.hasRole(timelock, bytes32("admin")),
-            "Timelock does not have the cd_admin role"
-        );
+        require(roles.hasRole(timelock, bytes32("admin")), "Timelock does not have the admin role");
 
         // Validate that the DAO MS has the "admin" role
-        require(roles.hasRole(daoMS, bytes32("admin")), "DAO MS does not have the cd_admin role");
+        require(roles.hasRole(daoMS, bytes32("admin")), "DAO MS does not have the admin role");
 
         // Validate that the new Heart has the "heart" role
         require(
