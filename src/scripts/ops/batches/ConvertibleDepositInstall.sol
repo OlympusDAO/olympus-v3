@@ -10,7 +10,6 @@ import {Kernel, Actions} from "src/Kernel.sol";
 /// @notice     Installs the ConvertibleDeposit contracts
 contract ConvertibleDepositInstall is OlyBatch {
     address public kernel;
-    // address public cdepo;
     address public cdpos;
     address public cdAuctioneer;
     address public cdFacility;
@@ -18,6 +17,8 @@ contract ConvertibleDepositInstall is OlyBatch {
     address public heart;
     address public oldHeart;
     address public oldEmissionManager;
+
+    // TODO This needs to be updated to use the new contracts
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
