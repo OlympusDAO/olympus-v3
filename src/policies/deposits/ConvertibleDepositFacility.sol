@@ -376,7 +376,7 @@ contract ConvertibleDepositFacility is
     }
 
     /// @inheritdoc IConvertibleDepositFacility
-    function claimAllYield() public {
+    function claimAllYield() external {
         // Get the assets
         IERC20[] memory assets = DEPOSIT_MANAGER.getConfiguredAssets();
 
@@ -401,7 +401,12 @@ contract ConvertibleDepositFacility is
         // Don't do anything if disabled
         if (!isEnabled) return;
 
-        claimAllYield();
+        try this.claimAllYield() {
+            // Do nothing
+        } catch {
+            // This avoids the periodic task from failing loudly, as the claimAllYield function is not critical to the system
+            revert CDF_ClaimAllYieldFailed();
+        }
     }
 
     // ========== ERC165 ========== //

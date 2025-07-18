@@ -41,6 +41,9 @@ interface IConvertibleDepositFacility {
 
     error CDF_Unsupported(uint256 positionId_);
 
+    /// @dev Used when the claimAllYield function fails during a periodic task
+    error CDF_ClaimAllYieldFailed();
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Parameters for the {createPosition} function
