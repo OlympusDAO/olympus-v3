@@ -32,7 +32,7 @@ interface IYieldDepositFacility {
 
     error YDF_Unsupported(uint256 positionId_);
 
-    error YDF_NoSnapshotAvailable(address token, uint48 timestamp);
+    error YDF_NoRateSnapshot(address vault_, uint48 timestamp_);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -100,55 +100,17 @@ interface IYieldDepositFacility {
         uint256[] memory positionIds_
     ) external view returns (uint256 yield, IERC20 asset);
 
-    /// @notice Preview the amount of yield that would be claimed for the given positions with timestamp hints
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that `account_` is the owner of all of the positions
-    ///         - Validating that token in the position is a supported receipt token
-    ///         - Validating that all of the positions are valid
-    ///         - Using the provided timestamp hints if valid
-    ///         - Returning the total amount of yield that would be claimed
-    ///
-    /// @param  account_        The address to preview the yield for
-    /// @param  positionIds_    An array of position ids that will be claimed
-    /// @param  timestampHints_ An array of timestamp hints for each position
-    /// @return yield           The amount of yield that would be claimed
-    /// @return asset           The address of the asset that will be received
-    function previewClaimYield(
-        address account_,
-        uint256[] memory positionIds_,
-        uint48[] memory timestampHints_
-    ) external view returns (uint256 yield, IERC20 asset);
-
     /// @notice Claims the yield for the given positions
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller is the owner of all of the positions
     ///         - Validating that token in the position is a supported receipt token
     ///         - Validating that all of the positions are valid
-    ///         - Burning the receipt tokens
     ///         - Transferring the yield to the caller
     ///         - Emitting an event
     ///
     /// @param  positionIds_    An array of position ids that will be claimed
     /// @return yield           The amount of yield that was claimed
     function claimYield(uint256[] memory positionIds_) external returns (uint256 yield);
-
-    /// @notice Claims the yield for the given positions with timestamp hints
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller is the owner of all of the positions
-    ///         - Validating that token in the position is a supported receipt token
-    ///         - Validating that all of the positions are valid
-    ///         - Using the provided timestamp hints if valid
-    ///         - Burning the receipt tokens
-    ///         - Transferring the yield to the caller
-    ///         - Emitting an event
-    ///
-    /// @param  positionIds_    An array of position ids that will be claimed
-    /// @param  timestampHints_ An array of timestamp hints for each position
-    /// @return yield           The amount of yield that was claimed
-    function claimYield(
-        uint256[] memory positionIds_,
-        uint48[] memory timestampHints_
-    ) external returns (uint256 yield);
 
     // ========== ADMIN FUNCTIONS ========== //
 

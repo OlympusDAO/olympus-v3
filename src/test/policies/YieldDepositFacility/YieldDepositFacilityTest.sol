@@ -329,14 +329,6 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
-    function _getRoundedTimestamp(uint48 timestamp_) internal pure returns (uint48) {
-        return (uint48(timestamp_) / 8 hours) * 8 hours;
-    }
-
-    function _getRoundedTimestamp() internal view returns (uint48) {
-        return _getRoundedTimestamp(uint48(block.timestamp));
-    }
-
     modifier givenWarpForward(uint48 warp_) {
         vm.warp(block.timestamp + warp_);
         _;
@@ -465,11 +457,11 @@ contract YieldDepositFacilityTest is Test {
             "DepositManager's vault shares are not reduced by the yield amount"
         );
 
-        // Assert conversion rate is updated
+        // Assert claim timestamp is updated to current block timestamp
         assertEq(
-            yieldDepositFacility.positionLastYieldConversionRate(positionId_),
-            expectedConversionRate_,
-            "Conversion rate is not updated"
+            yieldDepositFacility.positionLastYieldClaimTimestamp(positionId_),
+            block.timestamp,
+            "Claim timestamp is not updated"
         );
     }
 

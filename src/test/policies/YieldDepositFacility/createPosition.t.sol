@@ -203,11 +203,11 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         assertEq(positionIds.length, 1, "positionIds.length");
         assertEq(positionIds[0], 0, "positionIds[0]");
 
-        // Assert that the last yield conversion rate is set
+        // Assert that the last yield claim timestamp is set
         assertEq(
-            yieldDepositFacility.positionLastYieldConversionRate(actualPositionId),
-            lastYieldConversionRate + 1,
-            "positionLastYieldConversionRate"
+            yieldDepositFacility.positionLastYieldClaimTimestamp(actualPositionId),
+            block.timestamp,
+            "positionLastYieldClaimTimestamp"
         );
     }
 }
