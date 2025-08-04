@@ -286,6 +286,21 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     }
 
     /// @inheritdoc IYieldDepositFacility
+    /// @dev        Notes:
+    /// @dev        - For asset vaults that are not monotonically increasing in value, the yield received by different depositors may differ based on the time of claim.
+    /// @dev        - If before or at expiry: it will get the current vault rate
+    /// @dev        - If after expiry: it will get the last vault rate before or equal to the expiry timestamp
+    /// @dev        - The current value is calculated as: share quantity at previous claim * vault rate
+    /// @dev        - The yield is calculated as: current value - original deposit
+    /// @dev
+    /// @dev        This function will revert if:
+    /// @dev        - The contract is not enabled
+    /// @dev        - The asset in the positions is not supported
+    /// @dev        - `account_` is not the owner of all of the positions
+    /// @dev        - Any of the positions have a different asset and deposit period combination
+    /// @dev        - The position was not created by this contract
+    /// @dev        - The asset does not have a vault configured
+    /// @dev        - There is no snapshot for the asset at the last yield claim timestamp
     function previewClaimYield(
         address account_,
         uint256[] memory positionIds_
