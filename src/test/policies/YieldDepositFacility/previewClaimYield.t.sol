@@ -148,6 +148,7 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000) // 10%
+        givenWarpForward(1) // Requires gap between snapshots
     {
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
@@ -162,8 +163,10 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
+        // Yield fee = 449999999999999990 * 1000 / 10000 = 44999999999999999
+        // Claimed yield = 449999999999999990 - 44999999999999999 = 404999999999999991
         uint256 expectedYield = 449999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 44999999999999999;
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -193,6 +196,7 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000)
+        givenWarpForward(1) // Requires gap between snapshots
         givenHarvest(recipient, POSITION_ID)
         givenWarpForward(1 days)
         givenVaultAccruesYield(iVault, 1e18)
@@ -202,15 +206,18 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
-        // last conversion rate = 1155000000000000000 + 1
-        // current conversion rate = 1211204379562043795
-        // deposit amount = 9000000000000000000
-        // deposit shares = 7792207792207792201 (at the time of last claim)
-        // Yield/share = 1211204379562043795 - 1155000000000000001 = 56204379562043794 (in terms of assets per share)
-        // Actual yield = yield/share * shares
-        // Actual yield = 56204379562043794 * 7792207792207792201 / 1e18 = 437956204379562030
+        // Last conversion rate = 1155000000000000000 + 1
+        // Deposit amount = 9000000000000000000
+        // Last shares = 9000000000000000000 * 1e18 / 1155000000000000001 = 7792207792207792201
+        // End conversion rate = 1211204379562043795
+        // Current shares value = last shares * end rate / 1e18
+        // = 7792207792207792201 * 1211204379562043795 / 1e18 = 9437956204379562030
+        // Yield = current shares value - receipt tokens
+        // = 9437956204379562030 - 9000000000000000000 = 437956204379562030
+        // Yield fee = 437956204379562030 * 1000 / 10000 = 43795620437956203
+        // Claimed yield = 437956204379562030 - 43795620437956203 = 394160583941605827
         uint256 expectedYield = 437956204379562030;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 43795620437956203;
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -245,6 +252,7 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(0)
+        givenWarpForward(1) // Requires gap between snapshots
     {
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
@@ -278,6 +286,37 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
             address(previewedAsset),
             address(reserveToken),
             "Previewed asset does not match expected"
+        );
+    }
+
+    // given yield is claimed multiple times in the same block
+    //  [X] the second claim should return 0 yield
+
+    function test_whenClaimedMultipleTimesInSameBlock()
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000) // 10%
+        givenWarpForward(1) // Requires gap between snapshots
+    {
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = POSITION_ID;
+
+        // Actually claim the yield to update state
+        vm.prank(recipient);
+        yieldDepositFacility.claimYield(positionIds);
+
+        // Second preview in the same block should return 0 yield
+        (uint256 secondPreviewedYield, IERC20 secondPreviewedAsset) = yieldDepositFacility
+            .previewClaimYield(recipient, positionIds);
+
+        assertEq(secondPreviewedYield, 0, "Second previewed yield should be 0");
+        assertEq(
+            address(secondPreviewedAsset),
+            address(reserveToken),
+            "Second previewed asset does not match expected"
         );
     }
 }

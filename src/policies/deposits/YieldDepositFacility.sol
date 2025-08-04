@@ -232,18 +232,24 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             // Deposit period hasn't finished, use current rate
             endRate = _getConversionRate(assetVault);
             newClaimTimestamp = uint48(block.timestamp);
+
+            // Ensure we're not claiming from before our last claim
+            if (newClaimTimestamp <= lastClaimTimestamp) {
+                // No yield available - end snapshot is same or earlier than start
+                return (0, 0, lastClaimTimestamp);
+            }
         } else {
             // Deposit period has finished, find the most recent rate at or before expiry
             uint48 endSnapshotTimestamp = _findLastSnapshotBefore(assetVault, position.expiry);
             if (endSnapshotTimestamp == 0) {
                 // No end snapshot available, return 0 yield
-                return (0, 0, 0);
+                return (0, 0, lastClaimTimestamp);
             }
 
             // Ensure we're not claiming from before our last claim
             if (endSnapshotTimestamp <= lastClaimTimestamp) {
                 // No yield available - end snapshot is same or earlier than start
-                return (0, 0, 0);
+                return (0, 0, lastClaimTimestamp);
             }
 
             endRate = vaultRateSnapshots[assetVault][endSnapshotTimestamp];
@@ -257,7 +263,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         uint256 lastShares = FullMath.mulDiv(
             position.remainingDeposit, // assets
             10 ** assetVault.decimals(), // decimals
-            lastSnapshotRate // assets per share
+            lastSnapshotRate + 1 // assets per share, increased by 1 wei to account for rounding errors and prevent insolvency
         );
 
         // Calculate what the position would be worth at the current rate
@@ -348,6 +354,9 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             // If there is yield, update the last yield claim timestamp
             if (previewYieldMinusFee > 0) {
                 positionLastYieldClaimTimestamp[positionId] = newClaimTimestamp;
+
+                // Ensure there is a snapshot for the new claim timestamp
+                _takeSnapshot(asset, newClaimTimestamp);
             }
         }
 
@@ -419,15 +428,14 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         // Skip if the vault is not set
         if (address(vault) == address(0)) return 0;
 
-        // Only store if we haven't stored for this timestamp
-        if (vaultRateSnapshots[vault][timestamp_] == 0) {
-            uint256 rate = _getConversionRate(vault);
-            vaultRateSnapshots[vault][timestamp_] = rate;
-            vaultSnapshotTimestamps[vault].add(timestamp_);
-            emit RateSnapshotTaken(address(vault), timestamp_, rate);
-            return rate;
-        }
-        return vaultRateSnapshots[vault][timestamp_];
+        // Even if the snapshot already exists, we still take a new one
+        // This is to ensure that the yield calculation is always accurate, regardless of the order in the block
+        uint256 rate = _getConversionRate(vault);
+        vaultRateSnapshots[vault][timestamp_] = rate;
+        vaultSnapshotTimestamps[vault].add(timestamp_);
+        emit RateSnapshotTaken(address(vault), timestamp_, rate);
+
+        return rate;
     }
 
     // ========== PERIODIC TASK ========== //

@@ -163,6 +163,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000) // 10%
+        givenWarpForward(1) // Requires gap between snapshots
     {
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
@@ -177,9 +178,11 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 currentConversionRate = 1155000000000000000 + 1;
+        // Yield fee = 449999999999999990 * 1000 / 10000 = 44999999999999999
+        // Claimed yield = 449999999999999990 - 44999999999999999 = 404999999999999991
+        uint256 currentConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 44999999999999999;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Preview harvest yield
@@ -216,7 +219,8 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedFee,
             expectedYieldShares,
-            currentConversionRate
+            currentConversionRate,
+            uint48(block.timestamp)
         );
     }
 
@@ -234,6 +238,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000)
+        givenWarpForward(1) // Requires gap between snapshots
         givenHarvest(recipient, POSITION_ID)
         givenWarpForward(1 days)
         givenVaultAccruesYield(iVault, 1e18)
@@ -243,16 +248,19 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
-        // last conversion rate = 1155000000000000000 + 1
-        // current conversion rate = 1211204379562043795
-        // deposit amount = 9000000000000000000
-        // deposit shares = 7792207792207792201 (at the time of last claim)
-        // Yield/share = 1211204379562043795 - 1155000000000000001 = 56204379562043794 (in terms of assets per share)
-        // Actual yield = yield/share * shares
-        // Actual yield = 56204379562043794 * 7792207792207792201 / 1e18 = 437956204379562030
-        uint256 currentConversionRate = 1211204379562043795 + 1;
+        // Last conversion rate = 1155000000000000000 + 1
+        // Deposit amount = 9000000000000000000
+        // Last shares = 9000000000000000000 * 1e18 / 1155000000000000001 = 7792207792207792201
+        // End conversion rate = 1211204379562043795
+        // Current shares value = last shares * end rate / 1e18
+        // = 7792207792207792201 * 1211204379562043795 / 1e18 = 9437956204379562030
+        // Yield = current shares value - receipt tokens
+        // = 9437956204379562030 - 9000000000000000000 = 437956204379562030
+        // Yield fee = 437956204379562030 * 1000 / 10000 = 43795620437956203
+        // Claimed yield = 437956204379562030 - 43795620437956203 = 394160583941605827
+        uint256 currentConversionRate = 1211204379562043795;
         uint256 expectedYield = 437956204379562030;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 43795620437956203;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Preview harvest yield
@@ -289,7 +297,8 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedFee,
             expectedYieldShares,
-            currentConversionRate
+            currentConversionRate,
+            uint48(block.timestamp)
         );
     }
 
@@ -321,16 +330,18 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // Calculate expected yield and fee
         // This will take the current rate as the end rate
         // Last conversion rate = 1100000000000000000 + 1
-        // Deposit amount
+        // Deposit amount = 9000000000000000000
         // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
         // End conversion rate = 1210000000000000000
         // Current shares value = last shares * end rate / 1e18
         // = 8181818181818181810 * 1210000000000000000 / 1e18 = 9899999999999999990
         // Yield = current shares value - receipt tokens
         // = 9899999999999999990 - 9000000000000000000 = 899999999999999990
-        uint256 currentConversionRate = 1210000000000000000 + 1;
+        // Yield fee = 899999999999999990 * 1000 / 10000 = 89999999999999999
+        // Claimed yield = 899999999999999990 - 89999999999999999 = 809999999999999991
+        uint256 currentConversionRate = 1210000000000000000;
         uint256 expectedYield = 899999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 89999999999999999;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Expect event
@@ -349,7 +360,8 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedFee,
             expectedYieldShares,
-            currentConversionRate
+            currentConversionRate,
+            YIELD_EXPIRY // Matches givenRateSnapshotTaken() call
         );
     }
 
@@ -380,9 +392,11 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 rateSnapshotConversionRate = 1155000000000000000 + 1;
+        // Yield fee = 449999999999999990 * 1000 / 10000 = 44999999999999999
+        // Claimed yield = 449999999999999990 - 44999999999999999 = 404999999999999991
+        uint256 rateSnapshotConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 44999999999999999;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Expect event
@@ -408,7 +422,8 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedFee,
             expectedYieldShares,
-            rateSnapshotConversionRate
+            rateSnapshotConversionRate,
+            YIELD_EXPIRY // Matches givenRateSnapshotTaken() call
         );
     }
 
@@ -418,7 +433,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenYieldFee(1000)
         givenDepositPeriodEnded(0)
-        givenRateSnapshotTaken
+        givenRateSnapshotTaken // block: 1000000
         givenVaultAccruesYield(iVault, 1e18)
     {
         // Move beyond the end of the deposit period
@@ -439,7 +454,16 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         yieldDepositFacility.claimYield(positionIds);
 
         // Assert balances
-        _assertHarvestBalances(recipient, POSITION_ID, 0, 0, 0, 0, rateSnapshotConversionRate);
+        _assertHarvestBalances(
+            recipient,
+            POSITION_ID,
+            0,
+            0,
+            0,
+            0,
+            rateSnapshotConversionRate,
+            1000000 // Matches givenRateSnapshotTaken() call
+        );
     }
 
     function test_whenExpired_givenRateSnapshotOnExpiry_roundingError()
@@ -506,14 +530,16 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // As the expiry is in the past, this will take the last rate snapshot
         // Last conversion rate = 1000000000000000000 + 1
         // Deposit amount = 1000000000000000000
-        // Last shares = 999999999999999999 (at the time of deposit)
+        // Last shares = 1000000000000000000 * 1e18 / 1000000000000000001 = 999999999999999999
         // End conversion rate = 1500000000000000000
         // Current shares value = last shares * end rate / 1e18
         // = 999999999999999999 * 1500000000000000000 / 1e18 = 1499999999999999998
         // Yield = current shares value - receipt tokens
         // = 1499999999999999998 - 1000000000000000000 = 499999999999999998
+        // Yield fee = 499999999999999998 * 1000 / 10000 = 49999999999999999
+        // Claimed yield = 499999999999999998 - 49999999999999999 = 449999999999999999
         uint256 expectedYield = 499999999999999998;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 49999999999999999;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -634,9 +660,11 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 rateSnapshotConversionRate = 1155000000000000000 + 1;
+        // Yield fee = 449999999999999990 * 1000 / 10000 = 44999999999999999
+        // Claimed yield = 449999999999999990 - 44999999999999999 = 404999999999999991
+        uint256 rateSnapshotConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 44999999999999999;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Expect event
@@ -655,7 +683,8 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedFee,
             expectedYieldShares,
-            rateSnapshotConversionRate
+            rateSnapshotConversionRate,
+            YIELD_EXPIRY // Matches givenRateSnapshotTaken() call
         );
     }
 
@@ -673,12 +702,13 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(0)
+        givenWarpForward(1) // Requires gap between snapshots
     {
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
         positionIds[0] = POSITION_ID;
 
-        // Calculate expected yield and
+        // Calculate expected yield and fee
         // Last conversion rate = 1100000000000000000 + 1
         // Deposit amount = 9000000000000000000
         // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
@@ -687,7 +717,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 currentConversionRate = 1155000000000000000 + 1;
+        uint256 currentConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 0;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
@@ -726,7 +756,53 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             expectedFee,
             expectedFee,
             expectedYieldShares,
-            currentConversionRate
+            currentConversionRate,
+            uint48(block.timestamp)
+        );
+    }
+
+    // given yield is claimed multiple times in the same block
+    //  [X] the second claim should return 0 yield
+    //  [X] the second claim should emit event with 0 yield
+    //  [X] the second claim should not transfer any tokens
+
+    function test_whenClaimedMultipleTimesInSameBlock()
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000) // 10%
+        givenWarpForward(1) // Requires gap between snapshots
+    {
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = POSITION_ID;
+
+        // Claim yield the first time
+        vm.prank(recipient);
+        yieldDepositFacility.claimYield(positionIds);
+
+        // Store balances after first claim
+        uint256 balanceAfterFirstClaim = reserveToken.balanceOf(recipient);
+        uint256 treasuryBalanceAfterFirstClaim = reserveToken.balanceOf(address(treasury));
+
+        // Second claim in the same block should return 0 yield
+        vm.expectEmit(true, true, true, true);
+        emit YieldClaimed(address(reserveToken), recipient, 0);
+
+        vm.prank(recipient);
+        yieldDepositFacility.claimYield(positionIds);
+
+        // Assert balances unchanged after second claim
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            balanceAfterFirstClaim,
+            "Recipient balance should not change on second claim"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(treasury)),
+            treasuryBalanceAfterFirstClaim,
+            "Treasury balance should not change on second claim"
         );
     }
 }

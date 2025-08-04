@@ -39,7 +39,8 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
     }
 
     // given a snapshot has already been taken for the current timestamp
-    //  [X] it does nothing
+    //  [X] it stores a new snapshot
+    //  [X] it emits a SnapshotTaken event
 
     function test_givenSnapshotAlreadyTaken(uint48 timestamp) public givenLocallyActive {
         // Set the timestamp to be a multiple of 8 hours
@@ -62,6 +63,13 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
             "Vault conversion rate is not different"
         );
 
+        // Get the new vault conversion rate
+        uint256 newRate = vault.convertToAssets(1e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit RateSnapshotTaken(address(vault), timestamp, newRate);
+
         // Force another snapshot to be taken
         vm.prank(heart);
         yieldDepositFacility.execute();
@@ -69,8 +77,8 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
         // The snapshot remains unchanged
         assertEq(
             yieldDepositFacility.vaultRateSnapshots(iVault, timestamp),
-            currentRate,
-            "Snapshot should not change"
+            newRate,
+            "Snapshot should change"
         );
     }
 

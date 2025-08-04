@@ -434,7 +434,8 @@ contract YieldDepositFacilityTest is Test {
         uint256 expectedFee_,
         uint256 expectedTreasuryBalance_,
         uint256 expectedVaultSharesReduction_,
-        uint256 expectedConversionRate_
+        uint256 expectedConversionRate_,
+        uint48 lastClaimTimestamp_
     ) internal view {
         // Assert caller received yield minus fee
         assertEq(
@@ -457,10 +458,10 @@ contract YieldDepositFacilityTest is Test {
             "DepositManager's vault shares are not reduced by the yield amount"
         );
 
-        // Assert claim timestamp is updated to current block timestamp
+        // Assert claim timestamp is updated to the last claim timestamp
         assertEq(
             yieldDepositFacility.positionLastYieldClaimTimestamp(positionId_),
-            block.timestamp,
+            lastClaimTimestamp_,
             "Claim timestamp is not updated"
         );
     }
