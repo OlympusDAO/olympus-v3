@@ -286,12 +286,15 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     }
 
     /// @inheritdoc IYieldDepositFacility
-    /// @dev        Notes:
-    /// @dev        - For asset vaults that are not monotonically increasing in value, the yield received by different depositors may differ based on the time of claim.
+    /// @dev        Yield is calculated in the following manner:
     /// @dev        - If before or at expiry: it will get the current vault rate
     /// @dev        - If after expiry: it will get the last vault rate before or equal to the expiry timestamp
     /// @dev        - The current value is calculated as: share quantity at previous claim * vault rate
     /// @dev        - The yield is calculated as: current value - original deposit
+    /// @dev
+    /// @dev        Notes:
+    /// @dev        - For asset vaults that are not monotonically increasing in value, the yield received by different depositors may differ based on the time of claim.
+    /// @dev        - Claiming yield multiple times during a deposit period will likely result in a lower yield than claiming once at/after expiry.
     /// @dev
     /// @dev        This function will revert if:
     /// @dev        - The contract is not enabled
@@ -335,6 +338,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     }
 
     /// @inheritdoc IYieldDepositFacility
+    /// @dev        See also {previewClaimYield} for more details on the yield calculation.
     function claimYield(
         uint256[] memory positionIds_
     ) external onlyEnabled returns (uint256 yieldMinusFee) {
