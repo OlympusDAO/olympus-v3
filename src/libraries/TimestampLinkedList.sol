@@ -5,6 +5,10 @@ pragma solidity >=0.8.20;
 /// @notice A library for managing linked lists of uint48 timestamps in descending order
 /// @dev    Each list maintains timestamps in descending chronological order (newest first)
 library TimestampLinkedList {
+    // ========== ERRORS ========== //
+
+    error TimestampLinkedList_InvalidTimestamp(uint48 timestamp);
+
     // ========== STRUCTS ========== //
 
     /// @notice Structure representing a timestamp linked list
@@ -22,6 +26,8 @@ library TimestampLinkedList {
     /// @param  list The list to add to
     /// @param  timestamp The timestamp to add
     function add(List storage list, uint48 timestamp) internal {
+        if (timestamp == 0) revert TimestampLinkedList_InvalidTimestamp(timestamp);
+
         if (contains(list, timestamp)) {
             return; // Already exists, do nothing
         }

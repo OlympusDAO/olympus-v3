@@ -189,6 +189,19 @@ contract TimestampLinkedListTest is Test {
         assertEq(list.getPrevious(maxVal), maxVal - 1);
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
+    function test_minZero_reverts() public {
+        // Expect it to revert, as zero is not a valid timestamp
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TimestampLinkedList.TimestampLinkedList_InvalidTimestamp.selector,
+                uint48(0)
+            )
+        );
+
+        list.add(0);
+    }
+
     // ========== SEARCH OPERATIONS - COMPREHENSIVE ========== //
 
     function test_findLastBefore_comprehensive() public {
