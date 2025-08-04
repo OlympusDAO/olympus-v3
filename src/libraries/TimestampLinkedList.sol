@@ -23,6 +23,9 @@ library TimestampLinkedList {
 
     /// @notice Adds a new timestamp to the list in descending order
     /// @dev    Does nothing if timestamp already exists
+    /// @dev    This function will revert if:
+    /// @dev    - The timestamp is 0
+    ///
     /// @param  list The list to add to
     /// @param  timestamp The timestamp to add
     function add(List storage list, uint48 timestamp) internal {
