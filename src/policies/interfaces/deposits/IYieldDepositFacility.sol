@@ -34,16 +34,6 @@ interface IYieldDepositFacility {
 
     error YDF_NoRateSnapshot(address vault_, uint48 timestamp_);
 
-    error YDF_NoMatchingPosition(address user_, address asset_, uint8 periodMonths_);
-
-    error YDF_InsufficientRemainingDeposit(
-        address user_,
-        address asset_,
-        uint8 periodMonths_,
-        uint256 requested_,
-        uint256 available_
-    );
-
     // ========== DATA STRUCTURES ========== //
 
     /// @notice Parameters for the {createPosition} function

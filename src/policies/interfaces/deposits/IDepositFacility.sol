@@ -44,6 +44,19 @@ interface IDepositFacility {
         uint256 available
     );
 
+    error DepositFacility_NoPositions();
+
+    error DepositFacility_InvalidPositionId(uint256 positionId);
+
+    error DepositFacility_MultipleAssetPeriods(uint256[] positionIds);
+
+    error DepositFacility_InsufficientRemainingDeposit(
+        address asset,
+        uint8 depositPeriod,
+        uint256 requested,
+        uint256 available
+    );
+
     // ========== OPERATOR AUTHORIZATION ========== //
 
     /// @notice Authorize an operator (e.g., a redemption vault) to handle actions through this facility
@@ -144,50 +157,37 @@ interface IDepositFacility {
 
     // ========== RECLAIM ========== //
 
-    /// @notice Preview the amount of deposit token that would be reclaimed
+    /// @notice Preview the amount of deposit token that would be reclaimed from positions
     /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating position ownership
     ///         - Returning the total amount of deposit tokens that would be reclaimed
     ///
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
+    /// @param  account_        The address to preview the reclaim for
+    /// @param  positionIds_    Array of position IDs to reclaim from
     /// @param  amount_         The amount of deposit tokens to reclaim
     /// @return reclaimed       The amount of deposit token returned to the caller
     function previewReclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
+        address account_,
+        uint256[] calldata positionIds_,
         uint256 amount_
     ) external view returns (uint256 reclaimed);
 
-    /// @notice Reclaims deposit tokens, after applying a discount
-    ///         Deposit tokens can be reclaimed at any time.
-    ///         The caller is not required to have a position in the facility.
+    /// @notice Reclaims deposit tokens from positions, after applying a discount
+    ///         Deposit tokens can be reclaimed at any time by position owners.
+    ///         The caller must own all provided positions.
     /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that caller owns all positions
+    ///         - Validating positions have sufficient remaining deposit
+    ///         - Updating position remaining deposits in ascending order
     ///         - Burning the receipt tokens
-    ///         - Transferring the deposit token to `recipient_`
+    ///         - Transferring the deposit token to caller
     ///         - Emitting an event
     ///
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
-    /// @param  recipient_      The address to reclaim the deposit token to
-    /// @param  amount_         The amount of deposit tokens to reclaim
-    /// @return reclaimed       The amount of deposit token returned to the recipient
-    function reclaimFor(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        address recipient_,
-        uint256 amount_
-    ) external returns (uint256 reclaimed);
-
-    /// @notice Reclaims deposit tokens, after applying a discount
-    /// @dev    This variant reclaims the underlying asset to the caller
-    ///
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
+    /// @param  positionIds_    Array of position IDs to reclaim from
     /// @param  amount_         The amount of deposit tokens to reclaim
     /// @return reclaimed       The amount of deposit token returned to the caller
     function reclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
+        uint256[] calldata positionIds_,
         uint256 amount_
     ) external returns (uint256 reclaimed);
 

@@ -298,22 +298,22 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     /// @inheritdoc IDepositFacility
     function previewReclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
+        address account_,
+        uint256[] calldata positionIds_,
         uint256 amount_
     ) public view onlyEnabled returns (uint256 reclaimed) {
         // Validate that the amount is not 0
         if (amount_ == 0) revert DepositFacility_ZeroAmount();
 
-        // Validate that there are enough available deposits
-        _validateAvailableDeposits(depositToken_, amount_);
+        // // Validate that there are enough available deposits
+        // _validateAvailableDeposits(depositToken_, amount_);
 
-        // This is rounded down to keep assets in the vault, otherwise the contract may end up
-        // in a state where there are not enough of the assets in the vault to redeem/reclaim
-        reclaimed = amount_.mulDiv(
-            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_),
-            ONE_HUNDRED_PERCENT
-        );
+        // // This is rounded down to keep assets in the vault, otherwise the contract may end up
+        // // in a state where there are not enough of the assets in the vault to redeem/reclaim
+        // reclaimed = amount_.mulDiv(
+        //     DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_),
+        //     ONE_HUNDRED_PERCENT
+        // );
 
         // If the reclaimed amount is 0, revert
         if (reclaimed == 0) revert DepositFacility_ZeroAmount();
@@ -322,56 +322,45 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
-    function reclaimFor(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        address recipient_,
+    function reclaim(
+        uint256[] calldata positionIds_,
         uint256 amount_
     ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
         // Calculate the quantity of deposit token to withdraw and return
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
+        uint256 discountedAssetsOut = previewReclaim(msg.sender, positionIds_, amount_);
 
-        // Withdraw the deposit
-        uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
-            IDepositManager.WithdrawParams({
-                asset: depositToken_,
-                depositPeriod: depositPeriod_,
-                depositor: msg.sender,
-                recipient: address(this),
-                amount: amount_,
-                isWrapped: false
-            })
-        );
+        // // Withdraw the deposit
+        // uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
+        //     IDepositManager.WithdrawParams({
+        //         asset: depositToken_,
+        //         depositPeriod: depositPeriod_,
+        //         depositor: msg.sender,
+        //         recipient: address(this),
+        //         amount: amount_,
+        //         isWrapped: false
+        //     })
+        // );
 
-        // Transfer discounted amount of the deposit token to the recipient
-        ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
+        // // Transfer discounted amount of the deposit token to the recipient
+        // ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
 
-        // Transfer the remaining deposit tokens to the TRSRY
-        ERC20(address(depositToken_)).safeTransfer(
-            address(TRSRY),
-            actualAmount - discountedAssetsOut
-        );
+        // // Transfer the remaining deposit tokens to the TRSRY
+        // ERC20(address(depositToken_)).safeTransfer(
+        //     address(TRSRY),
+        //     actualAmount - discountedAssetsOut
+        // );
 
-        // Emit event
-        emit Reclaimed(
-            recipient_,
-            address(depositToken_),
-            depositPeriod_,
-            discountedAssetsOut,
-            actualAmount - discountedAssetsOut
-        );
+        // // Emit event
+        // emit Reclaimed(
+        //     recipient_,
+        //     address(depositToken_),
+        //     depositPeriod_,
+        //     discountedAssetsOut,
+        //     actualAmount - discountedAssetsOut
+        // );
 
         return discountedAssetsOut;
-    }
-
-    /// @inheritdoc IDepositFacility
-    function reclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) external returns (uint256 reclaimed) {
-        reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
     }
 
     // ========== ERC165 ========== //
