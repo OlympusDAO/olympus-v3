@@ -65,7 +65,7 @@ contract YieldDepositFacilityTest is Test {
     uint48 public constant YIELD_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
     uint256 public treasuryReserveBalanceBefore;
-    uint256 public cdepoVaultBalanceBefore;
+    uint256 public depositManagerVaultBalanceBefore;
     uint256 public recipientReserveTokenBalanceBefore;
 
     uint256 internal _previousDepositActualAmount;
@@ -116,7 +116,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Store the treasury balance before
         _updateReserveBalances();
-        _updateCdepoVaultBalance();
+        _updateDepositManagerVaultBalance();
     }
 
     function _createStack() internal {
@@ -193,8 +193,8 @@ contract YieldDepositFacilityTest is Test {
         recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
     }
 
-    function _updateCdepoVaultBalance() internal {
-        cdepoVaultBalanceBefore = vault.balanceOf(address(depositManager));
+    function _updateDepositManagerVaultBalance() internal {
+        depositManagerVaultBalanceBefore = vault.balanceOf(address(depositManager));
     }
 
     function _mintToken(IERC20 token_, address to_, uint256 amount_) internal {
@@ -236,7 +236,7 @@ contract YieldDepositFacilityTest is Test {
         _previousDepositActualAmount = actualAmount;
 
         _updateReserveBalances();
-        _updateCdepoVaultBalance();
+        _updateDepositManagerVaultBalance();
         _;
     }
 
@@ -275,6 +275,8 @@ contract YieldDepositFacilityTest is Test {
     }
 
     function _createYieldDepositPosition(
+        IERC20 asset_,
+        uint8 periodMonths_,
         address account_,
         uint256 amount_
     )
@@ -286,8 +288,8 @@ contract YieldDepositFacilityTest is Test {
         (actualPositionId, actualReceiptTokenId, actualAmount) = yieldDepositFacility
             .createPosition(
                 IYieldDepositFacility.CreatePositionParams({
-                    asset: iReserveToken,
-                    periodMonths: PERIOD_MONTHS,
+                    asset: asset_,
+                    periodMonths: periodMonths_,
                     amount: amount_,
                     wrapPosition: false,
                     wrapReceipt: false
@@ -295,10 +297,22 @@ contract YieldDepositFacilityTest is Test {
             );
 
         _updateReserveBalances();
-        _updateCdepoVaultBalance();
+        _updateDepositManagerVaultBalance();
         _previousDepositActualAmount = actualAmount;
 
         return (actualPositionId, actualReceiptTokenId, actualAmount);
+    }
+
+    function _createYieldDepositPosition(
+        address account_,
+        uint256 amount_
+    ) internal returns (uint256 positionId_, uint256 receiptTokenId_, uint256 actualAmount_) {
+        (positionId_, receiptTokenId_, actualAmount_) = _createYieldDepositPosition(
+            iReserveToken,
+            PERIOD_MONTHS,
+            account_,
+            amount_
+        );
     }
 
     modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
@@ -364,7 +378,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Update the treasury and DepositManager balances
         _updateReserveBalances();
-        _updateCdepoVaultBalance();
+        _updateDepositManagerVaultBalance();
     }
 
     modifier givenVaultAccruesYield(IERC4626 vault_, uint256 amount_) {
@@ -444,7 +458,7 @@ contract YieldDepositFacilityTest is Test {
         uint256 expectedFee_,
         uint256 expectedTreasuryBalance_,
         uint256 expectedVaultSharesReduction_,
-        uint256 expectedConversionRate_,
+        uint256,
         uint48 lastClaimTimestamp_
     ) internal view {
         // Assert caller received yield minus fee
@@ -463,7 +477,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Assert DepositManager's vault shares are reduced by the yield amount
         assertEq(
-            cdepoVaultBalanceBefore - vault.balanceOf(address(depositManager)),
+            depositManagerVaultBalanceBefore - vault.balanceOf(address(depositManager)),
             expectedVaultSharesReduction_,
             "DepositManager's vault shares are not reduced by the yield amount"
         );

@@ -245,9 +245,13 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
     {
         amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
 
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = 0;
+
         // Reclaim the yield deposit via the redemption vault
         vm.prank(recipient);
-        cdFacility.reclaim(iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT);
+        cdFacility.reclaim(positionIds, COMMITMENT_AMOUNT);
 
         // At this stage:
         // - The recipient has reclaimed 1e18 via the ConvertibleDepositFacility

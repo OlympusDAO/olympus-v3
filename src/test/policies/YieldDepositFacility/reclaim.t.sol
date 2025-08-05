@@ -18,8 +18,9 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
 
     uint256 public constant DEPOSIT_AMOUNT = 1e18;
 
-    // given the user does not own a matching position
+    // when the caller does not provide any position IDs
     //  [X] it reverts
+
     function test_givenUserDoesNotOwnMatchingPosition_reverts()
         public
         givenLocallyActive
@@ -37,27 +38,219 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
     {
         // Expect revert when trying to reclaim without owning position
         vm.expectRevert(
+            abi.encodeWithSelector(IDepositFacility.DepositFacility_NoPositions.selector)
+        );
+
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(
+            new uint256[](0), // No position IDs
+            _previousDepositActualAmount
+        );
+    }
+
+    // when any of the positions are not owned by the caller
+    //  [X] it reverts
+
+    function test_differentOwner_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+    {
+        // Create a position
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, DEPOSIT_AMOUNT);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
+        // Expect revert
+        vm.expectRevert(
             abi.encodeWithSelector(
-                IYieldDepositFacility.YDF_NoMatchingPosition.selector,
-                recipient,
+                IDepositFacility.DepositFacility_InvalidPositionId.selector,
+                positionId
+            )
+        );
+
+        // Call function
+        vm.prank(recipientTwo);
+        yieldDepositFacility.reclaim(positionIds, 1e18);
+    }
+
+    // when any of the positions are not from YieldDepositFacility
+    //  [X] it reverts
+
+    function test_givenPositionsFromCDF_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+    {
+        // Create a position in CDF
+        uint256 positionId = _createConvertibleDepositPosition(recipient, DEPOSIT_AMOUNT, 2e18);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InvalidPositionId.selector,
+                positionId
+            )
+        );
+
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, DEPOSIT_AMOUNT / 2);
+    }
+
+    // when any of the positions have a different asset
+    //  [X] it reverts
+
+    function test_differentAsset_reverts()
+        public
+        givenLocallyActive
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+    {
+        // Enable reserve token two
+        vm.startPrank(admin);
+        depositManager.addAsset(iReserveTokenTwo, iVaultTwo, type(uint256).max);
+        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
+        vm.stopPrank();
+
+        // Mint reserve token and reserve token two
+        _mintToken(iReserveToken, recipient, DEPOSIT_AMOUNT);
+        _mintToken(iReserveTokenTwo, recipient, DEPOSIT_AMOUNT);
+
+        // Approve spending
+        vm.startPrank(recipient);
+        iReserveToken.approve(address(depositManager), DEPOSIT_AMOUNT);
+        iReserveTokenTwo.approve(address(depositManager), DEPOSIT_AMOUNT);
+        vm.stopPrank();
+
+        // Create a position
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, DEPOSIT_AMOUNT);
+        (uint256 positionIdTwo, , ) = _createYieldDepositPosition(
+            iReserveTokenTwo,
+            PERIOD_MONTHS,
+            recipient,
+            DEPOSIT_AMOUNT
+        );
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](2);
+        positionIds[0] = positionId;
+        positionIds[1] = positionIdTwo;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_MultipleAssetPeriods.selector,
+                positionIds
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, DEPOSIT_AMOUNT);
+    }
+
+    // when any of the positions have a different period
+    //  [X] it reverts
+
+    function test_differentPeriod_reverts()
+        public
+        givenLocallyActive
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+    {
+        // Add a different period
+        vm.startPrank(admin);
+        depositManager.addAssetPeriod(iReserveToken, 3, 90e2);
+        vm.stopPrank();
+
+        // Mint reserve token
+        _mintToken(iReserveToken, recipient, DEPOSIT_AMOUNT);
+
+        // Approve spending
+        vm.startPrank(recipient);
+        iReserveToken.approve(address(depositManager), DEPOSIT_AMOUNT);
+        vm.stopPrank();
+
+        // Create a position
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, DEPOSIT_AMOUNT);
+        (uint256 positionIdTwo, , ) = _createYieldDepositPosition(
+            iReserveToken,
+            3,
+            recipient,
+            DEPOSIT_AMOUNT
+        );
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](2);
+        positionIds[0] = positionId;
+        positionIds[1] = positionIdTwo;
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_MultipleAssetPeriods.selector,
+                positionIds
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, DEPOSIT_AMOUNT);
+    }
+
+    // when the positions do not have sufficient remaining deposit
+    //  [X] it reverts
+
+    function test_givenReclaimAmountExceedsRemainingDeposit_reverts()
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
+    {
+        // Create a position
+        (uint256 positionId, , uint256 actualAmount) = _createYieldDepositPosition(
+            recipient,
+            DEPOSIT_AMOUNT
+        );
+
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
+        // First reclaim some amount
+        uint256 firstReclaimAmount = actualAmount / 2;
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, firstReclaimAmount);
+
+        // Try to reclaim more than remaining
+        uint256 excessAmount = DEPOSIT_AMOUNT; // More than the remaining actualAmount / 2
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InsufficientRemainingDeposit.selector,
                 address(iReserveToken),
-                PERIOD_MONTHS
+                PERIOD_MONTHS,
+                excessAmount,
+                actualAmount - firstReclaimAmount
             )
         );
 
         vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            _previousDepositActualAmount
-        );
+        yieldDepositFacility.reclaim(positionIds, excessAmount);
     }
 
     // given the user owns a matching position with sufficient remaining deposit
     //  [X] it reduces the remaining deposit amount
     //  [X] it transfers the reclaimed amount to recipient
     //  [X] it emits the Reclaimed event
+
     function test_givenUserOwnsMatchingPosition_reducesRemainingDeposit()
         public
         givenLocallyActive
@@ -96,14 +289,12 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
             reclaimAmount - expectedReclaimed
         );
 
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Reclaim half the position
         vm.prank(recipient);
-        uint256 actualReclaimed = yieldDepositFacility.reclaimFor(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            reclaimAmount
-        );
+        uint256 actualReclaimed = yieldDepositFacility.reclaim(positionIds, reclaimAmount);
 
         // Verify the reclaimed amount
         assertEq(
@@ -127,293 +318,6 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         );
     }
 
-    // given the user owns multiple positions but only one matches
-    //  [X] it only updates the matching position
-    function test_givenMultiplePositions_onlyUpdatesMatchingPosition()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT * 3)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 3)
-        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 3)
-    {
-        // Add missing asset periods for this test
-        vm.startPrank(admin);
-        depositManager.addAssetPeriod(iReserveToken, 3, 90e2); // 3 months
-        depositManager.addAssetPeriod(iReserveToken, 12, 90e2); // 12 months
-        vm.stopPrank();
-
-        // Create multiple positions with different periods
-        vm.prank(recipient);
-        (uint256 positionId1, , uint256 actualAmount1) = yieldDepositFacility.createPosition(
-            IYieldDepositFacility.CreatePositionParams({
-                asset: iReserveToken,
-                periodMonths: 3,
-                amount: DEPOSIT_AMOUNT,
-                wrapPosition: false,
-                wrapReceipt: false
-            })
-        );
-
-        vm.prank(recipient);
-        (uint256 positionId2, , uint256 actualAmount2) = yieldDepositFacility.createPosition(
-            IYieldDepositFacility.CreatePositionParams({
-                asset: iReserveToken,
-                periodMonths: 6,
-                amount: DEPOSIT_AMOUNT,
-                wrapPosition: false,
-                wrapReceipt: false
-            })
-        );
-
-        vm.prank(recipient);
-        (uint256 positionId3, , uint256 actualAmount3) = yieldDepositFacility.createPosition(
-            IYieldDepositFacility.CreatePositionParams({
-                asset: iReserveToken,
-                periodMonths: 12,
-                amount: DEPOSIT_AMOUNT,
-                wrapPosition: false,
-                wrapReceipt: false
-            })
-        );
-
-        uint256 reclaimAmount = actualAmount2 / 2;
-
-        // Reclaim from the 6-month position
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, 6, recipient, reclaimAmount);
-
-        // Verify only the 6-month position was updated
-        IDepositPositionManager.Position memory position1 = convertibleDepositPositions.getPosition(
-            positionId1
-        );
-        IDepositPositionManager.Position memory position2 = convertibleDepositPositions.getPosition(
-            positionId2
-        );
-        IDepositPositionManager.Position memory position3 = convertibleDepositPositions.getPosition(
-            positionId3
-        );
-
-        assertEq(position1.remainingDeposit, actualAmount1, "3-month position should be unchanged");
-        assertEq(
-            position2.remainingDeposit,
-            actualAmount2 - reclaimAmount,
-            "6-month position should be reduced"
-        );
-        assertEq(
-            position3.remainingDeposit,
-            actualAmount3,
-            "12-month position should be unchanged"
-        );
-    }
-
-    // given the user has multiple positions in the same deposit period
-    //  [X] it deducts from positions in ascending order of token id
-    function test_givenMultiplePositionsSamePeriod_deductsInAscendingTokenIdOrder()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT * 3)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 3)
-        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 3)
-    {
-        // Create multiple positions with same period (token IDs will be sequential)
-        (uint256 positionId1, , uint256 actualAmount1) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-        (uint256 positionId2, , uint256 actualAmount2) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-        (uint256 positionId3, , uint256 actualAmount3) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-
-        // Verify token IDs are sequential
-        assertLt(positionId1, positionId2, "Position 1 ID should be less than Position 2 ID");
-        assertLt(positionId2, positionId3, "Position 2 ID should be less than Position 3 ID");
-
-        uint256 reclaimAmount = actualAmount1 + (actualAmount2 / 2); // 1.5 deposit amounts
-
-        // Reclaim should deduct from positions in ascending token ID order
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, reclaimAmount);
-
-        // Verify deduction order: first position fully depleted, second position partially depleted
-        IDepositPositionManager.Position memory position1 = convertibleDepositPositions.getPosition(
-            positionId1
-        );
-        IDepositPositionManager.Position memory position2 = convertibleDepositPositions.getPosition(
-            positionId2
-        );
-        IDepositPositionManager.Position memory position3 = convertibleDepositPositions.getPosition(
-            positionId3
-        );
-
-        assertEq(
-            position1.remainingDeposit,
-            0,
-            "First position remaining deposit should be zero after full depletion"
-        );
-        assertEq(
-            position2.remainingDeposit,
-            actualAmount2 - (actualAmount2 / 2),
-            "Second position remaining deposit should be reduced by half"
-        );
-        assertEq(
-            position3.remainingDeposit,
-            actualAmount3,
-            "Third position remaining deposit should be unchanged"
-        );
-    }
-
-    // given the user has multiple positions where some have remaining deposit of 0
-    //  [X] it skips positions with zero remaining deposit
-    function test_givenPositionsWithZeroRemainingDeposit_skipsZeroPositions()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT * 3)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 3)
-        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 3)
-    {
-        // Create multiple positions
-        (uint256 positionId1, , uint256 actualAmount1) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-        (uint256 positionId2, , uint256 actualAmount2) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-        (uint256 positionId3, , uint256 actualAmount3) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-
-        // Fully reclaim first position
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, actualAmount1);
-
-        // Verify first position is depleted
-        IDepositPositionManager.Position memory position1 = convertibleDepositPositions.getPosition(
-            positionId1
-        );
-        assertEq(
-            position1.remainingDeposit,
-            0,
-            "First position remaining deposit should be zero after full reclaim"
-        );
-
-        // Now reclaim more - should skip the zero position and use the second position
-        uint256 secondReclaimAmount = actualAmount2 / 2;
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            secondReclaimAmount
-        );
-
-        // Verify positions state
-        position1 = convertibleDepositPositions.getPosition(positionId1);
-        IDepositPositionManager.Position memory position2 = convertibleDepositPositions.getPosition(
-            positionId2
-        );
-        IDepositPositionManager.Position memory position3 = convertibleDepositPositions.getPosition(
-            positionId3
-        );
-
-        assertEq(
-            position1.remainingDeposit,
-            0,
-            "First position remaining deposit should remain at zero"
-        );
-        assertEq(
-            position2.remainingDeposit,
-            actualAmount2 - secondReclaimAmount,
-            "Second position remaining deposit should be reduced by second reclaim amount"
-        );
-        assertEq(
-            position3.remainingDeposit,
-            actualAmount3,
-            "Third position remaining deposit should be unchanged after second reclaim"
-        );
-    }
-
-    // given the user has positions from ConvertibleDepositFacility (not YieldDepositFacility)
-    //  [X] it reverts
-    function test_givenPositionsFromCDF_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
-        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
-        givenAddressHasConvertibleDepositPosition(recipient, DEPOSIT_AMOUNT, 2e18)
-    {
-        // The givenAddressHasConvertibleDepositPosition modifier creates a CDF position
-        // Now try to reclaim through YDF, which should revert
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYieldDepositFacility.YDF_NoMatchingPosition.selector,
-                recipient,
-                address(iReserveToken),
-                PERIOD_MONTHS
-            )
-        );
-
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            DEPOSIT_AMOUNT / 2
-        );
-    }
-
-    // given the user tries to reclaim more than their remaining deposit
-    //  [X] it reverts
-    function test_givenReclaimAmountExceedsRemainingDeposit_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
-        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
-    {
-        // Create a position
-        (uint256 positionId, , uint256 actualAmount) = _createYieldDepositPosition(
-            recipient,
-            DEPOSIT_AMOUNT
-        );
-
-        // First reclaim some amount
-        uint256 firstReclaimAmount = actualAmount / 2;
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(
-            iReserveToken,
-            PERIOD_MONTHS,
-            recipient,
-            firstReclaimAmount
-        );
-
-        // Try to reclaim more than remaining
-        uint256 excessAmount = DEPOSIT_AMOUNT; // More than the remaining actualAmount / 2
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYieldDepositFacility.YDF_InsufficientRemainingDeposit.selector,
-                recipient,
-                address(iReserveToken),
-                PERIOD_MONTHS,
-                excessAmount,
-                actualAmount - firstReclaimAmount
-            )
-        );
-
-        vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, excessAmount);
-    }
-
     // given the user reclaims their entire position
     //  [X] it sets remaining deposit to zero
     function test_givenUserReclaimsEntirePosition_setsRemainingDepositToZero()
@@ -429,9 +333,12 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
             DEPOSIT_AMOUNT
         );
 
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Reclaim entire position
         vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, actualAmount);
+        yieldDepositFacility.reclaim(positionIds, actualAmount);
 
         // Verify position remaining deposit is zero
         IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
@@ -444,3 +351,5 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         );
     }
 }
+
+// TODO copy to CDF tests

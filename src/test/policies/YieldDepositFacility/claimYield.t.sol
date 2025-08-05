@@ -827,10 +827,13 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             DEPOSIT_AMOUNT
         );
 
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Reclaim half of the position first
         uint256 reclaimAmount = actualAmount / 2;
         vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, reclaimAmount);
+        yieldDepositFacility.reclaim(positionIds, reclaimAmount);
 
         // Verify position has reduced remaining deposit
         IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
@@ -845,10 +848,6 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // Accrue more yield after reclaim
         vm.warp(block.timestamp + 1 days);
         reserveToken.mint(address(vault), 1e18); // Additional yield
-
-        // Prepare position IDs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = positionId;
 
         // Store balances before claiming yield
         uint256 recipientBalanceBefore = reserveToken.balanceOf(recipient);
@@ -897,9 +896,13 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             DEPOSIT_AMOUNT
         );
 
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Reclaim entire position
         vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, actualAmount);
+        yieldDepositFacility.reclaim(positionIds, actualAmount);
 
         // Verify position has zero remaining deposit
         IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
@@ -914,10 +917,6 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // Accrue more yield after reclaim
         vm.warp(block.timestamp + 1 days);
         reserveToken.mint(address(vault), 1e18); // Additional yield
-
-        // Prepare position IDs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = positionId;
 
         // Store balances before claiming yield
         uint256 recipientBalanceBefore = reserveToken.balanceOf(recipient);
@@ -969,10 +968,15 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         reserveToken.mint(address(vault), 1e18);
         vm.warp(block.timestamp + 1);
 
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](2);
+        positionIds[0] = positionId1;
+        positionIds[1] = positionId2;
+
         // Reclaim half from first position only
         uint256 reclaimAmount = actualAmount1 / 2;
         vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, reclaimAmount);
+        yieldDepositFacility.reclaim(positionIds, reclaimAmount);
 
         // Verify positions state
         IDepositPositionManager.Position memory position1 = convertibleDepositPositions.getPosition(
@@ -1001,11 +1005,6 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // - Position 2: full remaining deposit (actualAmount2)
         // - Vault conversion rates and timing of yield accrual
         // - Expected total = yield_from_position1 + yield_from_position2
-
-        // Claim yield from both positions
-        uint256[] memory positionIds = new uint256[](2);
-        positionIds[0] = positionId1;
-        positionIds[1] = positionId2;
 
         vm.prank(recipient);
         uint256 totalClaimedYield = yieldDepositFacility.claimYield(positionIds);
@@ -1050,7 +1049,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // Now reclaim half the position
         uint256 reclaimAmount = actualAmount / 2;
         vm.prank(recipient);
-        yieldDepositFacility.reclaimFor(iReserveToken, PERIOD_MONTHS, recipient, reclaimAmount);
+        yieldDepositFacility.reclaim(positionIds, reclaimAmount);
 
         // Verify position reduced
         IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(

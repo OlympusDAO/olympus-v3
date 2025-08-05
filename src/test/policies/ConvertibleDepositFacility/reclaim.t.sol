@@ -14,14 +14,6 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         uint256 forfeitedAmount
     );
 
-    // ========== HELPERS ========== //
-
-    // Helper to call reclaim on the vault, or skip if not implemented
-    function _callReclaim(address user_, IERC20 asset_, uint8 period_, uint256 amount_) internal {
-        vm.prank(user_);
-        facility.reclaim(asset_, period_, amount_);
-    }
-
     // ========== TESTS ========== //
 
     // given the contract is disable
@@ -31,8 +23,13 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         // Expect revert
         _expectRevertNotEnabled();
 
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = 1; // Dummy position ID
+
         // Call function
-        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, 1e18);
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, 1e18);
     }
 
     // given the amount is zero
@@ -43,23 +40,25 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
         givenReceiptTokenSpendingIsApproved(
             recipient,
             address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
+        // Create a position
+        (uint256 positionId, , ) = _createPosition(recipient, RESERVE_TOKEN_AMOUNT, 2e18, false);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Expect revert
         _expectRevertZeroAmount();
 
         // Call function
-        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, 0);
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, 0);
     }
 
     // given the reclaimed amount rounds to zero
@@ -70,18 +69,19 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
         givenReceiptTokenSpendingIsApproved(
             recipient,
             address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
+        // Create a position
+        (uint256 positionId, , ) = _createPosition(recipient, RESERVE_TOKEN_AMOUNT, 2e18, false);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Will round down to 0 after the reclaim rate is applied
         uint256 amount = 1;
 
@@ -89,7 +89,8 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         _expectRevertZeroAmount();
 
         // Call function
-        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, amount);
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, amount);
     }
 
     // given there are not enough available deposits
@@ -100,7 +101,6 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
     )
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
         givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT)
@@ -120,11 +120,19 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
         // - The recipient has committed 10e18 of funds from the ConvertibleDepositFacility via the OPERATOR
 
+        // Create a position
+        (uint256 positionId, , ) = _createPosition(recipient, RESERVE_TOKEN_AMOUNT, 2e18, false);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Expect revert
         _expectRevertInsufficientDeposits(amount_, 0);
 
         // Call function
-        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, amount_);
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, amount_);
     }
 
     // given the spending is not approved
@@ -135,13 +143,14 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
     {
+        // Create a position
+        (uint256 positionId, , ) = _createPosition(recipient, RESERVE_TOKEN_AMOUNT, 2e18, false);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(
             address(depositManager),
@@ -150,7 +159,8 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         );
 
         // Call function
-        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, RESERVE_TOKEN_AMOUNT);
     }
 
     // given the amount is less than the available deposits
@@ -161,18 +171,19 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
     function test_success()
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
         givenReceiptTokenSpendingIsApproved(
             recipient,
             address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
+        // Create a position
+        (uint256 positionId, , ) = _createPosition(recipient, RESERVE_TOKEN_AMOUNT, 2e18, false);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
         uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
             depositManager.getAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
@@ -188,7 +199,8 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         );
 
         // Call function
-        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, RESERVE_TOKEN_AMOUNT);
 
         // Assert convertible deposit tokens are transferred from the recipient
         uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
