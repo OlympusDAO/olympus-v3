@@ -397,6 +397,16 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenReceiptTokenSpendingIsApproved(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) {
+        vm.prank(owner_);
+        depositManager.approve(spender_, _receiptTokenId, amount_);
+        _;
+    }
+
     function _createConvertibleDepositPosition(
         address account_,
         uint256 amount_,

@@ -214,7 +214,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_,
         uint256 conversionPrice_,
         bool wrapPosition_
-    ) internal returns (uint256 positionId) {
+    ) internal returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount) {
         return
             _createPosition(
                 iReserveToken,
@@ -233,7 +233,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 conversionPrice_,
         bool wrapPosition_,
         bool wrapReceipt_
-    ) internal returns (uint256 positionId) {
+    ) internal returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount) {
         return
             _createPosition(
                 iReserveToken,
@@ -254,9 +254,9 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 conversionPrice_,
         bool wrapPosition_,
         bool wrapReceipt_
-    ) internal returns (uint256 positionId) {
+    ) internal returns (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount) {
         vm.prank(auctioneer);
-        (positionId, , ) = facility.createPosition(
+        (positionId, receiptTokenId, actualAmount) = facility.createPosition(
             IConvertibleDepositFacility.CreatePositionParams({
                 asset: asset_,
                 periodMonths: depositPeriod_,

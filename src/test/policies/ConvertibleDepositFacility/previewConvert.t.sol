@@ -94,7 +94,7 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
 
         for (uint256 i; i < 3; i++) {
             // Create position
-            uint256 positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
+            (uint256 positionId, , ) = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
 
             positionIds_[i] = positionId;
             amounts_[i] = 3e18;
@@ -231,9 +231,9 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         for (uint256 i; i < 3; i++) {
             uint256 positionId;
             if (positionIndex == i) {
-                positionId = _createPosition(recipientTwo, 3e18, CONVERSION_PRICE, false);
+                (positionId, , ) = _createPosition(recipientTwo, 3e18, CONVERSION_PRICE, false);
             } else {
-                positionId = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
+                (positionId, , ) = _createPosition(recipient, 3e18, CONVERSION_PRICE, false);
             }
 
             positionIds_[i] = positionId;

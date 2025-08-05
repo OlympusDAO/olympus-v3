@@ -119,7 +119,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         emit CreatedDeposit(address(reserveToken), recipient, 0, PERIOD_MONTHS, 10e6);
 
         // Call function
-        uint256 positionId = _createPosition(recipient, 10e6, conversionPrice, false, true);
+        (uint256 positionId, , ) = _createPosition(recipient, 10e6, conversionPrice, false, true);
 
         // Assert that the position ID is 0
         assertEq(positionId, 0, "positionId");
@@ -174,7 +174,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         );
 
         // Call function
-        uint256 positionId = _createPosition(
+        (uint256 positionId, , uint256 actualAmount) = _createPosition(
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,
@@ -202,11 +202,91 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
             "operator"
         );
 
+        // Assert that the remaining deposit matches the actual amount
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).remainingDeposit,
+            actualAmount,
+            "remainingDeposit"
+        );
+
         // Assert that the reserve token was transferred from the recipient
         assertEq(reserveToken.balanceOf(recipient), 0, "reserveToken.balanceOf(recipient)");
 
         // Assert that the receipt token was minted to the recipient
         _assertReceiptTokenBalance(recipient, RESERVE_TOKEN_AMOUNT, true);
+
+        // Assert that the recipient has a DEPOS position
+        uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
+        assertEq(positionIds.length, 1, "positionIds.length");
+        assertEq(positionIds[0], 0, "positionIds[0]");
+
+        // Assert that the mint approval was NOT increased
+        _assertMintApproval(0);
+    }
+
+    function test_success_fuzz(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(depositManager),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        amount_ = bound(amount_, 1e18, RESERVE_TOKEN_AMOUNT);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit CreatedDeposit(address(reserveToken), recipient, 0, PERIOD_MONTHS, amount_);
+
+        // Call function
+        (uint256 positionId, , uint256 actualAmount) = _createPosition(
+            recipient,
+            amount_,
+            CONVERSION_PRICE,
+            false,
+            true
+        );
+
+        // Assert that the position ID is 0
+        assertEq(positionId, 0, "positionId");
+
+        // Assert that the conversion price is correct
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).conversionPrice,
+            CONVERSION_PRICE,
+            "conversionPrice"
+        );
+
+        // Assert that the position is convertible
+        assertEq(convertibleDepositPositions.isConvertible(positionId), true, "isConvertible");
+
+        // Assert that the operator is the CD facility
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).operator,
+            address(facility),
+            "operator"
+        );
+
+        // Assert that the remaining deposit matches the actual amount
+        assertEq(
+            convertibleDepositPositions.getPosition(positionId).remainingDeposit,
+            actualAmount,
+            "remainingDeposit"
+        );
+
+        // Assert that the reserve token was transferred from the recipient
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            RESERVE_TOKEN_AMOUNT - actualAmount,
+            "reserveToken.balanceOf(recipient)"
+        );
+
+        // Assert that the receipt token was minted to the recipient
+        _assertReceiptTokenBalance(recipient, amount_, true);
 
         // Assert that the recipient has a DEPOS position
         uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
@@ -234,7 +314,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         _createPosition(recipient, RESERVE_TOKEN_AMOUNT / 2, CONVERSION_PRICE, false);
 
         // Call function again
-        uint256 positionId2 = _createPosition(
+        (uint256 positionId2, , ) = _createPosition(
             recipient,
             RESERVE_TOKEN_AMOUNT / 2,
             CONVERSION_PRICE,
@@ -302,7 +382,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
         );
 
         // Call function
-        uint256 positionId = _createPosition(
+        (uint256 positionId, , ) = _createPosition(
             recipient,
             RESERVE_TOKEN_AMOUNT,
             CONVERSION_PRICE,

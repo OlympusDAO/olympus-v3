@@ -192,8 +192,98 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
             "operator"
         );
 
+        // Assert that the remaining deposit matches the actual amount
+        assertEq(
+            convertibleDepositPositions.getPosition(actualPositionId).remainingDeposit,
+            actualAmount,
+            "remainingDeposit"
+        );
+
         // Assert that the reserve token was transferred from the recipient
         _assertReserveTokenBalance(0);
+
+        // Assert that the receipt token token was minted to the recipient
+        _assertReceiptTokenBalance(recipient, actualAmount, false);
+
+        // Assert that the recipient has a DEPOS position
+        uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
+        assertEq(positionIds.length, 1, "positionIds.length");
+        assertEq(positionIds[0], 0, "positionIds[0]");
+
+        // Assert that the last yield claim timestamp is set
+        assertEq(
+            yieldDepositFacility.positionLastYieldClaimTimestamp(actualPositionId),
+            block.timestamp,
+            "positionLastYieldClaimTimestamp"
+        );
+    }
+
+    function test_success_fuzz(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasReserveToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipient,
+            address(depositManager),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        amount_ = bound(amount_, 1e18, RESERVE_TOKEN_AMOUNT);
+
+        uint256 lastYieldConversionRate = vault.convertToAssets(1e18);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit CreatedDeposit(address(reserveToken), recipient, 0, PERIOD_MONTHS, amount_);
+
+        // Call function
+        (
+            uint256 actualPositionId,
+            uint256 actualReceiptTokenId,
+            uint256 actualAmount
+        ) = _createYieldDepositPosition(recipient, amount_);
+
+        // Assert that the position ID is 0
+        assertEq(actualPositionId, 0, "positionId");
+
+        // Assert that the receipt token ID is correct
+        assertEq(actualReceiptTokenId, _receiptTokenId, "_receiptTokenId");
+
+        // Assert that the conversion price is correct
+        assertEq(
+            convertibleDepositPositions.getPosition(actualPositionId).conversionPrice,
+            type(uint256).max,
+            "conversionPrice"
+        );
+
+        // Assert that the actual amount is correct
+        assertApproxEqAbs(actualAmount, amount_, 1, "actualAmount");
+
+        // Assert that the position is not convertible
+        assertEq(
+            convertibleDepositPositions.isConvertible(actualPositionId),
+            false,
+            "isConvertible"
+        );
+
+        // Assert that the operator is the YDF
+        assertEq(
+            convertibleDepositPositions.getPosition(actualPositionId).operator,
+            address(yieldDepositFacility),
+            "operator"
+        );
+
+        // Assert that the remaining deposit matches the actual amount
+        assertEq(
+            convertibleDepositPositions.getPosition(actualPositionId).remainingDeposit,
+            actualAmount,
+            "remainingDeposit"
+        );
+
+        // Assert that the reserve token was transferred from the recipient
+        _assertReserveTokenBalance(RESERVE_TOKEN_AMOUNT - amount_);
 
         // Assert that the receipt token token was minted to the recipient
         _assertReceiptTokenBalance(recipient, actualAmount, false);
