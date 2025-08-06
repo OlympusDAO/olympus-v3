@@ -330,18 +330,18 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // Calculate expected yield and fee
         // This will take the current rate as the end rate
         // Last conversion rate = 1100000000000000000 + 1
-        // Deposit amount = 9000000000000000000
-        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
+        // Deposit amount = 8999999999999999999
+        // Last shares = 8999999999999999999 * 1e18 / 1100000000000000001 = 8181818181818181809
         // End conversion rate = 1210000000000000000
         // Current shares value = last shares * end rate / 1e18
-        // = 8181818181818181810 * 1210000000000000000 / 1e18 = 9899999999999999990
+        // = 8181818181818181809 * 1210000000000000000 / 1e18 = 9899999999999999988
         // Yield = current shares value - receipt tokens
-        // = 9899999999999999990 - 9000000000000000000 = 899999999999999990
-        // Yield fee = 899999999999999990 * 1000 / 10000 = 89999999999999999
-        // Claimed yield = 899999999999999990 - 89999999999999999 = 809999999999999991
+        // = 9899999999999999988 - 8999999999999999999 = 899999999999999989
+        // Yield fee = 899999999999999989 * 1000 / 10000 = 89999999999999998
+        // Claimed yield = 899999999999999989 - 89999999999999998 = 809999999999999991
         uint256 currentConversionRate = 1210000000000000000;
-        uint256 expectedYield = 899999999999999990;
-        uint256 expectedFee = 89999999999999999;
+        uint256 expectedYield = 899999999999999989;
+        uint256 expectedFee = 89999999999999998;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Expect event
@@ -817,9 +817,6 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
         givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
-        givenVaultAccruesYield(iVault, 1e18)
-        givenYieldFee(1000) // 10%
-        givenWarpForward(1) // Requires gap between snapshots
     {
         // Create position manually to capture actual amount
         (uint256 positionId, , uint256 actualAmount) = _createYieldDepositPosition(
@@ -827,6 +824,11 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
             DEPOSIT_AMOUNT
         );
 
+        // Warp and accrue yield
+        vm.warp(block.timestamp + 1 days);
+        reserveToken.mint(address(vault), 1e18); // Additional yield
+
+        // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
         positionIds[0] = positionId;
 
@@ -835,45 +837,38 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         vm.prank(recipient);
         yieldDepositFacility.reclaim(positionIds, reclaimAmount);
 
-        // Verify position has reduced remaining deposit
-        IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
-            positionId
-        );
-        assertEq(
-            position.remainingDeposit,
-            actualAmount - reclaimAmount,
-            "Position remaining deposit should be reduced by reclaim amount"
-        );
-
         // Accrue more yield after reclaim
         vm.warp(block.timestamp + 1 days);
         reserveToken.mint(address(vault), 1e18); // Additional yield
 
         // Store balances before claiming yield
         uint256 recipientBalanceBefore = reserveToken.balanceOf(recipient);
-        uint256 treasuryBalanceBefore = reserveToken.balanceOf(address(treasury));
 
-        // TODO: Calculate exact expected yield based on:
-        // - Remaining deposit after reclaim (actualAmount / 2)
-        // - Vault conversion rates at different timestamps
-        // - Yield accrual periods and timing
-        // For now, verify yield is non-zero and proportional
+        // Calculate expected yield for second claim
+        // Last conversion rate = 1100000000000000000 + 1
+        // Remaining deposit = 4500000000000000000
+        // Last shares = 4500000000000000000 * 1e18 / 1100000000000000001 = 4090909090909090905
+        // End conversion rate = 1225000000000000000
+        // Current shares value = last shares * end rate / 1e18
+        // = 4090909090909090905 * 1225000000000000000 / 1e18 = 5011363636363636358
+        // Yield = current shares value - receipt tokens
+        // = 5011363636363636358 - 4500000000000000000 = 511363636363636358
+        uint256 expectedYield = 511363636363636358;
 
         // Claim yield - should be based on the reduced remaining deposit
         vm.prank(recipient);
         uint256 claimedYield = yieldDepositFacility.claimYield(positionIds);
 
-        // Verify yield was received (should be > 0 but less than if full position remained)
-        assertGt(claimedYield, 0, "Some yield should have been claimed after partial reclaim");
-        assertGt(
-            reserveToken.balanceOf(recipient),
-            recipientBalanceBefore,
-            "Recipient balance should increase from yield after partial reclaim"
+        // Verify yield was received
+        assertEq(
+            claimedYield,
+            expectedYield,
+            "Some yield should have been claimed after partial reclaim"
         );
-        assertGt(
-            reserveToken.balanceOf(address(treasury)),
-            treasuryBalanceBefore,
-            "Treasury balance should increase from fee after partial reclaim"
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            recipientBalanceBefore + expectedYield,
+            "Recipient balance should increase from yield after partial reclaim"
         );
     }
 
@@ -1025,15 +1020,17 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasReserveToken(recipient, DEPOSIT_AMOUNT)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
         givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
-        givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(0) // 0% fee for easier calculation
-        givenWarpForward(1) // Requires gap between snapshots
     {
         // Create position manually to capture actual amount
         (uint256 positionId, , uint256 actualAmount) = _createYieldDepositPosition(
             recipient,
             DEPOSIT_AMOUNT
         );
+
+        // Warp and accrue yield
+        vm.warp(block.timestamp + 1 days);
+        reserveToken.mint(address(vault), 1e18); // Additional yield
 
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
@@ -1047,37 +1044,32 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         assertGt(firstClaimedYield, 0, "Should have claimed initial yield before reclaim");
 
         // Now reclaim half the position
-        uint256 reclaimAmount = actualAmount / 2;
         vm.prank(recipient);
-        yieldDepositFacility.reclaim(positionIds, reclaimAmount);
-
-        // Verify position reduced
-        IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
-            positionId
-        );
-        assertEq(
-            position.remainingDeposit,
-            actualAmount - reclaimAmount,
-            "Position remaining deposit should be reduced after reclaim"
-        );
+        yieldDepositFacility.reclaim(positionIds, actualAmount / 2);
 
         // Accrue more yield after reclaim
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(block.timestamp + 1);
         reserveToken.mint(address(vault), 1e18); // Additional yield
 
         // Second yield claim - should be based on reduced position
         vm.prank(recipient);
         uint256 secondClaimedYield = yieldDepositFacility.claimYield(positionIds);
 
-        // TODO: Calculate exact expected yield for second claim based on:
-        // - Remaining deposit after reclaim (actualAmount / 2)
-        // - Vault conversion rate at time of reclaim vs current time
-        // - Should be proportionally less than if no reclaim had occurred
+        // Calculate expected yield for second claim
+        // Last conversion rate = 1155000000000000000 + 1
+        // Remaining deposit = 4500000000000000000
+        // Last shares = 4500000000000000000 * 1e18 / 1155000000000000001 = 3896103896103896100
+        // End conversion rate = 1226962616822429906
+        // Current shares value = last shares * end rate / 1e18
+        // = 3896103896103896100 * 1226962616822429906 / 1e18 = 4780373831775700927
+        // Yield = current shares value - receipt tokens
+        // = 4780373831775700927 - 4500000000000000000 = 280373831775700927
+        uint256 expectedYield = 280373831775700927;
 
         // Should have claimed some yield, but less than would be expected for full position
-        assertGt(
+        assertEq(
             secondClaimedYield,
-            0,
+            expectedYield,
             "Should have claimed yield based on remaining deposit after reclaim"
         );
     }

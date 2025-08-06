@@ -3,7 +3,6 @@ pragma solidity >=0.8.0;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 
 /// @title  IDepositFacility
 /// @notice Interface for deposit facilities to coordinate with generic operators (e.g., redemption vaults)
@@ -46,7 +45,9 @@ interface IDepositFacility {
 
     error DepositFacility_NoPositions();
 
-    error DepositFacility_InvalidPositionId(uint256 positionId);
+    error DepositFacility_InvalidPositionOwner(uint256 positionId);
+
+    error DepositFacility_InvalidPositionFacility(uint256 positionId);
 
     error DepositFacility_MultipleAssetPeriods(uint256[] positionIds);
 
@@ -56,6 +57,8 @@ interface IDepositFacility {
         uint256 requested,
         uint256 available
     );
+
+    error DepositFacility_InvariantAmountToDeductNotZero();
 
     // ========== OPERATOR AUTHORIZATION ========== //
 

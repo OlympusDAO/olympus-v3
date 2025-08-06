@@ -5,6 +5,7 @@ pragma solidity >=0.8.20;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -17,6 +18,7 @@ import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
 /// @title Base Deposit Facility
 /// @notice Abstract base contract for deposit facilities with shared functionality
@@ -46,7 +48,12 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         private _assetOperatorCommittedDeposits;
 
     /// @notice The TRSRY module
+    /// @dev    Must be populated by the inheriting contract in `configureDependencies()`
     TRSRYv1 public TRSRY;
+
+    /// @notice The DEPOS module
+    /// @dev    Must be populated by the inheriting contract in `configureDependencies()`
+    DEPOSv1 public DEPOS;
 
     // ========== MODIFIERS ========== //
 
@@ -289,11 +296,88 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     // ========== RECLAIM ========== //
 
+    function _validatePositions(
+        address account_,
+        uint256[] calldata positionIds_,
+        uint256 amount_
+    ) internal view returns (IERC20 _depositAsset, uint8 _depositPeriod) {
+        // Validate that the position IDs are not empty
+        if (positionIds_.length == 0) revert DepositFacility_NoPositions();
+
+        uint256 remainingDeposits;
+
+        for (uint256 i; i < positionIds_.length; i++) {
+            IDepositPositionManager.Position memory position = DEPOS.getPosition(positionIds_[i]);
+
+            // Owner should be consistent
+            if (position.owner != account_)
+                revert DepositFacility_InvalidPositionOwner(positionIds_[i]);
+
+            // Operator should be this contract
+            if (position.operator != address(this))
+                revert DepositFacility_InvalidPositionFacility(positionIds_[i]);
+
+            // If this is the first position, set the deposit asset and period
+            if (i == 0) {
+                _depositAsset = IERC20(position.asset);
+                _depositPeriod = position.periodMonths;
+            }
+            // Otherwise check that the deposit asset and period are consistent
+            else {
+                if (
+                    position.asset != address(_depositAsset) ||
+                    position.periodMonths != _depositPeriod
+                ) revert DepositFacility_MultipleAssetPeriods(positionIds_);
+            }
+
+            // Increment the remaining deposits
+            remainingDeposits += position.remainingDeposit;
+        }
+
+        // Ensure that the remaining deposits are sufficient
+        if (amount_ > remainingDeposits)
+            revert DepositFacility_InsufficientRemainingDeposit(
+                address(_depositAsset),
+                _depositPeriod,
+                amount_,
+                remainingDeposits
+            );
+
+        return (_depositAsset, _depositPeriod);
+    }
+
     function _validateAvailableDeposits(IERC20 depositToken_, uint256 amount_) internal view {
         uint256 availableDeposits = getAvailableDeposits(depositToken_);
 
         if (amount_ > availableDeposits)
             revert DepositFacility_InsufficientDeposits(amount_, availableDeposits);
+    }
+
+    function _previewReclaim(
+        address account_,
+        uint256[] calldata positionIds_,
+        uint256 amount_
+    ) internal view returns (uint256 _reclaimed, IERC20 _depositToken, uint8 _depositPeriod) {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
+        // Validate the positions
+        (_depositToken, _depositPeriod) = _validatePositions(account_, positionIds_, amount_);
+
+        // Validate that there are enough available deposits
+        _validateAvailableDeposits(_depositToken, amount_);
+
+        // This is rounded down to keep assets in the vault, otherwise the contract may end up
+        // in a state where there are not enough of the assets in the vault to redeem/reclaim
+        _reclaimed = amount_.mulDiv(
+            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(_depositToken, _depositPeriod),
+            ONE_HUNDRED_PERCENT
+        );
+
+        // If the reclaimed amount is 0, revert
+        if (_reclaimed == 0) revert DepositFacility_ZeroAmount();
+
+        return (_reclaimed, _depositToken, _depositPeriod);
     }
 
     /// @inheritdoc IDepositFacility
@@ -302,65 +386,89 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256[] calldata positionIds_,
         uint256 amount_
     ) public view onlyEnabled returns (uint256 reclaimed) {
-        // Validate that the amount is not 0
-        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+        (reclaimed, , ) = _previewReclaim(account_, positionIds_, amount_);
 
-        // // Validate that there are enough available deposits
-        // _validateAvailableDeposits(depositToken_, amount_);
-
-        // // This is rounded down to keep assets in the vault, otherwise the contract may end up
-        // // in a state where there are not enough of the assets in the vault to redeem/reclaim
-        // reclaimed = amount_.mulDiv(
-        //     DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_),
-        //     ONE_HUNDRED_PERCENT
-        // );
-
-        // If the reclaimed amount is 0, revert
-        if (reclaimed == 0) revert DepositFacility_ZeroAmount();
-
+        // Return the reclaimed amount
         return reclaimed;
+    }
+
+    /// @notice Deducts the amount from the given positions
+    /// @dev    This function assumes that the position IDs have been validated
+    function _deductFromPositions(uint256[] calldata positionIds_, uint256 amount_) internal {
+        uint256 amountToDeduct = amount_;
+
+        for (uint256 i; i < positionIds_.length; i++) {
+            IDepositPositionManager.Position memory position = DEPOS.getPosition(positionIds_[i]);
+
+            // If the remaining deposit can absorb the amount, deduct it
+            if (position.remainingDeposit >= amountToDeduct) {
+                DEPOS.setRemainingDeposit(
+                    positionIds_[i],
+                    position.remainingDeposit - amountToDeduct
+                );
+                amountToDeduct = 0;
+                break;
+            }
+
+            // Otherwise deduct the remaining deposit and continue to the next position
+            amountToDeduct -= position.remainingDeposit;
+            DEPOS.setRemainingDeposit(
+                positionIds_[i],
+                0 // Set remaining deposit to 0 as it has been fully reclaimed
+            );
+        }
+
+        // Invariant: amountToDeduct should be 0 after processing all positions
+        if (amountToDeduct != 0) revert DepositFacility_InvariantAmountToDeductNotZero();
     }
 
     /// @inheritdoc IDepositFacility
     function reclaim(
         uint256[] calldata positionIds_,
         uint256 amount_
-    ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
+    ) public nonReentrant onlyEnabled returns (uint256 _reclaimed) {
         // Calculate the quantity of deposit token to withdraw and return
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(msg.sender, positionIds_, amount_);
+        IERC20 _depositToken;
+        uint8 _depositPeriod;
+        (_reclaimed, _depositToken, _depositPeriod) = _previewReclaim(
+            msg.sender,
+            positionIds_,
+            amount_
+        );
 
-        // // Withdraw the deposit
-        // uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
-        //     IDepositManager.WithdrawParams({
-        //         asset: depositToken_,
-        //         depositPeriod: depositPeriod_,
-        //         depositor: msg.sender,
-        //         recipient: address(this),
-        //         amount: amount_,
-        //         isWrapped: false
-        //     })
-        // );
+        // Update the positions to reflect the reclaimed amount
+        _deductFromPositions(positionIds_, amount_);
 
-        // // Transfer discounted amount of the deposit token to the recipient
-        // ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
+        // Withdraw the deposit
+        uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: _depositToken,
+                depositPeriod: _depositPeriod,
+                depositor: msg.sender,
+                recipient: address(this),
+                amount: amount_,
+                isWrapped: false
+            })
+        );
 
-        // // Transfer the remaining deposit tokens to the TRSRY
-        // ERC20(address(depositToken_)).safeTransfer(
-        //     address(TRSRY),
-        //     actualAmount - discountedAssetsOut
-        // );
+        // Transfer discounted amount of the deposit token to the caller
+        // _previewReclaim validates that the caller owns the positions, so we can safely transfer
+        ERC20(address(_depositToken)).safeTransfer(msg.sender, _reclaimed);
 
-        // // Emit event
-        // emit Reclaimed(
-        //     recipient_,
-        //     address(depositToken_),
-        //     depositPeriod_,
-        //     discountedAssetsOut,
-        //     actualAmount - discountedAssetsOut
-        // );
+        // Transfer the remaining deposit tokens to the TRSRY
+        ERC20(address(_depositToken)).safeTransfer(address(TRSRY), actualAmount - _reclaimed);
 
-        return discountedAssetsOut;
+        // Emit event
+        emit Reclaimed(
+            msg.sender,
+            address(_depositToken),
+            _depositPeriod,
+            _reclaimed,
+            actualAmount - _reclaimed
+        );
+
+        return _reclaimed;
     }
 
     // ========== ERC165 ========== //

@@ -68,7 +68,7 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositFacility.DepositFacility_InvalidPositionId.selector,
+                IDepositFacility.DepositFacility_InvalidPositionOwner.selector,
                 positionId
             )
         );
@@ -94,7 +94,7 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositFacility.DepositFacility_InvalidPositionId.selector,
+                IDepositFacility.DepositFacility_InvalidPositionFacility.selector,
                 positionId
             )
         );
@@ -114,12 +114,6 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         givenLocallyActive
         givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT)
     {
-        // Enable reserve token two
-        vm.startPrank(admin);
-        depositManager.addAsset(iReserveTokenTwo, iVaultTwo, type(uint256).max);
-        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
-        vm.stopPrank();
-
         // Mint reserve token and reserve token two
         _mintToken(iReserveToken, recipient, DEPOSIT_AMOUNT);
         _mintToken(iReserveTokenTwo, recipient, DEPOSIT_AMOUNT);
@@ -179,12 +173,12 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         vm.stopPrank();
 
         // Create a position
-        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, DEPOSIT_AMOUNT);
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, DEPOSIT_AMOUNT / 2);
         (uint256 positionIdTwo, , ) = _createYieldDepositPosition(
             iReserveToken,
             3,
             recipient,
-            DEPOSIT_AMOUNT
+            DEPOSIT_AMOUNT / 2
         );
 
         // Prepare position IDs

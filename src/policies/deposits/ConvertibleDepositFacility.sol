@@ -37,9 +37,6 @@ contract ConvertibleDepositFacility is
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
 
-    /// @notice The DEPOS module.
-    DEPOSv1 public DEPOS;
-
     // ========== SETUP ========== //
 
     constructor(
@@ -71,14 +68,14 @@ contract ConvertibleDepositFacility is
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = toKeycode("MINTR");
-        Keycode cdposKeycode = toKeycode("DEPOS");
+        Keycode deposKeycode = toKeycode("DEPOS");
 
         permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(cdposKeycode, DEPOS.mint.selector);
-        permissions[4] = Permissions(cdposKeycode, DEPOS.setRemainingDeposit.selector);
+        permissions[3] = Permissions(deposKeycode, DEPOS.mint.selector);
+        permissions[4] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {

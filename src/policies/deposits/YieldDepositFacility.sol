@@ -27,9 +27,6 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     using TimestampLinkedList for TimestampLinkedList.List;
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The DEPOS module.
-    DEPOSv1 public DEPOS;
-
     /// @notice The yield fee
     uint16 internal _yieldFee;
 
@@ -73,10 +70,11 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode cdposKeycode = toKeycode("DEPOS");
+        Keycode deposKeycode = toKeycode("DEPOS");
 
-        permissions = new Permissions[](1);
-        permissions[0] = Permissions(cdposKeycode, DEPOS.mint.selector);
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(deposKeycode, DEPOS.mint.selector);
+        permissions[1] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -130,7 +128,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
                 owner: depositor,
                 asset: address(params_.asset),
                 periodMonths: params_.periodMonths,
-                remainingDeposit: params_.amount,
+                remainingDeposit: actualAmount,
                 conversionPrice: type(uint256).max,
                 expiry: uint48(block.timestamp + uint48(params_.periodMonths) * 30 days),
                 wrapPosition: params_.wrapPosition,
