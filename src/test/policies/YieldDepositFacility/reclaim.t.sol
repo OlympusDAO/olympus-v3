@@ -18,6 +18,49 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
 
     uint256 public constant DEPOSIT_AMOUNT = 1e18;
 
+    // ========== TESTS ========== //
+
+    // given the contract is disabled
+    //  [X] it reverts
+
+    function test_contractDisabled_reverts() public {
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = 1; // Dummy position ID
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, 1e18);
+    }
+
+    // given the amount is zero
+    //  [X] it reverts
+
+    function test_amountToReclaimIsZero_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient(address(depositManager))
+        givenReceiptTokenSpendingIsApprovedByRecipient(address(depositManager))
+    {
+        // Create a position
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
+        // Expect revert
+        _expectRevertZeroAmount();
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, 0);
+    }
+
     // when the caller does not provide any position IDs
     //  [X] it reverts
 
@@ -240,6 +283,98 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         yieldDepositFacility.reclaim(positionIds, excessAmount);
     }
 
+    // given the reclaimed amount rounds to zero
+    //  [X] it reverts
+
+    function test_reclaimedAmountIsZero_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient(address(depositManager))
+        givenReceiptTokenSpendingIsApprovedByRecipient(address(depositManager))
+    {
+        // Create a position
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
+        // Will round down to 0 after the reclaim rate is applied
+        uint256 amount = 1;
+
+        // Expect revert
+        _expectRevertZeroAmount();
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, amount);
+    }
+
+    // given there are not enough available deposits
+    //  [X] it reverts
+
+    function test_insufficientAvailableDeposits_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT)
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient(address(depositManager))
+        givenAddressHasConvertibleDepositPosition(recipient, RESERVE_TOKEN_AMOUNT, 2e18)
+        givenReceiptTokenSpendingIsApprovedByRecipient(address(depositManager))
+        givenOperatorAuthorized(OPERATOR)
+        givenCommitted(OPERATOR, RESERVE_TOKEN_AMOUNT - 1)
+    {
+        amount_ = bound(amount_, 1, RESERVE_TOKEN_AMOUNT - 1);
+
+        // At this stage:
+        // - The recipient has started redemption for 10e18 via the ConvertibleDepositFacility
+        // - DepositManager has 10e18 in deposits from the ConvertibleDepositFacility, of which 10e18 are committed for redemption
+        // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
+        // - The recipient has committed 10e18 of funds from the ConvertibleDepositFacility via the OPERATOR
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = 0;
+
+        // Expect revert
+        _expectRevertInsufficientDeposits(amount_, 0);
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, amount_);
+    }
+
+    // given the spending is not approved
+    //  [X] it reverts
+
+    function test_spendingIsNotApproved_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient(address(depositManager))
+    {
+        // Create a position
+        (uint256 positionId, , ) = _createYieldDepositPosition(recipient, RESERVE_TOKEN_AMOUNT);
+
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = positionId;
+
+        // Expect revert
+        _expectRevertReceiptTokenInsufficientAllowance(
+            address(depositManager),
+            0,
+            RESERVE_TOKEN_AMOUNT - 1
+        );
+
+        // Call function
+        vm.prank(recipient);
+        yieldDepositFacility.reclaim(positionIds, RESERVE_TOKEN_AMOUNT - 1);
+    }
+
     // given the user owns a matching position with sufficient remaining deposit
     //  [X] it reduces the remaining deposit amount
     //  [X] it transfers the reclaimed amount to recipient
@@ -345,5 +480,3 @@ contract YieldDepositFacilityReclaimTest is YieldDepositFacilityTest {
         );
     }
 }
-
-// TODO copy to CDF tests

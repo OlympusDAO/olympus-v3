@@ -183,6 +183,10 @@ contract ConvertibleDepositFacilityTest is Test {
 
     // ========== MODIFIERS ========== //
 
+    function _mintToken(IERC20 token_, address to_, uint256 amount_) internal {
+        MockERC20(address(token_)).mint(to_, amount_);
+    }
+
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
         reserveToken.mint(to_, amount_);
         _;
@@ -324,19 +328,34 @@ contract ConvertibleDepositFacilityTest is Test {
     }
 
     function _createYieldDepositPosition(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
         address account_,
         uint256 amount_
-    ) internal returns (uint256 positionId) {
+    ) internal returns (uint256 positionId_, uint256 receiptTokenId_, uint256 actualAmount_) {
         vm.prank(account_);
-        (positionId, , ) = yieldDepositFacility.createPosition(
+        (positionId_, receiptTokenId_, actualAmount_) = yieldDepositFacility.createPosition(
             IYieldDepositFacility.CreatePositionParams({
-                asset: iReserveToken,
-                periodMonths: PERIOD_MONTHS,
+                asset: depositToken_,
+                periodMonths: depositPeriod_,
                 amount: amount_,
                 wrapPosition: false,
                 wrapReceipt: false
             })
         );
+    }
+
+    function _createYieldDepositPosition(
+        address account_,
+        uint256 amount_
+    ) internal returns (uint256 positionId) {
+        (positionId, , ) = _createYieldDepositPosition(
+            iReserveToken,
+            PERIOD_MONTHS,
+            account_,
+            amount_
+        );
+        return positionId;
     }
 
     modifier givenAddressHasYieldDepositPosition(address account_, uint256 amount_) {
@@ -444,12 +463,6 @@ contract ConvertibleDepositFacilityTest is Test {
     modifier givenOperatorAuthorized(address operator_) {
         vm.prank(admin);
         facility.authorizeOperator(operator_);
-        _;
-    }
-
-    modifier givenOperatorDeuthorized(address operator_) {
-        vm.prank(admin);
-        facility.deauthorizeOperator(operator_);
         _;
     }
 

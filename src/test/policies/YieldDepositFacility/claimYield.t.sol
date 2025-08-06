@@ -950,10 +950,12 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), DEPOSIT_AMOUNT * 2)
     {
         // Create two positions
+        // 8999999999999999999
         (uint256 positionId1, , uint256 actualAmount1) = _createYieldDepositPosition(
             recipient,
             DEPOSIT_AMOUNT
         );
+        // 8999999999999999999
         (uint256 positionId2, , uint256 actualAmount2) = _createYieldDepositPosition(
             recipient,
             DEPOSIT_AMOUNT
@@ -969,6 +971,8 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         positionIds[1] = positionId2;
 
         // Reclaim half from first position only
+        // Reclaimed: 4499999999999999999
+        // Remaining: 4500000000000000000
         uint256 reclaimAmount = actualAmount1 / 2;
         vm.prank(recipient);
         yieldDepositFacility.reclaim(positionIds, reclaimAmount);
@@ -995,19 +999,37 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         vm.warp(block.timestamp + 1 days);
         reserveToken.mint(address(vault), 1e18);
 
-        // TODO: Calculate exact expected yield based on:
-        // - Position 1: reduced remaining deposit (actualAmount1 / 2)
-        // - Position 2: full remaining deposit (actualAmount2)
-        // - Vault conversion rates and timing of yield accrual
-        // - Expected total = yield_from_position1 + yield_from_position2
+        // Calculate expected yield
+        // Yield is calculated separately per position
+        // For position1 (reclaimed):
+        // Last conversion rate = 1100000000000000000 + 1
+        // Remaining deposit = 4500000000000000000
+        // Last shares = 4500000000000000000 * 1e18 / 1100000000000000001 = 4090909090909090905
+        // End conversion rate = 1182555780933062880
+        // Current shares value = last shares * end rate / 1e18
+        // = 4090909090909090905 * 1182555780933062880 / 1e18 = 4837728194726166322
+        // Yield = current shares value - receipt tokens
+        // = 4837728194726166322 - 4500000000000000000 = 337728194726166322
+        uint256 expectedYield1 = 337728194726166322;
+
+        // For position2 (not reclaimed):
+        // Last conversion rate = 1100000000000000000 + 1
+        // Remaining deposit = 8999999999999999999
+        // Last shares = 8999999999999999999 * 1e18 / 1100000000000000001 = 8181818181818181809
+        // End conversion rate = 1182555780933062880
+        // Current shares value = last shares * end rate / 1e18
+        // = 8181818181818181809 * 1182555780933062880 / 1e18 = 9675456389452332643
+        // Yield = current shares value - receipt tokens
+        // = 9675456389452332643 - 8999999999999999999 = 675456389452332644
+        uint256 expectedYield2 = 675456389452332644;
 
         vm.prank(recipient);
         uint256 totalClaimedYield = yieldDepositFacility.claimYield(positionIds);
 
         // Should receive some yield (more from position2 than position1 due to reclaim)
-        assertGt(
+        assertEq(
             totalClaimedYield,
-            0,
+            expectedYield1 + expectedYield2,
             "Should receive yield from both positions after partial reclaim of one"
         );
     }

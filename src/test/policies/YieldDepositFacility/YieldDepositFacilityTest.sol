@@ -25,6 +25,7 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 
 // solhint-disable max-states-count
 contract YieldDepositFacilityTest is Test {
@@ -58,6 +59,7 @@ contract YieldDepositFacilityTest is Test {
     address public emergency;
     address public admin;
     address public heart;
+    address public OPERATOR;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant RESERVE_TOKEN_AMOUNT = 10e18;
@@ -79,6 +81,7 @@ contract YieldDepositFacilityTest is Test {
         emergency = makeAddr("EMERGENCY");
         admin = makeAddr("ADMIN");
         heart = makeAddr("HEART");
+        OPERATOR = makeAddr("OPERATOR");
 
         ohm = new MockERC20("OHM", "OHM", 9);
 
@@ -206,6 +209,11 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenRecipientHasReserveToken() {
+        _mintToken(iReserveToken, recipient, RESERVE_TOKEN_AMOUNT);
+        _;
+    }
+
     function _approveTokenSpending(
         IERC20 token_,
         address owner_,
@@ -222,6 +230,11 @@ contract YieldDepositFacilityTest is Test {
         uint256 amount_
     ) {
         _approveTokenSpending(iReserveToken, owner_, spender_, amount_);
+        _;
+    }
+
+    modifier givenReserveTokenSpendingIsApprovedByRecipient(address spender_) {
+        _approveTokenSpending(iReserveToken, recipient, spender_, RESERVE_TOKEN_AMOUNT);
         _;
     }
 
@@ -421,6 +434,12 @@ contract YieldDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenReceiptTokenSpendingIsApprovedByRecipient(address spender_) {
+        vm.prank(recipient);
+        depositManager.approve(spender_, _receiptTokenId, RESERVE_TOKEN_AMOUNT);
+        _;
+    }
+
     function _createConvertibleDepositPosition(
         address account_,
         uint256 amount_,
@@ -446,6 +465,18 @@ contract YieldDepositFacilityTest is Test {
         uint256 conversionPrice_
     ) {
         _createConvertibleDepositPosition(account_, amount_, conversionPrice_);
+        _;
+    }
+
+    modifier givenOperatorAuthorized(address operator_) {
+        vm.prank(admin);
+        yieldDepositFacility.authorizeOperator(operator_);
+        _;
+    }
+
+    modifier givenCommitted(address operator_, uint256 amount_) {
+        vm.prank(operator_);
+        yieldDepositFacility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
@@ -597,6 +628,22 @@ contract YieldDepositFacilityTest is Test {
     function _expectRevertUnsupported(uint256 positionId_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(IYieldDepositFacility.YDF_Unsupported.selector, positionId_)
+        );
+    }
+
+    function _expectRevertZeroAmount() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositFacility.DepositFacility_ZeroAmount.selector)
+        );
+    }
+
+    function _expectRevertInsufficientDeposits(uint256 requested_, uint256 available_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositFacility.DepositFacility_InsufficientDeposits.selector,
+                requested_,
+                available_
+            )
         );
     }
 }
