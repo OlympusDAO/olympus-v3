@@ -303,7 +303,9 @@ sequenceDiagram
 
 ### Reclaiming a Deposit
 
-The holder of convertible deposit tokens can reclaim their underlying deposit at any time. A discount (`getAssetPeriodReclaimRate()` on the DepositManager contract) is applied on the deposit that is returned, which is transferred to the TRSRY.
+The holder of receipt tokens can reclaim their underlying deposit at any time. A discount (`getAssetPeriodReclaimRate()` on the DepositManager contract) is applied on the deposit that is returned, which is transferred to the TRSRY.
+
+A position created by the deposit facility being called is required in order to reclaim. This is to prevent imbalances in the deposits and yield across deposit facilities.
 
 ```mermaid
 sequenceDiagram
@@ -532,7 +534,7 @@ The ConvertibleDepositAuctioneer is able to mint a convertible deposit:
 Receipt token holders can perform the following actions:
 
 - `convert()`: convert their deposit position into OHM before conversion expiry.
-- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This does not require a DEPOS position ID.
+- `reclaim()`: reclaim a discounted quantity of the underlying asset, USDS, at any time. This requires a DEPOS position ID.
 
 The facility also implements the `IDepositFacility` interface to support callbacks for authorized operators:
 
