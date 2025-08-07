@@ -52,7 +52,9 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     // given the caller is not a deposit operator
     //  [X] it reverts
 
-    function test_givenNotDepositOperator_reverts(address caller_) public givenIsEnabled {
+    function test_givenNotDepositOperator_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != DEPOSIT_OPERATOR);
 
         // Expect revert
@@ -72,7 +74,11 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     // when the recipient is the zero address
     //  [X] it reverts
 
-    function test_whenRecipientIsZeroAddress_reverts() public givenIsEnabled {
+    function test_whenRecipientIsZeroAddress_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         // Expect revert
         _expectRevertZeroAddress();
 
@@ -90,7 +96,11 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     // given the asset is not configured
     //  [X] it reverts
 
-    function test_givenAssetNotConfigured_reverts() public givenIsEnabled {
+    function test_givenAssetNotConfigured_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         // Expect revert
         _expectRevertNotConfiguredAsset();
 
@@ -111,6 +121,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     function test_givenNoDeposits_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
     {
@@ -137,6 +148,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -170,6 +182,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -242,6 +255,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -279,6 +293,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -300,6 +315,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)

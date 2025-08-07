@@ -29,7 +29,9 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
     // when the caller is not the manager or admin
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
+    function test_givenCallerIsNotManagerOrAdmin_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != ADMIN && caller_ != MANAGER);
 
         _expectRevertNotManagerOrAdmin();
@@ -41,7 +43,11 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
     // given there is no asset period
     //  [X] it reverts
 
-    function test_givenThereIsNoAssetPeriod_reverts() public givenIsEnabled {
+    function test_givenThereIsNoAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
@@ -54,6 +60,7 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
     function test_givenAssetPeriodIsAlreadyDisabled_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
     {
@@ -73,6 +80,7 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
     function test_setsAssetPeriodToDisabled()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
     {

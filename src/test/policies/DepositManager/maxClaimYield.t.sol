@@ -34,6 +34,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenContractIsDisabled()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -53,7 +54,11 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     // given the asset vault is not configured
     //  [X] it returns zero
 
-    function test_givenAssetVaultIsNotConfigured() public givenIsEnabled {
+    function test_givenAssetVaultIsNotConfigured()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
         assertEq(maxYield, 0, "Max yield mismatch");
     }
@@ -64,6 +69,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenAssetPeriodIsDisabled()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -86,6 +92,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenAssetIsAddedWithZeroAddress()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAddedWithZeroAddress
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -102,6 +109,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenBorrowedFullAmount()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -137,6 +145,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenBorrowedPartialAmount()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -180,6 +189,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_givenNoYieldToClaim()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -195,6 +205,7 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
     function test_maxClaimYield()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)

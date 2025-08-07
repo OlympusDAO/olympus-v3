@@ -36,7 +36,9 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     // given the caller is not a deposit operator
     //  [X] it reverts
 
-    function test_givenNotDepositOperator_reverts(address caller_) public givenIsEnabled {
+    function test_givenNotDepositOperator_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != DEPOSIT_OPERATOR);
 
         // Expect revert
@@ -57,7 +59,11 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     // given the asset is not configured
     //  [X] it reverts
 
-    function test_givenAssetNotConfigured_reverts() public givenIsEnabled {
+    function test_givenAssetNotConfigured_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         // Expect revert
         _expectRevertNotConfiguredAsset();
 
@@ -79,6 +85,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     function test_givenNoBorrows_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -107,6 +114,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -137,6 +145,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     function test_givenAssetSpendingNotApproved_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -170,6 +179,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)

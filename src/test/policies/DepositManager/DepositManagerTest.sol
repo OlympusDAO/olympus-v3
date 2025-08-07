@@ -92,7 +92,7 @@ contract DepositManagerTest is Test {
         iAsset = IERC20(address(asset));
         iVault = IERC4626(address(vault));
 
-        // Simulate the asset vault having earnt yield
+        // Simulate the asset vault having earned yield
         {
             // Deposit into the vault
             asset.mint(address(this), 100e18);
@@ -443,6 +443,12 @@ contract DepositManagerTest is Test {
                 borrowed_
             )
         );
+    }
+
+    modifier givenFacilityNameIsSetDefault() {
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "cd1");
+        _;
     }
 
     // ========== ASSERTIONS ========== //

@@ -33,7 +33,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
     function test_givenCallerDoesNotHaveDepositOperatorRole_reverts(
         address caller_
-    ) public givenIsEnabled {
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != DEPOSIT_OPERATOR);
 
         _expectRevertNotDepositOperator();
@@ -54,7 +54,11 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     // given the deposit asset configuration does not exist
     //  [X] it reverts
 
-    function test_givenDepositAssetConfigurationDoesNotExist_reverts() public givenIsEnabled {
+    function test_givenDepositAssetConfigurationDoesNotExist_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         _expectRevertInvalidReceiptTokenId(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(DEPOSIT_OPERATOR);
@@ -77,6 +81,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenWrappedIsTrue_givenDepositorHasNotApprovedContractToSpendWrappedReceiptToken_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -103,6 +108,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenWrappedIsTrue_givenDepositorWrappedReceiptTokenBalanceIsInsufficient_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -130,6 +136,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenWrappedIsTrue()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -156,6 +163,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenDepositorHasNotApprovedContractToSpendReceiptToken_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -182,6 +190,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenDepositorReceiptTokenBalanceIsInsufficient_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -216,6 +225,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAddedWithZeroAddress
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -250,6 +260,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenAssetIsAddedWithZeroAddress()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAddedWithZeroAddress
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -279,6 +290,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenAssetPeriodIsDisabled()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -309,6 +321,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -332,6 +345,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenRecipientAddressIsDifferentToDepositor_zeroAddress_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -350,6 +364,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -375,6 +390,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenMaxYieldClaimed()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -434,6 +450,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_withdraw()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -460,6 +477,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenAssetDepositCapIsExceeded()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)

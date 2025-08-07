@@ -1,0 +1,198 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.20;
+
+import {DepositManagerTest} from "./DepositManagerTest.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {uint2str} from "src/libraries/Uint2Str.sol";
+import {String} from "src/libraries/String.sol";
+
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
+contract DepositManagerSetFacilityNameTest is DepositManagerTest {
+    // ========== EVENTS ========== //
+
+    event FacilityNameSet(address indexed facility, string name);
+
+    // ========== TESTS ========== //
+
+    // given the contract is disabled
+    //  [X] it reverts
+
+    function test_givenContractIsDisabled_reverts() public {
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+    }
+
+    // when the caller is not the admin or manager
+    //  [X] it reverts
+
+    function test_givenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
+        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+
+        // Expect revert
+        _expectRevertNotManagerOrAdmin();
+
+        // Call function
+        vm.prank(caller_);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+    }
+
+    // when the facility name has been set already
+    //  [X] it reverts
+
+    function test_givenFacilityNameAlreadySet_reverts() public givenIsEnabled {
+        // Set the facility name
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_FacilityNameSet.selector,
+                DEPOSIT_OPERATOR
+            )
+        );
+
+        // Call function again
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+    }
+
+    // when the facility name is empty
+    //  [ ] it reverts
+
+    function test_givenFacilityNameIsEmpty_reverts() public givenIsEnabled {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInvalid.selector)
+        );
+
+        // Call function
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "");
+    }
+
+    // when the name is already in use
+    //  [X] it reverts
+
+    function test_givenFacilityNameAlreadyInUse_reverts() public givenIsEnabled {
+        address otherOperator = makeAddr("otherOperator");
+        // Set the facility name
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(otherOperator, "tst");
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInUse.selector, "tst")
+        );
+
+        // Call function with the same name
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+    }
+
+    // when the name length is greater than 3
+    //  [X] it reverts
+
+    function test_givenFacilityNameLengthGreaterThanThree_reverts() public givenIsEnabled {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInvalid.selector)
+        );
+
+        // Call function with a name longer than 3 characters
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, "test");
+    }
+
+    // when the name contains characters other than lowercase letters or numbers
+    //  [X] it reverts
+
+    function test_givenFacilityNameContainsInvalidCharacters_reverts(
+        uint8 index_,
+        bytes1 character_
+    ) public givenIsEnabled {
+        index_ = uint8(bound(index_, 0, 2));
+
+        // Ensure character is not a lowercase letter
+        if (
+            (character_ >= 0x61 && character_ <= 0x7A) || (character_ >= 0x30 && character_ <= 0x39)
+        ) {
+            character_ = bytes1(0x01);
+        }
+
+        // Adjust the name to contain invalid characters
+        bytes memory name = new bytes(3);
+        for (uint8 i; i < 3; i++) {
+            if (i == index_) {
+                name[i] = character_;
+            } else {
+                name[i] = 0x61; // 'a'
+            }
+        }
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInvalid.selector)
+        );
+
+        // Call function with a name containing invalid characters
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, string(name));
+    }
+
+    // [X] it sets the facility name
+    // [X] it emits the FacilityNameSet event
+
+    function test_success(
+        bytes1 character1_,
+        bytes1 character2_,
+        bytes1 character3_
+    ) public givenIsEnabled {
+        // Ensure characters are lowercase letters or numbers
+        if (
+            (character1_ < 0x61 || character1_ > 0x7A) && (character1_ < 0x30 || character1_ > 0x39)
+        ) {
+            character1_ = bytes1(0x61); // 'a'
+        }
+        if (
+            (character2_ < 0x61 || character2_ > 0x7A) && (character2_ < 0x30 || character2_ > 0x39)
+        ) {
+            character2_ = bytes1(0x61); // 'a'
+        }
+        if (
+            (character3_ < 0x61 || character3_ > 0x7A) && (character3_ < 0x30 || character3_ > 0x39)
+        ) {
+            character3_ = bytes1(0x61); // 'a'
+        }
+
+        // Create the name from the characters
+        bytes memory name = new bytes(3);
+        name[0] = character1_;
+        name[1] = character2_;
+        name[2] = character3_;
+        string memory nameStr = string(name);
+        console2.log("Setting facility name to: %s", nameStr);
+
+        // Expect event
+        vm.expectEmit(true, true, false, true);
+        emit FacilityNameSet(DEPOSIT_OPERATOR, nameStr);
+
+        // Call function
+        vm.prank(ADMIN);
+        depositManager.setFacilityName(DEPOSIT_OPERATOR, nameStr);
+
+        // Validate
+        assertEq(
+            depositManager.getFacilityName(DEPOSIT_OPERATOR),
+            nameStr,
+            "Facility name not set correctly"
+        );
+    }
+}

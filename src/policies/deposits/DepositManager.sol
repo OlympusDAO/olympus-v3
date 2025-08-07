@@ -64,6 +64,13 @@ contract DepositManager is
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    /// @notice Maps facility address to its name
+    mapping(address facility => bytes3 name) internal _facilityToName;
+
+    /// @notice A set of facility names
+    /// @dev    This contains unique values
+    bytes3[] internal _facilityNames;
+
     // ========== BORROWING STATE VARIABLES ========== //
 
     /// @notice Maps asset-operator key to current borrowed amounts
@@ -249,6 +256,83 @@ contract DepositManager is
         address operator_
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(address(asset_), operator_));
+    }
+
+    // ========== FACILITY ========== //
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function reverts if:
+    ///             - the caller is not the admin or manager role
+    ///             - the facility's name is already set
+    ///             - the name is already in use
+    ///             - the facility name is empty
+    ///             - the facility name is not 3 characters long
+    ///             - the facility name contains characters that are not a-z or 0-9
+    function setFacilityName(
+        address facility_,
+        string calldata name_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        // Validate that the name is not already set for the facility
+        if (_facilityToName[facility_] != bytes3(0)) {
+            revert DepositManager_FacilityNameSet(facility_);
+        }
+
+        // Validate that the name is not empty
+        if (bytes(name_).length == 0) {
+            revert DepositManager_FacilityNameInvalid();
+        }
+
+        // Validate that the name contains 3 characters
+        if (bytes(name_).length != 3) {
+            revert DepositManager_FacilityNameInvalid();
+        }
+        // Validate that the characters are a-z, 0-9
+        {
+            bytes memory nameBytes = bytes(name_);
+            for (uint256 i = 0; i < 3; i++) {
+                if (bytes1(nameBytes[i]) >= 0x61 && bytes1(nameBytes[i]) <= 0x7A) {
+                    continue; // Lowercase letter
+                }
+
+                if (bytes1(nameBytes[i]) >= 0x30 && bytes1(nameBytes[i]) <= 0x39) {
+                    continue; // Number
+                }
+
+                revert DepositManager_FacilityNameInvalid();
+            }
+        }
+
+        // Validate that the name isn't in use by another facility
+        for (uint256 i = 0; i < _facilityNames.length; i++) {
+            if (_facilityNames[i] == bytes3(bytes(name_))) {
+                revert DepositManager_FacilityNameInUse(name_);
+            }
+        }
+
+        // Set the name
+        _facilityToName[facility_] = bytes3(bytes(name_));
+
+        // Add to the facility names array
+        _facilityNames.push(bytes3(bytes(name_)));
+
+        // Emit event
+        emit FacilityNameSet(facility_, name_);
+    }
+
+    /// @inheritdoc IDepositManager
+    function getFacilityName(address facility_) public view returns (string memory) {
+        bytes memory nameBytes = new bytes(3);
+        bytes3 facilityName = _facilityToName[facility_];
+        if (facilityName == bytes3(0)) {
+            return "";
+        }
+
+        nameBytes[0] = bytes1(facilityName[0]);
+        nameBytes[1] = bytes1(facilityName[1]);
+        nameBytes[2] = bytes1(facilityName[2]);
+
+        // Convert bytes to string
+        return string(nameBytes);
     }
 
     // ========== ASSET PERIOD ========== //
@@ -595,6 +679,12 @@ contract DepositManager is
         uint8 depositPeriod_,
         address facility_
     ) internal returns (uint256 tokenId) {
+        // Validate that the facility name is set
+        string memory facilityName = getFacilityName(facility_);
+        if (bytes(facilityName).length == 0) {
+            revert DepositManager_FacilityNameNotSet(facility_);
+        }
+
         // Generate a unique token ID for the token, deposit period and facility combination
         tokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
 
@@ -602,9 +692,11 @@ contract DepositManager is
         _createWrappableToken(
             tokenId,
             string
-                .concat(asset_.name(), " Receipt - ", uint2str(depositPeriod_), " months")
+                .concat(facilityName, asset_.name(), " - ", uint2str(depositPeriod_), " months")
                 .truncate32(),
-            string.concat("r", asset_.symbol(), "-", uint2str(depositPeriod_), "m").truncate32(),
+            string
+                .concat(facilityName, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
+                .truncate32(),
             asset_.decimals(),
             abi.encodePacked(
                 address(this), // Owner

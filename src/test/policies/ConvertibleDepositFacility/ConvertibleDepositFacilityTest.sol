@@ -147,6 +147,10 @@ contract ConvertibleDepositFacilityTest is Test {
             type(uint256).max
         );
 
+        // Set the facility names
+        depositManager.setFacilityName(address(facility), "cdf");
+        depositManager.setFacilityName(address(yieldDepositFacility), "ydf");
+
         // Enable the token/period/facility combo
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),

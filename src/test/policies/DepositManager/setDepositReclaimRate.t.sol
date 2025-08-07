@@ -35,7 +35,9 @@ contract DepositManagerSetAssetPeriodReclaimRateTest is DepositManagerTest {
     // when the caller is not the manager or admin
     //  [X] it reverts
 
-    function test_whenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
+    function test_whenCallerIsNotManagerOrAdmin_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != ADMIN && caller_ != MANAGER);
 
         _expectRevertNotManagerOrAdmin();
@@ -52,7 +54,11 @@ contract DepositManagerSetAssetPeriodReclaimRateTest is DepositManagerTest {
     // given the asset vault is not configured
     //  [X] it reverts
 
-    function test_givenAssetVaultIsNotConfigured_reverts() public givenIsEnabled {
+    function test_givenAssetVaultIsNotConfigured_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
@@ -67,7 +73,12 @@ contract DepositManagerSetAssetPeriodReclaimRateTest is DepositManagerTest {
     // given the asset period does not exist
     //  [X] it reverts
 
-    function test_givenAssetPeriodDoesNotExist_reverts() public givenIsEnabled givenAssetIsAdded {
+    function test_givenAssetPeriodDoesNotExist_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
@@ -84,7 +95,13 @@ contract DepositManagerSetAssetPeriodReclaimRateTest is DepositManagerTest {
 
     function test_whenReclaimRateIsGreaterThan100_reverts(
         uint16 reclaimRate_
-    ) public givenIsEnabled givenAssetIsAdded givenAssetPeriodIsAdded {
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
         reclaimRate_ = uint16(bound(reclaimRate_, 100e2 + 1, type(uint16).max));
 
         vm.expectRevert(
@@ -105,7 +122,13 @@ contract DepositManagerSetAssetPeriodReclaimRateTest is DepositManagerTest {
 
     function test_setsReclaimRate(
         uint16 reclaimRate_
-    ) public givenIsEnabled givenAssetIsAdded givenAssetPeriodIsAdded {
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
         reclaimRate_ = uint16(bound(reclaimRate_, 0, 100e2));
 
         // Expect event

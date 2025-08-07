@@ -23,6 +23,8 @@ interface IDepositManager is IAssetManager {
     );
 
     // Asset Configuration Events
+    event FacilityNameSet(address indexed facility, string name);
+
     event AssetPeriodConfigured(
         uint256 indexed receiptTokenId,
         address indexed asset,
@@ -82,6 +84,14 @@ interface IDepositManager is IAssetManager {
     error DepositManager_OutOfBounds();
 
     // Asset Configuration Errors
+    error DepositManager_FacilityNameNotSet(address facility);
+
+    error DepositManager_FacilityNameSet(address facility);
+
+    error DepositManager_FacilityNameInvalid();
+
+    error DepositManager_FacilityNameInUse(string name);
+
     error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod, address facility);
 
     error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod, address facility);
@@ -314,6 +324,21 @@ interface IDepositManager is IAssetManager {
         IERC20 asset_,
         address operator_
     ) external view returns (uint256 liabilities);
+
+    // ========== FACILITY ========== //
+
+    /// @notice Sets the name of a facility. This is included in the name and symbol of receipt tokens.
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Setting the facility name
+    ///         - Emitting an event
+    function setFacilityName(address facility_, string calldata name_) external;
+
+    /// @notice Returns the name of a facility
+    ///
+    /// @param  facility_   The address of the facility
+    /// @return name        The name of the facility or an empty string
+    function getFacilityName(address facility_) external view returns (string memory name);
 
     // ========== DEPOSIT CONFIGURATIONS ========== //
 
