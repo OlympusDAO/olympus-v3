@@ -119,7 +119,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         )
             revert IDepositManager.DepositManager_InvalidAssetPeriod(
                 address(depositToken_),
-                depositPeriod_
+                depositPeriod_,
+                address(this)
             );
 
         // Validate that there are enough uncommitted funds

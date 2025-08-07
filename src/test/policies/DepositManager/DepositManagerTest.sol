@@ -316,7 +316,8 @@ contract DepositManagerTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
-                depositPeriod_
+                depositPeriod_,
+                DEPOSIT_OPERATOR
             )
         );
     }
@@ -326,7 +327,8 @@ contract DepositManagerTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_AssetPeriodEnabled.selector,
                 address(asset_),
-                depositPeriod_
+                depositPeriod_,
+                DEPOSIT_OPERATOR
             )
         );
     }
@@ -336,7 +338,8 @@ contract DepositManagerTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_AssetPeriodDisabled.selector,
                 address(asset_),
-                depositPeriod_
+                depositPeriod_,
+                DEPOSIT_OPERATOR
             )
         );
     }

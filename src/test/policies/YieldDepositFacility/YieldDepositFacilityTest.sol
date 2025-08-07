@@ -589,7 +589,8 @@ contract YieldDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
-                periodMonths_
+                periodMonths_,
+                address(yieldDepositFacility)
             )
         );
     }

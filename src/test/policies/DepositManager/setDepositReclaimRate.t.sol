@@ -5,10 +5,15 @@ import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
-contract DepositManagersetAssetPeriodReclaimRateTest is DepositManagerTest {
+contract DepositManagerSetAssetPeriodReclaimRateTest is DepositManagerTest {
     // ========== EVENTS ========== //
 
-    event AssetPeriodReclaimRateSet(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
+    event AssetPeriodReclaimRateSet(
+        address indexed asset,
+        address indexed facility,
+        uint8 depositPeriod,
+        uint16 reclaimRate
+    );
 
     // ========== TESTS ========== //
 
@@ -105,7 +110,12 @@ contract DepositManagersetAssetPeriodReclaimRateTest is DepositManagerTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit AssetPeriodReclaimRateSet(address(iAsset), DEPOSIT_PERIOD, reclaimRate_);
+        emit AssetPeriodReclaimRateSet(
+            address(iAsset),
+            DEPOSIT_OPERATOR,
+            DEPOSIT_PERIOD,
+            reclaimRate_
+        );
 
         vm.prank(ADMIN);
         depositManager.setAssetPeriodReclaimRate(

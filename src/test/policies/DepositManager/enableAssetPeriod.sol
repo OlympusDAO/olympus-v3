@@ -10,6 +10,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     event AssetPeriodEnabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
+        address indexed facility,
         uint8 depositPeriod
     );
 
@@ -79,6 +80,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         emit AssetPeriodEnabled(
             depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR),
             address(asset),
+            DEPOSIT_OPERATOR,
             DEPOSIT_PERIOD
         );
 

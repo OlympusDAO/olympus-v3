@@ -82,7 +82,7 @@ contract DepositManager is
             address(_assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].asset) ==
             address(0)
         ) {
-            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_);
+            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, facility_);
         }
         _;
     }
@@ -97,11 +97,11 @@ contract DepositManager is
             getReceiptTokenId(asset_, depositPeriod_, facility_)
         ];
         if (assetPeriod.asset == address(0)) {
-            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_);
+            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, facility_);
         }
 
         if (!assetPeriod.isEnabled) {
-            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_);
+            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, facility_);
         }
         _;
     }
@@ -304,7 +304,7 @@ contract DepositManager is
 
         // Validate that the asset and deposit period combination is not already configured
         if (isAssetPeriod(asset_, depositPeriod_, facility_).isConfigured) {
-            revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_);
+            revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, facility_);
         }
 
         // Configure the ERC6909 receipt token
@@ -323,7 +323,7 @@ contract DepositManager is
         _setAssetPeriodReclaimRate(asset_, depositPeriod_, facility_, reclaimRate_);
 
         // Emit event
-        emit AssetPeriodConfigured(receiptTokenId, address(asset_), depositPeriod_);
+        emit AssetPeriodConfigured(receiptTokenId, address(asset_), facility_, depositPeriod_);
 
         return receiptTokenId;
     }
@@ -343,14 +343,14 @@ contract DepositManager is
         // Validate that the asset period is disabled
         uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
         if (_assetPeriods[tokenId].isEnabled) {
-            revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_);
+            revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_, facility_);
         }
 
         // Enable the asset period
         _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].isEnabled = true;
 
         // Emit event
-        emit AssetPeriodEnabled(tokenId, address(asset_), depositPeriod_);
+        emit AssetPeriodEnabled(tokenId, address(asset_), facility_, depositPeriod_);
     }
 
     /// @inheritdoc IDepositManager
@@ -368,14 +368,14 @@ contract DepositManager is
         // Validate that the asset period is enabled
         uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
         if (!_assetPeriods[tokenId].isEnabled) {
-            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_);
+            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, facility_);
         }
 
         // Disable the asset period
         _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].isEnabled = false;
 
         // Emit event
-        emit AssetPeriodDisabled(tokenId, address(asset_), depositPeriod_);
+        emit AssetPeriodDisabled(tokenId, address(asset_), facility_, depositPeriod_);
     }
 
     /// @inheritdoc IDepositManager
@@ -415,7 +415,7 @@ contract DepositManager is
 
         _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)]
             .reclaimRate = reclaimRate_;
-        emit AssetPeriodReclaimRateSet(address(asset_), depositPeriod_, reclaimRate_);
+        emit AssetPeriodReclaimRateSet(address(asset_), facility_, depositPeriod_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager

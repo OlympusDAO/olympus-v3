@@ -623,7 +623,8 @@ contract ConvertibleDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
-                depositPeriod_
+                depositPeriod_,
+                address(facility)
             )
         );
     }

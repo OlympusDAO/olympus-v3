@@ -208,7 +208,8 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_AssetPeriodExists.selector,
                 address(iAsset),
-                DEPOSIT_PERIOD
+                DEPOSIT_PERIOD,
+                DEPOSIT_OPERATOR
             )
         );
 

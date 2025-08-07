@@ -18,29 +18,38 @@ interface IDepositManager is IAssetManager {
     event ClaimedYield(
         address indexed asset,
         address indexed depositor,
-        address indexed operator,
+        address indexed facility,
         uint256 amount
     );
 
+    // Asset Configuration Events
     event AssetPeriodConfigured(
         uint256 indexed receiptTokenId,
         address indexed asset,
+        address indexed facility,
         uint8 depositPeriod
     );
 
     event AssetPeriodEnabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
+        address indexed facility,
         uint8 depositPeriod
     );
 
     event AssetPeriodDisabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
+        address indexed facility,
         uint8 depositPeriod
     );
 
-    event AssetPeriodReclaimRateSet(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
+    event AssetPeriodReclaimRateSet(
+        address indexed asset,
+        address indexed facility,
+        uint8 depositPeriod,
+        uint16 reclaimRate
+    );
 
     // Borrowing Events
     event BorrowingWithdrawal(
@@ -72,25 +81,26 @@ interface IDepositManager is IAssetManager {
 
     error DepositManager_OutOfBounds();
 
-    error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod);
+    // Asset Configuration Errors
+    error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod, address facility);
 
-    error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod);
+    error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod, address facility);
 
-    error DepositManager_AssetPeriodEnabled(address asset, uint8 depositPeriod);
+    error DepositManager_AssetPeriodEnabled(address asset, uint8 depositPeriod, address facility);
 
-    error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod);
+    error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod, address facility);
 
     // Borrowing Errors
     error DepositManager_BorrowingLimitExceeded(
         address asset,
-        address operator,
+        address facility,
         uint256 requested,
         uint256 available
     );
 
     error DepositManager_BorrowedAmountExceeded(
         address asset,
-        address operator,
+        address facility,
         uint256 amount,
         uint256 borrowed
     );
