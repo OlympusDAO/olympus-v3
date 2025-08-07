@@ -18,6 +18,7 @@ contract ERC6909WrappableTest is Test {
 
     address public constant ASSET = address(0x1234567890123456789012345678901234567890);
     uint8 public constant DEPOSIT_PERIOD = 9;
+    address public constant FACILITY = address(0x9876543210987654321098765432109876543210);
 
     function setUp() public {
         alice = makeAddr("alice");
@@ -26,7 +27,12 @@ contract ERC6909WrappableTest is Test {
         token = new MockERC6909Wrappable(address(erc20Implementation));
 
         // Set the token metadata
-        bytes memory additionalMetadata = abi.encodePacked(address(token), ASSET, DEPOSIT_PERIOD);
+        bytes memory additionalMetadata = abi.encodePacked(
+            address(token),
+            ASSET,
+            DEPOSIT_PERIOD,
+            FACILITY
+        );
         token.setTokenMetadata(TOKEN_ID, "Mock", "MOCK", 18, additionalMetadata);
     }
 
@@ -155,6 +161,7 @@ contract ERC6909WrappableTest is Test {
         assertEq(wrappedToken.owner(), address(token), "ERC20 owner mismatch");
         assertEq(address(wrappedToken.asset()), ASSET, "ERC20 asset mismatch");
         assertEq(wrappedToken.depositPeriod(), DEPOSIT_PERIOD, "ERC20 deposit period mismatch");
+        assertEq(wrappedToken.facility(), FACILITY, "ERC20 facility mismatch");
     }
 
     // Mint
