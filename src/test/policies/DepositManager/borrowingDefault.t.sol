@@ -208,7 +208,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         assertEq(
             depositManager.balanceOf(
                 DEPOSITOR,
-                depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD)
+                depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR)
             ),
             previousDepositorDepositActualAmount - amount_,
             "receipt token balance"

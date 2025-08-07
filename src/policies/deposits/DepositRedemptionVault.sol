@@ -155,13 +155,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     function _pullReceiptToken(
         IERC20 depositToken_,
         uint8 depositPeriod_,
+        address facility_,
         uint256 amount_
     ) internal {
         // Transfer the receipt tokens from the caller to this contract
         IERC6909(address(DEPOSIT_MANAGER)).transferFrom(
             msg.sender,
             address(this),
-            DEPOSIT_MANAGER.getReceiptTokenId(depositToken_, depositPeriod_),
+            DEPOSIT_MANAGER.getReceiptTokenId(depositToken_, depositPeriod_, facility_),
             amount_
         );
     }
@@ -236,7 +237,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         IDepositFacility(facility_).handleCommit(depositToken_, depositPeriod_, amount_);
 
         // Pull the receipt tokens from the caller
-        _pullReceiptToken(depositToken_, depositPeriod_, amount_);
+        _pullReceiptToken(depositToken_, depositPeriod_, facility_, amount_);
 
         // Emit events
         emit RedemptionStarted(
@@ -290,7 +291,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             msg.sender,
             DEPOSIT_MANAGER.getReceiptTokenId(
                 IERC20(redemption.depositToken),
-                redemption.depositPeriod
+                redemption.depositPeriod,
+                redemption.facility
             ),
             amount_
         );
@@ -339,7 +341,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             address(DEPOSIT_MANAGER),
             DEPOSIT_MANAGER.getReceiptTokenId(
                 IERC20(redemption.depositToken),
-                redemption.depositPeriod
+                redemption.depositPeriod,
+                redemption.facility
             ),
             redemptionAmount
         );
@@ -696,7 +699,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             address(DEPOSIT_MANAGER),
             DEPOSIT_MANAGER.getReceiptTokenId(
                 IERC20(redemption.depositToken),
-                redemption.depositPeriod
+                redemption.depositPeriod,
+                redemption.facility
             ),
             retainedCollateral + previousPrincipal
         );

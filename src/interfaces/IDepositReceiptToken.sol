@@ -18,4 +18,6 @@ interface IDepositReceiptToken is IERC20 {
     function asset() external view returns (IERC20 _asset);
 
     function depositPeriod() external view returns (uint8 _depositPeriod);
+
+    function facility() external view returns (address _facility);
 }

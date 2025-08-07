@@ -112,7 +112,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_
     ) external onlyEnabled onlyAuthorizedOperator {
         // Validate that the deposit token and period are supported
-        if (!DEPOSIT_MANAGER.isAssetPeriod(depositToken_, depositPeriod_).isConfigured)
+        if (
+            !DEPOSIT_MANAGER
+                .isAssetPeriod(depositToken_, depositPeriod_, address(this))
+                .isConfigured
+        )
             revert IDepositManager.DepositManager_InvalidAssetPeriod(
                 address(depositToken_),
                 depositPeriod_
@@ -311,7 +315,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
         reclaimed = amount_.mulDiv(
-            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_),
+            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_, address(this)),
             ONE_HUNDRED_PERCENT
         );
 

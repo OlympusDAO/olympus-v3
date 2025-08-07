@@ -71,7 +71,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(position.periodMonths, PERIOD_MONTHS, "position period months");
 
         // Assert that the receipt token id is accurate
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(facility)
+        );
         assertEq(returnedReceiptTokenId_, receiptTokenId, "receipt token id");
     }
 

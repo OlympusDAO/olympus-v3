@@ -235,7 +235,12 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Configure deposit
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(IERC20(address(asset)), DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(
+            IERC20(address(asset)),
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR,
+            RECLAIM_RATE
+        );
 
         // Mint the asset to the depositor
         vm.prank(ADMIN);
@@ -336,7 +341,11 @@ contract DepositManagerDepositTest is DepositManagerTest {
     {
         amount_ = bound(amount_, 1e18, MINT_AMOUNT);
 
-        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -378,7 +387,11 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 expectedShares = vault.previewDeposit(amount);
         uint256 expectedAssets = _getExpectedActualAssets(amount);
 
-        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
 
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
@@ -417,7 +430,11 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 expectedShares = vault.previewDeposit(amount);
         uint256 expectedAssets = _getExpectedActualAssets(amount);
 
-        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
 
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
@@ -525,7 +542,11 @@ contract DepositManagerDepositTest is DepositManagerTest {
         uint256 expectedShares = vault.previewDeposit(amount_);
         uint256 expectedAssets = _getExpectedActualAssets(amount_);
 
-        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
 
         // Expect event
         vm.expectEmit(true, true, true, true);

@@ -179,11 +179,26 @@ contract DepositRedemptionVaultTest is Test {
             type(uint256).max
         );
 
-        depositManager.addAssetPeriod(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
+        // Enable the token/period/facility combo
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            address(cdFacility),
+            90e2
+        );
+
+        // Enable the token/period/facility combo for the YieldDepositFacility
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            address(ydFacility),
+            90e2
+        );
 
         receiptTokenId = depositManager.getReceiptTokenId(
             IERC20(address(reserveToken)),
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(cdFacility)
         );
         vm.stopPrank();
 
@@ -195,11 +210,26 @@ contract DepositRedemptionVaultTest is Test {
             type(uint256).max
         );
 
-        depositManager.addAssetPeriod(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
+        // Enable the token/period/facility combo
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveTokenTwo)),
+            PERIOD_MONTHS,
+            address(cdFacility),
+            90e2
+        );
+
+        // Enable the token/period/facility combo for the YieldDepositFacility
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveTokenTwo)),
+            PERIOD_MONTHS,
+            address(ydFacility),
+            90e2
+        );
 
         receiptTokenIdTwo = depositManager.getReceiptTokenId(
             IERC20(address(reserveTokenTwo)),
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(cdFacility)
         );
         vm.stopPrank();
 
@@ -507,7 +537,7 @@ contract DepositRedemptionVaultTest is Test {
         vm.startPrank(user_);
         depositManager.approve(
             address(redemptionVault),
-            depositManager.getReceiptTokenId(asset_, depositPeriod_),
+            depositManager.getReceiptTokenId(asset_, depositPeriod_, address(cdFacility)),
             amount_
         );
         vm.stopPrank();
@@ -546,7 +576,7 @@ contract DepositRedemptionVaultTest is Test {
         return
             IERC20(
                 depositManager.getWrappedToken(
-                    depositManager.getReceiptTokenId(asset_, depositPeriod_)
+                    depositManager.getReceiptTokenId(asset_, depositPeriod_, address(cdFacility))
                 )
             );
     }
@@ -899,7 +929,7 @@ contract DepositRedemptionVaultTest is Test {
                 spender_,
                 currentAllowance_,
                 amount_,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(cdFacility))
             )
         );
     }
@@ -914,7 +944,7 @@ contract DepositRedemptionVaultTest is Test {
                 recipient,
                 currentBalance_,
                 amount_,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(cdFacility))
             )
         );
     }

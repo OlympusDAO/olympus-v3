@@ -135,11 +135,13 @@ interface IDepositManager is IAssetManager {
     /// @param depositPeriod   The deposit period, in months
     /// @param reclaimRate     The reclaim rate for the asset period (see the implementation contract for scale)
     /// @param asset           The underlying ERC20 asset
+    /// @param facility        The facility that can issue this receipt token
     struct AssetPeriod {
         bool isEnabled;
         uint8 depositPeriod;
         uint16 reclaimRate;
         address asset;
+        address facility;
     }
 
     /// @notice Status of an asset period
@@ -334,11 +336,13 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
+    /// @param  facility_       The address of the facility
     /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
+        address facility_,
         uint16 reclaimRate_
     ) external returns (uint256 receiptTokenId);
 
@@ -350,7 +354,8 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    function disableAssetPeriod(IERC20 asset_, uint8 depositPeriod_) external;
+    /// @param  facility_       The address of the facility
+    function disableAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address facility_) external;
 
     /// @notice Enables an asset period, which allows new deposits
     /// @dev    The implementing contract is expected to handle the following:
@@ -360,16 +365,19 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    function enableAssetPeriod(IERC20 asset_, uint8 depositPeriod_) external;
+    /// @param  facility_       The address of the facility
+    function enableAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address facility_) external;
 
-    /// @notice Returns the asset period for an asset and period
+    /// @notice Returns the asset period for an asset, period and facility
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
+    /// @param  facility_       The address of the facility
     /// @return configuration   The asset period
     function getAssetPeriod(
         IERC20 asset_,
-        uint8 depositPeriod_
+        uint8 depositPeriod_,
+        address facility_
     ) external view returns (AssetPeriod memory configuration);
 
     /// @notice Returns the asset period from a receipt token ID
@@ -380,15 +388,17 @@ interface IDepositManager is IAssetManager {
         uint256 tokenId_
     ) external view returns (AssetPeriod memory configuration);
 
-    /// @notice Returns whether a deposit asset and period combination are configured
+    /// @notice Returns whether a deposit asset, period and facility combination are configured
     /// @dev    A asset period that is disabled will not accept further deposits
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
+    /// @param  facility_       The address of the facility
     /// @return status          The status of the asset period
     function isAssetPeriod(
         IERC20 asset_,
-        uint8 depositPeriod_
+        uint8 depositPeriod_,
+        address facility_
     ) external view returns (AssetPeriodStatus memory status);
 
     /// @notice Returns the asset periods
@@ -405,10 +415,12 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
+    /// @param  facility_       The address of the facility
     /// @param  reclaimRate_    The reclaim rate to set
     function setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
+        address facility_,
         uint16 reclaimRate_
     ) external;
 
@@ -416,21 +428,28 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
+    /// @param  facility_       The address of the facility
     /// @return reclaimRate     The reclaim rate for the asset period
     function getAssetPeriodReclaimRate(
         IERC20 asset_,
-        uint8 depositPeriod_
+        uint8 depositPeriod_,
+        address facility_
     ) external view returns (uint16 reclaimRate);
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 
-    /// @notice Returns the ID of the receipt token for an asset period
+    /// @notice Returns the ID of the receipt token for an asset period and facility
     /// @dev    The ID returned is not a guarantee that the asset period is configured or enabled. {isAssetPeriod} should be used for that purpose.
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
+    /// @param  facility_       The address of the facility
     /// @return receiptTokenId  The ID of the receipt token
-    function getReceiptTokenId(IERC20 asset_, uint8 depositPeriod_) external view returns (uint256);
+    function getReceiptTokenId(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address facility_
+    ) external view returns (uint256);
 
     /// @notice Returns the name of a receipt token
     ///
@@ -469,4 +488,10 @@ interface IDepositManager is IAssetManager {
     function getReceiptTokenDepositPeriod(
         uint256 tokenId_
     ) external view returns (uint8 depositPeriod);
+
+    /// @notice Returns the facility of a receipt token
+    ///
+    /// @param  tokenId_    The ID of the receipt token
+    /// @return facility    The facility of the receipt token
+    function getReceiptTokenFacility(uint256 tokenId_) external view returns (address facility);
 }

@@ -174,7 +174,11 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         )
     {
         uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
-            depositManager.getAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS)) / 100e2;
+            depositManager.getAssetPeriodReclaimRate(
+                iReserveToken,
+                PERIOD_MONTHS,
+                address(facility)
+            )) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
         // Expect event
@@ -191,7 +195,11 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
 
         // Assert convertible deposit tokens are transferred from the recipient
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(facility)
+        );
         assertEq(
             depositManager.balanceOf(recipient, receiptTokenId),
             0,

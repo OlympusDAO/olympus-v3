@@ -143,13 +143,13 @@ contract DepositManagerTest is Test {
 
     modifier givenAssetPeriodIsAdded() {
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
         _;
     }
 
     modifier givenAssetPeriodIsDisabled() {
         vm.prank(ADMIN);
-        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
         _;
     }
 
@@ -183,7 +183,11 @@ contract DepositManagerTest is Test {
         );
 
         // Update the previous balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
         previousDepositorReceiptTokenBalance = depositManager.balanceOf(DEPOSITOR, receiptTokenId);
         if (depositManager.getWrappedToken(receiptTokenId) != address(0)) {
             previousDepositorWrappedTokenBalance = IERC20(
@@ -205,7 +209,11 @@ contract DepositManagerTest is Test {
     }
 
     modifier givenDepositorHasApprovedSpendingWrappedReceiptToken(uint256 amount_) {
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
         address wrappedToken = depositManager.getWrappedToken(receiptTokenId);
 
         vm.prank(DEPOSITOR);
@@ -214,7 +222,11 @@ contract DepositManagerTest is Test {
     }
 
     modifier givenDepositorHasApprovedSpendingReceiptToken(uint256 amount_) {
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
 
         vm.prank(DEPOSITOR);
         depositManager.approve(address(depositManager), receiptTokenId, amount_);
@@ -286,7 +298,11 @@ contract DepositManagerTest is Test {
     }
 
     function _expectRevertInvalidReceiptTokenId(IERC20 asset_, uint8 depositPeriod_) internal {
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(asset_, depositPeriod_);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            asset_,
+            depositPeriod_,
+            DEPOSIT_OPERATOR
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
                 IERC6909Wrappable.ERC6909Wrappable_InvalidTokenId.selector,
@@ -361,7 +377,7 @@ contract DepositManagerTest is Test {
                 address(depositManager),
                 currentAllowance_,
                 amount_,
-                depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD)
+                depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR)
             )
         );
     }
@@ -376,7 +392,7 @@ contract DepositManagerTest is Test {
                 DEPOSITOR,
                 currentBalance_,
                 amount_,
-                depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD)
+                depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR)
             )
         );
     }
@@ -590,7 +606,11 @@ contract DepositManagerTest is Test {
         bool wrappedTokenExists_,
         bool isDeposit_
     ) internal view {
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
 
         // Unwrapped amount
         if (isDeposit_) {

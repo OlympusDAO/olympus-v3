@@ -107,7 +107,8 @@ contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
     {
         uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(yieldDepositFacility)
         );
 
         // Call function
@@ -155,7 +156,8 @@ contract YieldDepositFacilityDepositTest is YieldDepositFacilityTest {
     {
         uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(yieldDepositFacility)
         );
 
         // Start gas snapshot

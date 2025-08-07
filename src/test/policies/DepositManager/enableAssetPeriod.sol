@@ -22,7 +22,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // when the caller is not the manager or admin
@@ -34,7 +34,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         _expectRevertNotManagerOrAdmin();
 
         vm.prank(caller_);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given there is no asset period
@@ -44,7 +44,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given the asset period is already enabled
@@ -59,7 +59,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         _expectRevertConfigurationEnabled(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // [X] the asset period is enabled
@@ -73,28 +73,30 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     {
         // Disable the asset period
         vm.prank(ADMIN);
-        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         vm.expectEmit(true, true, true, true);
         emit AssetPeriodEnabled(
-            depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD),
+            depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR),
             address(asset),
             DEPOSIT_PERIOD
         );
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         // Assert the asset period is enabled
         IDepositManager.AssetPeriod memory configuration = depositManager.getAssetPeriod(
             iAsset,
-            DEPOSIT_PERIOD
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
         );
         assertEq(configuration.isEnabled, true, "AssetPeriod: isEnabled mismatch");
 
         IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
             iAsset,
-            DEPOSIT_PERIOD
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
         );
         assertEq(status.isConfigured, true, "isAssetPeriod: isConfigured mismatch");
         assertEq(status.isEnabled, true, "isAssetPeriod: isEnabled mismatch");

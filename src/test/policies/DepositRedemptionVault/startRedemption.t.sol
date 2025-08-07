@@ -49,7 +49,11 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         );
 
         // Assert receipt token balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(depositToken_, depositPeriod_);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            depositToken_,
+            depositPeriod_,
+            address(cdFacility)
+        );
         assertEq(
             depositManager.balanceOf(user_, receiptTokenId),
             receiptTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
@@ -208,7 +212,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         vm.startPrank(recipient);
         depositManager.transfer(
             address(this),
-            depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS),
+            depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(cdFacility)),
             1e17
         );
         vm.stopPrank();
