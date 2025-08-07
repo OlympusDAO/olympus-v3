@@ -304,6 +304,17 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier mintYieldDepositToken(address account_, uint256 amount_) {
+        vm.prank(account_);
+        (, previousDepositActual) = yieldDepositFacility.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            false
+        );
+        _;
+    }
+
     modifier givenAddressHasConvertibleDepositToken(
         address account_,
         IERC20 asset_,

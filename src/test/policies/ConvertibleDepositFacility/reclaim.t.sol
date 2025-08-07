@@ -153,6 +153,35 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
     }
 
+    // given the caller has receipt tokens from a different facility
+    //  [X] it reverts
+
+    function test_differentReceiptToken_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        mintYieldDepositToken(recipient, RESERVE_TOKEN_AMOUNT)
+        givenAddressHasReserveToken(recipientTwo, RESERVE_TOKEN_AMOUNT)
+        givenReserveTokenSpendingIsApproved(
+            recipientTwo,
+            address(depositManager),
+            RESERVE_TOKEN_AMOUNT
+        )
+        mintConvertibleDepositToken(recipientTwo, RESERVE_TOKEN_AMOUNT) // Ensures that there are deposits
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(depositManager),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        // Expect revert
+        _expectRevertReceiptTokenInsufficientBalance(0, RESERVE_TOKEN_AMOUNT);
+
+        // Call function
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, RESERVE_TOKEN_AMOUNT);
+    }
+
     // given the amount is less than the available deposits
     //  [X] it succeeds
     //  [X] it transfers the deposit tokens from the facility to the caller
