@@ -20,7 +20,6 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
@@ -67,8 +66,8 @@ contract ConvertibleDepositFacilityTest is Test {
     uint8 public constant PERIOD_MONTHS = 6;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
-    uint256 previousDepositActual;
-    uint256 previousBorrowActual;
+    uint256 public previousDepositActual;
+    uint256 public previousBorrowActual;
 
     function setUp() public virtual {
         vm.warp(INITIAL_BLOCK);

@@ -460,7 +460,7 @@ contract YieldDepositFacilityTest is Test {
         uint256 expectedFee_,
         uint256 expectedTreasuryBalance_,
         uint256 expectedVaultSharesReduction_,
-        uint256 expectedConversionRate_,
+        uint256,
         uint48 lastClaimTimestamp_
     ) internal view {
         // Assert caller received yield minus fee
