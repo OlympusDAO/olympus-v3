@@ -261,7 +261,9 @@ contract DepositManager is
     // ========== FACILITY ========== //
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function reverts if:
+    /// @dev        Note that once set, a facility name cannot be changed.
+    ///
+    ///             This function reverts if:
     ///             - the caller is not the admin or manager role
     ///             - the facility's name is already set
     ///             - the name is already in use
