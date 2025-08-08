@@ -13,6 +13,8 @@ contract UpdateDEPOSTest is DEPOSTest {
     //  [X] it reverts
     // when the caller is not a permissioned address
     //  [X] it reverts
+    // when the caller is not the operator of the position
+    //  [X] it reverts
     // when the caller is the owner of the position
     //  [X] it reverts
     // when the amount is 0
@@ -45,6 +47,26 @@ contract UpdateDEPOSTest is DEPOSTest {
 
         // Call function
         vm.prank(OTHER);
+        DEPOS.setRemainingDeposit(0, 1e18);
+    }
+
+    function test_callerNotOperator_reverts()
+        public
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            false
+        )
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOperator.selector, 0)
+        );
+
+        // Call function
+        vm.prank(godmodeTwo);
         DEPOS.setRemainingDeposit(0, 1e18);
     }
 
