@@ -266,7 +266,7 @@ contract DepositManager is
         return keccak256(abi.encode(address(asset_), operator_));
     }
 
-    // ========== OPERATOR NAME ========== //
+    // ========== OPERATOR NAMES ========== //
 
     /// @inheritdoc IDepositManager
     /// @dev        Note that once set, an operator name cannot be changed.

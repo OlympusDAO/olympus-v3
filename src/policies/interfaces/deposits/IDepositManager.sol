@@ -325,7 +325,7 @@ interface IDepositManager is IAssetManager {
         address operator_
     ) external view returns (uint256 liabilities);
 
-    // ========== FACILITY ========== //
+    // ========== OPERATOR NAMES ========== //
 
     /// @notice Sets the name of an operator. This is included in the name and symbol of receipt tokens.
     /// @dev    The implementing contract is expected to handle the following:
