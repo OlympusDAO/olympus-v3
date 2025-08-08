@@ -231,6 +231,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
+    ///             - The caller is not the operator that created the position
     ///             - The amount is 0
     ///             - The amount is greater than the remaining deposit
     ///             - `to_` is the zero address
