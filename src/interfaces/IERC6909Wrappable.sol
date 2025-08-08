@@ -4,6 +4,22 @@ pragma solidity >=0.8.0;
 /// @title IERC6909Wrappable
 /// @notice Declares interface for an ERC6909 implementation that allows for wrapping and unwrapping ERC6909 tokens to and from ERC20 tokens
 interface IERC6909Wrappable {
+    // ========== EVENTS ========== //
+
+    event Wrapped(
+        uint256 indexed tokenId,
+        address indexed wrappedToken,
+        address indexed account,
+        uint256 amount
+    );
+
+    event Unwrapped(
+        uint256 indexed tokenId,
+        address indexed wrappedToken,
+        address indexed account,
+        uint256 amount
+    );
+
     // ========== ERRORS ========== //
 
     error ERC6909Wrappable_TokenIdAlreadyExists(uint256 tokenId);

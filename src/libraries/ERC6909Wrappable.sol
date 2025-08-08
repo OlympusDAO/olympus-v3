@@ -178,6 +178,10 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         // Mint the wrapped ERC20 token to the recipient
         IERC20BurnableMintable wrappedToken_ = _getWrappedToken(tokenId_);
         wrappedToken_.mintFor(msg.sender, amount_);
+
+        // Emit the Wrapped event
+        emit Wrapped(tokenId_, address(wrappedToken_), msg.sender, amount_);
+
         return address(wrappedToken_);
     }
 
@@ -195,6 +199,9 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
 
         // Mint the ERC6909 token
         _mint(msg.sender, tokenId_, amount_);
+
+        // Emit the Unwrapped event
+        emit Unwrapped(tokenId_, _wrappedTokens[tokenId_], msg.sender, amount_);
     }
 
     // ========== TOKEN FUNCTIONS ========== //
