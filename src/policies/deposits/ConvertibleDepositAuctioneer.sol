@@ -171,8 +171,8 @@ contract ConvertibleDepositAuctioneer is
     ///             - Deposits are not enabled for the asset/period/operator
     ///             - The depositor has not approved the DepositManager to spend the deposit asset
     ///             - The depositor has an insufficient balance of the deposit asset
-    ///             - The calculated amount of OHM out is below the minimum OHM out value
     ///             - The calculated amount of OHM out is 0
+    ///             - The calculated amount of OHM out is < minOhmOut_
     function bid(
         uint8 depositPeriod_,
         uint256 depositAmount_,
@@ -217,8 +217,8 @@ contract ConvertibleDepositAuctioneer is
             // Reject if the OHM out is below the minimum OHM out
             if (output.ohmOut < params.minOhmOut)
                 revert ConvertibleDepositAuctioneer_ConvertedAmountSlippage(
-                    params.minOhmOut,
-                    output.ohmOut
+                    output.ohmOut,
+                    params.minOhmOut
                 );
 
             // Update state

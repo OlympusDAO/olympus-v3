@@ -81,9 +81,14 @@ interface IConvertibleDepositAuctioneer {
     /// @param  reason          Reason for invalid parameters
     error ConvertibleDepositAuctioneer_InvalidParams(string reason);
 
+    /// @notice Emitted when the OHM output (the amount of OHM the deposit can be converted to) is zero
     error ConvertibleDepositAuctioneer_ConvertedAmountZero();
 
-    error ConvertibleDepositAuctioneer_ConvertedAmountSlippage(uint256 minOhmOut, uint256 ohmOut);
+    /// @notice Emitted when the OHM output (the amount of OHM the deposit can be converted to) is less than the minimum specified
+    ///
+    /// @param  ohmOut         The amount of OHM tokens that the deposit can be converted to
+    /// @param  minOhmOut      The minimum amount of OHM that the deposit should convert to, in order to succeed
+    error ConvertibleDepositAuctioneer_ConvertedAmountSlippage(uint256 ohmOut, uint256 minOhmOut);
 
     /// @notice Emitted when the deposit period is already enabled for this asset
     error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
@@ -169,11 +174,11 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///
     /// @param  depositPeriod_  The deposit period
-    /// @param  deposit_        Amount of deposit asset to deposit
+    /// @param  depositAmount_  Amount of deposit asset to deposit
     /// @return ohmOut          Amount of OHM tokens that the deposit could be converted to
     function previewBid(
         uint8 depositPeriod_,
-        uint256 deposit_
+        uint256 depositAmount_
     ) external view returns (uint256 ohmOut);
 
     // ========== STATE VARIABLES ========== //

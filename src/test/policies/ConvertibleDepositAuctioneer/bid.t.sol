@@ -183,8 +183,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
                 IConvertibleDepositAuctioneer
                     .ConvertibleDepositAuctioneer_ConvertedAmountSlippage
                     .selector,
-                minOhmOut_,
-                expectedConvertedAmount
+                expectedConvertedAmount,
+                minOhmOut_
             )
         );
 
