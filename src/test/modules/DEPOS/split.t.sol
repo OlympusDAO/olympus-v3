@@ -20,6 +20,8 @@ contract SplitDEPOSTest is DEPOSTest {
     //  [X] it reverts
     // when the caller is not a permissioned address
     //  [X] it reverts
+    // when the caller is not the operator of the position
+    //  [X] it reverts
     // when the amount is 0
     //  [X] it reverts
     // when the amount is greater than the remaining deposit
