@@ -69,7 +69,7 @@ contract DepositManager is
 
     /// @notice A set of operator names
     /// @dev    This contains unique values
-    bytes3[] internal _operatorNames;
+    mapping(bytes3 name => bool isRegistered) internal _operatorNames;
 
     // ========== BORROWING STATE VARIABLES ========== //
 
@@ -304,18 +304,15 @@ contract DepositManager is
             }
         }
 
+        bytes3 nameBytes = bytes3(bytes(name_));
         // Validate that the name isn't in use by another operator
-        for (uint256 i = 0; i < _operatorNames.length; i++) {
-            if (_operatorNames[i] == bytes3(bytes(name_))) {
-                revert DepositManager_OperatorNameInUse(name_);
-            }
-        }
+        if (_operatorNames[nameBytes]) revert DepositManager_OperatorNameInUse(name_);
 
         // Set the name
-        _operatorToName[operator_] = bytes3(bytes(name_));
+        _operatorToName[operator_] = nameBytes;
 
-        // Add to the operator names array
-        _operatorNames.push(bytes3(bytes(name_)));
+        // Add to the operator names to prevent re-use
+        _operatorNames[nameBytes] = true;
 
         // Emit event
         emit OperatorNameSet(operator_, name_);
