@@ -230,8 +230,6 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
     {
         amount_ = bound(amount_, 1e18, RESERVE_TOKEN_AMOUNT);
 
-        uint256 lastYieldConversionRate = vault.convertToAssets(1e18);
-
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit CreatedDeposit(address(reserveToken), recipient, 0, PERIOD_MONTHS, amount_);
