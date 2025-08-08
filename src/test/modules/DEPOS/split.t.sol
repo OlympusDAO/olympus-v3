@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {DEPOSTest} from "./DEPOSTest.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {Module} from "src/Kernel.sol";
 
 contract SplitDEPOSTest is DEPOSTest {
     event PositionSplit(
@@ -17,9 +18,7 @@ contract SplitDEPOSTest is DEPOSTest {
 
     // when the position does not exist
     //  [X] it reverts
-    // when the caller is not the owner of the position
-    //  [X] it reverts
-    // when the caller is a permissioned address
+    // when the caller is not a permissioned address
     //  [X] it reverts
     // when the amount is 0
     //  [X] it reverts
@@ -44,10 +43,12 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, 1e18, OTHER, false);
+        _splitPosition(godmode, 0, 1e18, OTHER, false);
     }
 
-    function test_callerIsNotOwner_reverts()
+    function test_callerIsNotPermissioned_reverts(
+        address caller_
+    )
         public
         givenPositionCreated(
             address(this),
@@ -57,28 +58,14 @@ contract SplitDEPOSTest is DEPOSTest {
             false
         )
     {
+        // Bound the caller to a non-permissioned address
+        vm.assume(caller_ != godmode);
+
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, caller_));
 
         // Call function
-        _splitPosition(OTHER, 0, REMAINING_DEPOSIT, OTHER, false);
-    }
-
-    function test_callerIsPermissioned_reverts()
-        public
-        givenPositionCreated(
-            address(this),
-            REMAINING_DEPOSIT,
-            CONVERSION_PRICE,
-            CONVERSION_EXPIRY,
-            false
-        )
-    {
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOwner.selector, 0));
-
-        // Call function
-        _splitPosition(godmode, 0, REMAINING_DEPOSIT, OTHER, false);
+        _splitPosition(caller_, 0, REMAINING_DEPOSIT, OTHER, false);
     }
 
     function test_amountIsZero_reverts()
@@ -97,7 +84,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, 0, OTHER, false);
+        _splitPosition(godmode, 0, 0, OTHER, false);
     }
 
     function test_amountIsGreaterThanRemainingDeposit_reverts(
@@ -120,7 +107,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, amount, OTHER, false);
+        _splitPosition(godmode, 0, amount, OTHER, false);
     }
 
     function test_recipientIsZeroAddress_reverts()
@@ -139,7 +126,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, REMAINING_DEPOSIT, address(0), false);
+        _splitPosition(godmode, 0, REMAINING_DEPOSIT, address(0), false);
     }
 
     function test_success(
@@ -161,7 +148,7 @@ contract SplitDEPOSTest is DEPOSTest {
         emit PositionSplit(0, 1, convertibleDepositToken, DEPOSIT_PERIOD, amount, OTHER, false);
 
         // Call function
-        _splitPosition(address(this), 0, amount, OTHER, false);
+        _splitPosition(godmode, 0, amount, OTHER, false);
 
         // Assert old position
         _assertPosition(
@@ -214,7 +201,7 @@ contract SplitDEPOSTest is DEPOSTest {
         );
 
         // Call function
-        _splitPosition(address(this), 0, amount, address(this), false);
+        _splitPosition(godmode, 0, amount, address(this), false);
 
         // Assert old position
         _assertPosition(
@@ -258,7 +245,7 @@ contract SplitDEPOSTest is DEPOSTest {
         emit PositionSplit(0, 1, convertibleDepositToken, DEPOSIT_PERIOD, amount, OTHER, false);
 
         // Call function
-        _splitPosition(address(this), 0, amount, OTHER, false);
+        _splitPosition(godmode, 0, amount, OTHER, false);
 
         // Assert old position
         _assertPosition(
@@ -303,7 +290,7 @@ contract SplitDEPOSTest is DEPOSTest {
         emit PositionSplit(0, 1, convertibleDepositToken, DEPOSIT_PERIOD, amount, OTHER, true);
 
         // Call function
-        _splitPosition(address(this), 0, amount, OTHER, true);
+        _splitPosition(godmode, 0, amount, OTHER, true);
 
         // Assert old position
         _assertPosition(
