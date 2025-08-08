@@ -68,6 +68,25 @@ contract SplitDEPOSTest is DEPOSTest {
         _splitPosition(caller_, 0, REMAINING_DEPOSIT, OTHER, false);
     }
 
+    function test_differentOperator_reverts()
+        public
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            false
+        )
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositPositionManager.DEPOS_NotOperator.selector, 0)
+        );
+
+        // Call function
+        _splitPosition(godmodeTwo, 0, 1, OTHER, false);
+    }
+
     function test_amountIsZero_reverts()
         public
         givenPositionCreated(

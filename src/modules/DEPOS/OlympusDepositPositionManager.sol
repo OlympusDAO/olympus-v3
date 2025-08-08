@@ -231,6 +231,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         override
         permissioned
         onlyValidPosition(positionId_)
+        onlyPositionOperator(positionId_)
         returns (uint256 newPositionId)
     {
         Position storage position = _positions[positionId_];
@@ -458,6 +459,12 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     modifier onlyValidPosition(uint256 positionId_) {
         if (_getPosition(positionId_).conversionPrice == 0)
             revert DEPOS_InvalidPositionId(positionId_);
+        _;
+    }
+
+    modifier onlyPositionOperator(uint256 positionId_) {
+        // This validates that the caller is the operator of the position
+        if (_getPosition(positionId_).operator != msg.sender) revert DEPOS_NotOperator(positionId_);
         _;
     }
 

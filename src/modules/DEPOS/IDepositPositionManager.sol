@@ -96,6 +96,9 @@ interface IDepositPositionManager {
     /// @notice Error thrown when the caller is not the owner of the position
     error DEPOS_NotOwner(uint256 positionId_);
 
+    /// @notice Error thrown when the caller is not the operator of the position
+    error DEPOS_NotOperator(uint256 positionId_);
+
     /// @notice Error thrown when an invalid position ID is provided
     error DEPOS_InvalidPositionId(uint256 id_);
 
