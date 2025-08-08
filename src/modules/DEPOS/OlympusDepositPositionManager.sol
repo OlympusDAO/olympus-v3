@@ -214,12 +214,12 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     /// @inheritdoc IDepositPositionManager
     /// @dev        This function reverts if:
-    ///             - The caller is not the owner of the position
+    ///             - The caller is not permissioned
     ///             - The amount is 0
     ///             - The amount is greater than the remaining deposit
     ///             - `to_` is the zero address
     ///
-    ///             This is a public function that can be called by any address holding a position
+    ///             This is a permissioned function that can only be called by approved policies
     function split(
         uint256 positionId_,
         uint256 amount_,
@@ -229,8 +229,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         external
         virtual
         override
+        permissioned
         onlyValidPosition(positionId_)
-        onlyPositionOwner(positionId_)
         returns (uint256 newPositionId)
     {
         Position storage position = _positions[positionId_];
