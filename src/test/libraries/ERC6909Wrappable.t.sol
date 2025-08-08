@@ -423,7 +423,7 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasERC6909Tokens
         givenRecipientHasApprovedERC6909TokenSpending
     {
-        vm.assume(caller_ != alice);
+        vm.assume(caller_ != alice && caller_ != address(0));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -553,7 +553,7 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasERC20Tokens
         givenRecipientHasApprovedWrappedTokenSpending
     {
-        vm.assume(caller_ != alice);
+        vm.assume(caller_ != alice && caller_ != address(0));
 
         vm.expectRevert(stdError.arithmeticError);
 
