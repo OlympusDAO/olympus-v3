@@ -203,7 +203,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 2e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -270,7 +270,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 2e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -347,7 +347,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 4e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -419,7 +419,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 4e8;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -505,7 +505,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -580,7 +580,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 10e9;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -652,7 +652,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = 10e9;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -718,7 +718,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 tickTwoPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -796,7 +796,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         {
             // Check preview
-            (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+            uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
             // Assert that the preview is as expected
             assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -886,7 +886,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         }
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -963,7 +963,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = tickOneConvertedAmount + tickTwoConvertedAmount;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -1037,7 +1037,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
@@ -1099,7 +1099,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
 
         // Check preview
-        (uint256 previewOhmOut, ) = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");

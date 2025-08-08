@@ -49,8 +49,8 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     function previewBid(
         uint8,
         uint256 depositAmount_
-    ) external view override returns (uint256 ohmOut, address depositSpender) {
-        return (depositAmount_, address(this));
+    ) external view override returns (uint256 ohmOut) {
+        return (depositAmount_);
     }
 
     function getPreviousTick(uint8) external view override returns (Tick memory tick) {}

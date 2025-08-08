@@ -324,7 +324,7 @@ contract ConvertibleDepositAuctioneer is
         override
         onlyEnabled
         onlyDepositPeriodEnabled(depositPeriod_)
-        returns (uint256 ohmOut, address depositSpender)
+        returns (uint256 ohmOut)
     {
         // Get the updated tick based on the current state
         Tick memory currentTick = _getCurrentTick(depositPeriod_);
@@ -333,7 +333,7 @@ contract ConvertibleDepositAuctioneer is
         BidOutput memory output = _previewBid(bidAmount_, currentTick);
         ohmOut = output.ohmOut;
 
-        return (ohmOut, address(CD_FACILITY.DEPOSIT_MANAGER()));
+        return ohmOut;
     }
 
     // ========== VIEW FUNCTIONS ========== //

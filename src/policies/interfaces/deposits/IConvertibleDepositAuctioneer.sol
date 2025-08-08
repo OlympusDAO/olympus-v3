@@ -165,11 +165,10 @@ interface IConvertibleDepositAuctioneer {
     /// @param  depositPeriod_  The deposit period
     /// @param  deposit_        Amount of deposit asset to deposit
     /// @return ohmOut          Amount of OHM tokens that the deposit could be converted to
-    /// @return depositSpender  The address of the contract that would spend the deposit asset
     function previewBid(
         uint8 depositPeriod_,
         uint256 deposit_
-    ) external view returns (uint256 ohmOut, address depositSpender);
+    ) external view returns (uint256 ohmOut);
 
     // ========== STATE VARIABLES ========== //
 
