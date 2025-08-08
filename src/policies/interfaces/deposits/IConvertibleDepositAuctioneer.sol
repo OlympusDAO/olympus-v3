@@ -81,6 +81,10 @@ interface IConvertibleDepositAuctioneer {
     /// @param  reason          Reason for invalid parameters
     error ConvertibleDepositAuctioneer_InvalidParams(string reason);
 
+    error ConvertibleDepositAuctioneer_ConvertedAmountZero();
+
+    error ConvertibleDepositAuctioneer_ConvertedAmountSlippage(uint256 minOhmOut, uint256 ohmOut);
+
     /// @notice Emitted when the deposit period is already enabled for this asset
     error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
         address depositAsset,
@@ -148,6 +152,7 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  depositPeriod_  The deposit period
     /// @param  depositAmount_  Amount of deposit asset to deposit
+    /// @param  minOhmOut_      The minimum amount of OHM tokens that the deposit should convert to, in order to succeed. This acts as slippage protection.
     /// @param  wrapPosition_   Whether to wrap the position as an ERC721
     /// @param  wrapReceipt_    Whether to wrap the receipt as an ERC20
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
@@ -156,6 +161,7 @@ interface IConvertibleDepositAuctioneer {
     function bid(
         uint8 depositPeriod_,
         uint256 depositAmount_,
+        uint256 minOhmOut_,
         bool wrapPosition_,
         bool wrapReceipt_
     ) external returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId);

@@ -104,7 +104,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectNotEnabledRevert();
 
         // Call function
-        auctioneer.bid(PERIOD_MONTHS, 1e18, false, false);
+        auctioneer.bid(PERIOD_MONTHS, 1e18, 1, false, false);
     }
 
     // given the deposit period is not enabled
@@ -115,7 +115,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectDepositAssetAndPeriodNotEnabledRevert(iReserveToken, PERIOD_MONTHS);
 
         // Call function
-        auctioneer.bid(PERIOD_MONTHS, 1e18, false, false);
+        auctioneer.bid(PERIOD_MONTHS, 1e18, 1, false, false);
     }
 
     // when the caller has not approved DepositManager to spend the bid token
@@ -132,7 +132,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(PERIOD_MONTHS, 1e18, false, false);
+        auctioneer.bid(PERIOD_MONTHS, 1e18, 1, false, false);
     }
 
     // when the "cd_auctioneer" role is not granted to the auctioneer contract
@@ -153,7 +153,44 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(PERIOD_MONTHS, 1e18, false, false);
+        auctioneer.bid(PERIOD_MONTHS, 1e18, 1, false, false);
+    }
+
+    // when the OHM out is less than the minimum OHM out
+    //  [X] it reverts
+
+    function test_whenLessThanMinimumOhmOut_reverts(
+        uint256 bidAmount_,
+        uint256 minOhmOut_
+    )
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenAddressHasReserveToken(recipient, 1e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
+    {
+        // We want the converted amount to be less than the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 = 10e9 - 1
+        // Bid amount = (10e9 - 1) * 15e18 / 1e9
+        // Bid amount = 150e18 - 1 (it will round down)
+        bidAmount_ = bound(bidAmount_, 1e18, 150e18 - 1);
+        uint256 expectedConvertedAmount = (bidAmount_ * 1e9) / 15e18;
+        minOhmOut_ = bound(minOhmOut_, expectedConvertedAmount + 1, type(uint256).max); // Ensure minOhmOut is greater than the expected converted amount
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_ConvertedAmountSlippage
+                    .selector,
+                minOhmOut_,
+                expectedConvertedAmount
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount_, minOhmOut_, false, false);
     }
 
     // when the bid amount converted is 0
@@ -176,14 +213,15 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
-                "converted amount"
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_ConvertedAmountZero
+                    .selector
             )
         );
 
         // Call function
         vm.prank(recipient);
-        auctioneer.bid(PERIOD_MONTHS, bidAmount, false, false);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
     }
 
     // given the deposit asset has 6 decimals
@@ -216,6 +254,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -283,6 +322,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -360,6 +400,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -435,6 +476,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -518,6 +560,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -527,6 +570,75 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             bidAmount,
             expectedConvertedAmount,
             150e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
+        // Assert the tick
+        _assertPreviousTick(
+            TICK_SIZE - expectedConvertedAmount,
+            MIN_PRICE,
+            TICK_SIZE,
+            uint48(block.timestamp)
+        );
+    }
+
+    //  when the OHM out is greater or equal to the minimum OHM out
+    //   [X] it succeeds
+
+    function test_convertedAmountLessThanTickCapacity_greaterThanMinOhmOut(
+        uint256 bidAmount_,
+        uint256 minOhmOut_
+    )
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenAddressHasReserveToken(recipient, 150e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
+    {
+        // We want the converted amount to be less than the tick capacity (10e9)
+        // Bid amount * 1e9 / 15e18 = 10e9 - 1
+        // Bid amount = (10e9 - 1) * 15e18 / 1e9
+        // Bid amount = 150e18 - 1 (it will round down)
+        bidAmount_ = bound(bidAmount_, 1e18, 150e18 - 1);
+        uint256 expectedConvertedAmount = (bidAmount_ * 1e9) / 15e18;
+        minOhmOut_ = bound(minOhmOut_, 0, expectedConvertedAmount);
+
+        {
+            // Check preview
+            uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount_);
+
+            // Assert that the preview is as expected
+            assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+        }
+
+        // Expect event
+        _expectBidEvent(bidAmount_, expectedConvertedAmount, 0);
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            PERIOD_MONTHS,
+            bidAmount_,
+            minOhmOut_,
+            false,
+            false
+        );
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount_,
+            expectedConvertedAmount,
+            150e18 - bidAmount_,
             0,
             0,
             ohmOut,
@@ -593,6 +705,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -665,6 +778,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -731,6 +845,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -810,6 +925,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -899,6 +1015,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -976,6 +1093,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -1050,6 +1168,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
@@ -1112,6 +1231,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
             PERIOD_MONTHS,
             bidAmount,
+            1,
             false,
             false
         );
