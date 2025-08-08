@@ -27,6 +27,7 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
     PositionTokenRenderer public tokenURIRenderer;
     ERC721ReceiverMock public mockERC721Receiver;
     address public godmode;
+    address public godmodeTwo;
     address public convertibleDepositToken;
     uint8 public convertibleDepositTokenDecimals = 18;
 
@@ -57,10 +58,12 @@ abstract contract DEPOSTest is Test, IERC721Receiver {
 
         // Generate fixtures
         godmode = DEPOS.generateGodmodeFixture(type(OlympusDepositPositionManager).name);
+        godmodeTwo = DEPOS.generateGodmodeFixture(type(OlympusDepositPositionManager).name);
 
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(DEPOS));
         kernel.executeAction(Actions.ActivatePolicy, godmode);
+        kernel.executeAction(Actions.ActivatePolicy, godmodeTwo);
 
         // Set the token renderer
         vm.prank(godmode);
