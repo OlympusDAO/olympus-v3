@@ -5,6 +5,7 @@ pragma solidity >=0.8.20;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -17,6 +18,7 @@ import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
 /// @title Base Deposit Facility
 /// @notice Abstract base contract for deposit facilities with shared functionality
@@ -46,7 +48,12 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         private _assetOperatorCommittedDeposits;
 
     /// @notice The TRSRY module
+    /// @dev    Must be populated by the inheriting contract in `configureDependencies()`
     TRSRYv1 public TRSRY;
+
+    /// @notice The DEPOS module.
+    /// @dev    Must be populated by the inheriting contract in `configureDependencies()`
+    DEPOSv1 public DEPOS;
 
     // ========== MODIFIERS ========== //
 
@@ -373,6 +380,42 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ) external returns (uint256 reclaimed) {
         reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
     }
+
+    // ========== POSITION MANAGEMENT ========== //
+
+    /// @inheritdoc IDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The position does not exist
+    ///             - The caller is not the owner of the position
+    function split(
+        uint256 positionId_,
+        uint256 amount_,
+        address to_,
+        bool wrap_
+    ) external nonReentrant onlyEnabled returns (uint256) {
+        // Get the position. This will revert if the position does not exist.
+        IDepositPositionManager.Position memory position = DEPOS.getPosition(positionId_);
+
+        // Validate that the caller is the owner of the position
+        if (position.owner != msg.sender)
+            revert IDepositPositionManager.DEPOS_NotOwner(positionId_);
+
+        // Perform the split
+        uint256 newPositionId = DEPOS.split(positionId_, amount_, to_, wrap_);
+
+        // Allow inheriting contracts to perform custom actions when a position is split
+        _split(positionId_, newPositionId, amount_);
+
+        return newPositionId;
+    }
+
+    /// @notice     Internal function to handle the splitting of a position
+    /// @dev        Inheriting contracts can implement this function to perform custom actions when a position is split. This function is called after the position is split, so beware of reentrancy.
+    function _split(
+        uint256 oldPositionId_,
+        uint256 newPositionId_,
+        uint256 amount_
+    ) internal virtual {}
 
     // ========== ERC165 ========== //
 

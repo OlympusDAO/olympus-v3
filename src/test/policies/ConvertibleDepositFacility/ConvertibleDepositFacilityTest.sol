@@ -256,7 +256,7 @@ contract ConvertibleDepositFacilityTest is Test {
         bool wrapReceipt_
     ) internal returns (uint256 positionId) {
         vm.prank(auctioneer);
-        (positionId, , ) = facility.createPosition(
+        (positionId, , previousDepositActual) = facility.createPosition(
             IConvertibleDepositFacility.CreatePositionParams({
                 asset: asset_,
                 periodMonths: depositPeriod_,
