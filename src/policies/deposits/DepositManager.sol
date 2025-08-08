@@ -150,6 +150,8 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
     function deposit(
         DepositParams calldata params_
     )
@@ -174,6 +176,8 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
+    ///
+    /// @dev        The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
     function maxClaimYield(IERC20 asset_, address operator_) external view returns (uint256) {
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, operator_);
         bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, operator_);
@@ -189,6 +193,8 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
     function claimYield(
         IERC20 asset_,
         address recipient_,
@@ -216,6 +222,8 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
     function withdraw(
         WithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
