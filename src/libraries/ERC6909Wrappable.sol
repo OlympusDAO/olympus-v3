@@ -164,6 +164,13 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     }
 
     /// @inheritdoc IERC6909Wrappable
+    /// @dev        This function will burn the ERC6909 token from the caller and mint the wrapped ERC20 token to the same address.
+    ///
+    ///             This function reverts if:
+    ///             - The token ID does not exist
+    ///             - The amount is zero
+    ///             - The caller has not approved this contract to spend the token
+    ///             - The caller has an insufficient balance of the token
     function wrap(uint256 tokenId_, uint256 amount_) public returns (address wrappedToken) {
         // Burn the ERC6909 token
         _burn(msg.sender, tokenId_, amount_, false);
@@ -175,6 +182,13 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     }
 
     /// @inheritdoc IERC6909Wrappable
+    /// @dev        This function will burn the wrapped ERC20 token from the caller and mint the ERC6909 token to the same address.
+    ///
+    ///             This function reverts if:
+    ///             - The token ID does not exist
+    ///             - The amount is zero
+    ///             - The caller has not approved this contract to spend the wrapped token
+    ///             - The caller has an insufficient balance of the wrapped token
     function unwrap(uint256 tokenId_, uint256 amount_) public {
         // Burn the wrapped ERC20 token
         _burn(msg.sender, tokenId_, amount_, true);
