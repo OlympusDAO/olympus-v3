@@ -19,5 +19,5 @@ interface IDepositReceiptToken is IERC20 {
 
     function depositPeriod() external view returns (uint8 _depositPeriod);
 
-    function facility() external view returns (address _facility);
+    function operator() external view returns (address _operator);
 }

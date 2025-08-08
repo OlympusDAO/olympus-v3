@@ -148,8 +148,8 @@ contract ConvertibleDepositFacilityTest is Test {
         );
 
         // Set the facility names
-        depositManager.setFacilityName(address(facility), "cdf");
-        depositManager.setFacilityName(address(yieldDepositFacility), "ydf");
+        depositManager.setOperatorName(address(facility), "cdf");
+        depositManager.setOperatorName(address(yieldDepositFacility), "ydf");
 
         // Enable the token/period/facility combo
         depositManager.addAssetPeriod(

@@ -18,37 +18,37 @@ interface IDepositManager is IAssetManager {
     event ClaimedYield(
         address indexed asset,
         address indexed depositor,
-        address indexed facility,
+        address indexed operator,
         uint256 amount
     );
 
     // Asset Configuration Events
-    event FacilityNameSet(address indexed facility, string name);
+    event OperatorNameSet(address indexed operator, string name);
 
     event AssetPeriodConfigured(
         uint256 indexed receiptTokenId,
         address indexed asset,
-        address indexed facility,
+        address indexed operator,
         uint8 depositPeriod
     );
 
     event AssetPeriodEnabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
-        address indexed facility,
+        address indexed operator,
         uint8 depositPeriod
     );
 
     event AssetPeriodDisabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
-        address indexed facility,
+        address indexed operator,
         uint8 depositPeriod
     );
 
     event AssetPeriodReclaimRateSet(
         address indexed asset,
-        address indexed facility,
+        address indexed operator,
         uint8 depositPeriod,
         uint16 reclaimRate
     );
@@ -84,33 +84,33 @@ interface IDepositManager is IAssetManager {
     error DepositManager_OutOfBounds();
 
     // Asset Configuration Errors
-    error DepositManager_FacilityNameNotSet(address facility);
+    error DepositManager_OperatorNameNotSet(address operator);
 
-    error DepositManager_FacilityNameSet(address facility);
+    error DepositManager_OperatorNameSet(address operator);
 
-    error DepositManager_FacilityNameInvalid();
+    error DepositManager_OperatorNameInvalid();
 
-    error DepositManager_FacilityNameInUse(string name);
+    error DepositManager_OperatorNameInUse(string name);
 
-    error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod, address facility);
+    error DepositManager_InvalidAssetPeriod(address asset, uint8 depositPeriod, address operator);
 
-    error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod, address facility);
+    error DepositManager_AssetPeriodExists(address asset, uint8 depositPeriod, address operator);
 
-    error DepositManager_AssetPeriodEnabled(address asset, uint8 depositPeriod, address facility);
+    error DepositManager_AssetPeriodEnabled(address asset, uint8 depositPeriod, address operator);
 
-    error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod, address facility);
+    error DepositManager_AssetPeriodDisabled(address asset, uint8 depositPeriod, address operator);
 
     // Borrowing Errors
     error DepositManager_BorrowingLimitExceeded(
         address asset,
-        address facility,
+        address operator,
         uint256 requested,
         uint256 available
     );
 
     error DepositManager_BorrowedAmountExceeded(
         address asset,
-        address facility,
+        address operator,
         uint256 amount,
         uint256 borrowed
     );
@@ -155,13 +155,13 @@ interface IDepositManager is IAssetManager {
     /// @param depositPeriod   The deposit period, in months
     /// @param reclaimRate     The reclaim rate for the asset period (see the implementation contract for scale)
     /// @param asset           The underlying ERC20 asset
-    /// @param facility        The facility that can issue this receipt token
+    /// @param operator        The operator that can issue this receipt token
     struct AssetPeriod {
         bool isEnabled;
         uint8 depositPeriod;
         uint16 reclaimRate;
         address asset;
-        address facility;
+        address operator;
     }
 
     /// @notice Status of an asset period
@@ -327,18 +327,18 @@ interface IDepositManager is IAssetManager {
 
     // ========== FACILITY ========== //
 
-    /// @notice Sets the name of a facility. This is included in the name and symbol of receipt tokens.
+    /// @notice Sets the name of an operator. This is included in the name and symbol of receipt tokens.
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
-    ///         - Setting the facility name
+    ///         - Setting the operator name
     ///         - Emitting an event
-    function setFacilityName(address facility_, string calldata name_) external;
+    function setOperatorName(address operator_, string calldata name_) external;
 
-    /// @notice Returns the name of a facility
+    /// @notice Returns the name of an operator
     ///
-    /// @param  facility_   The address of the facility
-    /// @return name        The name of the facility or an empty string
-    function getFacilityName(address facility_) external view returns (string memory name);
+    /// @param  operator_   The address of the operator
+    /// @return name        The name of the operator or an empty string
+    function getOperatorName(address operator_) external view returns (string memory name);
 
     // ========== DEPOSIT CONFIGURATIONS ========== //
 
@@ -371,13 +371,13 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
+    /// @param  operator_       The address of the operator
     /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_,
+        address operator_,
         uint16 reclaimRate_
     ) external returns (uint256 receiptTokenId);
 
@@ -389,8 +389,8 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
-    function disableAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address facility_) external;
+    /// @param  operator_       The address of the operator
+    function disableAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address operator_) external;
 
     /// @notice Enables an asset period, which allows new deposits
     /// @dev    The implementing contract is expected to handle the following:
@@ -400,19 +400,19 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
-    function enableAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address facility_) external;
+    /// @param  operator_       The address of the operator
+    function enableAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address operator_) external;
 
-    /// @notice Returns the asset period for an asset, period and facility
+    /// @notice Returns the asset period for an asset, period and operator
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
+    /// @param  operator_       The address of the operator
     /// @return configuration   The asset period
     function getAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) external view returns (AssetPeriod memory configuration);
 
     /// @notice Returns the asset period from a receipt token ID
@@ -423,17 +423,17 @@ interface IDepositManager is IAssetManager {
         uint256 tokenId_
     ) external view returns (AssetPeriod memory configuration);
 
-    /// @notice Returns whether a deposit asset, period and facility combination are configured
+    /// @notice Returns whether a deposit asset, period and operator combination are configured
     /// @dev    A asset period that is disabled will not accept further deposits
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
+    /// @param  operator_       The address of the operator
     /// @return status          The status of the asset period
     function isAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) external view returns (AssetPeriodStatus memory status);
 
     /// @notice Returns the asset periods
@@ -450,12 +450,12 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
+    /// @param  operator_       The address of the operator
     /// @param  reclaimRate_    The reclaim rate to set
     function setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_,
+        address operator_,
         uint16 reclaimRate_
     ) external;
 
@@ -463,27 +463,27 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
+    /// @param  operator_       The address of the operator
     /// @return reclaimRate     The reclaim rate for the asset period
     function getAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) external view returns (uint16 reclaimRate);
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 
-    /// @notice Returns the ID of the receipt token for an asset period and facility
+    /// @notice Returns the ID of the receipt token for an asset period and operator
     /// @dev    The ID returned is not a guarantee that the asset period is configured or enabled. {isAssetPeriod} should be used for that purpose.
     ///
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
-    /// @param  facility_       The address of the facility
+    /// @param  operator_       The address of the operator
     /// @return receiptTokenId  The ID of the receipt token
     function getReceiptTokenId(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) external view returns (uint256);
 
     /// @notice Returns the name of a receipt token
@@ -524,9 +524,9 @@ interface IDepositManager is IAssetManager {
         uint256 tokenId_
     ) external view returns (uint8 depositPeriod);
 
-    /// @notice Returns the facility of a receipt token
+    /// @notice Returns the operator of a receipt token
     ///
     /// @param  tokenId_    The ID of the receipt token
-    /// @return facility    The facility of the receipt token
-    function getReceiptTokenFacility(uint256 tokenId_) external view returns (address facility);
+    /// @return operator    The operator of the receipt token
+    function getReceiptTokenOperator(uint256 tokenId_) external view returns (address operator);
 }

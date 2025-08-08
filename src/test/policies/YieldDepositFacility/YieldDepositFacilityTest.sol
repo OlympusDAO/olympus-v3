@@ -167,8 +167,8 @@ contract YieldDepositFacilityTest is Test {
         vm.startPrank(admin);
 
         // Set the facility names
-        depositManager.setFacilityName(address(cdFacility), "cdf");
-        depositManager.setFacilityName(address(yieldDepositFacility), "ydf");
+        depositManager.setOperatorName(address(cdFacility), "cdf");
+        depositManager.setOperatorName(address(yieldDepositFacility), "ydf");
 
         depositManager.addAsset(iReserveToken, iVault, type(uint256).max);
 

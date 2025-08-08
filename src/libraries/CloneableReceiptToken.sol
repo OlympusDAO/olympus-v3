@@ -22,7 +22,7 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
     // 0x41 - owner, 20 bytes
     // 0x55 - asset, 20 bytes
     // 0x69 - depositPeriod, 1 byte
-    // 0x6A - facility, 20 bytes
+    // 0x6A - operator, 20 bytes
 
     /// @notice The owner of the clone
     /// @return _owner The owner address stored in immutable args
@@ -42,10 +42,10 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
         _depositPeriod = _getArgUint8(0x69);
     }
 
-    /// @notice The facility that issued the receipt token
-    /// @return _facility The facility address stored in immutable args
-    function facility() public pure returns (address _facility) {
-        _facility = _getArgAddress(0x6A);
+    /// @notice The operator that issued the receipt token
+    /// @return _operator The operator address stored in immutable args
+    function operator() public pure returns (address _operator) {
+        _operator = _getArgAddress(0x6A);
     }
 
     // ========== OWNER-ONLY FUNCTIONS ========== //

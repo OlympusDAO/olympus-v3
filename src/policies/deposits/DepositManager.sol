@@ -64,12 +64,12 @@ contract DepositManager is
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
-    /// @notice Maps facility address to its name
-    mapping(address facility => bytes3 name) internal _facilityToName;
+    /// @notice Maps operator address to its name
+    mapping(address operator => bytes3 name) internal _operatorToName;
 
-    /// @notice A set of facility names
+    /// @notice A set of operator names
     /// @dev    This contains unique values
-    bytes3[] internal _facilityNames;
+    bytes3[] internal _operatorNames;
 
     // ========== BORROWING STATE VARIABLES ========== //
 
@@ -83,13 +83,13 @@ contract DepositManager is
     modifier onlyAssetPeriodExists(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) {
         if (
-            address(_assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].asset) ==
+            address(_assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].asset) ==
             address(0)
         ) {
-            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, facility_);
+            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
         _;
     }
@@ -98,17 +98,17 @@ contract DepositManager is
     modifier onlyAssetPeriodEnabled(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) {
         AssetPeriod memory assetPeriod = _assetPeriods[
-            getReceiptTokenId(asset_, depositPeriod_, facility_)
+            getReceiptTokenId(asset_, depositPeriod_, operator_)
         ];
         if (assetPeriod.asset == address(0)) {
-            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, facility_);
+            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
 
         if (!assetPeriod.isEnabled) {
-            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, facility_);
+            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
         _;
     }
@@ -258,35 +258,35 @@ contract DepositManager is
         return keccak256(abi.encode(address(asset_), operator_));
     }
 
-    // ========== FACILITY ========== //
+    // ========== OPERATOR NAME ========== //
 
     /// @inheritdoc IDepositManager
-    /// @dev        Note that once set, a facility name cannot be changed.
+    /// @dev        Note that once set, an operator name cannot be changed.
     ///
     ///             This function reverts if:
     ///             - the caller is not the admin or manager role
-    ///             - the facility's name is already set
+    ///             - the operator's name is already set
     ///             - the name is already in use
-    ///             - the facility name is empty
-    ///             - the facility name is not 3 characters long
-    ///             - the facility name contains characters that are not a-z or 0-9
-    function setFacilityName(
-        address facility_,
+    ///             - the operator name is empty
+    ///             - the operator name is not 3 characters long
+    ///             - the operator name contains characters that are not a-z or 0-9
+    function setOperatorName(
+        address operator_,
         string calldata name_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        // Validate that the name is not already set for the facility
-        if (_facilityToName[facility_] != bytes3(0)) {
-            revert DepositManager_FacilityNameSet(facility_);
+        // Validate that the name is not already set for the operator
+        if (_operatorToName[operator_] != bytes3(0)) {
+            revert DepositManager_OperatorNameSet(operator_);
         }
 
         // Validate that the name is not empty
         if (bytes(name_).length == 0) {
-            revert DepositManager_FacilityNameInvalid();
+            revert DepositManager_OperatorNameInvalid();
         }
 
         // Validate that the name contains 3 characters
         if (bytes(name_).length != 3) {
-            revert DepositManager_FacilityNameInvalid();
+            revert DepositManager_OperatorNameInvalid();
         }
         // Validate that the characters are a-z, 0-9
         {
@@ -300,38 +300,38 @@ contract DepositManager is
                     continue; // Number
                 }
 
-                revert DepositManager_FacilityNameInvalid();
+                revert DepositManager_OperatorNameInvalid();
             }
         }
 
-        // Validate that the name isn't in use by another facility
-        for (uint256 i = 0; i < _facilityNames.length; i++) {
-            if (_facilityNames[i] == bytes3(bytes(name_))) {
-                revert DepositManager_FacilityNameInUse(name_);
+        // Validate that the name isn't in use by another operator
+        for (uint256 i = 0; i < _operatorNames.length; i++) {
+            if (_operatorNames[i] == bytes3(bytes(name_))) {
+                revert DepositManager_OperatorNameInUse(name_);
             }
         }
 
         // Set the name
-        _facilityToName[facility_] = bytes3(bytes(name_));
+        _operatorToName[operator_] = bytes3(bytes(name_));
 
-        // Add to the facility names array
-        _facilityNames.push(bytes3(bytes(name_)));
+        // Add to the operator names array
+        _operatorNames.push(bytes3(bytes(name_)));
 
         // Emit event
-        emit FacilityNameSet(facility_, name_);
+        emit OperatorNameSet(operator_, name_);
     }
 
     /// @inheritdoc IDepositManager
-    function getFacilityName(address facility_) public view returns (string memory) {
+    function getOperatorName(address operator_) public view returns (string memory) {
         bytes memory nameBytes = new bytes(3);
-        bytes3 facilityName = _facilityToName[facility_];
-        if (facilityName == bytes3(0)) {
+        bytes3 operatorName = _operatorToName[operator_];
+        if (operatorName == bytes3(0)) {
             return "";
         }
 
-        nameBytes[0] = bytes1(facilityName[0]);
-        nameBytes[1] = bytes1(facilityName[1]);
-        nameBytes[2] = bytes1(facilityName[2]);
+        nameBytes[0] = bytes1(operatorName[0]);
+        nameBytes[1] = bytes1(operatorName[1]);
+        nameBytes[2] = bytes1(operatorName[2]);
 
         // Convert bytes to string
         return string(nameBytes);
@@ -343,9 +343,9 @@ contract DepositManager is
     function isAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) public view override returns (AssetPeriodStatus memory status) {
-        uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
+        uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
         status.isConfigured = address(_assetPeriods[receiptTokenId].asset) != address(0);
         status.isEnabled = _assetPeriods[receiptTokenId].isEnabled;
 
@@ -376,7 +376,7 @@ contract DepositManager is
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_,
+        address operator_,
         uint16 reclaimRate_
     )
         external
@@ -389,12 +389,12 @@ contract DepositManager is
         if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
 
         // Validate that the asset and deposit period combination is not already configured
-        if (isAssetPeriod(asset_, depositPeriod_, facility_).isConfigured) {
-            revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, facility_);
+        if (isAssetPeriod(asset_, depositPeriod_, operator_).isConfigured) {
+            revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, operator_);
         }
 
         // Configure the ERC6909 receipt token
-        receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_, facility_);
+        receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_, operator_);
 
         // Set the asset period
         _assetPeriods[receiptTokenId] = AssetPeriod({
@@ -402,14 +402,14 @@ contract DepositManager is
             depositPeriod: depositPeriod_,
             reclaimRate: 0,
             asset: address(asset_),
-            facility: facility_
+            operator: operator_
         });
 
         // Set the reclaim rate (which does validation and emits an event)
-        _setAssetPeriodReclaimRate(asset_, depositPeriod_, facility_, reclaimRate_);
+        _setAssetPeriodReclaimRate(asset_, depositPeriod_, operator_, reclaimRate_);
 
         // Emit event
-        emit AssetPeriodConfigured(receiptTokenId, address(asset_), facility_, depositPeriod_);
+        emit AssetPeriodConfigured(receiptTokenId, address(asset_), operator_, depositPeriod_);
 
         return receiptTokenId;
     }
@@ -419,24 +419,24 @@ contract DepositManager is
     function enableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     )
         external
         onlyEnabled
         onlyManagerOrAdminRole
-        onlyAssetPeriodExists(asset_, depositPeriod_, facility_)
+        onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
         // Validate that the asset period is disabled
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
+        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
         if (_assetPeriods[tokenId].isEnabled) {
-            revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_, facility_);
+            revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_, operator_);
         }
 
         // Enable the asset period
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].isEnabled = true;
+        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].isEnabled = true;
 
         // Emit event
-        emit AssetPeriodEnabled(tokenId, address(asset_), facility_, depositPeriod_);
+        emit AssetPeriodEnabled(tokenId, address(asset_), operator_, depositPeriod_);
     }
 
     /// @inheritdoc IDepositManager
@@ -444,24 +444,24 @@ contract DepositManager is
     function disableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     )
         external
         onlyEnabled
         onlyManagerOrAdminRole
-        onlyAssetPeriodExists(asset_, depositPeriod_, facility_)
+        onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
         // Validate that the asset period is enabled
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
+        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
         if (!_assetPeriods[tokenId].isEnabled) {
-            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, facility_);
+            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
 
         // Disable the asset period
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].isEnabled = false;
+        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].isEnabled = false;
 
         // Emit event
-        emit AssetPeriodDisabled(tokenId, address(asset_), facility_, depositPeriod_);
+        emit AssetPeriodDisabled(tokenId, address(asset_), operator_, depositPeriod_);
     }
 
     /// @inheritdoc IDepositManager
@@ -483,9 +483,9 @@ contract DepositManager is
     function getAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) public view override returns (AssetPeriod memory) {
-        return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)];
+        return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)];
     }
 
     // ========== DEPOSIT RECLAIM RATE ========== //
@@ -494,14 +494,14 @@ contract DepositManager is
     function _setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_,
+        address operator_,
         uint16 reclaimRate_
     ) internal {
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
 
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)]
+        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)]
             .reclaimRate = reclaimRate_;
-        emit AssetPeriodReclaimRateSet(address(asset_), facility_, depositPeriod_, reclaimRate_);
+        emit AssetPeriodReclaimRateSet(address(asset_), operator_, depositPeriod_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager
@@ -509,24 +509,24 @@ contract DepositManager is
     function setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_,
+        address operator_,
         uint16 reclaimRate_
     )
         external
         onlyEnabled
         onlyManagerOrAdminRole
-        onlyAssetPeriodExists(asset_, depositPeriod_, facility_)
+        onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        _setAssetPeriodReclaimRate(asset_, depositPeriod_, facility_, reclaimRate_);
+        _setAssetPeriodReclaimRate(asset_, depositPeriod_, operator_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager
     function getAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) external view returns (uint16) {
-        return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, facility_)].reclaimRate;
+        return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].reclaimRate;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
@@ -679,32 +679,32 @@ contract DepositManager is
     function _setReceiptTokenData(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) internal returns (uint256 tokenId) {
-        // Validate that the facility name is set
-        string memory facilityName = getFacilityName(facility_);
-        if (bytes(facilityName).length == 0) {
-            revert DepositManager_FacilityNameNotSet(facility_);
+        // Validate that the operator name is set
+        string memory operatorName = getOperatorName(operator_);
+        if (bytes(operatorName).length == 0) {
+            revert DepositManager_OperatorNameNotSet(operator_);
         }
 
-        // Generate a unique token ID for the token, deposit period and facility combination
-        tokenId = getReceiptTokenId(asset_, depositPeriod_, facility_);
+        // Generate a unique token ID for the token, deposit period and operator combination
+        tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
 
         // Create the receipt token
         _createWrappableToken(
             tokenId,
             string
-                .concat(facilityName, asset_.name(), " - ", uint2str(depositPeriod_), " months")
+                .concat(operatorName, asset_.name(), " - ", uint2str(depositPeriod_), " months")
                 .truncate32(),
             string
-                .concat(facilityName, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
+                .concat(operatorName, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
                 .truncate32(),
             asset_.decimals(),
             abi.encodePacked(
                 address(this), // Owner
                 address(asset_), // Asset
                 depositPeriod_, // Deposit Period
-                facility_ // Facility
+                operator_ // Operator
             ),
             false
         );
@@ -716,9 +716,9 @@ contract DepositManager is
     function getReceiptTokenId(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address facility_
+        address operator_
     ) public pure override returns (uint256) {
-        return uint256(keccak256(abi.encode(asset_, depositPeriod_, facility_)));
+        return uint256(keccak256(abi.encode(asset_, depositPeriod_, operator_)));
     }
 
     /// @inheritdoc IDepositManager
@@ -757,8 +757,8 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
-    function getReceiptTokenFacility(uint256 tokenId_) external view override returns (address) {
-        return _assetPeriods[tokenId_].facility;
+    function getReceiptTokenOperator(uint256 tokenId_) external view override returns (address) {
+        return _assetPeriods[tokenId_].operator;
     }
 
     // ========== ERC165 ========== //

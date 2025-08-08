@@ -10,10 +10,10 @@ import {String} from "src/libraries/String.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
-contract DepositManagerSetFacilityNameTest is DepositManagerTest {
+contract DepositManagerSetOperatorNameTest is DepositManagerTest {
     // ========== EVENTS ========== //
 
-    event FacilityNameSet(address indexed facility, string name);
+    event OperatorNameSet(address indexed operator, string name);
 
     // ========== TESTS ========== //
 
@@ -26,7 +26,7 @@ contract DepositManagerSetFacilityNameTest is DepositManagerTest {
 
         // Call function
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 
     // when the caller is not the admin or manager
@@ -40,81 +40,81 @@ contract DepositManagerSetFacilityNameTest is DepositManagerTest {
 
         // Call function
         vm.prank(caller_);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 
-    // when the facility name has been set already
+    // when the operator name has been set already
     //  [X] it reverts
 
-    function test_givenFacilityNameAlreadySet_reverts() public givenIsEnabled {
-        // Set the facility name
+    function test_givenOperatorNameAlreadySet_reverts() public givenIsEnabled {
+        // Set the operator name
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
 
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_FacilityNameSet.selector,
+                IDepositManager.DepositManager_OperatorNameSet.selector,
                 DEPOSIT_OPERATOR
             )
         );
 
         // Call function again
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 
-    // when the facility name is empty
-    //  [ ] it reverts
+    // when the operator name is empty
+    //  [X] it reverts
 
-    function test_givenFacilityNameIsEmpty_reverts() public givenIsEnabled {
+    function test_givenOperatorNameIsEmpty_reverts() public givenIsEnabled {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInvalid.selector)
+            abi.encodeWithSelector(IDepositManager.DepositManager_OperatorNameInvalid.selector)
         );
 
         // Call function
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "");
     }
 
     // when the name is already in use
     //  [X] it reverts
 
-    function test_givenFacilityNameAlreadyInUse_reverts() public givenIsEnabled {
+    function test_givenOperatorNameAlreadyInUse_reverts() public givenIsEnabled {
         address otherOperator = makeAddr("otherOperator");
-        // Set the facility name
+        // Set the operator name
         vm.prank(ADMIN);
-        depositManager.setFacilityName(otherOperator, "tst");
+        depositManager.setOperatorName(otherOperator, "tst");
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInUse.selector, "tst")
+            abi.encodeWithSelector(IDepositManager.DepositManager_OperatorNameInUse.selector, "tst")
         );
 
         // Call function with the same name
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "tst");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "tst");
     }
 
     // when the name length is greater than 3
     //  [X] it reverts
 
-    function test_givenFacilityNameLengthGreaterThanThree_reverts() public givenIsEnabled {
+    function test_givenOperatorNameLengthGreaterThanThree_reverts() public givenIsEnabled {
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInvalid.selector)
+            abi.encodeWithSelector(IDepositManager.DepositManager_OperatorNameInvalid.selector)
         );
 
         // Call function with a name longer than 3 characters
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "test");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "test");
     }
 
     // when the name contains characters other than lowercase letters or numbers
     //  [X] it reverts
 
-    function test_givenFacilityNameContainsInvalidCharacters_reverts(
+    function test_givenOperatorNameContainsInvalidCharacters_reverts(
         uint8 index_,
         bytes1 character_
     ) public givenIsEnabled {
@@ -139,16 +139,16 @@ contract DepositManagerSetFacilityNameTest is DepositManagerTest {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(IDepositManager.DepositManager_FacilityNameInvalid.selector)
+            abi.encodeWithSelector(IDepositManager.DepositManager_OperatorNameInvalid.selector)
         );
 
         // Call function with a name containing invalid characters
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, string(name));
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, string(name));
     }
 
-    // [X] it sets the facility name
-    // [X] it emits the FacilityNameSet event
+    // [X] it sets the operator name
+    // [X] it emits the OperatorNameSet event
 
     function test_success(
         bytes1 character1_,
@@ -178,21 +178,21 @@ contract DepositManagerSetFacilityNameTest is DepositManagerTest {
         name[1] = character2_;
         name[2] = character3_;
         string memory nameStr = string(name);
-        console2.log("Setting facility name to: %s", nameStr);
+        console2.log("Setting operator name to: %s", nameStr);
 
         // Expect event
         vm.expectEmit(true, true, false, true);
-        emit FacilityNameSet(DEPOSIT_OPERATOR, nameStr);
+        emit OperatorNameSet(DEPOSIT_OPERATOR, nameStr);
 
         // Call function
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, nameStr);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, nameStr);
 
         // Validate
         assertEq(
-            depositManager.getFacilityName(DEPOSIT_OPERATOR),
+            depositManager.getOperatorName(DEPOSIT_OPERATOR),
             nameStr,
-            "Facility name not set correctly"
+            "Operator name not set correctly"
         );
     }
 }

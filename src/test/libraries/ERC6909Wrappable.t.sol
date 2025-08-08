@@ -161,7 +161,7 @@ contract ERC6909WrappableTest is Test {
         assertEq(wrappedToken.owner(), address(token), "ERC20 owner mismatch");
         assertEq(address(wrappedToken.asset()), ASSET, "ERC20 asset mismatch");
         assertEq(wrappedToken.depositPeriod(), DEPOSIT_PERIOD, "ERC20 deposit period mismatch");
-        assertEq(wrappedToken.facility(), FACILITY, "ERC20 facility mismatch");
+        assertEq(wrappedToken.operator(), FACILITY, "ERC20 facility mismatch");
     }
 
     // Mint

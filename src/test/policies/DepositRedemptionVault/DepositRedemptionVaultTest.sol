@@ -175,8 +175,8 @@ contract DepositRedemptionVaultTest is Test {
         vm.startPrank(admin);
 
         // Set the facility names
-        depositManager.setFacilityName(address(cdFacility), "cdf");
-        depositManager.setFacilityName(address(ydFacility), "ydf");
+        depositManager.setOperatorName(address(cdFacility), "cdf");
+        depositManager.setOperatorName(address(ydFacility), "ydf");
 
         depositManager.addAsset(
             IERC20(address(reserveToken)),

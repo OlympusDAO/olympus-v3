@@ -152,7 +152,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         vm.startPrank(admin);
 
         // Set the facility name
-        depositManager.setFacilityName(address(facility), "cdf");
+        depositManager.setOperatorName(address(facility), "cdf");
 
         depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max);
 

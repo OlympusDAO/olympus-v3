@@ -69,7 +69,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         // Check facility
-        address facility = depositManager.getReceiptTokenFacility(tokenId_);
+        address facility = depositManager.getReceiptTokenOperator(tokenId_);
         assertEq(facility, facility_, "Receipt token facility does not match expected facility");
     }
 
@@ -107,7 +107,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             "getAssetPeriod from token id: deposit period mismatch"
         );
         assertEq(
-            depositConfigurationFromReceiptTokenId.facility,
+            depositConfigurationFromReceiptTokenId.operator,
             facility_,
             "getAssetPeriod from token id: facility mismatch"
         );
@@ -126,7 +126,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             "getAssetPeriod: deposit period mismatch"
         );
         assertEq(
-            depositConfigurationFromAssetAndPeriod.facility,
+            depositConfigurationFromAssetAndPeriod.operator,
             facility_,
             "getAssetPeriod: facility mismatch"
         );
@@ -138,7 +138,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             if (
                 address(depositAssets[i].asset) == asset_ &&
                 depositAssets[i].depositPeriod == depositPeriod_ &&
-                depositAssets[i].facility == facility_
+                depositAssets[i].operator == facility_
             ) {
                 found = true;
 
@@ -149,7 +149,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
                     "getAssetPeriods: deposit period mismatch"
                 );
                 assertEq(
-                    depositAssets[i].facility,
+                    depositAssets[i].operator,
                     facility_,
                     "getAssetPeriods: facility mismatch"
                 );
@@ -206,7 +206,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     function test_givenFacilityNameIsNotSet_reverts() public givenIsEnabled givenAssetIsAdded {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositManager.DepositManager_FacilityNameNotSet.selector,
+                IDepositManager.DepositManager_OperatorNameNotSet.selector,
                 DEPOSIT_OPERATOR
             )
         );
@@ -356,7 +356,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
 
         // Set the new facility name
         vm.prank(ADMIN);
-        depositManager.setFacilityName(newFacility, "new");
+        depositManager.setOperatorName(newFacility, "new");
 
         // Add the asset period with the new facility
         vm.prank(ADMIN);

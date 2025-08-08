@@ -447,7 +447,7 @@ contract DepositManagerTest is Test {
 
     modifier givenFacilityNameIsSetDefault() {
         vm.prank(ADMIN);
-        depositManager.setFacilityName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
         _;
     }
 
