@@ -312,15 +312,15 @@ contract DepositManager is
             }
         }
 
-        bytes3 nameBytes = bytes3(bytes(name_));
+        bytes3 nameBytes3 = bytes3(bytes(name_));
         // Validate that the name isn't in use by another operator
-        if (_operatorNames[nameBytes]) revert DepositManager_OperatorNameInUse(name_);
+        if (_operatorNames[nameBytes3]) revert DepositManager_OperatorNameInUse(name_);
 
         // Set the name
-        _operatorToName[operator_] = nameBytes;
+        _operatorToName[operator_] = nameBytes3;
 
         // Add to the operator names to prevent re-use
-        _operatorNames[nameBytes] = true;
+        _operatorNames[nameBytes3] = true;
 
         // Emit event
         emit OperatorNameSet(operator_, name_);
