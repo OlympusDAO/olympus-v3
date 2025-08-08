@@ -191,6 +191,22 @@ interface IDepositFacility {
         uint256 amount_
     ) external returns (uint256 reclaimed);
 
+    // ========== POSITION MANAGEMENT ========== //
+
+    /// @notice Splits the specified amount of the position into a new position
+    ///
+    /// @param  positionId_     The ID of the position to split
+    /// @param  amount_         The amount to split from the position
+    /// @param  to_             The address to receive the new position
+    /// @param  wrap_           Whether to wrap the new position
+    /// @return _newPositionId  The ID of the newly created position
+    function split(
+        uint256 positionId_,
+        uint256 amount_,
+        address to_,
+        bool wrap_
+    ) external returns (uint256 _newPositionId);
+
     // ========== BALANCE QUERIES ========== //
 
     /// @notice Get the available deposit balance for a specific token. This excludes any committed funds.
