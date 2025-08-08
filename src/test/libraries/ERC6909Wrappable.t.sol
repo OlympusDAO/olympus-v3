@@ -371,7 +371,7 @@ contract ERC6909WrappableTest is Test {
         token.wrap(999, AMOUNT);
     }
 
-    // when the recipient has not approved the contract to spend the ERC6909 token
+    // when the owner has not approved the contract to spend the ERC6909 token
     //  [X] it reverts
     function test_wrap_whenRecipientHasNotApproved_reverts()
         public
@@ -394,7 +394,7 @@ contract ERC6909WrappableTest is Test {
 
     // when the caller does not have sufficient ERC6909 tokens
     //  [X] it reverts
-    function test_wrap_givenRecipientHasInsufficientERC6909Tokens_reverts()
+    function test_wrap_givenOwnerHasInsufficientERC6909Tokens_reverts()
         public
         givenERC20TokenExists
         givenRecipientHasApprovedERC6909TokenSpending
@@ -413,11 +413,37 @@ contract ERC6909WrappableTest is Test {
         token.wrap(TOKEN_ID, AMOUNT);
     }
 
+    // when the caller is not the owner
+    //  [X] it reverts
+    function test_wrap_differentCaller_reverts(
+        address caller_
+    )
+        public
+        givenERC20TokenExists
+        givenRecipientHasERC6909Tokens
+        givenRecipientHasApprovedERC6909TokenSpending
+    {
+        vm.assume(caller_ != alice);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientAllowance.selector,
+                address(token),
+                0,
+                AMOUNT,
+                TOKEN_ID
+            )
+        );
+
+        vm.prank(caller_);
+        token.wrap(TOKEN_ID, AMOUNT);
+    }
+
     // given the ERC20 token has not been created
     //  [X] it creates the ERC20 token contract
     //  [X] the wrappedToken address is set correctly
-    //  [X] the ERC6909 token is burned from the recipient
-    //  [X] the ERC20 token is minted to the recipient
+    //  [X] the ERC6909 token is burned from the owner
+    //  [X] the ERC20 token is minted to the owner
     //  [X] the ERC6909 token supply is reduced
     //  [X] the ERC20 token supply is increased
     function test_wrap_givenERC20TokenHasNotBeenCreated()
@@ -441,8 +467,8 @@ contract ERC6909WrappableTest is Test {
     }
 
     // given the ERC20 token exists
-    //  [X] the ERC6909 token is burned from the recipient
-    //  [X] the ERC20 token is minted to the recipient
+    //  [X] the ERC6909 token is burned from the owner
+    //  [X] the ERC20 token is minted to the owner
     //  [X] the ERC6909 token supply is reduced
     //  [X] the ERC20 token supply is increased
     function test_wrap_givenERC20TokenExists()
@@ -490,7 +516,7 @@ contract ERC6909WrappableTest is Test {
         token.unwrap(999, AMOUNT);
     }
 
-    // when the recipient has not approved the contract to spend the ERC20 token
+    // when the owner has not approved the contract to spend the ERC20 token
     //  [X] it reverts
     function test_unwrap_whenRecipientHasNotApproved_reverts()
         public
@@ -503,10 +529,10 @@ contract ERC6909WrappableTest is Test {
         token.unwrap(TOKEN_ID, AMOUNT);
     }
 
-    // given the recipient has approved the contract to spend the ERC20 token
-    //  given the recipient does not have sufficient ERC20 tokens
+    // given the owner has approved the contract to spend the ERC20 token
+    //  given the owner does not have sufficient ERC20 tokens
     //   [X] it reverts
-    function test_unwrap_givenRecipientHasInsufficientERC20Tokens_reverts()
+    function test_unwrap_givenOwnerHasInsufficientERC20Tokens_reverts()
         public
         givenERC20TokenExists
         givenRecipientHasApprovedWrappedTokenSpending
@@ -517,11 +543,29 @@ contract ERC6909WrappableTest is Test {
         token.unwrap(TOKEN_ID, AMOUNT);
     }
 
-    //  [X] the ERC6909 token is minted to the recipient
-    //  [X] the ERC20 token is burned from the recipient
+    // when the caller is not the owner
+    //  [X] it reverts
+    function test_unwrap_differentCaller_reverts(
+        address caller_
+    )
+        public
+        givenERC20TokenExists
+        givenRecipientHasERC20Tokens
+        givenRecipientHasApprovedWrappedTokenSpending
+    {
+        vm.assume(caller_ != alice);
+
+        vm.expectRevert(stdError.arithmeticError);
+
+        vm.prank(caller_);
+        token.unwrap(TOKEN_ID, AMOUNT);
+    }
+
+    //  [X] the ERC6909 token is minted to the owner
+    //  [X] the ERC20 token is burned from the owner
     //  [X] the ERC6909 token supply is increased
     //  [X] the ERC20 token supply is decreased
-    function test_unwrap_givenRecipientHasApproved()
+    function test_unwrap_givenOwnerHasApproved()
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
