@@ -180,12 +180,20 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The position ID is invalid
+    ///             - The caller is not the operator that created the position
     ///
     ///             This is a permissioned function that can only be called by approved policies
     function setRemainingDeposit(
         uint256 positionId_,
         uint256 amount_
-    ) external virtual override permissioned onlyValidPosition(positionId_) {
+    )
+        external
+        virtual
+        override
+        permissioned
+        onlyValidPosition(positionId_)
+        onlyPositionOperator(positionId_)
+    {
         // Update the remaining deposit of the position
         Position storage position = _positions[positionId_];
         position.remainingDeposit = amount_;
@@ -198,12 +206,20 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     /// @dev        This function reverts if:
     ///             - The caller is not permissioned
     ///             - The position ID is invalid
+    ///             - The caller is not the operator that created the position
     ///
     ///             This is a permissioned function that can only be called by approved policies
     function setAdditionalData(
         uint256 positionId_,
         bytes calldata additionalData_
-    ) external virtual override permissioned onlyValidPosition(positionId_) {
+    )
+        external
+        virtual
+        override
+        permissioned
+        onlyValidPosition(positionId_)
+        onlyPositionOperator(positionId_)
+    {
         // Update the additional data of the position
         Position storage position = _positions[positionId_];
         position.additionalData = additionalData_;
