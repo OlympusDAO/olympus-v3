@@ -164,27 +164,23 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     }
 
     /// @inheritdoc IERC6909Wrappable
-    function wrap(
-        address onBehalfOf_,
-        uint256 tokenId_,
-        uint256 amount_
-    ) public returns (address wrappedToken) {
+    function wrap(uint256 tokenId_, uint256 amount_) public returns (address wrappedToken) {
         // Burn the ERC6909 token
-        _burn(onBehalfOf_, tokenId_, amount_, false);
+        _burn(msg.sender, tokenId_, amount_, false);
 
         // Mint the wrapped ERC20 token to the recipient
         IERC20BurnableMintable wrappedToken_ = _getWrappedToken(tokenId_);
-        wrappedToken_.mintFor(onBehalfOf_, amount_);
+        wrappedToken_.mintFor(msg.sender, amount_);
         return address(wrappedToken_);
     }
 
     /// @inheritdoc IERC6909Wrappable
-    function unwrap(address onBehalfOf_, uint256 tokenId_, uint256 amount_) public {
+    function unwrap(uint256 tokenId_, uint256 amount_) public {
         // Burn the wrapped ERC20 token
-        _burn(onBehalfOf_, tokenId_, amount_, true);
+        _burn(msg.sender, tokenId_, amount_, true);
 
         // Mint the ERC6909 token
-        _mint(onBehalfOf_, tokenId_, amount_);
+        _mint(msg.sender, tokenId_, amount_);
     }
 
     // ========== TOKEN FUNCTIONS ========== //

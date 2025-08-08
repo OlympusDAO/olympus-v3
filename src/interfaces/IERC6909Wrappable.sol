@@ -15,22 +15,16 @@ interface IERC6909Wrappable {
 
     /// @notice Wraps an ERC6909 token to an ERC20 token
     ///
-    /// @param onBehalfOf_   The address to wrap the token on behalf of
     /// @param tokenId_      The ID of the ERC6909 token
     /// @param amount_       The amount of tokens to wrap
     /// @return wrappedToken The address of the wrapped ERC20 token
-    function wrap(
-        address onBehalfOf_,
-        uint256 tokenId_,
-        uint256 amount_
-    ) external returns (address wrappedToken);
+    function wrap(uint256 tokenId_, uint256 amount_) external returns (address wrappedToken);
 
     /// @notice Unwraps an ERC20 token to an ERC6909 token
     ///
-    /// @param onBehalfOf_   The address to unwrap the token on behalf of
     /// @param tokenId_      The ID of the ERC6909 token
     /// @param amount_       The amount of tokens to unwrap
-    function unwrap(address onBehalfOf_, uint256 tokenId_, uint256 amount_) external;
+    function unwrap(uint256 tokenId_, uint256 amount_) external;
 
     /// @notice Returns the address of the wrapped ERC20 token for a given token ID
     ///

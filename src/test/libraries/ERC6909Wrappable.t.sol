@@ -350,7 +350,9 @@ contract ERC6909WrappableTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IERC6909Wrappable.ERC6909Wrappable_ZeroAmount.selector)
         );
-        token.wrap(alice, TOKEN_ID, 0);
+
+        vm.prank(alice);
+        token.wrap(TOKEN_ID, 0);
     }
 
     // when the tokenId is invalid
@@ -364,19 +366,9 @@ contract ERC6909WrappableTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IERC6909Wrappable.ERC6909Wrappable_InvalidTokenId.selector, 999)
         );
-        token.wrap(alice, 999, AMOUNT);
-    }
 
-    // when the recipient is the zero address
-    //  [X] it reverts
-    function test_wrap_whenRecipientIsZeroAddress_reverts()
-        public
-        givenERC20TokenExists
-        givenRecipientHasERC6909Tokens
-        givenRecipientHasApprovedERC6909TokenSpending
-    {
-        vm.expectRevert(abi.encodeWithSelector(ERC6909.ERC6909InvalidSender.selector, address(0)));
-        token.wrap(address(0), TOKEN_ID, AMOUNT);
+        vm.prank(alice);
+        token.wrap(999, AMOUNT);
     }
 
     // when the recipient has not approved the contract to spend the ERC6909 token
@@ -395,7 +387,30 @@ contract ERC6909WrappableTest is Test {
                 TOKEN_ID
             )
         );
-        token.wrap(alice, TOKEN_ID, AMOUNT);
+
+        vm.prank(alice);
+        token.wrap(TOKEN_ID, AMOUNT);
+    }
+
+    // when the caller does not have sufficient ERC6909 tokens
+    //  [X] it reverts
+    function test_wrap_givenRecipientHasInsufficientERC6909Tokens_reverts()
+        public
+        givenERC20TokenExists
+        givenRecipientHasApprovedERC6909TokenSpending
+    {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientBalance.selector,
+                alice,
+                0,
+                AMOUNT,
+                TOKEN_ID
+            )
+        );
+
+        vm.prank(alice);
+        token.wrap(TOKEN_ID, AMOUNT);
     }
 
     // given the ERC20 token has not been created
@@ -411,7 +426,8 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasApprovedERC6909TokenSpending
     {
         // Wrap the token
-        token.wrap(alice, TOKEN_ID, AMOUNT);
+        vm.prank(alice);
+        token.wrap(TOKEN_ID, AMOUNT);
 
         assertWrappedTokenExists(true);
 
@@ -436,7 +452,8 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasApprovedERC6909TokenSpending
     {
         // Wrap the token
-        address wrappedToken = token.wrap(alice, TOKEN_ID, AMOUNT);
+        vm.prank(alice);
+        address wrappedToken = token.wrap(TOKEN_ID, AMOUNT);
 
         assertWrappedTokenExists(true);
         assertEq(wrappedToken, token.getWrappedToken(TOKEN_ID), "Wrapped token address mismatch");
@@ -457,7 +474,9 @@ contract ERC6909WrappableTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IERC6909Wrappable.ERC6909Wrappable_ZeroAmount.selector)
         );
-        token.unwrap(alice, TOKEN_ID, 0);
+
+        vm.prank(alice);
+        token.unwrap(TOKEN_ID, 0);
     }
 
     // when the tokenId is invalid
@@ -466,14 +485,9 @@ contract ERC6909WrappableTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IERC6909Wrappable.ERC6909Wrappable_InvalidTokenId.selector, 999)
         );
-        token.unwrap(alice, 999, AMOUNT);
-    }
 
-    // when the recipient is the zero address
-    //  [X] it reverts
-    function test_unwrap_whenRecipientIsZeroAddress_reverts() public givenERC20TokenExists {
-        vm.expectRevert(abi.encodeWithSelector(ERC6909.ERC6909InvalidSender.selector, address(0)));
-        token.unwrap(address(0), TOKEN_ID, AMOUNT);
+        vm.prank(alice);
+        token.unwrap(999, AMOUNT);
     }
 
     // when the recipient has not approved the contract to spend the ERC20 token
@@ -484,7 +498,9 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasERC20Tokens
     {
         vm.expectRevert(stdError.arithmeticError);
-        token.unwrap(alice, TOKEN_ID, AMOUNT);
+
+        vm.prank(alice);
+        token.unwrap(TOKEN_ID, AMOUNT);
     }
 
     // given the recipient has approved the contract to spend the ERC20 token
@@ -496,7 +512,9 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasApprovedWrappedTokenSpending
     {
         vm.expectRevert(stdError.arithmeticError);
-        token.unwrap(alice, TOKEN_ID, AMOUNT);
+
+        vm.prank(alice);
+        token.unwrap(TOKEN_ID, AMOUNT);
     }
 
     //  [X] the ERC6909 token is minted to the recipient
@@ -510,7 +528,8 @@ contract ERC6909WrappableTest is Test {
         givenRecipientHasApprovedWrappedTokenSpending
     {
         // Unwrap the token
-        token.unwrap(alice, TOKEN_ID, AMOUNT);
+        vm.prank(alice);
+        token.unwrap(TOKEN_ID, AMOUNT);
 
         assertERC20Balance(alice, 0);
         assertERC20TotalSupply(0);
