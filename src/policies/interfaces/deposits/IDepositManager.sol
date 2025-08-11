@@ -15,7 +15,7 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 interface IDepositManager is IAssetManager {
     // ========== EVENTS ========== //
 
-    event ClaimedYield(
+    event OperatorYieldClaimed(
         address indexed asset,
         address indexed depositor,
         address indexed operator,

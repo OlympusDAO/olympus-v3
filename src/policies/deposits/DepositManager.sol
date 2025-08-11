@@ -191,7 +191,7 @@ contract DepositManager is
         }
 
         // Emit an event
-        emit ClaimedYield(address(asset_), recipient_, msg.sender, actualAmount);
+        emit OperatorYieldClaimed(address(asset_), recipient_, msg.sender, actualAmount);
     }
 
     /// @inheritdoc IDepositManager
