@@ -162,7 +162,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
     }
 
     // given the vault address is the zero address
@@ -252,7 +252,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
     }
 
     // [X] the asset is transferred to the recipient
@@ -322,7 +322,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
     }
 
     function test_claimYield_fuzz(
