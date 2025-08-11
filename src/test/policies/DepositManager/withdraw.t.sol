@@ -425,6 +425,64 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
 
+    function test_givenMaxYieldClaimed_fuzz(
+        uint256 depositAmount_,
+        uint256 yieldAmount_
+    )
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(type(uint256).max)
+        givenDepositorHasApprovedSpendingReceiptToken(type(uint256).max)
+    {
+        depositAmount_ = bound(depositAmount_, 1e18, 100e18);
+        yieldAmount_ = bound(yieldAmount_, 1e18, 200e18);
+
+        uint256 balanceBefore = asset.balanceOf(DEPOSITOR);
+
+        // Mint, deposit
+        asset.mint(DEPOSITOR, depositAmount_);
+        _deposit(depositAmount_, false);
+
+        // Simulate yield being accrued to the vault
+        asset.mint(address(vault), yieldAmount_);
+
+        // Determine the maximum yield that can be claimed
+        uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
+
+        // Claim the yield
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.claimYield(iAsset, ADMIN, maxYield);
+
+        // Withdraw the full deposit
+        _withdraw(DEPOSITOR, previousDepositorDepositActualAmount, false);
+
+        // Operator shares
+        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        assertApproxEqAbs(operatorSharesAfter, 0, 3, "Operator shares mismatch");
+
+        // Vault balance
+        assertApproxEqAbs(vault.balanceOf(address(depositManager)), 0, 3, "Vault balance mismatch");
+
+        // Asset liabilities
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "Asset liabilities mismatch"
+        );
+
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertDepositAssetBalance(
+            DEPOSITOR,
+            balanceBefore + previousDepositorDepositActualAmount,
+            5
+        );
+    }
+
     // [X] the wrapped receipt token is not burned
     // [X] the receipt token is burned
     // [X] the asset liabilities are decreased by the withdrawn amount
