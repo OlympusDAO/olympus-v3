@@ -170,7 +170,7 @@ contract DepositManagerTest is Test {
         _;
     }
 
-    modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
+    function _deposit(uint256 amount_, bool shouldWrap_) public {
         vm.prank(DEPOSIT_OPERATOR);
         (, previousDepositorDepositActualAmount) = depositManager.deposit(
             IDepositManager.DepositParams({
@@ -198,13 +198,14 @@ contract DepositManagerTest is Test {
         previousDepositManagerAssetBalance = asset.balanceOf(address(depositManager));
         previousDepositManagerSharesBalance = vault.balanceOf(address(depositManager));
 
-        (uint256 shares, uint256 sharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
+        (uint256 shares, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
         previousDepositManagerOperatorSharesBalance = shares;
 
         previousAssetLiabilities = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+    }
+
+    modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
+        _deposit(amount_, shouldWrap_);
         _;
     }
 
@@ -667,11 +668,19 @@ contract DepositManagerTest is Test {
         address account_,
         uint256 depositAssetBalance_
     ) internal view {
+        _assertDepositAssetBalance(account_, depositAssetBalance_, 1);
+    }
+
+    function _assertDepositAssetBalance(
+        address account_,
+        uint256 depositAssetBalance_,
+        uint256 delta_
+    ) internal view {
         // Use approx here as the returned asset amount can be 1 wei off
         assertApproxEqAbs(
             asset.balanceOf(account_),
             depositAssetBalance_,
-            1,
+            delta_,
             "Asset balance mismatch"
         );
     }
