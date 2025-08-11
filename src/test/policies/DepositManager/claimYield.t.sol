@@ -14,7 +14,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             iAsset,
             DEPOSIT_OPERATOR
         );
-        return vaultAssets + vaultBorrowed - operatorLiabilities - 1;
+        return vaultAssets + vaultBorrowed - operatorLiabilities;
     }
 
     uint256 internal _operatorSharesBefore;

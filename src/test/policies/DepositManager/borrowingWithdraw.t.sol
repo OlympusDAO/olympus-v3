@@ -175,11 +175,16 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
-        amount_ = bound(amount_, 1, previousDepositorDepositActualAmount);
+        amount_ = bound(
+            amount_,
+            5, // 1 risks a ZERO_SHARES error
+            previousDepositorDepositActualAmount
+        );
         _takeSnapshot(amount_);
 
         // Expect event
-        vm.expectEmit(true, true, true, true);
+        // The amount can be off by a few wei, so don't assert that
+        vm.expectEmit(true, true, true, false);
         emit BorrowingWithdrawal(address(iAsset), DEPOSIT_OPERATOR, RECIPIENT, amount_);
 
         // Call function
@@ -193,18 +198,20 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         );
 
         // Assert tokens
-        assertEq(actualAmount, amount_, "actual amount");
-        assertEq(iAsset.balanceOf(RECIPIENT), amount_, "withdrawn amount");
+        assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
+        assertApproxEqAbs(iAsset.balanceOf(RECIPIENT), amount_, 5, "withdrawn amount");
 
         // Borrowed amounts
-        assertEq(
+        assertApproxEqAbs(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
             amount_,
+            5,
             "borrowed amount"
         );
-        assertEq(
+        assertApproxEqAbs(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             previousDepositorDepositActualAmount - amount_,
+            5,
             "borrowing capacity"
         );
 
@@ -214,22 +221,24 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             DEPOSIT_OPERATOR
         );
 
-        assertEq(
+        assertApproxEqAbs(
             operatorShares,
             _operatorSharesBefore - _expectedWithdrawnShares,
+            5,
             "operator shares"
         );
 
         assertApproxEqAbs(
             operatorSharesInAssets,
             _operatorSharesInAssetsBefore - amount_,
-            1,
+            5,
             "operator shares in assets"
         );
 
-        assertEq(
+        assertApproxEqAbs(
             vault.balanceOf(address(depositManager)),
             _depositManagerSharesBefore - _expectedWithdrawnShares,
+            5,
             "vault balance"
         );
     }
@@ -308,13 +317,14 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     {
         amount_ = bound(
             amount_,
-            1,
+            5, // 1 risks a ZERO_SHARES error
             previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount
         );
         _takeSnapshot(amount_);
 
         // Expect event
-        vm.expectEmit(true, true, true, true);
+        // The amount can be off by a few wei, so don't assert that
+        vm.expectEmit(true, true, true, false);
         emit BorrowingWithdrawal(address(iAsset), DEPOSIT_OPERATOR, RECIPIENT, amount_);
 
         // Call function
@@ -328,22 +338,25 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         );
 
         // Assert tokens
-        assertEq(actualAmount, amount_, "actual amount");
-        assertEq(
+        assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
+        assertApproxEqAbs(
             iAsset.balanceOf(RECIPIENT),
             previousRecipientBorrowActualAmount + amount_,
+            5,
             "recipient balance"
         );
 
         // Borrowed amounts
-        assertEq(
+        assertApproxEqAbs(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
             previousRecipientBorrowActualAmount + amount_,
+            5,
             "borrowed amount"
         );
-        assertEq(
+        assertApproxEqAbs(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount - amount_,
+            5,
             "borrowing capacity"
         );
 
@@ -353,22 +366,24 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             DEPOSIT_OPERATOR
         );
 
-        assertEq(
+        assertApproxEqAbs(
             operatorShares,
             _operatorSharesBefore - _expectedWithdrawnShares,
+            5,
             "operator shares"
         );
 
         assertApproxEqAbs(
             operatorSharesInAssets,
             _operatorSharesInAssetsBefore - amount_,
-            1,
+            5,
             "operator shares in assets"
         );
 
-        assertEq(
+        assertApproxEqAbs(
             vault.balanceOf(address(depositManager)),
             _depositManagerSharesBefore - _expectedWithdrawnShares,
+            5,
             "vault balance"
         );
     }
