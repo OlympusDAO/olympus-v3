@@ -558,7 +558,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         uint256[] memory positionIds = new uint256[](1);
         positionIds[0] = 0;
         vm.prank(recipient);
-        uint256 yieldClaimed = ydFacility.claimYield(positionIds);
+        ydFacility.claimYield(positionIds);
 
         // Claim yield from convertible deposits
         cdFacility.claimYield(iReserveToken);

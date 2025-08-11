@@ -591,7 +591,11 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     function test_whenExpired_givenRateSnapshotOnExpiry_fuzz(
         uint256 yieldAmount_
     ) public givenLocallyActive givenYieldFee(1000) {
-        yieldAmount_ = bound(yieldAmount_, 1, 10e18);
+        yieldAmount_ = bound(
+            yieldAmount_,
+            10, // Avoid ZERO_SHARES revert
+            10e18
+        );
 
         // Mint a yield deposit position
         uint256 positionId;
