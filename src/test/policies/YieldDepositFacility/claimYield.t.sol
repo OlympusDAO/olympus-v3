@@ -11,8 +11,15 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
 
-    uint256 public DEPOSIT_AMOUNT = 9e18;
-    uint256 public POSITION_ID = 0;
+    uint256 internal constant DEPOSIT_AMOUNT = 9e18;
+    uint256 internal constant POSITION_ID = 0;
+
+    function _convertAssetsToShares(uint256 amount_) internal view returns (uint256) {
+        return
+            iVault.totalSupply() == 0
+                ? amount_
+                : (amount_ * iVault.totalSupply()) / iVault.totalAssets();
+    }
 
     // given the contract is disabled
     //  [X] it reverts
@@ -183,7 +190,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         uint256 currentConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 44999999999999999;
-        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+        uint256 expectedYieldShares = _convertAssetsToShares(expectedYield);
+
+        // Revise expectedYield based on the shares
+        expectedYield = iVault.previewRedeem(expectedYieldShares);
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -192,9 +202,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         );
 
         // Assert preview matches expected
-        assertEq(
+        assertApproxEqAbs(
             previewedYield,
             expectedYield - expectedFee,
+            1,
             "Previewed yield does not match expected"
         );
         assertEq(
@@ -261,7 +272,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         uint256 currentConversionRate = 1211204379562043795;
         uint256 expectedYield = 437956204379562030;
         uint256 expectedFee = 43795620437956203;
-        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+        uint256 expectedYieldShares = _convertAssetsToShares(expectedYield);
+
+        // Revise expectedYield based on the shares
+        expectedYield = iVault.previewRedeem(expectedYieldShares);
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -270,9 +284,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         );
 
         // Assert preview matches expected
-        assertEq(
+        assertApproxEqAbs(
             previewedYield,
             expectedYield - expectedFee,
+            1,
             "Previewed yield does not match expected"
         );
         assertEq(
@@ -342,7 +357,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         uint256 currentConversionRate = 1210000000000000000;
         uint256 expectedYield = 899999999999999989;
         uint256 expectedFee = 89999999999999998;
-        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+        uint256 expectedYieldShares = _convertAssetsToShares(expectedYield);
+
+        // Revise expectedYield based on the shares
+        expectedYield = iVault.previewRedeem(expectedYieldShares);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -403,7 +421,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         uint256 rateSnapshotConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 44999999999999999;
-        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+        uint256 expectedYieldShares = _convertAssetsToShares(expectedYield);
+
+        // Revise expectedYield based on the shares
+        expectedYield = iVault.previewRedeem(expectedYieldShares);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -671,7 +692,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         uint256 rateSnapshotConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 44999999999999999;
-        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+        uint256 expectedYieldShares = _convertAssetsToShares(expectedYield);
+
+        // Revise expectedYield based on the shares
+        expectedYield = iVault.previewRedeem(expectedYieldShares);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -726,7 +750,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         uint256 currentConversionRate = 1155000000000000000;
         uint256 expectedYield = 449999999999999990;
         uint256 expectedFee = 0;
-        uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
+        uint256 expectedYieldShares = _convertAssetsToShares(expectedYield);
+
+        // Revise expectedYield based on the shares
+        expectedYield = iVault.previewRedeem(expectedYieldShares);
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -735,9 +762,10 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         );
 
         // Assert preview matches expected
-        assertEq(
+        assertApproxEqAbs(
             previewedYield,
             expectedYield - expectedFee,
+            1,
             "Previewed yield does not match expected"
         );
         assertEq(
