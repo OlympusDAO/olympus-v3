@@ -397,6 +397,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        Notes:
+    ///             - The calculated amount may differ from the actual amount borrowed (using `borrowAgainstRedemption()`) by a few wei, due to rounding behaviour in ERC4626 vaults.
     function previewBorrowAgainstRedemption(
         address user_,
         uint16 redemptionId_
@@ -413,7 +415,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///             - The interest rate is not set
     function borrowAgainstRedemption(
         uint16 redemptionId_
-    ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(msg.sender, redemptionId_)
+        returns (uint256)
+    {
         // Get the redemption
         bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         UserRedemption storage redemption = _userRedemptions[redemptionKey];
@@ -448,7 +456,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _redemptionLoan[redemptionKey] = newLoan;
 
         // Delegate to the facility for borrowing
-        IDepositFacility(redemption.facility).handleBorrow(
+        uint256 actualAmount = IDepositFacility(redemption.facility).handleBorrow(
             IERC20(redemption.depositToken),
             redemption.depositPeriod,
             principal,
@@ -456,7 +464,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         );
 
         // Emit event
-        emit LoanCreated(msg.sender, redemptionId_, principal, redemption.facility);
+        emit LoanCreated(msg.sender, redemptionId_, actualAmount, redemption.facility);
+
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositRedemptionVault
