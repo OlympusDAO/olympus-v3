@@ -122,10 +122,10 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenBorrow(1e18)
         givenDepositorHasApprovedSpendingReceiptToken(previousRecipientBorrowActualAmount)
     {
-        amount_ = bound(amount_, 1e18 + 1, 1e18 * 100);
+        amount_ = bound(amount_, previousRecipientBorrowActualAmount + 1, 1e18 * 100);
 
         // Expect revert
-        _expectRevertBorrowedAmountExceeded(amount_, 1e18);
+        _expectRevertBorrowedAmountExceeded(amount_, previousRecipientBorrowActualAmount);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
