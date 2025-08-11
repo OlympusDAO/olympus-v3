@@ -5,9 +5,9 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract YieldDepositFacilitySplitTest is YieldDepositFacilityTest {
-    uint256 public DEPOSIT_AMOUNT = 9e18;
-    uint256 public YIELD_AMOUNT = 1e18;
-    uint256 public POSITION_ID = 0;
+    uint256 internal constant DEPOSIT_AMOUNT = 9e18;
+    uint256 internal constant YIELD_AMOUNT = 1e18;
+    uint256 internal constant POSITION_ID = 0;
 
     uint256 internal _lastYieldClaim;
 

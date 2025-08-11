@@ -5,8 +5,8 @@ import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.s
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
-    uint256 public DEPOSIT_AMOUNT = 9e18;
-    uint256 public POSITION_ID = 0;
+    uint256 internal constant DEPOSIT_AMOUNT = 9e18;
+    uint256 internal constant POSITION_ID = 0;
 
     function _split(uint256 amount_) internal returns (uint256) {
         vm.prank(recipient);
