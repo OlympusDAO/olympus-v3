@@ -294,6 +294,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     /// @dev        Notes:
     /// @dev        - For asset vaults that are not monotonically increasing in value, the yield received by different depositors may differ based on the time of claim.
     /// @dev        - Claiming yield multiple times during a deposit period will likely result in a lower yield than claiming once at/after expiry.
+    /// @dev        - The actual amount of yield that can be claimed via `claimYield()` can differ by a few wei, due to rounding behaviour in ERC4626 vaults.
     /// @dev
     /// @dev        This function will revert if:
     /// @dev        - The contract is not enabled
@@ -378,21 +379,28 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             }
         }
 
+        uint256 actualYieldMinusFee;
         if (yieldMinusFee > 0) {
             // Withdraw the yield from the deposit manager to this contract
             // This will validate that the deposits are still solvent
             // This is also done as one call, to avoid off-by-one rounding errors with ERC4626
-            DEPOSIT_MANAGER.claimYield(asset, address(this), yieldMinusFee + yieldFee);
-            // Transfer the yield (minus fee) to the caller
-            IERC20(asset).transfer(msg.sender, yieldMinusFee);
+            uint256 actualAmount = DEPOSIT_MANAGER.claimYield(
+                asset,
+                address(this),
+                yieldMinusFee + yieldFee
+            );
             // Transfer the yield fee to the treasury
             if (yieldFee > 0) IERC20(asset).transfer(address(TRSRY), yieldFee);
+            // Transfer the yield (minus fee) to the caller
+            // This uses the actual amount, since that may differ from what was calculated earlier
+            actualYieldMinusFee = actualAmount - yieldFee;
+            IERC20(asset).transfer(msg.sender, actualYieldMinusFee);
         }
 
         // Emit event
-        emit YieldClaimed(address(asset), msg.sender, yieldMinusFee);
+        emit YieldClaimed(address(asset), msg.sender, actualYieldMinusFee);
 
-        return yieldMinusFee;
+        return actualYieldMinusFee;
     }
 
     // ========== ADMIN FUNCTIONS ========== //

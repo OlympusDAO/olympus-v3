@@ -280,7 +280,12 @@ interface IDepositManager is IAssetManager {
     /// @param  asset_        The address of the underlying asset
     /// @param  recipient_    The recipient of the claimed yield
     /// @param  amount_       The amount to claim yield for
-    function claimYield(IERC20 asset_, address recipient_, uint256 amount_) external;
+    /// @return actualAmount  The quantity of underlying assets transferred to the recipient
+    function claimYield(
+        IERC20 asset_,
+        address recipient_,
+        uint256 amount_
+    ) external returns (uint256 actualAmount);
 
     /// @notice Withdraws the given amount of the underlying asset
     /// @dev    The implementing contract is expected to handle the following:
