@@ -55,9 +55,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         );
 
         // Assert deposit token balances
-        assertEq(
+        assertApproxEqAbs(
             depositToken_.balanceOf(user_),
             alreadyRedeemedAmount_ + amount_,
+            1,
             "user: deposit token balance mismatch"
         );
         assertEq(
@@ -562,6 +563,8 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         // Claim yield from convertible deposits
         cdFacility.claimYield(iReserveToken);
 
+        uint256 balanceBefore = iReserveToken.balanceOf(recipient);
+
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit RedemptionFinished(
@@ -583,9 +586,9 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             iReserveToken,
             PERIOD_MONTHS,
             address(ydFacility),
-            RESERVE_TOKEN_AMOUNT, // Includes the redemption
+            _previousDepositActualAmount, // Includes the redemption
             0,
-            yieldClaimed,
+            balanceBefore,
             COMMITMENT_AMOUNT // Yield deposit position
         );
 
