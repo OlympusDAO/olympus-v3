@@ -128,12 +128,10 @@ abstract contract BaseAssetManager is IAssetManager {
         else {
             IERC4626 vault = IERC4626(assetConfiguration.vault);
 
-            // Use solmate's convertToShares() function, which rounds down, to determine the number of shares to redeem from the vault
+            // Use convertToShares(), which rounds down, to determine the number of shares to redeem from the vault
             // This may result in the depositor receiving a few less wei,
             // but ensures that the vault remains solvent
-            shares = vault.totalSupply() == 0
-                ? amount_
-                : amount_.mulDiv(vault.totalSupply(), vault.totalAssets());
+            shares = vault.convertToShares(amount_);
             assetAmount = vault.redeem(shares, depositor_, address(this));
         }
 

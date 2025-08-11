@@ -15,10 +15,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
     uint256 internal constant POSITION_ID = 0;
 
     function _convertAssetsToShares(uint256 amount_) internal view returns (uint256) {
-        return
-            iVault.totalSupply() == 0
-                ? amount_
-                : (amount_ * iVault.totalSupply()) / iVault.totalAssets();
+        return iVault.convertToShares(amount_);
     }
 
     // given the contract is disabled
