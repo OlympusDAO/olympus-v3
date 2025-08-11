@@ -312,6 +312,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, amount_);
+    }
 
     function test_claimYield_fuzz(
         uint256 depositAmount_,
