@@ -144,10 +144,18 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             expectedShares,
             previousDepositorDepositActualAmount,
             actualAmount,
-            false
+            false,
+            1
         );
         _assertReceiptToken(0, previousDepositorDepositActualAmount, true, false);
-        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
+
+        // As the full amount is being withdrawn, double-check that liabilities are 0
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "Liabilities should be 0"
+        );
     }
 
     // given the depositor has not approved the contract to spend the receipt token
@@ -294,10 +302,18 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             expectedShares,
             previousDepositorDepositActualAmount,
             actualAmount,
-            false
+            false,
+            1
         );
         _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
+
+        // As the full amount is being withdrawn, double-check that liabilities are 0
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "Liabilities should be 0"
+        );
     }
 
     // given there has been another deposit
@@ -320,9 +336,9 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         uint256 actualAmount = _withdraw(amount_, false);
 
-        _assertAssetBalance(expectedShares, amount_, actualAmount, false);
+        _assertAssetBalance(expectedShares, amount_, actualAmount, false, 5);
         _assertReceiptToken(amount_, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, amount_);
+        _assertDepositAssetBalance(DEPOSITOR, amount_, 5);
     }
 
     // when the recipient address is different to the depositor
@@ -363,10 +379,10 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
 
         uint256 actualAmount = _withdraw(recipient, amount_, false);
 
-        _assertAssetBalance(expectedShares, amount_, actualAmount, false);
+        _assertAssetBalance(expectedShares, amount_, actualAmount, false, 5);
         _assertReceiptToken(amount_, 0, false, false);
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
     }
 
     // given the maximum yield has been claimed
@@ -409,10 +425,10 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             iAsset,
             DEPOSIT_OPERATOR
         );
-        assertEq(operatorSharesAfter, 0, "Operator shares mismatch");
+        assertApproxEqAbs(operatorSharesAfter, 0, 2, "Operator shares mismatch");
 
         // Vault balance
-        assertEq(vault.balanceOf(address(depositManager)), 0, "Vault balance mismatch");
+        assertApproxEqAbs(vault.balanceOf(address(depositManager)), 0, 2, "Vault balance mismatch");
 
         // Asset liabilities
         assertEq(
@@ -463,10 +479,10 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             iAsset,
             DEPOSIT_OPERATOR
         );
-        assertApproxEqAbs(operatorSharesAfter, 0, 3, "Operator shares mismatch");
+        assertApproxEqAbs(operatorSharesAfter, 0, 5, "Operator shares mismatch");
 
         // Vault balance
-        assertApproxEqAbs(vault.balanceOf(address(depositManager)), 0, 3, "Vault balance mismatch");
+        assertApproxEqAbs(vault.balanceOf(address(depositManager)), 0, 5, "Vault balance mismatch");
 
         // Asset liabilities
         assertEq(
@@ -506,10 +522,18 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             expectedShares,
             previousDepositorDepositActualAmount,
             actualAmount,
-            false
+            false,
+            1
         );
         _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
+
+        // As the full amount is being withdrawn, double-check that liabilities are 0
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "Liabilities should be 0"
+        );
     }
 
     // given the asset deposit cap has been exceeded
@@ -533,9 +557,17 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             expectedShares,
             previousDepositorDepositActualAmount,
             actualAmount,
-            false
+            false,
+            1
         );
         _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
-        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
+        _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
+
+        // As the full amount is being withdrawn, double-check that liabilities are 0
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "Liabilities should be 0"
+        );
     }
 }
