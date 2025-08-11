@@ -132,11 +132,12 @@ abstract contract BaseAssetManager is IAssetManager {
             // This may result in the depositor receiving a few less wei,
             // but ensures that the vault remains solvent
             shares = vault.convertToShares(amount_);
+
+            // Amount of shares must be non-zero
+            if (shares == 0) revert AssetManager_ZeroAmount();
+
             assetAmount = vault.redeem(shares, depositor_, address(this));
         }
-
-        // Amount of shares must be non-zero
-        if (shares == 0) revert AssetManager_ZeroAmount();
 
         // Update the shares deposited by the caller (operator)
         _operatorShares[_getOperatorKey(asset_, msg.sender)] -= shares;
