@@ -9,6 +9,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 /// @title  BaseAssetManager
 /// @notice This is a base contract for managing asset deposits and withdrawals. It is designed to be inherited by another contract.
@@ -16,6 +17,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 ///         Future versions of the contract could add support for more complex strategies and/or strategy migration, while addressing the concern of funds theft.
 abstract contract BaseAssetManager is IAssetManager {
     using TransferHelper for ERC20;
+    using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
 
@@ -124,12 +126,15 @@ abstract contract BaseAssetManager is IAssetManager {
         }
         // Otherwise, withdraw the assets from the vault
         else {
-            shares = IERC4626(assetConfiguration.vault).withdraw(
-                amount_,
-                depositor_,
-                address(this)
-            );
-            assetAmount = amount_;
+            IERC4626 vault = IERC4626(assetConfiguration.vault);
+
+            // Use solmate's convertToShares() function, which rounds down, to determine the number of shares to redeem from the vault
+            // This may result in the depositor receiving a few less wei,
+            // but ensures that the vault remains solvent
+            shares = vault.totalSupply() == 0
+                ? amount_
+                : amount_.mulDiv(vault.totalSupply(), vault.totalAssets());
+            assetAmount = vault.redeem(shares, depositor_, address(this));
         }
 
         // Amount of shares must be non-zero
