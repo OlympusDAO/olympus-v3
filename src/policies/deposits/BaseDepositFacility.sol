@@ -242,6 +242,13 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         if (amount_ > operatorCommitments)
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
 
+        // Reduce committed deposits by the amount borrowed
+        // This is done prior to any external contract calls to mitigate re-entrancy
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
         // Process the borrowing through DepositManager
         // It will revert if more is being borrowed than available
         uint256 actualAmount = DEPOSIT_MANAGER.borrowingWithdraw(
