@@ -6,6 +6,7 @@ import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager
 
 // Libraries
 import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
@@ -33,5 +34,5 @@ abstract contract DEPOSv1 is Module, ERC721, IDepositPositionManager {
     mapping(uint256 => Position) internal _positions;
 
     /// @notice Mapping of user addresses to their position IDs
-    mapping(address => uint256[]) internal _userPositions;
+    mapping(address => EnumerableSet.UintSet) internal _userPositions;
 }
