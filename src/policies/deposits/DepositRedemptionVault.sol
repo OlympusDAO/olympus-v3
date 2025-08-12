@@ -810,6 +810,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev    Notes:
+    ///         - When setting the max borrow percentage, keep in mind the annual interest rate and claim default reward percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
     function setMaxBorrowPercentage(
         IERC20 asset_,
         uint16 percent_
@@ -827,6 +829,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev    Notes:
+    ///         - When setting the annual interest rate, keep in mind the max borrow percentage and claim default reward percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
     function setAnnualInterestRate(
         IERC20 asset_,
         uint16 rate_
@@ -844,6 +848,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev    Notes:
+    ///         - When setting the claim default reward percentage, keep in mind the annual interest rate and max borrow percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
     function setClaimDefaultRewardPercentage(
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
