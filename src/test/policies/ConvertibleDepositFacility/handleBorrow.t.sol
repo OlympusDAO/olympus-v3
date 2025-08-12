@@ -35,10 +35,10 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
         facility.handleBorrow(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
     }
 
-    // when the amount is greater than the available capacity
+    // when the amount is greater than the available deposits
     //  [X] it reverts
 
-    function test_whenAmountGreaterThanCapacity_reverts(
+    function test_whenAmountGreaterThanAvailableDeposits_reverts(
         uint256 amount_
     )
         public

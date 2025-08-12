@@ -7,7 +7,6 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
     event AssetCommitted(address indexed asset, address indexed operator, uint256 amount);
 
     uint256 public constant COMMIT_AMOUNT = 1e18;
-    address public constant OPERATOR_TWO = address(0xDDD);
 
     // ========== TESTS ========== //
 

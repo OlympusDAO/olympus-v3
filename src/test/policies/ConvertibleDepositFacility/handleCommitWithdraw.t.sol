@@ -7,7 +7,6 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
     event AssetCommitWithdrawn(address indexed asset, address indexed operator, uint256 amount);
 
     uint256 public constant COMMIT_AMOUNT = 1e18;
-    address public constant OPERATOR_TWO = address(0xDDD);
 
     // ========== TESTS ========== //
 
@@ -191,6 +190,142 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
             previousDepositActual * 2 - COMMIT_AMOUNT,
+            "available deposits"
+        );
+    }
+
+    // given the operator has borrowed against the commitment
+    //  [X] it reverts
+
+    function test_givenBorrowed_reverts(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenBorrowed(OPERATOR, COMMIT_AMOUNT, recipient)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, type(uint256).max);
+
+        // Expect revert
+        _expectRevertInsufficientCommitments(OPERATOR, withdrawAmount_, 0);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipient);
+    }
+
+    // given multiple operators have commitments
+    //  when an operator attempts to borrow more than committed
+    //   [ ] it reverts
+    //  when an operator attempts to withdraw more than committed
+    //   [X] it reverts
+    //  [ ] it withdraws the requested amount
+    //  [ ] the committed deposits of the operator are reduced
+    //  [ ] the committed deposits of the other operators are not reduced
+
+    function test_multipleOperators_givenBorrowed_whenOperatorWithdrawsMoreThanRemaining_reverts(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenBorrowed(OPERATOR, COMMIT_AMOUNT, recipient)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, type(uint256).max);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+        }
+
+        // Expect revert
+        _expectRevertInsufficientCommitments(OPERATOR, withdrawAmount_, 0);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipient);
+    }
+
+    function test_multipleOperators(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, COMMIT_AMOUNT);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+
+            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+        }
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit AssetCommitWithdrawn(address(iReserveToken), OPERATOR, withdrawAmount_);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipient);
+
+        // Assert tokens
+        assertEq(
+            depositManager.balanceOf(OPERATOR, receiptTokenId),
+            previousDepositActual - amount_,
+            "operator receipt token balance"
+        );
+        assertEq(iReserveToken.balanceOf(recipient), withdrawAmount_, "recipient token balance");
+
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            2 * COMMIT_AMOUNT - withdrawAmount_,
+            "committed deposits"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            COMMIT_AMOUNT - withdrawAmount_,
+            "committed deposits per operator"
+        );
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            previousDepositActual * 3 - 2 * COMMIT_AMOUNT - withdrawAmount_,
             "available deposits"
         );
     }
