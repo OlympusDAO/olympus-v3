@@ -113,6 +113,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The deposit token or period are not supported for this facility in the DepositManager
+    ///             - There are not enough available deposits in the DepositManager
     function handleCommit(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -149,6 +154,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The amount is greater than the committed deposits for the operator
     function handleCommitCancel(
         IERC20 depositToken_,
         uint8,
@@ -173,6 +182,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The amount is greater than the committed deposits for the operator
     function handleCommitWithdraw(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -256,6 +269,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ///             - Updates the committed deposits
     ///
     ///             This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
     function handleLoanRepay(
         IERC20 depositToken_,
         uint8,
@@ -285,6 +300,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
     function handleLoanDefault(
         IERC20 depositToken_,
         uint8 depositPeriod_,
