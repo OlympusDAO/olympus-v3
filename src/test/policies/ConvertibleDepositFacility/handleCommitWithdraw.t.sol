@@ -308,7 +308,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         // Assert tokens
         assertEq(
             depositManager.balanceOf(OPERATOR, receiptTokenId),
-            previousDepositActual - amount_,
+            previousDepositActual - withdrawAmount_,
             "operator receipt token balance"
         );
         assertEq(iReserveToken.balanceOf(recipient), withdrawAmount_, "recipient token balance");
