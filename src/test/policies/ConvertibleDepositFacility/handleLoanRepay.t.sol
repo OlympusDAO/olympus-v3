@@ -99,6 +99,8 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
     // [X] it transfers the tokens from the payer to the deposit manager
     // [X] it updates the operator shares
+    // [X] it updates the committed deposits
+    // [X] it updates the committed deposits for the operator
 
     function test_success(
         uint256 amount_
@@ -146,6 +148,16 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             facility.getAvailableDeposits(iReserveToken),
             operatorSharesInAssetsAfter - (previousDepositActual - previousBorrowActual + amount_),
             "available deposits"
+        );
+
+        // Assert that the overall committed deposits have increased
+        assertEq(facility.getCommittedDeposits(iReserveToken), amount_, "committed deposits");
+
+        // Assert that the committed deposits for the operator have increased
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            amount_,
+            "committed deposits for operator"
         );
     }
 }

@@ -214,13 +214,15 @@ interface IDepositFacility {
     /// @return balance     The available deposit balance
     function getAvailableDeposits(IERC20 depositToken_) external view returns (uint256 balance);
 
-    /// @notice Get the committed deposits for a specific token
+    /// @notice Get the committed deposits for a specific token.
+    ///         The committed deposits represents the amount of the deposit token that this contract ensures will be available for all of the operators to use.
     ///
     /// @param depositToken_    The deposit token to query
     /// @return committed       The total committed deposits
     function getCommittedDeposits(IERC20 depositToken_) external view returns (uint256 committed);
 
-    /// @notice Get the committed deposits for a specific token and operator
+    /// @notice Get the committed deposits for a specific token and operator.
+    ///         The committed deposits represents the amount of the deposit token that this contract ensures will be available for the operator to use.
     ///
     /// @param depositToken_ The deposit token to query
     /// @param operator_     The operator

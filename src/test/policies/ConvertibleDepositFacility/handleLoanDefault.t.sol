@@ -6,6 +6,8 @@ import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepos
 contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFacilityTest {
     uint256 internal _recipientBalanceBefore;
     uint256 internal _operatorSharesInAssetsBefore;
+    uint256 internal _committedDepositsBefore;
+    uint256 internal _committedDepositsOperatorBefore;
 
     function _takeSnapshot() internal {
         _recipientBalanceBefore = iReserveToken.balanceOf(recipient);
@@ -13,6 +15,8 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
             iReserveToken,
             address(facility)
         );
+        _committedDepositsBefore = facility.getCommittedDeposits(iReserveToken);
+        _committedDepositsOperatorBefore = facility.getCommittedDeposits(iReserveToken, OPERATOR);
     }
 
     // ========== TESTS ========== //
@@ -99,6 +103,8 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
 
     // [X] it burns the receipt tokens from the payer for the default amount
     // [X] the operator shares remain the same
+    // [X] the committed deposits remain the same
+    // [X] the committed deposits for the operator remain the same
 
     function test_success(
         uint256 amount_
@@ -149,6 +155,20 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
             facility.getAvailableDeposits(iReserveToken),
             operatorSharesInAssetsAfter - (previousDepositActual - previousBorrowActual),
             "available deposits"
+        );
+
+        // Assert that the overall committed deposits are the same
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            _committedDepositsBefore,
+            "committed deposits"
+        );
+
+        // Assert that the committed deposits for the operator are the same
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            _committedDepositsOperatorBefore,
+            "committed deposits for operator"
         );
     }
 }
