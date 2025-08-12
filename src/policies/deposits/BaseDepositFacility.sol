@@ -179,7 +179,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_,
         address recipient_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
-        // Validate that there are enough committed funds
+        // Validate that there are enough committed funds for the operator
         uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
         if (amount_ > operatorCommitments)
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
