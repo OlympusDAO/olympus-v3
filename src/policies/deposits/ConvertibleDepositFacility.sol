@@ -65,7 +65,8 @@ contract ConvertibleDepositFacility is
         DEPOS = DEPOSv1(getModuleAddress(dependencies[3]));
 
         // Validate that the OHM scale is the same
-        if (10 ** MINTR.ohm().decimals() != _OHM_SCALE) revert CDF_InvalidArgs("OHM decimals");
+        uint256 ohmScale = 10 ** uint256(MINTR.ohm().decimals());
+        if (ohmScale != _OHM_SCALE) revert CDF_InvalidArgs("OHM decimals");
     }
 
     /// @inheritdoc Policy
