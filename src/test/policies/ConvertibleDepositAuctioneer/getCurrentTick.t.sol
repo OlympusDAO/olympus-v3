@@ -4,6 +4,8 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctioneerTest {
     // given the contract is disabled
     //  [X] it reverts
@@ -643,5 +645,92 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Assert tick
         assertEq(tick.capacity, 5e9, "new tick capacity");
         assertEq(tick.price, MIN_PRICE, "new tick price");
+    }
+
+    /// @notice Test that price decay uses initial tick size (10e9), not reduced current tick size (5e9)
+    /// @dev This test demonstrates the accelerated price decay bug with deterministic values
+    function test_priceDecayUsesInitialTickSize()
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+    {
+        _mintReserveToken(recipient, 100000e18);
+        _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
+
+        // Make large purchase to reduce tick size from 10e9 to 5e9
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 30000e18, 1, false, false);
+
+        // Get state after purchase (deterministic based on bid logic)
+        IConvertibleDepositAuctioneer.Tick memory tickAfterPurchase = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Let exactly 6 hours pass
+        vm.warp(block.timestamp + 6 hours);
+
+        /**
+         * MATHEMATICAL PROOF:
+         *
+         * Constants:
+         * - TARGET = 20e9
+         * - TICK_SIZE (initial) = 10e9
+         * - Current tick size (after large purchase) = 5e9
+         * - TICK_STEP = 110e2
+         * - Time passed = 6 hours = 21600 seconds
+         * - 1 day = 86400 seconds
+         *
+         * Capacity to add over 6 hours:
+         * capacityToAdd = (20e9 * 21600) / 86400 / 1 = 5e9
+         *
+         * After purchase, let's say:
+         * - tickAfterPurchase.capacity = 3e9 (example from bid logic)
+         * - Total capacity = 3e9 + 5e9 = 8e9
+         *
+         * CORRECT BEHAVIOR (using initial TICK_SIZE = 10e9):
+         * - Since 8e9 < 10e9, no decay iterations needed
+         * - Expected capacity = 8e9
+         * - Expected price = unchanged from after purchase
+         *
+         * BUGGY BEHAVIOR (using reduced tick size = 5e9):
+         * - Check: 8e9 > 5e9? Yes, enter while loop
+         * - Subtract: 8e9 - 5e9 = 3e9, apply price decay
+         * - Check: 3e9 > 5e9? No, exit loop
+         * - Result: 1 iteration with unintended price decay
+         */
+
+        // Get actual result
+        IConvertibleDepositAuctioneer.Tick memory actualTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Hard-coded expected values based on using initial tick size (10e9)
+        uint256 capacityToAdd = 5e9; // (20e9 * 21600) / 86400 / 1
+        uint256 totalCapacity = tickAfterPurchase.capacity + capacityToAdd;
+
+        // Since we're adding only 5e9 capacity and initial tick size is 10e9,
+        // most scenarios won't exceed the tick size, so no price decay should occur
+        uint256 expectedCapacity = totalCapacity;
+        uint256 expectedPrice = tickAfterPurchase.price; // No price change expected
+
+        console2.log("Capacity after purchase:", tickAfterPurchase.capacity);
+        console2.log("Capacity to add (6 hours):", capacityToAdd);
+        console2.log("Expected total capacity:", expectedCapacity);
+        console2.log("Expected price (no decay):", expectedPrice);
+        console2.log("Actual capacity:", actualTick.capacity);
+        console2.log("Actual price:", actualTick.price);
+        console2.log("Current tick size (reduced):", auctioneer.getCurrentTickSize());
+
+        // These should pass when the fix is implemented (use initial tick size in decay loop)
+        assertEq(
+            actualTick.capacity,
+            expectedCapacity,
+            "Should use initial tick size for decay calculation"
+        );
+        assertEq(
+            actualTick.price,
+            expectedPrice,
+            "Price should not decay when using initial tick size"
+        );
     }
 }
