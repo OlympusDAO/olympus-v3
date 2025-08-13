@@ -37,6 +37,11 @@ contract ConvertibleDepositFacility is
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
 
+    /// @notice The DEPOS module.
+    DEPOSv1 public DEPOS;
+
+    uint256 internal constant _OHM_SCALE = 1e9;
+
     // ========== SETUP ========== //
 
     constructor(
@@ -58,6 +63,9 @@ contract ConvertibleDepositFacility is
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
         DEPOS = DEPOSv1(getModuleAddress(dependencies[3]));
+
+        // Validate that the OHM scale is the same
+        if (10 ** MINTR.ohm().decimals() != _OHM_SCALE) revert CDF_InvalidArgs("OHM decimals");
     }
 
     /// @inheritdoc Policy
@@ -217,9 +225,9 @@ contract ConvertibleDepositFacility is
 
         // The deposit and receipt token have the same decimals, so either can be used
         convertedTokenOut = FullMath.mulDiv(
-            amount_,
-            10 ** IERC20(currentAsset).decimals(),
-            position.conversionPrice
+            amount_, // Scale: deposit token
+            _OHM_SCALE,
+            position.conversionPrice // Scale: deposit token
         );
 
         return (convertedTokenOut, currentAsset, currentPeriodMonths);
