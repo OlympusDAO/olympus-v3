@@ -407,7 +407,12 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
 
         uint256 conversionPrice = 2e6;
 
-        uint256 expectedConvertedAmount = (10e6 * 1e6) / conversionPrice;
+        // Proof:
+        // Converted amount: deposit / price (in OHM scale)
+        // Deposit amount: 10e6
+        // Conversion price: 2e6
+        // Converted amount (OHM): 10e6 * 1e9 / 2e6 = 5e9
+        uint256 expectedConvertedAmount = 5e9;
         uint256 expectedAssets = 10e6;
 
         // Create positions
@@ -494,7 +499,12 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         positionIds_[1] = 1;
         amounts_[1] = 5e18;
 
-        uint256 expectedConvertedAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
+        // Proof:
+        // Converted amount: deposit / price (in OHM scale)
+        // Deposit amount: 10e18
+        // Conversion price: 2e18
+        // Converted amount (OHM): 10e18 * 1e9 / 2e18 = 5e9
+        uint256 expectedConvertedAmount = 5e9;
         uint256 expectedAssets = RESERVE_TOKEN_AMOUNT;
 
         // Expect event
@@ -584,9 +594,9 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
             convertParams.amounts[1] = 4e18;
         }
 
-        uint256 expectedConvertedAmount = (amountOne_ * 1e18) /
+        uint256 expectedConvertedAmount = (amountOne_ * 1e9) /
             CONVERSION_PRICE +
-            (4e18 * 1e18) /
+            (4e18 * 1e9) /
             CONVERSION_PRICE;
         uint256 expectedAssets = amountOne_ + 4e18;
 
@@ -655,7 +665,12 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         positionIds_[1] = 1;
         amounts_[1] = 5e18;
 
-        uint256 expectedConvertedAmount = (RESERVE_TOKEN_AMOUNT * 1e18) / CONVERSION_PRICE;
+        // Proof:
+        // Converted amount: deposit / price (in OHM scale)
+        // Deposit amount: 10e18
+        // Conversion price: 2e18
+        // Converted amount (OHM): 10e18 * 1e9 / 2e18 = 5e9
+        uint256 expectedConvertedAmount = 5e9;
         uint256 expectedAssets = RESERVE_TOKEN_AMOUNT;
 
         // Expect event
