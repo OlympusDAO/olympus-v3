@@ -251,7 +251,7 @@ contract ConvertibleDepositAuctioneer is
                 periodMonths: params.depositPeriod,
                 depositor: msg.sender,
                 amount: depositIn,
-                conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut),
+                conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut), // Assets per OHM, deposit token scale
                 wrapPosition: params.wrapPosition,
                 wrapReceipt: params.wrapReceipt
             })
