@@ -324,7 +324,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // Validate that the position is wrapped/minted
         if (!position.wrapped) revert DEPOS_NotWrapped(tokenId_);
 
-        // Additional validation performed in super.transferForm():
+        // Additional validation performed in super.transferFrom():
         // - Approvals
         // - Ownership
         // - Destination address
