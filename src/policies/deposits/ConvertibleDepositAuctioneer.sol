@@ -716,7 +716,7 @@ contract ConvertibleDepositAuctioneer is
         }
 
         // Set the tick size
-        // This has the affect of resetting the tick size to the default
+        // This has the effect of resetting the tick size to the default
         // The tick size may have been adjusted for the previous day if the target was met
         _currentTickSize = tickSize_;
     }
