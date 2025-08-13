@@ -410,7 +410,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         // Proof:
         // Converted amount: deposit / price (in OHM scale)
         // Deposit amount: 10e6
-        // Conversion price: 2e6
+        // Conversion price: 2e6 (deposit tokens per OHM)
         // Converted amount (OHM): 10e6 * 1e9 / 2e6 = 5e9
         uint256 expectedConvertedAmount = 5e9;
         uint256 expectedAssets = 10e6;
@@ -502,7 +502,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         // Proof:
         // Converted amount: deposit / price (in OHM scale)
         // Deposit amount: 10e18
-        // Conversion price: 2e18
+        // Conversion price: 2e18 (deposit tokens per OHM)
         // Converted amount (OHM): 10e18 * 1e9 / 2e18 = 5e9
         uint256 expectedConvertedAmount = 5e9;
         uint256 expectedAssets = RESERVE_TOKEN_AMOUNT;
@@ -668,7 +668,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         // Proof:
         // Converted amount: deposit / price (in OHM scale)
         // Deposit amount: 10e18
-        // Conversion price: 2e18
+        // Conversion price: 2e18 (deposit tokens per OHM)
         // Converted amount (OHM): 10e18 * 1e9 / 2e18 = 5e9
         uint256 expectedConvertedAmount = 5e9;
         uint256 expectedAssets = RESERVE_TOKEN_AMOUNT;
