@@ -26,6 +26,8 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     /// @dev    If set, tokenURI() will delegate to this contract. If not set, tokenURI() returns an empty string.
     address internal _tokenRenderer;
 
+    uint256 internal constant _OHM_SCALE = 1e9;
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(
@@ -402,7 +404,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // amount_ and conversionPrice_ are in the same decimals and cancel each other out
         // The output needs to be in OHM, so we multiply by 1e9
         // This also deliberately rounds down
-        return (amount_ * 1e9) / conversionPrice_;
+        return (amount_ * _OHM_SCALE) / conversionPrice_;
     }
 
     /// @inheritdoc IDepositPositionManager
