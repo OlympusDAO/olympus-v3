@@ -5,6 +5,7 @@ import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionVaultTest {
     event LoanCreated(
@@ -193,5 +194,83 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         // Assert that the available deposits are correct
         // Only the deposit amount for which redemption has not started
         _assertAvailableDeposits(_previousDepositActualAmount);
+    }
+
+    function test_givenCommitmentAmountFuzz(
+        uint256 commitmentAmount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipientTwo,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+        uint256 expectedLoanAmount = (90e2 * commitmentAmount_) / 100e2;
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Expect event
+        // 3rd arg is not tracked as it cannot always be predicted
+        vm.expectEmit(true, true, true, false);
+        emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
+
+        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz");
+
+        // Call function
+        vm.prank(recipient);
+        uint256 actualLoanAmount = redemptionVault.borrowAgainstRedemption(0);
+
+        vm.stopSnapshotGas();
+
+        // Calculations
+        uint256 expectedInterest = FullMath.mulDivUp(
+            actualLoanAmount,
+            10e2 * PERIOD_MONTHS,
+            100e2 * 12
+        ); // Post-borrow as we need the actual loan amount
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // Assert actual loan amount is as expected
+        assertApproxEqAbs(
+            actualLoanAmount,
+            expectedLoanAmount,
+            5,
+            "actual loan amount is unexpected"
+        );
+
+        // Assert loan record
+        _assertLoan(
+            recipient,
+            0,
+            actualLoanAmount,
+            actualLoanAmount,
+            expectedInterest,
+            false,
+            expectedDueDate
+        );
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(recipient, actualLoanAmount, 0, 0);
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            actualLoanAmount,
+            "getBorrowedAmount"
+        );
     }
 }

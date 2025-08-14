@@ -486,6 +486,27 @@ contract DepositRedemptionVaultTest is Test {
         uint8 depositPeriod_,
         uint256 amount_
     ) internal {
+        // Approve spending of the receipt token
+        vm.startPrank(user_);
+        depositManager.approve(
+            address(redemptionVault),
+            depositManager.getReceiptTokenId(asset_, depositPeriod_),
+            amount_
+        );
+        vm.stopPrank();
+
+        // Start redemption
+        vm.startPrank(user_);
+        redemptionVault.startRedemption(asset_, depositPeriod_, amount_, address(cdFacility));
+        vm.stopPrank();
+    }
+
+    function _depositAndStartRedemption(
+        address user_,
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) internal {
         // Mint reserve tokens to the user
         MockERC20(address(asset_)).mint(user_, amount_);
 
@@ -503,19 +524,7 @@ contract DepositRedemptionVaultTest is Test {
             false
         );
 
-        // Approve spending of the receipt token
-        vm.startPrank(user_);
-        depositManager.approve(
-            address(redemptionVault),
-            depositManager.getReceiptTokenId(asset_, depositPeriod_),
-            amount_
-        );
-        vm.stopPrank();
-
-        // Start redemption
-        vm.startPrank(user_);
-        redemptionVault.startRedemption(asset_, depositPeriod_, amount_, address(cdFacility));
-        vm.stopPrank();
+        _startRedemption(user_, asset_, depositPeriod_, _previousDepositActualAmount);
     }
 
     modifier givenCommitted(
@@ -524,12 +533,12 @@ contract DepositRedemptionVaultTest is Test {
         uint8 depositPeriod_,
         uint256 amount_
     ) {
-        _startRedemption(user_, asset_, depositPeriod_, amount_);
+        _depositAndStartRedemption(user_, asset_, depositPeriod_, amount_);
         _;
     }
 
     modifier givenCommittedDefault(uint256 amount_) {
-        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, amount_);
+        _depositAndStartRedemption(recipient, iReserveToken, PERIOD_MONTHS, amount_);
         _;
     }
 
