@@ -334,6 +334,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         reserveToken.approve(address(redemptionVault), repaymentAmount);
 
         // Call function
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit LoanRepaid(recipient, 0, loan.principal, loan.interest);
+
+        // Call function
         vm.prank(recipient);
         redemptionVault.repayLoan(0, repaymentAmount);
 
