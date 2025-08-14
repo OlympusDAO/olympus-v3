@@ -759,9 +759,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         }
 
         // Reduce redemption amount by the burned and retained collateral
-        // The calculated amount is used, so that the redemption is wiped out completely,
-        // regardless of what was transferred back. Otherwise the redemption/loan will be left
-        // in a strange state.
+        // Use the calculated amount (retainedCollateral + previousPrincipal) to adjust redemption.
+        // This leaves redemption.amount equal to (initialPrincipal - previousPrincipal), i.e.,
+        // any principal already repaid remains redeemable by the borrower. Using calculated amounts
+        // avoids inconsistencies from ERC4626 rounding in actual transfers.
         redemption.amount -= retainedCollateral + previousPrincipal;
 
         // Distribute residual value (keeper reward + treasury)
