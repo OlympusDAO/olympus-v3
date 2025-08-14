@@ -781,7 +781,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         IERC20 asset_,
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        if (percent_ > 100e2) revert RedemptionVault_OutOfBounds(percent_);
+        if (percent_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(percent_);
 
         _assetMaxBorrowPercentages[address(asset_)] = percent_;
 
@@ -798,7 +798,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         IERC20 asset_,
         uint16 rate_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        if (rate_ > 100e2) revert RedemptionVault_OutOfBounds(rate_);
+        if (rate_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(rate_);
 
         _assetAnnualInterestRates[address(asset_)] = rate_;
 
@@ -814,7 +814,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     function setClaimDefaultRewardPercentage(
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        if (percent_ > 100e2) revert RedemptionVault_OutOfBounds(percent_);
+        if (percent_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(percent_);
 
         _claimDefaultRewardPercentage = percent_;
 
