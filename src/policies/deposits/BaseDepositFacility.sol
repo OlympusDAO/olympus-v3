@@ -224,7 +224,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         );
 
         // Reduce committed deposits by the amount borrowed
-        // This is done prior to any external contract calls to mitigate re-entrancy
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
         ] -= actualAmount;
