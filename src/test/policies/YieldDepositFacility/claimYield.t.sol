@@ -9,7 +9,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
-    event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
+    event ClaimedYield(address indexed asset, address indexed depositor, uint256 yield);
 
     uint256 internal constant DEPOSIT_AMOUNT = 9e18;
     uint256 internal constant POSITION_ID = 0;
@@ -213,7 +213,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Claim yield
         vm.prank(recipient);
@@ -295,7 +295,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Harvest yield
         vm.prank(recipient);
@@ -361,7 +361,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Claim yield
         vm.prank(recipient);
@@ -425,7 +425,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Start gas snapshot
         vm.startSnapshotGas("claimYield");
@@ -471,7 +471,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, 0);
+        emit ClaimedYield(address(reserveToken), recipient, 0);
 
         // Claim yield
         vm.prank(recipient);
@@ -567,7 +567,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveTokenTwo), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveTokenTwo), recipient, expectedYield - expectedFee);
 
         // Claim yield
         vm.prank(recipient);
@@ -700,7 +700,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Claim yield
         vm.prank(recipient);
@@ -777,7 +777,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, expectedYield - expectedFee);
+        emit ClaimedYield(address(reserveToken), recipient, expectedYield - expectedFee);
 
         // Claim yield
         vm.prank(recipient);
@@ -823,7 +823,7 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Second claim in the same block should return 0 yield
         vm.expectEmit(true, true, true, true);
-        emit YieldClaimed(address(reserveToken), recipient, 0);
+        emit ClaimedYield(address(reserveToken), recipient, 0);
 
         vm.prank(recipient);
         yieldDepositFacility.claimYield(positionIds);

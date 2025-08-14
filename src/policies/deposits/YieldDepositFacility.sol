@@ -398,7 +398,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         }
 
         // Emit event
-        emit YieldClaimed(address(asset), msg.sender, actualYieldMinusFee);
+        emit ClaimedYield(address(asset), msg.sender, actualYieldMinusFee);
 
         return actualYieldMinusFee;
     }
