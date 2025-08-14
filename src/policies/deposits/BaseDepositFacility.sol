@@ -43,7 +43,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @notice The amount of assets committed, excluding the assets that have been lent out
     mapping(IERC20 asset => uint256 committedDeposits) private _assetCommittedDeposits;
 
-    /// @notice The amount of assets committed per operator
+    /// @notice The amount of assets committed per operator, excluding the assets that have been lent out
     mapping(bytes32 assetOperatorKey => uint256 committedDeposits)
         private _assetOperatorCommittedDeposits;
 
@@ -179,6 +179,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
 
         // Reduce the commitment
+        // This is done prior to any external contract calls to mitigate re-entrancy
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
         ] -= amount_;
@@ -203,12 +204,28 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The amount is greater than the committed deposits for the operator
     function handleBorrow(
         IERC20 depositToken_,
         uint8,
         uint256 amount_,
         address recipient_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
+        // Validate that there are enough committed funds for the operator
+        uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
+        if (amount_ > operatorCommitments)
+            revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
+
+        // Reduce committed deposits by the amount borrowed
+        // This is done prior to any external contract calls to mitigate re-entrancy
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
         // Process the borrowing through DepositManager
         // It will revert if more is being borrowed than available
         uint256 actualAmount = DEPOSIT_MANAGER.borrowingWithdraw(
@@ -219,20 +236,25 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             })
         );
 
-        // Reduce committed deposits by the amount borrowed
-        _assetCommittedDeposits[depositToken_] -= amount_;
-
         return actualAmount;
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function performs the following:
+    ///             - Updates the committed deposits
+    ///
+    ///             This function will revert if:
     function handleLoanRepay(
         IERC20 depositToken_,
         uint8,
         uint256 amount_,
         address payer_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
-        // Repayment increases the committed deposits
+        // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
+        // This is done prior to any external contract calls to mitigate re-entrancy
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] += amount_;
         _assetCommittedDeposits[depositToken_] += amount_;
 
         // Process the repayment through DepositManager
@@ -255,6 +277,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         address payer_
     ) external onlyEnabled onlyAuthorizedOperator {
         // Default has no impact on the committed deposits
+        // The amount has already been lent out,
+        // and committed deposits have been decreased accordingly
 
         // Process the default through DepositManager
         // It will revert if more is being defaulted than borrowed
@@ -287,6 +311,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        The amount is calculated as:
+    ///             - The amount of deposits that have been committed (via `handleCommit()`) for the deposit token and operator
+    ///             - Minus: the amount of loan principal currently outstanding for the operator
     function getCommittedDeposits(
         IERC20 depositToken_,
         address operator_
@@ -295,6 +322,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        The amount returned is calculated as:
+    ///             - The amount of deposits that have been committed (via `handleCommit()`) for the deposit token
+    ///             - Minus: the amount of loan principal currently outstanding
     function getCommittedDeposits(IERC20 depositToken_) public view returns (uint256) {
         return _assetCommittedDeposits[depositToken_];
     }
