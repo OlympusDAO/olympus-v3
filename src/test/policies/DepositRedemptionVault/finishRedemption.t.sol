@@ -58,7 +58,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         assertApproxEqAbs(
             depositToken_.balanceOf(user_),
             alreadyRedeemedAmount_ + amount_,
-            1,
+            3,
             "user: deposit token balance mismatch"
         );
         assertEq(
@@ -691,5 +691,62 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
+    }
+
+    function test_givenCommitmentAmountFuzz(
+        uint256 commitmentAmount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipientTwo,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            commitmentAmount_
+        );
+
+        // Start gas snapshot
+        vm.startSnapshotGas("redeem");
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
+
+        // Stop gas snapshot
+        console2.log("Gas used", vm.stopSnapshotGas());
+
+        // Assertions
+        uint256 expectedRemainingReceiptTokens = _previousDepositActualAmount - commitmentAmount_;
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            commitmentAmount_,
+            0,
+            0,
+            expectedRemainingReceiptTokens
+        );
     }
 }
