@@ -118,6 +118,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8 depositPeriod_,
         uint256 amount_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
+        // Validate that the amount is not zero
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
         // Validate that the deposit token and period are supported
         if (
             !DEPOSIT_MANAGER
@@ -151,6 +154,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8,
         uint256 amount_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
+        // Validate that the amount is not zero
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
         // Validate that there are enough committed funds
         uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
         if (amount_ > operatorCommitments)
@@ -189,6 +195,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 isWrapped: false
             })
         );
+
+        // Validate that the amount is not zero
+        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
 
         // Reduce the commitment
         // The input amount is used here, in order to avoid having residual values
@@ -230,6 +239,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             })
         );
 
+        // Validate that the amount is not zero
+        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
+
         // Reduce committed deposits by the amount borrowed
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
@@ -260,6 +272,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             })
         );
 
+        // Validate that the amount is not zero
+        if (repaymentActual == 0) revert DepositFacility_ZeroAmount();
+
         // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
@@ -276,6 +291,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_,
         address payer_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
+        // Validate that the amount is not zero
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
         // Default has no impact on the committed deposits
         // The amount has already been lent out,
         // and committed deposits have been decreased accordingly
