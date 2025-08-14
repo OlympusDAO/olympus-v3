@@ -191,10 +191,12 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         );
 
         // Reduce the commitment
+        // The input amount is used here, in order to avoid having residual values
+        // (which the calling operator has no control over)
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] -= actualAmount;
-        _assetCommittedDeposits[depositToken_] -= actualAmount;
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
 
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
