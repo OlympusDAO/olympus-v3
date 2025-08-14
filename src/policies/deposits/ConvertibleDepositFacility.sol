@@ -322,6 +322,11 @@ contract ConvertibleDepositFacility is
         }
 
         // Withdraw the underlying asset and deposit into the treasury
+        // The actual amount withdrawn may differ from `receiptTokenIn` by a few wei,
+        // but will not materially affect the amount of OHM that is minted when converting.
+        // Additionally, given that the amount is composed of multiple positions
+        // (each with potentially different conversion prices), it is not trivial to
+        // re-calculate `convertedTokenOut` with the actual amount.
         DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
                 asset: IERC20(asset),
