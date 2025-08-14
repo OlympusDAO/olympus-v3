@@ -37,6 +37,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @notice The number of months in a year
     uint8 internal constant _MONTHS_IN_YEAR = 12;
 
+    /// @notice Constant for one month
+    uint48 internal constant _ONE_MONTH = 30 days;
+
     // ========== CONFIGURABLE PARAMETERS ========== //
 
     /// @notice Per-asset max borrow percentage (in 100e2, e.g. 8500 = 85%)
@@ -231,7 +234,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _userRedemptions[_getUserRedemptionKey(msg.sender, redemptionId)] = UserRedemption({
             depositToken: address(depositToken_),
             depositPeriod: depositPeriod_,
-            redeemableAt: uint48(block.timestamp + uint48(depositPeriod_) * 30 days),
+            redeemableAt: uint48(block.timestamp) + uint48(depositPeriod_) * _ONE_MONTH,
             amount: amount_,
             facility: facility_
         });
@@ -407,7 +410,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         );
 
         // Due date: now + deposit period
-        uint48 dueDate = uint48(block.timestamp) + uint48(redemption.depositPeriod) * 30 days;
+        uint48 dueDate = uint48(block.timestamp) + uint48(redemption.depositPeriod) * _ONE_MONTH;
 
         return (principal, interest, dueDate);
     }
@@ -588,7 +591,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         uint256 interestPayable = _calculateInterest(principal_, interestRate, extensionMonths_);
 
-        uint48 newDueDate = dueDate_ + uint48(extensionMonths_) * uint48(30 days);
+        uint48 newDueDate = dueDate_ + uint48(extensionMonths_) * _ONE_MONTH;
 
         return (newDueDate, interestPayable);
     }
