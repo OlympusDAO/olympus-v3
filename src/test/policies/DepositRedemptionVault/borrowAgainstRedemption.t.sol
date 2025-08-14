@@ -272,5 +272,12 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
             actualLoanAmount,
             "getBorrowedAmount"
         );
+
+        // Assert committed funds have been reduced
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_ - actualLoanAmount,
+            "committed deposits"
+        );
     }
 }

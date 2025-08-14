@@ -222,6 +222,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             principalAmount_,
             "redemption amount mismatch"
         );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            principalAmount_,
+            "committed deposits"
+        );
     }
 
     // given there is no retained collateral
@@ -285,6 +299,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             0,
             "redemption amount mismatch"
         );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
+        );
     }
 
     // given the keeper reward percentage is 0
@@ -345,6 +373,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             redemptionVault.getUserRedemption(recipient, 0).amount,
             0,
             "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
         );
     }
 
@@ -408,6 +450,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             redemptionVault.getUserRedemption(recipient, 0).amount,
             0,
             "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
         );
     }
 
@@ -497,6 +553,13 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
             0,
             "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
         );
     }
 }
