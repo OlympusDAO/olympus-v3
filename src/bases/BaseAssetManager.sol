@@ -9,7 +9,6 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
 
 /// @title  BaseAssetManager
 /// @notice This is a base contract for managing asset deposits and withdrawals. It is designed to be inherited by another contract.
@@ -17,7 +16,6 @@ import {FullMath} from "src/libraries/FullMath.sol";
 ///         Future versions of the contract could add support for more complex strategies and/or strategy migration, while addressing the concern of funds theft.
 abstract contract BaseAssetManager is IAssetManager {
     using TransferHelper for ERC20;
-    using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
 
