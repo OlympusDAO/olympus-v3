@@ -339,7 +339,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Assertions
         // Assert loan
-        _assertLoan(recipient, 0, loan.principal, 0, 0, false, loan.dueDate);
+        _assertLoan(recipient, 0, loan.initialPrincipal, 0, 0, false, loan.dueDate);
 
         // Assert deposit token balances
         _assertDepositTokenBalances(
