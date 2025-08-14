@@ -117,7 +117,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_
-    ) external onlyEnabled onlyAuthorizedOperator {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
         // Validate that the deposit token and period are supported
         if (
             !DEPOSIT_MANAGER
@@ -150,7 +150,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         IERC20 depositToken_,
         uint8,
         uint256 amount_
-    ) external onlyEnabled onlyAuthorizedOperator {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
         // Validate that there are enough committed funds
         uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
         if (amount_ > operatorCommitments)
@@ -172,7 +172,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8 depositPeriod_,
         uint256 amount_,
         address recipient_
-    ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Validate that there are enough committed funds
         uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
         if (amount_ > operatorCommitments)
@@ -214,7 +214,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8,
         uint256 amount_,
         address recipient_
-    ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Validate that there are enough committed funds for the operator
         uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
         if (amount_ > operatorCommitments)
@@ -249,7 +249,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8,
         uint256 amount_,
         address payer_
-    ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the repayment through DepositManager
         // It will revert if more is being repaid than borrowed
         uint256 repaymentActual = DEPOSIT_MANAGER.borrowingRepay(
@@ -275,7 +275,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8 depositPeriod_,
         uint256 amount_,
         address payer_
-    ) external onlyEnabled onlyAuthorizedOperator {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
         // Default has no impact on the committed deposits
         // The amount has already been lent out,
         // and committed deposits have been decreased accordingly
