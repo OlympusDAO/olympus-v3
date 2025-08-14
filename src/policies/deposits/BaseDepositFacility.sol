@@ -178,13 +178,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         if (amount_ > operatorCommitments)
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
 
-        // Reduce the commitment
-        // This is done prior to any external contract calls to mitigate re-entrancy
-        _assetOperatorCommittedDeposits[
-            _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] -= amount_;
-        _assetCommittedDeposits[depositToken_] -= amount_;
-
         // Process the withdrawal through DepositManager
         uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
@@ -196,6 +189,12 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 isWrapped: false
             })
         );
+
+        // Reduce the commitment
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= actualAmount;
+        _assetCommittedDeposits[depositToken_] -= actualAmount;
 
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
@@ -219,13 +218,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         if (amount_ > operatorCommitments)
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
 
-        // Reduce committed deposits by the amount borrowed
-        // This is done prior to any external contract calls to mitigate re-entrancy
-        _assetOperatorCommittedDeposits[
-            _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] -= amount_;
-        _assetCommittedDeposits[depositToken_] -= amount_;
-
         // Process the borrowing through DepositManager
         // It will revert if more is being borrowed than available
         uint256 actualAmount = DEPOSIT_MANAGER.borrowingWithdraw(
@@ -235,6 +227,13 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 amount: amount_
             })
         );
+
+        // Reduce committed deposits by the amount borrowed
+        // This is done prior to any external contract calls to mitigate re-entrancy
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= actualAmount;
+        _assetCommittedDeposits[depositToken_] -= actualAmount;
 
         return actualAmount;
     }
@@ -250,23 +249,23 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 amount_,
         address payer_
     ) external onlyEnabled onlyAuthorizedOperator returns (uint256) {
-        // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
-        // This is done prior to any external contract calls to mitigate re-entrancy
-        _assetOperatorCommittedDeposits[
-            _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] += amount_;
-        _assetCommittedDeposits[depositToken_] += amount_;
-
         // Process the repayment through DepositManager
         // It will revert if more is being repaid than borrowed
-        return
-            DEPOSIT_MANAGER.borrowingRepay(
-                IDepositManager.BorrowingRepayParams({
-                    asset: depositToken_,
-                    payer: payer_,
-                    amount: amount_
-                })
-            );
+        uint256 repaymentActual = DEPOSIT_MANAGER.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: depositToken_,
+                payer: payer_,
+                amount: amount_
+            })
+        );
+
+        // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] += repaymentActual;
+        _assetCommittedDeposits[depositToken_] += repaymentActual;
+
+        return repaymentActual;
     }
 
     /// @inheritdoc IDepositFacility
