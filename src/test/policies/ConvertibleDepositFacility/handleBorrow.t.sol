@@ -55,15 +55,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
         amount_ = bound(amount_, previousDepositActual + 1, type(uint256).max);
 
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositManager.DepositManager_BorrowingLimitExceeded.selector,
-                address(iReserveToken),
-                address(facility),
-                amount_,
-                previousDepositActual
-            )
-        );
+        _expectRevertInsufficientCommitments(OPERATOR, amount_, previousDepositActual);
 
         // Call function
         vm.prank(OPERATOR);

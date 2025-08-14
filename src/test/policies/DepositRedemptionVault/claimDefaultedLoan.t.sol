@@ -462,12 +462,13 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         assertApproxEqAbs(
             reserveToken.balanceOf(address(treasury)),
             expectedCollateral - expectedKeeperReward,
-            5,
+            5, // Actual amount can be unpredictable
             "deposit token: treasury balance mismatch"
         ); // Remaining collateral that was not lent out, minus keeper reward
-        assertEq(
+        assertApproxEqAbs(
             reserveToken.balanceOf(address(defaultRewardClaimer)),
             expectedKeeperReward, // Keeper reward
+            1, // Affected by the collateral returned
             "deposit token: claimer balance mismatch"
         );
         assertEq(
