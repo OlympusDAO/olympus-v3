@@ -179,6 +179,14 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         if (amount_ > operatorCommitments)
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
 
+        // Reduce the commitment
+        // The input amount is used here, in order to avoid having residual values
+        // (which the calling operator has no control over)
+        _assetOperatorCommittedDeposits[
+            _getCommittedDepositsKey(depositToken_, msg.sender)
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
         // Process the withdrawal through DepositManager
         uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
@@ -193,14 +201,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
         // Validate that the amount is not zero
         if (actualAmount == 0) revert DepositFacility_ZeroAmount();
-
-        // Reduce the commitment
-        // The input amount is used here, in order to avoid having residual values
-        // (which the calling operator has no control over)
-        _assetOperatorCommittedDeposits[
-            _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] -= amount_;
-        _assetCommittedDeposits[depositToken_] -= amount_;
 
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
