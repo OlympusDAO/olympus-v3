@@ -586,10 +586,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint16 interestRate = _assetAnnualInterestRates[asset_];
         if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(asset_);
 
-        uint256 interestPayable = principal_.mulDivUp(
-            uint256(interestRate) * uint256(extensionMonths_),
-            uint256(12) * uint256(ONE_HUNDRED_PERCENT)
-        );
+        uint256 interestPayable = _calculateInterest(principal_, interestRate, extensionMonths_);
 
         uint48 newDueDate = dueDate_ + uint48(extensionMonths_) * uint48(30 days);
 
