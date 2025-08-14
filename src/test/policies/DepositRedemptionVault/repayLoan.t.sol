@@ -248,6 +248,20 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            loan.initialPrincipal,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been increased
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - loan.initialPrincipal,
+            "committed deposits"
+        );
     }
 
     // when the amount is greater than the interest owed
@@ -297,6 +311,20 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            loan.initialPrincipal - principalAmount_,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been increased
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - (loan.initialPrincipal - principalAmount_),
+            "committed deposits"
+        );
     }
 
     function test_givenCommitmentAmountFuzz_repayInFull(
@@ -366,6 +394,13 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
             0,
             "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_,
+            "committed deposits"
         );
     }
 }

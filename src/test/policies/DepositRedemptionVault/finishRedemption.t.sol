@@ -618,6 +618,13 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
+
+        // Assert that there are no remaining committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits should be 0"
+        );
     }
 
     function test_success_fuzz(
@@ -651,6 +658,13 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
+
+        // Assert that there are no remaining committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits should be 0"
+        );
     }
 
     function test_givenCommitmentAmountFuzz(
@@ -707,6 +721,13 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             0,
             expectedRemainingReceiptTokens
+        );
+
+        // Assert that there are no remaining committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits should be 0"
         );
     }
 }

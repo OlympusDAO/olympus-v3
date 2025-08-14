@@ -467,6 +467,13 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(amount_);
+
+        // Assert committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - amount_,
+            "committed deposits"
+        );
     }
 
     function test_givenOtherDeposits(
