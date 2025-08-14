@@ -353,24 +353,24 @@ contract ConvertibleDepositFacility is
     }
 
     /// @inheritdoc IConvertibleDepositFacility
-    function claimYield(IERC20 asset_) public returns (uint256 yieldAssets) {
+    function claimYield(IERC20 asset_) public returns (uint256) {
         // If disabled, don't do anything
         if (!isEnabled) return 0;
 
         // Determine the yield
-        yieldAssets = previewClaimYield(asset_);
+        uint256 previewedYield = previewClaimYield(asset_);
 
         // Skip if there is no yield to claim
-        if (yieldAssets == 0) return 0;
+        if (previewedYield == 0) return 0;
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
-        DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), yieldAssets);
+        uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), previewedYield);
 
         // Emit the event
-        emit ClaimedYield(address(asset_), yieldAssets);
+        emit ClaimedYield(address(asset_), actualYield);
 
-        return yieldAssets;
+        return actualYield;
     }
 
     /// @inheritdoc IConvertibleDepositFacility
