@@ -350,7 +350,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         );
 
         // Assert receipt token balances
-        _assertReceiptTokenBalances(recipient, _previousDepositActualAmount - commitmentAmount_, commitmentAmount_);
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
 
         // Assert borrowed amount on DepositManager
         assertEq(

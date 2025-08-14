@@ -451,18 +451,38 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         redemptionVault.claimDefaultedLoan(recipient, 0);
 
         // Assert that the loan is cleared
-        _assertLoan(recipient, 0, 0, 0, true, loanBefore.dueDate);
+        _assertLoan(recipient, 0, loanBefore.principal, 0, 0, true, loanBefore.dueDate);
 
         // Assert deposit token balances
-        _assertDepositTokenBalances(
-            recipient,
+        assertEq(
+            reserveToken.balanceOf(recipient),
             loanBefore.principal, // No change
-            expectedCollateral - expectedKeeperReward, // Remaining collateral that was not lent out, minus keeper reward
-            expectedKeeperReward // Keeper reward
+            "deposit token: user balance mismatch"
+        );
+        assertApproxEqAbs(
+            reserveToken.balanceOf(address(treasury)),
+            expectedCollateral - expectedKeeperReward,
+            5,
+            "deposit token: treasury balance mismatch"
+        ); // Remaining collateral that was not lent out, minus keeper reward
+        assertEq(
+            reserveToken.balanceOf(address(defaultRewardClaimer)),
+            expectedKeeperReward, // Keeper reward
+            "deposit token: claimer balance mismatch"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(redemptionVault)),
+            0,
+            "deposit token: redemption vault balance mismatch"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(cdFacility)),
+            0,
+            "deposit token: cd facility balance mismatch"
         );
 
         // Assert receipt token balances
-        _assertReceiptTokenBalances(recipient, _previousDepositActualAmount, 0);
+        _assertReceiptTokenBalances(recipient, _previousDepositActualAmount - commitmentAmount_, 0);
 
         // Assert the redemption amount
         assertEq(
