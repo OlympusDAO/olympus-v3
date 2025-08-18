@@ -196,7 +196,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),
-            getMinPriceFor(PRICE.getCurrentPrice())
+            getMinPriceFor(_getCurrentPrice())
         );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
@@ -567,10 +567,23 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice get CD auction minimum price for given current price
+    /// @dev    This does not adjust the decimal scale between PRICE and the reserve asset
+    ///
     /// @param  price of OHM on market according to PRICE module
     /// @return minPrice for CD auction
     function getMinPriceFor(uint256 price) public view returns (uint256) {
         return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
+    }
+
+    /// @notice Returns the current price from the PRICE module
+    ///
+    /// @return currentPrice with decimal scale of the reserve asset
+    function _getCurrentPrice() internal view returns (uint256) {
+        // Get from PRICE
+        uint256 currentPrice = PRICE.getCurrentPrice();
+
+        // Change the decimal scale to be the reserve asset's
+        return (currentPrice * 10 ** _reserveDecimals) / 10 ** _oracleDecimals;
     }
 
     // ========== ERC165 ========== //
