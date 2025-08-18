@@ -13,7 +13,7 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     // when the caller does not have the "admin" or "manager" role
     //  [X] it reverts
 
-    function test_callerDoesNotHaveAdminOrManagerRole_reverts(address caller_) public {
+    function test_callerDoesNotHaveAdminOrManagerRole_reverts(address caller_) public givenEnabled {
         // Ensure caller is not admin or manager
         vm.assume(caller_ != admin && caller_ != manager);
 
@@ -26,24 +26,21 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     }
 
     // given the contract is not enabled
-    //  [X] it succeeds
+    //  [X] it reverts
 
-    function test_givenContractNotEnabled() public {
+    function test_givenContractNotEnabled_reverts() public {
+        // Expect revert
+        _expectNotEnabledRevert();
+
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
-
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS, 0);
-
-        // Check the tick is populated
-        _assertPreviousTick(0, 0, 0, uint48(block.timestamp));
     }
 
     // when the deposit period is zero
     //  [X] it reverts
 
-    function test_whenDepositPeriodIsZero_reverts() public {
+    function test_whenDepositPeriodIsZero_reverts() public givenEnabled {
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(

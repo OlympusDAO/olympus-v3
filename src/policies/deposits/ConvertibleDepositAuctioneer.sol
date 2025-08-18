@@ -530,9 +530,12 @@ contract ConvertibleDepositAuctioneer is
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        This function will revert if:
+    ///             - The contract is not enabled
     ///             - The caller is not a manager or admin
     ///             - The deposit period is already enabled for this asset
-    function enableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
+    function enableDepositPeriod(
+        uint8 depositPeriod_
+    ) external override onlyEnabled onlyManagerOrAdminRole {
         // Validate that the deposit period is not 0
         if (depositPeriod_ == 0)
             revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
@@ -568,7 +571,13 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function disableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
+    /// @dev        This function will revert if:
+    ///             - The contract is not enabled
+    ///             - The caller is not a manager or admin
+    ///             - The deposit period is not enabled for this asset
+    function disableDepositPeriod(
+        uint8 depositPeriod_
+    ) external override onlyEnabled onlyManagerOrAdminRole {
         // Validate that the deposit period is enabled
         if (!_depositPeriodsEnabled[depositPeriod_]) {
             revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
