@@ -66,13 +66,20 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     IConvertibleDepositAuctioneer public cdAuctioneer;
 
     // Manager variables
+
+    /// @notice The base emission rate, in OHM scale.
+    /// @dev    e.g. 2e5 = 0.02%
     uint256 public baseEmissionRate;
     uint256 public minimumPremium;
     uint48 public vestingPeriod; // initialized at 0
     uint256 public backing;
     uint8 public beatCounter;
     uint256 public activeMarketId;
+
+    /// @notice The multiplier applied to the tick size, in terms of ONE_HUNDRED_PERCENT
     uint256 public tickSizeScalar;
+
+    /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
     uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
