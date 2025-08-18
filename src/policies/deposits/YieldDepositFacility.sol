@@ -394,11 +394,11 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
                 yieldMinusFee + yieldFee
             );
             // Transfer the yield fee to the treasury
-            if (yieldFee > 0) IERC20(asset).safeTransfer(address(TRSRY), yieldFee);
+            if (yieldFee > 0) ERC20(address(asset)).safeTransfer(address(TRSRY), yieldFee);
             // Transfer the yield (minus fee) to the caller
             // This uses the actual amount, since that may differ from what was calculated earlier
             actualYieldMinusFee = actualAmount - yieldFee;
-            IERC20(asset).safeTransfer(msg.sender, actualYieldMinusFee);
+            ERC20(address(asset)).safeTransfer(msg.sender, actualYieldMinusFee);
         }
 
         // Emit event
