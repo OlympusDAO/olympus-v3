@@ -35,7 +35,7 @@ interface IEmissionManager {
     /// @notice Emitted when the bond contracts are set
     event BondContractsSet(address auctioneer, address teller);
 
-    /// @notice Emitted when the CD auctionner contract are set
+    /// @notice Emitted when the CD auctionner contract is set
     event ConvertibleDepositAuctioneerSet(address auctioneer);
 
     /// @notice Emitted when the tick size scalar is changed
