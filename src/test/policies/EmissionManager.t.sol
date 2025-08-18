@@ -757,6 +757,95 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
     }
 
+    function test_execute_givenDifferentReserveDecimals() public givenPremiumBelowMinimum {
+        // Create a reserve asset with different decimal scale
+        reserve = new MockERC20("newReserve", "NR", 6);
+        sReserve = new MockERC4626(reserve, "sNewReserve", "sNR");
+
+        // Set up a new CDAuctioneer
+        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
+
+        // Set up an EmissionManager with a different deposit asset
+        emissionManager = new EmissionManager(
+            kernel,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            address(sReserve),
+            address(bondAuctioneer),
+            address(cdAuctioneer),
+            address(teller)
+        );
+
+        // Initialise system
+        {
+            kernel.executeAction(Actions.ActivatePolicy, address(emissionManager));
+            kernel.executeAction(Actions.ActivatePolicy, address(cdAuctioneer));
+        }
+
+        // Configure price
+        {
+            // 22377897966596497241 = 22.37 reserve/OHM
+            PRICE.setCurrentPrice(22377897966596497241);
+        }
+
+        // Enable the emissions manager
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                baseEmissionRate,
+                minimumPremium,
+                backing,
+                tickSizeScalar,
+                minPriceScalar,
+                restartTimeframe
+            )
+        );
+
+        // Beat counter is 2
+        {
+            // Execute twice to get beat counter to 2
+            vm.startPrank(heart);
+            emissionManager.execute();
+            emissionManager.execute();
+            vm.stopPrank();
+
+            // Warp to the next day
+            vm.warp(block.timestamp + 86400);
+        }
+
+        // Check that the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            // Adjusted to the decimals of the deposit/reserve asset
+            // price = 22377897966596497241 (18 dp)
+            // price (adjusted) = 22377897 (6 dp)
+            // minPrice = price * minPriceScalar/1e18
+            // minPrice = 22377897
+
+            assertEq(cdAuctioneer.minPrice(), 22377897, "Min price");
+        }
+    }
+
     function test_execute_whenNextBeatIsZero_whenPremiumEqualMinimum_whenNoAdjustment()
         public
         givenNextBeatIsZero
