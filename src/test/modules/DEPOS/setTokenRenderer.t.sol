@@ -19,7 +19,7 @@ contract SetTokenRendererDEPOSTest is DEPOSTest {
     //  [X] it reverts
 
     function test_callerNotPermissioned_reverts(address caller_) public {
-        vm.assume(caller_ != godmode);
+        vm.assume(caller_ != godmode && caller_ != godmodeTwo);
 
         vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, caller_));
 

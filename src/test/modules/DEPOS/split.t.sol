@@ -61,7 +61,7 @@ contract SplitDEPOSTest is DEPOSTest {
         )
     {
         // Bound the caller to a non-permissioned address
-        vm.assume(caller_ != godmode);
+        vm.assume(caller_ != godmode && caller_ != godmodeTwo);
 
         // Expect revert
         vm.expectRevert(abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, caller_));
