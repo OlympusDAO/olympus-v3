@@ -483,9 +483,16 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @param cdAuctioneer_ address of the cd auctioneer contract
     function setCDAuctionContract(address cdAuctioneer_) external onlyAdminRole {
         // Auction contract cannot be set to the zero address
-        if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
+        if (cdAuctioneer_ == address(0)) revert InvalidParam("zero address");
+        // Validate that the CDAuctioneer is configured for the reserve asset
+        if (
+            address(IConvertibleDepositAuctioneer(cdAuctioneer_).getDepositAsset()) !=
+            address(reserve)
+        ) revert InvalidParam("different asset");
 
         cdAuctioneer = IConvertibleDepositAuctioneer(cdAuctioneer_);
+
+        emit ConvertibleDepositAuctioneerSet(cdAuctioneer_);
     }
 
     /// @notice allow governance to set the CD tick size scalar
