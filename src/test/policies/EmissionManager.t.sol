@@ -221,15 +221,25 @@ contract EmissionManagerTest is Test {
     //       [X] it sets the restart timeframe
     //
     // [X] setBondContracts
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin role
     //       [X] when the new bondAuctioneer address is the zero address
     //          [X] it reverts
     //       [X] when the new teller address is the zero address
     //          [X] it reverts
     //       [X] it sets the bondAuctioneer address
     //       [X] it sets the teller address
+    //
+    // [X] setCDAuctionContract
+    //    [X] when the caller doesn't have the admin role
+    //       [X] it reverts
+    //    [X] when the caller has the admin role
+    //       [X] when the new CDAuctioneer address is the zero address
+    //          [X] it reverts
+    //       [X] when the new CDAuctioneer has a different deposit asset
+    //          [X] it reverts
+    //       [X] it sets the cdAuctioneer address
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -2807,6 +2817,53 @@ contract EmissionManagerTest is Test {
             "BondAuctioneer should be updated"
         );
         assertEq(emissionManager.teller(), address(1), "Bond teller should be updated");
+    }
+
+    // setCDAuctionContract tests
+
+    function test_setCDAuctionContract_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setCDAuctionContract function with the wrong caller
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.setCDAuctionContract(address(1));
+    }
+
+    function test_setCDAuctionContract_whenZero_reverts() public {
+        // Try to set cdAuctioneer to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "zero address");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setCDAuctionContract(address(0));
+    }
+
+    function test_setCDAuctionContract_differentAsset_reverts() public {
+        MockConvertibleDepositAuctioneer newCDAuctioneer = new MockConvertibleDepositAuctioneer(
+            kernel,
+            address(sReserve)
+        );
+
+        // Try to set cdAuctioneer to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "different asset");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.setCDAuctionContract(address(newCDAuctioneer));
+    }
+
+    function test_setCDAuctionContract_success() public {
+        // Set new CD Auctioneer contract
+        vm.prank(guardian);
+        emissionManager.setCDAuctionContract(address(cdAuctioneer));
+
+        // Confirm new contract
+        assertEq(
+            address(emissionManager.cdAuctioneer()),
+            address(cdAuctioneer),
+            "CDuctioneer should be updated"
+        );
     }
 
     // getSupply tests
