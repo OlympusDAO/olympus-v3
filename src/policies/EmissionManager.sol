@@ -578,11 +578,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
     }
 
-    /// @notice get CD auction minimum price for given current price
-    /// @dev    This does not adjust the decimal scale between PRICE and the reserve asset
+    /// @notice Get CD auction minimum price for a given price input
+    /// @dev    Expects `price` to already be expressed in the reserve asset's decimal scale.
+    ///         This function does not adjust/convert decimal scales.
     ///
-    /// @param  price of OHM on market according to PRICE module
-    /// @return minPrice for CD auction
+    /// @param  price Price of OHM in reserve token terms, scaled to the reserve asset's decimals
     function getMinPriceFor(uint256 price) public view returns (uint256) {
         return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
     }
