@@ -839,10 +839,10 @@ contract EmissionManagerTest is Test {
             // Adjusted to the decimals of the deposit/reserve asset
             // price = 22377897966596497241 (18 dp)
             // price (adjusted) = 22377897 (6 dp)
-            // minPrice = price * minPriceScalar/1e18
-            // minPrice = 22377897
+            // minPrice = price * 9e17/1e18
+            // minPrice = 20140107
 
-            assertEq(cdAuctioneer.minPrice(), 22377897, "Min price");
+            assertEq(cdAuctioneer.minPrice(), 20140107, "Min price");
         }
     }
 
