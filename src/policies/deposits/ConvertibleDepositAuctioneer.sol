@@ -756,7 +756,10 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
+    /// @dev        Notes:
+    ///             - Calling this function will erase the previous auction results, which in turn may affect the bond markets created to sell under-sold OHM capacity
+    ///
+    ///             This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
     ///             - The new auction tracking period is 0
     ///
