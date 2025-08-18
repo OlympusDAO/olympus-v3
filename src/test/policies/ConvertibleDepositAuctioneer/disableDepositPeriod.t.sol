@@ -9,10 +9,22 @@ import {console2} from "forge-std/console2.sol";
 contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepositAuctioneerTest {
     event DepositPeriodDisabled(address indexed depositAsset, uint8 depositPeriod);
 
+    // given the contract is not enabled
+    //  [X] it reverts
+
+    function test_givenContractNotEnabled_reverts() public {
+        // Expect revert
+        _expectNotEnabledRevert();
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
+    }
+
     // when the caller does not have the "admin" or "manager" role
     //  [X] it reverts
 
-    function test_callerDoesNotHaveAdminOrManagerRole_reverts(address caller_) public {
+    function test_callerDoesNotHaveAdminOrManagerRole_reverts(address caller_) public givenEnabled {
         // Ensure caller is not admin or manager
         vm.assume(caller_ != admin && caller_ != manager);
 
