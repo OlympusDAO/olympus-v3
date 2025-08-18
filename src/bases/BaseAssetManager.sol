@@ -33,6 +33,8 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @notice Deposit assets into the configured vault
     /// @dev    This function will pull the assets from the depositor and deposit them into the vault. If the vault is the zero address, the assets will be kept idle.
     ///
+    ///         To avoid susceptibility to ERC777 re-entrancy, this function should be called before any state changes.
+    ///
     ///         When an ERC4626 vault is configured for an asset, the amount of assets that can be withdrawn may be 1 less than what was originally deposited. To be conservative, this function returns the actual amount.
     ///
     ///         This function will revert if:

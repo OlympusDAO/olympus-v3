@@ -530,6 +530,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
+        // Pull in the deposit tokens from the caller
+        // This takes place before any state changes to avoid ERC777 re-entrancy
+        ERC20(redemption.depositToken).safeTransferFrom(msg.sender, address(this), amount_);
+
         // Update loan state
         // Partial repayment (pay interest first, then principal)
         uint256 principalRepaid;
@@ -554,9 +558,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             loan.interest = 0;
             loan.principal -= principalRepaid;
         }
-
-        // Pull in the deposit tokens from the caller
-        ERC20(redemption.depositToken).safeTransferFrom(msg.sender, address(this), amount_);
 
         // Delegate to the facility for repayment of principal
         // This will revert if there is an over-payment
@@ -664,17 +665,18 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             months_
         );
 
-        // Update due date by the number of months
-        loan.dueDate = newDueDate;
-
-        // No need to update the interest payable, as it is collected immediately
-
         // Transfer the interest from the caller to the TRSRY
+        // This takes place before any state changes to avoid ERC777 re-entrancy
         ERC20(redemption.depositToken).safeTransferFrom(
             msg.sender,
             address(TRSRY),
             interestPayable
         );
+
+        // Update due date by the number of months
+        loan.dueDate = newDueDate;
+
+        // No need to update the interest payable, as it is collected immediately
 
         emit LoanExtended(msg.sender, redemptionId_, loan.dueDate);
     }
