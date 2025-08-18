@@ -37,9 +37,6 @@ contract ConvertibleDepositFacility is
     /// @notice The MINTR module.
     MINTRv1 public MINTR;
 
-    /// @notice The DEPOS module.
-    DEPOSv1 public DEPOS;
-
     uint256 internal constant _OHM_SCALE = 1e9;
 
     // ========== SETUP ========== //
