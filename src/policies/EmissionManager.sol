@@ -113,6 +113,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (sReserve_ == address(0)) revert InvalidParam("sDAI address cannot be 0");
         if (bondAuctioneer_ == address(0))
             revert InvalidParam("Bond Auctioneer address cannot be 0");
+        if (teller_ == address(0)) revert InvalidParam("Bond Teller address cannot be 0");
         if (cdAuctioneer_ == address(0)) revert InvalidParam("CD Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
@@ -133,6 +134,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // Validate that the CDAuctioneer is configured for the reserve asset
         if (address(cdAuctioneer.getDepositAsset()) != address(reserve_))
             revert InvalidParam("CD Auctioneer not configured for reserve");
+
+        // Emit events
+        emit BondContractsSet(bondAuctioneer_, teller_);
+        emit ConvertibleDepositAuctioneerSet(cdAuctioneer_);
 
         // PolicyEnabler disables the policy by default
     }
