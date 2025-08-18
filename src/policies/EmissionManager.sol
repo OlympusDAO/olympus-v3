@@ -595,7 +595,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         uint256 currentPrice = PRICE.getCurrentPrice();
 
         // Change the decimal scale to be the reserve asset's
-        return (currentPrice * 10 ** _reserveDecimals) / 10 ** _oracleDecimals;
+        return currentPrice.mulDiv(10 ** _reserveDecimals, 10 ** _oracleDecimals);
     }
 
     // ========== ERC165 ========== //
