@@ -546,7 +546,10 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
+    /// @dev        Notes:
+    ///             - Enabling a deposit period will reset the minimum price and tick size to the standard values
+    ///
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The caller is not a manager or admin
     ///             - The deposit period is already enabled for this asset
