@@ -757,6 +757,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             iReserveToken,
             PERIOD_MONTHS,
+            cdFacilityAddress,
             commitmentAmount_,
             0,
             0,

@@ -525,7 +525,7 @@ contract DepositRedemptionVaultTest is Test {
         vm.startPrank(user_);
         depositManager.approve(
             address(redemptionVault),
-            depositManager.getReceiptTokenId(asset_, depositPeriod_),
+            depositManager.getReceiptTokenId(asset_, depositPeriod_, address(cdFacility)),
             amount_
         );
         vm.stopPrank();

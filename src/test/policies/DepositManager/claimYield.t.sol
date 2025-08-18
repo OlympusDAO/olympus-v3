@@ -331,6 +331,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(type(uint256).max)
