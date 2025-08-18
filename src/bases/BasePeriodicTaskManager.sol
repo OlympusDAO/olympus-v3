@@ -34,6 +34,9 @@ abstract contract BasePeriodicTaskManager is IPeriodicTaskManager, PolicyEnabler
         // Validate that the task is not a zero address
         if (task_ == address(0)) revert PeriodicTaskManager_ZeroAddress();
 
+        // Validate that the task is a contract
+        if (task_.code.length == 0) revert PeriodicTaskManager_NotPeriodicTask(task_);
+
         // If there is no custom selector, validate that the task implements the IPeriodicTask interface
         if (customSelector_ == bytes4(0)) {
             // Validate that the task implements the IPeriodicTask interface
