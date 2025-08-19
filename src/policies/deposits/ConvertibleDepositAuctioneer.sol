@@ -661,6 +661,10 @@ contract ConvertibleDepositAuctioneer is
         // Min price must be non-zero
         if (minPrice_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("min price");
 
+        // If the target is non-zero, the tick size must be <= target
+        if (target_ > 0 && tickSize_ > target_)
+            revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
+
         _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
 
         // Emit event
