@@ -188,7 +188,7 @@ contract ConvertibleDepositAuctioneer is
         nonReentrant
         onlyEnabled
         onlyDepositPeriodEnabled(depositPeriod_)
-        returns (uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256)
     {
         return
             _bid(
@@ -204,7 +204,7 @@ contract ConvertibleDepositAuctioneer is
 
     /// @notice Internal function to submit an auction bid on the given deposit asset and period
     /// @dev    This function expects the calling function to have already validated the contract state and deposit asset and period
-    function _bid(BidParams memory params) internal returns (uint256, uint256, uint256) {
+    function _bid(BidParams memory params) internal returns (uint256, uint256, uint256, uint256) {
         uint256 ohmOut;
         uint256 depositIn;
         {
@@ -248,17 +248,18 @@ contract ConvertibleDepositAuctioneer is
         // We round up to be conservative
 
         // Create the receipt tokens and position
-        (uint256 positionId, uint256 receiptTokenId, ) = CD_FACILITY.createPosition(
-            IConvertibleDepositFacility.CreatePositionParams({
-                asset: _DEPOSIT_ASSET,
-                periodMonths: params.depositPeriod,
-                depositor: msg.sender,
-                amount: depositIn,
-                conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut), // Assets per OHM, deposit token scale
-                wrapPosition: params.wrapPosition,
-                wrapReceipt: params.wrapReceipt
-            })
-        );
+        (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount) = CD_FACILITY
+            .createPosition(
+                IConvertibleDepositFacility.CreatePositionParams({
+                    asset: _DEPOSIT_ASSET,
+                    periodMonths: params.depositPeriod,
+                    depositor: msg.sender,
+                    amount: depositIn,
+                    conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut), // Assets per OHM, deposit token scale
+                    wrapPosition: params.wrapPosition,
+                    wrapReceipt: params.wrapReceipt
+                })
+            );
 
         // Emit event
         emit Bid(
@@ -270,7 +271,7 @@ contract ConvertibleDepositAuctioneer is
             positionId
         );
 
-        return (ohmOut, positionId, receiptTokenId);
+        return (ohmOut, positionId, receiptTokenId, actualAmount);
     }
 
     /// @notice Internal function to preview the quantity of OHM tokens that can be purchased for a given deposit amount

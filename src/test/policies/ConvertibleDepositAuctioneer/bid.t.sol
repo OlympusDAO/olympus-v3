@@ -98,6 +98,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
     }
 
+    function _assertActualAmount(
+        uint256 actualAmount_,
+        uint256 previousReceiptBalance_
+    ) internal view {
+        // Assert that the actual amount matches the increase in receipt token balance
+        uint256 currentReceiptBalance = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 receiptTokensReceived = currentReceiptBalance - previousReceiptBalance_;
+        assertEq(
+            actualAmount_,
+            receiptTokensReceived,
+            "actual amount should match receipt tokens received"
+        );
+    }
+
     // when the contract is disabled
     //  [X] it reverts
 
@@ -248,18 +262,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -272,6 +288,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -319,15 +338,17 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -340,6 +361,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -397,15 +421,17 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 1);
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -418,6 +444,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         // Not affected by the previous day's bid
@@ -470,18 +499,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 1);
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Start gas snapshot
         vm.startSnapshotGas("bid");
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Stop gas snapshot
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -498,6 +529,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         // Not affected by the previous day's bid
@@ -557,15 +591,17 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -578,6 +614,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -600,13 +639,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_convertedAmountLessThanTickCapacity_greaterThanMinOhmOut(
         uint256 bidAmount_,
         uint256 minOhmOut_
-    )
-        public
-        givenEnabled
-        givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenAddressHasReserveToken(recipient, 150e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
-    {
+    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+        _mintAndApprove(recipient, 150e18);
+
         // We want the converted amount to be less than the tick capacity (10e9)
         // Bid amount * 1e9 / 15e18 = 10e9 - 1
         // Bid amount = (10e9 - 1) * 15e18 / 1e9
@@ -623,18 +658,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
         }
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount_, expectedConvertedAmount, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount_,
-            minOhmOut_,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount_, minOhmOut_, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -647,6 +684,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -699,18 +739,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -723,6 +765,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -772,18 +817,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -796,6 +843,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -839,18 +889,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -863,6 +915,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -899,17 +954,24 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 tickThreePrice = 1815e16;
         uint256 tickThreeBidAmount = bidAmount - bidOneAmount - bidTwoAmount;
 
-        uint256 tickOneConvertedAmount = (bidOneAmount * 1e9) / 15e18;
-        uint256 tickTwoConvertedAmount = (bidTwoAmount * 1e9) / 165e17;
-        uint256 tickThreeConvertedAmount = (tickThreeBidAmount * 1e9) / tickThreePrice;
-        uint256 expectedConvertedAmount = tickOneConvertedAmount +
-            tickTwoConvertedAmount +
-            tickThreeConvertedAmount;
+        uint256 expectedConvertedAmount;
+        uint256 expectedDepositIn;
+        {
+            uint256 tickOneConvertedAmount = (bidOneAmount * 1e9) / 15e18;
+            uint256 tickTwoConvertedAmount = (bidTwoAmount * 1e9) / 165e17;
+            uint256 tickThreeConvertedAmount = (tickThreeBidAmount * 1e9) / tickThreePrice;
 
-        // Recalculate the bid amount, in case tickThreeConvertedAmount is 0
-        uint256 expectedDepositIn = bidOneAmount +
-            bidTwoAmount +
-            (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
+            expectedConvertedAmount =
+                tickOneConvertedAmount +
+                tickTwoConvertedAmount +
+                tickThreeConvertedAmount;
+
+            // Recalculate the bid amount, in case tickThreeConvertedAmount is 0
+            expectedDepositIn =
+                bidOneAmount +
+                bidTwoAmount +
+                (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
+        }
 
         {
             // Check preview
@@ -919,18 +981,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
         }
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -943,6 +1007,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -1009,18 +1076,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1033,6 +1102,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -1087,18 +1159,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1111,6 +1185,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -1162,18 +1239,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1186,6 +1265,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
         assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
@@ -1225,18 +1307,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1249,6 +1333,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
     }
 
     // given the day target is 0
@@ -1285,18 +1372,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1309,6 +1398,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert tick
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
@@ -1340,18 +1432,20 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert that the preview is as expected
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1364,6 +1458,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert tick
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
@@ -1392,6 +1489,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Calculate the expected converted amount
         uint256 expectedConvertedAmountTickTwo = ((bidAmount - 150e18) * 1e9) / 165e17;
 
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
         {
             // Check preview
             uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
@@ -1409,13 +1509,12 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Call function
         vm.prank(recipient);
-        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
-            PERIOD_MONTHS,
-            bidAmount,
-            1,
-            false,
-            false
-        );
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
 
         // Assert returned values
         _assertConvertibleDepositPosition(
@@ -1428,6 +1527,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             positionId,
             receiptTokenId
         );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert tick
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);

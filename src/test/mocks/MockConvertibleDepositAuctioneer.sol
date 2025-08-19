@@ -43,8 +43,13 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256,
         bool,
         bool
-    ) external pure override returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) {
-        return (depositAmount_, 0, 0);
+    )
+        external
+        pure
+        override
+        returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId, uint256 actualAmount)
+    {
+        return (depositAmount_, 0, 0, depositAmount_);
     }
 
     function previewBid(
