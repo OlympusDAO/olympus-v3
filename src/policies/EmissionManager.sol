@@ -581,9 +581,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @return size of tick
     function getSizeFor(uint256 target) public view returns (uint256) {
         // CDAuctioneer will not accept a tick size of 0, so return the minimum accepted amount. This will effectively disable auctions, as the price would go vertical.
-        if (target == 0) return 1;
+        // This also handles the situation where rounding causes the calculated size to be 0
+        uint256 size = (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+        if (size == 0) return 1;
 
-        return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+        return size;
     }
 
     /// @notice Get CD auction minimum price for a given price input
