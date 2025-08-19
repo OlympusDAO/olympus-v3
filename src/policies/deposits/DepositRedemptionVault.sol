@@ -426,7 +426,12 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    /// @dev        This function will revert if:
+    /// @dev        Borrows the maximum possible amount against an existing redemption.
+    ///             The loan will be for a fixed-term. The interest is calculated on the
+    ///             basis of that term, and the full amount will be payable in order to
+    ///             close the loan.
+    ///
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The redemption ID is invalid
     ///             - The facility is not authorized
@@ -497,7 +502,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    /// @dev        This function will revert if:
+    /// @dev        This function will repay the outstanding loan amount.
+    ///             Interest is paid back first, followed by principal.
+    ///
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The redemption ID is invalid
     ///             - The redemption has no loan
