@@ -719,7 +719,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // - expired
         // - not defaulted
         // - not fully repaid
-        if (block.timestamp < loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+        if (block.timestamp < loan.dueDate || loan.isDefaulted || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(user_, redemptionId_);
 
         // Determine how much collateral to confiscate
