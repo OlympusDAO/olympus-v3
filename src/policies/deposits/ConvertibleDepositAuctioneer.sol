@@ -295,6 +295,10 @@ contract ConvertibleDepositAuctioneer is
         output.tickPrice = tick_.price;
         output.tickSize = _currentTickSize;
 
+        // Load, as this will be used within the loop
+        AuctionParameters memory auctionParams = _auctionParameters;
+        Day memory dayState = _dayState;
+
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
             uint256 depositAmount = remainingDeposit;
@@ -313,7 +317,8 @@ contract ConvertibleDepositAuctioneer is
                 // The tick has also been depleted, so update the price
                 output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
                 output.tickSize = _getNewTickSize(
-                    _dayState.convertible + convertibleAmount + output.ohmOut
+                    dayState.convertible + convertibleAmount + output.ohmOut,
+                    auctionParams
                 );
                 output.tickCapacity = output.tickSize;
             }
@@ -393,23 +398,26 @@ contract ConvertibleDepositAuctioneer is
     ///
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
-    function _getNewTickSize(uint256 ohmOut_) internal view returns (uint256 newTickSize) {
+    function _getNewTickSize(
+        uint256 ohmOut_,
+        AuctionParameters memory auctionParams_
+    ) internal pure returns (uint256 newTickSize) {
         // If the day target is zero, the tick size is always standard
-        if (_auctionParameters.target == 0) {
-            return _auctionParameters.tickSize;
+        if (auctionParams_.target == 0) {
+            return auctionParams_.tickSize;
         }
 
         // Calculate the multiplier
-        uint256 multiplier = ohmOut_ / _auctionParameters.target;
+        uint256 multiplier = ohmOut_ / auctionParams_.target;
 
         // If the day target has not been met, the tick size remains the standard
         if (multiplier == 0) {
-            newTickSize = _auctionParameters.tickSize;
+            newTickSize = auctionParams_.tickSize;
             return newTickSize;
         }
 
         // Otherwise the tick size is halved as many times as the multiplier
-        newTickSize = _auctionParameters.tickSize / (multiplier * 2);
+        newTickSize = auctionParams_.tickSize / (multiplier * 2);
 
         // This can round down to zero (which would cause problems with calculations), so provide a fallback
         if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
