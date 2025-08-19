@@ -76,6 +76,10 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256 newSize,
         uint256 newMinPrice
     ) external override {
+        // Mimic behaviour of the real auctioneer with error handling
+        if (newSize == 0) revert("tick size zero");
+        if (newMinPrice == 0) revert("min price zero");
+
         target = newTarget;
         tickSize = newSize;
         minPrice = newMinPrice;
