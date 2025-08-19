@@ -163,12 +163,11 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     ///      period count that was active during that time, not the current period count.
     function test_capacityAllocationWhenEnablingDepositPeriod() public givenEnabled {
         uint8 periodA = PERIOD_MONTHS;
-        uint8 periodB = 12;
+        uint8 periodB = PERIOD_MONTHS_TWO;
         uint8 periodC = 18;
         // Enable the other periods with the DepositManager
         {
             vm.startPrank(admin);
-            depositManager.addAssetPeriod(iReserveToken, periodB, address(facility), 90e2);
             depositManager.addAssetPeriod(iReserveToken, periodC, address(facility), 90e2);
             vm.stopPrank();
         }
