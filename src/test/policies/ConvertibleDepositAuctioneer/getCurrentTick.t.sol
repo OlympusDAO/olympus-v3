@@ -76,6 +76,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // As the day target is zero, no new capacity is added, hence the values stay the same
         assertEq(tick.capacity, TICK_SIZE, "capacity");
         assertEq(tick.price, MIN_PRICE, "price");
+        assertEq(auctioneer.getCurrentTickSize(), TICK_SIZE, "tick size");
     }
 
     //  [X] the tick price remains at the min price
@@ -886,5 +887,6 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // As the day target is zero, no new capacity is added, hence the values stay the same
         assertEq(tick.capacity, previousTick.capacity, "capacity");
         assertEq(tick.price, previousTick.price, "price");
+        assertEq(auctioneer.getCurrentTickSize(), TICK_SIZE, "tick size");
     }
 }
