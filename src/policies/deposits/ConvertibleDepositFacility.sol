@@ -358,6 +358,7 @@ contract ConvertibleDepositFacility is
     // ========== YIELD ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This returns the value from DepositManager.maxClaimYield(), which is a theoretical value.
     function previewClaimYield(IERC20 asset_) public view returns (uint256 yieldAssets) {
         yieldAssets = DEPOSIT_MANAGER.maxClaimYield(asset_, address(this));
         return yieldAssets;
@@ -365,18 +366,24 @@ contract ConvertibleDepositFacility is
 
     /// @inheritdoc IConvertibleDepositFacility
     function claimYield(IERC20 asset_) public returns (uint256) {
-        // If disabled, don't do anything
-        if (!isEnabled) return 0;
-
         // Determine the yield
         uint256 previewedYield = previewClaimYield(asset_);
 
+        return claimYield(asset_, previewedYield);
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function mainly serves as a backup for claiming protocol yield, in case the max yield cannot be claimed.
+    function claimYield(IERC20 asset_, uint256 amount_) public returns (uint256) {
+        // If disabled, don't do anything
+        if (!isEnabled) return 0;
+
         // Skip if there is no yield to claim
-        if (previewedYield == 0) return 0;
+        if (amount_ == 0) return 0;
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
-        uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), previewedYield);
+        uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), amount_);
 
         // Emit the event
         emit ClaimedYield(address(asset_), actualYield);

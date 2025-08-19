@@ -152,6 +152,13 @@ interface IConvertibleDepositFacility {
     /// @return assets          The amount of assets that were claimed
     function claimYield(IERC20 asset_) external returns (uint256 assets);
 
+    /// @notice Claim the yield accrued for the given asset
+    ///
+    /// @param  asset_          The address of the asset
+    /// @param  amount_         The amount to claim
+    /// @return assets          The amount of assets that were claimed
+    function claimYield(IERC20 asset_, uint256 amount_) external returns (uint256 assets);
+
     /// @notice Claim the yield accrued for all assets and deposit periods
     function claimAllYield() external;
 
