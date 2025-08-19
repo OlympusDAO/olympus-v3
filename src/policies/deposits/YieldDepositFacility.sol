@@ -154,7 +154,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             depositor,
             positionId,
             params_.periodMonths,
-            params_.amount
+            actualAmount
         );
 
         return (positionId, receiptTokenId, actualAmount);

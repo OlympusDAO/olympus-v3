@@ -144,7 +144,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         )
     {
         // Expect event
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, false);
         emit CreatedDeposit(
             address(reserveToken),
             recipient,
@@ -231,7 +231,7 @@ contract YieldDepositFacilityCreatePositionTest is YieldDepositFacilityTest {
         amount_ = bound(amount_, 1e18, RESERVE_TOKEN_AMOUNT);
 
         // Expect event
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, false);
         emit CreatedDeposit(address(reserveToken), recipient, 0, PERIOD_MONTHS, amount_);
 
         // Call function
