@@ -224,6 +224,11 @@ contract ConvertibleDepositAuctioneer is
                     params.minOhmOut
                 );
 
+            // Before updating any state, ensure that all other periods are updated
+            // This ensures that if the tick size changes, the change will not be
+            // applied retroactively
+            _updateCurrentTicks(params.depositPeriod);
+
             // Update state
             _dayState.convertible += output.ohmOut;
 
@@ -592,7 +597,7 @@ contract ConvertibleDepositAuctioneer is
 
         // Update the tick data for all enabled deposit periods
         // This is necessary, otherwise tick capacity and price will be calculated incorrectly
-        _updateCurrentTicks();
+        _updateCurrentTicks(0);
 
         // Enable the deposit period
         _depositPeriodsEnabled[depositPeriod_] = true;
@@ -634,7 +639,7 @@ contract ConvertibleDepositAuctioneer is
 
         // Update the tick data for all enabled deposit periods
         // This is necessary, otherwise tick capacity and price will be calculated incorrectly
-        _updateCurrentTicks();
+        _updateCurrentTicks(0);
 
         // Disable the deposit period
         _depositPeriodsEnabled[depositPeriod_] = false;
@@ -762,12 +767,17 @@ contract ConvertibleDepositAuctioneer is
         _currentTickSize = tickSize_;
     }
 
-    /// @notice     Takes a snapshot of the current tick values for enabled deposit periods
-    function _updateCurrentTicks() internal {
+    /// @notice Takes a snapshot of the current tick values for enabled deposit periods
+    ///
+    /// @param  excludedDepositPeriod_  The deposit period that should be excluded from updates. Provide 0 to not exclude (since 0 is an invalid deposit period).
+    function _updateCurrentTicks(uint8 excludedDepositPeriod_) internal {
         // Iterate over periods
         uint256 periodLength = _depositPeriods.length();
         for (uint256 i; i < periodLength; i++) {
             uint8 period = uint8(_depositPeriods.at(i));
+
+            // Skip if the deposit period is excluded
+            if (period == excludedDepositPeriod_) continue;
 
             // Skip if the deposit period is not enabled
             if (!_depositPeriodsEnabled[period]) continue;
@@ -804,7 +814,7 @@ contract ConvertibleDepositAuctioneer is
 
         // Update tick state for enabled assets and periods
         // This prevents retroactive application of new parameters
-        _updateCurrentTicks();
+        _updateCurrentTicks(0);
 
         // Update global state
         _setAuctionParameters(target_, tickSize_, minPrice_);
