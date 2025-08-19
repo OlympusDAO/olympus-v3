@@ -134,7 +134,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
                 asset: address(params_.asset),
                 periodMonths: params_.periodMonths,
                 remainingDeposit: actualAmount,
-                conversionPrice: type(uint256).max,
+                conversionPrice: DEPOS.NON_CONVERSION_PRICE(),
                 expiry: uint48(block.timestamp + uint48(params_.periodMonths) * 30 days),
                 wrapPosition: params_.wrapPosition,
                 additionalData: ""
