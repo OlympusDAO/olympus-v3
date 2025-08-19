@@ -40,6 +40,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @notice The length of the `EnableParams` struct in bytes
     uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
 
+    uint256 internal constant _TICK_SIZE_MINIMUM = 1;
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice active base emissions rate change information
@@ -610,7 +612,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // CDAuctioneer will not accept a tick size of 0, so return the minimum accepted amount. This will effectively disable auctions, as the price would go vertical.
         // This also handles the situation where rounding causes the calculated size to be 0
         uint256 size = (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
-        if (size == 0) return 1;
+        if (size == 0) return _TICK_SIZE_MINIMUM;
 
         return size;
     }
