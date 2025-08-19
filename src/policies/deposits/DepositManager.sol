@@ -630,6 +630,9 @@ contract DepositManager is
         // Update borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
 
+        // Validate operator solvency after borrowed amount change
+        _validateOperatorSolvency(params_.asset, msg.sender);
+
         // Emit event
         emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, params_.amount);
 
@@ -672,6 +675,9 @@ contract DepositManager is
 
         // Update the borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
+
+        // Validate operator solvency after borrowed amount change
+        _validateOperatorSolvency(params_.asset, msg.sender);
 
         // No need to update the operator shares, as the balance has already been adjusted upon withdraw/repay
 
