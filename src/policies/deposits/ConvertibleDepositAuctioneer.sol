@@ -53,6 +53,9 @@ contract ConvertibleDepositAuctioneer is
     /// @notice The length of the enable parameters
     uint256 internal constant _ENABLE_PARAMS_LENGTH = 160;
 
+    /// @notice The minimum tick size
+    uint8 public constant TICK_SIZE_MINIMUM = 1;
+
     // ========== STRUCTS ========== //
 
     struct BidOutput {
@@ -401,6 +404,10 @@ contract ConvertibleDepositAuctioneer is
 
         // Otherwise the tick size is halved as many times as the multiplier
         newTickSize = _auctionParameters.tickSize / (multiplier * 2);
+
+        // This can round down to zero (which would cause problems with calculations), so provide a fallback
+        if (newTickSize == 0) return TICK_SIZE_MINIMUM;
+
         return newTickSize;
     }
 
