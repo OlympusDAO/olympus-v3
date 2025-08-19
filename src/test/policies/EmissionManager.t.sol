@@ -643,6 +643,27 @@ contract EmissionManagerTest is Test {
             "Market counter should not increment"
         );
 
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
+
+            assertEq(emission, 0, "target should be zero");
+            assertEq(cdAuctioneer.tickSize(), 1, "tick size should be 1");
+        }
+
         // Confirm that the token balances are still 0
         assertEq(ohm.balanceOf(address(emissionManager)), 0, "OHM balance should be 0");
         assertEq(reserve.balanceOf(address(emissionManager)), 0, "Reserve balance should be 0");
@@ -3032,5 +3053,19 @@ contract EmissionManagerTest is Test {
 
         // Expect the premium to be 200%
         assertEq(premium, 200e16, "Premium should be 200%");
+    }
+
+    // getSizeFor tests
+
+    function test_getSizeFor_zero() public view {
+        assertEq(emissionManager.getSizeFor(0), 1, "getSizeFor");
+    }
+
+    function test_getSizeFor(uint256 target_) public view {
+        target_ = bound(target_, 1, 1000e9);
+
+        uint256 expectedSize = (target_ * tickSizeScalar) / 1e18;
+
+        assertEq(emissionManager.getSizeFor(target_), expectedSize, "getSizeFor");
     }
 }

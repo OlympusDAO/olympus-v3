@@ -572,9 +572,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice get CD auction tick size for a given target
+    /// @dev    If the target is 0 (no emissions target), a size of 1 will be returned
+    ///
     /// @param  target size of day's CD auction
     /// @return size of tick
     function getSizeFor(uint256 target) public view returns (uint256) {
+        // CDAuctioneer will not accept a tick size of 0, so return the minimum accepted amount. This will effectively disable auctions, as the price would go vertical.
+        if (target == 0) return 1;
+
         return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
     }
 
