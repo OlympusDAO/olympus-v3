@@ -809,6 +809,11 @@ contract ConvertibleDepositAuctioneer is
     ) external override onlyRole(ROLE_EMISSION_MANAGER) {
         uint256 previousTarget = _auctionParameters.target;
 
+        // Update tick state for enabled assets and periods
+        // This prevents retroactive application of new parameters
+        _updateCurrentTicks();
+
+        // Update global state
         _setAuctionParameters(target_, tickSize_, minPrice_);
 
         // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price
