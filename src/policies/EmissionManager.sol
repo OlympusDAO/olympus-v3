@@ -205,6 +205,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         (, , uint256 emission) = getNextEmission();
 
         // Update the parameters for the convertible deposit auction
+        // This call can revert, however it is mitigated by:
+        // - CDAuctioneer will accept a target (emission) of 0
+        // - getSizeFor() will return a tick size of 1 wei when the target is 0
         cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),
