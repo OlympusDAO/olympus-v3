@@ -220,6 +220,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function expects receipt tokens to be unwrapped (i.e. native ERC6909 tokens)
     function startRedemption(
         IERC20 depositToken_,
         uint8 depositPeriod_,
