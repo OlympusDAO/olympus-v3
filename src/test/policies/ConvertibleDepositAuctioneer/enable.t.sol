@@ -78,6 +78,35 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         );
     }
 
+    // when the tick size is greater than the target
+    //  [X] it reverts
+
+    function test_tickSizeGreaterThanTarget_reverts(uint256 tickSize_) public {
+        tickSize_ = bound(tickSize_, TARGET + 1, type(uint256).max);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
+                "tick size"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: tickSize_,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+    }
+
     //  when the tick size is 0
     //   [X] it reverts
 
