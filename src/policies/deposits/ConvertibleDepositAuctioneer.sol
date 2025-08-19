@@ -224,11 +224,6 @@ contract ConvertibleDepositAuctioneer is
                     params.minOhmOut
                 );
 
-            // Before updating any state, ensure that all other periods are updated
-            // This ensures that if the tick size changes, the change will not be
-            // applied retroactively
-            _updateCurrentTicks(params.depositPeriod);
-
             // Update state
             _dayState.convertible += output.ohmOut;
 
@@ -240,6 +235,14 @@ contract ConvertibleDepositAuctioneer is
 
             // Update the current tick size
             if (output.tickSize != _currentTickSize) {
+                if (_depositPeriodsCount > 1) {
+                    // Before updating the global tick size, ensure that all other periods are updated
+                    // This ensures that if the tick size changes, the change will not be
+                    // applied retroactively
+                    // Only required if there are other deposit periods than the one being bid on
+                    _updateCurrentTicks(params.depositPeriod);
+                }
+
                 _currentTickSize = output.tickSize;
             }
 
