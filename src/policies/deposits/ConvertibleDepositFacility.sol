@@ -76,13 +76,12 @@ contract ConvertibleDepositFacility is
         Keycode mintrKeycode = toKeycode("MINTR");
         Keycode deposKeycode = toKeycode("DEPOS");
 
-        permissions = new Permissions[](6);
+        permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
-        permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(deposKeycode, DEPOS.mint.selector);
-        permissions[4] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
-        permissions[5] = Permissions(deposKeycode, DEPOS.split.selector);
+        permissions[2] = Permissions(deposKeycode, DEPOS.mint.selector);
+        permissions[3] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
+        permissions[4] = Permissions(deposKeycode, DEPOS.split.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
