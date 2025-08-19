@@ -54,7 +54,7 @@ contract ConvertibleDepositAuctioneer is
     uint256 internal constant _ENABLE_PARAMS_LENGTH = 160;
 
     /// @notice The minimum tick size
-    uint8 public constant TICK_SIZE_MINIMUM = 1;
+    uint256 internal constant _TICK_SIZE_MINIMUM = 1;
 
     // ========== STRUCTS ========== //
 
@@ -406,7 +406,7 @@ contract ConvertibleDepositAuctioneer is
         newTickSize = _auctionParameters.tickSize / (multiplier * 2);
 
         // This can round down to zero (which would cause problems with calculations), so provide a fallback
-        if (newTickSize == 0) return TICK_SIZE_MINIMUM;
+        if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
 
         return newTickSize;
     }
