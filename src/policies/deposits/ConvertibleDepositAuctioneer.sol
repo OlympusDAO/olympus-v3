@@ -307,7 +307,8 @@ contract ConvertibleDepositAuctioneer is
             if (output.tickCapacity <= convertibleAmount) {
                 convertibleAmount = output.tickCapacity;
                 // Convertible = deposit * OHM scale / price, so this is the inverse
-                depositAmount = convertibleAmount.mulDiv(output.tickPrice, _ohmScale);
+                // Round in favour of the protocol
+                depositAmount = convertibleAmount.mulDivUp(output.tickPrice, _ohmScale);
 
                 // The tick has also been depleted, so update the price
                 output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
@@ -322,7 +323,11 @@ contract ConvertibleDepositAuctioneer is
             }
 
             // Record updates to the deposit and OHM
-            remainingDeposit -= depositAmount;
+            if (depositAmount <= remainingDeposit) {
+                remainingDeposit -= depositAmount;
+            } else {
+                remainingDeposit = 0;
+            }
             output.ohmOut += convertibleAmount;
         }
 
