@@ -11,6 +11,8 @@ import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest {
+    uint256 public constant LARGE_MINT_AMOUNT = 200e18;
+
     event Bid(
         address indexed bidder,
         address indexed depositAsset,
@@ -1256,16 +1258,16 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     //  when the bid amount converts to an amount equal to the tick capacity
     //   [X] the price is increased
     //   [X] the capacity is the standard tick size
-    //  [ ] the price is increased
+    //  [X] the price is increased
 
     function test_givenTargetZero_whenConvertedAmountLessThanTickCapacity(
         uint256 bidAmount_
     )
         public
-        givenEnabled
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenAddressHasReserveToken(recipient, 150e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
+        givenAddressHasReserveToken(recipient, LARGE_MINT_AMOUNT)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), LARGE_MINT_AMOUNT)
     {
         // We want a bid amount that will result in a converted amount less than the tick size
         // Given bid amount * 1e9 / 15e18 = converted amount
@@ -1300,7 +1302,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertConvertibleDepositPosition(
             bidAmount,
             expectedConvertedAmount,
-            150e18 - bidAmount,
+            LARGE_MINT_AMOUNT - bidAmount,
             0,
             0,
             ohmOut,
@@ -1316,10 +1318,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenTargetZero_whenConvertedAmountEqualToTickCapacity()
         public
-        givenEnabled
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenAddressHasReserveToken(recipient, 150e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
+        givenAddressHasReserveToken(recipient, LARGE_MINT_AMOUNT)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), LARGE_MINT_AMOUNT)
     {
         // We want a bid amount that will result in a converted amount equal than the tick size
         // Given bid amount * 1e9 / 15e18 = converted amount
@@ -1355,7 +1357,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertConvertibleDepositPosition(
             bidAmount,
             expectedConvertedAmount,
-            150e18 - bidAmount,
+            LARGE_MINT_AMOUNT - bidAmount,
             0,
             0,
             ohmOut,
@@ -1373,11 +1375,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount
     )
         public
-        givenEnabled
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenAddressHasReserveToken(recipient, 200e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 200e18)
     {
+        _mintAndApprove(recipient, LARGE_MINT_AMOUNT);
+
         // We want a bid amount that will result in a converted amount greater than the tick size
         // Given bid amount * 1e9 / 15e18 = converted amount
         // The initial tick price is MIN_PRICE, 15e18
@@ -1388,23 +1390,18 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         bidAmount = bound(bidAmount, 151e18, 200e18);
 
         // Calculate the expected converted amount
-        uint256 expectedConvertedAmount;
-        uint256 expectedCapacity;
-        {
-            uint256 expectedConvertedAmountTickTwo = ((bidAmount - 150e18) * 1e9) / 165e17;
-            expectedConvertedAmount = TICK_SIZE + expectedConvertedAmountTickTwo;
-            expectedCapacity = TICK_SIZE - expectedConvertedAmountTickTwo;
-        }
-
-        // Calculate the expected tick price
-        uint256 expectedTickPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
+        uint256 expectedConvertedAmountTickTwo = ((bidAmount - 150e18) * 1e9) / 165e17;
 
         {
             // Check preview
             uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
 
             // Assert that the preview is as expected
-            assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+            assertEq(
+                previewOhmOut,
+                TICK_SIZE + expectedConvertedAmountTickTwo,
+                "preview converted amount"
+            );
 
             // Expect event
             _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -1423,8 +1420,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Assert returned values
         _assertConvertibleDepositPosition(
             bidAmount,
-            expectedConvertedAmount,
-            200e18 - bidAmount,
+            TICK_SIZE + expectedConvertedAmountTickTwo,
+            LARGE_MINT_AMOUNT - bidAmount,
             0,
             0,
             ohmOut,
@@ -1434,7 +1431,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert tick
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
-        assertEq(tick.capacity, expectedCapacity, "tick capacity");
-        assertEq(tick.price, expectedTickPrice, "tick price");
+        assertEq(tick.capacity, TICK_SIZE - expectedConvertedAmountTickTwo, "tick capacity");
+        assertEq(tick.price, FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2), "tick price");
     }
 }
