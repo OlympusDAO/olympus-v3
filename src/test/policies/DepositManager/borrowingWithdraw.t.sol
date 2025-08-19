@@ -193,6 +193,17 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             5, // 1 risks a ZERO_SHARES error
             previousDepositorDepositActualAmount
         );
+
+        uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
+
+        // Make another deposit
+        // This reduces rounding issues with conversion between shares and assets
+        {
+            asset.mint(DEPOSITOR, MINT_AMOUNT);
+            _approveSpendingAsset(DEPOSITOR, MINT_AMOUNT);
+            _deposit(MINT_AMOUNT, false);
+        }
+
         _takeSnapshot(amount_);
 
         // Expect event
@@ -223,7 +234,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         );
         assertApproxEqAbs(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
-            previousDepositorDepositActualAmount - amount_,
+            firstDepositActualAmount + previousDepositorDepositActualAmount - amount_,
             5,
             "borrowing capacity"
         );
@@ -336,6 +347,17 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             5, // 1 risks a ZERO_SHARES error
             previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount
         );
+
+        uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
+
+        // Make another deposit
+        // This reduces rounding issues with conversion between shares and assets
+        {
+            asset.mint(DEPOSITOR, MINT_AMOUNT);
+            _approveSpendingAsset(DEPOSITOR, MINT_AMOUNT);
+            _deposit(MINT_AMOUNT, false);
+        }
+
         _takeSnapshot(amount_);
 
         // Expect event
@@ -371,7 +393,10 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         );
         assertApproxEqAbs(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
-            previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount - amount_,
+            firstDepositActualAmount +
+                previousDepositorDepositActualAmount -
+                previousRecipientBorrowActualAmount -
+                amount_,
             5,
             "borrowing capacity"
         );

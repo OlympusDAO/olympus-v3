@@ -153,9 +153,13 @@ contract DepositManagerTest is Test {
         _;
     }
 
-    modifier givenDepositorHasApprovedSpendingAsset(uint256 amount_) {
-        vm.prank(DEPOSITOR);
+    function _approveSpendingAsset(address owner_, uint256 amount_) internal {
+        vm.prank(owner_);
         asset.approve(address(depositManager), amount_);
+    }
+
+    modifier givenDepositorHasApprovedSpendingAsset(uint256 amount_) {
+        _approveSpendingAsset(DEPOSITOR, amount_);
         _;
     }
 
