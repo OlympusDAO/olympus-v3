@@ -385,6 +385,11 @@ contract ConvertibleDepositAuctioneer is
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
     function _getNewTickSize(uint256 ohmOut_) internal view returns (uint256 newTickSize) {
+        // If the day target is zero, the tick size is always standard
+        if (_auctionParameters.target == 0) {
+            return _auctionParameters.tickSize;
+        }
+
         // Calculate the multiplier
         uint256 multiplier = ohmOut_ / _auctionParameters.target;
 
@@ -453,6 +458,9 @@ contract ConvertibleDepositAuctioneer is
     ///             - Calculate the added capacity based on the time passed since the last bid, and add it to the current capacity to get the new capacity
     ///             - Until the new capacity is <= to the standard tick size, reduce the capacity by the standard tick size and reduce the price by the tick step
     ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the standard tick size
+    ///
+    ///             Notes:
+    ///             - If the target is 0, the price will not decay and the capacity will not change. It will only decay when a target is set again to a non-zero value.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
@@ -638,14 +646,13 @@ contract ConvertibleDepositAuctioneer is
     // ========== ADMIN FUNCTIONS ========== //
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
+        // The target can be zero
+
         // Tick size must be non-zero
         if (tickSize_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
 
         // Min price must be non-zero
         if (minPrice_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("min price");
-
-        // Target must be non-zero
-        if (target_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("target");
 
         _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
 
@@ -770,7 +777,6 @@ contract ConvertibleDepositAuctioneer is
     ///             - The caller does not have the ROLE_EMISSION_MANAGER role
     ///             - The new tick size is 0
     ///             - The new min price is 0
-    ///             - The new target is 0
     function setAuctionParameters(
         uint256 target_,
         uint256 tickSize_,

@@ -1248,4 +1248,193 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             receiptTokenId
         );
     }
+
+    // given the day target is 0
+    //  when the bid amount converts to an amount less than the tick capacity
+    //   [X] the price does not change
+    //   [X] the capacity is reduced
+    //  when the bid amount converts to an amount equal to the tick capacity
+    //   [X] the price is increased
+    //   [X] the capacity is the standard tick size
+    //  [ ] the price is increased
+
+    function test_givenTargetZero_whenConvertedAmountLessThanTickCapacity(
+        uint256 bidAmount_
+    )
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenAddressHasReserveToken(recipient, 150e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
+    {
+        // We want a bid amount that will result in a converted amount less than the tick size
+        // Given bid amount * 1e9 / 15e18 = converted amount
+        // When bid amount = 15e9, the converted amount = 1
+        // When bid amount = 150e18, the converted amount = 10e9
+        // When bid amount = 15e18-1, the converted amount = 9999999999
+        uint256 bidAmount = bound(bidAmount_, 15e9, 150e18 - 1);
+
+        // Calculate the expected converted amount
+        uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
+
+        // Check preview
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            PERIOD_MONTHS,
+            bidAmount,
+            1,
+            false,
+            false
+        );
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            150e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert tick
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
+        assertEq(tick.capacity, TICK_SIZE - expectedConvertedAmount, "tick capacity");
+        assertEq(tick.price, MIN_PRICE, "tick price");
+    }
+
+    function test_givenTargetZero_whenConvertedAmountEqualToTickCapacity()
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenAddressHasReserveToken(recipient, 150e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
+    {
+        // We want a bid amount that will result in a converted amount equal than the tick size
+        // Given bid amount * 1e9 / 15e18 = converted amount
+        // When bid amount = 150e18, the converted amount = 10e9
+        uint256 bidAmount = 150e18;
+
+        // Calculate the expected converted amount
+        uint256 expectedConvertedAmount = (bidAmount * 1e9) / 15e18;
+
+        // Calculate the expected tick price
+        uint256 expectedTickPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
+
+        // Check preview
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Expect event
+        _expectBidEvent(bidAmount, previewOhmOut, 0);
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            PERIOD_MONTHS,
+            bidAmount,
+            1,
+            false,
+            false
+        );
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            150e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert tick
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
+        assertEq(tick.capacity, TICK_SIZE, "tick capacity");
+        assertEq(tick.price, expectedTickPrice, "tick price");
+    }
+
+    function test_givenTargetZero_whenConvertedAmountGreaterThanTickCapacity(
+        uint256 bidAmount
+    )
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenAddressHasReserveToken(recipient, 200e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 200e18)
+    {
+        // We want a bid amount that will result in a converted amount greater than the tick size
+        // Given bid amount * 1e9 / 15e18 = converted amount
+        // The initial tick price is MIN_PRICE, 15e18
+        // The second tick price is MIN_PRICE * 1.1, 165e17
+        // When bid amount = 151e18:
+        // - 150e18 is converted into 10e9 at a price of 15e18
+        // - 1e18 is converted into 60606060 at a price of 165e17
+        bidAmount = bound(bidAmount, 151e18, 200e18);
+
+        // Calculate the expected converted amount
+        uint256 expectedConvertedAmount;
+        uint256 expectedCapacity;
+        {
+            uint256 expectedConvertedAmountTickTwo = ((bidAmount - 150e18) * 1e9) / 165e17;
+            expectedConvertedAmount = TICK_SIZE + expectedConvertedAmountTickTwo;
+            expectedCapacity = TICK_SIZE - expectedConvertedAmountTickTwo;
+        }
+
+        // Calculate the expected tick price
+        uint256 expectedTickPrice = FullMath.mulDivUp(MIN_PRICE, TICK_STEP, 100e2);
+
+        {
+            // Check preview
+            uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+
+            // Assert that the preview is as expected
+            assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+            // Expect event
+            _expectBidEvent(bidAmount, previewOhmOut, 0);
+        }
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId) = auctioneer.bid(
+            PERIOD_MONTHS,
+            bidAmount,
+            1,
+            false,
+            false
+        );
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            expectedConvertedAmount,
+            200e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert tick
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(PERIOD_MONTHS);
+        assertEq(tick.capacity, expectedCapacity, "tick capacity");
+        assertEq(tick.price, expectedTickPrice, "tick price");
+    }
 }
