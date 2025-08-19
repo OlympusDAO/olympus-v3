@@ -330,20 +330,20 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     /// @inheritdoc IDepositFacility
     function getAvailableDeposits(IERC20 depositToken_) public view returns (uint256) {
-        // getOperatorAssets returns the assets currently in the DepositManager
-        // This includes the assets that are committed
-        // But excludes the assets that have been lent out
-        (, uint256 sharesInAssets) = DEPOSIT_MANAGER.getOperatorAssets(
+        // Asset liabilities are used as the excess (sharesInAssets - liabilities) is not accessible anyway
+        uint256 assetLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(
             depositToken_,
             address(this)
         );
+        uint256 borrowedAmount = DEPOSIT_MANAGER.getBorrowedAmount(depositToken_, address(this));
+
         // Committed deposits does not include the assets that have been lent out
         uint256 committedDeposits = _assetCommittedDeposits[depositToken_];
 
         // This should not happen, but prevent a revert anyway
-        if (committedDeposits > sharesInAssets) return 0;
+        if (committedDeposits + borrowedAmount > assetLiabilities) return 0;
 
-        return sharesInAssets - committedDeposits;
+        return assetLiabilities - committedDeposits - borrowedAmount;
     }
 
     /// @inheritdoc IDepositFacility
