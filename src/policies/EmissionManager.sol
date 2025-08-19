@@ -199,6 +199,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///             - Sets the parameters for the auction
     ///             - If the auction tracking period has finished and there is a deficit of OHM sold, attempts to create a bond market
     ///             - If market creation fails (external dependency), emits BondMarketCreationFailed and continues execution
+    ///
+    ///             Notes:
+    ///             - If there are delays in the heartbeat (which calls this function), auction result tracking will be affected.
     function execute() external onlyRole(ROLE_HEART) {
         // Don't do anything if disabled
         if (!isEnabled) return;
