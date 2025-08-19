@@ -280,6 +280,7 @@ contract ConvertibleDepositFacility is
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
+    ///             - No positions are provided
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - Any position is not valid
@@ -299,6 +300,8 @@ contract ConvertibleDepositFacility is
         onlyEnabled
         returns (uint256 receiptTokenIn, uint256 convertedTokenOut)
     {
+        if (positionIds_.length == 0) revert CDF_InvalidArgs("no positions");
+
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
