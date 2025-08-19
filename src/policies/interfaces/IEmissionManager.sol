@@ -14,6 +14,9 @@ interface IEmissionManager {
     // ========== EVENTS ========== //
 
     event SaleCreated(uint256 marketID, uint256 saleAmount);
+
+    event BondMarketCreationFailed(uint256 saleAmount);
+
     event BackingUpdated(uint256 newBacking, uint256 supplyAdded, uint256 reservesAdded);
 
     /// @notice Emitted when the base emission rate is changed
