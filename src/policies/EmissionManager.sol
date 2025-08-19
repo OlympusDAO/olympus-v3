@@ -239,8 +239,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
                 // Attempt to create the bond market
                 try this.createPendingBondMarket() {
-                    // If successful, zero out the pending capacity
-                    bondMarketPendingCapacity = 0;
+                    // Do nothing if successful
+                    // createPendingBondMarket() resets the pending capacity, so it does not need to be done here
                 } catch {
                     // We don't want the periodic task to fail, so catch the error
                     // But trigger an event that can be monitored
@@ -655,6 +655,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // Create the market
         MINTR.increaseMintApproval(address(this), bondMarketPendingCapacity);
         _createMarket(bondMarketPendingCapacity);
+
+        // Set the pending capacity to 0
+        // This prevents the bond market from being created again
+        bondMarketPendingCapacity = 0;
     }
 
     // ========== ERC165 ========== //
