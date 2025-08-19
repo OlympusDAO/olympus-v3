@@ -7,7 +7,7 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVaultTest {
-    event MaxBorrowPercentageSet(address indexed asset, uint16 percent);
+    event MaxBorrowPercentageSet(address indexed asset, address indexed facility, uint16 percent);
 
     // ===== TESTS ===== //
 
@@ -20,7 +20,7 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
 
         // Call function
         vm.prank(admin);
-        redemptionVault.setMaxBorrowPercentage(iReserveToken, 100e2);
+        redemptionVault.setMaxBorrowPercentage(iReserveToken, address(cdFacility), 100e2);
     }
 
     // given the caller is not the admin or manager
@@ -36,7 +36,7 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
 
         // Call function
         vm.prank(caller_);
-        redemptionVault.setMaxBorrowPercentage(iReserveToken, 100e2);
+        redemptionVault.setMaxBorrowPercentage(iReserveToken, address(cdFacility), 100e2);
     }
 
     // when the rate is greater than 100e2
@@ -50,7 +50,7 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
 
         // Call function
         vm.prank(admin);
-        redemptionVault.setMaxBorrowPercentage(iReserveToken, rate_);
+        redemptionVault.setMaxBorrowPercentage(iReserveToken, address(cdFacility), rate_);
     }
 
     // given the asset is not supported
@@ -65,15 +65,15 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
 
         // Expect emit
         vm.expectEmit(true, true, true, true);
-        emit MaxBorrowPercentageSet(address(asset), rate_);
+        emit MaxBorrowPercentageSet(address(asset), address(cdFacility), rate_);
 
         // Call function
         vm.prank(caller);
-        redemptionVault.setMaxBorrowPercentage(IERC20(address(asset)), rate_);
+        redemptionVault.setMaxBorrowPercentage(IERC20(address(asset)), address(cdFacility), rate_);
 
         // Assert
         assertEq(
-            redemptionVault.getMaxBorrowPercentage(IERC20(address(asset))),
+            redemptionVault.getMaxBorrowPercentage(IERC20(address(asset)), address(cdFacility)),
             rate_,
             "max borrow percentage mismatch"
         );
@@ -88,15 +88,15 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
 
         // Expect emit
         vm.expectEmit(true, true, true, true);
-        emit MaxBorrowPercentageSet(address(iReserveToken), rate_);
+        emit MaxBorrowPercentageSet(address(iReserveToken), address(cdFacility), rate_);
 
         // Call function
         vm.prank(caller);
-        redemptionVault.setMaxBorrowPercentage(iReserveToken, rate_);
+        redemptionVault.setMaxBorrowPercentage(iReserveToken, address(cdFacility), rate_);
 
         // Assert
         assertEq(
-            redemptionVault.getMaxBorrowPercentage(iReserveToken),
+            redemptionVault.getMaxBorrowPercentage(iReserveToken, address(cdFacility)),
             rate_,
             "max borrow percentage mismatch"
         );
