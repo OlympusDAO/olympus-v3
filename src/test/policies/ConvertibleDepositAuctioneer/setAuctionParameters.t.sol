@@ -5,6 +5,10 @@ import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTe
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDepositAuctioneerTest {
+    // Additional events for pending changes
+    event DepositPeriodEnabled(address indexed depositAsset, uint8 depositPeriod);
+    event DepositPeriodDisabled(address indexed depositAsset, uint8 depositPeriod);
+
     // when the caller does not have the "cd_emissionmanager" role
     //  [X] it reverts
 
@@ -124,8 +128,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_contractInactive()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
         givenDisabled
     {
@@ -191,8 +195,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_updatesCurrentTick()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
     {
         uint256 lastConvertible = auctioneer.getDayState().convertible;
@@ -251,7 +255,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newTickSizeLessThanCurrentTickCapacity(
         uint256 newTickSize_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -276,7 +280,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newTickSizeGreaterThanCurrentTickCapacity(
         uint256 newTickSize_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -301,7 +305,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newMinPriceGreaterThanCurrentTickPrice(
         uint256 newMinPrice_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -326,7 +330,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_newMinPriceLessThanCurrentTickPrice(
         uint256 newMinPrice_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp
@@ -364,8 +368,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnDayTwo()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
     {
         uint256 dayOneTarget = TARGET;
@@ -400,8 +404,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnDayEight()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
     {
         int256[] memory expectedAuctionResults = new int256[](7);
@@ -514,8 +518,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
     function test_calledOnDayNine()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
     {
         // Warp to day two
@@ -607,5 +611,263 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             0
         );
         _assertAuctionResultsNextIndex(1);
+    }
+
+    // ========== PENDING DEPOSIT PERIOD CHANGES TESTS ========== //
+
+    /// @notice Test single pending enable gets processed correctly
+    function test_singlePendingEnable()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(1e18)
+    {
+        uint8 newPeriod = PERIOD_MONTHS + 1;
+        uint256 lastConvertible = auctioneer.getDayState().convertible;
+
+        // Enable the period with the DepositManager first
+        vm.startPrank(admin);
+        depositManager.addAssetPeriod(iReserveToken, newPeriod, address(facility), 90e2);
+        vm.stopPrank();
+
+        // Queue the enable
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(newPeriod);
+
+        // Verify period is not enabled yet
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(newPeriod),
+            false,
+            "period should not be enabled yet"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should still be 1");
+
+        // New auction parameters
+        uint256 newTarget = TARGET + 1e9;
+        uint256 newTickSize = TICK_SIZE + 1e9;
+        uint256 newMinPrice = MIN_PRICE + 1e18;
+
+        // Expect the actual enable event when setAuctionParameters is called
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodEnabled(address(iReserveToken), newPeriod);
+
+        // Call setAuctionParameters
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Verify the period is now enabled
+        assertEq(auctioneer.isDepositPeriodEnabled(newPeriod), true, "period should be enabled");
+        assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should be 2");
+
+        // Verify the new period was initialized with NEW parameters
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(newPeriod);
+        assertEq(tick.price, newMinPrice, "new period should have new min price");
+        assertEq(tick.capacity, newTickSize, "new period should have new tick size");
+        assertEq(tick.lastUpdate, block.timestamp, "new period should have current timestamp");
+
+        // Verify auction results were stored before the change
+        int256[] memory results = auctioneer.getAuctionResults();
+        assertEq(
+            results[0],
+            int256(lastConvertible) - int256(TARGET),
+            "auction results should use old target"
+        );
+    }
+
+    /// @notice Test single pending disable gets processed correctly
+    function test_singlePendingDisable()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenRecipientHasBid(1e18)
+    {
+        uint256 lastConvertible = auctioneer.getDayState().convertible;
+
+        // Queue the disable for PERIOD_MONTHS
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
+
+        // Verify period is still enabled
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            true,
+            "period should still be enabled"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should still be 2");
+
+        // New auction parameters
+        uint256 newTarget = TARGET + 1e9;
+        uint256 newTickSize = TICK_SIZE + 1e9;
+        uint256 newMinPrice = MIN_PRICE + 1e18;
+
+        // Expect the actual disable event
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodDisabled(address(iReserveToken), PERIOD_MONTHS);
+
+        // Call setAuctionParameters
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Verify the period is now disabled
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            false,
+            "period should be disabled"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should be 1");
+
+        // Verify the remaining period still works
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO),
+            true,
+            "other period should still be enabled"
+        );
+
+        // Verify auction results were stored before the change (with old count of 2)
+        int256[] memory results = auctioneer.getAuctionResults();
+        assertEq(
+            results[0],
+            int256(lastConvertible) - int256(TARGET),
+            "auction results should use old target"
+        );
+    }
+
+    /// @notice Test mixed enable/disable for different periods
+    function test_mixedEnableDisableDifferentPeriods()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(1e18)
+    {
+        uint8 newPeriod = PERIOD_MONTHS + 1;
+
+        // Enable new period with DepositManager
+        vm.startPrank(admin);
+        depositManager.addAssetPeriod(iReserveToken, newPeriod, address(facility), 90e2);
+        vm.stopPrank();
+
+        // Queue enable for new period and disable for existing period
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(newPeriod);
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
+
+        // New auction parameters
+        uint256 newTarget = TARGET + 1e9;
+        uint256 newTickSize = TICK_SIZE + 1e9;
+        uint256 newMinPrice = MIN_PRICE + 1e18;
+
+        // Expect both events
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodEnabled(address(iReserveToken), newPeriod);
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodDisabled(address(iReserveToken), PERIOD_MONTHS);
+
+        // Call setAuctionParameters
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Verify final state
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            false,
+            "old period should be disabled"
+        );
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(newPeriod),
+            true,
+            "new period should be enabled"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should be 1");
+
+        // Verify new period has new parameters
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(newPeriod);
+        assertEq(tick.price, newMinPrice, "new period should have new min price");
+        assertEq(tick.capacity, newTickSize, "new period should have new tick size");
+    }
+
+    /// @notice Test enable then disable same period (final state should be disabled)
+    function test_enableThenDisableSamePeriod()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(1e18)
+    {
+        uint8 targetPeriod = PERIOD_MONTHS_TWO;
+
+        // Queue enable then disable for the same period
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(targetPeriod);
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(targetPeriod);
+
+        // New auction parameters
+        uint256 newTarget = TARGET + 1e9;
+        uint256 newTickSize = TICK_SIZE + 1e9;
+        uint256 newMinPrice = MIN_PRICE + 1e18;
+
+        // Should emit both events since both operations are processed
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodEnabled(address(iReserveToken), targetPeriod);
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodDisabled(address(iReserveToken), targetPeriod);
+
+        // Call setAuctionParameters
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Verify final state is disabled
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(targetPeriod),
+            false,
+            "period should be disabled"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should still be 1");
+    }
+
+    /// @notice Test disable then enable same period (final state should be enabled)
+    function test_disableThenEnableSamePeriod()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenRecipientHasBid(1e18)
+    {
+        // Queue disable then enable for the same period
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS_TWO);
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS_TWO);
+
+        // New auction parameters
+        uint256 newTarget = TARGET + 1e9;
+        uint256 newTickSize = TICK_SIZE + 1e9;
+        uint256 newMinPrice = MIN_PRICE + 1e18;
+
+        // Both events should be emitted
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodDisabled(address(iReserveToken), PERIOD_MONTHS_TWO);
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS_TWO);
+
+        // Call setAuctionParameters
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Verify final state is enabled with new parameters
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO),
+            true,
+            "period should be enabled"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should still be 2");
+
+        // Verify it has new parameters (since it was re-enabled)
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tick.price, newMinPrice, "re-enabled period should have new min price");
+        assertEq(tick.capacity, newTickSize, "re-enabled period should have new tick size");
     }
 }

@@ -182,8 +182,8 @@ contract ConvertibleDepositAuctioneerSetAuctionTrackingPeriodTest is
 
     function test_previousAuctionResults()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
     {
         // Warp to the next day and trigger storage of the previous day's results

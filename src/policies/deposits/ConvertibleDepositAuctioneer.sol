@@ -74,6 +74,11 @@ contract ConvertibleDepositAuctioneer is
         bool wrapReceipt;
     }
 
+    struct PendingDepositPeriodChange {
+        uint8 depositPeriod;
+        bool enable;
+    }
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice Whether the deposit period is enabled
@@ -118,6 +123,9 @@ contract ConvertibleDepositAuctioneer is
     /// @notice The auction results, where a positive number indicates an over-subscription for the day.
     /// @dev    The length of this array is equal to the auction tracking period
     int256[] internal _auctionResults;
+
+    /// @notice Queue of pending deposit period enable/disable changes
+    PendingDepositPeriodChange[] internal _pendingDepositPeriodChanges;
 
     // ========== SETUP ========== //
 
@@ -541,6 +549,122 @@ contract ConvertibleDepositAuctioneer is
         return _auctionResults;
     }
 
+    // ========== PENDING CHANGES HELPERS ========== //
+
+    /// @notice Validates that there is no duplicate pending change for the deposit period
+    /// @param  depositPeriod_  The deposit period to check
+    /// @param  enable_         Whether the requested operation is to enable (true) or disable (false)
+    function _validateNoDuplicatePendingChange(uint8 depositPeriod_, bool enable_) internal view {
+        // Get the effective state considering pending changes
+        bool effectiveState = _getEffectiveDepositPeriodState(depositPeriod_);
+
+        // Check if the requested change would result in the same state
+        if (effectiveState == enable_) {
+            revert ConvertibleDepositAuctioneer_DepositPeriodInvalidState(
+                address(_DEPOSIT_ASSET),
+                depositPeriod_,
+                effectiveState
+            );
+        }
+    }
+
+    /// @notice Gets the effective state of a deposit period considering pending changes
+    /// @param  depositPeriod_  The deposit period to check
+    /// @return effectiveState  The effective enabled state (current state + pending changes)
+    function _getEffectiveDepositPeriodState(
+        uint8 depositPeriod_
+    ) internal view returns (bool effectiveState) {
+        // Start with current state
+        effectiveState = _depositPeriodsEnabled[depositPeriod_];
+
+        // Apply pending changes in order
+        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
+            if (_pendingDepositPeriodChanges[i].depositPeriod == depositPeriod_) {
+                effectiveState = _pendingDepositPeriodChanges[i].enable;
+            }
+        }
+
+        return effectiveState;
+    }
+
+    /// @notice Processes all pending deposit period changes
+    /// @param  tickSize_   The tick size to initialize new periods with
+    /// @param  minPrice_   The minimum price to initialize new periods with
+    function _processPendingDepositPeriodChanges(uint256 tickSize_, uint256 minPrice_) internal {
+        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
+            PendingDepositPeriodChange memory change = _pendingDepositPeriodChanges[i];
+
+            if (change.enable) {
+                _enableDepositPeriod(change.depositPeriod, tickSize_, minPrice_);
+            } else {
+                _disableDepositPeriod(change.depositPeriod);
+            }
+        }
+
+        // Clear the pending changes queue
+        delete _pendingDepositPeriodChanges;
+    }
+
+    /// @notice Internal function to actually enable a deposit period
+    /// @param  depositPeriod_  The deposit period to enable
+    /// @param  tickSize_       The tick size to initialize with
+    /// @param  minPrice_       The minimum price to initialize with
+    function _enableDepositPeriod(
+        uint8 depositPeriod_,
+        uint256 tickSize_,
+        uint256 minPrice_
+    ) internal {
+        // Skip if already enabled (shouldn't happen due to validation, but defensive)
+        if (_depositPeriodsEnabled[depositPeriod_]) {
+            return;
+        }
+
+        // Enable the deposit period
+        _depositPeriodsEnabled[depositPeriod_] = true;
+
+        // Add the deposit period to the array if it is not already in it
+        if (!_depositPeriods.contains(depositPeriod_)) {
+            _depositPeriods.add(depositPeriod_);
+        }
+
+        // Initialize the tick with the new auction parameters
+        _depositPeriodPreviousTicks[depositPeriod_] = Tick(
+            minPrice_,
+            tickSize_,
+            uint48(block.timestamp)
+        );
+
+        // Increment the count
+        _depositPeriodsCount++;
+
+        // Emit event for actual enabling
+        emit DepositPeriodEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+    }
+
+    /// @notice Internal function to actually disable a deposit period
+    /// @param  depositPeriod_  The deposit period to disable
+    function _disableDepositPeriod(uint8 depositPeriod_) internal {
+        // Skip if already disabled (shouldn't happen due to validation, but defensive)
+        if (!_depositPeriodsEnabled[depositPeriod_]) {
+            return;
+        }
+
+        // Disable the deposit period
+        _depositPeriodsEnabled[depositPeriod_] = false;
+
+        // Remove the deposit period from the array
+        _depositPeriods.remove(depositPeriod_);
+
+        // Remove the tick
+        delete _depositPeriodPreviousTicks[depositPeriod_];
+
+        // Decrement the count
+        _depositPeriodsCount--;
+
+        // Emit event for actual disabling
+        emit DepositPeriodDisabled(address(_DEPOSIT_ASSET), depositPeriod_);
+    }
+
     // ========== ASSET CONFIGURATION ========== //
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -577,92 +701,74 @@ contract ConvertibleDepositAuctioneer is
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        Notes:
-    ///             - Enabling a deposit period will reset the minimum price and tick size to the standard values
+    ///             - Enabling a deposit period will queue the change to be processed at the next setAuctionParameters call
+    ///             - Can be called while the contract is disabled (changes will be processed when contract is enabled)
+    ///             - The deposit period will reset the minimum price and tick size to the standard values when actually enabled
     ///
     ///             This function will revert if:
-    ///             - The contract is not enabled
     ///             - The caller is not a manager or admin
-    ///             - The deposit period is already enabled for this asset
-    function enableDepositPeriod(
-        uint8 depositPeriod_
-    ) external override onlyEnabled onlyManagerOrAdminRole {
+    ///             - The deposit period is 0
+    ///             - The effective state would result in enabling an already enabled period
+    function enableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
         // Validate that the deposit period is not 0
         if (depositPeriod_ == 0)
             revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
 
-        // Validate that the deposit period is not already enabled
-        if (_depositPeriodsEnabled[depositPeriod_]) {
-            revert ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
-                address(_DEPOSIT_ASSET),
-                depositPeriod_
-            );
-        }
+        // Validate that this wouldn't result in a duplicate state
+        _validateNoDuplicatePendingChange(depositPeriod_, true);
 
-        // Update the tick data for all enabled deposit periods
-        // This is necessary, otherwise tick capacity and price will be calculated incorrectly
-        _updateCurrentTicks(0);
-
-        // Enable the deposit period
-        _depositPeriodsEnabled[depositPeriod_] = true;
-
-        // Add the deposit period to the array if it is not already in it
-        if (!_depositPeriods.contains(depositPeriod_)) {
-            _depositPeriods.add(depositPeriod_);
-        }
-
-        // Initialise the tick
-        _depositPeriodPreviousTicks[depositPeriod_] = Tick(
-            _auctionParameters.minPrice,
-            _auctionParameters.tickSize,
-            uint48(block.timestamp)
+        // Add to pending changes queue
+        _pendingDepositPeriodChanges.push(
+            PendingDepositPeriodChange({depositPeriod: depositPeriod_, enable: true})
         );
 
-        // Increment the count
-        _depositPeriodsCount++;
-
-        // Emit event
-        emit DepositPeriodEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
+        // Emit event to indicate the change has been queued
+        emit DepositPeriodEnableQueued(address(_DEPOSIT_ASSET), depositPeriod_);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
-    ///             - The contract is not enabled
+    /// @dev        Notes:
+    ///             - Disabling a deposit period will queue the change to be processed at the next setAuctionParameters call
+    ///             - Can be called while the contract is disabled (changes will be processed when contract is enabled)
+    ///
+    ///             This function will revert if:
     ///             - The caller is not a manager or admin
-    ///             - The deposit period is not enabled for this asset
-    function disableDepositPeriod(
-        uint8 depositPeriod_
-    ) external override onlyEnabled onlyManagerOrAdminRole {
-        // Validate that the deposit period is enabled
-        if (!_depositPeriodsEnabled[depositPeriod_]) {
-            revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
-                address(_DEPOSIT_ASSET),
-                depositPeriod_
-            );
-        }
+    ///             - The effective state would result in disabling an already disabled period
+    function disableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
+        // Validate that this wouldn't result in a duplicate state
+        _validateNoDuplicatePendingChange(depositPeriod_, false);
 
-        // Update the tick data for all enabled deposit periods
-        // This is necessary, otherwise tick capacity and price will be calculated incorrectly
-        _updateCurrentTicks(0);
+        // Add to pending changes queue
+        _pendingDepositPeriodChanges.push(
+            PendingDepositPeriodChange({depositPeriod: depositPeriod_, enable: false})
+        );
 
-        // Disable the deposit period
-        _depositPeriodsEnabled[depositPeriod_] = false;
-
-        // Remove the deposit period from the array
-        _depositPeriods.remove(depositPeriod_);
-
-        // Remove the tick
-        delete _depositPeriodPreviousTicks[depositPeriod_];
-
-        // Decrement the count
-        _depositPeriodsCount--;
-
-        // Emit event
-        emit DepositPeriodDisabled(address(_DEPOSIT_ASSET), depositPeriod_);
+        // Emit event to indicate the change has been queued
+        emit DepositPeriodDisableQueued(address(_DEPOSIT_ASSET), depositPeriod_);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getDepositPeriodsCount() external view override returns (uint256) {
         return _depositPeriodsCount;
+    }
+
+    /// @notice Get the current and pending state for a specific deposit period
+    /// @param depositPeriod_ The deposit period to check
+    /// @return isEnabled Whether the period is currently enabled
+    /// @return isPendingEnabled Whether the period will be enabled after pending changes are processed
+    function getDepositPeriodState(
+        uint8 depositPeriod_
+    ) external view returns (bool isEnabled, bool isPendingEnabled) {
+        // Current state
+        isEnabled = isDepositPeriodEnabled(depositPeriod_);
+
+        // Calculate effective state after all pending changes
+        isPendingEnabled = isEnabled;
+        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
+            if (_pendingDepositPeriodChanges[i].depositPeriod == depositPeriod_) {
+                isPendingEnabled = _pendingDepositPeriodChanges[i].enable;
+            }
+        }
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -819,16 +925,20 @@ contract ConvertibleDepositAuctioneer is
         // This prevents retroactive application of new parameters
         _updateCurrentTicks(0);
 
+        // Store the auction results based on the previous state, before any changes
+        _storeAuctionResults(previousTarget);
+
         // Update global state
         _setAuctionParameters(target_, tickSize_, minPrice_);
 
         // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price
 
-        // Ensure all ticks are updated with the new parameters
+        // Ensure all existing ticks are updated with the new parameters
         _setNewTickParameters(tickSize_, minPrice_, false, false, false);
 
-        // Store the auction results, if necessary
-        _storeAuctionResults(previousTarget);
+        // Process pending deposit period changes with the new parameters
+        // This must be called after _setNewTickParameters to ensure new periods get correct parameters
+        _processPendingDepositPeriodChanges(tickSize_, minPrice_);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -897,10 +1007,14 @@ contract ConvertibleDepositAuctioneer is
         // Set the auction tracking period
         setAuctionTrackingPeriod(params.auctionTrackingPeriod);
 
-        // Ensure all ticks have the current parameters
+        // Ensure all existing ticks have the current parameters
         // Also set the lastUpdate to the current block timestamp
         // Otherwise, getCurrentTick() will calculate a long period of time having passed
         _setNewTickParameters(params.tickSize, params.minPrice, true, true, true);
+
+        // Process any pending deposit period changes with the new parameters
+        // This enables queued changes to be processed immediately when contract is enabled
+        _processPendingDepositPeriodChanges(params.tickSize, params.minPrice);
 
         // Reset the day state
         _dayState = Day(uint48(block.timestamp), 0);

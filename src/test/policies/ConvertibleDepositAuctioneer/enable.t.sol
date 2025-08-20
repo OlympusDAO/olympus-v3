@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "admin" role
@@ -229,8 +230,8 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
 
     function test_contractDisabled()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(1e18)
         givenDisabled
     {
@@ -285,5 +286,62 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
 
         _assertAuctionResults(0, 0, 0, 0, 0, 0, 0);
         _assertAuctionResultsNextIndex(0);
+    }
+
+    /// @notice Test that pending deposit period changes are processed when the contract is enabled
+    function test_pendingChangesProcessedOnEnable() public {
+        // Queue some changes while contract is disabled
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS_TWO);
+
+        // Verify changes are pending
+        (bool isEnabled1, bool isPendingEnabled1) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        (bool isEnabled2, bool isPendingEnabled2) = auctioneer.getDepositPeriodState(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(isEnabled1, false, "period 1 should not be enabled yet");
+        assertEq(isPendingEnabled1, true, "period 1 should be pending enabled");
+        assertEq(isEnabled2, false, "period 2 should not be enabled yet");
+        assertEq(isPendingEnabled2, true, "period 2 should be pending enabled");
+
+        // Enable the contract - this should process pending changes
+        vm.prank(admin);
+        auctioneer.enable(
+            abi.encode(
+                IConvertibleDepositAuctioneer.EnableParams({
+                    target: TARGET,
+                    tickSize: TICK_SIZE,
+                    minPrice: MIN_PRICE,
+                    tickStep: TICK_STEP,
+                    auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
+                })
+            )
+        );
+
+        // Verify periods are now actually enabled
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            true,
+            "period 1 should be enabled"
+        );
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO),
+            true,
+            "period 2 should be enabled"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 2, "should have 2 enabled periods");
+
+        // Verify no pending changes remain
+        (bool finalEnabled1, bool finalPending1) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        (bool finalEnabled2, bool finalPending2) = auctioneer.getDepositPeriodState(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(finalEnabled1, true, "period 1 should be enabled");
+        assertEq(finalPending1, true, "period 1 pending should match current");
+        assertEq(finalEnabled2, true, "period 2 should be enabled");
+        assertEq(finalPending2, true, "period 2 pending should match current");
     }
 }

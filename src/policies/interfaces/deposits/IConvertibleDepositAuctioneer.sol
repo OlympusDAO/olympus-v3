@@ -74,6 +74,18 @@ interface IConvertibleDepositAuctioneer {
     /// @param  depositPeriod     The deposit period
     event DepositPeriodDisabled(address indexed depositAsset, uint8 depositPeriod);
 
+    /// @notice Emitted when a deposit period enable is queued
+    ///
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    event DepositPeriodEnableQueued(address indexed depositAsset, uint8 depositPeriod);
+
+    /// @notice Emitted when a deposit period disable is queued
+    ///
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    event DepositPeriodDisableQueued(address indexed depositAsset, uint8 depositPeriod);
+
     // ========== ERRORS ========== //
 
     /// @notice Emitted when the parameters are invalid
@@ -100,6 +112,13 @@ interface IConvertibleDepositAuctioneer {
     error ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
         address depositAsset,
         uint8 depositPeriod
+    );
+
+    /// @notice Emitted when the deposit period is in an invalid state for the requested operation
+    error ConvertibleDepositAuctioneer_DepositPeriodInvalidState(
+        address depositAsset,
+        uint8 depositPeriod,
+        bool latestState
     );
 
     // ========== DATA STRUCTURES ========== //

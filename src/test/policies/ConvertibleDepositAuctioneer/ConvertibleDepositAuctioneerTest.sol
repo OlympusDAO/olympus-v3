@@ -202,6 +202,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
         );
     }
 
+    function _expectDepositPeriodInvalidState(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_,
+        bool isEnabled_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodInvalidState
+                    .selector,
+                address(depositAsset_),
+                depositPeriod_,
+                isEnabled_
+            )
+        );
+    }
+
     function _assertAuctionParameters(
         uint256 target_,
         uint256 tickSize_,

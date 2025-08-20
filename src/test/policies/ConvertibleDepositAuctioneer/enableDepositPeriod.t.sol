@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -10,7 +11,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {console2} from "forge-std/console2.sol";
 
 contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepositAuctioneerTest {
-    event DepositPeriodEnabled(address indexed depositAsset, uint8 depositPeriod);
+    event DepositPeriodEnableQueued(address indexed depositAsset, uint8 depositPeriod);
 
     // when the caller does not have the "admin" or "manager" role
     //  [X] it reverts
@@ -28,15 +29,21 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     }
 
     // given the contract is not enabled
-    //  [X] it reverts
+    //  [X] it queues the enable (now allowed while disabled)
 
-    function test_givenContractNotEnabled_reverts() public {
-        // Expect revert
-        _expectNotEnabledRevert();
+    function test_givenContractNotEnabled_queuesEnable() public {
+        // Expect queued event (should work while disabled)
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        // Verify it was queued
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "period should be pending enabled");
     }
 
     // when the deposit period is zero
@@ -61,19 +68,11 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_givenDepositPeriodAlreadyEnabled_reverts()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer
-                    .ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled
-                    .selector,
-                address(iReserveToken),
-                PERIOD_MONTHS
-            )
-        );
+        _expectDepositPeriodInvalidState(iReserveToken, PERIOD_MONTHS, true);
 
         // Call function
         vm.prank(admin);
@@ -85,26 +84,36 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_givenDepositPeriodPreviouslyEnabled()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenDepositPeriodDisabled(PERIOD_MONTHS)
+        givenEnabled
     {
         // Warp forward, so we know the timestamp will be different
         vm.warp(block.timestamp + 1);
 
-        // Expect event
+        // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS, 0);
+        // Assert state - period should NOT be enabled yet (only queued)
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            false,
+            "deposit period should not be enabled yet"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count should still be 0");
 
-        // Check the tick is populated
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        // The tick should not be initialized yet
+        _assertPreviousTick(0, 0, TICK_SIZE, 0);
+
+        // Check pending changes
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "period should be pending enabled");
     }
 
     // given there is another deposit period enabled
@@ -115,22 +124,42 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_givenOtherDepositPeriodEnabled()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
     {
-        // Expect event
+        // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS + 1);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS + 1);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS + 1);
 
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS + 1, 1);
+        // Assert state - new period should NOT be enabled yet (only queued)
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS + 1),
+            false,
+            "new period should not be enabled yet"
+        );
+        assertEq(
+            auctioneer.getDepositPeriodsCount(),
+            1,
+            "count should still be 1 (existing period)"
+        );
 
-        // Check the tick is populated
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        // Original period should still be enabled
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            true,
+            "existing period should still be enabled"
+        );
+
+        // Check pending changes
+        (bool newIsEnabled, bool newIsPendingEnabled) = auctioneer.getDepositPeriodState(
+            PERIOD_MONTHS + 1
+        );
+        assertEq(newIsEnabled, false, "new period should not be enabled yet");
+        assertEq(newIsPendingEnabled, true, "new period should be pending enabled");
     }
 
     // [X] the deposit period is added to the deposit periods array
@@ -139,19 +168,74 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     // [X] an event is emitted
 
     function test_success() public givenEnabled {
-        // Expect event
+        // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS, 0);
+        // Assert state - period should NOT be enabled yet (only queued)
+        assertEq(
+            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
+            false,
+            "deposit period should not be enabled yet"
+        );
+        assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count should still be 0");
 
-        // Check the tick is populated
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        // The tick should not be initialized yet
+        _assertPreviousTick(0, 0, TICK_SIZE, 0);
+
+        // Check pending changes
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "period should be pending enabled");
+    }
+
+    /// @notice Test that queueing enable after enable for same period reverts
+    function test_enableAfterEnable_reverts() public givenEnabled {
+        // Queue first enable
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        // Expect revert when trying to enable again
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodInvalidState
+                    .selector,
+                address(iReserveToken),
+                PERIOD_MONTHS,
+                true // effective state would be enabled
+            )
+        );
+
+        // Call function again
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+    }
+
+    /// @notice Test enable -> disable -> enable sequence works correctly
+    function test_enableDisableEnableSequence() public givenEnabled {
+        // Queue enable
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        // Queue disable (should work since effective state becomes enabled then disabled)
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
+
+        // Queue enable again (should work since effective state is now disabled)
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        // Check final pending state - after enable -> disable -> enable sequence
+        (bool finalIsEnabled, bool finalIsPendingEnabled) = auctioneer.getDepositPeriodState(
+            PERIOD_MONTHS
+        );
+        assertEq(finalIsEnabled, false, "period should not be enabled yet");
+        assertEq(finalIsPendingEnabled, true, "period should end up pending enabled");
     }
 
     /// @notice Test that existing deposit periods maintain correct capacity allocation when a new period is enabled
