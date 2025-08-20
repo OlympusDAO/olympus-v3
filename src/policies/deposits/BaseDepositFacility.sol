@@ -409,7 +409,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_
-    ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
+    ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
         // Calculate the quantity of deposit token to withdraw and return
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
         uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
