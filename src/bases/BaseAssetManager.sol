@@ -40,6 +40,9 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         This function will revert if:
     ///         - The vault is not approved
     ///         - It is unable to pull the assets from the depositor
+    ///         - The minimum deposit requirement is not met
+    ///         - Adding the deposit would exceed the deposit cap
+    ///         - Zero shares would be received from the vault
     ///
     /// @param  asset_          The asset to deposit
     /// @param  depositor_      The depositor
@@ -188,6 +191,7 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         This function will revert if:
     ///         - The asset is already configured
     ///         - The vault asset does not match the asset
+    ///         - The minimum deposit exceeds the deposit cap
     ///
     /// @param asset_          The asset to configure
     /// @param vault_          The vault to use

@@ -42,8 +42,14 @@ interface IAssetManager {
 
     event AssetConfigured(address indexed asset, address indexed vault);
 
+    /// @notice Emitted when an asset's deposit cap is updated
+    /// @param asset      The ERC20 asset
+    /// @param depositCap The new deposit cap amount (in asset units)
     event AssetDepositCapSet(address indexed asset, uint256 depositCap);
 
+    /// @notice Emitted when an asset's minimum single-deposit amount is updated
+    /// @param asset           The ERC20 asset
+    /// @param minimumDeposit  The new minimum deposit amount (in asset units)
     event AssetMinimumDepositSet(address indexed asset, uint256 minimumDeposit);
 
     event AssetDeposited(
@@ -68,7 +74,7 @@ interface IAssetManager {
     ///
     /// @param isConfigured   Whether the asset is configured
     /// @param depositCap     The maximum amount of assets that can be deposited. Set to 0 to disable deposits.
-    /// @param minimumDeposit The minimum amount of assets that can be deposited in a single transaction
+    /// @param minimumDeposit The minimum amount of assets that can be deposited in a single transaction (set to 0 to disable the check)
     /// @param vault          The ERC4626 vault that the asset is deposited into
     struct AssetConfiguration {
         bool isConfigured;
