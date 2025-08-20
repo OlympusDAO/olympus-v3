@@ -400,6 +400,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function reverts if:
+    ///             - The contract is not active
+    ///             - Deposits are not enabled for the asset/period
+    ///             - The depositor has not approved the DepositManager to spend the receipt token
+    ///             - The depositor has an insufficient balance of the receipt token
     function reclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
