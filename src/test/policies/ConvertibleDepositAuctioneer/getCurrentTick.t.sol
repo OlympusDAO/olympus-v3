@@ -10,7 +10,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     // given the contract is disabled
     //  [X] it does not revert
 
-    function test_contractDisabled_reverts()
+    function test_contractDisabled_doesNotRevert()
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenEnabled

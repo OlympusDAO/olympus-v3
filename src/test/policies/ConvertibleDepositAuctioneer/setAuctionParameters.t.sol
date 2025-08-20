@@ -842,7 +842,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     }
 
     /// @notice Test that remaining deposit periods maintain correct capacity allocation when a period is disabled
-    /// @dev This test demonstrates a bug where disabling a deposit period causes remaining periods
+    /// @dev This test guards against a bug where disabling a deposit period could cause remaining periods
     ///      to gain extra capacity because _getCurrentTick recalculates using the NEW (smaller) period count
     ///      instead of preserving capacity accumulated with the original period count.
     ///

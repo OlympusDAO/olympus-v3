@@ -1198,7 +1198,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             // Tick three: 9075e16 * 1e9 / 1815e16 = 5e9
             // Tick four: 99825e15 * 1e9 / 19965e15 = 5e9
             // Tick five: 1098075e14 * 1e9 / 219615e14 = 5e9
-            // Tick six: 12078825e23 * 1e9 / 2395765e13 = 5e9
+            // Tick six: 12078825e13 * 1e9 / 2415765e13 = 5e9
             uint256 ticksOneToSixConvertedAmount = 40e9;
             uint256 tickSevenConvertedAmount = ((bidAmount - 73617075e13) * 1e9) / 26573415e12;
             expectedConvertedAmount = ticksOneToSixConvertedAmount + tickSevenConvertedAmount;
