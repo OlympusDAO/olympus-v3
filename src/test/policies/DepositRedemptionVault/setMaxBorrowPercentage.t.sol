@@ -57,7 +57,7 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
     //  [X] it reverts
 
     function test_whenAssetIsZeroAddress_reverts(uint16 rate_) public givenLocallyActive {
-        rate_ = uint16(bound(rate_, 100e2 + 1, type(uint16).max));
+        rate_ = uint16(bound(rate_, 0, 100e2));
 
         // Expect revert
         _expectRevertZeroAddress();
@@ -71,7 +71,7 @@ contract DepositRedemptionVaultSetMaxBorrowPercentageTest is DepositRedemptionVa
     //  [X] it reverts
 
     function test_whenFacilityIsZeroAddress_reverts(uint16 rate_) public givenLocallyActive {
-        rate_ = uint16(bound(rate_, 100e2 + 1, type(uint16).max));
+        rate_ = uint16(bound(rate_, 0, 100e2));
 
         // Expect revert
         _expectRevertZeroAddress();
