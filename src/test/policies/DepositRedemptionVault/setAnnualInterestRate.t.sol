@@ -61,6 +61,34 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
         redemptionVault.setAnnualInterestRate(iReserveToken, address(cdFacility), rate_);
     }
 
+    // when the asset is the zero address
+    //  [X] it reverts
+
+    function test_whenAssetIsZeroAddress_reverts(uint16 rate_) public givenLocallyActive {
+        rate_ = uint16(bound(rate_, 100e2 + 1, type(uint16).max));
+
+        // Expect revert
+        _expectRevertZeroAddress();
+
+        // Call function
+        vm.prank(admin);
+        redemptionVault.setAnnualInterestRate(IERC20(address(0)), address(cdFacility), rate_);
+    }
+
+    // when the facility is the zero address
+    //  [X] it reverts
+
+    function test_whenFacilityIsZeroAddress_reverts(uint16 rate_) public givenLocallyActive {
+        rate_ = uint16(bound(rate_, 100e2 + 1, type(uint16).max));
+
+        // Expect revert
+        _expectRevertZeroAddress();
+
+        // Call function
+        vm.prank(admin);
+        redemptionVault.setAnnualInterestRate(iReserveToken, address(0), rate_);
+    }
+
     // given the asset is not supported
     //  [X] it sets the annual interest rate for the asset
     //  [X] it emits a InterestRateSet event
@@ -82,6 +110,35 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
         // Assert
         assertEq(
             redemptionVault.getAnnualInterestRate(IERC20(address(asset)), address(cdFacility)),
+            rate_,
+            "annual interest rate mismatch"
+        );
+    }
+
+    // given the facility is not authorized
+    //  [X] it sets the max borrow percentage for the asset
+    //  [X] it emits a AnnualInterestRateSet event
+
+    function test_givenFacilityIsNotAuthorized(
+        bool isAdmin_,
+        uint16 rate_
+    ) public givenLocallyActive {
+        rate_ = uint16(bound(rate_, 0, 100e2));
+        address caller = isAdmin_ ? admin : manager;
+
+        address facility = address(0xDDDD);
+
+        // Expect emit
+        vm.expectEmit(true, true, true, true);
+        emit AnnualInterestRateSet(address(iReserveToken), address(facility), rate_);
+
+        // Call function
+        vm.prank(caller);
+        redemptionVault.setAnnualInterestRate(iReserveToken, address(facility), rate_);
+
+        // Assert
+        assertEq(
+            redemptionVault.getAnnualInterestRate(iReserveToken, address(facility)),
             rate_,
             "annual interest rate mismatch"
         );

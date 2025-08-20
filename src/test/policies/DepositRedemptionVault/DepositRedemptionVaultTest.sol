@@ -1125,4 +1125,10 @@ contract DepositRedemptionVaultTest is Test {
             )
         );
     }
+
+    function _expectRevertZeroAddress() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAddress.selector)
+        );
+    }
 }
