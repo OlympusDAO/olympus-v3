@@ -81,6 +81,7 @@ interface IDepositRedemptionVault {
 
     error RedemptionVault_AlreadyRedeemed(address user, uint16 redemptionId);
 
+    error RedemptionVault_ZeroAddress();
     error RedemptionVault_OutOfBounds(uint16 rate);
 
     error RedemptionVault_UnpaidLoan(address user, uint16 redemptionId);

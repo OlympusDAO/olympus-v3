@@ -849,11 +849,21 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc IDepositRedemptionVault
     /// @dev    Notes:
     ///         - When setting the max borrow percentage, keep in mind the annual interest rate and claim default reward percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
+    ///         - This function allows setting the value even if the asset or facility are not registered
+    ///
+    ///         This function reverts if:
+    ///         - The contract is not enabled
+    ///         - The caller does not have the admin or manager role
+    ///         - asset_ is the zero address
+    ///         - facility_ is the zero address
+    ///         - percent_ is out of range
     function setMaxBorrowPercentage(
         IERC20 asset_,
         address facility_,
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
+        if (address(asset_) == address(0)) revert RedemptionVault_ZeroAddress();
+        if (address(facility_) == address(0)) revert RedemptionVault_ZeroAddress();
         if (percent_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(percent_);
 
         _assetFacilityMaxBorrowPercentages[
@@ -874,11 +884,21 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc IDepositRedemptionVault
     /// @dev    Notes:
     ///         - When setting the annual interest rate, keep in mind the max borrow percentage and claim default reward percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
+    ///         - This function allows setting the value even if the asset or facility are not registered
+    ///
+    ///         This function reverts if:
+    ///         - The contract is not enabled
+    ///         - The caller does not have the admin or manager role
+    ///         - asset_ is the zero address
+    ///         - facility_ is the zero address
+    ///         - percent_ is out of range
     function setAnnualInterestRate(
         IERC20 asset_,
         address facility_,
         uint16 rate_
     ) external onlyEnabled onlyManagerOrAdminRole {
+        if (address(asset_) == address(0)) revert RedemptionVault_ZeroAddress();
+        if (address(facility_) == address(0)) revert RedemptionVault_ZeroAddress();
         if (rate_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(rate_);
 
         _assetFacilityAnnualInterestRates[_getAssetFacilityKey(address(asset_), facility_)] = rate_;
