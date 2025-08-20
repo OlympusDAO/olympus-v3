@@ -53,6 +53,15 @@ abstract contract BaseAssetManager is IAssetManager {
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
 
+        // Validate that the deposit meets the minimum deposit requirement
+        if (amount_ < assetConfiguration.minimumDeposit) {
+            revert AssetManager_MinimumDepositNotMet(
+                address(asset_),
+                amount_,
+                assetConfiguration.minimumDeposit
+            );
+        }
+
         // Validate that adding the deposit will not exceed the deposit cap
         {
             (, uint256 assetAmountBefore) = getOperatorAssets(asset_, msg.sender);
@@ -180,10 +189,16 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         - The asset is already configured
     ///         - The vault asset does not match the asset
     ///
-    /// @param asset_       The asset to configure
-    /// @param vault_       The vault to use
-    /// @param depositCap_  The deposit cap of the asset
-    function _addAsset(IERC20 asset_, IERC4626 vault_, uint256 depositCap_) internal {
+    /// @param asset_          The asset to configure
+    /// @param vault_          The vault to use
+    /// @param depositCap_     The deposit cap of the asset
+    /// @param minimumDeposit_ The minimum deposit amount for the asset
+    function _addAsset(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) internal {
         // Validate that the asset is not the zero address
         if (address(asset_) == address(0)) {
             revert AssetManager_InvalidAsset();
@@ -199,11 +214,21 @@ abstract contract BaseAssetManager is IAssetManager {
             revert AssetManager_VaultAssetMismatch();
         }
 
+        // Validate that minimum deposit does not exceed deposit cap
+        if (minimumDeposit_ > depositCap_) {
+            revert AssetManager_MinimumDepositExceedsDepositCap(
+                address(asset_),
+                minimumDeposit_,
+                depositCap_
+            );
+        }
+
         // Configure the asset
         _assetConfigurations[asset_] = AssetConfiguration({
             isConfigured: true,
             vault: address(vault_),
-            depositCap: depositCap_
+            depositCap: depositCap_,
+            minimumDeposit: minimumDeposit_
         });
 
         // Add the asset to the array of configured assets
@@ -211,6 +236,7 @@ abstract contract BaseAssetManager is IAssetManager {
 
         emit AssetConfigured(address(asset_), address(vault_), depositCap_);
         emit AssetDepositCapSet(address(asset_), depositCap_);
+        emit AssetMinimumDepositSet(address(asset_), minimumDeposit_);
     }
 
     /// @notice Set the deposit cap for an asset
@@ -218,6 +244,7 @@ abstract contract BaseAssetManager is IAssetManager {
     ///
     ///         This function will revert if:
     ///         - The asset is not configured
+    ///         - The deposit cap is less than the minimum deposit
     ///
     /// @param asset_          The asset to set the deposit cap for
     /// @param depositCap_     The deposit cap to set for the asset
@@ -225,9 +252,52 @@ abstract contract BaseAssetManager is IAssetManager {
         // Validate that the asset is configured
         if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
 
+        // Validate that deposit cap is not less than minimum deposit
+        uint256 minimumDeposit = _assetConfigurations[asset_].minimumDeposit;
+        if (depositCap_ < minimumDeposit) {
+            revert AssetManager_MinimumDepositExceedsDepositCap(
+                address(asset_),
+                minimumDeposit,
+                depositCap_
+            );
+        }
+
         // Set the deposit cap
         _assetConfigurations[asset_].depositCap = depositCap_;
         emit AssetDepositCapSet(address(asset_), depositCap_);
+    }
+
+    /// @notice Set the minimum deposit for an asset
+    /// @dev    This function will set the minimum deposit for an asset.
+    ///
+    ///         The minimum deposit prevents insolvency issues that can occur when small deposits
+    ///         accrue large amounts of yield. When claiming yield on such deposits, all vault shares
+    ///         may be burned while liabilities remain, causing the DepositManager_Insolvent error
+    ///         and blocking subsequent yield claims.
+    ///
+    ///         This function will revert if:
+    ///         - The asset is not configured
+    ///         - The minimum deposit exceeds the deposit cap
+    ///
+    /// @param asset_           The asset to set the minimum deposit for
+    /// @param minimumDeposit_  The minimum deposit to set for the asset
+    function _setAssetMinimumDeposit(IERC20 asset_, uint256 minimumDeposit_) internal {
+        // Validate that the asset is configured
+        if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
+
+        // Validate that minimum deposit does not exceed deposit cap
+        uint256 depositCap = _assetConfigurations[asset_].depositCap;
+        if (minimumDeposit_ > depositCap) {
+            revert AssetManager_MinimumDepositExceedsDepositCap(
+                address(asset_),
+                minimumDeposit_,
+                depositCap
+            );
+        }
+
+        // Set the minimum deposit
+        _assetConfigurations[asset_].minimumDeposit = minimumDeposit_;
+        emit AssetMinimumDepositSet(address(asset_), minimumDeposit_);
     }
 
     function _isConfiguredAsset(IERC20 asset_) internal view returns (bool) {

@@ -131,13 +131,13 @@ contract DepositManagerTest is Test {
 
     modifier givenAssetIsAdded() {
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, iVault, type(uint256).max);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, 0);
         _;
     }
 
     modifier givenAssetIsAddedWithZeroAddress() {
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max, 0);
         _;
     }
 

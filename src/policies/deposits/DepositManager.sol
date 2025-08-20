@@ -379,22 +379,44 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by the manager or admin role
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the admin or manager role
+    ///             - asset_ is the zero address
+    ///             - minimumDeposit_ > depositCap_
     function addAsset(
         IERC20 asset_,
         IERC4626 vault_,
-        uint256 depositCap_
+        uint256 depositCap_,
+        uint256 minimumDeposit_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        _addAsset(asset_, vault_, depositCap_);
+        _addAsset(asset_, vault_, depositCap_, minimumDeposit_);
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by the manager or admin role
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the admin or manager role
+    ///             - asset_ is not configured
+    ///             - The existing minimum deposit > depositCap_
     function setAssetDepositCap(
         IERC20 asset_,
         uint256 depositCap_
     ) external onlyEnabled onlyManagerOrAdminRole {
         _setAssetDepositCap(asset_, depositCap_);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the admin or manager role
+    ///             - asset_ is not configured
+    ///             - minimumDeposit_ > the existing deposit cap
+    function setAssetMinimumDeposit(
+        IERC20 asset_,
+        uint256 minimumDeposit_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        _setAssetMinimumDeposit(asset_, minimumDeposit_);
     }
 
     /// @inheritdoc IDepositManager

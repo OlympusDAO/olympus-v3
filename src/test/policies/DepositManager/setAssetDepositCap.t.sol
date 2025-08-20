@@ -51,6 +51,33 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
         depositManager.setAssetDepositCap(iAsset, 100e18);
     }
 
+    // when deposit cap is less than minimum deposit
+    //  [X] it reverts
+
+    function test_whenDepositCapIsLessThanMinimumDeposit_reverts(
+        uint256 minimumDeposit_,
+        uint256 depositCap_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
+        minimumDeposit_ = bound(minimumDeposit_, 1, type(uint128).max);
+        depositCap_ = bound(depositCap_, 0, minimumDeposit_ - 1);
+
+        // Add asset with minimum deposit
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, minimumDeposit_);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_MinimumDepositExceedsDepositCap.selector,
+                address(iAsset),
+                minimumDeposit_,
+                depositCap_
+            )
+        );
+
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, depositCap_);
+    }
+
     // [X] it sets the deposit cap
     // [X] it emits an event
 

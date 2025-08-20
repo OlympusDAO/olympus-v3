@@ -146,7 +146,8 @@ contract ConvertibleDepositFacilityTest is Test {
         depositManager.addAsset(
             IERC20(address(reserveToken)),
             IERC4626(address(vault)),
-            type(uint256).max
+            type(uint256).max,
+            0
         );
 
         // Set the facility names
@@ -181,7 +182,8 @@ contract ConvertibleDepositFacilityTest is Test {
         depositManager.addAsset(
             IERC20(address(reserveTokenTwo)),
             IERC4626(address(vaultTwo)),
-            type(uint256).max
+            type(uint256).max,
+            0
         );
 
         // Enable the token/period/facility combo

@@ -26,11 +26,25 @@ interface IAssetManager {
         uint256 depositCap
     );
 
+    error AssetManager_MinimumDepositNotMet(
+        address asset,
+        uint256 depositAmount,
+        uint256 minimumDeposit
+    );
+
+    error AssetManager_MinimumDepositExceedsDepositCap(
+        address asset,
+        uint256 minimumDeposit,
+        uint256 depositCap
+    );
+
     // ========== EVENTS ========== //
 
     event AssetConfigured(address indexed asset, address indexed vault, uint256 depositCap);
 
     event AssetDepositCapSet(address indexed asset, uint256 depositCap);
+
+    event AssetMinimumDepositSet(address indexed asset, uint256 minimumDeposit);
 
     event AssetDeposited(
         address indexed asset,
@@ -52,12 +66,14 @@ interface IAssetManager {
 
     /// @notice Configuration for an asset
     ///
-    /// @param isConfigured  Whether the asset is configured
-    /// @param depositCap    The maximum amount of assets that can be deposited. Set to 0 to disable deposits.
-    /// @param vault         The ERC4626 vault that the asset is deposited into
+    /// @param isConfigured   Whether the asset is configured
+    /// @param depositCap     The maximum amount of assets that can be deposited. Set to 0 to disable deposits.
+    /// @param minimumDeposit The minimum amount of assets that can be deposited in a single transaction
+    /// @param vault          The ERC4626 vault that the asset is deposited into
     struct AssetConfiguration {
         bool isConfigured;
         uint256 depositCap;
+        uint256 minimumDeposit;
         address vault;
     }
 

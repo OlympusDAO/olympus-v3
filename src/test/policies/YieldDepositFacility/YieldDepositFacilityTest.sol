@@ -170,7 +170,7 @@ contract YieldDepositFacilityTest is Test {
         depositManager.setOperatorName(address(cdFacility), "cdf");
         depositManager.setOperatorName(address(yieldDepositFacility), "ydf");
 
-        depositManager.addAsset(iReserveToken, iVault, type(uint256).max);
+        depositManager.addAsset(iReserveToken, iVault, type(uint256).max, 0);
 
         // Enable the token/period/facility combo
         depositManager.addAssetPeriod(
@@ -192,7 +192,7 @@ contract YieldDepositFacilityTest is Test {
 
         // Create a second receipt token
         vm.startPrank(admin);
-        depositManager.addAsset(iReserveTokenTwo, iVaultTwo, type(uint256).max);
+        depositManager.addAsset(iReserveTokenTwo, iVaultTwo, type(uint256).max, 0);
 
         // Enable the token/period/facility combo
         depositManager.addAssetPeriod(
