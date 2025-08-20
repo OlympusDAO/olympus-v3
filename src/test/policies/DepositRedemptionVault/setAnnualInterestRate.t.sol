@@ -116,7 +116,7 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
     }
 
     // given the facility is not authorized
-    //  [X] it sets the max borrow percentage for the asset
+    //  [X] it sets the annual interest rate for the asset
     //  [X] it emits a AnnualInterestRateSet event
 
     function test_givenFacilityIsNotAuthorized(
