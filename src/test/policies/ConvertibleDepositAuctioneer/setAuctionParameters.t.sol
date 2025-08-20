@@ -1065,12 +1065,17 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 manualNewCapacity = storedTickA.capacity + expectedCapacityToAdd2Periods;
         console2.log("Manual calculation: stored + expected =", manualNewCapacity);
 
-        // Step 4: Enable period C, changing the total to 3 periods
+        // Step 4: Queue enabling period C
         vm.prank(admin);
         auctioneer.enableDepositPeriod(periodC);
 
+        // Process the queued change (applies when parameters are set)
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
         console2.log("\n=== AFTER ENABLING PERIOD C ===");
         console2.log("Periods count:", auctioneer.getDepositPeriodsCount());
+        assertEq(auctioneer.getDepositPeriodsCount(), 3, "3 periods should be enabled after processing");
 
         // Step 5: Check tick states after enabling period C
         IConvertibleDepositAuctioneer.Tick memory actualTickA = auctioneer.getCurrentTick(periodA);
