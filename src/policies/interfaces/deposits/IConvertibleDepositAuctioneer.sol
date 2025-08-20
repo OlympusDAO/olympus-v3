@@ -109,10 +109,11 @@ interface IConvertibleDepositAuctioneer {
     );
 
     /// @notice Emitted when the deposit period is in an invalid state for the requested operation
+    /// @param  isEnabled   The current enabled state: true if enabled, false if disabled
     error ConvertibleDepositAuctioneer_DepositPeriodInvalidState(
         address depositAsset,
         uint8 depositPeriod,
-        bool latestState
+        bool isEnabled
     );
 
     // ========== DATA STRUCTURES ========== //
@@ -269,8 +270,8 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Returns whether a deposit period is enabled
     ///
     /// @param  depositPeriod_      The deposit period
-    /// @return isEnabled           Whether the deposit period is enabled
-    /// @return isPendingEnabled    Whether the period will be enabled after pending changes are processed
+    /// @return isEnabled           Current state
+    /// @return isPendingEnabled    Desired state after applying all queued changes (equals isEnabled if no changes are queued)
     function isDepositPeriodEnabled(
         uint8 depositPeriod_
     ) external view returns (bool isEnabled, bool isPendingEnabled);

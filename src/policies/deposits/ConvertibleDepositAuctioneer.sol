@@ -551,7 +551,7 @@ contract ConvertibleDepositAuctioneer is
 
     // ========== PENDING CHANGES HELPERS ========== //
 
-    /// @notice Validates that there is no duplicate pending change for the deposit period
+    /// @notice Validates that the requested action would not result in the same effective state, preventing redundant queue operations
     /// @param  depositPeriod_  The deposit period to check
     /// @param  enable_         Whether the requested operation is to enable (true) or disable (false)
     function _validateNoDuplicatePendingChange(uint8 depositPeriod_, bool enable_) internal view {
