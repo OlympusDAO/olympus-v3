@@ -684,13 +684,27 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function isDepositPeriodEnabled(uint8 depositPeriod_) public view override returns (bool) {
-        return _depositPeriodsEnabled[depositPeriod_];
+    function isDepositPeriodEnabled(
+        uint8 depositPeriod_
+    ) public view override returns (bool isEnabled, bool isPendingEnabled) {
+        // Current state
+        isEnabled = _depositPeriodsEnabled[depositPeriod_];
+
+        // Calculate effective state after all pending changes
+        isPendingEnabled = isEnabled;
+        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
+            if (_pendingDepositPeriodChanges[i].depositPeriod == depositPeriod_) {
+                isPendingEnabled = _pendingDepositPeriodChanges[i].enable;
+            }
+        }
+
+        return (isEnabled, isPendingEnabled);
     }
 
     /// @notice Modifier to check if a deposit period is enabled
     modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
-        if (!isDepositPeriodEnabled(depositPeriod_)) {
+        (bool isEnabled, ) = isDepositPeriodEnabled(depositPeriod_);
+        if (!isEnabled) {
             revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
                 address(_DEPOSIT_ASSET),
                 depositPeriod_
@@ -750,25 +764,6 @@ contract ConvertibleDepositAuctioneer is
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getDepositPeriodsCount() external view override returns (uint256) {
         return _depositPeriodsCount;
-    }
-
-    /// @notice Get the current and pending state for a specific deposit period
-    /// @param depositPeriod_ The deposit period to check
-    /// @return isEnabled Whether the period is currently enabled
-    /// @return isPendingEnabled Whether the period will be enabled after pending changes are processed
-    function getDepositPeriodState(
-        uint8 depositPeriod_
-    ) external view returns (bool isEnabled, bool isPendingEnabled) {
-        // Current state
-        isEnabled = isDepositPeriodEnabled(depositPeriod_);
-
-        // Calculate effective state after all pending changes
-        isPendingEnabled = isEnabled;
-        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
-            if (_pendingDepositPeriodChanges[i].depositPeriod == depositPeriod_) {
-                isPendingEnabled = _pendingDepositPeriodChanges[i].enable;
-            }
-        }
     }
 
     // ========== ADMIN FUNCTIONS ========== //

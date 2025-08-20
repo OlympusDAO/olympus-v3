@@ -118,7 +118,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function getDepositPeriods() external view override returns (uint8[] memory) {}
 
-    function isDepositPeriodEnabled(uint8 depositPeriod_) external view override returns (bool) {}
+    function isDepositPeriodEnabled(
+        uint8 depositPeriod_
+    ) external view override returns (bool, bool) {}
 
     function getDepositPeriodsCount() external view override returns (uint256) {}
 }

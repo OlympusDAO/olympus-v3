@@ -94,8 +94,8 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         auctioneer.enableDepositPeriod(PERIOD_MONTHS_TWO);
 
         // Verify pending changes exist
-        (bool enabled1, bool pending1) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        (bool enabled2, bool pending2) = auctioneer.getDepositPeriodState(PERIOD_MONTHS_TWO);
+        (bool enabled1, bool pending1) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        (bool enabled2, bool pending2) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
         assertEq(enabled1, true, "period 1 should be enabled");
         assertEq(pending1, false, "period 1 should be pending disabled");
         assertEq(enabled2, false, "period 2 should not be enabled");
@@ -106,8 +106,8 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         auctioneer.disable("");
 
         // Verify pending changes are preserved
-        (bool finalEnabled1, bool finalPending1) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        (bool finalEnabled2, bool finalPending2) = auctioneer.getDepositPeriodState(
+        (bool finalEnabled1, bool finalPending1) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        (bool finalEnabled2, bool finalPending2) = auctioneer.isDepositPeriodEnabled(
             PERIOD_MONTHS_TWO
         );
         assertEq(finalEnabled1, true, "period 1 should still be enabled");
@@ -126,7 +126,7 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
         givenEnabled
     {
         // No pending changes queued - verify current state
-        (bool enabled, bool pending) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        (bool enabled, bool pending) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
         assertEq(enabled, true, "period should be enabled");
         assertEq(pending, true, "pending should match current (no changes queued)");
 
@@ -140,7 +140,7 @@ contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneer
 
         // Verify contract is disabled and state unchanged
         assertEq(auctioneer.isEnabled(), false, "contract should be disabled");
-        (bool finalEnabled, bool finalPending) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        (bool finalEnabled, bool finalPending) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
         assertEq(finalEnabled, true, "period should still be enabled");
         assertEq(finalPending, true, "pending should still match current");
     }

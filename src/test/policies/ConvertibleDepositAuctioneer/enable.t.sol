@@ -298,8 +298,10 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         auctioneer.enableDepositPeriod(PERIOD_MONTHS_TWO);
 
         // Verify changes are pending
-        (bool isEnabled1, bool isPendingEnabled1) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        (bool isEnabled2, bool isPendingEnabled2) = auctioneer.getDepositPeriodState(
+        (bool isEnabled1, bool isPendingEnabled1) = auctioneer.isDepositPeriodEnabled(
+            PERIOD_MONTHS
+        );
+        (bool isEnabled2, bool isPendingEnabled2) = auctioneer.isDepositPeriodEnabled(
             PERIOD_MONTHS_TWO
         );
         assertEq(isEnabled1, false, "period 1 should not be enabled yet");
@@ -322,26 +324,15 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
         );
 
         // Verify periods are now actually enabled
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            true,
-            "period 1 should be enabled"
-        );
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO),
-            true,
-            "period 2 should be enabled"
-        );
-        assertEq(auctioneer.getDepositPeriodsCount(), 2, "should have 2 enabled periods");
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, true, "period 1 should be enabled");
+        assertEq(isPendingEnabled, true, "period 1 pending should match current");
 
-        // Verify no pending changes remain
-        (bool finalEnabled1, bool finalPending1) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        (bool finalEnabled2, bool finalPending2) = auctioneer.getDepositPeriodState(
-            PERIOD_MONTHS_TWO
-        );
-        assertEq(finalEnabled1, true, "period 1 should be enabled");
-        assertEq(finalPending1, true, "period 1 pending should match current");
-        assertEq(finalEnabled2, true, "period 2 should be enabled");
-        assertEq(finalPending2, true, "period 2 pending should match current");
+        (bool isEnabledPeriodTwo, bool isPendingEnabledPeriodTwo) = auctioneer
+            .isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
+        assertEq(isEnabledPeriodTwo, true, "period 2 should be enabled");
+        assertEq(isPendingEnabledPeriodTwo, true, "period 2 pending should match current");
+
+        assertEq(auctioneer.getDepositPeriodsCount(), 2, "should have 2 enabled periods");
     }
 }

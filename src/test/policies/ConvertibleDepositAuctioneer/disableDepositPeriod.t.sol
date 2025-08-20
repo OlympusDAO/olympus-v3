@@ -28,7 +28,7 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Verify it was queued
-        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
         assertEq(isEnabled, true, "period should still be enabled");
         assertEq(isPendingEnabled, false, "period should be pending disabled");
     }
@@ -81,17 +81,11 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Assert state - period should still be enabled (only queued for disable)
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            true,
-            "deposit period should still be enabled"
-        );
-        assertEq(auctioneer.getDepositPeriodsCount(), 1, "deposit periods count should still be 1");
-
-        // Check pending changes
-        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        assertEq(isEnabled, true, "period should still be enabled");
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, true, "deposit period should still be enabled");
         assertEq(isPendingEnabled, false, "period should be pending disabled");
+
+        assertEq(auctioneer.getDepositPeriodsCount(), 1, "deposit periods count should still be 1");
     }
 
     // [X] it removes the deposit period from the deposit periods array
@@ -114,22 +108,20 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Assert state - both periods should still be enabled
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            true,
-            "first period should still be enabled"
-        );
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS + 1),
-            true,
-            "second period should still be enabled"
-        );
-        assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should still be 2");
-
-        // Check pending changes
-        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        assertEq(isEnabled, true, "period should still be enabled");
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, true, "first period should still be enabled");
         assertEq(isPendingEnabled, false, "period should be pending disabled");
+
+        (bool isEnabledPeriodTwo, bool isPendingEnabledPeriodTwo) = auctioneer
+            .isDepositPeriodEnabled(PERIOD_MONTHS + 1);
+        assertEq(isEnabledPeriodTwo, true, "second period should still be enabled");
+        assertEq(
+            isPendingEnabledPeriodTwo,
+            true,
+            "second period pending enabled should match current state"
+        );
+
+        assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should still be 2");
     }
 
     /// @notice Test that queueing disable after disable for same period reverts
@@ -197,7 +189,7 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Check final pending state - after disable -> enable -> disable sequence
-        (bool finalIsEnabled, bool finalIsPendingEnabled) = auctioneer.getDepositPeriodState(
+        (bool finalIsEnabled, bool finalIsPendingEnabled) = auctioneer.isDepositPeriodEnabled(
             PERIOD_MONTHS
         );
         assertEq(finalIsEnabled, true, "period should still be enabled");

@@ -268,9 +268,12 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Returns whether a deposit period is enabled
     ///
-    /// @param  depositPeriod_  The deposit period
-    /// @return isEnabled       Whether the deposit period is enabled
-    function isDepositPeriodEnabled(uint8 depositPeriod_) external view returns (bool isEnabled);
+    /// @param  depositPeriod_      The deposit period
+    /// @return isEnabled           Whether the deposit period is enabled
+    /// @return isPendingEnabled    Whether the period will be enabled after pending changes are processed
+    function isDepositPeriodEnabled(
+        uint8 depositPeriod_
+    ) external view returns (bool isEnabled, bool isPendingEnabled);
 
     /// @notice Enables a deposit period
     /// @dev    The implementing contract is expected to handle the following:

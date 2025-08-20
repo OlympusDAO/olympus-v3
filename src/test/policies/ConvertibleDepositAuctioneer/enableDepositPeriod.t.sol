@@ -41,7 +41,7 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
         // Verify it was queued
-        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
         assertEq(isEnabled, false, "period should not be enabled yet");
         assertEq(isPendingEnabled, true, "period should be pending enabled");
     }
@@ -100,20 +100,14 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
         // Assert state - period should NOT be enabled yet (only queued)
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            false,
-            "deposit period should not be enabled yet"
-        );
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "deposit period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "deposit period should be pending enabled");
+
         assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count should still be 0");
 
         // The tick should not be initialized yet
         _assertPreviousTick(0, 0, TICK_SIZE, 0);
-
-        // Check pending changes
-        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        assertEq(isEnabled, false, "period should not be enabled yet");
-        assertEq(isPendingEnabled, true, "period should be pending enabled");
     }
 
     // given there is another deposit period enabled
@@ -136,11 +130,11 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         auctioneer.enableDepositPeriod(PERIOD_MONTHS + 1);
 
         // Assert state - new period should NOT be enabled yet (only queued)
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS + 1),
-            false,
-            "new period should not be enabled yet"
-        );
+        (bool isEnabledPeriodTwo, bool isPendingEnabledPeriodTwo) = auctioneer
+            .isDepositPeriodEnabled(PERIOD_MONTHS + 1);
+        assertEq(isEnabledPeriodTwo, false, "new period should not be enabled yet");
+        assertEq(isPendingEnabledPeriodTwo, true, "new period should be pending enabled");
+
         assertEq(
             auctioneer.getDepositPeriodsCount(),
             1,
@@ -148,18 +142,9 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         );
 
         // Original period should still be enabled
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            true,
-            "existing period should still be enabled"
-        );
-
-        // Check pending changes
-        (bool newIsEnabled, bool newIsPendingEnabled) = auctioneer.getDepositPeriodState(
-            PERIOD_MONTHS + 1
-        );
-        assertEq(newIsEnabled, false, "new period should not be enabled yet");
-        assertEq(newIsPendingEnabled, true, "new period should be pending enabled");
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, true, "existing period should still be enabled");
+        assertEq(isPendingEnabled, true, "existing period pending should match current state");
     }
 
     // [X] the deposit period is added to the deposit periods array
@@ -177,20 +162,14 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
         // Assert state - period should NOT be enabled yet (only queued)
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            false,
-            "deposit period should not be enabled yet"
-        );
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "deposit period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "period should be pending enabled");
+
         assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count should still be 0");
 
         // The tick should not be initialized yet
         _assertPreviousTick(0, 0, TICK_SIZE, 0);
-
-        // Check pending changes
-        (bool isEnabled, bool isPendingEnabled) = auctioneer.getDepositPeriodState(PERIOD_MONTHS);
-        assertEq(isEnabled, false, "period should not be enabled yet");
-        assertEq(isPendingEnabled, true, "period should be pending enabled");
     }
 
     /// @notice Test that queueing enable after enable for same period reverts
@@ -231,7 +210,7 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
         // Check final pending state - after enable -> disable -> enable sequence
-        (bool finalIsEnabled, bool finalIsPendingEnabled) = auctioneer.getDepositPeriodState(
+        (bool finalIsEnabled, bool finalIsPendingEnabled) = auctioneer.isDepositPeriodEnabled(
             PERIOD_MONTHS
         );
         assertEq(finalIsEnabled, false, "period should not be enabled yet");

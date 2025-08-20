@@ -635,11 +635,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.enableDepositPeriod(newPeriod);
 
         // Verify period is not enabled yet
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(newPeriod),
-            false,
-            "period should not be enabled yet"
-        );
+        (bool isEnabled, ) = auctioneer.isDepositPeriodEnabled(newPeriod);
+        assertEq(isEnabled, false, "period should not be enabled yet");
         assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should still be 1");
 
         // New auction parameters
@@ -656,7 +653,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Verify the period is now enabled
-        assertEq(auctioneer.isDepositPeriodEnabled(newPeriod), true, "period should be enabled");
+        (isEnabled, ) = auctioneer.isDepositPeriodEnabled(newPeriod);
+        assertEq(isEnabled, true, "period should be enabled");
         assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should be 2");
 
         // Verify the new period was initialized with NEW parameters
@@ -689,11 +687,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
         // Verify period is still enabled
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            true,
-            "period should still be enabled"
-        );
+        (bool isEnabled, ) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, true, "period should still be enabled");
         assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should still be 2");
 
         // New auction parameters
@@ -710,19 +705,13 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Verify the period is now disabled
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            false,
-            "period should be disabled"
-        );
+        (isEnabled, ) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "period should be disabled");
         assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should be 1");
 
         // Verify the remaining period still works
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO),
-            true,
-            "other period should still be enabled"
-        );
+        (bool isEnabledPeriodTwo, ) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
+        assertEq(isEnabledPeriodTwo, true, "other period should still be enabled");
 
         // Verify auction results were stored before the change (with old count of 2)
         int256[] memory results = auctioneer.getAuctionResults();
@@ -769,16 +758,10 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Verify final state
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS),
-            false,
-            "old period should be disabled"
-        );
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(newPeriod),
-            true,
-            "new period should be enabled"
-        );
+        (bool isEnabled, ) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "old period should be disabled");
+        (bool isEnabledPeriodTwo, ) = auctioneer.isDepositPeriodEnabled(newPeriod);
+        assertEq(isEnabledPeriodTwo, true, "new period should be enabled");
         assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should be 1");
 
         // Verify new period has new parameters
@@ -818,11 +801,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Verify final state is disabled
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(targetPeriod),
-            false,
-            "period should be disabled"
-        );
+        (bool isEnabled, ) = auctioneer.isDepositPeriodEnabled(targetPeriod);
+        assertEq(isEnabled, false, "period should be disabled");
         assertEq(auctioneer.getDepositPeriodsCount(), 1, "count should still be 1");
     }
 
@@ -856,11 +836,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
 
         // Verify final state is enabled with new parameters
-        assertEq(
-            auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO),
-            true,
-            "period should be enabled"
-        );
+        (bool isEnabled, ) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
+        assertEq(isEnabled, true, "period should be enabled");
         assertEq(auctioneer.getDepositPeriodsCount(), 2, "count should still be 2");
 
         // Verify it has new parameters (since it was re-enabled)
