@@ -536,7 +536,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // - expired
         // - defaulted
         // - fully repaid
-        if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
         // Pull in the deposit tokens from the caller
@@ -664,7 +664,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // - expired
         // - defaulted
         // - fully repaid
-        if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
         (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
