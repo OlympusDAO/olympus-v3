@@ -1075,7 +1075,11 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         console2.log("\n=== AFTER ENABLING PERIOD C ===");
         console2.log("Periods count:", auctioneer.getDepositPeriodsCount());
-        assertEq(auctioneer.getDepositPeriodsCount(), 3, "3 periods should be enabled after processing");
+        assertEq(
+            auctioneer.getDepositPeriodsCount(),
+            3,
+            "3 periods should be enabled after processing"
+        );
 
         // Step 5: Check tick states after enabling period C
         IConvertibleDepositAuctioneer.Tick memory actualTickA = auctioneer.getCurrentTick(periodA);
