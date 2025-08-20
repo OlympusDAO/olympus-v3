@@ -747,8 +747,13 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             This function will revert if:
     ///             - The caller is not a manager or admin
+    ///             - The deposit period is 0
     ///             - The effective state would result in disabling an already disabled period
     function disableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
+        // Validate that the deposit period is not 0
+        if (depositPeriod_ == 0)
+            revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
+
         // Validate that this wouldn't result in a duplicate state
         _validateNoDuplicatePendingChange(depositPeriod_, false);
 

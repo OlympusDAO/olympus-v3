@@ -193,4 +193,19 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         assertEq(finalIsEnabled, true, "period should still be enabled");
         assertEq(finalIsPendingEnabled, false, "period should end up pending disabled");
     }
+
+    // when the deposit period is 0
+    //  [X] it reverts
+    function test_givenDepositPeriodZero_reverts() public {
+        // Expect revert
+        bytes memory expectedError = abi.encodeWithSignature(
+            "ConvertibleDepositAuctioneer_InvalidParams(string)",
+            "deposit period"
+        );
+        vm.expectRevert(expectedError);
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(0);
+    }
 }
