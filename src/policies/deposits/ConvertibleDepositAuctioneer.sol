@@ -577,10 +577,15 @@ contract ConvertibleDepositAuctioneer is
         // Start with current state
         effectiveState = _depositPeriodsEnabled[depositPeriod_];
 
-        // Apply pending changes in order
-        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
-            if (_pendingDepositPeriodChanges[i].depositPeriod == depositPeriod_) {
-                effectiveState = _pendingDepositPeriodChanges[i].enable;
+        // Later entries take precedence; scan from the end and short-circuit
+        for (uint256 i = _pendingDepositPeriodChanges.length; i > 0; ) {
+            unchecked {
+                i--;
+            }
+            PendingDepositPeriodChange memory c = _pendingDepositPeriodChanges[i];
+            if (c.depositPeriod == depositPeriod_) {
+                effectiveState = c.enable;
+                break;
             }
         }
 
@@ -591,13 +596,17 @@ contract ConvertibleDepositAuctioneer is
     /// @param  tickSize_   The tick size to initialize new periods with
     /// @param  minPrice_   The minimum price to initialize new periods with
     function _processPendingDepositPeriodChanges(uint256 tickSize_, uint256 minPrice_) internal {
-        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
+        uint256 len = _pendingDepositPeriodChanges.length;
+        for (uint256 i = 0; i < len; ) {
             PendingDepositPeriodChange memory change = _pendingDepositPeriodChanges[i];
 
             if (change.enable) {
                 _enableDepositPeriod(change.depositPeriod, tickSize_, minPrice_);
             } else {
                 _disableDepositPeriod(change.depositPeriod);
+            }
+            unchecked {
+                ++i;
             }
         }
 
@@ -687,17 +696,8 @@ contract ConvertibleDepositAuctioneer is
     function isDepositPeriodEnabled(
         uint8 depositPeriod_
     ) public view override returns (bool isEnabled, bool isPendingEnabled) {
-        // Current state
         isEnabled = _depositPeriodsEnabled[depositPeriod_];
-
-        // Calculate effective state after all pending changes
-        isPendingEnabled = isEnabled;
-        for (uint256 i = 0; i < _pendingDepositPeriodChanges.length; i++) {
-            if (_pendingDepositPeriodChanges[i].depositPeriod == depositPeriod_) {
-                isPendingEnabled = _pendingDepositPeriodChanges[i].enable;
-            }
-        }
-
+        isPendingEnabled = _getEffectiveDepositPeriodState(depositPeriod_);
         return (isEnabled, isPendingEnabled);
     }
 
