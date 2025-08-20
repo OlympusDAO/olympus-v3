@@ -234,7 +234,7 @@ abstract contract BaseAssetManager is IAssetManager {
         // Add the asset to the array of configured assets
         _configuredAssets.push(asset_);
 
-        emit AssetConfigured(address(asset_), address(vault_), depositCap_);
+        emit AssetConfigured(address(asset_), address(vault_));
         emit AssetDepositCapSet(address(asset_), depositCap_);
         emit AssetMinimumDepositSet(address(asset_), minimumDeposit_);
     }

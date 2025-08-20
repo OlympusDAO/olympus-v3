@@ -40,7 +40,7 @@ interface IAssetManager {
 
     // ========== EVENTS ========== //
 
-    event AssetConfigured(address indexed asset, address indexed vault, uint256 depositCap);
+    event AssetConfigured(address indexed asset, address indexed vault);
 
     event AssetDepositCapSet(address indexed asset, uint256 depositCap);
 
