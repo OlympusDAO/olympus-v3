@@ -123,15 +123,15 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     {
         // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS + 1);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS_TWO);
 
         // Call function
         vm.prank(admin);
-        auctioneer.enableDepositPeriod(PERIOD_MONTHS + 1);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS_TWO);
 
         // Assert state - new period should NOT be enabled yet (only queued)
         (bool isEnabledPeriodTwo, bool isPendingEnabledPeriodTwo) = auctioneer
-            .isDepositPeriodEnabled(PERIOD_MONTHS + 1);
+            .isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
         assertEq(isEnabledPeriodTwo, false, "new period should not be enabled yet");
         assertEq(isPendingEnabledPeriodTwo, true, "new period should be pending enabled");
 

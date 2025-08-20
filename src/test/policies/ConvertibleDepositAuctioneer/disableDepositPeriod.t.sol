@@ -96,7 +96,7 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
     function test_givenOtherDepositPeriods()
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
         givenEnabled
     {
         // Expect queued event
@@ -113,7 +113,7 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         assertEq(isPendingEnabled, false, "period should be pending disabled");
 
         (bool isEnabledPeriodTwo, bool isPendingEnabledPeriodTwo) = auctioneer
-            .isDepositPeriodEnabled(PERIOD_MONTHS + 1);
+            .isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
         assertEq(isEnabledPeriodTwo, true, "second period should still be enabled");
         assertEq(
             isPendingEnabledPeriodTwo,

@@ -600,7 +600,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_givenOtherDepositAssetAndPeriodEnabled_otherTickCapacityDepleted()
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
         givenEnabled
         givenRecipientHasBid(270e18)
     {
@@ -615,7 +615,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            PERIOD_MONTHS + 1
+            PERIOD_MONTHS_TWO
         );
 
         // Assert tick
@@ -629,7 +629,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_givenOtherDepositAssetAndPeriodEnabled_tickCapacityDepleted()
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
         givenEnabled
         givenRecipientHasBid(270e18)
     {
@@ -665,7 +665,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     function test_givenOtherDepositAssetAndPeriodEnabled_otherDepositAssetAndPeriodDayTargetMet()
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
         givenEnabled
         givenRecipientHasBid(360375e15)
     {
@@ -680,7 +680,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            PERIOD_MONTHS + 1
+            PERIOD_MONTHS_TWO
         );
 
         // Assert tick
