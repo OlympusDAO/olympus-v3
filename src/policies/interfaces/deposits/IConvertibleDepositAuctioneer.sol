@@ -102,12 +102,6 @@ interface IConvertibleDepositAuctioneer {
     /// @param  minOhmOut      The minimum amount of OHM that the deposit should convert to, in order to succeed
     error ConvertibleDepositAuctioneer_ConvertedAmountSlippage(uint256 ohmOut, uint256 minOhmOut);
 
-    /// @notice Emitted when the deposit period is already enabled for this asset
-    error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
-        address depositAsset,
-        uint8 depositPeriod
-    );
-
     /// @notice Emitted when the deposit period is not enabled for this asset
     error ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
         address depositAsset,
