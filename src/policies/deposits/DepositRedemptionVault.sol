@@ -355,13 +355,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Handle the withdrawal
         // Redemptions are only accessible to the owner, so msg.sender is safe here
+        uint256 receiptTokenId = DEPOSIT_MANAGER.getReceiptTokenId(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            redemption.facility
+        );
         IERC6909(address(DEPOSIT_MANAGER)).approve(
             address(DEPOSIT_MANAGER),
-            DEPOSIT_MANAGER.getReceiptTokenId(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod,
-                redemption.facility
-            ),
+            receiptTokenId,
             redemptionAmount
         );
         IDepositFacility(redemption.facility).handleCommitWithdraw(
@@ -370,6 +371,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemptionAmount,
             msg.sender
         );
+        // Reset approval, in case not all was used
+        IERC6909(address(DEPOSIT_MANAGER)).approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
 
         // Emit the redeemed event
         emit RedemptionFinished(
@@ -600,6 +603,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 principalRepaid,
                 address(this)
             );
+
+            // The DepositFacility may not use all of the approval, so reset it to 0
+            ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), 0);
         }
 
         // Transfer interest to the TRSRY
@@ -766,13 +772,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         loan.principal = 0;
         loan.interest = 0;
 
+        uint256 receiptTokenId = DEPOSIT_MANAGER.getReceiptTokenId(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            redemption.facility
+        );
         IERC6909(address(DEPOSIT_MANAGER)).approve(
             address(DEPOSIT_MANAGER),
-            DEPOSIT_MANAGER.getReceiptTokenId(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod,
-                redemption.facility
-            ),
+            receiptTokenId,
             retainedCollateral + previousPrincipal
         );
         // Burn the receipt tokens for the principal
@@ -794,6 +801,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 address(this)
             );
         }
+        // Reset the approval, in case not all was used
+        IERC6909(address(DEPOSIT_MANAGER)).approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
 
         // Reduce redemption amount by the burned and retained collateral
         // Use the calculated amount (retainedCollateral + previousPrincipal) to adjust redemption.
