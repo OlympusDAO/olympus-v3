@@ -469,13 +469,11 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         UserRedemption storage redemption = _userRedemptions[redemptionKey];
 
-        // Check that the facility is still authorized
-        _validateFacility(redemption.facility);
-
         // Validate that the redemption is not already borrowed against
         if (_redemptionLoan[redemptionKey].dueDate != 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
+        // This will also validate the facility
         (uint256 principal, , uint48 dueDate) = _previewBorrowAgainstRedemption(
             msg.sender,
             redemptionId_
