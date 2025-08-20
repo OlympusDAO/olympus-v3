@@ -97,4 +97,56 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
             .getAssetConfiguration(iAsset);
         assertEq(assetConfiguration.depositCap, depositCap_, "Deposit cap mismatch");
     }
+
+    // when the deposit cap equals the minimum deposit
+    //  [X] it succeeds
+    function test_depositCapEqualsMinimumDeposit() 
+        public 
+        givenIsEnabled 
+        givenFacilityNameIsSetDefault 
+        givenAssetIsAdded 
+    {
+        uint256 minimumDeposit = 100e18;
+        
+        // First set a minimum deposit
+        vm.prank(ADMIN);
+        depositManager.setAssetMinimumDeposit(iAsset, minimumDeposit);
+        
+        // Setting deposit cap equal to minimum deposit should succeed
+        vm.expectEmit(true, true, true, true);
+        emit AssetDepositCapSet(address(iAsset), minimumDeposit);
+        
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, minimumDeposit);
+        
+        // Assert both values are equal
+        IAssetManager.AssetConfiguration memory config = depositManager.getAssetConfiguration(iAsset);
+        assertEq(config.depositCap, minimumDeposit, "Deposit cap should equal minimum deposit");
+        assertEq(config.minimumDeposit, minimumDeposit, "Minimum deposit unchanged");
+    }
+
+    // when minimum deposit is 0 and deposit cap is 0
+    //  [X] it succeeds (both disabled)
+    function test_bothZeroValues() 
+        public 
+        givenIsEnabled 
+        givenFacilityNameIsSetDefault 
+        givenAssetIsAdded 
+    {
+        // Set minimum deposit to 0
+        vm.prank(ADMIN);
+        depositManager.setAssetMinimumDeposit(iAsset, 0);
+        
+        // Set deposit cap to 0 (disables deposits)
+        vm.expectEmit(true, true, true, true);
+        emit AssetDepositCapSet(address(iAsset), 0);
+        
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, 0);
+        
+        // Assert both are zero
+        IAssetManager.AssetConfiguration memory config = depositManager.getAssetConfiguration(iAsset);
+        assertEq(config.depositCap, 0, "Deposit cap should be 0");
+        assertEq(config.minimumDeposit, 0, "Minimum deposit should be 0");
+    }
 }

@@ -3,7 +3,6 @@ pragma solidity >=0.8.20;
 
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
@@ -86,7 +85,7 @@ contract DepositManagerSetAssetMinimumDepositTest is DepositManagerTest {
         minimumDeposit_ = bound(minimumDeposit_, 0, type(uint256).max - 1);
 
         vm.expectEmit(true, true, true, true);
-        emit AssetMinimumDepositSet(address(asset), minimumDeposit_);
+        emit AssetMinimumDepositSet(address(iAsset), minimumDeposit_);
 
         vm.prank(ADMIN);
         depositManager.setAssetMinimumDeposit(iAsset, minimumDeposit_);
