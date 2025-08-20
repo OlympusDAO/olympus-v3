@@ -273,7 +273,7 @@ interface IDepositRedemptionVault {
     ///
     /// @param asset_    The address of the asset
     /// @param facility_ The address of the facility
-    /// @return percent  The maximum borrow percentage, in terms of 100e2
+    /// @return percent  The maximum borrow percentage (100e2 == 100%)
     function getMaxBorrowPercentage(
         IERC20 asset_,
         address facility_
@@ -283,7 +283,7 @@ interface IDepositRedemptionVault {
     ///
     /// @param asset_    The address of the asset
     /// @param facility_ The address of the facility
-    /// @param rate_     The annual interest rate
+    /// @param rate_     The annual interest rate (100e2 == 100%)
     function setAnnualInterestRate(IERC20 asset_, address facility_, uint16 rate_) external;
 
     /// @notice Get the annual interest rate for an asset-facility combination
