@@ -624,6 +624,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint48 dueDate_,
         uint8 extensionMonths_
     ) internal view returns (uint48, uint256) {
+        // Validate the facility
+        _validateFacility(facility_);
+
+        // Validate interest rate
         uint16 interestRate = _assetFacilityAnnualInterestRates[
             _getAssetFacilityKey(asset_, facility_)
         ];
