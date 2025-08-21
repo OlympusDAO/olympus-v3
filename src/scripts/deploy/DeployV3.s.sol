@@ -21,6 +21,14 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {EmissionManager} from "src/policies/EmissionManager.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
+import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
+import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
+import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -399,5 +407,178 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(heart), "olympus.policies");
+    }
+
+    function deployDepositManager() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("DepositManager parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy
+        vm.broadcast();
+        DepositManager depositManager = new DepositManager(kernel);
+
+        return (address(depositManager), "olympus.policies");
+    }
+
+    function deployEmissionManager() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        address gohm = _getAddressNotZero("olympus.legacy.gOHM");
+        address reserve = _getAddressNotZero("external.tokens.USDS");
+        address sReserve = _getAddressNotZero("external.tokens.sUSDS");
+        address bondAuctioneer = _getAddressNotZero(
+            "external.bond-protocol.BondFixedTermAuctioneer"
+        );
+        address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
+        address teller = _getAddressNotZero("external.bond-protocol.BondFixedTermTeller");
+
+        // Log parameters
+        console2.log("EmissionManager parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+        console2.log("  gohm", gohm);
+        console2.log("  reserve", reserve);
+        console2.log("  sReserve", sReserve);
+        console2.log("  bondAuctioneer", bondAuctioneer);
+        console2.log("  cdAuctioneer", cdAuctioneer);
+        console2.log("  teller", teller);
+
+        // Deploy
+        vm.broadcast();
+        EmissionManager emissionManager = new EmissionManager(
+            Kernel(kernel),
+            ohm,
+            gohm,
+            reserve,
+            sReserve,
+            bondAuctioneer,
+            cdAuctioneer,
+            teller
+        );
+
+        return (address(emissionManager), "olympus.policies");
+    }
+
+    function deployConvertibleDepositFacility() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+
+        // Log parameters
+        console2.log("ConvertibleDepositFacility parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  depositManager", depositManager);
+
+        // Deploy
+        vm.broadcast();
+        ConvertibleDepositFacility cdFacility = new ConvertibleDepositFacility(
+            kernel,
+            depositManager
+        );
+
+        return (address(cdFacility), "olympus.policies");
+    }
+
+    function deployConvertibleDepositAuctioneer() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address cdFacility = _getAddressNotZero("olympus.policies.ConvertibleDepositFacility");
+        address depositAsset = _getAddressNotZero("external.tokens.USDS");
+
+        // Log parameters
+        console2.log("ConvertibleDepositAuctioneer parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  cdFacility", cdFacility);
+        console2.log("  depositAsset", depositAsset);
+
+        // Deploy
+        vm.broadcast();
+        ConvertibleDepositAuctioneer cdAuctioneer = new ConvertibleDepositAuctioneer(
+            kernel,
+            cdFacility,
+            depositAsset
+        );
+
+        return (address(cdAuctioneer), "olympus.policies");
+    }
+
+    function deployOlympusDepositPositionManager() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address tokenRenderer = _getAddressNotZero("olympus.periphery.PositionTokenRenderer");
+
+        // Log parameters
+        console2.log("OlympusDepositPositionManager parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  tokenRenderer", tokenRenderer);
+
+        // Deploy
+        vm.broadcast();
+        OlympusDepositPositionManager depos = new OlympusDepositPositionManager(
+            kernel,
+            tokenRenderer
+        );
+
+        return (address(depos), "olympus.modules");
+    }
+
+    function deployPositionTokenRenderer() public returns (address, string memory) {
+        // No dependencies needed for PositionTokenRenderer
+        console2.log("PositionTokenRenderer parameters:");
+        console2.log("  No constructor parameters");
+
+        // Deploy
+        vm.broadcast();
+        PositionTokenRenderer renderer = new PositionTokenRenderer();
+
+        return (address(renderer), "olympus.periphery");
+    }
+
+    function deployDepositRedemptionVault() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+
+        // Log parameters
+        console2.log("DepositRedemptionVault parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  depositManager", depositManager);
+
+        // Deploy
+        vm.broadcast();
+        DepositRedemptionVault vault = new DepositRedemptionVault(kernel, depositManager);
+
+        return (address(vault), "olympus.policies");
+    }
+
+    function deployReserveWrapper() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address reserve = _getAddressNotZero("external.tokens.USDS");
+        address sReserve = _getAddressNotZero("external.tokens.sUSDS");
+
+        // Log parameters
+        console2.log("ReserveWrapper parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  reserve", reserve);
+        console2.log("  sReserve", sReserve);
+
+        // Deploy
+        vm.broadcast();
+        ReserveWrapper wrapper = new ReserveWrapper(kernel, reserve, sReserve);
+
+        return (address(wrapper), "olympus.policies");
     }
 }
