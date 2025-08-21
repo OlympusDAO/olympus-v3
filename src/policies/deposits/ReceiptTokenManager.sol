@@ -4,12 +4,14 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {String} from "src/libraries/String.sol";
+import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
 
 /// @title  ReceiptTokenManager
 /// @notice Manager contract for creating and managing ERC6909 receipt tokens for deposits
@@ -19,14 +21,6 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     // ========== STATE VARIABLES ========== //
 
-    // ========== STORAGE STRUCTS ========== //
-
-    struct TokenStorageData {
-        address owner; // 20 bytes
-        address asset; // 20 bytes
-        address operator; // 20 bytes
-        uint8 depositPeriod; // 1 byte
-    }
     /// @notice Maps token ID to the authorized owner (for mint/burn operations)
     mapping(uint256 tokenId => address authorizedOwner) internal _tokenOwners;
 
@@ -56,6 +50,9 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
         // Store the authorized owner for this token
         _tokenOwners[tokenId] = owner;
+
+        // Create the wrappable token with proper metadata layout for CloneableReceiptToken
+        // Layout: name(32) + symbol(32) + decimals(1) + owner(20) + asset(20) + depositPeriod(1) + operator(20)
         _createWrappableToken(
             tokenId,
             string
@@ -65,15 +62,13 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
                 .concat(operatorName_, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
                 .truncate32(),
             asset_.decimals(),
-            abi.encode(
-                TokenStorageData({
-                    owner: owner_,
-                    asset: address(asset_),
-                    operator: operator_,
-                    depositPeriod: depositPeriod_
-                })
+            abi.encodePacked(
+                address(this), // Owner at 0x41
+                address(asset_), // Asset at 0x55
+                depositPeriod_, // Deposit Period at 0x69
+                operator_ // Operator at 0x6A
             ),
-            false
+            true // Automatically create the wrapped token
         );
 
         emit TokenCreated(tokenId, owner, address(asset_), depositPeriod_, operator_);
@@ -110,26 +105,6 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         _burn(from_, tokenId_, amount_, isWrapped_);
     }
 
-    // ========== INTERNAL FUNCTIONS ========== //
-
-    /// @notice Decode the token storage data from _tokenMetadataAdditional
-    /// @param tokenId_ The token ID
-    /// @return data The decoded TokenStorageData struct
-    function _getTokenStorageData(
-        uint256 tokenId_
-    ) internal view returns (TokenStorageData memory data) {
-        // Access additional metadata directly from parent contract
-        bytes memory encodedData = _getTokenAdditionalData(tokenId_);
-
-        if (encodedData.length == 0) {
-            return TokenStorageData(address(0), address(0), address(0), 0);
-        }
-
-        // Decode the ABI-encoded struct
-        data = abi.decode(encodedData, (TokenStorageData));
-        return data;
-    }
-
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IReceiptTokenManager
@@ -159,25 +134,37 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     /// @inheritdoc IReceiptTokenManager
     function getTokenOwner(uint256 tokenId_) public view override returns (address) {
-        TokenStorageData memory data = _getTokenStorageData(tokenId_);
-        return data.owner;
+        return _tokenOwners[tokenId_];
     }
 
     /// @inheritdoc IReceiptTokenManager
     function getTokenAsset(uint256 tokenId_) external view override returns (IERC20) {
-        TokenStorageData memory data = _getTokenStorageData(tokenId_);
-        return IERC20(data.asset);
+        address wrappedToken = getWrappedToken(tokenId_);
+        if (wrappedToken == address(0)) return IERC20(address(0));
+        return IDepositReceiptToken(wrappedToken).asset();
     }
 
     /// @inheritdoc IReceiptTokenManager
     function getTokenDepositPeriod(uint256 tokenId_) external view override returns (uint8) {
-        TokenStorageData memory data = _getTokenStorageData(tokenId_);
-        return data.depositPeriod;
+        address wrappedToken = getWrappedToken(tokenId_);
+        if (wrappedToken == address(0)) return 0;
+        return IDepositReceiptToken(wrappedToken).depositPeriod();
     }
 
     /// @inheritdoc IReceiptTokenManager
     function getTokenOperator(uint256 tokenId_) external view override returns (address) {
-        TokenStorageData memory data = _getTokenStorageData(tokenId_);
-        return data.operator;
+        address wrappedToken = getWrappedToken(tokenId_);
+        if (wrappedToken == address(0)) return address(0);
+        return IDepositReceiptToken(wrappedToken).operator();
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(ERC6909Wrappable, IERC165) returns (bool) {
+        return
+            interfaceId == type(IReceiptTokenManager).interfaceId ||
+            ERC6909Wrappable.supportsInterface(interfaceId);
     }
 }
