@@ -25,6 +25,7 @@ import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol";
 
 /// @title YieldDepositFacility
+/// @dev   NOTE: this contract is NOT ready for deployment, as it has some major design issues.
 contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPeriodicTask {
     using TimestampLinkedList for TimestampLinkedList.List;
     using TransferHelper for ERC20;
