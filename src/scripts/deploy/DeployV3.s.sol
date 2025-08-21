@@ -8,13 +8,19 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
+// Libraries
+import {SafeCast} from "src/libraries/SafeCast.sol";
+
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 
 // Contracts
+import {Kernel} from "src/Kernel.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -362,5 +368,36 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(ccipCrossChainBridge), "olympus.periphery");
+    }
+
+    function deployHeart() public returns (address, string memory) {
+        // Input parameters
+        uint256 maxReward = _readDeploymentArgUint256("Heart", "maxReward");
+        uint48 auctionDuration = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("Heart", "auctionDuration")
+        );
+
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address distributor = _getAddressNotZero("olympus.policies.ZeroDistributor");
+
+        // Log inputs
+        console2.log("Heart parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  distributor", distributor);
+        console2.log("  maxReward", maxReward);
+        console2.log("  auctionDuration", auctionDuration);
+
+        // Deploy
+        vm.broadcast();
+        OlympusHeart heart = new OlympusHeart(
+            Kernel(kernel),
+            IDistributor(distributor),
+            maxReward,
+            auctionDuration
+        );
+
+        return (address(heart), "olympus.policies");
     }
 }
