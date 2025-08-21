@@ -7,6 +7,7 @@ import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 import {stdError} from "@forge-std-1.9.6/StdError.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract ERC6909WrappableTest is Test {
     MockERC6909Wrappable public token;
@@ -72,6 +73,23 @@ contract ERC6909WrappableTest is Test {
         } else {
             assertEq(wrappedToken, address(0), "Wrapped token should not exist");
         }
+    }
+
+    function assertERC6909Allowance(address owner_, uint256 expectedAllowance_) internal view {
+        assertEq(
+            token.allowance(owner_, address(this), TOKEN_ID),
+            expectedAllowance_,
+            "ERC6909 expected allowance mismatch"
+        );
+    }
+
+    function assertERC20Allowance(address owner_, uint256 expectedAllowance_) internal view {
+        IERC20 wrappedToken = IERC20(token.getWrappedToken(TOKEN_ID));
+        assertEq(
+            wrappedToken.allowance(owner_, address(token)),
+            expectedAllowance_,
+            "ERC20 expected allowance mismatch"
+        );
     }
 
     function assertTokens(uint256 expectedTokenId, address expectedWrappedToken) internal view {
@@ -272,20 +290,26 @@ contract ERC6909WrappableTest is Test {
     //   [X] the ERC6909 token is not burned from the recipient
     //   [X] the ERC20 token total supply is decreased
     //   [X] the ERC6909 token total supply is unchanged
-    function test_burn_whenWrappedIsTrue_givenRecipientHasApproved()
+    function test_burn_whenWrappedIsTrue_givenRecipientHasApproved(
+        uint256 amount_
+    )
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
         givenRecipientHasApprovedWrappedTokenSpending
     {
-        // Burn the token
-        token.burn(alice, TOKEN_ID, AMOUNT, true);
+        amount_ = bound(amount_, 1, AMOUNT);
 
-        assertERC20Balance(alice, 0);
-        assertERC20TotalSupply(0);
+        // Burn the token
+        token.burn(alice, TOKEN_ID, amount_, true);
+
+        assertERC20Balance(alice, AMOUNT - amount_);
+        assertERC20TotalSupply(AMOUNT - amount_);
+        assertERC20Allowance(alice, AMOUNT - amount_);
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
+        assertERC6909Allowance(alice, 0);
     }
 
     //  when the caller is the owner
@@ -317,9 +341,11 @@ contract ERC6909WrappableTest is Test {
 
         assertERC20Balance(alice, 0);
         assertERC20TotalSupply(0);
+        assertERC20Allowance(alice, 0);
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
+        assertERC6909Allowance(alice, 0);
     }
 
     // when wrapped is false
@@ -366,16 +392,17 @@ contract ERC6909WrappableTest is Test {
     //   [X] the ERC6909 token is burned from the recipient
     //   [X] the ERC20 token total supply is unchanged
     //   [X] the ERC6909 token total supply is decreased
-    function test_burn_whenWrappedIsFalse_givenRecipientHasApproved()
-        public
-        givenRecipientHasERC6909Tokens
-        givenRecipientHasApprovedERC6909TokenSpending
-    {
-        // Burn the token
-        token.burn(alice, TOKEN_ID, AMOUNT, false);
+    function test_burn_whenWrappedIsFalse_givenRecipientHasApproved(
+        uint256 amount_
+    ) public givenRecipientHasERC6909Tokens givenRecipientHasApprovedERC6909TokenSpending {
+        amount_ = bound(amount_, 1, AMOUNT);
 
-        assertERC6909Balance(alice, 0);
-        assertERC6909TotalSupply(0);
+        // Burn the token
+        token.burn(alice, TOKEN_ID, amount_, false);
+
+        assertERC6909Balance(alice, AMOUNT - amount_);
+        assertERC6909TotalSupply(AMOUNT - amount_);
+        assertERC6909Allowance(alice, AMOUNT - amount_);
     }
 
     //  when the caller is the owner
@@ -393,6 +420,7 @@ contract ERC6909WrappableTest is Test {
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
+        assertERC6909Allowance(alice, 0);
     }
 
     // Wrap
@@ -598,9 +626,11 @@ contract ERC6909WrappableTest is Test {
 
         assertERC20Balance(alice, 0);
         assertERC20TotalSupply(0);
+        assertERC20Allowance(alice, 0);
 
         assertERC6909Balance(alice, AMOUNT);
         assertERC6909TotalSupply(AMOUNT);
+        assertERC6909Allowance(alice, 0);
     }
 
     // getTokens
