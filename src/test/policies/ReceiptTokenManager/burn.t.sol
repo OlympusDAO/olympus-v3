@@ -20,9 +20,8 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         // Try to burn from a token that doesn't exist yet
         vm.expectRevert(
             abi.encodeWithSelector(
-                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
-                OWNER,
-                address(0)
+                IERC6909Wrappable.ERC6909Wrappable_InvalidTokenId.selector,
+                _tokenId
             )
         );
         vm.prank(OWNER);

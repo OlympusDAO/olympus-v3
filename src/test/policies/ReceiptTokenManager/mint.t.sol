@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {ReceiptTokenManagerTest} from "./ReceiptTokenManagerTest.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 
 /**
  * @title MintTest
@@ -16,9 +17,8 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
         // Try to mint to a token that doesn't exist yet
         vm.expectRevert(
             abi.encodeWithSelector(
-                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
-                OWNER,
-                address(0)
+                IERC6909Wrappable.ERC6909Wrappable_InvalidTokenId.selector,
+                _tokenId
             )
         );
         vm.prank(OWNER);
