@@ -1,11 +1,19 @@
 {
     "sequence": [
         {
-            "name": "OlympusConvertibleDepository",
+            "name": "PositionTokenRenderer",
             "args": {}
         },
         {
             "name": "OlympusDepositPositionManager",
+            "args": {}
+        },
+        {
+            "name": "DepositManager",
+            "args": {}
+        },
+        {
+            "name": "DepositRedemptionVault",
             "args": {}
         },
         {
@@ -21,7 +29,7 @@
             "args": {}
         },
         {
-            "name": "OlympusHeart",
+            "name": "Heart",
             "args": {
                 "auctionDuration": 1200,
                 "maxReward": 40000000000
