@@ -226,7 +226,7 @@ contract DepositManagerTest is Test {
         address wrappedToken = receiptTokenManager.getWrappedToken(receiptTokenId);
 
         vm.prank(DEPOSITOR);
-        IERC20(wrappedToken).approve(address(depositManager), amount_);
+        IERC20(wrappedToken).approve(address(receiptTokenManager), amount_);
         _;
     }
 

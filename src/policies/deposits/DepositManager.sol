@@ -245,6 +245,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller is does not have the required role
+    ///             - The recipient is the zero address
+    ///             - The asset and deposit period combination is not configured
+    ///             - The caller has not approved this contract to spend the receipt (or wrapped) token
     function withdraw(
         WithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
