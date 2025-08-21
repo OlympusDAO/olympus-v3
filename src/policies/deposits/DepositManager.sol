@@ -5,8 +5,8 @@ pragma solidity >=0.8.20;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
-import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -18,6 +18,7 @@ import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 
 /// @title Deposit Manager
 /// @notice This policy is used to manage deposits on behalf of other protocol contracts. For each deposit, a receipt token is minted 1:1 to the depositor.
@@ -118,10 +119,13 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(address kernel_, address tokenFactory_) Policy(Kernel(kernel_)) {
-        if (tokenFactory_ == address(0)) revert DepositManager_InvalidParams("token factory");
+    constructor(address kernel_, address tokenManager_) Policy(Kernel(kernel_)) {
+        // Validate that the token manager implements IReceiptTokenManager
+        if (!IERC165(tokenManager_).supportsInterface(type(IReceiptTokenManager).interfaceId)) {
+            revert DepositManager_InvalidParams("token manager");
+        }
 
-        _receiptTokenManager = ReceiptTokenManager(tokenFactory_);
+        _receiptTokenManager = ReceiptTokenManager(tokenManager_);
 
         // Disabled by default by PolicyEnabler
     }
