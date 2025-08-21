@@ -172,7 +172,7 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
 
     // given different owners create tokens with same parameters
     //  [X] token IDs are different (owner included in hash)
-    function test_tokenIdIncludesOwner() public {
+    function test_tokenIdIncludesOwner() public view {
         // Generate token IDs for same parameters but different owners
         uint256 tokenId1 = receiptTokenManager.getReceiptTokenId(
             OWNER,

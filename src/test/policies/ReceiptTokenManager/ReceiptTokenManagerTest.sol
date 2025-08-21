@@ -33,6 +33,7 @@ contract ReceiptTokenManagerTest is Test {
     string public constant OPERATOR_NAME = "abc";
 
     uint256 internal _tokenId;
+    IERC20 internal _wrappedToken;
 
     modifier createReceiptToken() {
         vm.prank(OWNER);
@@ -44,6 +45,8 @@ contract ReceiptTokenManagerTest is Test {
         );
         // Verify the token ID matches our expected ID
         assertEq(actualTokenId, _tokenId, "Created token ID should match expected token ID");
+
+        _wrappedToken = IERC20(receiptTokenManager.getWrappedToken(_tokenId));
         _;
     }
 
@@ -53,9 +56,21 @@ contract ReceiptTokenManagerTest is Test {
         _;
     }
 
+    modifier mintToRecipientWrapped() {
+        vm.prank(OWNER);
+        receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, true);
+        _;
+    }
+
     modifier allowOwnerToSpend() {
         vm.prank(RECIPIENT);
         receiptTokenManager.approve(OWNER, _tokenId, MINT_AMOUNT);
+        _;
+    }
+
+    modifier allowReceiptTokenManagerToSpendWrapped() {
+        vm.prank(RECIPIENT);
+        _wrappedToken.approve(address(receiptTokenManager), MINT_AMOUNT);
         _;
     }
 

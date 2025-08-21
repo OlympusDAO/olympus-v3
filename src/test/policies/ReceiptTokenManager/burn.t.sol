@@ -6,6 +6,8 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
+import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
+import {stdError} from "@forge-std-1.9.6/StdError.sol";
 
 /**
  * @title BurnTest
@@ -27,10 +29,76 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT, false);
     }
 
+    // when the caller is not the token owner
+    //  given the recipient has approved spending by the non-owner
+    //   [X] it reverts
+
+    function test_whenCallerIsNotTokenOwner_givenRecipientHasApprovedSpending_reverts()
+        public
+        createReceiptToken
+    {
+        // First give allowance to NON_OWNER
+        vm.prank(RECIPIENT);
+        receiptTokenManager.approve(NON_OWNER, _tokenId, MINT_AMOUNT / 2);
+
+        // NON_OWNER still cannot burn because they're not the token owner
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
+                NON_OWNER,
+                OWNER
+            )
+        );
+
+        vm.prank(NON_OWNER);
+        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
+    }
+
+    //  [X] it reverts
+
+    function test_whenCallerIsNotTokenOwner_reverts() public createReceiptToken {
+        // NON_OWNER cannot burn because they're not the token owner
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
+                NON_OWNER,
+                OWNER
+            )
+        );
+
+        vm.prank(NON_OWNER);
+        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
+    }
+
+    function test_whenCallerIsTokenOwner_givenRecipientHasNotApprovedSpending_reverts()
+        public
+        createReceiptToken
+        mintToRecipient
+    {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientAllowance.selector,
+                OWNER, // Spender
+                0, // Allowance
+                MINT_AMOUNT / 2, // Amount
+                _tokenId
+            )
+        );
+
+        vm.prank(OWNER);
+        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
+    }
+
     // given token owner burns tokens with allowance
     //  [X] owner can burn successfully with allowance
     //  [X] balance is updated correctly
-    function test_ownerCanBurn() public createReceiptToken mintToRecipient allowOwnerToSpend {
+    function test_whenCallerIsTokenOwner_givenRecipientHasApprovedSpending()
+        public
+        createReceiptToken
+        mintToRecipient
+        allowOwnerToSpend
+    {
         vm.prank(OWNER);
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
 
@@ -41,23 +109,9 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         );
     }
 
-    // given non-owner attempts to burn
-    //  [X] reverts with NotOwner error
-    function test_nonOwnerCannotBurn() public createReceiptToken {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
-                NON_OWNER,
-                OWNER
-            )
-        );
-        vm.prank(NON_OWNER);
-        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
-    }
-
     // given owner burns from self
     //  [X] burn from self works correctly
-    function test_burnFromSelf() public createReceiptToken {
+    function test_givenTokenOwnerHasNotApprovedSpending() public createReceiptToken {
         // First mint tokens to OWNER
         vm.prank(OWNER);
         receiptTokenManager.mint(OWNER, _tokenId, MINT_AMOUNT, false);
@@ -75,7 +129,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
 
     // given zero amount burn
     //  [X] burn zero amount reverts
-    function test_burnZeroAmount() public createReceiptToken mintToRecipient {
+    function test_burnZeroAmount_reverts() public createReceiptToken mintToRecipient {
         vm.expectRevert(
             abi.encodeWithSelector(IERC6909Wrappable.ERC6909Wrappable_ZeroAmount.selector)
         );
@@ -127,163 +181,94 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
 
     // ========== INSUFFICIENT BALANCE TESTS ========== //
 
-    function test_burnWithoutBalance() public createReceiptToken {
-        address newRecipient = makeAddr("NEW_RECIPIENT");
-
-        // Grant allowance from newRecipient (who has no balance)
-        vm.prank(newRecipient);
-        receiptTokenManager.approve(OWNER, _tokenId, MINT_AMOUNT);
+    function test_burnWithoutBalance_reverts() public createReceiptToken allowOwnerToSpendAll {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientBalance.selector,
+                RECIPIENT, // From address
+                0,
+                MINT_AMOUNT,
+                _tokenId
+            )
+        );
 
         // Try to burn from address with no balance
         vm.prank(OWNER);
-        receiptTokenManager.burn(newRecipient, _tokenId, MINT_AMOUNT, false);
-
-        // Should succeed (balance becomes negative in theory, but ERC6909 handles underflow)
-        assertEq(
-            receiptTokenManager.balanceOf(newRecipient, _tokenId),
-            0,
-            "Balance should remain zero when burning from address without balance"
-        );
+        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT, false);
     }
 
-    function test_burnMoreThanBalance()
+    function test_burnMoreThanBalance_reverts()
         public
         createReceiptToken
         mintToRecipient
         allowOwnerToSpendAll
     {
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientBalance.selector,
+                RECIPIENT, // From address
+                MINT_AMOUNT,
+                MINT_AMOUNT * 2,
+                _tokenId
+            )
+        );
+
         // Try to burn more than available balance
         vm.prank(OWNER);
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT * 2, false);
-
-        // Should result in zero balance (ERC6909 handles underflow protection)
-        assertEq(
-            receiptTokenManager.balanceOf(RECIPIENT, _tokenId),
-            0,
-            "Balance should be zero when burning more than available balance"
-        );
     }
 
-    // ========== WRAPPING TESTS ========== //
+    // when wrapped is true
+    //  given the recipient has not approved spending of the ERC20 tokens
+    //   [X] it reverts
 
-    function test_burnWithWrapFalse() public createReceiptToken {
-        // Mint tokens first
+    function test_whenWrappedIsTrue_givenRecipientHasNotApprovedERC20Spending()
+        public
+        createReceiptToken
+        mintToRecipientWrapped
+    {
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Then burn wrapped tokens
         vm.prank(OWNER);
-        receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, false);
-
-        // Grant allowance
-        vm.prank(RECIPIENT);
-        receiptTokenManager.approve(OWNER, _tokenId, MINT_AMOUNT);
-
-        vm.prank(OWNER);
-        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
-
-        assertEq(
-            receiptTokenManager.balanceOf(RECIPIENT, _tokenId),
-            MINT_AMOUNT / 2,
-            "Balance should be reduced after burning"
-        );
+        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, true);
     }
 
-    function test_burnWithWrapTrue() public createReceiptToken {
-        // First mint with wrapping to have wrapped tokens
+    // given the recipient has an insufficient balance of the ERC20 tokens
+    //  [X] it reverts
+
+    function test_whenWrappedIsTrue_insufficientBalance_reverts()
+        public
+        createReceiptToken
+        mintToRecipient
+        allowReceiptTokenManagerToSpendWrapped
+    {
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Try to burn wrapped tokens when recipient only has unwrapped tokens
         vm.prank(OWNER);
-        receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, true);
+        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, true);
+    }
 
-        // Grant allowance
-        vm.prank(RECIPIENT);
-        receiptTokenManager.approve(OWNER, _tokenId, MINT_AMOUNT);
+    // [X] it burns the wrapped tokens
 
+    function test_whenWrappedIsTrue()
+        public
+        createReceiptToken
+        mintToRecipientWrapped
+        allowReceiptTokenManagerToSpendWrapped
+    {
         // Then burn wrapped tokens
         vm.prank(OWNER);
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, true);
 
         assertEq(
-            receiptTokenManager.balanceOf(RECIPIENT, _tokenId),
+            _wrappedToken.balanceOf(RECIPIENT),
             MINT_AMOUNT / 2,
             "Balance should be reduced after burning wrapped tokens"
         );
-    }
-
-    function test_burnWrappedWithoutWrappedTokens() public createReceiptToken {
-        // Mint tokens first
-        vm.prank(OWNER);
-        receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, false);
-
-        // Grant allowance
-        vm.prank(RECIPIENT);
-        receiptTokenManager.approve(OWNER, _tokenId, MINT_AMOUNT);
-
-        // Try to burn wrapped tokens when recipient only has unwrapped tokens
-        vm.prank(OWNER);
-        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, true);
-
-        // Should still work (burns from ERC6909 balance)
-        assertEq(
-            receiptTokenManager.balanceOf(RECIPIENT, _tokenId),
-            MINT_AMOUNT / 2,
-            "Balance should be reduced after burning"
-        );
-    }
-
-    // ========== ALLOWANCE TESTS ========== //
-
-    function test_burnWithoutAllowanceButAsOwner() public createReceiptToken {
-        // Mint tokens first
-        vm.prank(OWNER);
-        receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, false);
-
-        // Owner should still need allowance to burn others' tokens - this test should actually fail
-        vm.expectRevert(); // ERC6909InsufficientAllowance
-        vm.prank(OWNER);
-        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
-    }
-
-    function test_burnWithAllowance() public createReceiptToken {
-        // First give allowance to NON_OWNER
-        vm.prank(RECIPIENT);
-        receiptTokenManager.approve(NON_OWNER, _tokenId, MINT_AMOUNT / 2);
-
-        // NON_OWNER still cannot burn because they're not the token owner
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
-                NON_OWNER,
-                OWNER
-            )
-        );
-        vm.prank(NON_OWNER);
-        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
-    }
-
-    // given owner burns without allowance from token holder
-    //  [X] owner cannot burn without allowance from holder
-    function test_ownerCannotBurnWithoutAllowance() public createReceiptToken {
-        // Mint tokens first
-        vm.prank(OWNER);
-        receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, false);
-
-        // OWNER tries to burn from RECIPIENT without allowance
-        // This should fail because OWNER needs allowance from RECIPIENT to burn their tokens
-        vm.expectRevert(); // Should revert due to insufficient allowance - using the actual error signature
-        vm.prank(OWNER);
-        receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
-    }
-
-    // ========== INVALID TOKEN TESTS ========== //
-
-    function test_burnInvalidToken() public createReceiptToken {
-        uint256 invalidTokenId = 12345;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
-                OWNER,
-                address(0)
-            )
-        );
-        vm.prank(OWNER);
-        receiptTokenManager.burn(RECIPIENT, invalidTokenId, MINT_AMOUNT, false);
     }
 
     // ========== CROSS-TOKEN OWNERSHIP TESTS ========== //

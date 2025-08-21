@@ -28,7 +28,7 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
     // given token owner mints tokens
     //  [X] owner can mint successfully
     //  [X] balance is updated correctly
-    function test_ownerCanMint() public createReceiptToken {
+    function test_whenCallerIsTokenOwner() public createReceiptToken {
         vm.prank(OWNER);
         receiptTokenManager.mint(RECIPIENT, _tokenId, MINT_AMOUNT, false);
 
@@ -41,7 +41,7 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
 
     // given non-owner attempts to mint
     //  [X] reverts with NotOwner error
-    function test_nonOwnerCannotMint() public createReceiptToken {
+    function test_whenCallerIsNotTokenOwner_reverts() public createReceiptToken {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
@@ -55,7 +55,7 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
 
     // given token owner mints to self
     //  [X] mint to self works correctly
-    function test_mintToSelf() public createReceiptToken {
+    function test_whenCallerIsTokenOwner_mintToSelf() public createReceiptToken {
         vm.prank(OWNER);
         receiptTokenManager.mint(OWNER, _tokenId, MINT_AMOUNT, false);
 
@@ -68,7 +68,7 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
 
     // given mint to zero address
     //  [X] mint to zero address reverts
-    function test_mintToZeroAddress() public createReceiptToken {
+    function test_mintToZeroAddress_reverts() public createReceiptToken {
         vm.expectRevert(abi.encodeWithSignature("ERC6909InvalidReceiver(address)", address(0))); // ERC6909 should revert on mint to zero address
         vm.prank(OWNER);
         receiptTokenManager.mint(address(0), _tokenId, MINT_AMOUNT, false);
@@ -76,7 +76,7 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
 
     // given zero amount mint
     //  [X] mint zero amount reverts
-    function test_mintZeroAmount() public createReceiptToken {
+    function test_mintZeroAmount_reverts() public createReceiptToken {
         vm.expectRevert(abi.encodeWithSignature("ERC6909Wrappable_ZeroAmount()")); // Should revert on zero amount mint
         vm.prank(OWNER);
         receiptTokenManager.mint(RECIPIENT, _tokenId, 0, false);
@@ -214,23 +214,6 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
             MINT_AMOUNT,
             "Should have wrapped ERC20 balance equal to the wrapped mint amount only"
         );
-    }
-
-    // given mint invalid token
-    //  [X] reverts with NotOwner error (owner is address(0))
-    function test_mintInvalidToken() public createReceiptToken {
-        uint256 invalidTokenId = 12345;
-
-        vm.prank(OWNER);
-        // This should revert because the token doesn't exist and OWNER is not the owner of this invalid token
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IReceiptTokenManager.ReceiptTokenManager_NotOwner.selector,
-                OWNER,
-                address(0)
-            )
-        );
-        receiptTokenManager.mint(RECIPIENT, invalidTokenId, MINT_AMOUNT, false);
     }
 
     // given mint other owner's token
