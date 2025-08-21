@@ -34,7 +34,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     bytes32 public constant ROLE_DEPOSIT_OPERATOR = "deposit_operator";
 
     /// @notice The receipt token manager for creating receipt tokens
-    ReceiptTokenManager internal immutable _receiptTokenManager;
+    ReceiptTokenManager internal immutable _RECEIPT_TOKEN_MANAGER;
 
     // Tasks
     // [X] Rename to DepositManager
@@ -83,7 +83,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         uint8 depositPeriod_,
         address operator_
     ) {
-        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
             depositPeriod_,
@@ -101,7 +101,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         uint8 depositPeriod_,
         address operator_
     ) {
-        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
             depositPeriod_,
@@ -125,7 +125,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
             revert DepositManager_InvalidParams("token manager");
         }
 
-        _receiptTokenManager = ReceiptTokenManager(tokenManager_);
+        _RECEIPT_TOKEN_MANAGER = ReceiptTokenManager(tokenManager_);
 
         // Disabled by default by PolicyEnabler
     }
@@ -176,13 +176,13 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
 
         // Mint the receipt token to the caller
-        receiptTokenId = _receiptTokenManager.getReceiptTokenId(
+        receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             params_.asset,
             params_.depositPeriod,
             msg.sender
         );
-        _receiptTokenManager.mint(
+        _RECEIPT_TOKEN_MANAGER.mint(
             params_.depositor,
             receiptTokenId,
             actualAmount,
@@ -259,9 +259,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
         // Burn the receipt token from the depositor
         // Will revert if the asset configuration is not valid/invalid receipt token ID
-        _receiptTokenManager.burn(
+        _RECEIPT_TOKEN_MANAGER.burn(
             params_.depositor,
-            _receiptTokenManager.getReceiptTokenId(
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
                 address(this),
                 params_.asset,
                 params_.depositPeriod,
@@ -401,7 +401,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         uint8 depositPeriod_,
         address operator_
     ) public view override returns (AssetPeriodStatus memory status) {
-        uint256 receiptTokenId = _receiptTokenManager.getReceiptTokenId(
+        uint256 receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
             depositPeriod_,
@@ -499,7 +499,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         onlyManagerOrAdminRole
         onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
             depositPeriod_,
@@ -526,7 +526,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         onlyManagerOrAdminRole
         onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
             depositPeriod_,
@@ -581,7 +581,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
 
         _assetPeriods[
-            _receiptTokenManager.getReceiptTokenId(address(this), asset_, depositPeriod_, operator_)
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+                address(this),
+                asset_,
+                depositPeriod_,
+                operator_
+            )
         ].reclaimRate = reclaimRate_;
         emit AssetPeriodReclaimRateSet(address(asset_), operator_, depositPeriod_, reclaimRate_);
     }
@@ -610,7 +615,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ) external view returns (uint16) {
         return
             _assetPeriods[
-                _receiptTokenManager.getReceiptTokenId(
+                _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
                     address(this),
                     asset_,
                     depositPeriod_,
@@ -728,9 +733,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
 
         // Burn the receipt tokens from the payer
-        _receiptTokenManager.burn(
+        _RECEIPT_TOKEN_MANAGER.burn(
             params_.payer,
-            _receiptTokenManager.getReceiptTokenId(
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
                 address(this),
                 params_.asset,
                 params_.depositPeriod,
@@ -793,7 +798,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
 
         // Create the receipt token via the factory
-        tokenId = _receiptTokenManager.createToken(asset_, depositPeriod_, operator_, operatorName);
+        tokenId = _RECEIPT_TOKEN_MANAGER.createToken(
+            asset_,
+            depositPeriod_,
+            operator_,
+            operatorName
+        );
 
         // Record this token ID as owned by this contract
         _ownedTokenIds.add(tokenId);
@@ -817,7 +827,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         address operator_
     ) public view override returns (uint256) {
         return
-            _receiptTokenManager.getReceiptTokenId(
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
                 address(this),
                 asset_,
                 depositPeriod_,
@@ -827,7 +837,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     function getReceiptTokenManager() external view override returns (IReceiptTokenManager) {
-        return IReceiptTokenManager(address(_receiptTokenManager));
+        return IReceiptTokenManager(address(_RECEIPT_TOKEN_MANAGER));
     }
 
     /// @inheritdoc IDepositManager
@@ -836,13 +846,13 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         uint8 depositPeriod_,
         address operator_
     ) external view override returns (uint256 tokenId, address wrappedToken) {
-        tokenId = _receiptTokenManager.getReceiptTokenId(
+        tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
             depositPeriod_,
             operator_
         );
-        wrappedToken = _receiptTokenManager.getWrappedToken(tokenId);
+        wrappedToken = _RECEIPT_TOKEN_MANAGER.getWrappedToken(tokenId);
         return (tokenId, wrappedToken);
     }
 
