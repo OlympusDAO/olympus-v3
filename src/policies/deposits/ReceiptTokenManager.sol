@@ -27,6 +27,8 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         address operator; // 20 bytes
         uint8 depositPeriod; // 1 byte
     }
+    /// @notice Maps token ID to the authorized owner (for mint/burn operations)
+    mapping(uint256 tokenId => address authorizedOwner) internal _tokenOwners;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -36,21 +38,24 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     /// @inheritdoc IReceiptTokenManager
     function createToken(
-        address owner_,
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_,
         string memory operatorName_
     ) external returns (uint256 tokenId) {
+        // Use msg.sender as the owner for security
+        address owner = msg.sender;
+
         // Generate token ID including owner in the hash
-        tokenId = getReceiptTokenId(owner_, asset_, depositPeriod_, operator_);
+        tokenId = getReceiptTokenId(owner, asset_, depositPeriod_, operator_);
 
         // Validate token doesn't already exist
         if (isValidTokenId(tokenId)) {
             revert ReceiptTokenManager_TokenExists(tokenId);
         }
 
-        // Create the wrappable token with ABI-encoded struct
+        // Store the authorized owner for this token
+        _tokenOwners[tokenId] = owner;
         _createWrappableToken(
             tokenId,
             string
@@ -71,7 +76,7 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
             false
         );
 
-        emit TokenCreated(tokenId, owner_, address(asset_), depositPeriod_, operator_);
+        emit TokenCreated(tokenId, owner, address(asset_), depositPeriod_, operator_);
         return tokenId;
     }
 

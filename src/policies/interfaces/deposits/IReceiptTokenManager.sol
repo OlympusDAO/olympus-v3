@@ -34,15 +34,14 @@ interface IReceiptTokenManager is IERC6909, IERC6909Wrappable {
     // ========== FUNCTIONS ========== //
 
     /// @notice Creates a new receipt token
+    /// @dev    The caller (msg.sender) becomes the owner of the token for security
     ///
-    /// @param  owner_          The owner of the token (usually DepositManager)
     /// @param  asset_          The underlying asset
     /// @param  depositPeriod_  The deposit period
     /// @param  operator_       The operator address
     /// @param  operatorName_   The operator name for token metadata
     /// @return tokenId         The created token ID
     function createToken(
-        address owner_,
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_,
@@ -50,6 +49,7 @@ interface IReceiptTokenManager is IERC6909, IERC6909Wrappable {
     ) external returns (uint256 tokenId);
 
     /// @notice Mints tokens to a recipient
+    /// @dev    Gated to the owner (creator) of the token
     ///
     /// @param  to_         The recipient
     /// @param  tokenId_    The token ID
@@ -58,6 +58,7 @@ interface IReceiptTokenManager is IERC6909, IERC6909Wrappable {
     function mint(address to_, uint256 tokenId_, uint256 amount_, bool shouldWrap_) external;
 
     /// @notice Burns tokens from a holder
+    /// @dev    Gated to the owner (creator) of the token
     ///
     /// @param  from_       The holder
     /// @param  tokenId_    The token ID

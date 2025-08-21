@@ -787,13 +787,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
 
         // Create the receipt token via the factory
-        tokenId = _receiptTokenManager.createToken(
-            address(this), // Owner
-            asset_,
-            depositPeriod_,
-            operator_,
-            operatorName
-        );
+        tokenId = _receiptTokenManager.createToken(asset_, depositPeriod_, operator_, operatorName);
 
         // Record this token ID as owned by this contract
         _ownedTokenIds.add(tokenId);
@@ -845,9 +839,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         wrappedToken = _receiptTokenManager.getWrappedToken(tokenId);
         return (tokenId, wrappedToken);
     }
-
-    // Receipt token view functions moved to _receiptTokenManager
-    // Use _receiptTokenManager.getTokenAsset(tokenId), etc. for token metadata
 
     // ========== ERC165 ========== //
 
