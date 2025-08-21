@@ -46,7 +46,6 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-// import {OlympusDepositPositionManager} from "modules/DEPOS/OlympusDepositPositionManager.sol";
 
 // Bophades Policies
 import {Operator} from "policies/Operator.sol";
@@ -94,10 +93,6 @@ import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {SafeCast} from "libraries/SafeCast.sol";
 
-// import {DepositManager} from "policies/DepositManager.sol";
-// import {CDAuctioneer} from "policies/CDAuctioneer.sol";
-// import {CDFacility} from "policies/CDFacility.sol";
-
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
 // solhint-disable max-states-count
@@ -118,7 +113,6 @@ contract OlympusDeploy is Script {
     OlympusBoostedLiquidityRegistry public BLREG;
     OlympusClearinghouseRegistry public CHREG;
     OlympusContractRegistry public RGSTY;
-    // OlympusDepositPositionManager public DEPOS;
     OlympusGovDelegation public DLGTE;
 
     /// Policies
@@ -144,9 +138,6 @@ contract OlympusDeploy is Script {
     YieldRepurchaseFacility public yieldRepo;
     ReserveMigrator public reserveMigrator;
     EmissionManager public emissionManager;
-    // CDAuctioneer public cdAuctioneer;
-    // CDFacility public cdFacility;
-    // DepositManager public cdTokenManager;
     CoolerLtvOracle public coolerV2LtvOracle;
     CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
     MonoCooler public coolerV2;
@@ -245,9 +236,6 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["OlympusContractRegistry"] = this._deployContractRegistry.selector;
-        // selectorMap["OlympusDepositPositionManager"] = this
-        //     ._deployConvertibleDepositPositionManager
-        //     .selector;
         selectorMap["OlympusGovDelegation"] = this._deployGovDelegation.selector;
         selectorMap["DelegateEscrowFactory"] = this._deployDelegateEscrowFactory.selector;
         // Policies
@@ -277,13 +265,6 @@ contract OlympusDeploy is Script {
         selectorMap["ContractRegistryAdmin"] = this._deployContractRegistryAdmin.selector;
         selectorMap["ReserveMigrator"] = this._deployReserveMigrator.selector;
         selectorMap["EmissionManager"] = this._deployEmissionManager.selector;
-        // selectorMap["ConvertibleDepositAuctioneer"] = this
-        //     ._deployConvertibleDepositAuctioneer
-        //     .selector;
-        // selectorMap["ConvertibleDepositFacility"] = this._deployConvertibleDepositFacility.selector;
-        // selectorMap["ConvertibleDepositTokenManager"] = this
-        //     ._deployConvertibleDepositTokenManager
-        //     .selector;
 
         // Cooler Loans V2
         selectorMap["CoolerV2LtvOracle"] = this._deployCoolerV2LtvOracle.selector;
@@ -391,11 +372,6 @@ contract OlympusDeploy is Script {
         loanConsolidator = LoanConsolidator(envAddress("olympus.policies.LoanConsolidator"));
         reserveMigrator = ReserveMigrator(envAddress("olympus.policies.ReserveMigrator"));
         emissionManager = EmissionManager(envAddress("olympus.policies.EmissionManager"));
-        // cdAuctioneer = CDAuctioneer(envAddress("olympus.policies.ConvertibleDepositAuctioneer"));
-        // cdFacility = CDFacility(envAddress("olympus.policies.ConvertibleDepositFacility"));
-        // cdTokenManager = DepositManager(
-        //     envAddress("olympus.policies.ConvertibleDepositTokenManager")
-        // );
 
         // Cooler Loans V2
         coolerV2LtvOracle = CoolerLtvOracle(envAddress("olympus.policies.CoolerV2LtvOracle"));
@@ -1545,7 +1521,7 @@ contract OlympusDeploy is Script {
     function _deployEmissionManager(bytes calldata) public returns (address) {
         // No additional arguments for EmissionManager
 
-        address cdAuctioneer = address(0); // TODO: Add cdAuctioneer
+        address cdAuctioneer = address(0); // Unused in original version
 
         // Log dependencies
         console2.log("EmissionManager parameters:");
@@ -1575,78 +1551,6 @@ contract OlympusDeploy is Script {
 
         return address(emissionManager);
     }
-
-    // ========== CONVERTIBLE DEPOSIT ========== //
-
-    // function _deployConvertibleDepositPositionManager(bytes calldata) public returns (address) {
-    //     // No additional arguments for ConvertibleDepositPositionManager
-
-    //     // Log dependencies
-    //     console2.log("ConvertibleDepositPositionManager parameters:");
-    //     console2.log("   kernel", address(kernel));
-
-    //     // Deploy ConvertibleDepositPositionManager
-    //     vm.broadcast();
-    //     DEPOS = new OlympusDepositPositionManager(address(kernel), address(0));
-    //     console2.log("ConvertibleDepositPositionManager deployed at:", address(DEPOS));
-
-    //     return address(DEPOS);
-    // }
-
-    // function _deployConvertibleDepositTokenManager(bytes calldata) public returns (address) {
-    //     // No additional arguments for ConvertibleDepositTokenManager
-
-    //     // Log dependencies
-    //     console2.log("ConvertibleDepositTokenManager parameters:");
-    //     console2.log("   kernel", address(kernel));
-
-    //     // Deploy ConvertibleDepositTokenManager
-    //     vm.broadcast();
-    //     cdTokenManager = new DepositManager(address(kernel));
-    //     console2.log("ConvertibleDepositTokenManager deployed at:", address(cdTokenManager));
-
-    //     return address(cdTokenManager);
-    // }
-
-    // function _deployConvertibleDepositAuctioneer(bytes calldata args_) public returns (address) {
-    //     // No additional arguments for ConvertibleDepositAuctioneer
-    //     uint8 depositPeriodMonths = abi.decode(args_, (uint8));
-
-    //     // Log dependencies
-    //     console2.log("ConvertibleDepositAuctioneer parameters:");
-    //     console2.log("   kernel", address(kernel));
-    //     console2.log("   cdFacility", address(cdFacility));
-    //     console2.log("   reserveToken", address(reserve));
-    //     console2.log("   depositPeriodMonths", depositPeriodMonths);
-
-    //     // Deploy ConvertibleDepositAuctioneer
-    //     vm.broadcast();
-    //     cdAuctioneer = new CDAuctioneer(
-    //         address(kernel),
-    //         address(cdFacility),
-    //         address(reserve),
-    //         depositPeriodMonths
-    //     );
-    //     console2.log("ConvertibleDepositAuctioneer deployed at:", address(cdAuctioneer));
-
-    //     return address(cdAuctioneer);
-    // }
-
-    // function _deployConvertibleDepositFacility(bytes calldata) public returns (address) {
-    //     // No additional arguments for ConvertibleDepositFacility
-
-    //     // Log dependencies
-    //     console2.log("ConvertibleDepositFacility parameters:");
-    //     console2.log("   kernel", address(kernel));
-    //     console2.log("   cdTokenManager", address(cdTokenManager));
-
-    //     // Deploy ConvertibleDepositFacility
-    //     vm.broadcast();
-    //     cdFacility = new CDFacility(address(kernel), address(cdTokenManager));
-    //     console2.log("ConvertibleDepositFacility deployed at:", address(cdFacility));
-
-    //     return address(cdFacility);
-    // }
 
     // ========== VERIFICATION ========== //
 
