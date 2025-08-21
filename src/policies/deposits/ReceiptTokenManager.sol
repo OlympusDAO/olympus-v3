@@ -52,7 +52,6 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         _tokenOwners[tokenId] = owner;
 
         // Create the wrappable token with proper metadata layout for CloneableReceiptToken
-        // Layout: name(32) + symbol(32) + decimals(1) + owner(20) + asset(20) + depositPeriod(1) + operator(20)
         _createWrappableToken(
             tokenId,
             string
@@ -91,7 +90,7 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         uint256 tokenId_,
         uint256 amount_,
         bool shouldWrap_
-    ) external onlyTokenOwner(tokenId_) {
+    ) external onlyValidTokenId(tokenId_) onlyTokenOwner(tokenId_) {
         _mint(to_, tokenId_, amount_, shouldWrap_);
     }
 
@@ -101,7 +100,7 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         uint256 tokenId_,
         uint256 amount_,
         bool isWrapped_
-    ) external onlyTokenOwner(tokenId_) {
+    ) external onlyValidTokenId(tokenId_) onlyTokenOwner(tokenId_) {
         _burn(from_, tokenId_, amount_, isWrapped_);
     }
 
