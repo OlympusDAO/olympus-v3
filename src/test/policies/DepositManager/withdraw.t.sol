@@ -255,7 +255,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         );
 
         _assertAssetBalance(amount_, amount_, shares, false);
-        _assertReceiptToken(amount_, 0, false, false);
+        _assertReceiptToken(amount_, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, amount_);
     }
 
@@ -288,7 +288,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         );
 
         _assertAssetBalance(MINT_AMOUNT, MINT_AMOUNT, shares, false);
-        _assertReceiptToken(MINT_AMOUNT, 0, false, false);
+        _assertReceiptToken(MINT_AMOUNT, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT);
     }
 
@@ -317,7 +317,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             false,
             1
         );
-        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
 
         // As the full amount is being withdrawn, double-check that liabilities are 0
@@ -350,7 +350,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         uint256 actualAmount = _withdraw(amount_, false);
 
         _assertAssetBalance(expectedShares, amount_, actualAmount, false, 5);
-        _assertReceiptToken(amount_, 0, false, false);
+        _assertReceiptToken(amount_, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, amount_, 5);
     }
 
@@ -395,7 +395,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         uint256 actualAmount = _withdraw(recipient, amount_, false);
 
         _assertAssetBalance(expectedShares, amount_, actualAmount, false, 5);
-        _assertReceiptToken(amount_, 0, false, false);
+        _assertReceiptToken(amount_, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, amount_, 5);
     }
@@ -453,7 +453,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount);
     }
 
@@ -508,7 +508,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, true, false);
         _assertDepositAssetBalance(
             DEPOSITOR,
             balanceBefore + previousDepositorDepositActualAmount,
@@ -543,7 +543,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             false,
             1
         );
-        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
 
         // As the full amount is being withdrawn, double-check that liabilities are 0
@@ -579,7 +579,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             false,
             1
         );
-        _assertReceiptToken(previousDepositorDepositActualAmount, 0, false, false);
+        _assertReceiptToken(previousDepositorDepositActualAmount, 0, true, false);
         _assertDepositAssetBalance(DEPOSITOR, previousDepositorDepositActualAmount, 1);
 
         // As the full amount is being withdrawn, double-check that liabilities are 0

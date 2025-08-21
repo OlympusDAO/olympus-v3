@@ -160,7 +160,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(0, 0, false, false); // Unaffected
+        _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, amount_, 5);
     }
@@ -250,7 +250,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(0, 0, false, false); // Unaffected
+        _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, amount_, 5);
     }
@@ -320,7 +320,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(0, 0, false, false); // Unaffected
+        _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, amount_, 5);
     }
@@ -393,7 +393,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             "Asset liabilities mismatch"
         );
 
-        _assertReceiptToken(0, 0, false, false); // Unaffected
+        _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, balanceBefore);
         _assertDepositAssetBalance(recipient, maxYield, 5);
     }

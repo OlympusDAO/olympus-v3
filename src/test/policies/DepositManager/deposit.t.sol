@@ -425,7 +425,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Assert
         _assertReceiptTokenId(expectedReceiptTokenId, receiptTokenId);
         _assertAssetBalance(amount_, amount_, actualAmount, true);
-        _assertReceiptToken(amount_, 0, false, true);
+        _assertReceiptToken(amount_, 0, true, true);
         _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - amount_);
     }
 
@@ -637,7 +637,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
         // Assert
         _assertReceiptTokenId(expectedReceiptTokenId, receiptTokenId);
         _assertAssetBalance(expectedShares, expectedAssets, actualAmount, true);
-        _assertReceiptToken(expectedAssets, 0, false, true);
+        _assertReceiptToken(expectedAssets, 0, true, true);
         _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - expectedAssets);
     }
 }
