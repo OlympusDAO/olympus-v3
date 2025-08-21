@@ -21,8 +21,6 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     // ========== STORAGE STRUCTS ========== //
 
-    /// @dev Internal struct for optimized storage in _tokenMetadataAdditional
-    /// @dev Properties arranged to optimize packing: addresses together, then smaller types
     struct TokenStorageData {
         address owner; // 20 bytes
         address asset; // 20 bytes
@@ -79,25 +77,31 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     // ========== MINTING/BURNING ========== //
 
-    /// @inheritdoc IReceiptTokenManager
-    function mint(address to_, uint256 tokenId_, uint256 amount_, bool shouldWrap_) external {
-        // Only token owner can mint
+    modifier onlyTokenOwner(uint256 tokenId_) {
         address owner = getTokenOwner(tokenId_);
         if (msg.sender != owner) {
             revert ReceiptTokenManager_NotOwner(msg.sender, owner);
         }
+        _;
+    }
 
+    /// @inheritdoc IReceiptTokenManager
+    function mint(
+        address to_,
+        uint256 tokenId_,
+        uint256 amount_,
+        bool shouldWrap_
+    ) external onlyTokenOwner(tokenId_) {
         _mint(to_, tokenId_, amount_, shouldWrap_);
     }
 
     /// @inheritdoc IReceiptTokenManager
-    function burn(address from_, uint256 tokenId_, uint256 amount_, bool isWrapped_) external {
-        // Only token owner can burn
-        address owner = getTokenOwner(tokenId_);
-        if (msg.sender != owner) {
-            revert ReceiptTokenManager_NotOwner(msg.sender, owner);
-        }
-
+    function burn(
+        address from_,
+        uint256 tokenId_,
+        uint256 amount_,
+        bool isWrapped_
+    ) external onlyTokenOwner(tokenId_) {
         _burn(from_, tokenId_, amount_, isWrapped_);
     }
 
