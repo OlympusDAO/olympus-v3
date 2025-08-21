@@ -17,6 +17,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
@@ -36,6 +37,7 @@ contract YieldDepositFacilityTest is Test {
     OlympusMinter public minter;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
+    ReceiptTokenManager public receiptTokenManager;
     ConvertibleDepositFacility public cdFacility;
 
     MockERC20 public ohm;
@@ -127,7 +129,8 @@ contract YieldDepositFacilityTest is Test {
             address(0)
         );
         treasury = new OlympusTreasury(kernel);
-        depositManager = new DepositManager(address(kernel));
+        receiptTokenManager = new ReceiptTokenManager();
+        depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
         cdFacility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
@@ -424,7 +427,7 @@ contract YieldDepositFacilityTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        depositManager.approve(spender_, _receiptTokenId, amount_);
+        receiptTokenManager.approve(spender_, _receiptTokenId, amount_);
         _;
     }
 
@@ -507,12 +510,12 @@ contract YieldDepositFacilityTest is Test {
         bool isWrapped_
     ) internal view {
         assertEq(
-            depositManager.balanceOf(recipient_, _receiptTokenId),
+            receiptTokenManager.balanceOf(recipient_, _receiptTokenId),
             isWrapped_ ? 0 : depositAmount_,
             "receiptToken.balanceOf(recipient)"
         );
 
-        IERC20 wrappedReceiptToken = IERC20(depositManager.getWrappedToken(_receiptTokenId));
+        IERC20 wrappedReceiptToken = IERC20(receiptTokenManager.getWrappedToken(_receiptTokenId));
 
         if (!isWrapped_) {
             // If the wrapped receipt token is set, make sure the balance is 0

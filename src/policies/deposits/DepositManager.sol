@@ -4,16 +4,14 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
-import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
-import {uint2str} from "src/libraries/Uint2Str.sol";
-import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
-import {String} from "src/libraries/String.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -25,21 +23,17 @@ import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
 /// @notice This policy is used to manage deposits on behalf of other protocol contracts. For each deposit, a receipt token is minted 1:1 to the depositor.
 /// @dev    This contract combines functionality from a number of inherited contracts, in order to simplify contract implementation.
 ///         Receipt tokens are ERC6909 tokens in order to reduce gas costs. They can optionally be wrapped to an ERC20 token.
-contract DepositManager is
-    Policy,
-    PolicyEnabler,
-    IDepositManager,
-    BaseAssetManager,
-    ERC6909Wrappable
-{
+contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetManager {
     using TransferHelper for ERC20;
-    using String for string;
     using EnumerableSet for EnumerableSet.UintSet;
 
     // ========== CONSTANTS ========== //
 
     /// @notice The role that is allowed to deposit and withdraw funds
     bytes32 public constant ROLE_DEPOSIT_OPERATOR = "deposit_operator";
+
+    /// @notice The receipt token manager for creating receipt tokens
+    ReceiptTokenManager internal immutable _receiptTokenManager;
 
     // Tasks
     // [X] Rename to DepositManager
@@ -60,6 +54,9 @@ contract DepositManager is
 
     /// @notice Maps token ID to the asset period
     mapping(uint256 tokenId => AssetPeriod) internal _assetPeriods;
+
+    /// @notice Set of token IDs that this DepositManager owns
+    EnumerableSet.UintSet internal _ownedTokenIds;
 
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
@@ -85,10 +82,13 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) {
-        if (
-            address(_assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].asset) ==
-            address(0)
-        ) {
+        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
+        if (address(_assetPeriods[tokenId].asset) == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
         _;
@@ -100,13 +100,16 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) {
-        AssetPeriod memory assetPeriod = _assetPeriods[
-            getReceiptTokenId(asset_, depositPeriod_, operator_)
-        ];
+        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
+        AssetPeriod memory assetPeriod = _assetPeriods[tokenId];
         if (assetPeriod.asset == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
-
         if (!assetPeriod.isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
@@ -115,9 +118,11 @@ contract DepositManager is
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(
-        address kernel_
-    ) Policy(Kernel(kernel_)) ERC6909Wrappable(address(new CloneableReceiptToken())) {
+    constructor(address kernel_, address tokenFactory_) Policy(Kernel(kernel_)) {
+        if (tokenFactory_ == address(0)) revert DepositManager_InvalidParams("token factory");
+
+        _receiptTokenManager = ReceiptTokenManager(tokenFactory_);
+
         // Disabled by default by PolicyEnabler
     }
 
@@ -167,8 +172,18 @@ contract DepositManager is
         (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
 
         // Mint the receipt token to the caller
-        receiptTokenId = getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender);
-        _mint(params_.depositor, receiptTokenId, actualAmount, params_.shouldWrap);
+        receiptTokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            params_.asset,
+            params_.depositPeriod,
+            msg.sender
+        );
+        _receiptTokenManager.mint(
+            params_.depositor,
+            receiptTokenId,
+            actualAmount,
+            params_.shouldWrap
+        );
 
         // Update the asset liabilities for the caller (operator)
         _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
@@ -234,9 +249,14 @@ contract DepositManager is
 
         // Burn the receipt token from the depositor
         // Will revert if the asset configuration is not valid/invalid receipt token ID
-        _burn(
+        _receiptTokenManager.burn(
             params_.depositor,
-            getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender),
+            _receiptTokenManager.getReceiptTokenId(
+                address(this),
+                params_.asset,
+                params_.depositPeriod,
+                msg.sender
+            ),
             params_.amount,
             params_.isWrapped
         );
@@ -371,10 +391,14 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) public view override returns (AssetPeriodStatus memory status) {
-        uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        uint256 receiptTokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
         status.isConfigured = address(_assetPeriods[receiptTokenId].asset) != address(0);
         status.isEnabled = _assetPeriods[receiptTokenId].isEnabled;
-
         return status;
     }
 
@@ -441,17 +465,8 @@ contract DepositManager is
             revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, operator_);
         }
 
-        // Configure the ERC6909 receipt token
+        // Configure the ERC6909 receipt token and asset period atomically
         receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_, operator_);
-
-        // Set the asset period
-        _assetPeriods[receiptTokenId] = AssetPeriod({
-            isEnabled: true,
-            depositPeriod: depositPeriod_,
-            reclaimRate: 0,
-            asset: address(asset_),
-            operator: operator_
-        });
 
         // Set the reclaim rate (which does validation and emits an event)
         _setAssetPeriodReclaimRate(asset_, depositPeriod_, operator_, reclaimRate_);
@@ -474,14 +489,16 @@ contract DepositManager is
         onlyManagerOrAdminRole
         onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        // Validate that the asset period is disabled
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
         if (_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_, operator_);
         }
-
-        // Enable the asset period
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].isEnabled = true;
+        _assetPeriods[tokenId].isEnabled = true;
 
         // Emit event
         emit AssetPeriodEnabled(tokenId, address(asset_), operator_, depositPeriod_);
@@ -499,27 +516,33 @@ contract DepositManager is
         onlyManagerOrAdminRole
         onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        // Validate that the asset period is enabled
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        uint256 tokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
         if (!_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
-
-        // Disable the asset period
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].isEnabled = false;
+        _assetPeriods[tokenId].isEnabled = false;
 
         // Emit event
         emit AssetPeriodDisabled(tokenId, address(asset_), operator_, depositPeriod_);
     }
 
     /// @inheritdoc IDepositManager
-    function getAssetPeriods() external view returns (AssetPeriod[] memory) {
-        uint256 tokenIdsLength = _wrappableTokenIds.length();
-        AssetPeriod[] memory depositAssets = new AssetPeriod[](tokenIdsLength);
-        for (uint256 i; i < tokenIdsLength; ++i) {
-            depositAssets[i] = _assetPeriods[_wrappableTokenIds.at(i)];
+    function getAssetPeriods() external view override returns (AssetPeriod[] memory assetPeriods) {
+        // Get all token IDs owned by this contract
+        uint256[] memory tokenIds = _ownedTokenIds.values();
+
+        // Build the array of asset periods (all owned tokens should have valid asset periods)
+        assetPeriods = new AssetPeriod[](tokenIds.length);
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            assetPeriods[i] = _assetPeriods[tokenIds[i]];
         }
-        return depositAssets;
+
+        return assetPeriods;
     }
 
     /// @inheritdoc IDepositManager
@@ -547,8 +570,9 @@ contract DepositManager is
     ) internal {
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
 
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)]
-            .reclaimRate = reclaimRate_;
+        _assetPeriods[
+            _receiptTokenManager.getReceiptTokenId(address(this), asset_, depositPeriod_, operator_)
+        ].reclaimRate = reclaimRate_;
         emit AssetPeriodReclaimRateSet(address(asset_), operator_, depositPeriod_, reclaimRate_);
     }
 
@@ -574,7 +598,15 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) external view returns (uint16) {
-        return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].reclaimRate;
+        return
+            _assetPeriods[
+                _receiptTokenManager.getReceiptTokenId(
+                    address(this),
+                    asset_,
+                    depositPeriod_,
+                    operator_
+                )
+            ].reclaimRate;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
@@ -686,9 +718,14 @@ contract DepositManager is
         }
 
         // Burn the receipt tokens from the payer
-        _burn(
+        _receiptTokenManager.burn(
             params_.payer,
-            getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender),
+            _receiptTokenManager.getReceiptTokenId(
+                address(this),
+                params_.asset,
+                params_.depositPeriod,
+                msg.sender
+            ),
             params_.amount,
             false
         );
@@ -745,27 +782,26 @@ contract DepositManager is
             revert DepositManager_OperatorNameNotSet(operator_);
         }
 
-        // Generate a unique token ID for the token, deposit period and operator combination
-        tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
-
-        // Create the receipt token
-        _createWrappableToken(
-            tokenId,
-            string
-                .concat(operatorName, asset_.name(), " - ", uint2str(depositPeriod_), " months")
-                .truncate32(),
-            string
-                .concat(operatorName, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
-                .truncate32(),
-            asset_.decimals(),
-            abi.encodePacked(
-                address(this), // Owner
-                address(asset_), // Asset
-                depositPeriod_, // Deposit Period
-                operator_ // Operator
-            ),
-            false
+        // Create the receipt token via the factory
+        tokenId = _receiptTokenManager.createToken(
+            address(this), // Owner
+            asset_,
+            depositPeriod_,
+            operator_,
+            operatorName
         );
+
+        // Record this token ID as owned by this contract
+        _ownedTokenIds.add(tokenId);
+
+        // Set the asset period data atomically
+        _assetPeriods[tokenId] = AssetPeriod({
+            isEnabled: true,
+            depositPeriod: depositPeriod_,
+            reclaimRate: 0, // Start with 0, set separately later
+            asset: address(asset_),
+            operator: operator_
+        });
 
         return tokenId;
     }
@@ -775,64 +811,47 @@ contract DepositManager is
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) public pure override returns (uint256) {
-        return uint256(keccak256(abi.encode(asset_, depositPeriod_, operator_)));
+    ) public view override returns (uint256) {
+        return
+            _receiptTokenManager.getReceiptTokenId(
+                address(this),
+                asset_,
+                depositPeriod_,
+                operator_
+            );
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This is the same as the ERC6909 name() function, but is included for consistency
-    function getReceiptTokenName(uint256 tokenId_) external view override returns (string memory) {
-        return name(tokenId_);
+    function getReceiptTokenManager() external view override returns (IReceiptTokenManager) {
+        return IReceiptTokenManager(address(_receiptTokenManager));
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This is the same as the ERC6909 symbol() function, but is included for consistency
-    function getReceiptTokenSymbol(
-        uint256 tokenId_
-    ) external view override returns (string memory) {
-        return symbol(tokenId_);
+    function getReceiptToken(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view override returns (uint256 tokenId, address wrappedToken) {
+        tokenId = _receiptTokenManager.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
+        wrappedToken = _receiptTokenManager.getWrappedToken(tokenId);
+        return (tokenId, wrappedToken);
     }
 
-    /// @inheritdoc IDepositManager
-    /// @dev        This is the same as the ERC6909 decimals() function, but is included for consistency
-    function getReceiptTokenDecimals(uint256 tokenId_) external view override returns (uint8) {
-        return decimals(tokenId_);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenOwner(uint256) external view override returns (address) {
-        return address(this);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenAsset(uint256 tokenId_) external view override returns (IERC20) {
-        return IERC20(_assetPeriods[tokenId_].asset);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenDepositPeriod(uint256 tokenId_) external view override returns (uint8) {
-        return _assetPeriods[tokenId_].depositPeriod;
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenOperator(uint256 tokenId_) external view override returns (address) {
-        return _assetPeriods[tokenId_].operator;
-    }
+    // Receipt token view functions moved to _receiptTokenManager
+    // Use _receiptTokenManager.getTokenAsset(tokenId), etc. for token metadata
 
     // ========== ERC165 ========== //
 
     function supportsInterface(
         bytes4 interfaceId
-    )
-        public
-        view
-        virtual
-        override(ERC6909Wrappable, BaseAssetManager, PolicyEnabler)
-        returns (bool)
-    {
+    ) public view virtual override(BaseAssetManager, PolicyEnabler) returns (bool) {
         return
             interfaceId == type(IDepositManager).interfaceId ||
-            ERC6909Wrappable.supportsInterface(interfaceId) ||
             BaseAssetManager.supportsInterface(interfaceId) ||
             PolicyEnabler.supportsInterface(interfaceId);
     }

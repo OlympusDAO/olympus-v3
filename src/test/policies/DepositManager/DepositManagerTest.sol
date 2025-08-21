@@ -7,6 +7,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -36,6 +37,7 @@ contract DepositManagerTest is Test {
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
+    ReceiptTokenManager public receiptTokenManager;
 
     MockERC20 public asset;
     MockERC4626 public vault;
@@ -69,7 +71,8 @@ contract DepositManagerTest is Test {
         // Create modules and policies
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        depositManager = new DepositManager(address(kernel));
+        receiptTokenManager = new ReceiptTokenManager();
+        depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         vm.stopPrank();
 
         // Install modules and policies
@@ -187,16 +190,17 @@ contract DepositManagerTest is Test {
         );
 
         // Update the previous balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+        (uint256 receiptTokenId, address wrappedToken) = depositManager.getReceiptToken(
             iAsset,
             DEPOSIT_PERIOD,
             DEPOSIT_OPERATOR
         );
-        previousDepositorReceiptTokenBalance = depositManager.balanceOf(DEPOSITOR, receiptTokenId);
-        if (depositManager.getWrappedToken(receiptTokenId) != address(0)) {
-            previousDepositorWrappedTokenBalance = IERC20(
-                depositManager.getWrappedToken(receiptTokenId)
-            ).balanceOf(DEPOSITOR);
+        previousDepositorReceiptTokenBalance = receiptTokenManager.balanceOf(
+            DEPOSITOR,
+            receiptTokenId
+        );
+        if (wrappedToken != address(0)) {
+            previousDepositorWrappedTokenBalance = IERC20(wrappedToken).balanceOf(DEPOSITOR);
         }
 
         previousDepositManagerAssetBalance = asset.balanceOf(address(depositManager));
@@ -219,7 +223,7 @@ contract DepositManagerTest is Test {
             DEPOSIT_PERIOD,
             DEPOSIT_OPERATOR
         );
-        address wrappedToken = depositManager.getWrappedToken(receiptTokenId);
+        address wrappedToken = receiptTokenManager.getWrappedToken(receiptTokenId);
 
         vm.prank(DEPOSITOR);
         IERC20(wrappedToken).approve(address(depositManager), amount_);
@@ -234,7 +238,7 @@ contract DepositManagerTest is Test {
         );
 
         vm.prank(DEPOSITOR);
-        depositManager.approve(address(depositManager), receiptTokenId, amount_);
+        receiptTokenManager.approve(address(depositManager), receiptTokenId, amount_);
         _;
     }
 
@@ -657,19 +661,19 @@ contract DepositManagerTest is Test {
         // Unwrapped amount
         if (isDeposit_) {
             assertEq(
-                depositManager.balanceOf(DEPOSITOR, receiptTokenId),
+                receiptTokenManager.balanceOf(DEPOSITOR, receiptTokenId),
                 previousDepositorReceiptTokenBalance + unwrappedAmount_,
                 "Receipt token balance mismatch"
             );
         } else {
             assertEq(
-                depositManager.balanceOf(DEPOSITOR, receiptTokenId),
+                receiptTokenManager.balanceOf(DEPOSITOR, receiptTokenId),
                 previousDepositorReceiptTokenBalance - unwrappedAmount_,
                 "Receipt token balance mismatch"
             );
         }
 
-        address wrappedToken = depositManager.getWrappedToken(receiptTokenId);
+        address wrappedToken = receiptTokenManager.getWrappedToken(receiptTokenId);
 
         // Wrapped token exists
         if (wrappedTokenExists_) {

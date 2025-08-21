@@ -204,7 +204,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             // Commit
             _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
 
-            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+            previousDepositActual = receiptTokenManager.balanceOf(OPERATOR, receiptTokenId);
         }
 
         // Expect revert

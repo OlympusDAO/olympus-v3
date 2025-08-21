@@ -47,7 +47,10 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     }
 
     /// @notice Returns the clone initialisation data for a given token ID
-    function _getTokenData(uint256 tokenId_) internal view returns (bytes memory) {
+    ///
+    /// @param  tokenId_    The token ID
+    /// @return tokenData   Packed bytes including the name, symbol, decimals and additional metadata
+    function _getTokenData(uint256 tokenId_) internal view returns (bytes memory tokenData) {
         bytes memory additionalMetadata = _tokenMetadataAdditional[tokenId_];
 
         return
@@ -57,6 +60,16 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
                 decimals(tokenId_),
                 additionalMetadata
             );
+    }
+
+    /// @notice Returns the additional metadata for a token ID
+    ///
+    /// @param  tokenId_        The token ID
+    /// @return additionalData  The additional metadata bytes
+    function _getTokenAdditionalData(
+        uint256 tokenId_
+    ) internal view returns (bytes memory additionalData) {
+        return _tokenMetadataAdditional[tokenId_];
     }
 
     // ========== MINT/BURN FUNCTIONS ========== //

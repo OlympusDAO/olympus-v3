@@ -171,7 +171,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
 
         // Assert tokens
         assertEq(
-            depositManager.balanceOf(OPERATOR, receiptTokenId),
+            receiptTokenManager.balanceOf(OPERATOR, receiptTokenId),
             previousDepositActual - amount_,
             "operator receipt token balance"
         );
@@ -297,7 +297,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
             // Commit
             _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
 
-            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+            previousDepositActual = receiptTokenManager.balanceOf(OPERATOR, receiptTokenId);
         }
 
         // Expect event
@@ -310,7 +310,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
 
         // Assert tokens
         assertEq(
-            depositManager.balanceOf(OPERATOR, receiptTokenId),
+            receiptTokenManager.balanceOf(OPERATOR, receiptTokenId),
             previousDepositActual - withdrawAmount_,
             "operator receipt token balance"
         );
@@ -371,7 +371,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
             // Commit
             _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
 
-            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+            previousDepositActual = receiptTokenManager.balanceOf(OPERATOR, receiptTokenId);
         }
 
         // Expect event
@@ -384,7 +384,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
 
         // Assert tokens
         assertEq(
-            depositManager.balanceOf(OPERATOR, receiptTokenId),
+            receiptTokenManager.balanceOf(OPERATOR, receiptTokenId),
             previousDepositActual - withdrawAmount_,
             "operator receipt token balance"
         );

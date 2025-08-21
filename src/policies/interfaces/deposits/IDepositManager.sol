@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 /// @title  Deposit Manager
 /// @notice Defines an interface for a policy that manages deposits on behalf of other contracts. It is meant to be used by the facilities, and is not an end-user policy.
@@ -76,6 +77,8 @@ interface IDepositManager is IAssetManager {
     );
 
     // ========== ERRORS ========== //
+
+    error DepositManager_InvalidParams(string reason);
 
     error DepositManager_Insolvent(address asset, uint256 requiredAssets);
 
@@ -457,10 +460,10 @@ interface IDepositManager is IAssetManager {
         address operator_
     ) external view returns (AssetPeriodStatus memory status);
 
-    /// @notice Returns the asset periods
+    /// @notice Gets all configured asset periods
     ///
-    /// @return depositConfigurations   The asset periods
-    function getAssetPeriods() external view returns (AssetPeriod[] memory depositConfigurations);
+    /// @return assetPeriods    Array of configured asset periods
+    function getAssetPeriods() external view returns (AssetPeriod[] memory assetPeriods);
 
     // ========== RECLAIM RATE ========== //
 
@@ -505,49 +508,23 @@ interface IDepositManager is IAssetManager {
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) external view returns (uint256);
+    ) external view returns (uint256 receiptTokenId);
 
-    /// @notice Returns the name of a receipt token
+    /// @notice Convenience function that returns both receipt token ID and wrapped token address
     ///
-    /// @param  tokenId_    The ID of the receipt token
-    /// @return name        The name of the receipt token
-    function getReceiptTokenName(uint256 tokenId_) external view returns (string memory);
+    /// @param  asset_          The asset contract
+    /// @param  depositPeriod_  The deposit period in months
+    /// @param  operator_       The operator address
+    /// @return tokenId         The receipt token ID
+    /// @return wrappedToken    The address of the wrapped ERC20 token (0x0 if not created yet)
+    function getReceiptToken(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view returns (uint256 tokenId, address wrappedToken);
 
-    /// @notice Returns the symbol of a receipt token
+    /// @notice Gets the receipt token manager
     ///
-    /// @param  tokenId_    The ID of the receipt token
-    /// @return symbol      The symbol of the receipt token
-    function getReceiptTokenSymbol(uint256 tokenId_) external view returns (string memory);
-
-    /// @notice Returns the decimals of a receipt token
-    ///
-    /// @param  tokenId_    The ID of the receipt token
-    /// @return decimals    The decimals of the receipt token
-    function getReceiptTokenDecimals(uint256 tokenId_) external view returns (uint8);
-
-    /// @notice Returns the owner of a receipt token
-    ///
-    /// @param  tokenId_    The ID of the receipt token
-    /// @return owner       The owner of the receipt token
-    function getReceiptTokenOwner(uint256 tokenId_) external view returns (address);
-
-    /// @notice Returns the asset of a receipt token
-    ///
-    /// @param  tokenId_    The ID of the receipt token
-    /// @return asset       The asset of the receipt token
-    function getReceiptTokenAsset(uint256 tokenId_) external view returns (IERC20);
-
-    /// @notice Returns the deposit period of a receipt token
-    ///
-    /// @param  tokenId_        The ID of the receipt token
-    /// @return depositPeriod   The deposit period of the receipt token
-    function getReceiptTokenDepositPeriod(
-        uint256 tokenId_
-    ) external view returns (uint8 depositPeriod);
-
-    /// @notice Returns the operator of a receipt token
-    ///
-    /// @param  tokenId_    The ID of the receipt token
-    /// @return operator    The operator of the receipt token
-    function getReceiptTokenOperator(uint256 tokenId_) external view returns (address operator);
+    /// @return manager The receipt token manager contract
+    function getReceiptTokenManager() external view returns (IReceiptTokenManager manager);
 }

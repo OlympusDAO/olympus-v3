@@ -23,7 +23,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             string.concat(facilityName_, asset_.name(), " - ", uint2str(depositPeriod_), " months")
         );
         assertEq(
-            depositManager.getReceiptTokenName(tokenId_),
+            receiptTokenManager.getTokenName(tokenId_),
             expectedName,
             "Receipt token name does not match expected format"
         );
@@ -33,27 +33,27 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             string.concat(facilityName_, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
         );
         assertEq(
-            depositManager.getReceiptTokenSymbol(tokenId_),
+            receiptTokenManager.getTokenSymbol(tokenId_),
             expectedSymbol,
             "Receipt token symbol does not match expected format"
         );
 
         // Check decimals
         assertEq(
-            depositManager.getReceiptTokenDecimals(tokenId_),
+            receiptTokenManager.getTokenDecimals(tokenId_),
             asset_.decimals(),
             "Receipt token decimals do not match asset decimals"
         );
 
         // Check owner
         assertEq(
-            depositManager.getReceiptTokenOwner(tokenId_),
+            receiptTokenManager.getTokenOwner(tokenId_),
             address(depositManager),
             "Receipt token owner is not the deposit manager"
         );
 
         // Check asset
-        IERC20 asset = depositManager.getReceiptTokenAsset(tokenId_);
+        IERC20 asset = receiptTokenManager.getTokenAsset(tokenId_);
         assertEq(
             address(asset),
             address(asset_),
@@ -61,7 +61,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         // Check deposit period
-        uint8 depositPeriod = depositManager.getReceiptTokenDepositPeriod(tokenId_);
+        uint8 depositPeriod = receiptTokenManager.getTokenDepositPeriod(tokenId_);
         assertEq(
             depositPeriod,
             depositPeriod_,
@@ -69,7 +69,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         // Check facility
-        address facility = depositManager.getReceiptTokenOperator(tokenId_);
+        address facility = receiptTokenManager.getTokenOperator(tokenId_);
         assertEq(facility, facility_, "Receipt token facility does not match expected facility");
     }
 

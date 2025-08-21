@@ -37,7 +37,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
         // Assert that the receipt tokens were transferred to the recipient
         assertEq(
-            depositManager.balanceOf(recipient, receiptTokenId),
+            depositManager.getReceiptTokenManager().balanceOf(recipient, receiptTokenId),
             previousConvertibleDepositBalance_ + bidAmount_,
             "receipt token balance"
         );
@@ -103,7 +103,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 previousReceiptBalance_
     ) internal view {
         // Assert that the actual amount matches the increase in receipt token balance
-        uint256 currentReceiptBalance = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 currentReceiptBalance = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
         uint256 receiptTokensReceived = currentReceiptBalance - previousReceiptBalance_;
         assertEq(
             actualAmount_,
@@ -263,7 +266,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -339,7 +345,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Call function
         vm.prank(recipient);
@@ -422,7 +431,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectBidEvent(bidAmount, previewOhmOut, 1);
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Call function
         vm.prank(recipient);
@@ -500,7 +512,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectBidEvent(bidAmount, previewOhmOut, 1);
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Start gas snapshot
         vm.startSnapshotGas("bid");
@@ -592,7 +607,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _expectBidEvent(bidAmount, previewOhmOut, 0);
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Call function
         vm.prank(recipient);
@@ -659,7 +677,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         }
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount_, expectedConvertedAmount, 0);
@@ -740,7 +761,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
@@ -818,7 +842,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
@@ -890,7 +917,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
@@ -982,7 +1012,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         }
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 0);
@@ -1098,7 +1131,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         }
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 1);
@@ -1216,7 +1252,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(expectedDepositIn, previewOhmOut, 0);
@@ -1299,7 +1338,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -1379,7 +1421,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -1447,7 +1492,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -1512,7 +1560,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -1572,7 +1623,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         // Expect event
         _expectBidEvent(bidAmount, previewOhmOut, 0);
@@ -1629,7 +1683,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 expectedConvertedAmountTickTwo = ((bidAmount - 150e18) * 1e9) / 165e17;
 
         // Get receipt token balance before bid
-        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+        uint256 balanceBefore = depositManager.getReceiptTokenManager().balanceOf(
+            recipient,
+            receiptTokenId
+        );
 
         {
             // Check preview

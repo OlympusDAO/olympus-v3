@@ -55,12 +55,12 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             address(cdFacility)
         );
         assertEq(
-            depositManager.balanceOf(user_, receiptTokenId),
+            receiptTokenManager.balanceOf(user_, receiptTokenId),
             receiptTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
             "user: receipt token balance mismatch"
         );
         assertEq(
-            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
             amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
             "redemptionVault: receipt token balance mismatch"
         );
@@ -210,7 +210,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
     {
         // Transfer the receipt tokens to reduce the balance
         vm.startPrank(recipient);
-        depositManager.transfer(
+        receiptTokenManager.transfer(
             address(this),
             depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(cdFacility)),
             1e17

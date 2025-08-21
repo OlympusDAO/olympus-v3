@@ -216,7 +216,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         // Assertions
         // Assert receipt token balances
         assertEq(
-            depositManager.balanceOf(
+            receiptTokenManager.balanceOf(
                 DEPOSITOR,
                 depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR)
             ),

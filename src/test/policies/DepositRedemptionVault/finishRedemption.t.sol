@@ -44,12 +44,12 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             facility_
         );
         assertEq(
-            depositManager.balanceOf(user_, receiptTokenId),
+            receiptTokenManager.balanceOf(user_, receiptTokenId),
             cancelledAmount_,
             "user: receipt token balance mismatch"
         );
         assertEq(
-            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
             otherUserCommitmentAmount_,
             "redemptionVault: receipt token balance mismatch"
         );

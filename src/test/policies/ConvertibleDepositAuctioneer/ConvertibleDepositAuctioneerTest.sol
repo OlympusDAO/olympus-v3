@@ -20,6 +20,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 // solhint-disable max-states-count
@@ -114,7 +115,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
             address(kernel),
             address(0)
         );
-        depositManager = new DepositManager(address(kernel));
+        // Deploy the receipt token manager first
+        ReceiptTokenManager receiptTokenManager = new ReceiptTokenManager();
+        depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         auctioneer = new ConvertibleDepositAuctioneer(
             address(kernel),
@@ -404,7 +407,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
         address spender_,
         uint256 amount_
     ) {
-        IERC20 wrappedReceiptToken = IERC20(depositManager.getWrappedToken(receiptTokenId));
+        IERC20 wrappedReceiptToken = IERC20(
+            depositManager.getReceiptTokenManager().getWrappedToken(receiptTokenId)
+        );
 
         vm.prank(owner_);
         wrappedReceiptToken.approve(spender_, amount_);

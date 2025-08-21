@@ -25,6 +25,7 @@ import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepo
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 
 // solhint-disable max-states-count
 contract ConvertibleDepositFacilityTest is Test {
@@ -37,6 +38,7 @@ contract ConvertibleDepositFacilityTest is Test {
     OlympusDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
+    ReceiptTokenManager public receiptTokenManager;
 
     MockERC20 public ohm;
     MockERC20 public reserveToken;
@@ -110,7 +112,8 @@ contract ConvertibleDepositFacilityTest is Test {
             address(kernel),
             address(0)
         );
-        depositManager = new DepositManager(address(kernel));
+        receiptTokenManager = new ReceiptTokenManager();
+        depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
@@ -451,7 +454,7 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        depositManager.approve(spender_, receiptTokenId, amount_);
+        receiptTokenManager.approve(spender_, receiptTokenId, amount_);
         _;
     }
 
@@ -480,12 +483,13 @@ contract ConvertibleDepositFacilityTest is Test {
         IERC20 asset_,
         uint8 depositPeriod_
     ) internal view returns (IERC20) {
-        return
-            IERC20(
-                depositManager.getWrappedToken(
-                    depositManager.getReceiptTokenId(asset_, depositPeriod_, address(facility))
-                )
-            );
+        (, address wrappedToken) = depositManager.getReceiptToken(
+            asset_,
+            depositPeriod_,
+            address(facility)
+        );
+
+        return IERC20(wrappedToken);
     }
 
     function _accrueYield(IERC4626 vault_, uint256 amount_) internal {
@@ -554,7 +558,7 @@ contract ConvertibleDepositFacilityTest is Test {
         bool isWrapped_
     ) internal view {
         assertEq(
-            depositManager.balanceOf(recipient_, receiptTokenId),
+            receiptTokenManager.balanceOf(recipient_, receiptTokenId),
             isWrapped_ ? 0 : depositAmount_,
             "receiptToken.balanceOf(recipient)"
         );
