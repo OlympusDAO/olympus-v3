@@ -30,6 +30,7 @@ interface IReceiptTokenManager is IERC6909, IERC6909Wrappable {
 
     error ReceiptTokenManager_TokenExists(uint256 tokenId);
     error ReceiptTokenManager_NotOwner(address caller, address owner);
+    error ReceiptTokenManager_InvalidParams(string reason);
 
     // ========== FUNCTIONS ========== //
 

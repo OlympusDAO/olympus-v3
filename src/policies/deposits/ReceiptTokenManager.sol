@@ -37,6 +37,17 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         address operator_,
         string memory operatorName_
     ) external returns (uint256 tokenId) {
+        // Validate parameters
+        if (address(asset_) == address(0)) {
+            revert ReceiptTokenManager_InvalidParams("asset");
+        }
+        if (depositPeriod_ == 0) {
+            revert ReceiptTokenManager_InvalidParams("depositPeriod");
+        }
+        if (operator_ == address(0)) {
+            revert ReceiptTokenManager_InvalidParams("operator");
+        }
+
         // Use msg.sender as the owner for security
         address owner = msg.sender;
 
