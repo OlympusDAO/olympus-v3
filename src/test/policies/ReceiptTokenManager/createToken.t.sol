@@ -455,12 +455,7 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
             )
         );
         vm.prank(OWNER);
-        receiptTokenManager.createToken(
-            IERC20(address(asset)),
-            0,
-            OPERATOR,
-            OPERATOR_NAME
-        );
+        receiptTokenManager.createToken(IERC20(address(asset)), 0, OPERATOR, OPERATOR_NAME);
     }
 
     // given zero address operator
