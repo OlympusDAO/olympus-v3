@@ -2,15 +2,12 @@
 pragma solidity >=0.8.20;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
-import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
-import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
+import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 
 /**
  * @title ReceiptTokenManagerTest
@@ -78,6 +75,43 @@ contract ReceiptTokenManagerTest is Test {
         vm.prank(RECIPIENT);
         receiptTokenManager.approve(OWNER, _tokenId, type(uint256).max);
         _;
+    }
+
+    // ========== HELPER FUNCTIONS ========== //
+
+    /// @notice Helper to expect ERC6909InsufficientBalance revert
+    function expectInsufficientBalance(address owner, uint256 balance, uint256 amount) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientBalance.selector,
+                owner,
+                balance,
+                amount,
+                _tokenId
+            )
+        );
+    }
+
+    /// @notice Helper to expect ERC6909InsufficientAllowance revert
+    function expectInsufficientAllowance(
+        address spender,
+        uint256 allowance,
+        uint256 amount
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientAllowance.selector,
+                spender,
+                allowance,
+                amount,
+                _tokenId
+            )
+        );
+    }
+
+    /// @notice Helper to expect ERC6909InvalidReceiver revert
+    function expectInvalidReceiver(address receiver_) internal {
+        vm.expectRevert(abi.encodeWithSelector(ERC6909.ERC6909InvalidReceiver.selector, receiver_));
     }
 
     function setUp() public virtual {

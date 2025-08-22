@@ -70,7 +70,7 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
     // given mint to zero address
     //  [X] mint to zero address reverts
     function test_mintToZeroAddress_reverts() public createReceiptToken {
-        vm.expectRevert(abi.encodeWithSignature("ERC6909InvalidReceiver(address)", address(0))); // ERC6909 should revert on mint to zero address
+        expectInvalidReceiver(address(0));
         vm.prank(OWNER);
         receiptTokenManager.mint(address(0), _tokenId, MINT_AMOUNT, false);
     }

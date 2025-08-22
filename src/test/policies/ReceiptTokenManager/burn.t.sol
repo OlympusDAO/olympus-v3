@@ -5,8 +5,6 @@ import {ReceiptTokenManagerTest} from "./ReceiptTokenManagerTest.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
-import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
-import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {stdError} from "@forge-std-1.9.6/StdError.sol";
 
 /**
@@ -74,17 +72,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         createReceiptToken
         mintToRecipient
     {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ERC6909.ERC6909InsufficientAllowance.selector,
-                OWNER, // Spender
-                0, // Allowance
-                MINT_AMOUNT / 2, // Amount
-                _tokenId
-            )
-        );
-
+        expectInsufficientAllowance(OWNER, 0, MINT_AMOUNT / 2);
         vm.prank(OWNER);
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT / 2, false);
     }
@@ -181,18 +169,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
     // ========== INSUFFICIENT BALANCE TESTS ========== //
 
     function test_burnWithoutBalance_reverts() public createReceiptToken allowOwnerToSpendAll {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ERC6909.ERC6909InsufficientBalance.selector,
-                RECIPIENT, // From address
-                0,
-                MINT_AMOUNT,
-                _tokenId
-            )
-        );
-
-        // Try to burn from address with no balance
+        expectInsufficientBalance(RECIPIENT, 0, MINT_AMOUNT);
         vm.prank(OWNER);
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT, false);
     }
@@ -203,18 +180,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         mintToRecipient
         allowOwnerToSpendAll
     {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ERC6909.ERC6909InsufficientBalance.selector,
-                RECIPIENT, // From address
-                MINT_AMOUNT,
-                MINT_AMOUNT * 2,
-                _tokenId
-            )
-        );
-
-        // Try to burn more than available balance
+        expectInsufficientBalance(RECIPIENT, MINT_AMOUNT, MINT_AMOUNT * 2);
         vm.prank(OWNER);
         receiptTokenManager.burn(RECIPIENT, _tokenId, MINT_AMOUNT * 2, false);
     }
