@@ -15,7 +15,18 @@ import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
 
 /// @title  ReceiptTokenManager
 /// @notice Manager contract for creating and managing ERC6909 receipt tokens for deposits
-/// @dev    This contract is extracted from DepositManager to reduce its size. Wrapped tokens will be clones of CloneableReceiptToken, but a future version could make the ERC20 wrapped token configurable.
+/// @dev    Extracted from DepositManager to reduce contract size.
+///
+///         Key Features:
+///         - Creator-only minting/burning: Only the contract that creates a token can mint/burn it
+///         - ERC6909 compatibility with optional ERC20 wrapping via CloneableReceiptToken clones
+///         - Deterministic token ID generation based on owner, asset, deposit period, and operator
+///         - Automatic wrapped token creation for seamless DeFi integration
+///
+///         Security Model:
+///         - Token ownership is immutable and set to msg.sender during creation
+///         - All mint/burn operations are gated by onlyTokenOwner modifier
+///         - Token IDs include owner address to prevent collision attacks
 contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
     using String for string;
 
@@ -31,6 +42,11 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
     // ========== TOKEN CREATION ========== //
 
     /// @inheritdoc IReceiptTokenManager
+    /// @dev        This function reverts if:
+    ///             - The asset is the zero address
+    ///             - The deposit period is 0
+    ///             - The operator is the zero address
+    ///             - A token with the same parameters already exists
     function createToken(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -99,6 +115,11 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
     }
 
     /// @inheritdoc IReceiptTokenManager
+    /// @dev        This function reverts if:
+    ///             - The token ID is invalid (not created)
+    ///             - The caller is not the token owner
+    ///             - The recipient is the zero address
+    ///             - The amount is 0
     function mint(
         address to_,
         uint256 tokenId_,
@@ -109,6 +130,14 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
     }
 
     /// @inheritdoc IReceiptTokenManager
+    /// @dev        This function reverts if:
+    ///             - The token ID is invalid (not created)
+    ///             - The caller is not the token owner
+    ///             - The account is the zero address
+    ///             - The amount is 0
+    ///             - For wrapped tokens: account has not approved ReceiptTokenManager to spend the wrapped ERC20 token
+    ///             - For unwrapped tokens: account has not approved the caller to spend ERC6909 tokens
+    ///             - The account has insufficient token balance
     function burn(
         address from_,
         uint256 tokenId_,

@@ -21,9 +21,12 @@ import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 
 /// @title Deposit Manager
-/// @notice This policy is used to manage deposits on behalf of other protocol contracts. For each deposit, a receipt token is minted 1:1 to the depositor.
-/// @dev    This contract combines functionality from a number of inherited contracts, in order to simplify contract implementation.
-///         Receipt tokens are ERC6909 tokens in order to reduce gas costs. They can optionally be wrapped to an ERC20 token.
+/// @notice This policy manages deposits and withdrawals for Olympus protocol contracts
+/// @dev    Key Features:
+///         - ERC6909 receipt tokens with optional ERC20 wrapping, using ReceiptTokenManager
+///         - Operator isolation preventing cross-operator fund access
+///         - Borrowing functionality
+///         - Configurable reclaim rates for risk management
 contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetManager {
     using TransferHelper for ERC20;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -161,6 +164,17 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset/deposit period/operator combination is not enabled
+    ///             - The deposit amount is below the minimum deposit requirement
+    ///             - The deposit would exceed the asset's deposit cap for the operator
+    ///             - The depositor has not approved the DepositManager to spend the asset tokens
+    ///             - The depositor has insufficient asset token balance
+    ///             - The asset is a fee-on-transfer token
+    ///             - Zero shares would be received from the vault
     function deposit(
         DepositParams calldata params_
     )
@@ -216,6 +230,13 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset is not configured in BaseAssetManager
+    ///             - Zero shares would be withdrawn from the vault
+    ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function claimYield(
         IERC20 asset_,
         address recipient_,
@@ -245,12 +266,17 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
     ///             This function reverts if:
     ///             - The contract is not enabled
-    ///             - The caller is does not have the required role
+    ///             - The caller does not have the deposit operator role
     ///             - The recipient is the zero address
-    ///             - The asset and deposit period combination is not configured
-    ///             - The caller has not approved this contract to spend the receipt (or wrapped) token
+    ///             - The asset/deposit period/operator combination is not configured
+    ///             - The depositor has insufficient receipt token balance
+    ///             - For wrapped tokens: depositor has not approved ReceiptTokenManager to spend the wrapped ERC20 token
+    ///             - For unwrapped tokens: depositor has not approved the caller to spend ERC6909 tokens
+    ///             - Zero shares would be withdrawn from the vault
+    ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function withdraw(
         WithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
@@ -323,12 +349,13 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        Note that once set, an operator name cannot be changed.
     ///
     ///             This function reverts if:
-    ///             - the caller is not the admin or manager role
-    ///             - the operator's name is already set
-    ///             - the name is already in use
-    ///             - the operator name is empty
-    ///             - the operator name is not 3 characters long
-    ///             - the operator name contains characters that are not a-z or 0-9
+    ///             - The contract is not enabled
+    ///             - The caller does not have the admin or manager role
+    ///             - The operator's name is already set
+    ///             - The name is already in use by another operator
+    ///             - The operator name is empty
+    ///             - The operator name is not exactly 3 characters long
+    ///             - The operator name contains characters that are not a-z or 0-9
     function setOperatorName(
         address operator_,
         string calldata name_
@@ -455,6 +482,17 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset has not been added via addAsset()
+    ///             - The operator is the zero address
+    ///             - The deposit period is 0
+    ///             - The asset/deposit period/operator combination is already configured
+    ///             - The operator name has not been set
+    ///             - The reclaim rate exceeds 100%
+    ///             - Receipt token creation fails (invalid parameters in ReceiptTokenManager)
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -492,6 +530,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset/deposit period/operator combination does not exist
+    ///             - The asset period is already enabled
     function enableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -519,6 +563,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset/deposit period/operator combination does not exist
+    ///             - The asset period is already disabled
     function disableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -596,6 +646,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset/deposit period/operator combination does not exist
+    ///             - The reclaim rate exceeds 100%
     function setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -631,6 +687,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The recipient is the zero address
+    ///             - The asset has not been added via addAsset()
+    ///             - The amount exceeds the operator's available borrowing capacity
+    ///             - Zero shares would be withdrawn from the vault
+    ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function borrowingWithdraw(
         BorrowingWithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
@@ -674,6 +739,17 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset has not been added via addAsset()
+    ///             - The amount exceeds the current borrowed amount for the operator
+    ///             - The payer has not approved DepositManager to spend the asset tokens
+    ///             - The payer has insufficient asset token balance
+    ///             - The asset is a fee-on-transfer token
+    ///             - Zero shares would be deposited into the vault
+    ///             - The operator becomes insolvent after the repayment (assets + borrowed < liabilities)
     function borrowingRepay(
         BorrowingRepayParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
@@ -714,6 +790,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset has not been added via addAsset()
+    ///             - The amount exceeds the current borrowed amount for the operator
+    ///             - The payer has insufficient receipt token balance
+    ///             - The payer has not approved the caller to spend ERC6909 tokens
+    ///             - The operator becomes insolvent after the default (assets + borrowed < liabilities)
     function borrowingDefault(
         BorrowingDefaultParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) {
