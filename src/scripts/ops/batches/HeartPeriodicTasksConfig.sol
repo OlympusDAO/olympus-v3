@@ -9,11 +9,12 @@ import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
 import {IReserveWrapper} from "src/policies/interfaces/IReserveWrapper.sol";
 import {IOperator} from "src/policies/interfaces/IOperator.sol";
 import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 /// @notice Configures the Heart with periodic tasks for reserve operations
-/// @dev    This is designed for use with Heart v1.7
+/// @dev    This is designed for use with Heart v1.7, and is mainly intended for configuring the Heart on testnets. The production contract will be configured through an OCG proposal.
 contract HeartPeriodicTasksConfig is BatchScriptV2 {
     /// @notice Configure Heart with periodic tasks in the specified order
     function configurePeriodicTasks(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
@@ -72,6 +73,16 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
                 yieldRepo,
                 IYieldRepo.endEpoch.selector,
                 3 // Fourth task
+            )
+        );
+
+        // 5. Enable the Heart
+        console2.log("Enabling Heart");
+        addToBatch(
+            heart,
+            abi.encodeWithSelector(
+                IEnabler.enable.selector,
+                "" // No enable data needed for Heart
             )
         );
 
