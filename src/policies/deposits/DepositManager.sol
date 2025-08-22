@@ -467,6 +467,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         onlyConfiguredAsset(asset_)
         returns (uint256 receiptTokenId)
     {
+        // Validate that the operator is not the zero address
+        if (operator_ == address(0)) revert DepositManager_ZeroAddress();
+
         // Validate that the deposit period is not 0
         if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
 
