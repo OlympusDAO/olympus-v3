@@ -52,14 +52,17 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
         _tokenOwners[tokenId] = owner;
 
         // Create the wrappable token with proper metadata layout for CloneableReceiptToken
+        string memory tokenName = string
+            .concat(operatorName_, asset_.name(), " - ", uint2str(depositPeriod_), " months")
+            .truncate32();
+        string memory tokenSymbol = string
+            .concat(operatorName_, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
+            .truncate32();
+
         _createWrappableToken(
             tokenId,
-            string
-                .concat(operatorName_, asset_.name(), " - ", uint2str(depositPeriod_), " months")
-                .truncate32(),
-            string
-                .concat(operatorName_, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
-                .truncate32(),
+            tokenName,
+            tokenSymbol,
             asset_.decimals(),
             abi.encodePacked(
                 address(this), // Owner at 0x41
