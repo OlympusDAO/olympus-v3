@@ -9,6 +9,10 @@
             "args": {}
         },
         {
+            "name": "ReceiptTokenManager",
+            "args": {}
+        },
+        {
             "name": "DepositManager",
             "args": {}
         },

@@ -21,6 +21,7 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
@@ -409,18 +410,28 @@ contract DeployV3 is WithEnvironment {
         return (address(heart), "olympus.policies");
     }
 
+    function deployReceiptTokenManager() public returns (address, string memory) {
+        // Deploy
+        vm.broadcast();
+        ReceiptTokenManager receiptTokenManager = new ReceiptTokenManager();
+
+        return (address(receiptTokenManager), "olympus.periphery");
+    }
+
     function deployDepositManager() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
+        address receiptTokenManager = _getAddressNotZero("olympus.periphery.ReceiptTokenManager");
 
         // Log parameters
         console2.log("DepositManager parameters:");
         console2.log("  kernel", kernel);
+        console2.log("  receiptTokenManager", receiptTokenManager);
 
         // Deploy
         vm.broadcast();
-        DepositManager depositManager = new DepositManager(kernel);
+        DepositManager depositManager = new DepositManager(kernel, receiptTokenManager);
 
         return (address(depositManager), "olympus.policies");
     }
