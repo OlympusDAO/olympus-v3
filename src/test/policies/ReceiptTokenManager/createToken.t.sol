@@ -424,4 +424,83 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
             "Token operator should match the provided operator"
         );
     }
+
+    // ========== PARAMETER VALIDATION TESTS ========== //
+
+    // given zero address asset
+    //  [X] reverts with InvalidParams error
+    function test_createTokenZeroAsset_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IReceiptTokenManager.ReceiptTokenManager_InvalidParams.selector,
+                "asset"
+            )
+        );
+        vm.prank(OWNER);
+        receiptTokenManager.createToken(
+            IERC20(address(0)),
+            DEPOSIT_PERIOD,
+            OPERATOR,
+            OPERATOR_NAME
+        );
+    }
+
+    // given zero deposit period
+    //  [X] reverts with InvalidParams error
+    function test_createTokenZeroDepositPeriod_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IReceiptTokenManager.ReceiptTokenManager_InvalidParams.selector,
+                "depositPeriod"
+            )
+        );
+        vm.prank(OWNER);
+        receiptTokenManager.createToken(
+            IERC20(address(asset)),
+            0,
+            OPERATOR,
+            OPERATOR_NAME
+        );
+    }
+
+    // given zero address operator
+    //  [X] reverts with InvalidParams error
+    function test_createTokenZeroOperator_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IReceiptTokenManager.ReceiptTokenManager_InvalidParams.selector,
+                "operator"
+            )
+        );
+        vm.prank(OWNER);
+        receiptTokenManager.createToken(
+            IERC20(address(asset)),
+            DEPOSIT_PERIOD,
+            address(0),
+            OPERATOR_NAME
+        );
+    }
+
+    // given empty operator name
+    //  [X] succeeds (empty operator names are allowed)
+    function test_createTokenEmptyOperatorName_succeeds() public {
+        vm.prank(OWNER);
+        uint256 tokenId = receiptTokenManager.createToken(
+            IERC20(address(asset)),
+            DEPOSIT_PERIOD,
+            OPERATOR,
+            "" // Empty operator name should be allowed
+        );
+
+        // Verify token was created successfully
+        assertTrue(
+            receiptTokenManager.isValidTokenId(tokenId),
+            "Token should be created successfully with empty operator name"
+        );
+        assertEq(
+            receiptTokenManager.getTokenOwner(tokenId),
+            OWNER,
+            "Token owner should be set correctly"
+        );
+    }
 }

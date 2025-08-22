@@ -69,8 +69,8 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         // Check facility
-        address facility = receiptTokenManager.getTokenOperator(tokenId_);
-        assertEq(facility, facility_, "Receipt token facility does not match expected facility");
+        address operator = receiptTokenManager.getTokenOperator(tokenId_);
+        assertEq(operator, facility_, "Receipt token facility does not match expected facility");
     }
 
     function assertAssetConfigured(
@@ -411,6 +411,61 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
             DEPOSIT_PERIOD,
             DEPOSIT_OPERATOR,
             "cd1"
+        );
+    }
+
+    // when an unknown token ID is used
+    //  [X] returns empty values per manager spec
+    function test_unknownTokenIdReturnsEmptyValues() public view {
+        // Generate a token ID that doesn't exist
+        uint256 unknownTokenId = 999999;
+
+        // Verify the token ID doesn't exist (validation check)
+        assertFalse(
+            receiptTokenManager.isValidTokenId(unknownTokenId),
+            "Token ID should not exist"
+        );
+
+        // Test that getter functions return empty/default values for unknown token ID
+        assertEq(
+            receiptTokenManager.getTokenName(unknownTokenId),
+            "",
+            "Unknown token name should return empty string"
+        );
+        assertEq(
+            receiptTokenManager.getTokenSymbol(unknownTokenId),
+            "",
+            "Unknown token symbol should return empty string"
+        );
+        assertEq(
+            receiptTokenManager.getTokenDecimals(unknownTokenId),
+            0,
+            "Unknown token decimals should return 0"
+        );
+        assertEq(
+            receiptTokenManager.getTokenOwner(unknownTokenId),
+            address(0),
+            "Unknown token owner should return zero address"
+        );
+        assertEq(
+            address(receiptTokenManager.getTokenAsset(unknownTokenId)),
+            address(0),
+            "Unknown token asset should return zero address"
+        );
+        assertEq(
+            receiptTokenManager.getTokenDepositPeriod(unknownTokenId),
+            0,
+            "Unknown token deposit period should return 0"
+        );
+        assertEq(
+            receiptTokenManager.getTokenOperator(unknownTokenId),
+            address(0),
+            "Unknown token operator should return zero address"
+        );
+        assertEq(
+            receiptTokenManager.getWrappedToken(unknownTokenId),
+            address(0),
+            "Unknown token wrapped token should return zero address"
         );
     }
 }
