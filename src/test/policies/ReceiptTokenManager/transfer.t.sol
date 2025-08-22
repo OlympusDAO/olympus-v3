@@ -32,7 +32,7 @@ contract ReceiptTokenManagerTransferTest is ReceiptTokenManagerTest {
         // Perform transfer (no allowance needed for self transfer)
         vm.prank(RECIPIENT);
         vm.expectEmit(true, true, true, true);
-        emit Transfer(RECIPIENT, OWNER, _tokenId, transferAmount);
+        emit Transfer(RECIPIENT, RECIPIENT, OWNER, _tokenId, transferAmount);
         receiptTokenManager.transfer(OWNER, _tokenId, transferAmount);
 
         // Check balances after transfer
@@ -154,7 +154,7 @@ contract ReceiptTokenManagerTransferTest is ReceiptTokenManagerTest {
         // Perform transferFrom
         vm.prank(OWNER);
         vm.expectEmit(true, true, true, true);
-        emit Transfer(RECIPIENT, recipient2, _tokenId, transferAmount);
+        emit Transfer(OWNER, RECIPIENT, recipient2, _tokenId, transferAmount);
         receiptTokenManager.transferFrom(RECIPIENT, recipient2, _tokenId, transferAmount);
 
         // Check balances after transfer
@@ -255,5 +255,11 @@ contract ReceiptTokenManagerTransferTest is ReceiptTokenManagerTest {
     }
 
     // Events for testing
-    event Transfer(address indexed from, address indexed to, uint256 indexed id, uint256 amount);
+    event Transfer(
+        address caller,
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed id,
+        uint256 amount
+    );
 }
