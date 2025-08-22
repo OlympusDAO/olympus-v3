@@ -5,6 +5,7 @@ import {ReceiptTokenManagerTest} from "./ReceiptTokenManagerTest.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
+import {stdError} from "@forge-std-1.9.6/StdError.sol";
 
 /**
  * @title MintTest
@@ -238,5 +239,31 @@ contract ReceiptTokenManagerMintTest is ReceiptTokenManagerTest {
         );
         vm.prank(OWNER);
         receiptTokenManager.mint(RECIPIENT, otherTokenId, MINT_AMOUNT, false);
+    }
+
+    // ========== OVERFLOW PROTECTION TESTS ========== //
+
+    function test_mintOverflowProtection() public createReceiptToken {
+        uint256 largeAmount = type(uint256).max / 2 + 1;
+
+        // First mint succeeds
+        vm.prank(OWNER);
+        receiptTokenManager.mint(RECIPIENT, _tokenId, largeAmount, false);
+
+        // Second mint should revert due to overflow
+        vm.expectRevert(stdError.arithmeticError);
+        vm.prank(OWNER);
+        receiptTokenManager.mint(RECIPIENT, _tokenId, largeAmount, false);
+    }
+
+    function test_mintMaxPlusOneOverflow() public createReceiptToken {
+        // Mint max uint256
+        vm.prank(OWNER);
+        receiptTokenManager.mint(RECIPIENT, _tokenId, type(uint256).max, false);
+
+        // Any additional mint should overflow
+        vm.expectRevert(stdError.arithmeticError);
+        vm.prank(OWNER);
+        receiptTokenManager.mint(RECIPIENT, _tokenId, 1, false);
     }
 }
