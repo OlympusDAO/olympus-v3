@@ -33,11 +33,7 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
         console2.log("Activating Heart policy");
         addToBatch(
             kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                heart
-            )
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heart)
         );
 
         // Assumes that there are no existing tasks
