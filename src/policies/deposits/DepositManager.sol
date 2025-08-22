@@ -39,16 +39,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @notice The receipt token manager for creating receipt tokens
     ReceiptTokenManager internal immutable _RECEIPT_TOKEN_MANAGER;
 
-    // Tasks
-    // [X] Rename to DepositManager
-    // [X] Idle/vault strategy for deposited tokens
-    // [X] ERC6909 migration
-    // [X] Rename to receipt tokens
-    // [X] ReceiptTokenSupply to depositor supply
-    // [X] borrowing and repayment of deposited funds
-    // [X] consider shifting away from policy
-    // [X] consider if asset configuration should require a different role
-
     // ========== STATE VARIABLES ========== //
 
     /// @notice Maps asset liabilities key to the number of receipt tokens that have been minted

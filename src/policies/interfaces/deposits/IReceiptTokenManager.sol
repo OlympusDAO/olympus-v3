@@ -8,14 +8,6 @@ import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 /// @title IReceiptTokenManager
 /// @notice Interface for the contract that creates and manages receipt tokens
 interface IReceiptTokenManager is IERC6909, IERC6909Wrappable {
-    // ========== STRUCTS ========== //
-
-    struct DepositTokenMetadata {
-        address asset;
-        uint8 depositPeriod;
-        address operator;
-    }
-
     // ========== EVENTS ========== //
 
     event TokenCreated(
