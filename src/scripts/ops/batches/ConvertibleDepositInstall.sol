@@ -34,7 +34,6 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "olympus.policies.ConvertibleDepositAuctioneer"
         );
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
-        address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
 
         console2.log("=== Installing ConvertibleDeposit System ===");
         console2.log("Installing modules and activating policies");
@@ -290,10 +289,6 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     /// @notice Configure and initialize EmissionManager
     function configureEmissionManager(
-        uint256 baseEmissionRate_,
-        uint256 minimumPremium_,
-        uint256 backing_,
-        uint48 restartTimeframe_,
         bool useDaoMS_
     ) external setUpWithChainId(useDaoMS_) {
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
