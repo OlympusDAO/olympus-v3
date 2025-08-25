@@ -1,27 +1,190 @@
+#!/bin/bash
+
+# Verifies contracts on Etherscan or custom verifier using metadata from out/ directory.
+#
+# Usage:
+# ./verify_etherscan.sh
+#   --address <contract-address>
+#   --metadata <metadata-json-file>
+#   [--constructor_args <constructor-args>]
+#   [--compiler_version <version>]
+#   [--optimizer_runs <runs>]
+#   [--chain <chain-name-or-url>]
+#   [--verify <true/false>]
+#   [--env <env-file>]
+#
+# Examples:
+# ./verify_etherscan.sh --address 0x123... --metadata out/Heart.sol/OlympusHeart.0.8.15.json --chain mainnet
+# ./verify_etherscan.sh --address 0x123... --metadata out/Kernel.sol/Kernel.0.8.15.json --constructor_args 0x456... --chain http://localhost:8545
+
+# Exit if any error occurs
+set -e
+
+# Load named arguments
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source $SCRIPT_DIR/lib/arguments.sh
+load_named_args "$@"
+
 # Load environment variables
-source .env
+load_env
 
-CONTRACT_ADDRESS=$1
-CONTRACT_PATH=$2
-CONSTRUCTOR_ARGS=$3
+# Load forge library functions
+source $SCRIPT_DIR/lib/forge.sh
 
-# Check if input variables are set
-if [ -z "$CONTRACT_ADDRESS" ]; then
-    echo "No target contract specified. Provide the contract address to verify."
+# Set defaults
+CHAIN=${chain:-mainnet}
+VERIFY=${verify:-true}
+CONSTRUCTOR_ARGS=${constructor_args:-}
+COMPILER_VERSION_OVERRIDE=${compiler_version:-}
+OPTIMIZER_RUNS_OVERRIDE=${optimizer_runs:-}
+
+# Validate required arguments
+echo ""
+echo "Validating arguments"
+if [ -z "$address" ]; then
+    echo "ERROR: No contract address specified. Provide the contract address with --address flag."
     exit 1
 fi
-if [ -z "$CONTRACT_PATH" ]; then
-    echo "No contract path. Provide the contract source (i.e. 'src/policies/Heart.sol:OlympusHeart')."
-    exit 1
-fi
-if [ -z "$CONSTRUCTOR_ARGS" ]; then
-    echo "No constructor args specified."
+
+if [ -z "$metadata" ]; then
+    echo "ERROR: No metadata file specified. Provide the metadata JSON file with --metadata flag (e.g., 'out/Heart.sol/OlympusHeart.0.8.15.json')."
     exit 1
 fi
 
-forge verify-contract --watch \
-    --etherscan-api-key $ETHERSCAN_KEY \
-    --compiler-version v0.8.15+commit.e14f2714 \
-    --chain-id $CHAIN --num-of-optimizations 10 \
-    --constructor-args $CONSTRUCTOR_ARGS \
-    $CONTRACT_ADDRESS $CONTRACT_PATH
+if [ ! -f "$metadata" ]; then
+    echo "ERROR: Metadata file not found: $metadata"
+    echo "Make sure the file exists and the contract has been compiled with 'forge build'"
+    exit 1
+fi
+
+echo "Using metadata file: $metadata"
+
+# Extract contract information from metadata
+COMPILATION_TARGET=$(jq -r '.metadata.settings.compilationTarget' "$metadata")
+CONTRACT_PATH=$(echo "$COMPILATION_TARGET" | jq -r 'to_entries[0] | "\(.key):\(.value)"')
+
+# Extract compiler information from metadata (for reference/fallback)
+# These are extracted from the broadcast files, e.g. broadcast/DeployV3.s.sol/1/deploy-latest.json
+METADATA_COMPILER_VERSION=$(jq -r '.metadata.compiler.version' "$metadata")
+OPTIMIZER_ENABLED=$(jq -r '.metadata.settings.optimizer.enabled' "$metadata")
+METADATA_OPTIMIZER_RUNS=$(jq -r '.metadata.settings.optimizer.runs' "$metadata")
+
+# Use overrides if provided, otherwise use metadata values
+if [ -n "$COMPILER_VERSION_OVERRIDE" ]; then
+    COMPILER_VERSION="$COMPILER_VERSION_OVERRIDE"
+    echo "Using compiler version override: $COMPILER_VERSION"
+else
+    COMPILER_VERSION="$METADATA_COMPILER_VERSION"
+    # Convert compiler version to forge format (add 'v' prefix if missing)
+    if [[ ! "$COMPILER_VERSION" =~ ^v ]]; then
+        COMPILER_VERSION="v$COMPILER_VERSION"
+    fi
+fi
+
+if [ -n "$OPTIMIZER_RUNS_OVERRIDE" ]; then
+    OPTIMIZER_RUNS="$OPTIMIZER_RUNS_OVERRIDE"
+    echo "Using optimizer runs override: $OPTIMIZER_RUNS"
+else
+    OPTIMIZER_RUNS="$METADATA_OPTIMIZER_RUNS"
+fi
+
+# Validate final values (only if we're using metadata values)
+if [ -z "$COMPILER_VERSION_OVERRIDE" ] && ([ "$COMPILER_VERSION" = "null" ] || [ -z "$COMPILER_VERSION" ]); then
+    echo "ERROR: Could not extract compiler version from metadata and no override provided"
+    exit 1
+fi
+
+if [ -z "$OPTIMIZER_RUNS_OVERRIDE" ] && ([ "$OPTIMIZER_RUNS" = "null" ] || [ -z "$OPTIMIZER_RUNS" ]); then
+    echo "ERROR: Could not extract optimizer runs from metadata and no override provided"
+    exit 1
+fi
+
+# Validate environment variables for verification
+if [ -z "$ETHERSCAN_KEY" ]; then
+    echo "ERROR: No Etherscan API key found. Set ETHERSCAN_KEY in environment file."
+    exit 1
+fi
+
+echo ""
+echo "Summary:"
+echo "  Contract address: $address"
+echo "  Contract path: $CONTRACT_PATH"
+echo "  Metadata file: $metadata"
+echo "  Chain: $CHAIN"
+
+if [ -n "$COMPILER_VERSION_OVERRIDE" ]; then
+    echo "  Compiler version: $COMPILER_VERSION"
+else
+    echo "  Compiler version: $COMPILER_VERSION (auto-detected)"
+fi
+
+echo "  Optimizer enabled: $OPTIMIZER_ENABLED"
+
+if [ -n "$OPTIMIZER_RUNS_OVERRIDE" ]; then
+    echo "  Optimizer runs: $OPTIMIZER_RUNS"
+else
+    echo "  Optimizer runs: $OPTIMIZER_RUNS (auto-detected)"
+fi
+
+if [ -n "$CONSTRUCTOR_ARGS" ]; then
+    echo "  Constructor args: $CONSTRUCTOR_ARGS"
+else
+    echo "  Constructor args: (auto-detected)"
+fi
+
+if [ -n "$VERIFIER_URL" ]; then
+    echo "  Verifier: custom ($VERIFIER_URL)"
+else
+    echo "  Verifier: etherscan"
+fi
+
+# Check if verification is disabled
+if [ "$VERIFY" != "true" ]; then
+    echo ""
+    echo "Verification is disabled. Exiting."
+    exit 0
+fi
+
+# Build verification command
+VERIFY_CMD="forge verify-contract --watch"
+
+# Add compiler version and optimizer runs only if overrides are provided
+# If no overrides, forge will auto-detect from cache/
+if [ -n "$COMPILER_VERSION_OVERRIDE" ]; then
+    VERIFY_CMD="$VERIFY_CMD --compiler-version $COMPILER_VERSION"
+fi
+
+if [ -n "$OPTIMIZER_RUNS_OVERRIDE" ]; then
+    VERIFY_CMD="$VERIFY_CMD --num-of-optimizations $OPTIMIZER_RUNS"
+fi
+
+# Add verifier configuration
+if [ -n "$VERIFIER_URL" ]; then
+    # Use custom verifier with URL and API key
+    VERIFY_CMD="$VERIFY_CMD --verifier custom --verifier-url $VERIFIER_URL --verifier-api-key $ETHERSCAN_KEY"
+else
+    # Use etherscan verifier with API key
+    VERIFY_CMD="$VERIFY_CMD --verifier etherscan --verifier-api-key $ETHERSCAN_KEY"
+fi
+
+# Add chain parameter (can be chain name or URL)
+VERIFY_CMD="$VERIFY_CMD --chain $CHAIN"
+
+# Add constructor args if provided
+if [ -n "$CONSTRUCTOR_ARGS" ]; then
+    VERIFY_CMD="$VERIFY_CMD --constructor-args $CONSTRUCTOR_ARGS"
+fi
+
+# Add contract address and path
+VERIFY_CMD="$VERIFY_CMD $address $CONTRACT_PATH"
+
+echo ""
+echo "Running verification command:"
+echo "$VERIFY_CMD"
+echo ""
+
+# Execute verification
+eval $VERIFY_CMD
+
+echo ""
+echo "Verification completed!"

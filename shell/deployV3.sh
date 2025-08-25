@@ -57,6 +57,8 @@ validate_and_set_account "$account" "$ledger"
 # Deploy using script
 echo ""
 echo "Running forge script"
+echo "NOTE: If verification of any contract fails during deployment, you can verify them"
+echo "      individually using: ./shell/verify_etherscan.sh --address <address> --metadata <metadata-file>"
 FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV3.s.sol:DeployV3 \
     --sig "deploy(string)()" $sequence \
     --rpc-url $chain \
