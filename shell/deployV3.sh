@@ -6,7 +6,7 @@
 # ./deployV3.sh
 #   --account <cast wallet> OR --ledger <mnemonic-index>
 #   --sequence <sequence-file>
-#   --chain <chain-name>
+#   --chain <chain-name> (e.g. mainnet, base, or provide a custom RPC URL)
 #   [--broadcast <false>]
 #   [--verify <false>]
 #   [--resume <false>]

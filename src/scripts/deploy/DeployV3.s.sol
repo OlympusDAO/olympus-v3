@@ -61,13 +61,15 @@ contract DeployV3 is WithEnvironment {
         string memory chain_ = ChainUtils._getChainName(block.chainid);
         _loadEnv(chain_);
 
+        // It would be nice to print the RPC URL being used here, but unfortunately vm.rpcUrl() prints the URL configured in foundry.toml
+
         // Load deployment data
         sequenceFile = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
         bytes memory sequence = abi.decode(sequenceFile.parseRaw(".sequence"), (bytes));
         uint256 len = sequence.length;
-        console2.log("Contracts to be deployed:", len);
+        console2.log("  Contracts to be deployed:", len);
 
         if (len == 0) {
             return;
