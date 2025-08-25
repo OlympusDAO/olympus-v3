@@ -3,6 +3,7 @@ pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
+import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
@@ -13,6 +14,7 @@ import {Safe} from "@safe-utils-0.0.13/Safe.sol";
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
 abstract contract BatchScriptV2 is WithEnvironment {
     using Safe for *;
+    using stdJson for string;
 
     /// @notice Address of the owner
     /// @dev    This could be a Safe Multisig or an EOA
@@ -23,29 +25,38 @@ abstract contract BatchScriptV2 is WithEnvironment {
     address[] internal _batchTargets;
     bytes[] internal _batchData;
 
+    string internal _argsFile;
+
     // TODOs
     // [ ] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    function _setUp(string memory chain_, bool useDaoMS_) internal {
+    function _setUp(string memory chain_, bool useDaoMS_, string memory argsFilePath_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
+        _loadArgs(argsFilePath_);
 
         address owner = msg.sender;
         if (useDaoMS_) owner = _envAddressNotZero("olympus.multisig.dao");
         _setUpBatchScript(owner);
     }
 
-    modifier setUp(string memory chain_, bool useDaoMS_) {
-        _setUp(chain_, useDaoMS_);
+    modifier setUp(string memory chain_, bool useDaoMS_, string memory argsFilePath_) {
+        _setUp(chain_, useDaoMS_, argsFilePath_);
+        _;
+    }
+
+    modifier setUpWithChainIdAndArgsFile(bool useDaoMS_, string memory argsFilePath_) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _setUp(chainName, useDaoMS_, argsFilePath_);
         _;
     }
 
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_);
+        _setUp(chainName, useDaoMS_, "");
         _;
     }
 
@@ -150,5 +161,74 @@ abstract contract BatchScriptV2 is WithEnvironment {
         } else {
             _proposeEOABatch();
         }
+    }
+
+    /// @notice Load arguments from a file (optional)
+    /// @param argsFilePath_ Path to the arguments file
+    function _loadArgs(string memory argsFilePath_) internal {
+        if (bytes(argsFilePath_).length > 0) {
+            console2.log("Loading arguments from", argsFilePath_);
+            _argsFile = vm.readFile(argsFilePath_);
+        }
+    }
+
+    /// @notice Get a string argument for a given function and key
+    /// @param functionName_ Name of the function
+    /// @param key_ Key to look for
+    /// @return string Returns the string value
+    function _readBatchArgString(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (string memory) {
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readString(
+                string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
+            );
+    }
+
+    /// @notice Get a bytes32 argument for a given function and key
+    /// @param functionName_ Name of the function
+    /// @param key_ Key to look for
+    /// @return bytes32 Returns the bytes32 value
+    function _readBatchArgBytes32(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (bytes32) {
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readBytes32(
+                string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
+            );
+    }
+
+    /// @notice Get an address argument for a given function and key
+    /// @param functionName_ Name of the function
+    /// @param key_ Key to look for
+    /// @return address Returns the address value
+    function _readBatchArgAddress(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (address) {
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readAddress(
+                string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
+            );
+    }
+
+    /// @notice Get a uint256 argument for a given function and key
+    /// @param functionName_ Name of the function
+    /// @param key_ Key to look for
+    /// @return uint256 Returns the uint256 value
+    function _readBatchArgUint256(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (uint256) {
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readUint(
+                string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
+            );
     }
 }

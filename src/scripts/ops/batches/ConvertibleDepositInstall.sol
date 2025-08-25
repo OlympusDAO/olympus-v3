@@ -14,18 +14,23 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 
+// Libraries
+import {SafeCast} from "src/libraries/SafeCast.sol";
+
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 /// @notice Installs and activates the complete ConvertibleDeposit system including EmissionManager
 /// @dev    This script handles the complete activation sequence based on ConvertibleDepositAuctioneerTest setup
 contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Install modules and activate policies
-    function install(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function install(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address kernel = _envAddressNotZero("olympus.Kernel");
         address depositPositionManager = _envAddressNotZero(
             "olympus.modules.OlympusDepositPositionManager"
         );
-        address receiptTokenManager = _envAddressNotZero("olympus.policies.ReceiptTokenManager");
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
@@ -50,17 +55,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
 
         // Activate policies
-        console2.log("2. Activating ReceiptTokenManager policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                receiptTokenManager
-            )
-        );
-
-        console2.log("3. Activating DepositManager policy");
+        console2.log("2. Activating DepositManager policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -70,7 +65,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("4. Activating ConvertibleDepositFacility policy");
+        console2.log("3. Activating ConvertibleDepositFacility policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -80,7 +75,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("5. Activating ConvertibleDepositAuctioneer policy");
+        console2.log("4. Activating ConvertibleDepositAuctioneer policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -90,7 +85,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("6. Activating EmissionManager policy");
+        console2.log("5. Activating EmissionManager policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -101,14 +96,17 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
 
         // Note: Heart policy should be activated by HeartPeriodicTasksConfig script
-        console2.log("7. Heart policy assumed to be activated by HeartPeriodicTasksConfig");
+        console2.log("6. Heart policy assumed to be activated by HeartPeriodicTasksConfig");
         console2.log("=== Installation batch prepared ===");
 
         proposeBatch();
     }
 
     /// @notice Configure DepositManager and enable it
-    function configureDepositManager(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function configureDepositManager(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
 
         console2.log("=== Configuring DepositManager ===");
@@ -124,8 +122,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Configure ConvertibleDepositFacility and enable it
     function configureConvertibleDepositFacility(
         string memory facilityName_,
-        bool useDaoMS_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
@@ -157,20 +156,21 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     /// @notice Add a new asset and its vault to the DepositManager
     function configureUSDS(
-        uint256 maxCapacity_,
-        uint256 minDeposit_,
-        bool useDaoMS_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address usds = _envAddressNotZero("external.tokens.USDS");
         address usdsVault = _envAddressNotZero("external.tokens.sUSDS");
+        uint256 maxCapacity = _readBatchArgUint256("ConfigureUSDS", "maxCapacity");
+        uint256 minDeposit = _readBatchArgUint256("ConfigureUSDS", "minDeposit");
 
         console2.log("=== Configuring USDS Asset ===");
         console2.log("Adding USDS as supported deposit asset");
         console2.log("USDS token:", usds);
         console2.log("sUSDS vault:", usdsVault);
-        console2.log("Max capacity:", maxCapacity_);
-        console2.log("Min deposit:", minDeposit_);
+        console2.log("Max capacity:", maxCapacity);
+        console2.log("Min deposit:", minDeposit);
 
         // Add asset to DepositManager
         addToBatch(
@@ -179,8 +179,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                 IDepositManager.addAsset.selector,
                 usds,
                 usdsVault,
-                maxCapacity_,
-                minDeposit_
+                maxCapacity,
+                minDeposit
             )
         );
 
@@ -190,21 +190,26 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     /// @notice Add asset period for ConvertibleDepositFacility
     function configureUSDSDepositPeriod(
-        uint8 periodMonths_,
-        uint16 reclaimRate_,
-        bool useDaoMS_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
         address usds = _envAddressNotZero("external.tokens.USDS");
+        uint8 depositPeriod = SafeCast.encodeUInt8(
+            _readBatchArgUint256("configureUSDSDepositPeriod", "depositPeriod")
+        );
+        uint16 reclaimRate = SafeCast.encodeUInt16(
+            _readBatchArgUint256("configureUSDSDepositPeriod", "reclaimRate")
+        );
 
         console2.log("=== Configuring USDS Deposit Period ===");
         console2.log("Setting up deposit period for USDS conversions");
         console2.log("Asset:", usds);
-        console2.log("Period (months):", periodMonths_);
-        console2.log("Reclaim rate (bps):", reclaimRate_);
+        console2.log("Deposit Period (months):", depositPeriod);
+        console2.log("Reclaim rate (bps):", reclaimRate);
         console2.log("Facility:", convertibleDepositFacility);
 
         // Add asset period
@@ -213,9 +218,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             abi.encodeWithSelector(
                 IDepositManager.addAssetPeriod.selector,
                 usds,
-                periodMonths_,
+                depositPeriod,
                 convertibleDepositFacility,
-                reclaimRate_
+                reclaimRate
             )
         );
 
@@ -225,8 +230,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     /// @notice Configure ConvertibleDepositAuctioneer
     function configureConvertibleDepositAuctioneer(
-        bool useDaoMS_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address convertibleDepositAuctioneer = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositAuctioneer"
@@ -288,7 +294,10 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     }
 
     /// @notice Configure and initialize EmissionManager
-    function configureEmissionManager(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function configureEmissionManager(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");

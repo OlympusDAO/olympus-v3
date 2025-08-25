@@ -45,4 +45,11 @@ library SafeCast {
         }
         return uint16(amount);
     }
+
+    function encodeUInt8(uint256 amount) internal pure returns (uint8) {
+        if (amount > type(uint8).max) {
+            revert Overflow(amount);
+        }
+        return uint8(amount);
+    }
 }
