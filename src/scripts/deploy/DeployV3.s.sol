@@ -14,6 +14,7 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";
@@ -31,6 +32,8 @@ import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
+import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
+import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -548,6 +551,8 @@ contract DeployV3 is WithEnvironment {
 
     function deployPositionTokenRenderer() public returns (address, string memory) {
         // No dependencies needed for PositionTokenRenderer
+
+        // Log parameters
         console2.log("PositionTokenRenderer parameters:");
         console2.log("  No constructor parameters");
 
@@ -610,5 +615,70 @@ contract DeployV3 is WithEnvironment {
         ZeroDistributor zeroDistributor = new ZeroDistributor(staking);
 
         return (address(zeroDistributor), "olympus.policies");
+    }
+
+    function _deployOlympusPrice() public returns (address, string memory) {
+        // Dependencies
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohmEthPriceFeed = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
+        address reserveEthPriceFeed = _envAddressNotZero("external.chainlink.daiEthPriceFeed");
+
+        // Input parameters
+        uint48 ohmEthUpdateThreshold = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("OlympusPrice", "ohmEthUpdateThreshold")
+        );
+        uint48 reserveEthUpdateThreshold = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("OlympusPrice", "reserveEthUpdateThreshold")
+        );
+        uint48 observationFrequency = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("OlympusPrice", "observationFrequency")
+        );
+        uint48 movingAverageDuration = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("OlympusPrice", "movingAverageDuration")
+        );
+        uint256 minimumTargetPrice = _readDeploymentArgUint256(
+            "OlympusPrice",
+            "minimumTargetPrice"
+        );
+
+        // Log parameters
+        console2.log("PRICE parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohmEthPriceFeed", ohmEthPriceFeed);
+        console2.log("  reserveEthPriceFeed", reserveEthPriceFeed);
+        console2.log("  reserveEthUpdateThreshold", reserveEthUpdateThreshold);
+        console2.log("  observationFrequency", observationFrequency);
+        console2.log("  movingAverageDuration", movingAverageDuration);
+        console2.log("  minimumTargetPrice", minimumTargetPrice);
+
+        // Deploy Price module
+        vm.broadcast();
+        OlympusPrice price = new OlympusPrice(
+            Kernel(kernel),
+            AggregatorV2V3Interface(ohmEthPriceFeed),
+            ohmEthUpdateThreshold,
+            AggregatorV2V3Interface(reserveEthPriceFeed),
+            reserveEthUpdateThreshold,
+            observationFrequency,
+            movingAverageDuration,
+            minimumTargetPrice
+        );
+
+        return (address(price), "olympus.modules");
+    }
+
+    function _deployOlympusPriceConfig() public returns (address, string memory) {
+        // Dependencies
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("PriceConfig parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy PriceConfig policy
+        vm.broadcast();
+        OlympusPriceConfig priceConfig = new OlympusPriceConfig(Kernel(kernel));
+
+        return (address(priceConfig), "olympus.policies");
     }
 }
