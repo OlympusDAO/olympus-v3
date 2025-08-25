@@ -30,6 +30,7 @@ import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPos
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
+import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -593,5 +594,21 @@ contract DeployV3 is WithEnvironment {
         ReserveWrapper wrapper = new ReserveWrapper(kernel, reserve, sReserve);
 
         return (address(wrapper), "olympus.policies");
+    }
+
+    function deployZeroDistributor() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address staking = _getAddressNotZero("olympus.legacy.Staking");
+
+        // Log parameters
+        console2.log("ZeroDistributor parameters:");
+        console2.log("  staking", staking);
+
+        // Deploy
+        vm.broadcast();
+        ZeroDistributor zeroDistributor = new ZeroDistributor(staking);
+
+        return (address(zeroDistributor), "olympus.policies");
     }
 }
