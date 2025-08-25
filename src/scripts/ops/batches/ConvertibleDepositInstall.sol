@@ -288,9 +288,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     }
 
     /// @notice Configure and initialize EmissionManager
-    function configureEmissionManager(
-        bool useDaoMS_
-    ) external setUpWithChainId(useDaoMS_) {
+    function configureEmissionManager(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
