@@ -381,11 +381,11 @@ contract DeployV3 is WithEnvironment {
         return (address(ccipCrossChainBridge), "olympus.periphery");
     }
 
-    function deployHeart() public returns (address, string memory) {
+    function deployOlympusHeart() public returns (address, string memory) {
         // Input parameters
-        uint256 maxReward = _readDeploymentArgUint256("Heart", "maxReward");
+        uint256 maxReward = _readDeploymentArgUint256("OlympusHeart", "maxReward");
         uint48 auctionDuration = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("Heart", "auctionDuration")
+            _readDeploymentArgUint256("OlympusHeart", "auctionDuration")
         );
 
         // Dependencies
