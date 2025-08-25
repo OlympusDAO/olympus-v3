@@ -32,7 +32,6 @@ load_env
 source $SCRIPT_DIR/lib/forge.sh
 
 # Set defaults
-CHAIN=${chain:-mainnet}
 VERIFY=${verify:-true}
 CONSTRUCTOR_ARGS=${constructor_args:-}
 COMPILER_VERSION_OVERRIDE=${compiler_version:-}
@@ -48,6 +47,11 @@ fi
 
 if [ -z "$metadata" ]; then
     echo "ERROR: No metadata file specified. Provide the metadata JSON file with --metadata flag (e.g., 'out/Heart.sol/OlympusHeart.0.8.15.json')."
+    exit 1
+fi
+
+if [ -z "$chain" ]; then
+    echo "ERROR: No chain specified. Provide the chain with --chain flag (e.g., 'mainnet', 'sepolia', or a custom RPC URL)."
     exit 1
 fi
 
@@ -110,26 +114,26 @@ echo "Summary:"
 echo "  Contract address: $address"
 echo "  Contract path: $CONTRACT_PATH"
 echo "  Metadata file: $metadata"
-echo "  Chain: $CHAIN"
+echo "  Chain: $chain"
 
 if [ -n "$COMPILER_VERSION_OVERRIDE" ]; then
-    echo "  Compiler version: $COMPILER_VERSION"
+    echo "  Compiler version: $COMPILER_VERSION (override)"
 else
-    echo "  Compiler version: $COMPILER_VERSION (auto-detected)"
+    echo "  Compiler version: $COMPILER_VERSION (from metadata)"
 fi
 
 echo "  Optimizer enabled: $OPTIMIZER_ENABLED"
 
 if [ -n "$OPTIMIZER_RUNS_OVERRIDE" ]; then
-    echo "  Optimizer runs: $OPTIMIZER_RUNS"
+    echo "  Optimizer runs: $OPTIMIZER_RUNS (override)"
 else
-    echo "  Optimizer runs: $OPTIMIZER_RUNS (auto-detected)"
+    echo "  Optimizer runs: $OPTIMIZER_RUNS (from metadata)"
 fi
 
 if [ -n "$CONSTRUCTOR_ARGS" ]; then
     echo "  Constructor args: $CONSTRUCTOR_ARGS"
 else
-    echo "  Constructor args: (auto-detected)"
+    echo "  Constructor args: (auto-detected from cache)"
 fi
 
 if [ -n "$VERIFIER_URL" ]; then
@@ -148,15 +152,8 @@ fi
 # Build verification command
 VERIFY_CMD="forge verify-contract --watch"
 
-# Add compiler version and optimizer runs only if overrides are provided
-# If no overrides, forge will auto-detect from cache/
-if [ -n "$COMPILER_VERSION_OVERRIDE" ]; then
-    VERIFY_CMD="$VERIFY_CMD --compiler-version $COMPILER_VERSION"
-fi
-
-if [ -n "$OPTIMIZER_RUNS_OVERRIDE" ]; then
-    VERIFY_CMD="$VERIFY_CMD --num-of-optimizations $OPTIMIZER_RUNS"
-fi
+# Always pass compiler version and optimizer runs (forge auto-detection can be unreliable)
+VERIFY_CMD="$VERIFY_CMD --compiler-version $COMPILER_VERSION --num-of-optimizations $OPTIMIZER_RUNS"
 
 # Add verifier configuration
 if [ -n "$VERIFIER_URL" ]; then
@@ -168,7 +165,7 @@ else
 fi
 
 # Add chain parameter (can be chain name or URL)
-VERIFY_CMD="$VERIFY_CMD --chain $CHAIN"
+VERIFY_CMD="$VERIFY_CMD --chain $chain"
 
 # Add constructor args if provided
 if [ -n "$CONSTRUCTOR_ARGS" ]; then
