@@ -34,6 +34,7 @@ import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
 import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
 import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
+import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -680,5 +681,43 @@ contract DeployV3 is WithEnvironment {
         OlympusPriceConfig priceConfig = new OlympusPriceConfig(Kernel(kernel));
 
         return (address(priceConfig), "olympus.policies");
+    }
+
+    function deploydaiEthPriceFeed() public returns (address, string memory) {
+        // Log parameters
+        console2.log("Deploying DAI/ETH MockPriceFeedOwned with 18 decimals");
+
+        // Deploy
+        vm.broadcast();
+        MockPriceFeedOwned priceFeed = new MockPriceFeedOwned();
+
+        // Set decimals to 18
+        vm.broadcast();
+        priceFeed.setDecimals(18);
+
+        // Set description
+        vm.broadcast();
+        priceFeed.setDescription("DAI / ETH");
+
+        return (address(priceFeed), "external.chainlink");
+    }
+
+    function deployohmEthPriceFeed() public returns (address, string memory) {
+        // Log parameters
+        console2.log("Deploying OHM/ETH MockPriceFeedOwned with 18 decimals");
+
+        // Deploy
+        vm.broadcast();
+        MockPriceFeedOwned priceFeed = new MockPriceFeedOwned();
+
+        // Set decimals to 18
+        vm.broadcast();
+        priceFeed.setDecimals(18);
+
+        // Set description
+        vm.broadcast();
+        priceFeed.setDescription("OHMv2 / ETH");
+
+        return (address(priceFeed), "external.chainlink");
     }
 }
