@@ -3,13 +3,9 @@ pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
-// Kernel
-import {Kernel, Actions} from "src/Kernel.sol";
-
 // Interfaces
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
-import {IReserveWrapper} from "src/policies/interfaces/IReserveWrapper.sol";
 import {IOperator} from "src/policies/interfaces/IOperator.sol";
 import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -20,21 +16,17 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 /// @dev    This is designed for use with Heart v1.7, and is mainly intended for configuring the Heart on testnets. The production contract will be configured through an OCG proposal.
 contract HeartPeriodicTasksConfig is BatchScriptV2 {
     /// @notice Configure Heart with periodic tasks in the specified order
+    /// @dev    This is for testing purposes only. The production contract will be configured through an OCG proposal.
+    ///         Run this after ConvertibleDepositInstall.install()
     function configurePeriodicTasks(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Load contract addresses
-        address kernel = _envAddressNotZero("olympus.Kernel");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
         address reserveMigrator = _envAddressNotZero("olympus.policies.ReserveMigrator");
         address reserveWrapper = _envAddressNotZero("olympus.policies.ReserveWrapper");
         address operator = _envAddressNotZero("olympus.policies.Operator");
         address yieldRepo = _envAddressNotZero("olympus.policies.YieldRepurchaseFacility");
 
-        // 0. Activate the Heart policy
-        console2.log("Activating Heart policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heart)
-        );
+        // Assumes that the Heart has been activated in the Kernel
 
         // Assumes that there are no existing tasks
         // solhint-disable-next-line gas-custom-errors

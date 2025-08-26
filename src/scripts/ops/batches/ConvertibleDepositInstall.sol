@@ -23,6 +23,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 /// @dev    This script handles the complete activation sequence based on ConvertibleDepositAuctioneerTest setup
 contract ConvertibleDepositInstall is BatchScriptV2 {
     /// @notice Install modules and activate policies
+    /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
     function install(
         bool useDaoMS_,
         string calldata argsFile_
@@ -39,9 +40,39 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "olympus.policies.ConvertibleDepositAuctioneer"
         );
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
+
+        // Get old policy addresses (may be zero)
+        address oldHeart = _envLastAddress("olympus.policies.OlympusHeart");
+        address oldEmissionManager = _envLastAddress("olympus.policies.EmissionManager");
 
         console2.log("=== Installing ConvertibleDeposit System ===");
         console2.log("Installing modules and activating policies");
+
+        // Deactivate old policies if they exist
+        if (oldHeart != address(0)) {
+            console2.log("0. Deactivating old OlympusHeart policy:", oldHeart);
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.DeactivatePolicy,
+                    oldHeart
+                )
+            );
+        }
+
+        if (oldEmissionManager != address(0)) {
+            console2.log("0. Deactivating old EmissionManager policy:", oldEmissionManager);
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.DeactivatePolicy,
+                    oldEmissionManager
+                )
+            );
+        }
 
         // Install DEPOS module
         console2.log("1. Installing OlympusDepositPositionManager module");
@@ -95,9 +126,16 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        // Note: Heart policy should be activated by HeartPeriodicTasksConfig script
-        console2.log("6. Heart policy assumed to be activated by HeartPeriodicTasksConfig");
+        console2.log("6. Activating Heart policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heart)
+        );
+
         console2.log("=== Installation batch prepared ===");
+        console2.log(
+            "Note: Heart periodic tasks should be configured by HeartPeriodicTasksConfig script"
+        );
 
         proposeBatch();
     }
