@@ -180,6 +180,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
         string memory functionName_,
         string memory key_
     ) internal view returns (string memory) {
+        // solhint-disable-next-line gas-custom-errors
         require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
         return
             _argsFile.readString(
@@ -195,6 +196,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
         string memory functionName_,
         string memory key_
     ) internal view returns (bytes32) {
+        // solhint-disable-next-line gas-custom-errors
         require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
         return
             _argsFile.readBytes32(
@@ -210,6 +212,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
         string memory functionName_,
         string memory key_
     ) internal view returns (address) {
+        // solhint-disable-next-line gas-custom-errors
         require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
         return
             _argsFile.readAddress(
@@ -225,6 +228,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
         string memory functionName_,
         string memory key_
     ) internal view returns (uint256) {
+        // solhint-disable-next-line gas-custom-errors
         require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
         return
             _argsFile.readUint(
