@@ -43,8 +43,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
 
         // Get old policy addresses (may be zero)
-        address oldHeart = _envLastAddress("olympus.policies.OlympusHeart");
-        address oldEmissionManager = _envLastAddress("olympus.policies.EmissionManager");
+        address oldHeart = _envLastAddress(chain, "olympus.policies.OlympusHeart");
+        address oldEmissionManager = _envLastAddress(chain, "olympus.policies.EmissionManager");
 
         console2.log("=== Installing ConvertibleDeposit System ===");
         console2.log("Installing modules and activating policies");

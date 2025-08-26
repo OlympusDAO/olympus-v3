@@ -85,6 +85,32 @@ abstract contract WithEnvironment is Script {
         return _envAddressNotZero(chain, key_);
     }
 
+    /// @notice Get address from environment file using "last" version
+    ///
+    /// @param  chain_  The chain to look up in the environment file
+    /// @param  key_    The key to look up in the environment file
+    /// @return address The address from the environment file, or the zero address
+    function _envLastAddress(
+        string memory chain_,
+        string memory key_
+    ) internal view returns (address) {
+        bool isDebug = _isDebugLogLevel();
+
+        if (isDebug) console2.log("  Checking in env.json for last value for ", key_, "on", chain_);
+        string memory fullKey = string.concat(".last.", chain_, ".", key_);
+        address addr;
+        bool keyExists = vm.keyExists(env, fullKey);
+
+        if (keyExists) {
+            addr = env.readAddress(fullKey);
+            if (isDebug) console2.log("    %s: %s (from env.json - last)", key_, addr);
+        } else {
+            if (isDebug) console2.log("    %s: *** NOT FOUND (last) ***", key_);
+        }
+
+        return addr;
+    }
+
     // ===== STRINGS ===== //
 
     /// @notice Get string from environment file

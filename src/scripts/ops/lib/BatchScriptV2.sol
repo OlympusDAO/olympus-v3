@@ -231,26 +231,4 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
             );
     }
-
-    /// @notice Get address from environment file using "last" version
-    ///
-    /// @param  key_    The key to look up in the environment file
-    /// @return address The address from the environment file, or the zero address
-    function _envLastAddress(string memory key_) internal view returns (address) {
-        bool isDebug = _isDebugLogLevel();
-
-        if (isDebug) console2.log("  Checking in env.json for", key_, "on", chain, "(last version)");
-        string memory fullKey = string.concat(".last.", chain, ".", key_);
-        address addr;
-        bool keyExists = vm.keyExists(env, fullKey);
-
-        if (keyExists) {
-            addr = env.readAddress(fullKey);
-            if (isDebug) console2.log("    %s: %s (from env.json - last)", key_, addr);
-        } else {
-            if (isDebug) console2.log("    %s: *** NOT FOUND (last) ***", key_);
-        }
-
-        return addr;
-    }
 }
