@@ -12,6 +12,8 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 
 // Libraries
@@ -40,6 +42,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
         address convertibleDepositAuctioneer = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositAuctioneer"
+        );
+        address depositRedemptionVault = _envAddressNotZero(
+            "olympus.policies.DepositRedemptionVault"
         );
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
@@ -122,7 +127,17 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("5. Activating EmissionManager policy");
+        console2.log("5. Activating DepositRedemptionVault policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                depositRedemptionVault
+            )
+        );
+
+        console2.log("6. Activating EmissionManager policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -132,7 +147,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("6. Activating Heart policy");
+        console2.log("7. Activating Heart policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heart)
@@ -462,6 +477,54 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
 
         console2.log("ConvertibleDepositAuctioneer disable batch prepared");
+        proposeBatch();
+    }
+
+    /// @notice Enable DepositRedemptionVault and configure cross-authorization
+    function enableDepositRedemptionVault(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address depositRedemptionVault = _envAddressNotZero(
+            "olympus.policies.DepositRedemptionVault"
+        );
+        address convertibleDepositFacility = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositFacility"
+        );
+
+        console2.log("=== Enabling DepositRedemptionVault ===");
+        console2.log("Authorizing ConvertibleDepositFacility in DepositRedemptionVault");
+
+        // Authorize ConvertibleDepositFacility in DepositRedemptionVault
+        addToBatch(
+            depositRedemptionVault,
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.authorizeFacility.selector,
+                convertibleDepositFacility
+            )
+        );
+
+        console2.log(
+            "Authorizing DepositRedemptionVault as operator in ConvertibleDepositFacility"
+        );
+
+        // Authorize DepositRedemptionVault as operator in ConvertibleDepositFacility
+        addToBatch(
+            convertibleDepositFacility,
+            abi.encodeWithSelector(
+                IDepositFacility.authorizeOperator.selector,
+                depositRedemptionVault
+            )
+        );
+
+        console2.log("Enabling DepositRedemptionVault");
+
+        // Enable the DepositRedemptionVault
+        addToBatch(depositRedemptionVault, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+
+        console2.log("DepositRedemptionVault enablement batch prepared");
         proposeBatch();
     }
 }
