@@ -18,7 +18,12 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
     /// @notice Configure Heart with periodic tasks in the specified order
     /// @dev    This is for testing purposes only. The production contract will be configured through an OCG proposal.
     ///         Run this after ConvertibleDepositInstall.install()
-    function configurePeriodicTasks(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function configurePeriodicTasks(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
         // Load contract addresses
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
         address reserveMigrator = _envAddressNotZero("olympus.policies.ReserveMigrator");
