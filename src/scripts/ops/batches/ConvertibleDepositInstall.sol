@@ -15,6 +15,7 @@ import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IC
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
@@ -525,6 +526,58 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         addToBatch(depositRedemptionVault, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         console2.log("DepositRedemptionVault enablement batch prepared");
+        proposeBatch();
+    }
+
+    /// @notice Configure asset settings in DepositRedemptionVault
+    function configureDepositRedemptionVaultAsset(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        address depositRedemptionVault = _envAddressNotZero(
+            "olympus.policies.DepositRedemptionVault"
+        );
+        address convertibleDepositFacility = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositFacility"
+        );
+        address usds = _envAddressNotZero("external.tokens.USDS");
+
+        uint16 maxBorrowPercentage = SafeCast.encodeUInt16(
+            _readBatchArgUint256("ConfigureDepositRedemptionVaultAsset", "maxBorrowPercentage")
+        );
+        uint16 annualInterestRate = SafeCast.encodeUInt16(
+            _readBatchArgUint256("ConfigureDepositRedemptionVaultAsset", "annualInterestRate")
+        );
+
+        console2.log("=== Configuring DepositRedemptionVault Asset Settings ===");
+        console2.log("Asset (USDS):", usds);
+        console2.log("Facility:", convertibleDepositFacility);
+        console2.log("Max Borrow Percentage (bps):", maxBorrowPercentage);
+        console2.log("Annual Interest Rate (bps):", annualInterestRate);
+
+        // Set max borrow percentage
+        addToBatch(
+            depositRedemptionVault,
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.setMaxBorrowPercentage.selector,
+                IERC20(usds),
+                convertibleDepositFacility,
+                maxBorrowPercentage
+            )
+        );
+
+        // Set annual interest rate
+        addToBatch(
+            depositRedemptionVault,
+            abi.encodeWithSelector(
+                IDepositRedemptionVault.setAnnualInterestRate.selector,
+                IERC20(usds),
+                convertibleDepositFacility,
+                annualInterestRate
+            )
+        );
+
+        console2.log("DepositRedemptionVault asset configuration batch prepared");
         proposeBatch();
     }
 }

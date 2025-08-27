@@ -1,0 +1,11 @@
+{
+    "functions": [
+        {
+            "args": {
+                "annualInterestRate": 1000,
+                "maxBorrowPercentage": 7500
+            },
+            "name": "ConfigureDepositRedemptionVaultAsset"
+        }
+    ]
+}
