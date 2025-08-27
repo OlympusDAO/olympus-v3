@@ -8,9 +8,11 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 
 // Mocks for testnet use
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -33,6 +35,7 @@ contract ConvertibleDepositBid is WithEnvironment {
     address public receiptTokenManager;
     address public depositManager;
     address public deposModule;
+    address public depositRedemptionVault;
 
     // Bid results
     uint256 public lastOhmOut;
@@ -66,6 +69,7 @@ contract ConvertibleDepositBid is WithEnvironment {
         receiptTokenManager = _envAddressNotZero("olympus.periphery.ReceiptTokenManager");
         depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         deposModule = _envAddressNotZero("olympus.modules.OlympusDepositPositionManager");
+        depositRedemptionVault = _envAddressNotZero("olympus.policies.DepositRedemptionVault");
 
         console2.log("=== Loaded Contract Addresses ===");
         console2.log("USDS:", usds);
@@ -347,5 +351,136 @@ contract ConvertibleDepositBid is WithEnvironment {
         // solhint-disable-next-line gas-custom-errors
         require(lastConvertedTokenOut > 0, "No OHM tokens minted");
         console2.log("  OHM tokens successfully minted");
+    }
+
+    // ========== REDEMPTION FUNCTIONS ========== //
+
+    /// @notice Start redemption of receipt tokens via DepositRedemptionVault
+    /// @param chain_ The chain to interact with
+    /// @param depositPeriod_ The deposit period in months
+    /// @param amount_ Amount of receipt tokens to redeem
+    function startRedemption(
+        string memory chain_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external returns (uint16 redemptionId) {
+        _validateCaller();
+        _setUp(chain_);
+
+        console2.log("\n=== Starting Receipt Token Redemption ===");
+        console2.log("Deposit Period (months):", depositPeriod_);
+        console2.log("Amount to redeem:", amount_);
+
+        // Get receipt token ID
+        uint256 receiptTokenId = IDepositManager(depositManager).getReceiptTokenId(
+            IERC20(usds),
+            depositPeriod_,
+            facility
+        );
+        console2.log("Receipt token ID:", receiptTokenId);
+
+        // Approve DRV to spend receipt tokens
+        console2.log("Approving DepositRedemptionVault to spend receipt tokens");
+        vm.broadcast();
+        IReceiptTokenManager(receiptTokenManager).approve(
+            depositRedemptionVault,
+            receiptTokenId,
+            amount_
+        );
+
+        // Start redemption
+        vm.broadcast();
+        redemptionId = IDepositRedemptionVault(depositRedemptionVault).startRedemption(
+            IERC20(usds),
+            depositPeriod_,
+            amount_,
+            facility
+        );
+
+        console2.log("Redemption started with ID:", redemptionId);
+        return redemptionId;
+    }
+
+    /// @notice Borrow against redemption via DepositRedemptionVault
+    /// @param chain_ The chain to interact with
+    /// @param redemptionId_ The redemption ID to borrow against
+    function borrowAgainstRedemption(
+        string memory chain_,
+        uint16 redemptionId_
+    ) external returns (uint256 borrowedAmount) {
+        _validateCaller();
+        _setUp(chain_);
+
+        console2.log("\n=== Borrowing Against Redemption ===");
+        console2.log("Redemption ID:", redemptionId_);
+
+        // Check USDS balance before borrowing
+        uint256 usdsBalanceBefore = IERC20(usds).balanceOf(msg.sender);
+        console2.log("USDS balance before borrowing:", usdsBalanceBefore);
+
+        // Preview the borrowing
+        (uint256 principal, uint256 interest, uint48 dueDate) = IDepositRedemptionVault(
+            depositRedemptionVault
+        ).previewBorrowAgainstRedemption(msg.sender, redemptionId_);
+        console2.log("Principal to borrow:", principal);
+        console2.log("Interest:", interest);
+        console2.log("Due date:", dueDate);
+
+        vm.broadcast();
+        borrowedAmount = IDepositRedemptionVault(depositRedemptionVault).borrowAgainstRedemption(
+            redemptionId_
+        );
+
+        // Check USDS balance after borrowing
+        uint256 usdsBalanceAfter = IERC20(usds).balanceOf(msg.sender);
+        console2.log("USDS balance after borrowing:", usdsBalanceAfter);
+        console2.log("USDS received:", usdsBalanceAfter - usdsBalanceBefore);
+        console2.log("Successfully borrowed:", borrowedAmount);
+
+        return borrowedAmount;
+    }
+
+    /// @notice Reclaim deposit tokens via ConvertibleDepositFacility
+    /// @param chain_ The chain to interact with
+    /// @param depositPeriod_ The deposit period in months
+    /// @param amount_ Amount of receipt tokens to reclaim
+    function reclaim(
+        string memory chain_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) external returns (uint256 reclaimedAmount) {
+        _validateCaller();
+        _setUp(chain_);
+
+        console2.log("\n=== Reclaiming Deposit Tokens ===");
+        console2.log("Deposit Period (months):", depositPeriod_);
+        console2.log("Amount to reclaim:", amount_);
+
+        // Get receipt token ID
+        uint256 receiptTokenId = IDepositManager(depositManager).getReceiptTokenId(
+            IERC20(usds),
+            depositPeriod_,
+            facility
+        );
+        console2.log("Receipt token ID:", receiptTokenId);
+
+        // Approve DepositManager to spend receipt tokens
+        console2.log("Approving DepositManager to spend receipt tokens");
+        vm.broadcast();
+        IReceiptTokenManager(receiptTokenManager).approve(depositManager, receiptTokenId, amount_);
+
+        // Preview the reclaim
+        uint256 expectedReclaimed = IDepositFacility(facility).previewReclaim(
+            IERC20(usds),
+            depositPeriod_,
+            amount_
+        );
+        console2.log("Expected reclaimed amount:", expectedReclaimed);
+
+        vm.broadcast();
+        reclaimedAmount = IDepositFacility(facility).reclaim(IERC20(usds), depositPeriod_, amount_);
+
+        console2.log("Successfully reclaimed:", reclaimedAmount);
+        return reclaimedAmount;
     }
 }
