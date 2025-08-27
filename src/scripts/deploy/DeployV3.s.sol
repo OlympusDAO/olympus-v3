@@ -618,7 +618,7 @@ contract DeployV3 is WithEnvironment {
         return (address(zeroDistributor), "olympus.policies");
     }
 
-    function _deployOlympusPrice() public returns (address, string memory) {
+    function deployOlympusPrice() public returns (address, string memory) {
         // Dependencies
         address kernel = _getAddressNotZero("olympus.Kernel");
         address ohmEthPriceFeed = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
@@ -668,7 +668,7 @@ contract DeployV3 is WithEnvironment {
         return (address(price), "olympus.modules");
     }
 
-    function _deployOlympusPriceConfig() public returns (address, string memory) {
+    function deployOlympusPriceConfig() public returns (address, string memory) {
         // Dependencies
         address kernel = _getAddressNotZero("olympus.Kernel");
 
