@@ -172,6 +172,11 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
+    function _validateArgsFileEmpty(string memory argsFilePath_) internal pure {
+        // solhint-disable-next-line gas-custom-errors
+        require(bytes(argsFilePath_).length == 0, "BatchScriptV2: Args file should be empty for this function");
+    }
+
     /// @notice Get a string argument for a given function and key
     /// @param functionName_ Name of the function
     /// @param key_ Key to look for

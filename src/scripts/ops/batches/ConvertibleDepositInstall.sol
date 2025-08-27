@@ -28,6 +28,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
         address kernel = _envAddressNotZero("olympus.Kernel");
         address depositPositionManager = _envAddressNotZero(
             "olympus.modules.OlympusDepositPositionManager"
@@ -60,6 +62,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                     oldHeart
                 )
             );
+        } else {
+            console2.log("0. No old OlympusHeart policy to deactivate");
         }
 
         if (oldEmissionManager != address(0)) {
@@ -72,6 +76,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                     oldEmissionManager
                 )
             );
+        } else {
+            console2.log("0. No old EmissionManager policy to deactivate");
         }
 
         // Install DEPOS module
@@ -145,6 +151,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
 
         console2.log("=== Configuring DepositManager ===");
@@ -163,6 +171,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
@@ -271,6 +281,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address convertibleDepositAuctioneer = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositAuctioneer"
@@ -336,6 +348,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
