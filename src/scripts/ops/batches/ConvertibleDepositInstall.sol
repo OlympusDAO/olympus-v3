@@ -167,19 +167,20 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
     /// @notice Configure ConvertibleDepositFacility and enable it
     function configureConvertibleDepositFacility(
-        string memory facilityName_,
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
-        _validateArgsFileEmpty(argsFile_);
-
+        string memory facilityName = _readBatchArgString(
+            "ConfigureConvertibleDepositFacility",
+            "facilityName"
+        );
         address depositManager = _envAddressNotZero("olympus.policies.DepositManager");
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
 
         console2.log("=== Configuring ConvertibleDepositFacility ===");
-        console2.log("Setting facility name:", facilityName_);
+        console2.log("Setting facility name:", facilityName);
 
         // Set facility name
         addToBatch(
@@ -187,7 +188,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             abi.encodeWithSignature(
                 "setOperatorName(address,string)",
                 convertibleDepositFacility,
-                facilityName_
+                facilityName
             )
         );
 
@@ -247,10 +248,10 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
         address usds = _envAddressNotZero("external.tokens.USDS");
         uint8 depositPeriod = SafeCast.encodeUInt8(
-            _readBatchArgUint256("configureUSDSDepositPeriod", "depositPeriod")
+            _readBatchArgUint256("ConfigureUSDSDepositPeriod", "depositPeriod")
         );
         uint16 reclaimRate = SafeCast.encodeUInt16(
-            _readBatchArgUint256("configureUSDSDepositPeriod", "reclaimRate")
+            _readBatchArgUint256("ConfigureUSDSDepositPeriod", "reclaimRate")
         );
 
         console2.log("=== Configuring USDS Deposit Period ===");
