@@ -246,6 +246,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address convertibleDepositFacility = _envAddressNotZero(
             "olympus.policies.ConvertibleDepositFacility"
         );
+        address convertibleDepositAuctioneer = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositAuctioneer"
+        );
         address usds = _envAddressNotZero("external.tokens.USDS");
         uint8 depositPeriod = SafeCast.encodeUInt8(
             _readBatchArgUint256("ConfigureUSDSDepositPeriod", "depositPeriod")
@@ -273,12 +276,22 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
+        // Enable deposit period in auctioneer
+        console2.log("Enabling deposit period in auctioneer");
+        addToBatch(
+            convertibleDepositAuctioneer,
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.enableDepositPeriod.selector,
+                depositPeriod
+            )
+        );
+
         console2.log("USDS deposit period configuration batch prepared");
         proposeBatch();
     }
 
-    /// @notice Configure ConvertibleDepositAuctioneer
-    function configureConvertibleDepositAuctioneer(
+    /// @notice Grant roles for ConvertibleDeposit system
+    function grantConvertibleDepositRoles(
         bool useDaoMS_,
         string calldata argsFile_
     ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
@@ -292,8 +305,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "olympus.policies.ConvertibleDepositFacility"
         );
 
-        console2.log("=== Configuring ConvertibleDepositAuctioneer ===");
-        console2.log("Granting roles and enabling auction functionality");
+        console2.log("=== Granting ConvertibleDeposit Roles ===");
 
         // Grant required roles
         console2.log("Granting cd_auctioneer role to:", convertibleDepositAuctioneer);
@@ -316,12 +328,29 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("Enabling ConvertibleDepositAuctioneer with initial parameters");
+        console2.log("ConvertibleDeposit roles batch prepared");
+        proposeBatch();
+    }
+
+    /// @notice Configure ConvertibleDepositAuctioneer
+    function configureConvertibleDepositAuctioneer(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address convertibleDepositAuctioneer = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositAuctioneer"
+        );
+
+        console2.log("=== Configuring ConvertibleDepositAuctioneer ===");
+        console2.log("Enabling auction functionality with initial parameters");
         console2.log("- Target: 1000 OHM");
         console2.log("- Tick size: 200 OHM");
         console2.log("- Min price: 22 USDS/OHM");
         console2.log("- Tick step: 110% (10% increase)");
         console2.log("- Tracking period: 7 days");
+
         // Enable the ConvertibleDepositAuctioneer
         // The parameters will be tweaked when the EmissionManager runs
         addToBatch(
@@ -409,6 +438,30 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
         console2.log("EmissionManager configuration batch prepared");
         console2.log("=== All ConvertibleDeposit components configured ===");
+        proposeBatch();
+    }
+
+    /// @notice Disable ConvertibleDepositAuctioneer
+    function disableConvertibleDepositAuctioneer(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address convertibleDepositAuctioneer = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositAuctioneer"
+        );
+
+        console2.log("=== Disabling ConvertibleDepositAuctioneer ===");
+        console2.log("Disabling auctioneer to halt new auctions");
+
+        // Disable the ConvertibleDepositAuctioneer
+        addToBatch(
+            convertibleDepositAuctioneer,
+            abi.encodeWithSelector(IEnabler.disable.selector, "")
+        );
+
+        console2.log("ConvertibleDepositAuctioneer disable batch prepared");
         proposeBatch();
     }
 }
