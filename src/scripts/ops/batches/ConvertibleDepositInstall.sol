@@ -48,6 +48,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "olympus.policies.DepositRedemptionVault"
         );
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address reserveWrapper = _envAddressNotZero("olympus.policies.ReserveWrapper");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
 
         // Get old policy addresses (may be zero)
@@ -148,7 +149,17 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             )
         );
 
-        console2.log("7. Activating Heart policy");
+        console2.log("7. Activating ReserveWrapper policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                reserveWrapper
+            )
+        );
+
+        console2.log("8. Activating Heart policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heart)
@@ -159,6 +170,28 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             "Note: Heart periodic tasks should be configured by HeartPeriodicTasksConfig script"
         );
 
+        proposeBatch();
+    }
+
+    function grantHeartRole(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+        address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
+
+        console2.log("=== Granting Heart Role ===");
+
+        // Grant heart role to OlympusHeart
+        console2.log("Granting heart role to:", heart);
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
+        );
+
+        console2.log("Heart role grant batch prepared");
         proposeBatch();
     }
 
@@ -578,6 +611,24 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
 
         console2.log("DepositRedemptionVault asset configuration batch prepared");
+        proposeBatch();
+    }
+
+    function enableReserveWrapper(
+        bool useDaoMS_,
+        string calldata argsFile_
+    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address reserveWrapper = _envAddressNotZero("olympus.policies.ReserveWrapper");
+
+        console2.log("=== Enabling ReserveWrapper ===");
+        console2.log("Enabling ReserveWrapper to start wrapping reserves");
+
+        // Enable the ReserveWrapper
+        addToBatch(reserveWrapper, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+
+        console2.log("ReserveWrapper enablement batch prepared");
         proposeBatch();
     }
 }
