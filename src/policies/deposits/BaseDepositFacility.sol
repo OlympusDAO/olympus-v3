@@ -481,24 +481,32 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         if (position.owner != msg.sender)
             revert IDepositPositionManager.DEPOS_NotOwner(positionId_);
 
+        // Validate that the amount is valid
+        if (amount_ == 0 || amount_ > position.remainingDeposit)
+            revert IDepositPositionManager.DEPOS_InvalidParams("amount");
+
         uint256 minimumDeposit = DEPOSIT_MANAGER
             .getAssetConfiguration(IERC20(position.asset))
             .minimumDeposit;
-        // Validate that the new position amount is >= the minimum deposit
-        if (amount_ < minimumDeposit) {
-            revert IAssetManager.AssetManager_MinimumDepositNotMet(
-                position.asset,
-                amount_,
-                minimumDeposit
-            );
-        }
-        // Validate that the remaining position amount is >= the minimum deposit
-        if (position.remainingDeposit - amount_ < minimumDeposit) {
-            revert IAssetManager.AssetManager_MinimumDepositNotMet(
-                position.asset,
-                position.remainingDeposit - amount_,
-                minimumDeposit
-            );
+        // Validate minimum deposit if set
+        if (minimumDeposit > 0) {
+            // Validate that the new position amount is >= the minimum deposit
+            if (amount_ < minimumDeposit) {
+                revert IAssetManager.AssetManager_MinimumDepositNotMet(
+                    position.asset,
+                    amount_,
+                    minimumDeposit
+                );
+            }
+            // Validate that the remaining position amount is >= the minimum deposit
+            // No risk of underflow here, as it has been validated that amount_ < position.remainingDeposit
+            if (position.remainingDeposit - amount_ < minimumDeposit) {
+                revert IAssetManager.AssetManager_MinimumDepositNotMet(
+                    position.asset,
+                    position.remainingDeposit - amount_,
+                    minimumDeposit
+                );
+            }
         }
 
         // Perform the split
