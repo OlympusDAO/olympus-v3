@@ -909,5 +909,12 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
             previousTick.lastUpdate,
             "lastUpdate should not change when target is 0"
         );
+
+        // Assert auction is not active
+        assertEq(
+            auctioneer.isAuctionActive(),
+            false,
+            "auction should be inactive when target is 0"
+        );
     }
 }

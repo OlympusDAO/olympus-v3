@@ -229,7 +229,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // - CDAuctioneer will accept a target (emission) of 0 (disables auction)
         // - If the tick size is 0, the target will be set to 0 due to the check above
         //
-        // - If minPrice is 0, the call will revert (which we would want)
+        // Reverts are expected in the following scenarios:
+        // - If the target is > 0 (auction active) and minPrice is 0, the call will revert (which we would want)
         cdAuctioneer.setAuctionParameters(emission, tickSize, getMinPriceFor(_getCurrentPrice()));
 
         // If the tracking period is complete, determine if there was under-selling of OHM

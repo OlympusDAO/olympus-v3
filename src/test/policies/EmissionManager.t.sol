@@ -3207,10 +3207,6 @@ contract EmissionManagerTest is Test {
         vm.prank(heart);
         emissionManager.execute();
 
-        // Verify auction has non-zero parameters initially (assuming premium above minimum)
-        // Note: This might be 0 if premium is below minimum, but that's fine for this test
-        uint256 initialTarget = cdAuctioneer.target();
-
         // Disable the emission manager
         vm.prank(guardian);
         emissionManager.disable("");

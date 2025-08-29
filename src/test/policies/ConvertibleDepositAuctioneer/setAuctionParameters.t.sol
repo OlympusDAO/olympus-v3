@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
@@ -116,6 +116,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         _assertPreviousTick(0, 0, newTickSize, 0);
         // _assertAuctionResultsEmpty(0);
         // _assertAuctionResultsNextIndex(0);
+        assertEq(auctioneer.isAuctionActive(), false, "Auction should be inactive");
     }
 
     // given the contract is not initialized
