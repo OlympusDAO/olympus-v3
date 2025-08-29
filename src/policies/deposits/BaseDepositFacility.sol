@@ -6,6 +6,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -480,7 +481,28 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         if (position.owner != msg.sender)
             revert IDepositPositionManager.DEPOS_NotOwner(positionId_);
 
+        uint256 minimumDeposit = DEPOSIT_MANAGER
+            .getAssetConfiguration(IERC20(position.asset))
+            .minimumDeposit;
+        // Validate that the new position amount is >= the minimum deposit
+        if (amount_ < minimumDeposit) {
+            revert IAssetManager.AssetManager_MinimumDepositNotMet(
+                position.asset,
+                amount_,
+                minimumDeposit
+            );
+        }
+        // Validate that the remaining position amount is >= the minimum deposit
+        if (position.remainingDeposit - amount_ < minimumDeposit) {
+            revert IAssetManager.AssetManager_MinimumDepositNotMet(
+                position.asset,
+                position.remainingDeposit - amount_,
+                minimumDeposit
+            );
+        }
+
         // Perform the split
+        // This will revert if the amount is 0 or greater than the position amount
         uint256 newPositionId = DEPOS.split(positionId_, amount_, to_, wrap_);
 
         // Allow inheriting contracts to perform custom actions when a position is split
