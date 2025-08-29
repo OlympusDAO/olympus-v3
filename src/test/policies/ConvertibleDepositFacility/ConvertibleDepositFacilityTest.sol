@@ -162,7 +162,7 @@ contract ConvertibleDepositFacilityTest is Test {
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
             address(facility),
-            90e2
+            RECLAIM_RATE
         );
 
         // Enable the token/period/facility combo for the yield deposit facility
@@ -170,7 +170,7 @@ contract ConvertibleDepositFacilityTest is Test {
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
             address(yieldDepositFacility),
-            90e2
+            RECLAIM_RATE
         );
 
         receiptTokenId = depositManager.getReceiptTokenId(
@@ -446,6 +446,14 @@ contract ConvertibleDepositFacilityTest is Test {
     ) {
         _approveWrappedReceiptTokenSpending(owner_, spender_, amount_);
         _;
+    }
+
+    function _approveReceiptTokenSpendingByDepositManager(
+        address owner_,
+        uint256 amount_
+    ) internal {
+        vm.prank(owner_);
+        receiptTokenManager.approve(address(depositManager), receiptTokenId, amount_);
     }
 
     modifier givenReceiptTokenSpendingIsApproved(
