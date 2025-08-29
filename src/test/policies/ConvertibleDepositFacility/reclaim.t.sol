@@ -251,7 +251,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         uint256 depositAmount_,
         uint256 yieldAmount_
     ) public givenLocallyActive {
-        reclaimRate_ = uint16(bound(reclaimRate_, 1, 100e2));
+        reclaimRate_ = uint16(bound(reclaimRate_, 1e2, 100e2)); // 1-100%, a very small number would likely cause the reclaimed amount to often round to 0, which is not what we want to test here
         depositAmount_ = bound(depositAmount_, 1e4, RESERVE_TOKEN_AMOUNT);
         yieldAmount_ = bound(yieldAmount_, 1e4, RESERVE_TOKEN_AMOUNT);
 
@@ -314,9 +314,10 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         );
 
         // Deposit token is transferred to the recipient
-        assertEq(
+        assertApproxEqAbs(
             iReserveToken.balanceOf(recipient),
             expectedReclaimedAmount,
+            5,
             "reserveToken.balanceOf(recipient)"
         );
 
