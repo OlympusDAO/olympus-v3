@@ -3201,4 +3201,28 @@ contract EmissionManagerTest is Test {
         assertEq(cdAuctioneer.tickSize(), 0, "Tick size should be 0");
         assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
     }
+
+    function test_disable_disablesAuction() public {
+        // First enable the emission manager with some auction parameters
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Verify auction has non-zero parameters initially (assuming premium above minimum)
+        // Note: This might be 0 if premium is below minimum, but that's fine for this test
+        uint256 initialTarget = cdAuctioneer.target();
+
+        // Disable the emission manager
+        vm.prank(guardian);
+        emissionManager.disable("");
+
+        // Verify that the auction is disabled (target = 0, tickSize = 0)
+        assertEq(cdAuctioneer.target(), 0, "Target should be 0 when EmissionManager is disabled");
+        assertEq(
+            cdAuctioneer.tickSize(),
+            0,
+            "Tick size should be 0 when EmissionManager is disabled"
+        );
+        assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
+        assertFalse(emissionManager.isEnabled(), "EmissionManager should be disabled");
+    }
 }

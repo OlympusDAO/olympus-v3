@@ -423,6 +423,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @dev        This function performs the following:
     ///             - Sets the shutdown timestamp
     ///             - Closes the active bond market (if it is active)
+    ///             - Disables the convertible deposit auction
     function _disable(bytes calldata) internal override {
         shutdownTimestamp = uint48(block.timestamp);
 
@@ -430,6 +431,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (bondAuctioneer.isLive(activeMarketId)) {
             bondAuctioneer.closeMarket(activeMarketId);
         }
+
+        // Disable the convertible deposit auction by setting target to 0
+        cdAuctioneer.setAuctionParameters(0, 0, 0);
     }
 
     /// @notice Restart the emission manager
