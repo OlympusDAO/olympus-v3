@@ -81,11 +81,30 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     }
 
     // when the new target is 0
-    //  [X] it sets the parameters
+    //  [X] it sets the parameters (tick size and min price can be anything, including 0)
 
     function test_targetZero() public givenEnabled {
-        uint256 newTickSize = 11e9;
+        uint256 newTickSize = 11e9; // Can be any value when target is 0
         uint256 newMinPrice = 14e18;
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
+
+        // Assert state
+        _assertAuctionParameters(0, newTickSize, newMinPrice);
+        // No assets defined, so tick is not initialized
+        _assertPreviousTick(0, 0, newTickSize, 0);
+        // _assertAuctionResultsEmpty(0);
+        // _assertAuctionResultsNextIndex(0);
+    }
+
+    // when the new target is 0 and min price is 0
+    //  [X] it sets the parameters (allowed when target is 0)
+
+    function test_targetZero_minPriceZero() public givenEnabled {
+        uint256 newTickSize = 11e9; // Can be any value when target is 0
+        uint256 newMinPrice = 0; // Allowed when target is 0
 
         // Call function
         vm.prank(emissionManager);

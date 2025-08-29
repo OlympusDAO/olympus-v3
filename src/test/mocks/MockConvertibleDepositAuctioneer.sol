@@ -74,6 +74,10 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         returns (AuctionParameters memory auctionParameters)
     {}
 
+    function isAuctionActive() external view override returns (bool) {
+        return target > 0;
+    }
+
     function getDayState() external view override returns (Day memory day) {}
 
     function setAuctionParameters(
@@ -82,8 +86,11 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         uint256 newMinPrice
     ) external override {
         // Mimic behaviour of the real auctioneer with error handling
-        if (newSize == 0) revert("tick size zero");
-        if (newMinPrice == 0) revert("min price zero");
+        // Tick size must be non-zero when target is non-zero
+        if (newTarget > 0 && newSize == 0) revert("tick size zero");
+
+        // Min price must be non-zero when target is non-zero (can be zero when auction is disabled)
+        if (newTarget > 0 && newMinPrice == 0) revert("min price zero");
 
         target = newTarget;
         tickSize = newSize;

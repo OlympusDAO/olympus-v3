@@ -870,18 +870,21 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     // given the day target is zero
     //  given the tick price is above the minimum
-    //   [X] the tick price does not change
-    //   [X] the tick size does not change
+    //   [X] the tick price does not decay
+    //   [X] the tick size does not decay
 
     function test_givenTickPriceAboveMinimum_targetZero(
         uint48 secondsPassed_
     )
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
-        givenRecipientHasBid(1000e18)
+        givenEnabled // Start with standard parameters
+        givenRecipientHasBid(1000e18) // Make a bid to move the tick
     {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        // Disable the auction by setting target to 0
+        _setAuctionParameters(0, TICK_SIZE, MIN_PRICE);
 
         IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getPreviousTick(
             PERIOD_MONTHS
@@ -894,9 +897,17 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
         // Assert current tick
-        // As the day target is zero, no new capacity is added, hence the values stay the same
-        assertEq(tick.capacity, previousTick.capacity, "capacity");
-        assertEq(tick.price, previousTick.price, "price");
-        assertEq(auctioneer.getCurrentTickSize(), TICK_SIZE, "tick size");
+        // As the day target is zero, no new capacity is added and no decay occurs, hence the values stay the same
+        assertEq(
+            tick.capacity,
+            previousTick.capacity,
+            "capacity should not change when target is 0"
+        );
+        assertEq(tick.price, previousTick.price, "price should not decay when target is 0");
+        assertEq(
+            tick.lastUpdate,
+            previousTick.lastUpdate,
+            "lastUpdate should not change when target is 0"
+        );
     }
 }
