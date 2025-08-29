@@ -325,7 +325,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
             RESERVE_TOKEN_AMOUNT,
-            "available deposits should be 0"
+            "available deposits should be RESERVE_TOKEN_AMOUNT"
         );
     }
 }
