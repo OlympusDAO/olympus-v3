@@ -663,7 +663,7 @@ contract EmissionManagerTest is Test {
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
 
             assertEq(emission, 0, "target should be zero");
-            assertEq(cdAuctioneer.tickSize(), 1, "tick size should be 1");
+            assertEq(cdAuctioneer.tickSize(), 0, "tick size should be zero");
         }
 
         // Confirm that the token balances are still 0
