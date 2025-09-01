@@ -329,7 +329,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
 
         if (operatorLiabilities > depositedSharesInAssets + borrowedAmount) {
-            revert DepositManager_Insolvent(address(asset_), operatorLiabilities);
+            revert DepositManager_Insolvent(
+                address(asset_),
+                operatorLiabilities,
+                depositedSharesInAssets,
+                borrowedAmount
+            );
         }
     }
 
