@@ -472,6 +472,7 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
     )
         public
         givenLocallyActive
+        givenVaultHasDeposit(1000e18)
         givenAddressHasConvertibleDepositToken(
             recipientTwo,
             iReserveToken,
@@ -564,27 +565,26 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
     }
 
     function test_givenCommitmentAmountFuzz_givenYieldFuzz(
+        uint256 depositAmount_,
         uint256 commitmentAmount_,
         uint256 yieldAmount_,
         uint256 yieldAmountTwo_
     )
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositToken(
-            recipientTwo,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
-        givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
+        givenVaultHasDeposit(1000e18)
         givenClaimDefaultRewardPercentage(100) // 1%
     {
-        commitmentAmount_ = bound(commitmentAmount_, 1e16, 5e18);
-        yieldAmount_ = bound(yieldAmount_, 1e16, 5e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 5e18);
+        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
+        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
 
         // Commit funds
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);

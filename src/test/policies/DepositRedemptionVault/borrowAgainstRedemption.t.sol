@@ -280,4 +280,91 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
             "committed deposits"
         );
     }
+
+    function test_givenCommitmentAmountFuzz_givenYieldAmountFuzz(
+        uint256 depositAmount_,
+        uint256 commitmentAmount_,
+        uint256 yieldAmount_,
+        uint256 yieldAmountTwo_
+    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
+        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
+        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        uint256 expectedLoanAmount = (90e2 * commitmentAmount_) / 100e2;
+
+        // Expect event
+        // 3rd arg is not tracked as it cannot always be predicted
+        vm.expectEmit(true, true, true, false);
+        emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
+
+        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz");
+
+        // Call function
+        vm.prank(recipient);
+        uint256 actualLoanAmount = redemptionVault.borrowAgainstRedemption(0);
+
+        vm.stopSnapshotGas();
+
+        // Calculations
+        uint256 expectedInterest = FullMath.mulDivUp(
+            actualLoanAmount,
+            10e2 * PERIOD_MONTHS,
+            100e2 * 12
+        ); // Post-borrow as we need the actual loan amount
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // Assert actual loan amount is as expected
+        assertApproxEqAbs(
+            actualLoanAmount,
+            expectedLoanAmount,
+            5,
+            "actual loan amount is unexpected"
+        );
+
+        // Assert loan record
+        _assertLoan(
+            recipient,
+            0,
+            actualLoanAmount,
+            actualLoanAmount,
+            expectedInterest,
+            false,
+            expectedDueDate
+        );
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(recipient, actualLoanAmount, 0, 0);
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            actualLoanAmount,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been reduced
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_ - actualLoanAmount,
+            "committed deposits"
+        );
+    }
 }
