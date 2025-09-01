@@ -256,14 +256,15 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             })
         );
 
-        // Validate that the amount is not zero
-        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
-
-        // Reduce committed deposits by the amount borrowed
+        // Reduce committed deposits
+        // This uses the requested amount, to be consistent with DepositManager
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] -= actualAmount;
-        _assetCommittedDeposits[depositToken_] -= actualAmount;
+        ] -= amount_;
+        _assetCommittedDeposits[depositToken_] -= amount_;
+
+        // Validate that the amount is not zero
+        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
 
         return actualAmount;
     }
@@ -291,14 +292,15 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             })
         );
 
-        // Validate that the amount is not zero
-        if (repaymentActual == 0) revert DepositFacility_ZeroAmount();
-
         // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
+        // This uses the requested amount, to be consistent with DepositManager
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] += repaymentActual;
-        _assetCommittedDeposits[depositToken_] += repaymentActual;
+        ] += amount_;
+        _assetCommittedDeposits[depositToken_] += amount_;
+
+        // Validate that the amount is not zero
+        if (repaymentActual == 0) revert DepositFacility_ZeroAmount();
 
         return repaymentActual;
     }

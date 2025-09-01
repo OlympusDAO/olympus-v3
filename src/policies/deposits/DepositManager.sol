@@ -715,8 +715,8 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         // Update borrowed amount
-        // This is done after the withdraw, as the actual amount is not known ahead of time
-        _borrowedAmounts[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
+        // The requested amount is used, in order to avoid issues with insolvency checks
+        _borrowedAmounts[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += params_.amount;
 
         // Validate operator solvency after state updates
         _validateOperatorSolvency(params_.asset, msg.sender);
