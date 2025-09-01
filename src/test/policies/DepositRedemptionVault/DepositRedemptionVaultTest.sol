@@ -803,10 +803,9 @@ contract DepositRedemptionVaultTest is Test {
     }
 
     function _assertAvailableDeposits(uint256 expected_) internal view {
-        assertApproxEqAbs(
+        assertEq(
             cdFacility.getAvailableDeposits(iReserveToken),
             expected_,
-            5,
             "cdFacility.getAvailableDeposits(iReserveToken)"
         );
     }

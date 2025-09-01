@@ -195,7 +195,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     // [X] it increases the operator shares by the actual amount (in terms of shares) repaid
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenIsEnabled
@@ -210,6 +211,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Calculate amount
         uint256 oneShareInAssets = vault.previewMint(1);
         amount_ = bound(amount_, oneShareInAssets, previousRecipientBorrowActualAmount);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
 
@@ -220,6 +222,9 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             _approveSpendingAsset(DEPOSITOR, MINT_AMOUNT);
             _deposit(MINT_AMOUNT, false);
         }
+
+        // Accrue yield
+        _accrueYield(yieldAmount_);
 
         _takeSnapshot(amount_);
 

@@ -112,21 +112,23 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
     // [X] the committed deposits for the operator remain the same
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(1000e18)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
         givenBorrowed(OPERATOR, previousDepositActual, recipient)
-        givenReceiptTokenSpendingIsApproved(
-            recipient,
-            address(depositManager),
-            previousBorrowActual
-        )
+        givenReceiptTokenSpendingIsApprovedByRecipient(previousBorrowActual)
     {
         amount_ = bound(amount_, 1, previousBorrowActual);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
 
         _takeSnapshot();
 

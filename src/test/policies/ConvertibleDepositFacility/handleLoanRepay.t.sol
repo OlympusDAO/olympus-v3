@@ -103,21 +103,23 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
     // [X] it updates the committed deposits for the operator
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(1000e18)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
         givenBorrowed(OPERATOR, previousDepositActual, recipient)
-        givenReserveTokenSpendingIsApproved(
-            recipient,
-            address(depositManager),
-            previousBorrowActual
-        )
+        givenReserveTokenSpendingIsApprovedByRecipient
     {
         amount_ = bound(amount_, 1, previousBorrowActual);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
 
         _takeSnapshot();
 

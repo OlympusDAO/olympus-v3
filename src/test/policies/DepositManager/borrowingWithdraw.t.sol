@@ -223,19 +223,17 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
 
         // Assert tokens
         assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
-        assertApproxEqAbs(iAsset.balanceOf(RECIPIENT), amount_, 5, "withdrawn amount");
+        assertEq(iAsset.balanceOf(RECIPIENT), actualAmount, "withdrawn amount");
 
         // Borrowed amounts
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
             amount_,
-            5,
             "borrowed amount"
         );
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             firstDepositActualAmount + previousDepositorDepositActualAmount - amount_,
-            5,
             "borrowing capacity"
         );
 
@@ -331,7 +329,8 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     // [X] it reduces the operator shares by the actual amount (in terms of shares) withdrawn
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenIsEnabled
@@ -347,6 +346,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             5, // 1 risks a ZERO_SHARES error
             previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount
         );
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
 
@@ -358,6 +358,10 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             _deposit(MINT_AMOUNT, false);
         }
 
+        // Accrue yield
+        _accrueYield(yieldAmount_);
+
+        // Snapshot
         _takeSnapshot(amount_);
 
         // Expect event
@@ -377,27 +381,24 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
 
         // Assert tokens
         assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
-        assertApproxEqAbs(
+        assertEq(
             iAsset.balanceOf(RECIPIENT),
-            previousRecipientBorrowActualAmount + amount_,
-            5,
+            previousRecipientBorrowActualAmount + actualAmount,
             "recipient balance"
         );
 
         // Borrowed amounts
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
             previousRecipientBorrowActualAmount + amount_,
-            5,
             "borrowed amount"
         );
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             firstDepositActualAmount +
                 previousDepositorDepositActualAmount -
                 previousRecipientBorrowActualAmount -
                 amount_,
-            5,
             "borrowing capacity"
         );
 

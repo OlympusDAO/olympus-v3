@@ -175,7 +175,8 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     // [X] it reduces the asset liabilities by the default amount
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenIsEnabled
@@ -189,6 +190,10 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     {
         // Calculate amount
         amount_ = bound(amount_, vault.previewMint(1), previousRecipientBorrowActualAmount);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(yieldAmount_);
 
         // Determine the amount of shares that are expected
         (, uint256 expectedAssets) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);

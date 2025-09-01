@@ -286,6 +286,10 @@ contract DepositManagerTest is Test {
         _;
     }
 
+    function _accrueYield(uint256 yieldAmount_) internal {
+        asset.mint(address(vault), yieldAmount_);
+    }
+
     // ========== REVERT HELPERS ========== //
 
     function _expectRevertNotEnabled() internal {

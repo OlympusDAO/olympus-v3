@@ -98,20 +98,21 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
     // [X] it reduces the committed deposits for the operator
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
+        givenVaultHasDeposit(1000e18)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
     {
         amount_ = bound(amount_, 1e18, previousDepositActual);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
 
         uint256 recipientBalanceBefore = iReserveToken.balanceOf(recipient);
         (, uint256 operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
@@ -129,12 +130,12 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
         );
 
         // Assert that the actual amount is the amount
-        assertEq(actualAmount, amount_, "actual amount");
+        assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
 
-        // Assert that the recipient's balance has increased by the amount
+        // Assert that the recipient's balance has increased by the actual amount
         assertEq(
             iReserveToken.balanceOf(recipient),
-            recipientBalanceBefore + amount_,
+            recipientBalanceBefore + actualAmount,
             "recipient balance"
         );
 

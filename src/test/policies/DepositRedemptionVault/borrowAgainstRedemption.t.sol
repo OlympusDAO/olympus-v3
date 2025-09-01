@@ -249,8 +249,8 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         _assertLoan(
             recipient,
             0,
-            actualLoanAmount,
-            actualLoanAmount,
+            expectedLoanAmount,
+            expectedLoanAmount,
             expectedInterest,
             false,
             expectedDueDate
@@ -269,14 +269,14 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         // Assert borrowed amount on DepositManager
         assertEq(
             depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
-            actualLoanAmount,
+            expectedLoanAmount,
             "getBorrowedAmount"
         );
 
         // Assert committed funds have been reduced
         assertEq(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
-            commitmentAmount_ - actualLoanAmount,
+            commitmentAmount_ - expectedLoanAmount,
             "committed deposits"
         );
     }
@@ -336,8 +336,8 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         _assertLoan(
             recipient,
             0,
-            actualLoanAmount,
-            actualLoanAmount,
+            expectedLoanAmount,
+            expectedLoanAmount,
             expectedInterest,
             false,
             expectedDueDate
@@ -356,14 +356,14 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         // Assert borrowed amount on DepositManager
         assertEq(
             depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
-            actualLoanAmount,
+            expectedLoanAmount,
             "getBorrowedAmount"
         );
 
         // Assert committed funds have been reduced
         assertEq(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
-            commitmentAmount_ - actualLoanAmount,
+            commitmentAmount_ - expectedLoanAmount,
             "committed deposits"
         );
     }
