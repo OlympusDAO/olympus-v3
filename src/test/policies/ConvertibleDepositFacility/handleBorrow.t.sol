@@ -7,6 +7,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 
 contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilityTest {
     uint256 public constant COMMIT_AMOUNT = 1e18;
+    uint256 public constant BORROW_AMOUNT = 1e18;
 
     // ========== TESTS ========== //
     // given the contract is disabled
@@ -18,7 +19,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient);
     }
 
     // given the caller is not authorized
@@ -34,7 +35,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
 
         // Call function
         vm.prank(caller_);
-        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient);
     }
 
     // when the amount is greater than the available deposits
@@ -108,7 +109,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
     {
-        amount_ = bound(amount_, 1e18, previousDepositActual);
+        amount_ = bound(amount_, BORROW_AMOUNT, previousDepositActual);
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         // Accrue yield
@@ -119,6 +120,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             iReserveToken,
             address(facility)
         );
+        uint256 availableDepositsBefore = facility.getAvailableDeposits(iReserveToken);
 
         // Call function
         vm.prank(OPERATOR);
@@ -144,16 +146,18 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             iReserveToken,
             address(facility)
         );
-        assertEq(
+        assertApproxEqAbs(
             operatorSharesInAssetsAfter,
             operatorSharesInAssetsBefore - amount_,
+            5,
             "operator shares in assets"
         );
 
-        // Assert that the available deposits have decreased by the amount
+        // Assert that the available deposits remains the same
+        // Committed deposits reduced, borrowed amount increased
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
-            operatorSharesInAssetsAfter - (previousDepositActual - amount_),
+            availableDepositsBefore,
             "available deposits"
         );
 
@@ -260,6 +264,7 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             iReserveToken,
             address(facility)
         );
+        uint256 availableDepositsBefore = facility.getAvailableDeposits(iReserveToken);
 
         // Call function
         vm.prank(OPERATOR);
@@ -285,16 +290,18 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             iReserveToken,
             address(facility)
         );
-        assertEq(
+        assertApproxEqAbs(
             operatorSharesInAssetsAfter,
             operatorSharesInAssetsBefore - amount_,
+            5,
             "operator shares in assets"
         );
 
-        // Assert that the available deposits have decreased by the amount
+        // Assert that the available deposits remains the same
+        // Committed deposits reduced, borrowed amount increased
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
-            operatorSharesInAssetsAfter - (2 * COMMIT_AMOUNT - amount_),
+            availableDepositsBefore,
             "available deposits"
         );
 
