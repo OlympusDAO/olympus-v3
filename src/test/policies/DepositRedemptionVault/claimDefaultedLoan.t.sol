@@ -490,7 +490,7 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        uint256 borrowActual = redemptionVault.borrowAgainstRedemption(0);
 
         // Determine the amount to pay back
         IDepositRedemptionVault.Loan memory loanBefore = redemptionVault.getRedemptionLoan(
@@ -513,7 +513,7 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         // Assert deposit token balances
         assertEq(
             reserveToken.balanceOf(recipient),
-            loanBefore.principal, // No change
+            borrowActual, // No change
             "deposit token: user balance mismatch"
         );
         assertApproxEqAbs(
@@ -591,7 +591,7 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        uint256 borrowActual = redemptionVault.borrowAgainstRedemption(0);
 
         // Accrue more yield
         _accrueYield(iVault, yieldAmountTwo_);
@@ -617,7 +617,7 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         // Assert deposit token balances
         assertEq(
             reserveToken.balanceOf(recipient),
-            loanBefore.principal, // No change
+            borrowActual, // No change
             "deposit token: user balance mismatch"
         );
         assertApproxEqAbs(

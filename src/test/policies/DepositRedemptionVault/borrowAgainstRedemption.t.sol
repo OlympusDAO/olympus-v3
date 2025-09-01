@@ -212,6 +212,12 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
     {
         commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
         uint256 expectedLoanAmount = (90e2 * commitmentAmount_) / 100e2;
+        uint256 expectedInterest = FullMath.mulDivUp(
+            expectedLoanAmount,
+            10e2 * PERIOD_MONTHS,
+            100e2 * 12
+        );
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
 
         // Commit funds
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
@@ -228,14 +234,6 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         uint256 actualLoanAmount = redemptionVault.borrowAgainstRedemption(0);
 
         vm.stopSnapshotGas();
-
-        // Calculations
-        uint256 expectedInterest = FullMath.mulDivUp(
-            actualLoanAmount,
-            10e2 * PERIOD_MONTHS,
-            100e2 * 12
-        ); // Post-borrow as we need the actual loan amount
-        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
 
         // Assert actual loan amount is as expected
         assertApproxEqAbs(
@@ -302,6 +300,12 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
 
         uint256 expectedLoanAmount = (90e2 * commitmentAmount_) / 100e2;
+        uint256 expectedInterest = FullMath.mulDivUp(
+            expectedLoanAmount,
+            10e2 * PERIOD_MONTHS,
+            100e2 * 12
+        );
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
 
         // Expect event
         // 3rd arg is not tracked as it cannot always be predicted
@@ -315,15 +319,6 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         uint256 actualLoanAmount = redemptionVault.borrowAgainstRedemption(0);
 
         vm.stopSnapshotGas();
-
-        // Calculations
-        uint256 expectedInterest = FullMath.mulDivUp(
-            actualLoanAmount,
-            10e2 * PERIOD_MONTHS,
-            100e2 * 12
-        ); // Post-borrow as we need the actual loan amount
-        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
-
         // Assert actual loan amount is as expected
         assertApproxEqAbs(
             actualLoanAmount,

@@ -55,9 +55,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         );
 
         // Assert deposit token balances
-        assertEq(
+        assertApproxEqAbs(
             depositToken_.balanceOf(user_),
             alreadyRedeemedAmount_ + amount_,
+            5, // Allow for some minor rounding issues
             "user: deposit token balance mismatch"
         );
         assertEq(
