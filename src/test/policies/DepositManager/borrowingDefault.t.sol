@@ -12,6 +12,8 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         uint256 amount
     );
 
+    uint256 public constant BORROW_AMOUNT = 1e18;
+
     // ========== TESTS ========== //
 
     // given the contract is disabled
@@ -28,7 +30,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
                 payer: DEPOSITOR,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -51,7 +53,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
                 payer: DEPOSITOR,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -74,7 +76,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
                 payer: DEPOSITOR,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -92,7 +94,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
     {
         // Expect revert
-        _expectRevertBorrowedAmountExceeded(1e18, 0);
+        _expectRevertBorrowedAmountExceeded(BORROW_AMOUNT, 0);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -101,7 +103,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
                 asset: iAsset,
                 depositPeriod: DEPOSIT_PERIOD,
                 payer: DEPOSITOR,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -119,13 +121,13 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
         givenDepositorHasApprovedSpendingReceiptToken(previousRecipientBorrowActualAmount)
     {
-        amount_ = bound(amount_, previousRecipientBorrowActualAmount + 1, 1e18 * 100);
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, BORROW_AMOUNT * 100);
 
         // Expect revert
-        _expectRevertBorrowedAmountExceeded(amount_, previousRecipientBorrowActualAmount);
+        _expectRevertBorrowedAmountExceeded(amount_, BORROW_AMOUNT);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -150,7 +152,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
     {
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(0, previousRecipientBorrowActualAmount);
@@ -185,7 +187,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
         givenDepositorHasApprovedSpendingReceiptToken(previousRecipientBorrowActualAmount)
     {
         // Calculate amount
@@ -232,7 +234,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         // Assert borrowed amounts
         assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
-            previousRecipientBorrowActualAmount - amount_,
+            BORROW_AMOUNT - amount_,
             "borrowed amount"
         );
 
