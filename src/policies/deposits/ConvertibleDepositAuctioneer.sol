@@ -650,10 +650,9 @@ contract ConvertibleDepositAuctioneer is
         // Enable the deposit period
         _depositPeriodsEnabled[depositPeriod_] = true;
 
-        // Add the deposit period to the array if it is not already in it
-        if (!_depositPeriods.contains(depositPeriod_)) {
-            _depositPeriods.add(depositPeriod_);
-        }
+        // Add the deposit period to the array
+        // No check necessary, as EnumerableSet will handle duplicates
+        _depositPeriods.add(depositPeriod_);
 
         // Initialize the tick with the new auction parameters
         _depositPeriodPreviousTicks[depositPeriod_] = Tick(
@@ -678,6 +677,7 @@ contract ConvertibleDepositAuctioneer is
         _depositPeriodsEnabled[depositPeriod_] = false;
 
         // Remove the deposit period from the array
+        // No check necessary, as EnumerableSet will handle non-existence
         _depositPeriods.remove(depositPeriod_);
 
         // Remove the tick
