@@ -201,6 +201,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///             - If the auction tracking period has finished and there is a deficit of OHM sold, attempts to create a bond market
     ///             - If market creation fails (external dependency), emits BondMarketCreationFailed and continues execution
     ///
+    ///             Note that if the CD auction is not running (e.g. the auctioneer contract is disabled), this function will consider OHM to have been under-sold across the auction tracking period. This will result in a bond market being created at the end of the auction tracking period in an attempt to sell the remaining OHM.
+    ///
     ///             Notes:
     ///             - If there are delays in the heartbeat (which calls this function), auction result tracking will be affected.
     function execute() external onlyRole(ROLE_HEART) {
