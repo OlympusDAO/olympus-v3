@@ -784,6 +784,16 @@ contract ConvertibleDepositAuctioneer is
         return _depositPeriods.length();
     }
 
+    /// @notice Gets the list of pending deposit period changes, from first to last
+    function getPendingDepositPeriodChanges()
+        external
+        view
+        override
+        returns (PendingDepositPeriodChange[] memory)
+    {
+        return _pendingDepositPeriodChanges;
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
