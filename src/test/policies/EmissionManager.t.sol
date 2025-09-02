@@ -71,6 +71,7 @@ contract EmissionManagerTest is Test {
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSizeScalar = 1e18; // 100%
     uint256 internal minPriceScalar = 9e17; // 90%
+    uint256 internal minTickSize = 0; // 0 OHM default minimum tick size
 
     uint256 internal DEFICIT = 1000e9;
     uint256 internal SURPLUS = 1001e9;
@@ -78,6 +79,7 @@ contract EmissionManagerTest is Test {
     uint256 internal expectedMinPrice;
 
     event BondMarketCreationFailed(uint256 saleAmount);
+    event MinTickSizeChanged(uint256 newMinTickSize);
 
     // test cases
     //
@@ -371,12 +373,15 @@ contract EmissionManagerTest is Test {
         vm.prank(guardian);
         emissionManager.enable(
             abi.encode(
-                baseEmissionRate,
-                minimumPremium,
-                backing,
-                tickSizeScalar,
-                minPriceScalar,
-                restartTimeframe
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
+                    restartTimeframe: restartTimeframe
+                })
             )
         );
 
@@ -825,12 +830,15 @@ contract EmissionManagerTest is Test {
         vm.prank(guardian);
         emissionManager.enable(
             abi.encode(
-                baseEmissionRate,
-                minimumPremium,
-                backing,
-                tickSizeScalar,
-                minPriceScalar,
-                restartTimeframe
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
+                    restartTimeframe: restartTimeframe
+                })
             )
         );
 
@@ -2275,6 +2283,43 @@ contract EmissionManagerTest is Test {
         );
     }
 
+    function test_execute_whenCalculatedTickSizeBelowMinimum_setsTargetToZero()
+        public
+        givenNextBeatIsZero
+        givenPremiumAboveMinimum
+    {
+        // Set minTickSize to a value higher than what the calculated tick size will be
+        uint256 minTick = 15_000e9; // 15,000 OHM minimum (higher than expected ~12,000 OHM)
+        vm.prank(guardian);
+        emissionManager.setMinTickSize(minTick);
+
+        // Get the expected emission (should be > 0 due to premium above minimum)
+        (, , uint256 originalEmission) = emissionManager.getNextEmission();
+        assertGt(originalEmission, 0, "Original emission should be > 0");
+
+        // Verify that calculated tick size would be less than the minimum
+        uint256 calculatedTickSize = emissionManager.getSizeFor(originalEmission);
+        assertEq(calculatedTickSize, 0, "Calculated tick size should be 0 when below minimum");
+        assertLt(
+            (originalEmission * tickSizeScalar) / 1e18,
+            minTick,
+            "Raw calculated tick size should be less than minimum"
+        );
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Verify that both target and tick size were set to 0 in the auctioneer
+        assertEq(
+            cdAuctioneer.target(),
+            0,
+            "Target should be set to 0 when tick size is below minimum"
+        );
+        assertEq(cdAuctioneer.tickSize(), 0, "Tick size should be 0");
+        assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
+    }
+
     // execute -> callback (full cycle bond purchase) tests
 
     function test_executeCallback_success() public givenNextBeatIsZero givenCDAuctioneerHasDeficit {
@@ -2495,6 +2540,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2514,6 +2560,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2550,6 +2597,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2588,6 +2636,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2613,6 +2662,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2638,6 +2688,7 @@ contract EmissionManagerTest is Test {
                     backing: 0,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2663,6 +2714,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: 0
                 })
             )
@@ -2684,6 +2736,7 @@ contract EmissionManagerTest is Test {
                     backing: backing + 1,
                     tickSizeScalar: tickSizeScalar,
                     minPriceScalar: minPriceScalar,
+                    minTickSize: minTickSize,
                     restartTimeframe: restartTimeframe + 1
                 })
             )
@@ -2706,6 +2759,77 @@ contract EmissionManagerTest is Test {
             emissionManager.restartTimeframe(),
             restartTimeframe + 1,
             "Restart timeframe should be updated"
+        );
+        assertEq(emissionManager.minTickSize(), minTickSize, "MinTickSize should be updated");
+    }
+
+    function test_initialize_setsMinTickSizeAndEmitsEvent()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        uint256 testMinTickSize = 5e9; // 5 OHM
+
+        // Expect MinTickSizeChanged event to be emitted
+        vm.expectEmit(address(emissionManager));
+        emit MinTickSizeChanged(testMinTickSize);
+
+        // Initialize the emissions manager with a specific minTickSize
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    minTickSize: testMinTickSize,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+
+        // Check that minTickSize was set correctly
+        assertEq(
+            emissionManager.minTickSize(),
+            testMinTickSize,
+            "MinTickSize should be set during initialization"
+        );
+    }
+
+    function test_initialize_withZeroMinTickSize_success()
+        public
+        givenShutdown
+        givenRestartTimeframeElapsed
+    {
+        uint256 testMinTickSize = 0;
+
+        // Expect MinTickSizeChanged event to be emitted
+        vm.expectEmit(address(emissionManager));
+        emit MinTickSizeChanged(testMinTickSize);
+
+        // Initialize the emissions manager with minTickSize = 0
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSizeScalar: tickSizeScalar,
+                    minPriceScalar: minPriceScalar,
+                    minTickSize: testMinTickSize,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+
+        // Check that minTickSize was set correctly
+        assertEq(
+            emissionManager.minTickSize(),
+            testMinTickSize,
+            "MinTickSize should be set to 0 during initialization"
         );
     }
 
@@ -2988,6 +3112,53 @@ contract EmissionManagerTest is Test {
         );
     }
 
+    // setMinTickSize tests
+
+    function test_setMinTickSize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setMinTickSize function with the wrong caller
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
+        vm.expectRevert(err);
+
+        vm.prank(rando_);
+        emissionManager.setMinTickSize(1e9);
+    }
+
+    function test_setMinTickSize_success() public {
+        uint256 newMinTickSize = 5e9; // 5 OHM
+
+        // Expect event to be emitted
+        vm.expectEmit(address(emissionManager));
+        emit MinTickSizeChanged(newMinTickSize);
+
+        // Set new minimum tick size
+        vm.prank(guardian);
+        emissionManager.setMinTickSize(newMinTickSize);
+
+        // Confirm new value
+        assertEq(emissionManager.minTickSize(), newMinTickSize, "MinTickSize should be updated");
+    }
+
+    function test_setMinTickSize_zeroValue_success() public {
+        uint256 newMinTickSize = 0;
+
+        // Expect event to be emitted
+        vm.expectEmit(address(emissionManager));
+        emit MinTickSizeChanged(newMinTickSize);
+
+        // Set minimum tick size to 0
+        vm.prank(guardian);
+        emissionManager.setMinTickSize(newMinTickSize);
+
+        // Confirm new value
+        assertEq(
+            emissionManager.minTickSize(),
+            newMinTickSize,
+            "MinTickSize should be updated to 0"
+        );
+    }
+
     // getSupply tests
 
     function test_getSupply_success() public {
@@ -3173,6 +3344,69 @@ contract EmissionManagerTest is Test {
         uint256 expectedSize = (target_ * tickSizeScalar) / 1e18;
 
         assertEq(emissionManager.getSizeFor(target_), expectedSize, "getSizeFor");
+    }
+
+    function test_getSizeFor_whenMinTickSizeIsZero_returnsCalculatedTickSize() public {
+        // Set minTickSize to 0
+        vm.prank(guardian);
+        emissionManager.setMinTickSize(0);
+
+        uint256 target = 100e9; // 100 OHM target
+        uint256 expectedSize = (target * tickSizeScalar) / 1e18;
+
+        assertEq(
+            emissionManager.getSizeFor(target),
+            expectedSize,
+            "Should return calculated tick size when minTickSize is 0"
+        );
+    }
+
+    function test_getSizeFor_whenTargetBelowMinimum_returnsZero() public {
+        // Set minTickSize to a value that will make small targets return 0
+        uint256 minTick = 10e9; // 10 OHM minimum
+        vm.prank(guardian);
+        emissionManager.setMinTickSize(minTick);
+
+        // Use a target that will result in a calculated tick size below the minimum
+        uint256 target = 5e9; // 5 OHM target
+        uint256 calculatedSize = (target * tickSizeScalar) / 1e18;
+
+        // Verify the calculated size is indeed less than the minimum
+        assertLt(
+            calculatedSize,
+            minTick,
+            "Calculated size should be less than minimum for this test"
+        );
+
+        assertEq(
+            emissionManager.getSizeFor(target),
+            0,
+            "Should return 0 when calculated tick size is below minimum"
+        );
+    }
+
+    function test_getSizeFor_whenTargetAboveMinimum_returnsCalculatedTickSize() public {
+        // Set minTickSize to a reasonable value
+        uint256 minTick = 10e9; // 10 OHM minimum
+        vm.prank(guardian);
+        emissionManager.setMinTickSize(minTick);
+
+        // Use a target that will result in a calculated tick size above the minimum
+        uint256 target = 100e9; // 100 OHM target
+        uint256 expectedSize = (target * tickSizeScalar) / 1e18;
+
+        // Verify the calculated size is indeed greater than the minimum
+        assertGt(
+            expectedSize,
+            minTick,
+            "Calculated size should be greater than minimum for this test"
+        );
+
+        assertEq(
+            emissionManager.getSizeFor(target),
+            expectedSize,
+            "Should return calculated tick size when above minimum"
+        );
     }
 
     function test_execute_whenCalculatedTickSizeIsZero_setsTargetToZero()
