@@ -113,4 +113,44 @@ contract TransferFromDEPOSTest is DEPOSTest {
         );
         _assertUserPosition(OTHER, 0, 1);
     }
+
+    function test_transferToSelf_success()
+        public
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        )
+    {
+        // Get initial state
+        uint256 initialBalance = DEPOS.balanceOf(address(this));
+        uint256[] memory initialUserPositions = DEPOS.getUserPositionIds(address(this));
+
+        // Call function - transfer to self
+        DEPOS.transferFrom(address(this), address(this), 0);
+
+        // ERC721 balance should remain the same
+        _assertERC721Balance(address(this), initialBalance);
+        _assertERC721Owner(0, address(this), true);
+
+        // Position record should remain unchanged
+        _assertPosition(
+            0,
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        );
+
+        // Position ownership should remain unchanged
+        assertEq(
+            DEPOS.getUserPositionIds(address(this)).length,
+            initialUserPositions.length,
+            "getUserPositionIds length should remain the same"
+        );
+        _assertUserPosition(address(this), 0, initialUserPositions.length);
+    }
 }
