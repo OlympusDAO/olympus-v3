@@ -207,6 +207,22 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         return redemption;
     }
 
+    /// @inheritdoc IDepositRedemptionVault
+    /// @dev        Notes:
+    ///             - This function is gas-intensive for users with many redemptions.
+    ///             - The index of an element in the returned array is the redemption ID.
+    ///             - Redemptions with an amount of 0 (fully redeemed) are included in the array.
+    function getUserRedemptions(address user_) external view returns (UserRedemption[] memory) {
+        uint16 count = _userRedemptionCount[user_];
+        UserRedemption[] memory redemptions = new UserRedemption[](count);
+
+        for (uint16 i = 0; i < count; i++) {
+            redemptions[i] = _userRedemptions[_getUserRedemptionKey(user_, i)];
+        }
+
+        return redemptions;
+    }
+
     // ========== REDEMPTION FLOW ========== //
 
     modifier onlyValidRedemptionId(address user_, uint16 redemptionId_) {
