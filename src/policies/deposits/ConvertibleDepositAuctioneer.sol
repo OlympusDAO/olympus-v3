@@ -87,11 +87,8 @@ contract ConvertibleDepositAuctioneer is
     /// @notice The deposit asset
     IERC20 internal immutable _DEPOSIT_ASSET;
 
-    /// @notice Array of deposit periods
+    /// @notice Array of enabled deposit periods
     EnumerableSet.UintSet internal _depositPeriods;
-
-    /// @notice The number of deposit periods that are enabled
-    uint256 internal _depositPeriodsCount;
 
     /// @notice Previous tick for each deposit period
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -248,7 +245,7 @@ contract ConvertibleDepositAuctioneer is
 
             // Update the current tick size
             if (output.tickSize != _currentTickSize) {
-                if (_depositPeriodsCount > 1) {
+                if (_depositPeriods.length() > 1) {
                     // Before updating the global tick size, ensure that all other periods are updated
                     // This ensures that if the tick size changes, the change will not be
                     // applied retroactively
@@ -468,7 +465,7 @@ contract ConvertibleDepositAuctioneer is
             // It is also adjusted by the number of deposit periods that are enabled, otherwise each auction would have too much capacity added
             uint256 capacityToAdd = (_auctionParameters.target * timePassed) /
                 1 days /
-                _depositPeriodsCount;
+                _depositPeriods.length();
 
             // Skip if the new capacity is 0
             if (capacityToAdd == 0) return previousTick;
@@ -665,9 +662,6 @@ contract ConvertibleDepositAuctioneer is
             uint48(block.timestamp)
         );
 
-        // Increment the count
-        _depositPeriodsCount++;
-
         // Emit event for actual enabling
         emit DepositPeriodEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
     }
@@ -688,9 +682,6 @@ contract ConvertibleDepositAuctioneer is
 
         // Remove the tick
         delete _depositPeriodPreviousTicks[depositPeriod_];
-
-        // Decrement the count
-        _depositPeriodsCount--;
 
         // Emit event for actual disabling
         emit DepositPeriodDisabled(address(_DEPOSIT_ASSET), depositPeriod_);
@@ -790,7 +781,7 @@ contract ConvertibleDepositAuctioneer is
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getDepositPeriodsCount() external view override returns (uint256) {
-        return _depositPeriodsCount;
+        return _depositPeriods.length();
     }
 
     // ========== ADMIN FUNCTIONS ========== //
