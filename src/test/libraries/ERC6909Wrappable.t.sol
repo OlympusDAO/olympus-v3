@@ -670,4 +670,66 @@ contract ERC6909WrappableTest is Test {
             "Wrapped token mismatch for token 1"
         );
     }
+
+    // Transfer
+    // when transferring to self
+    //  [X] the balance remains unchanged
+    //  [X] the total supply remains unchanged
+    //  [X] the allowance remains unchanged (for transferFrom)
+    function test_transfer_whenTransferringToSelf_ERC6909() public givenRecipientHasERC6909Tokens {
+        // Get initial state
+        uint256 initialBalance = token.balanceOf(alice, TOKEN_ID);
+        uint256 initialTotalSupply = token.totalSupply(TOKEN_ID);
+
+        // Transfer to self
+        vm.prank(alice);
+        token.transfer(alice, TOKEN_ID, AMOUNT);
+
+        // Balance should remain the same
+        assertERC6909Balance(alice, initialBalance);
+        assertERC6909TotalSupply(initialTotalSupply);
+    }
+
+    function test_transferFrom_whenTransferringToSelf_ERC6909()
+        public
+        givenRecipientHasERC6909Tokens
+        givenRecipientHasApprovedERC6909TokenSpending
+    {
+        // Get initial state
+        uint256 initialBalance = token.balanceOf(alice, TOKEN_ID);
+        uint256 initialTotalSupply = token.totalSupply(TOKEN_ID);
+        uint256 initialAllowance = token.allowance(alice, address(this), TOKEN_ID);
+
+        // Transfer to self using transferFrom
+        token.transferFrom(alice, alice, TOKEN_ID, AMOUNT);
+
+        // Balance should remain the same
+        assertERC6909Balance(alice, initialBalance);
+        assertERC6909TotalSupply(initialTotalSupply);
+
+        // Allowance should be reduced by the transfer amount
+        assertERC6909Allowance(alice, initialAllowance - AMOUNT);
+    }
+
+    function test_transfer_whenTransferringToSelf_ERC20()
+        public
+        givenERC20TokenExists
+        givenRecipientHasERC20Tokens
+    {
+        // Get initial state
+        CloneableReceiptToken wrappedToken = CloneableReceiptToken(token.getWrappedToken(TOKEN_ID));
+        uint256 initialBalance = wrappedToken.balanceOf(alice);
+        uint256 initialTotalSupply = wrappedToken.totalSupply();
+
+        // Ensure alice has enough balance (she should have AMOUNT from the modifier)
+        assertGe(initialBalance, AMOUNT, "Alice should have sufficient balance");
+
+        // Transfer to self using ERC20 interface
+        vm.prank(alice);
+        wrappedToken.transfer(alice, AMOUNT);
+
+        // Balance should remain the same
+        assertERC20Balance(alice, initialBalance);
+        assertERC20TotalSupply(initialTotalSupply);
+    }
 }
