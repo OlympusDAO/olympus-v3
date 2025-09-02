@@ -306,7 +306,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     }
 
     // when the borrow amount is less than one vault share
-    //  [ ] it reverts
+    //  [X] it reverts
 
     function test_whenBorrowAmountIsLessThanOneShare_reverts(
         uint256 amount_
@@ -320,7 +320,22 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
         givenBorrow(BORROW_AMOUNT)
     {
-        // Determine an amount that would be less than one share
+        // Determine an amount that is less than one share
+        uint256 oneShareInAssets = vault.previewRedeem(1);
+        amount_ = bound(amount_, 1, oneShareInAssets);
+
+        // Expect revert
+        _expectRevertZeroAmount();
+
+        // Call function
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: amount_
+            })
+        );
     }
 
     // [X] it transfers the assets to the recipient
