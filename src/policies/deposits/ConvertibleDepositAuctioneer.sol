@@ -788,7 +788,6 @@ contract ConvertibleDepositAuctioneer is
     function getPendingDepositPeriodChanges()
         external
         view
-        override
         returns (PendingDepositPeriodChange[] memory)
     {
         return _pendingDepositPeriodChanges;
