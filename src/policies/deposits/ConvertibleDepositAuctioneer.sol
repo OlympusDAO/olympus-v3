@@ -931,10 +931,11 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             This function performs the following:
     ///             - Performs validation of the inputs
+    ///             - Captures the current tick state for all enabled deposit periods
+    ///             - Stores the auction results for the previous period
     ///             - Sets the auction parameters
-    ///             - Adjusts the current tick capacity and price, if necessary
-    ///             - Resets the tick size to the standard
-    ///             - Stores the auction results for the period
+    ///             - Sets the tick parameters for all enabled deposit periods
+    ///             - Processes any pending deposit period changes
     ///
     ///             This function reverts if:
     ///             - The caller does not have the ROLE_EMISSION_MANAGER role
@@ -1017,6 +1018,15 @@ contract ConvertibleDepositAuctioneer is
     ///             - The auction parameters are invalid
     ///             - The tick step is invalid
     ///             - The auction tracking period is invalid
+    ///
+    ///             This function performs the following:
+    ///             - Sets the auction parameters
+    ///             - Sets the tick step
+    ///             - Sets the auction tracking period
+    ///             - Ensures all existing ticks have the current parameters
+    ///             - Processes any pending deposit period changes with the new parameters (including any that were pending prior to disabling)
+    ///             - Resets the day state
+    ///             - Resets the auction results
     function _enable(bytes calldata enableData_) internal override {
         if (enableData_.length != _ENABLE_PARAMS_LENGTH)
             revert ConvertibleDepositAuctioneer_InvalidParams("enable data");
