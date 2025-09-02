@@ -331,14 +331,15 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // - Ownership
         // - Destination address
 
+        // Remove from user positions on the source address
+        // This is done first, so that a self-transfer does not result in removal
+        if (!_userPositions[from_].remove(tokenId_)) revert DEPOS_InvalidPositionId(tokenId_);
+
         // Update the position record
         position.owner = to_;
 
         // Add to user positions on the destination address
         _userPositions[to_].add(tokenId_);
-
-        // Remove from user positions on the source address
-        if (!_userPositions[from_].remove(tokenId_)) revert DEPOS_InvalidPositionId(tokenId_);
 
         // Call `transferFrom` on the parent contract
         super.transferFrom(from_, to_, tokenId_);
