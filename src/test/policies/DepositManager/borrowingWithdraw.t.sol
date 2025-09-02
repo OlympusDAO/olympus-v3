@@ -320,9 +320,12 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
         givenBorrow(BORROW_AMOUNT)
     {
+        // Accrue some yield to so that 1 share > 1 asset
+        _accrueYield(1000e18);
+
         // Determine an amount that is less than one share
         uint256 oneShareInAssets = vault.previewRedeem(1);
-        amount_ = bound(amount_, 1, oneShareInAssets);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
 
         // Expect revert
         _expectRevertZeroAmount();
