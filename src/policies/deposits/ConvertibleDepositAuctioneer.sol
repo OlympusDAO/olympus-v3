@@ -82,7 +82,7 @@ contract ConvertibleDepositAuctioneer is
     // ========== STATE VARIABLES ========== //
 
     /// @notice Whether the deposit period is enabled
-    mapping(uint8 depositPeriod => bool isEnabled) internal _depositPeriodsEnabled;
+    mapping(uint8 depositPeriod => bool isDepositPeriodEnabled) internal _depositPeriodsEnabled;
 
     /// @notice The deposit asset
     IERC20 internal immutable _DEPOSIT_ASSET;
