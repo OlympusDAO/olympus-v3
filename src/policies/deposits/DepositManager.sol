@@ -961,20 +961,25 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     // ========== ADMIN FUNCTIONS ==========
 
     /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
-    /// @dev    This function is restricted to the admin role and prevents rescue of any managed assets or their vault tokens
-    ///         to protect deposited user funds
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
+    ///         - token_ is a managed asset or vault
+    ///         - token_ is the zero address
+    ///         - Depending on the token implementation, it may revert if the transfer amount (balance) is zero
+    ///
     /// @param  token_ The address of the ERC20 token to rescue
-    function rescue(address token_) external onlyEnabled onlyAdminRole {
+    function rescue(address token_) external onlyAdminRole {
         // Validate that the token is not a managed asset or vault token
         uint256 configuredAssetsLength = _configuredAssets.length;
-        for (uint256 i = 0; i < configuredAssetsLength; i++) {
+        for (uint256 i = 0; i < configuredAssetsLength; ) {
             IERC20 asset = _configuredAssets[i];
-            // Prevent rescue of the asset itself
-            if (token_ == address(asset)) revert DepositManager_CannotRescueAsset(token_);
-
-            // Prevent rescue of the vault token if configured
-            if (token_ == _assetConfigurations[asset].vault)
+            // Prevent rescue of a configured asset or vault
+            if (token_ == address(asset) || token_ == _assetConfigurations[asset].vault)
                 revert DepositManager_CannotRescueAsset(token_);
+
+            unchecked {
+                i++;
+            }
         }
 
         // Transfer the token balance to TRSRY
