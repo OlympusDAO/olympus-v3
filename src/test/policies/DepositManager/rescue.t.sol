@@ -23,7 +23,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
     // ========== rescue ==========
 
     // given the contract is disabled
-    //  [ ] it reverts
+    //  [X] it reverts
     function test_rescue_givenContractDisabled_reverts() public {
         randomToken.mint(address(depositManager), 100e18);
 
@@ -33,7 +33,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
     }
 
     // given the caller is not an admin
-    //  [ ] it reverts
+    //  [X] it reverts
     function test_rescue_givenCallerNotAdmin_reverts() public givenIsEnabled {
         randomToken.mint(address(depositManager), 100e18);
 
@@ -43,17 +43,50 @@ contract DepositManagerRescueTest is DepositManagerTest {
     }
 
     // given the token address is zero
-    //  [ ] it reverts
-    function test_rescue_givenTokenAddressZero_reverts() public givenIsEnabled {
-        vm.expectRevert(IDepositManager.DepositManager_ZeroAddress.selector);
+    //  given there are no managed assets
+    //   [X] it reverts
+    //  given the managed asset has a vault with the zero address
+    //   [X] it reverts
+    //  given the managed asset has a vault with a non-zero address
+    //   [X] it reverts
+    function test_rescue_givenNoManagedAssets_givenTokenAddressZero_reverts()
+        public
+        givenIsEnabled
+    {
+        vm.expectRevert("call to non-contract address 0x0000000000000000000000000000000000000000");
+
+        vm.prank(ADMIN);
+        depositManager.rescue(address(0));
+    }
+
+    function test_rescue_givenAssetWithZeroVault_givenTokenAddressZero_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAddedWithZeroAddress
+    {
+        vm.expectRevert(abi.encodeWithSelector(IDepositManager.DepositManager_CannotRescueAsset.selector, address(0)));
+
+        vm.prank(ADMIN);
+        depositManager.rescue(address(0));
+    }
+
+    function test_rescue_givenAssetWithVault_givenTokenAddressZero_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        vm.expectRevert("call to non-contract address 0x0000000000000000000000000000000000000000");
+
         vm.prank(ADMIN);
         depositManager.rescue(address(0));
     }
 
     // given the token address is a configured asset
     //  given the asset is disabled
-    //   [ ] it reverts
-    //  [ ] it reverts
+    //   [X] it reverts
+    //  [X] it reverts
     function test_rescue_givenTokenIsConfiguredAsset_givenAssetDisabled_reverts()
         public
         givenIsEnabled
@@ -95,7 +128,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
     }
 
     // given the token address is a configured vault
-    //  [ ] it reverts
+    //  [X] it reverts
     function test_rescue_givenTokenIsConfiguredVault_reverts()
         public
         givenIsEnabled
@@ -113,8 +146,8 @@ contract DepositManagerRescueTest is DepositManagerTest {
 
     // given the token address is not a configured asset or vault
     //  given the token has zero balance
-    //   [ ] it does not revert
-    //   [ ] it does not emit an event
+    //   [X] it does not revert
+    //   [X] it does not emit an event
     function test_rescue_givenTokenNotConfigured_givenZeroBalance_doesNotRevertOrEmit()
         public
         givenIsEnabled
@@ -127,8 +160,8 @@ contract DepositManagerRescueTest is DepositManagerTest {
     }
 
     //  given the token has a balance
-    //   [ ] it transfers the balance to TRSRY
-    //   [ ] it emits a TokenRescued event
+    //   [X] it transfers the balance to TRSRY
+    //   [X] it emits a TokenRescued event
     function test_rescue_givenTokenNotConfigured_givenHasBalance_transfersToTrsryAndEmits()
         public
         givenIsEnabled
