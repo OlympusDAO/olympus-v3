@@ -38,7 +38,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     bytes32 public constant ROLE_HEART = "heart";
 
     /// @notice The length of the `EnableParams` struct in bytes
-    uint256 internal constant ENABLE_PARAMS_LENGTH = 224;
+    uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
 
     // ========== STATE VARIABLES ========== //
 
@@ -70,20 +70,29 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @notice The base emission rate, in OHM scale.
     /// @dev    e.g. 2e5 = 0.02%
     uint256 public baseEmissionRate;
+
+    /// @notice The minimum premium for bond markets created by the manager, in terms of ONE_HUNDRED_PERCENT.
+    /// @dev    A minimum premium of 1e18 would require the market price to be 100% above the backing price (i.e. double).
     uint256 public minimumPremium;
-    uint48 public vestingPeriod; // initialized at 0
+
+    /// @notice The vesting period for bond markets created by the manager, in seconds.
+    /// @dev    Initialized at 0, which means no vesting.
+    uint48 public vestingPeriod;
+
+    /// @notice The backed price of OHM, in reserve scale.
     uint256 public backing;
+
+    /// @notice Used to track the number of beats that have occurred.
     uint8 public beatCounter;
+
+    /// @notice The ID of the active bond market (or 0)
     uint256 public activeMarketId;
 
-    /// @notice The multiplier applied to the tick size, in terms of ONE_HUNDRED_PERCENT
-    uint256 public tickSizeScalar;
+    /// @notice The fixed tick size for CD auctions, in OHM scale (9 decimals)
+    uint256 public tickSize;
 
     /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
     uint256 public minPriceScalar;
-
-    /// @notice The minimum tick size for CD auctions, in OHM scale (9 decimals)
-    uint256 public minTickSize;
 
     uint8 internal _oracleDecimals;
     // solhint-disable immutable-vars-naming
@@ -201,9 +210,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///             - If the auction tracking period has finished and there is a deficit of OHM sold, attempts to create a bond market
     ///             - If market creation fails (external dependency), emits BondMarketCreationFailed and continues execution
     ///
-    ///             Note that if the CD auction is not running (e.g. the auctioneer contract is disabled), this function will consider OHM to have been under-sold across the auction tracking period. This will result in a bond market being created at the end of the auction tracking period in an attempt to sell the remaining OHM.
-    ///
     ///             Notes:
+    ///             - If the CD auction is not running (e.g. the auctioneer contract is disabled), this function will consider OHM to have been under-sold across the auction tracking period. This will result in a bond market being created at the end of the auction tracking period in an attempt to sell the remaining OHM.
     ///             - If there are delays in the heartbeat (which calls this function), auction result tracking will be affected.
     function execute() external onlyRole(ROLE_HEART) {
         // Don't do anything if disabled
@@ -222,10 +230,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         (, , uint256 emission) = getNextEmission();
 
         // Calculate tick size for the emission
-        uint256 tickSize = getSizeFor(emission);
+        uint256 calculatedTickSize = getSizeFor(emission);
 
         // If calculated tick size is 0, disable the auction by setting target to 0
-        if (tickSize == 0) {
+        if (calculatedTickSize == 0) {
             emission = 0;
         }
 
@@ -236,7 +244,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         //
         // Reverts are expected in the following scenarios:
         // - If the target is > 0 (auction active) and minPrice is 0, the call will revert (which we would want)
-        cdAuctioneer.setAuctionParameters(emission, tickSize, getMinPriceFor(_getCurrentPrice()));
+        cdAuctioneer.setAuctionParameters(
+            emission,
+            calculatedTickSize,
+            getMinPriceFor(_getCurrentPrice())
+        );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
         if (cdAuctioneer.getAuctionResultsNextIndex() == 0) {
@@ -296,8 +308,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (params.minimumPremium == 0) revert InvalidParam("minimumPremium");
         if (params.backing == 0) revert InvalidParam("backing");
         if (params.restartTimeframe == 0) revert InvalidParam("restartTimeframe");
-        if (params.tickSizeScalar == 0 || params.tickSizeScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Tick Size Scalar");
+        if (params.tickSize == 0) revert InvalidParam("Tick Size");
         if (params.minPriceScalar == 0 || params.minPriceScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Min Price Scalar");
 
@@ -306,16 +317,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         minimumPremium = params.minimumPremium;
         backing = params.backing;
         restartTimeframe = params.restartTimeframe;
-        tickSizeScalar = params.tickSizeScalar;
+        tickSize = params.tickSize;
         minPriceScalar = params.minPriceScalar;
-        minTickSize = params.minTickSize;
 
         emit MinimumPremiumChanged(params.minimumPremium);
         emit BackingChanged(params.backing);
         emit RestartTimeframeChanged(params.restartTimeframe);
-        emit TickSizeScalarChanged(params.tickSizeScalar);
+        emit TickSizeChanged(params.tickSize);
         emit MinPriceScalarChanged(params.minPriceScalar);
-        emit MinTickSizeChanged(params.minTickSize);
     }
 
     // ========== BOND CALLBACK ========== //
@@ -463,10 +472,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         token.safeTransfer(address(TRSRY), token.balanceOf(address(this)));
     }
 
-    /// @notice set the base emissions rate
-    /// @param changeBy_ uint256 added or subtracted from baseEmissionRate
-    /// @param forNumBeats_ uint256 number of times to change baseEmissionRate by changeBy_
-    /// @param add bool determining addition or subtraction to baseEmissionRate
+    /// @notice Set the base emissions rate
+    ///
+    /// @param  changeBy_       uint256 added or subtracted from baseEmissionRate
+    /// @param  forNumBeats_    uint256 number of times to change baseEmissionRate by changeBy_
+    /// @param  add             bool determining addition or subtraction to baseEmissionRate
     function changeBaseRate(
         uint256 changeBy_,
         uint48 forNumBeats_,
@@ -485,8 +495,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit BaseRateChanged(changeBy_, forNumBeats_, add);
     }
 
-    /// @notice set the minimum premium for emissions
-    /// @param newMinimumPremium_ uint256
+    /// @notice Set the minimum premium for emissions
+    /// @dev    This function reverts if:
+    ///         - newMinimumPremium_ is 0
+    ///
+    /// @param  newMinimumPremium_  The new minimum premium, in terms of ONE_HUNDRED_PERCENT
     function setMinimumPremium(uint256 newMinimumPremium_) external onlyAdminRole {
         if (newMinimumPremium_ == 0) revert InvalidParam("newMinimumPremium");
 
@@ -495,7 +508,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit MinimumPremiumChanged(newMinimumPremium_);
     }
 
-    /// @notice set the new vesting period in seconds
+    /// @notice Set the new bond vesting period in seconds
+    /// @dev    This function reverts if:
+    ///         - newVestingPeriod_ is more than 31536000 (1 year in seconds)
+    ///
     /// @param newVestingPeriod_ uint48
     function setVestingPeriod(uint48 newVestingPeriod_) external onlyAdminRole {
         // Verify that the vesting period isn't more than a year
@@ -506,9 +522,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit VestingPeriodChanged(newVestingPeriod_);
     }
 
-    /// @notice allow governance to adjust backing price if deviated from reality
-    /// @dev note if adjustment is more than 33% down, contract should be redeployed
-    /// @param newBacking to adjust to
+    /// @notice Allow governance to adjust backing price if deviated from reality
+    /// @dev    This function reverts if:
+    ///         - newBacking is 0
+    ///         - newBacking is less than 90% of current backing (to prevent large sudden drops)
+    ///
+    ///         Note: if adjustment is more than 33% down, contract should be redeployed
+    ///
+    /// @param  newBacking  to adjust to
     /// TODO maybe put in a timespan arg so it can be smoothed over time if desirable
     function setBacking(uint256 newBacking) external onlyAdminRole {
         // Backing cannot be reduced by more than 10% at a time
@@ -518,8 +539,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit BackingChanged(newBacking);
     }
 
-    /// @notice allow governance to adjust the timeframe for restart after shutdown
-    /// @param newTimeframe to adjust it to
+    /// @notice Allow governance to adjust the timeframe for restart after shutdown
+    /// @dev    This function reverts if:
+    ///         - newTimeframe is 0
+    ///
+    /// @param  newTimeframe    to adjust it to
     function setRestartTimeframe(uint48 newTimeframe) external onlyAdminRole {
         // Restart timeframe must be greater than 0
         if (newTimeframe == 0) revert InvalidParam("newRestartTimeframe");
@@ -530,8 +554,12 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice allow governance to set the bond contracts used by the emission manager
-    /// @param bondAuctioneer_ address of the bond auctioneer contract
-    /// @param teller_ address of the bond teller contract
+    /// @dev    This function reverts if:
+    ///         - bondAuctioneer_ is the zero address
+    ///         - teller_ is the zero address
+    ///
+    /// @param  bondAuctioneer_ address of the bond auctioneer contract
+    /// @param  teller_         address of the bond teller contract
     function setBondContracts(address bondAuctioneer_, address teller_) external onlyAdminRole {
         // Bond contracts cannot be set to the zero address
         if (bondAuctioneer_ == address(0)) revert InvalidParam("bondAuctioneer");
@@ -543,8 +571,12 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit BondContractsSet(bondAuctioneer_, teller_);
     }
 
-    /// @notice allow governance to set the CD contract used by the emission manager
-    /// @param cdAuctioneer_ address of the cd auctioneer contract
+    /// @notice Allow governance to set the CD contract used by the emission manager
+    /// @dev    This function reverts if:
+    ///         - cdAuctioneer_ is the zero address
+    ///         - The deposit asset of the CDAuctioneer is not the same as the reserve asset in this contract
+    ///
+    /// @param  cdAuctioneer_   address of the cd auctioneer contract
     function setCDAuctionContract(address cdAuctioneer_) external onlyAdminRole {
         // Auction contract cannot be set to the zero address
         if (cdAuctioneer_ == address(0)) revert InvalidParam("zero address");
@@ -559,33 +591,30 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit ConvertibleDepositAuctioneerSet(cdAuctioneer_);
     }
 
-    /// @notice allow governance to set the CD tick size scalar
-    /// @param newScalar as a percentage in 18 decimals
-    function setTickSizeScalar(uint256 newScalar) external onlyAdminRole {
-        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Tick Size Scalar");
-        tickSizeScalar = newScalar;
+    /// @notice Allow governance to set the CD tick size
+    /// @dev    This function reverts if:
+    ///         - newTickSize_ is 0
+    ///
+    /// @param  newTickSize_    as a fixed amount in OHM decimals (9)
+    function setTickSize(uint256 newTickSize_) external onlyAdminRole {
+        if (newTickSize_ == 0) revert InvalidParam("Tick Size");
+        tickSize = newTickSize_;
 
-        emit TickSizeScalarChanged(newScalar);
+        emit TickSizeChanged(newTickSize_);
     }
 
-    /// @notice allow governance to set the CD minimum price scalar
-    /// @param newScalar as a percentage in 18 decimals
+    /// @notice Allow governance to set the CD minimum price scalar
+    /// @dev    This function reverts if:
+    ///         - newScalar is 0
+    ///         - newScalar is greater than ONE_HUNDRED_PERCENT (100% in 18 decimals)
+    ///
+    /// @param  newScalar   as a percentage in 18 decimals
     function setMinPriceScalar(uint256 newScalar) external onlyAdminRole {
         if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
             revert InvalidParam("Min Price Scalar");
         minPriceScalar = newScalar;
 
         emit MinPriceScalarChanged(newScalar);
-    }
-
-    /// @notice allow governance to set the minimum tick size for CD auctions
-    ///
-    /// @param minTickSize_ minimum tick size in OHM decimals (9)
-    function setMinTickSize(uint256 minTickSize_) external onlyAdminRole {
-        minTickSize = minTickSize_;
-
-        emit MinTickSizeChanged(minTickSize_);
     }
 
     // =========- VIEW FUNCTIONS ========== //
@@ -633,19 +662,15 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice get CD auction tick size for a given target
-    /// @dev    Returns the calculated tick size, which can be 0 if target is 0 or rounding causes it to be 0
-    ///         If the calculated tick size is less than the minTickSize, it will return 0
+    /// @dev    Returns the fixed tick size if target >= tick size, otherwise returns 0
     ///
     /// @param  target size of day's CD auction
     /// @return size of tick
     function getSizeFor(uint256 target) public view returns (uint256 size) {
-        // Return the calculated tick size, allowing 0 when target is 0 or rounding causes it to be 0
-        size = (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+        // Return the tick size if target is at least the tick size, otherwise return 0
+        if (target < tickSize) return 0;
 
-        // If the calculated tick size is less than the minTickSize, return 0
-        if (size < minTickSize) return 0;
-
-        return size;
+        return tickSize;
     }
 
     /// @notice Get CD auction minimum price for a given price input
