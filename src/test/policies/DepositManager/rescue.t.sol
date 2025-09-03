@@ -161,7 +161,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
         depositManager.rescue(address(randomToken));
 
         assertEq(randomToken.balanceOf(address(depositManager)), 0);
-        assertEq(randomToken.balanceOf(address(depositManager.TRSRY())), 0);
+        assertEq(randomToken.balanceOf(address(trsry)), 0);
     }
 
     //  given the token has a balance
@@ -181,6 +181,6 @@ contract DepositManagerRescueTest is DepositManagerTest {
         depositManager.rescue(address(randomToken));
 
         assertEq(randomToken.balanceOf(address(depositManager)), 0);
-        assertEq(randomToken.balanceOf(address(depositManager.TRSRY())), tokenAmount);
+        assertEq(randomToken.balanceOf(address(trsry)), tokenAmount);
     }
 }
