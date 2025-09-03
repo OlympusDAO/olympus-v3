@@ -19,6 +19,7 @@ optimizer_runs = 10000
 verbosity = 3
 
 # Operator is too large - it needs to only use 10 optimizer runs
+# The "size" script in package.json replicates these overrides, as "forge build --sizes" does not use the profiles defined here
 additional_compiler_profiles = [
     { name = "ten-runs", optimizer_runs = 10 },
     { name = "five-thousand-runs", optimizer_runs = 5000 },
