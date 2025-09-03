@@ -965,34 +965,24 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///         to protect deposited user funds
     /// @param  token_ The address of the ERC20 token to rescue
     function rescue(address token_) external onlyEnabled onlyAdminRole {
-        // Validate that the token address is not zero
-        if (token_ == address(0)) {
-            revert DepositManager_ZeroAddress();
-        }
-
         // Validate that the token is not a managed asset or vault token
         uint256 configuredAssetsLength = _configuredAssets.length;
         for (uint256 i = 0; i < configuredAssetsLength; i++) {
             IERC20 asset = _configuredAssets[i];
-            AssetConfiguration memory config = _assetConfigurations[asset];
-
             // Prevent rescue of the asset itself
-            if (token_ == address(asset)) {
-                revert DepositManager_CannotRescueAsset(token_);
-            }
+            if (token_ == address(asset)) revert DepositManager_CannotRescueAsset(token_);
 
             // Prevent rescue of the vault token if configured
-            if (config.vault != address(0) && token_ == config.vault) {
+            if (token_ == _assetConfigurations[asset].vault)
                 revert DepositManager_CannotRescueAsset(token_);
-            }
         }
 
         // Transfer the token balance to TRSRY
-        ERC20 token = ERC20(token_);
-        uint256 balance = token.balanceOf(address(this));
-        if (balance > 0) {
-            token.safeTransfer(address(TRSRY), balance);
-            emit TokenRescued(token_, balance);
-        }
+        // This will revert if the token is not a valid ERC20 or the zero address
+        // It may also revert if the balance is 0 (depending on the token implementation)
+        // The balance check has been excluded to save code space
+        uint256 balance = ERC20(token_).balanceOf(address(this));
+        ERC20(token_).safeTransfer(address(TRSRY), balance);
+        emit TokenRescued(token_, balance);
     }
 }
