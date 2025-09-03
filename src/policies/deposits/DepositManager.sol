@@ -16,7 +16,6 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -39,11 +38,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @notice The receipt token manager for creating receipt tokens
     ReceiptTokenManager internal immutable _RECEIPT_TOKEN_MANAGER;
-
-    // ========== MODULES ==========
-
-    /// @notice The Treasury module
-    TRSRYv1 public TRSRY;
 
     // ========== STATE VARIABLES ========== //
 
@@ -133,12 +127,10 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("ROLES");
-        dependencies[1] = toKeycode("TRSRY");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy
@@ -965,10 +957,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///         - The caller does not have the admin role
     ///         - token_ is a managed asset or vault
     ///         - token_ is the zero address
-    ///         - Depending on the token implementation, it may revert if the transfer amount (balance) is zero
     ///
     /// @param  token_ The address of the ERC20 token to rescue
-    function rescue(address token_) external onlyAdminRole {
+    function rescue(address token_) external onlyEnabled onlyAdminRole {
         // Validate that the token is not a managed asset or vault token
         uint256 configuredAssetsLength = _configuredAssets.length;
         for (uint256 i = 0; i < configuredAssetsLength; ) {
@@ -984,10 +975,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
         // Transfer the token balance to TRSRY
         // This will revert if the token is not a valid ERC20 or the zero address
-        // It may also revert if the balance is 0 (depending on the token implementation)
-        // The balance check has been excluded to save code space
         uint256 balance = ERC20(token_).balanceOf(address(this));
-        ERC20(token_).safeTransfer(address(TRSRY), balance);
-        emit TokenRescued(token_, balance);
+        address treasury = getModuleAddress(toKeycode("TRSRY"));
+        if (balance > 0 && treasury != address(0)) {
+            ERC20(token_).safeTransfer(treasury, balance);
+            emit TokenRescued(token_, balance);
+        }
     }
 }
