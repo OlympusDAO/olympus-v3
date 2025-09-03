@@ -65,7 +65,12 @@ contract DepositManagerRescueTest is DepositManagerTest {
         givenFacilityNameIsSetDefault
         givenAssetIsAddedWithZeroAddress
     {
-        vm.expectRevert(abi.encodeWithSelector(IDepositManager.DepositManager_CannotRescueAsset.selector, address(0)));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_CannotRescueAsset.selector,
+                address(0)
+            )
+        );
 
         vm.prank(ADMIN);
         depositManager.rescue(address(0));
