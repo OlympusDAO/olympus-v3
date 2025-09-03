@@ -47,6 +47,8 @@ interface IDepositManager is IAssetManager {
         uint8 depositPeriod
     );
 
+    event TokenRescued(address indexed token, uint256 amount);
+
     event AssetPeriodReclaimRateSet(
         address indexed asset,
         address indexed operator,
@@ -96,6 +98,8 @@ interface IDepositManager is IAssetManager {
     error DepositManager_ZeroAddress();
 
     error DepositManager_OutOfBounds();
+
+    error DepositManager_CannotRescueAsset(address token);
 
     // Asset Configuration Errors
     error DepositManager_OperatorNameNotSet(address operator);

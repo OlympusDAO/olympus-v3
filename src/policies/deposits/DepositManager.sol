@@ -16,6 +16,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -38,6 +39,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @notice The receipt token manager for creating receipt tokens
     ReceiptTokenManager internal immutable _RECEIPT_TOKEN_MANAGER;
+
+    // ========== MODULES ==========
+
+    /// @notice The Treasury module
+    TRSRYv1 public TRSRY;
 
     // ========== STATE VARIABLES ========== //
 
@@ -127,10 +133,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("TRSRY");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy
@@ -948,5 +956,43 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
             interfaceId == type(IDepositManager).interfaceId ||
             BaseAssetManager.supportsInterface(interfaceId) ||
             PolicyEnabler.supportsInterface(interfaceId);
+    }
+
+    // ========== ADMIN FUNCTIONS ==========
+
+    /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
+    /// @dev    This function is restricted to the admin role and prevents rescue of any managed assets or their vault tokens
+    ///         to protect deposited user funds
+    /// @param  token_ The address of the ERC20 token to rescue
+    function rescue(address token_) external onlyEnabled onlyAdminRole {
+        // Validate that the token address is not zero
+        if (token_ == address(0)) {
+            revert DepositManager_ZeroAddress();
+        }
+
+        // Validate that the token is not a managed asset or vault token
+        uint256 configuredAssetsLength = _configuredAssets.length;
+        for (uint256 i = 0; i < configuredAssetsLength; i++) {
+            IERC20 asset = _configuredAssets[i];
+            AssetConfiguration memory config = _assetConfigurations[asset];
+
+            // Prevent rescue of the asset itself
+            if (token_ == address(asset)) {
+                revert DepositManager_CannotRescueAsset(token_);
+            }
+
+            // Prevent rescue of the vault token if configured
+            if (config.vault != address(0) && token_ == config.vault) {
+                revert DepositManager_CannotRescueAsset(token_);
+            }
+        }
+
+        // Transfer the token balance to TRSRY
+        ERC20 token = ERC20(token_);
+        uint256 balance = token.balanceOf(address(this));
+        if (balance > 0) {
+            token.safeTransfer(address(TRSRY), balance);
+            emit TokenRescued(token_, balance);
+        }
     }
 }
