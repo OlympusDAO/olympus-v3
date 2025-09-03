@@ -232,7 +232,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // Calculate tick size for the emission
         uint256 calculatedTickSize = getSizeFor(emission);
 
-        // If calculated tick size is 0, disable the auction by setting target to 0
+        // If emission is below the tick size threshold, disable the auction by setting target to 0
+        // This prevents auction rounds that would be too small to be economically viable, or would have a price that increases too rapidly
         if (calculatedTickSize == 0) {
             emission = 0;
         }
@@ -661,13 +662,13 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         }
     }
 
-    /// @notice get CD auction tick size for a given target
-    /// @dev    Returns the fixed tick size if target >= tick size, otherwise returns 0
+    /// @notice Get the auction tick size for a given target
+    /// @dev    Returns the standard tick size if the target emission is at least the standard tick size.
+    ///         Otherwise, 0 is returned to indicate that the auction should be disabled.
     ///
     /// @param  target size of day's CD auction
     /// @return size of tick
     function getSizeFor(uint256 target) public view returns (uint256 size) {
-        // Return the tick size if target is at least the tick size, otherwise return 0
         if (target < tickSize) return 0;
 
         return tickSize;
