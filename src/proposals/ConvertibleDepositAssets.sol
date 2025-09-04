@@ -43,7 +43,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
     uint256 internal constant CDA_INITIAL_TARGET = 0;
     uint256 internal constant CDA_INITIAL_TICK_SIZE = 0;
     uint256 internal constant CDA_INITIAL_MIN_PRICE = 0;
-    uint256 internal constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075; // 0.75% increase
+    uint24 internal constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075; // 0.75% increase
     uint8 internal constant CDA_AUCTION_TRACKING_PERIOD = 7; // 7 days
 
     // EmissionManager parameters
@@ -52,7 +52,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
     uint256 internal constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
     uint256 internal constant EM_TICK_SIZE = 150e9; // 150 OHM
     uint256 internal constant EM_MIN_PRICE_SCALAR = 1e18; // 100% min price multiplier
-    uint256 internal constant EM_RESTART_TIMEFRAME = 950400; // 11 days
+    uint48 internal constant EM_RESTART_TIMEFRAME = 950400; // 11 days
 
     // ========== PROPOSAL ========== //
 
