@@ -470,7 +470,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                         baseEmissionsRate: 200000, // 200000 = 0.02%/day
                         minimumPremium: 1e18, // 100% premium
                         backing: 11670000000000000000, // 11.67 USDS / OHM
-                        tickSizeScalar: 20e16, // 20% of target per tick
+                        tickSize: 100e9, // 100 OHM
                         minPriceScalar: 1e18, // Minimum price is market price
                         restartTimeframe: 950400 // 11 days
                     })
