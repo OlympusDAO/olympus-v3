@@ -177,12 +177,12 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-convertible-deposit-auctioneer"
+        "name": "olympus-policy-convertible-deposit-auctioneer-1_0"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-convertible-deposit-facility"
+        "name": "olympus-policy-convertible-deposit-facility-1_0"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",
@@ -193,5 +193,25 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-heart-1_7"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-deposit-manager-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-deposit-redemption-vault-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-reserve-wrapper-1_0"
+    },
+    {
+        "addr": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
+        "chainId": 1,
+        "name": "olympus-policy-reserve-migrator-1_0"
     }
 ]
