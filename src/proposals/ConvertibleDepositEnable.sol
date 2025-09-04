@@ -162,11 +162,7 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
         // 3. Set operator name on DepositManager for ConvertibleDepositFacility
         _pushAction(
             depositManager,
-            abi.encodeWithSelector(
-                IDepositManager.setOperatorName.selector,
-                cdFacility,
-                FACILITY_NAME
-            ),
+            abi.encodeWithSelector(IDepositManager.setOperatorName.selector, cdFacility, CDF_NAME),
             "Set operator name on DepositManager for ConvertibleDepositFacility"
         );
 
@@ -323,8 +319,8 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
 
         // 3. Validate operator name is set
         require(
-            bytes(IDepositManager(depositManager).getOperatorName(cdFacility)) ==
-                bytes(FACILITY_NAME),
+            keccak256(bytes(IDepositManager(depositManager).getOperatorName(cdFacility))) ==
+                keccak256(bytes(CDF_NAME)),
             "DepositManager operator name for ConvertibleDepositFacility is incorrect"
         );
 
