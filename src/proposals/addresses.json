@@ -213,5 +213,15 @@
         "addr": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
         "chainId": 1,
         "name": "olympus-policy-reserve-migrator-1_0"
+    },
+    {
+        "addr": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+        "chainId": 1,
+        "name": "external-tokens-USDS"
+    },
+    {
+        "addr": "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
+        "chainId": 1,
+        "name": "external-tokens-sUSDS"
     }
 ]
