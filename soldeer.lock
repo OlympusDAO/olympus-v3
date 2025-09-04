@@ -30,9 +30,9 @@ rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce"
 
 [[dependencies]]
 name = "forge-proposal-simulator"
-version = "1.0.0"
+version = "1.0.1"
 git = "https://github.com/OlympusDAO/forge-proposal-simulator.git"
-rev = "864b357b650f9dc7b2fb1ae23562454815d51def"
+rev = "76374f3bf3b032dfb5c685c5a969ca20d0776384"
 
 [[dependencies]]
 name = "forge-std"
