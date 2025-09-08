@@ -49,8 +49,8 @@ echo "Warping time forward by $SECONDS_TO_WARP seconds..."
 
 # Check if anvil is running
 if ! curl -s -X POST -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
-     "$RPC_URL" > /dev/null 2>&1; then
+    -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+    "$RPC_URL" > /dev/null 2>&1; then
     echo "Error: Cannot connect to anvil at $RPC_URL"
     echo "Make sure anvil is running with: anvil --fork-url \$FORK_TEST_RPC_URL --allow-origin-passthrough --auto-impersonate"
     exit 1
