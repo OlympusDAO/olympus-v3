@@ -221,6 +221,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             })
         );
 
+        // Validate that the amount is not zero
+        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
+
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
 
