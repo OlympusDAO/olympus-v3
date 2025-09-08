@@ -245,4 +245,87 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         // Assert that the available deposits are correct (should be 0)
         assertEq(facility.getAvailableDeposits(iReserveToken), 0, "available deposits should be 0");
     }
+
+    function test_success_fuzz(
+        uint16 reclaimRate_,
+        uint256 depositAmount_,
+        uint256 yieldAmount_
+    ) public givenLocallyActive {
+        reclaimRate_ = uint16(bound(reclaimRate_, 1e2, 100e2)); // 1-100%, a very small number would likely cause the reclaimed amount to often round to 0, which is not what we want to test here
+        depositAmount_ = bound(depositAmount_, 1e4, RESERVE_TOKEN_AMOUNT);
+        yieldAmount_ = bound(yieldAmount_, 1e4, RESERVE_TOKEN_AMOUNT);
+
+        // Set the reclaim rate
+        vm.prank(admin);
+        depositManager.setAssetPeriodReclaimRate(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(facility),
+            reclaimRate_
+        );
+
+        // Do a normal, sizeable deposit
+        _mintReserveToken(recipientTwo, RESERVE_TOKEN_AMOUNT);
+        _approveReserveTokenSpendingByDepositManager(recipientTwo, RESERVE_TOKEN_AMOUNT);
+        _mintReceiptToken(recipientTwo, RESERVE_TOKEN_AMOUNT);
+
+        // Deposit
+        _mintReserveToken(recipient, depositAmount_);
+        _approveReserveTokenSpendingByDepositManager(recipient, depositAmount_);
+        _mintReceiptToken(recipient, depositAmount_);
+
+        // Approve receipt token spending
+        _approveReceiptTokenSpendingByDepositManager(recipient, depositAmount_);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        uint256 expectedReclaimedAmount = (depositAmount_ *
+            depositManager.getAssetPeriodReclaimRate(
+                iReserveToken,
+                PERIOD_MONTHS,
+                address(facility)
+            )) / 100e2;
+        uint256 expectedForfeitedAmount = depositAmount_ - expectedReclaimedAmount;
+
+        // Expect event
+        vm.expectEmit(true, true, true, false); // reclaimed and forfeited amounts are non-deterministic due to rounding
+        emit Reclaimed(
+            recipient,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            expectedReclaimedAmount,
+            expectedForfeitedAmount
+        );
+
+        // Call function
+        _callReclaim(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Assert convertible deposit tokens are transferred from the recipient
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(facility)
+        );
+        assertEq(
+            receiptTokenManager.balanceOf(recipient, receiptTokenId),
+            0,
+            "receiptToken.balanceOf(recipient)"
+        );
+
+        // Deposit token is transferred to the recipient
+        assertApproxEqAbs(
+            iReserveToken.balanceOf(recipient),
+            expectedReclaimedAmount,
+            5,
+            "reserveToken.balanceOf(recipient)"
+        );
+
+        // Assert that the available deposits are correct
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            RESERVE_TOKEN_AMOUNT,
+            "available deposits should be RESERVE_TOKEN_AMOUNT"
+        );
+    }
 }

@@ -374,18 +374,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             revert DepositFacility_InsufficientDeposits(amount_, availableDeposits);
     }
 
-    /// @inheritdoc IDepositFacility
-    function previewReclaim(
+    function _previewReclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_
-    ) public view onlyEnabled returns (uint256 reclaimed) {
-        // Validate that the amount is not 0
-        if (amount_ == 0) revert DepositFacility_ZeroAmount();
-
-        // Validate that there are enough available deposits
-        _validateAvailableDeposits(depositToken_, amount_);
-
+    ) internal view returns (uint256 reclaimed) {
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
         reclaimed = amount_.mulDiv(
@@ -400,6 +393,21 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    function previewReclaim(
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 amount_
+    ) public view onlyEnabled returns (uint256 reclaimed) {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
+        // Validate that there are enough available deposits
+        _validateAvailableDeposits(depositToken_, amount_);
+
+        return _previewReclaim(depositToken_, depositPeriod_, amount_);
+    }
+
+    /// @inheritdoc IDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not active
     ///             - Deposits are not enabled for the asset/period
@@ -410,9 +418,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint8 depositPeriod_,
         uint256 amount_
     ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
-        // Calculate the quantity of deposit token to withdraw and return
-        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
+        // Validate that there are enough available deposits
+        _validateAvailableDeposits(depositToken_, amount_);
 
         // Withdraw the deposit
         uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
@@ -425,6 +435,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 isWrapped: false
             })
         );
+
+        // Calculate the quantity of deposit token to withdraw and return
+        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
+        uint256 discountedAssetsOut = _previewReclaim(depositToken_, depositPeriod_, actualAmount);
 
         // Transfer discounted amount of the deposit token to the recipient
         ERC20(address(depositToken_)).safeTransfer(msg.sender, discountedAssetsOut);
