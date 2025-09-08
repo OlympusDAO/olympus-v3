@@ -73,6 +73,46 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         );
     }
 
+    function _assertOneUserRedemption(
+        address user_,
+        address redemptionOneAsset_,
+        uint256 redemptionOneAmount_
+    ) internal view {
+        // Get redemptions
+        IDepositRedemptionVault.UserRedemption[] memory redemptions = redemptionVault
+            .getUserRedemptions(user_);
+
+        // Assert length
+        assertEq(redemptions.length, 1, "redemptions length mismatch");
+
+        // Assert redemption one
+        assertEq(redemptions[0].depositToken, redemptionOneAsset_, "redemption one asset mismatch");
+        assertEq(redemptions[0].amount, redemptionOneAmount_, "redemption one amount mismatch");
+    }
+
+    function _assertTwoUserRedemptions(
+        address user_,
+        address redemptionOneAsset_,
+        uint256 redemptionOneAmount_,
+        address redemptionTwoAsset_,
+        uint256 redemptionTwoAmount_
+    ) internal view {
+        // Get redemptions
+        IDepositRedemptionVault.UserRedemption[] memory redemptions = redemptionVault
+            .getUserRedemptions(user_);
+
+        // Assert length
+        assertEq(redemptions.length, 2, "redemptions length mismatch");
+
+        // Assert redemption one
+        assertEq(redemptions[0].depositToken, redemptionOneAsset_, "redemption one asset mismatch");
+        assertEq(redemptions[0].amount, redemptionOneAmount_, "redemption one amount mismatch");
+
+        // Assert redemption two
+        assertEq(redemptions[1].depositToken, redemptionTwoAsset_, "redemption two asset mismatch");
+        assertEq(redemptions[1].amount, redemptionTwoAmount_, "redemption two amount mismatch");
+    }
+
     // given the contract is disabled
     //  [X] it reverts
 
@@ -317,6 +357,15 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             cdFacilityAddress
         );
 
+        // Assert user redemptions
+        _assertTwoUserRedemptions(
+            recipient,
+            address(iReserveToken),
+            COMMITMENT_AMOUNT,
+            address(iReserveToken),
+            COMMITMENT_AMOUNT
+        );
+
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
     }
@@ -372,6 +421,15 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             0,
             0,
             cdFacilityAddress
+        );
+
+        // Assert user redemptions
+        _assertTwoUserRedemptions(
+            recipient,
+            address(iReserveToken),
+            COMMITMENT_AMOUNT,
+            address(iReserveTokenTwo),
+            COMMITMENT_AMOUNT
         );
 
         // Assert that the available deposits are correct
@@ -430,6 +488,9 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             COMMITMENT_AMOUNT,
             cdFacilityAddress
         );
+
+        // Assert user redemptions
+        _assertOneUserRedemption(recipientTwo, address(iReserveToken), COMMITMENT_AMOUNT);
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
@@ -491,6 +552,9 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             0,
             cdFacilityAddress
         );
+
+        // Assert user redemptions
+        _assertOneUserRedemption(recipient, address(iReserveToken), amount_);
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(COMMITMENT_AMOUNT - amount_);

@@ -172,6 +172,12 @@ interface IDepositRedemptionVault {
     /// @return count The number of redemptions
     function getUserRedemptionCount(address user_) external view returns (uint16 count);
 
+    /// @notice Gets all redemptions for a user
+    ///
+    /// @param  user_ The address of the user
+    /// @return redemptions The array of redemptions
+    function getUserRedemptions(address user_) external view returns (UserRedemption[] memory);
+
     /// @notice Starts a redemption of a quantity of deposit tokens
     ///
     /// @param  depositToken_   The address of the deposit token
