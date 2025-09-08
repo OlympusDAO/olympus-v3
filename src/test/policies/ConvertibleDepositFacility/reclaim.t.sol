@@ -230,7 +230,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
             address(facility)
         );
         assertEq(
-            depositManager.balanceOf(recipient, receiptTokenId),
+            receiptTokenManager.balanceOf(recipient, receiptTokenId),
             0,
             "receiptToken.balanceOf(recipient)"
         );

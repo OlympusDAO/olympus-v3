@@ -5,9 +5,9 @@ pragma solidity >=0.8.15;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -80,10 +80,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     constructor(address kernel_, address depositManager_) Policy(Kernel(kernel_)) {
         // Validate that the DepositManager implements IDepositManager
         if (!IERC165(depositManager_).supportsInterface(type(IDepositManager).interfaceId)) {
-            revert RedemptionVault_InvalidDepositManager(depositManager_);
-        }
-        // Validate that the DepositManager implements IERC6909
-        if (!IERC165(depositManager_).supportsInterface(type(IERC6909).interfaceId)) {
             revert RedemptionVault_InvalidDepositManager(depositManager_);
         }
 
@@ -165,7 +161,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint256 amount_
     ) internal {
         // Transfer the receipt tokens from the caller to this contract
-        IERC6909(address(DEPOSIT_MANAGER)).transferFrom(
+        IReceiptTokenManager rtm = DEPOSIT_MANAGER.getReceiptTokenManager();
+        rtm.transferFrom(
             msg.sender,
             address(this),
             DEPOSIT_MANAGER.getReceiptTokenId(depositToken_, depositPeriod_, facility_),
@@ -305,7 +302,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Transfer the quantity of receipt tokens to the caller
         // Redemptions are only accessible to the owner, so msg.sender is safe here
-        IERC6909(address(DEPOSIT_MANAGER)).transfer(
+        IReceiptTokenManager rtm = DEPOSIT_MANAGER.getReceiptTokenManager();
+        rtm.transfer(
             msg.sender,
             DEPOSIT_MANAGER.getReceiptTokenId(
                 IERC20(redemption.depositToken),
@@ -360,11 +358,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemption.depositPeriod,
             redemption.facility
         );
-        IERC6909(address(DEPOSIT_MANAGER)).approve(
-            address(DEPOSIT_MANAGER),
-            receiptTokenId,
-            redemptionAmount
-        );
+        IReceiptTokenManager rtm = DEPOSIT_MANAGER.getReceiptTokenManager();
+        rtm.approve(address(DEPOSIT_MANAGER), receiptTokenId, redemptionAmount);
         IDepositFacility(redemption.facility).handleCommitWithdraw(
             IERC20(redemption.depositToken),
             redemption.depositPeriod,
@@ -372,7 +367,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             msg.sender
         );
         // Reset approval, in case not all was used
-        IERC6909(address(DEPOSIT_MANAGER)).approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
+        rtm.approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
 
         // Emit the redeemed event
         emit RedemptionFinished(
@@ -779,32 +774,35 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemption.depositPeriod,
             redemption.facility
         );
-        IERC6909(address(DEPOSIT_MANAGER)).approve(
-            address(DEPOSIT_MANAGER),
-            receiptTokenId,
-            retainedCollateral + previousPrincipal
-        );
-        // Burn the receipt tokens for the principal
-        if (previousPrincipal > 0) {
-            IDepositFacility(redemption.facility).handleLoanDefault(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod,
-                previousPrincipal,
-                address(this)
-            );
-        }
-        // Withdraw deposit for retained collateral
+        uint256 totalToConsume = retainedCollateral + previousPrincipal;
+
+        // Handle transfers
         uint256 retainedCollateralActual;
-        if (retainedCollateral > 0) {
-            retainedCollateralActual = IDepositFacility(redemption.facility).handleCommitWithdraw(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod,
-                retainedCollateral,
-                address(this)
-            );
+        {
+            IReceiptTokenManager rtm = DEPOSIT_MANAGER.getReceiptTokenManager();
+            rtm.approve(address(DEPOSIT_MANAGER), receiptTokenId, totalToConsume);
+            // Burn the receipt tokens for the principal
+            if (previousPrincipal > 0) {
+                IDepositFacility(redemption.facility).handleLoanDefault(
+                    IERC20(redemption.depositToken),
+                    redemption.depositPeriod,
+                    previousPrincipal,
+                    address(this)
+                );
+            }
+            // Withdraw deposit for retained collateral
+            if (retainedCollateral > 0) {
+                retainedCollateralActual = IDepositFacility(redemption.facility)
+                    .handleCommitWithdraw(
+                        IERC20(redemption.depositToken),
+                        redemption.depositPeriod,
+                        retainedCollateral,
+                        address(this)
+                    );
+            }
+            // Reset the approval, in case not all was used
+            rtm.approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
         }
-        // Reset the approval, in case not all was used
-        IERC6909(address(DEPOSIT_MANAGER)).approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
 
         // Reduce redemption amount by the burned and retained collateral
         // Use the calculated amount (retainedCollateral + previousPrincipal) to adjust redemption.

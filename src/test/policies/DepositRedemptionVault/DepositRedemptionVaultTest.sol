@@ -19,6 +19,7 @@ import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPos
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
@@ -40,6 +41,7 @@ contract DepositRedemptionVaultTest is Test {
     OlympusDepositPositionManager public convertibleDepositPositions;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
+    ReceiptTokenManager public receiptTokenManager;
 
     address public cdFacilityAddress;
     address public ydFacilityAddress;
@@ -121,7 +123,8 @@ contract DepositRedemptionVaultTest is Test {
             address(kernel),
             address(0)
         );
-        depositManager = new DepositManager(address(kernel));
+        receiptTokenManager = new ReceiptTokenManager();
+        depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         redemptionVault = new DepositRedemptionVault(address(kernel), address(depositManager));
         cdFacility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         cdFacilityAddress = address(cdFacility);
@@ -490,7 +493,7 @@ contract DepositRedemptionVaultTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        depositManager.approve(spender_, receiptTokenId, amount_);
+        receiptTokenManager.approve(spender_, receiptTokenId, amount_);
         _;
     }
 
@@ -500,7 +503,7 @@ contract DepositRedemptionVaultTest is Test {
         uint256 amount_
     ) {
         vm.prank(owner_);
-        depositManager.approve(spender_, receiptTokenIdTwo, amount_);
+        receiptTokenManager.approve(spender_, receiptTokenIdTwo, amount_);
         _;
     }
 
@@ -533,7 +536,7 @@ contract DepositRedemptionVaultTest is Test {
     ) internal {
         // Approve spending of the receipt token
         vm.startPrank(user_);
-        depositManager.approve(
+        receiptTokenManager.approve(
             address(redemptionVault),
             depositManager.getReceiptTokenId(asset_, depositPeriod_, address(cdFacility)),
             amount_
@@ -599,7 +602,7 @@ contract DepositRedemptionVaultTest is Test {
     ) internal view returns (IERC20) {
         return
             IERC20(
-                depositManager.getWrappedToken(
+                receiptTokenManager.getWrappedToken(
                     depositManager.getReceiptTokenId(asset_, depositPeriod_, address(cdFacility))
                 )
             );
@@ -730,7 +733,7 @@ contract DepositRedemptionVaultTest is Test {
         bool isWrapped_
     ) internal view {
         assertEq(
-            depositManager.balanceOf(recipient_, receiptTokenId),
+            receiptTokenManager.balanceOf(recipient_, receiptTokenId),
             isWrapped_ ? 0 : depositAmount_,
             "receiptToken.balanceOf(recipient)"
         );
@@ -892,12 +895,12 @@ contract DepositRedemptionVaultTest is Test {
         uint256 redemptionVaultExpected_
     ) internal view {
         assertEq(
-            depositManager.balanceOf(user_, receiptTokenId),
+            receiptTokenManager.balanceOf(user_, receiptTokenId),
             userExpected_,
             "receipt token: user balance mismatch"
         );
         assertEq(
-            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
             redemptionVaultExpected_,
             "receipt token: redemption vault balance mismatch"
         );

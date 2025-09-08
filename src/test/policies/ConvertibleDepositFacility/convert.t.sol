@@ -305,7 +305,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(depositManager),
+            address(receiptTokenManager),
             RESERVE_TOKEN_AMOUNT - 1
         )
     {
@@ -340,7 +340,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(depositManager),
+            address(receiptTokenManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -420,7 +420,11 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         _createPosition(recipient, 10e6 / 2, conversionPrice, false, true);
 
         // Approve spending
-        _approveWrappedReceiptTokenSpending(recipient, address(depositManager), expectedAssets);
+        _approveWrappedReceiptTokenSpending(
+            recipient,
+            address(receiptTokenManager),
+            expectedAssets
+        );
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -487,7 +491,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(depositManager),
+            address(receiptTokenManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -574,7 +578,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, 5e18)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(depositManager),
+            address(receiptTokenManager),
             RESERVE_TOKEN_AMOUNT
         )
     {

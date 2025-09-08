@@ -41,12 +41,12 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
             address(cdFacility)
         );
         assertEq(
-            depositManager.balanceOf(user_, receiptTokenId),
+            receiptTokenManager.balanceOf(user_, receiptTokenId),
             depositTokenBalanceBefore_ + amount_,
             "user: receipt token balance mismatch"
         );
         assertEq(
-            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
             previousUserCommitmentAmount_ - amount_,
             "redemptionVault: receipt token balance mismatch"
         );
@@ -190,12 +190,12 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
             address(cdFacility)
         );
         assertEq(
-            depositManager.balanceOf(recipient, receiptTokenId),
+            receiptTokenManager.balanceOf(recipient, receiptTokenId),
             firstAmount_ + secondAmount_,
             "user: receipt token balance mismatch"
         );
         assertEq(
-            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
             COMMITMENT_AMOUNT - firstAmount_ - secondAmount_,
             "redemptionVault: receipt token balance mismatch"
         );
@@ -238,12 +238,12 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
             address(cdFacility)
         );
         assertEq(
-            depositManager.balanceOf(recipient, receiptTokenId),
+            receiptTokenManager.balanceOf(recipient, receiptTokenId),
             COMMITMENT_AMOUNT,
             "user: receipt token balance mismatch"
         );
         assertEq(
-            depositManager.balanceOf(address(redemptionVault), receiptTokenId),
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
             0,
             "redemptionVault: receipt token balance should be 0"
         );

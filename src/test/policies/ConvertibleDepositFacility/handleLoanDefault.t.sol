@@ -136,7 +136,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
 
         // Assert that the recipient's balance has decreased by the amount
         assertEq(
-            depositManager.balanceOf(
+            receiptTokenManager.balanceOf(
                 recipient,
                 depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             ),
@@ -226,7 +226,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
 
         // Assert that the recipient's balance has decreased by the amount
         assertEq(
-            depositManager.balanceOf(
+            receiptTokenManager.balanceOf(
                 recipient,
                 depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             ),

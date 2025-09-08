@@ -4,36 +4,31 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
-import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";
-import {uint2str} from "src/libraries/Uint2Str.sol";
-import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
-import {String} from "src/libraries/String.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 
 /// @title Deposit Manager
-/// @notice This policy is used to manage deposits on behalf of other protocol contracts. For each deposit, a receipt token is minted 1:1 to the depositor.
-/// @dev    This contract combines functionality from a number of inherited contracts, in order to simplify contract implementation.
-///         Receipt tokens are ERC6909 tokens in order to reduce gas costs. They can optionally be wrapped to an ERC20 token.
-contract DepositManager is
-    Policy,
-    PolicyEnabler,
-    IDepositManager,
-    BaseAssetManager,
-    ERC6909Wrappable
-{
+/// @notice This policy manages deposits and withdrawals for Olympus protocol contracts
+/// @dev    Key Features:
+///         - ERC6909 receipt tokens with optional ERC20 wrapping, using ReceiptTokenManager
+///         - Operator isolation preventing cross-operator fund access
+///         - Borrowing functionality
+///         - Configurable reclaim rates for risk management
+contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetManager {
     using TransferHelper for ERC20;
-    using String for string;
     using EnumerableSet for EnumerableSet.UintSet;
 
     // ========== CONSTANTS ========== //
@@ -41,15 +36,8 @@ contract DepositManager is
     /// @notice The role that is allowed to deposit and withdraw funds
     bytes32 public constant ROLE_DEPOSIT_OPERATOR = "deposit_operator";
 
-    // Tasks
-    // [X] Rename to DepositManager
-    // [X] Idle/vault strategy for deposited tokens
-    // [X] ERC6909 migration
-    // [X] Rename to receipt tokens
-    // [X] ReceiptTokenSupply to depositor supply
-    // [X] borrowing and repayment of deposited funds
-    // [X] consider shifting away from policy
-    // [X] consider if asset configuration should require a different role
+    /// @notice The receipt token manager for creating receipt tokens
+    ReceiptTokenManager internal immutable _RECEIPT_TOKEN_MANAGER;
 
     // ========== STATE VARIABLES ========== //
 
@@ -60,6 +48,9 @@ contract DepositManager is
 
     /// @notice Maps token ID to the asset period
     mapping(uint256 tokenId => AssetPeriod) internal _assetPeriods;
+
+    /// @notice Set of token IDs that this DepositManager owns
+    EnumerableSet.UintSet internal _ownedTokenIds;
 
     /// @notice Constant equivalent to 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
@@ -85,10 +76,13 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) {
-        if (
-            address(_assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].asset) ==
-            address(0)
-        ) {
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
+        if (address(_assetPeriods[tokenId].asset) == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
         _;
@@ -100,13 +94,16 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) {
-        AssetPeriod memory assetPeriod = _assetPeriods[
-            getReceiptTokenId(asset_, depositPeriod_, operator_)
-        ];
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
+        AssetPeriod memory assetPeriod = _assetPeriods[tokenId];
         if (assetPeriod.asset == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
-
         if (!assetPeriod.isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
@@ -115,9 +112,14 @@ contract DepositManager is
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(
-        address kernel_
-    ) Policy(Kernel(kernel_)) ERC6909Wrappable(address(new CloneableReceiptToken())) {
+    constructor(address kernel_, address tokenManager_) Policy(Kernel(kernel_)) {
+        // Validate that the token manager implements IReceiptTokenManager
+        if (!IERC165(tokenManager_).supportsInterface(type(IReceiptTokenManager).interfaceId)) {
+            revert DepositManager_InvalidParams("token manager");
+        }
+
+        _RECEIPT_TOKEN_MANAGER = ReceiptTokenManager(tokenManager_);
+
         // Disabled by default by PolicyEnabler
     }
 
@@ -152,6 +154,17 @@ contract DepositManager is
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset/deposit period/operator combination is not enabled
+    ///             - The deposit amount is below the minimum deposit requirement
+    ///             - The deposit would exceed the asset's deposit cap for the operator
+    ///             - The depositor has not approved the DepositManager to spend the asset tokens
+    ///             - The depositor has insufficient asset token balance
+    ///             - The asset is a fee-on-transfer token
+    ///             - Zero shares would be received from the vault
     function deposit(
         DepositParams calldata params_
     )
@@ -167,8 +180,18 @@ contract DepositManager is
         (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
 
         // Mint the receipt token to the caller
-        receiptTokenId = getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender);
-        _mint(params_.depositor, receiptTokenId, actualAmount, params_.shouldWrap);
+        receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            params_.asset,
+            params_.depositPeriod,
+            msg.sender
+        );
+        _RECEIPT_TOKEN_MANAGER.mint(
+            params_.depositor,
+            receiptTokenId,
+            actualAmount,
+            params_.shouldWrap
+        );
 
         // Update the asset liabilities for the caller (operator)
         _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
@@ -197,6 +220,13 @@ contract DepositManager is
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset is not configured in BaseAssetManager
+    ///             - Zero shares would be withdrawn from the vault
+    ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function claimYield(
         IERC20 asset_,
         address recipient_,
@@ -226,6 +256,17 @@ contract DepositManager is
     /// @dev        This function is only callable by addresses with the deposit operator role
     ///
     ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The recipient is the zero address
+    ///             - The asset/deposit period/operator combination is not configured
+    ///             - The depositor has insufficient receipt token balance
+    ///             - For wrapped tokens: depositor has not approved ReceiptTokenManager to spend the wrapped ERC20 token
+    ///             - For unwrapped tokens: depositor has not approved the caller to spend ERC6909 tokens
+    ///             - Zero shares would be withdrawn from the vault
+    ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function withdraw(
         WithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
@@ -234,9 +275,14 @@ contract DepositManager is
 
         // Burn the receipt token from the depositor
         // Will revert if the asset configuration is not valid/invalid receipt token ID
-        _burn(
+        _RECEIPT_TOKEN_MANAGER.burn(
             params_.depositor,
-            getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender),
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+                address(this),
+                params_.asset,
+                params_.depositPeriod,
+                msg.sender
+            ),
             params_.amount,
             params_.isWrapped
         );
@@ -293,12 +339,13 @@ contract DepositManager is
     /// @dev        Note that once set, an operator name cannot be changed.
     ///
     ///             This function reverts if:
-    ///             - the caller is not the admin or manager role
-    ///             - the operator's name is already set
-    ///             - the name is already in use
-    ///             - the operator name is empty
-    ///             - the operator name is not 3 characters long
-    ///             - the operator name contains characters that are not a-z or 0-9
+    ///             - The contract is not enabled
+    ///             - The caller does not have the admin or manager role
+    ///             - The operator's name is already set
+    ///             - The name is already in use by another operator
+    ///             - The operator name is empty
+    ///             - The operator name is not exactly 3 characters long
+    ///             - The operator name contains characters that are not a-z or 0-9
     function setOperatorName(
         address operator_,
         string calldata name_
@@ -371,10 +418,14 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) public view override returns (AssetPeriodStatus memory status) {
-        uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        uint256 receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
         status.isConfigured = address(_assetPeriods[receiptTokenId].asset) != address(0);
         status.isEnabled = _assetPeriods[receiptTokenId].isEnabled;
-
         return status;
     }
 
@@ -421,6 +472,17 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset has not been added via addAsset()
+    ///             - The operator is the zero address
+    ///             - The deposit period is 0
+    ///             - The asset/deposit period/operator combination is already configured
+    ///             - The operator name has not been set
+    ///             - The reclaim rate exceeds 100%
+    ///             - Receipt token creation fails (invalid parameters in ReceiptTokenManager)
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -433,6 +495,9 @@ contract DepositManager is
         onlyConfiguredAsset(asset_)
         returns (uint256 receiptTokenId)
     {
+        // Validate that the operator is not the zero address
+        if (operator_ == address(0)) revert DepositManager_ZeroAddress();
+
         // Validate that the deposit period is not 0
         if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
 
@@ -441,17 +506,8 @@ contract DepositManager is
             revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, operator_);
         }
 
-        // Configure the ERC6909 receipt token
+        // Configure the ERC6909 receipt token and asset period atomically
         receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_, operator_);
-
-        // Set the asset period
-        _assetPeriods[receiptTokenId] = AssetPeriod({
-            isEnabled: true,
-            depositPeriod: depositPeriod_,
-            reclaimRate: 0,
-            asset: address(asset_),
-            operator: operator_
-        });
 
         // Set the reclaim rate (which does validation and emits an event)
         _setAssetPeriodReclaimRate(asset_, depositPeriod_, operator_, reclaimRate_);
@@ -464,6 +520,12 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset/deposit period/operator combination does not exist
+    ///             - The asset period is already enabled
     function enableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -474,14 +536,16 @@ contract DepositManager is
         onlyManagerOrAdminRole
         onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        // Validate that the asset period is disabled
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
         if (_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodEnabled(address(asset_), depositPeriod_, operator_);
         }
-
-        // Enable the asset period
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].isEnabled = true;
+        _assetPeriods[tokenId].isEnabled = true;
 
         // Emit event
         emit AssetPeriodEnabled(tokenId, address(asset_), operator_, depositPeriod_);
@@ -489,6 +553,12 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset/deposit period/operator combination does not exist
+    ///             - The asset period is already disabled
     function disableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -499,27 +569,33 @@ contract DepositManager is
         onlyManagerOrAdminRole
         onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
     {
-        // Validate that the asset period is enabled
-        uint256 tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
         if (!_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
-
-        // Disable the asset period
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].isEnabled = false;
+        _assetPeriods[tokenId].isEnabled = false;
 
         // Emit event
         emit AssetPeriodDisabled(tokenId, address(asset_), operator_, depositPeriod_);
     }
 
     /// @inheritdoc IDepositManager
-    function getAssetPeriods() external view returns (AssetPeriod[] memory) {
-        uint256 tokenIdsLength = _wrappableTokenIds.length();
-        AssetPeriod[] memory depositAssets = new AssetPeriod[](tokenIdsLength);
-        for (uint256 i; i < tokenIdsLength; ++i) {
-            depositAssets[i] = _assetPeriods[_wrappableTokenIds.at(i)];
+    function getAssetPeriods() external view override returns (AssetPeriod[] memory assetPeriods) {
+        // Get all token IDs owned by this contract
+        uint256[] memory tokenIds = _ownedTokenIds.values();
+
+        // Build the array of asset periods (all owned tokens should have valid asset periods)
+        assetPeriods = new AssetPeriod[](tokenIds.length);
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            assetPeriods[i] = _assetPeriods[tokenIds[i]];
         }
-        return depositAssets;
+
+        return assetPeriods;
     }
 
     /// @inheritdoc IDepositManager
@@ -547,13 +623,25 @@ contract DepositManager is
     ) internal {
         if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
 
-        _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)]
-            .reclaimRate = reclaimRate_;
+        _assetPeriods[
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+                address(this),
+                asset_,
+                depositPeriod_,
+                operator_
+            )
+        ].reclaimRate = reclaimRate_;
         emit AssetPeriodReclaimRateSet(address(asset_), operator_, depositPeriod_, reclaimRate_);
     }
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by the manager or admin role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the manager or admin role
+    ///             - The asset/deposit period/operator combination does not exist
+    ///             - The reclaim rate exceeds 100%
     function setAssetPeriodReclaimRate(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -574,13 +662,30 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) external view returns (uint16) {
-        return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)].reclaimRate;
+        return
+            _assetPeriods[
+                _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+                    address(this),
+                    asset_,
+                    depositPeriod_,
+                    operator_
+                )
+            ].reclaimRate;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The recipient is the zero address
+    ///             - The asset has not been added via addAsset()
+    ///             - The amount exceeds the operator's available borrowing capacity
+    ///             - Zero shares would be withdrawn from the vault
+    ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function borrowingWithdraw(
         BorrowingWithdrawParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
@@ -624,6 +729,17 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset has not been added via addAsset()
+    ///             - The amount exceeds the current borrowed amount for the operator
+    ///             - The payer has not approved DepositManager to spend the asset tokens
+    ///             - The payer has insufficient asset token balance
+    ///             - The asset is a fee-on-transfer token
+    ///             - Zero shares would be deposited into the vault
+    ///             - The operator becomes insolvent after the repayment (assets + borrowed < liabilities)
     function borrowingRepay(
         BorrowingRepayParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) returns (uint256 actualAmount) {
@@ -664,6 +780,15 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     /// @dev        This function is only callable by addresses with the deposit operator role
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the deposit operator role
+    ///             - The asset has not been added via addAsset()
+    ///             - The amount exceeds the current borrowed amount for the operator
+    ///             - The payer has insufficient receipt token balance
+    ///             - The payer has not approved the caller to spend ERC6909 tokens
+    ///             - The operator becomes insolvent after the default (assets + borrowed < liabilities)
     function borrowingDefault(
         BorrowingDefaultParams calldata params_
     ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) {
@@ -686,9 +811,14 @@ contract DepositManager is
         }
 
         // Burn the receipt tokens from the payer
-        _burn(
+        _RECEIPT_TOKEN_MANAGER.burn(
             params_.payer,
-            getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender),
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+                address(this),
+                params_.asset,
+                params_.depositPeriod,
+                msg.sender
+            ),
             params_.amount,
             false
         );
@@ -745,27 +875,25 @@ contract DepositManager is
             revert DepositManager_OperatorNameNotSet(operator_);
         }
 
-        // Generate a unique token ID for the token, deposit period and operator combination
-        tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
-
-        // Create the receipt token
-        _createWrappableToken(
-            tokenId,
-            string
-                .concat(operatorName, asset_.name(), " - ", uint2str(depositPeriod_), " months")
-                .truncate32(),
-            string
-                .concat(operatorName, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
-                .truncate32(),
-            asset_.decimals(),
-            abi.encodePacked(
-                address(this), // Owner
-                address(asset_), // Asset
-                depositPeriod_, // Deposit Period
-                operator_ // Operator
-            ),
-            false
+        // Create the receipt token via the factory
+        tokenId = _RECEIPT_TOKEN_MANAGER.createToken(
+            asset_,
+            depositPeriod_,
+            operator_,
+            operatorName
         );
+
+        // Record this token ID as owned by this contract
+        _ownedTokenIds.add(tokenId);
+
+        // Set the asset period data atomically
+        _assetPeriods[tokenId] = AssetPeriod({
+            isEnabled: true,
+            depositPeriod: depositPeriod_,
+            reclaimRate: 0, // Start with 0, set separately later
+            asset: address(asset_),
+            operator: operator_
+        });
 
         return tokenId;
     }
@@ -775,64 +903,44 @@ contract DepositManager is
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) public pure override returns (uint256) {
-        return uint256(keccak256(abi.encode(asset_, depositPeriod_, operator_)));
+    ) public view override returns (uint256) {
+        return
+            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+                address(this),
+                asset_,
+                depositPeriod_,
+                operator_
+            );
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This is the same as the ERC6909 name() function, but is included for consistency
-    function getReceiptTokenName(uint256 tokenId_) external view override returns (string memory) {
-        return name(tokenId_);
+    function getReceiptTokenManager() external view override returns (IReceiptTokenManager) {
+        return IReceiptTokenManager(address(_RECEIPT_TOKEN_MANAGER));
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This is the same as the ERC6909 symbol() function, but is included for consistency
-    function getReceiptTokenSymbol(
-        uint256 tokenId_
-    ) external view override returns (string memory) {
-        return symbol(tokenId_);
-    }
-
-    /// @inheritdoc IDepositManager
-    /// @dev        This is the same as the ERC6909 decimals() function, but is included for consistency
-    function getReceiptTokenDecimals(uint256 tokenId_) external view override returns (uint8) {
-        return decimals(tokenId_);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenOwner(uint256) external view override returns (address) {
-        return address(this);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenAsset(uint256 tokenId_) external view override returns (IERC20) {
-        return IERC20(_assetPeriods[tokenId_].asset);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenDepositPeriod(uint256 tokenId_) external view override returns (uint8) {
-        return _assetPeriods[tokenId_].depositPeriod;
-    }
-
-    /// @inheritdoc IDepositManager
-    function getReceiptTokenOperator(uint256 tokenId_) external view override returns (address) {
-        return _assetPeriods[tokenId_].operator;
+    function getReceiptToken(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view override returns (uint256 tokenId, address wrappedToken) {
+        tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
+            address(this),
+            asset_,
+            depositPeriod_,
+            operator_
+        );
+        wrappedToken = _RECEIPT_TOKEN_MANAGER.getWrappedToken(tokenId);
+        return (tokenId, wrappedToken);
     }
 
     // ========== ERC165 ========== //
 
     function supportsInterface(
         bytes4 interfaceId
-    )
-        public
-        view
-        virtual
-        override(ERC6909Wrappable, BaseAssetManager, PolicyEnabler)
-        returns (bool)
-    {
+    ) public view virtual override(BaseAssetManager, PolicyEnabler) returns (bool) {
         return
             interfaceId == type(IDepositManager).interfaceId ||
-            ERC6909Wrappable.supportsInterface(interfaceId) ||
             BaseAssetManager.supportsInterface(interfaceId) ||
             PolicyEnabler.supportsInterface(interfaceId);
     }
