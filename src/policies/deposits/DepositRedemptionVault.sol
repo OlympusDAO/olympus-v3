@@ -42,11 +42,11 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== CONFIGURABLE PARAMETERS ========== //
 
-    /// @notice Per-asset max borrow percentage (in 100e2, e.g. 8500 = 85%)
-    mapping(address => uint16) internal _assetMaxBorrowPercentages;
+    /// @notice Per-asset-facility max borrow percentage (in 100e2, e.g. 8500 = 85%)
+    mapping(bytes32 => uint16) internal _assetFacilityMaxBorrowPercentages;
 
-    /// @notice Per-asset interest rate (annual, in 100e2, e.g. 500 = 5%)
-    mapping(address => uint16) internal _assetAnnualInterestRates;
+    /// @notice Per-asset-facility interest rate (annual, in 100e2, e.g. 500 = 5%)
+    mapping(bytes32 => uint16) internal _assetFacilityAnnualInterestRates;
 
     /// @notice Keeper reward percentage (in 100e2, e.g. 500 = 5%)
     uint16 internal _claimDefaultRewardPercentage;
@@ -180,6 +180,17 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint16 redemptionId_
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(user_, redemptionId_));
+    }
+
+    /// @notice Generate a key for the asset-facility parameter mappings
+    /// @param asset_ The asset address
+    /// @param facility_ The facility address
+    /// @return The key for the mapping
+    function _getAssetFacilityKey(
+        address asset_,
+        address facility_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(asset_, facility_));
     }
 
     /// @inheritdoc IDepositRedemptionVault
@@ -344,13 +355,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Handle the withdrawal
         // Redemptions are only accessible to the owner, so msg.sender is safe here
+        uint256 receiptTokenId = DEPOSIT_MANAGER.getReceiptTokenId(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            redemption.facility
+        );
         IERC6909(address(DEPOSIT_MANAGER)).approve(
             address(DEPOSIT_MANAGER),
-            DEPOSIT_MANAGER.getReceiptTokenId(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod,
-                redemption.facility
-            ),
+            receiptTokenId,
             redemptionAmount
         );
         IDepositFacility(redemption.facility).handleCommitWithdraw(
@@ -359,6 +371,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemptionAmount,
             msg.sender
         );
+        // Reset approval, in case not all was used
+        IERC6909(address(DEPOSIT_MANAGER)).approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
 
         // Emit the redeemed event
         emit RedemptionFinished(
@@ -398,15 +412,19 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Determine the amount to borrow
         // This deliberately does not revert. That will be handled in the borrowAgainstRedemption() function
+        bytes32 assetFacilityKey = _getAssetFacilityKey(
+            redemption.depositToken,
+            redemption.facility
+        );
         uint256 principal = redemption.amount.mulDiv(
-            _assetMaxBorrowPercentages[redemption.depositToken],
+            _assetFacilityMaxBorrowPercentages[assetFacilityKey],
             ONE_HUNDRED_PERCENT
         );
 
         // Interest: annualized, prorated for period
         uint256 interest = _calculateInterest(
             principal,
-            _assetAnnualInterestRates[redemption.depositToken],
+            _assetFacilityAnnualInterestRates[assetFacilityKey],
             redemption.depositPeriod
         );
 
@@ -451,24 +469,28 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         UserRedemption storage redemption = _userRedemptions[redemptionKey];
 
-        // Check that the facility is still authorized
-        _validateFacility(redemption.facility);
-
         // Validate that the redemption is not already borrowed against
         if (_redemptionLoan[redemptionKey].dueDate != 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
+        // This will also validate the facility
         (uint256 principal, , uint48 dueDate) = _previewBorrowAgainstRedemption(
             msg.sender,
             redemptionId_
         );
 
         if (principal == 0)
-            revert RedemptionVault_MaxBorrowPercentageNotSet(redemption.depositToken);
+            revert RedemptionVault_MaxBorrowPercentageNotSet(
+                redemption.depositToken,
+                redemption.facility
+            );
 
         // Ensure a non-zero interest rate is configured
-        uint16 interestRate = _assetAnnualInterestRates[redemption.depositToken];
-        if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(redemption.depositToken);
+        uint16 interestRate = _assetFacilityAnnualInterestRates[
+            _getAssetFacilityKey(redemption.depositToken, redemption.facility)
+        ];
+        if (interestRate == 0)
+            revert RedemptionVault_InterestRateNotSet(redemption.depositToken, redemption.facility);
 
         // Delegate to the facility for borrowing
         uint256 principalActual = IDepositFacility(redemption.facility).handleBorrow(
@@ -579,6 +601,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 principalRepaid,
                 address(this)
             );
+
+            // The DepositFacility may not use all of the approval, so reset it to 0
+            ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), 0);
         }
 
         // Transfer interest to the TRSRY
@@ -592,12 +617,19 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     function _previewExtendLoan(
         address asset_,
+        address facility_,
         uint256 principal_,
         uint48 dueDate_,
         uint8 extensionMonths_
     ) internal view returns (uint48, uint256) {
-        uint16 interestRate = _assetAnnualInterestRates[asset_];
-        if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(asset_);
+        // Validate the facility
+        _validateFacility(facility_);
+
+        // Validate interest rate
+        uint16 interestRate = _assetFacilityAnnualInterestRates[
+            _getAssetFacilityKey(asset_, facility_)
+        ];
+        if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(asset_, facility_);
 
         uint256 interestPayable = _calculateInterest(principal_, interestRate, extensionMonths_);
 
@@ -625,6 +657,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Preview the new due date and interest payable
         (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
             redemption.depositToken,
+            redemption.facility,
             loan.principal,
             loan.dueDate,
             months_
@@ -669,6 +702,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
             redemption.depositToken,
+            redemption.facility,
             loan.principal,
             loan.dueDate,
             months_
@@ -740,13 +774,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         loan.principal = 0;
         loan.interest = 0;
 
+        uint256 receiptTokenId = DEPOSIT_MANAGER.getReceiptTokenId(
+            IERC20(redemption.depositToken),
+            redemption.depositPeriod,
+            redemption.facility
+        );
         IERC6909(address(DEPOSIT_MANAGER)).approve(
             address(DEPOSIT_MANAGER),
-            DEPOSIT_MANAGER.getReceiptTokenId(
-                IERC20(redemption.depositToken),
-                redemption.depositPeriod,
-                redemption.facility
-            ),
+            receiptTokenId,
             retainedCollateral + previousPrincipal
         );
         // Burn the receipt tokens for the principal
@@ -768,6 +803,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 address(this)
             );
         }
+        // Reset the approval, in case not all was used
+        IERC6909(address(DEPOSIT_MANAGER)).approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
 
         // Reduce redemption amount by the burned and retained collateral
         // Use the calculated amount (retainedCollateral + previousPrincipal) to adjust redemption.
@@ -823,39 +860,69 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc IDepositRedemptionVault
     /// @dev    Notes:
     ///         - When setting the max borrow percentage, keep in mind the annual interest rate and claim default reward percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
+    ///         - This function allows setting the value even if the asset or facility are not registered
+    ///
+    ///         This function reverts if:
+    ///         - The contract is not enabled
+    ///         - The caller does not have the admin or manager role
+    ///         - asset_ is the zero address
+    ///         - facility_ is the zero address
+    ///         - percent_ is out of range
     function setMaxBorrowPercentage(
         IERC20 asset_,
+        address facility_,
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
+        if (address(asset_) == address(0)) revert RedemptionVault_ZeroAddress();
+        if (address(facility_) == address(0)) revert RedemptionVault_ZeroAddress();
         if (percent_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(percent_);
 
-        _assetMaxBorrowPercentages[address(asset_)] = percent_;
+        _assetFacilityMaxBorrowPercentages[
+            _getAssetFacilityKey(address(asset_), facility_)
+        ] = percent_;
 
-        emit MaxBorrowPercentageSet(address(asset_), percent_);
+        emit MaxBorrowPercentageSet(address(asset_), facility_, percent_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function getMaxBorrowPercentage(IERC20 asset_) external view returns (uint16) {
-        return _assetMaxBorrowPercentages[address(asset_)];
+    function getMaxBorrowPercentage(
+        IERC20 asset_,
+        address facility_
+    ) external view returns (uint16) {
+        return _assetFacilityMaxBorrowPercentages[_getAssetFacilityKey(address(asset_), facility_)];
     }
 
     /// @inheritdoc IDepositRedemptionVault
     /// @dev    Notes:
     ///         - When setting the annual interest rate, keep in mind the max borrow percentage and claim default reward percentage, as the three configuration values can create incentives for borrowers to not repay their loans (e.g. claim default on their own loan)
+    ///         - This function allows setting the value even if the asset or facility are not registered
+    ///
+    ///         This function reverts if:
+    ///         - The contract is not enabled
+    ///         - The caller does not have the admin or manager role
+    ///         - asset_ is the zero address
+    ///         - facility_ is the zero address
+    ///         - percent_ is out of range
     function setAnnualInterestRate(
         IERC20 asset_,
+        address facility_,
         uint16 rate_
     ) external onlyEnabled onlyManagerOrAdminRole {
+        if (address(asset_) == address(0)) revert RedemptionVault_ZeroAddress();
+        if (address(facility_) == address(0)) revert RedemptionVault_ZeroAddress();
         if (rate_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(rate_);
 
-        _assetAnnualInterestRates[address(asset_)] = rate_;
+        _assetFacilityAnnualInterestRates[_getAssetFacilityKey(address(asset_), facility_)] = rate_;
 
-        emit AnnualInterestRateSet(address(asset_), rate_);
+        emit AnnualInterestRateSet(address(asset_), facility_, rate_);
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    function getAnnualInterestRate(IERC20 asset_) external view returns (uint16) {
-        return _assetAnnualInterestRates[address(asset_)];
+    function getAnnualInterestRate(
+        IERC20 asset_,
+        address facility_
+    ) external view returns (uint16) {
+        return _assetFacilityAnnualInterestRates[_getAssetFacilityKey(address(asset_), facility_)];
     }
 
     /// @inheritdoc IDepositRedemptionVault

@@ -7,7 +7,7 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVaultTest {
-    event AnnualInterestRateSet(address indexed asset, uint16 rate);
+    event AnnualInterestRateSet(address indexed asset, address indexed facility, uint16 rate);
 
     // ===== TESTS ===== //
 
@@ -20,7 +20,11 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
 
         // Call function
         vm.prank(admin);
-        redemptionVault.setAnnualInterestRate(iReserveToken, ANNUAL_INTEREST_RATE);
+        redemptionVault.setAnnualInterestRate(
+            iReserveToken,
+            address(cdFacility),
+            ANNUAL_INTEREST_RATE
+        );
     }
 
     // given the caller is not the admin or manager
@@ -36,7 +40,11 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
 
         // Call function
         vm.prank(caller_);
-        redemptionVault.setAnnualInterestRate(iReserveToken, ANNUAL_INTEREST_RATE);
+        redemptionVault.setAnnualInterestRate(
+            iReserveToken,
+            address(cdFacility),
+            ANNUAL_INTEREST_RATE
+        );
     }
 
     // when the rate is greater than 100e2
@@ -50,7 +58,35 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
 
         // Call function
         vm.prank(admin);
-        redemptionVault.setAnnualInterestRate(iReserveToken, rate_);
+        redemptionVault.setAnnualInterestRate(iReserveToken, address(cdFacility), rate_);
+    }
+
+    // when the asset is the zero address
+    //  [X] it reverts
+
+    function test_whenAssetIsZeroAddress_reverts(uint16 rate_) public givenLocallyActive {
+        rate_ = uint16(bound(rate_, 0, 100e2));
+
+        // Expect revert
+        _expectRevertZeroAddress();
+
+        // Call function
+        vm.prank(admin);
+        redemptionVault.setAnnualInterestRate(IERC20(address(0)), address(cdFacility), rate_);
+    }
+
+    // when the facility is the zero address
+    //  [X] it reverts
+
+    function test_whenFacilityIsZeroAddress_reverts(uint16 rate_) public givenLocallyActive {
+        rate_ = uint16(bound(rate_, 0, 100e2));
+
+        // Expect revert
+        _expectRevertZeroAddress();
+
+        // Call function
+        vm.prank(admin);
+        redemptionVault.setAnnualInterestRate(iReserveToken, address(0), rate_);
     }
 
     // given the asset is not supported
@@ -65,15 +101,44 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
 
         // Expect emit
         vm.expectEmit(true, true, true, true);
-        emit AnnualInterestRateSet(address(asset), rate_);
+        emit AnnualInterestRateSet(address(asset), address(cdFacility), rate_);
 
         // Call function
         vm.prank(caller);
-        redemptionVault.setAnnualInterestRate(IERC20(address(asset)), rate_);
+        redemptionVault.setAnnualInterestRate(IERC20(address(asset)), address(cdFacility), rate_);
 
         // Assert
         assertEq(
-            redemptionVault.getAnnualInterestRate(IERC20(address(asset))),
+            redemptionVault.getAnnualInterestRate(IERC20(address(asset)), address(cdFacility)),
+            rate_,
+            "annual interest rate mismatch"
+        );
+    }
+
+    // given the facility is not authorized
+    //  [X] it sets the annual interest rate for the asset
+    //  [X] it emits a AnnualInterestRateSet event
+
+    function test_givenFacilityIsNotAuthorized(
+        bool isAdmin_,
+        uint16 rate_
+    ) public givenLocallyActive {
+        rate_ = uint16(bound(rate_, 0, 100e2));
+        address caller = isAdmin_ ? admin : manager;
+
+        address facility = address(0xDDDD);
+
+        // Expect emit
+        vm.expectEmit(true, true, true, true);
+        emit AnnualInterestRateSet(address(iReserveToken), address(facility), rate_);
+
+        // Call function
+        vm.prank(caller);
+        redemptionVault.setAnnualInterestRate(iReserveToken, address(facility), rate_);
+
+        // Assert
+        assertEq(
+            redemptionVault.getAnnualInterestRate(iReserveToken, address(facility)),
             rate_,
             "annual interest rate mismatch"
         );
@@ -88,15 +153,15 @@ contract DepositRedemptionVaultSetAnnualInterestRateTest is DepositRedemptionVau
 
         // Expect emit
         vm.expectEmit(true, true, true, true);
-        emit AnnualInterestRateSet(address(iReserveToken), rate_);
+        emit AnnualInterestRateSet(address(iReserveToken), address(cdFacility), rate_);
 
         // Call function
         vm.prank(caller);
-        redemptionVault.setAnnualInterestRate(iReserveToken, rate_);
+        redemptionVault.setAnnualInterestRate(iReserveToken, address(cdFacility), rate_);
 
         // Assert
         assertEq(
-            redemptionVault.getAnnualInterestRate(iReserveToken),
+            redemptionVault.getAnnualInterestRate(iReserveToken, address(cdFacility)),
             rate_,
             "annual interest rate mismatch"
         );

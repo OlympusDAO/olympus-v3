@@ -244,11 +244,19 @@ contract DepositRedemptionVaultTest is Test {
 
         // Set the annual interest rate
         vm.prank(admin);
-        redemptionVault.setAnnualInterestRate(iReserveToken, ANNUAL_INTEREST_RATE);
+        redemptionVault.setAnnualInterestRate(
+            iReserveToken,
+            address(cdFacility),
+            ANNUAL_INTEREST_RATE
+        );
 
         // Set the max borrow percentage
         vm.prank(admin);
-        redemptionVault.setMaxBorrowPercentage(iReserveToken, MAX_BORROW_PERCENTAGE);
+        redemptionVault.setMaxBorrowPercentage(
+            iReserveToken,
+            address(cdFacility),
+            MAX_BORROW_PERCENTAGE
+        );
 
         // Disable the redemption vault
         vm.prank(admin);
@@ -651,13 +659,13 @@ contract DepositRedemptionVaultTest is Test {
 
     modifier givenMaxBorrowPercentage(IERC20 asset_, uint16 percent_) {
         vm.prank(admin);
-        redemptionVault.setMaxBorrowPercentage(asset_, percent_);
+        redemptionVault.setMaxBorrowPercentage(asset_, address(cdFacility), percent_);
         _;
     }
 
     modifier givenAnnualInterestRate(IERC20 asset_, uint16 rate_) {
         vm.prank(admin);
-        redemptionVault.setAnnualInterestRate(asset_, rate_);
+        redemptionVault.setAnnualInterestRate(asset_, address(cdFacility), rate_);
         _;
     }
 
@@ -1044,7 +1052,8 @@ contract DepositRedemptionVaultTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_MaxBorrowPercentageNotSet.selector,
-                address(asset_)
+                address(asset_),
+                address(cdFacility)
             )
         );
     }
@@ -1053,7 +1062,8 @@ contract DepositRedemptionVaultTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IDepositRedemptionVault.RedemptionVault_InterestRateNotSet.selector,
-                address(asset_)
+                address(asset_),
+                address(cdFacility)
             )
         );
     }
@@ -1113,6 +1123,12 @@ contract DepositRedemptionVaultTest is Test {
                 user_,
                 redemptionId_
             )
+        );
+    }
+
+    function _expectRevertZeroAddress() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAddress.selector)
         );
     }
 }
