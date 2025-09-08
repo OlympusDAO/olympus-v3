@@ -82,16 +82,13 @@ contract ConvertibleDepositAuctioneer is
     // ========== STATE VARIABLES ========== //
 
     /// @notice Whether the deposit period is enabled
-    mapping(uint8 depositPeriod => bool isEnabled) internal _depositPeriodsEnabled;
+    mapping(uint8 depositPeriod => bool isDepositPeriodEnabled) internal _depositPeriodsEnabled;
 
     /// @notice The deposit asset
     IERC20 internal immutable _DEPOSIT_ASSET;
 
-    /// @notice Array of deposit periods
+    /// @notice Array of enabled deposit periods
     EnumerableSet.UintSet internal _depositPeriods;
-
-    /// @notice The number of deposit periods that are enabled
-    uint256 internal _depositPeriodsCount;
 
     /// @notice Previous tick for each deposit period
     /// @dev    Use `getCurrentTick()` to recalculate and access the latest data
@@ -248,7 +245,7 @@ contract ConvertibleDepositAuctioneer is
 
             // Update the current tick size
             if (output.tickSize != _currentTickSize) {
-                if (_depositPeriodsCount > 1) {
+                if (_depositPeriods.length() > 1) {
                     // Before updating the global tick size, ensure that all other periods are updated
                     // This ensures that if the tick size changes, the change will not be
                     // applied retroactively
@@ -468,7 +465,7 @@ contract ConvertibleDepositAuctioneer is
             // It is also adjusted by the number of deposit periods that are enabled, otherwise each auction would have too much capacity added
             uint256 capacityToAdd = (_auctionParameters.target * timePassed) /
                 1 days /
-                _depositPeriodsCount;
+                _depositPeriods.length();
 
             // Skip if the new capacity is 0
             if (capacityToAdd == 0) return previousTick;
@@ -653,10 +650,9 @@ contract ConvertibleDepositAuctioneer is
         // Enable the deposit period
         _depositPeriodsEnabled[depositPeriod_] = true;
 
-        // Add the deposit period to the array if it is not already in it
-        if (!_depositPeriods.contains(depositPeriod_)) {
-            _depositPeriods.add(depositPeriod_);
-        }
+        // Add the deposit period to the array
+        // No check necessary, as EnumerableSet will handle duplicates
+        _depositPeriods.add(depositPeriod_);
 
         // Initialize the tick with the new auction parameters
         _depositPeriodPreviousTicks[depositPeriod_] = Tick(
@@ -664,9 +660,6 @@ contract ConvertibleDepositAuctioneer is
             tickSize_,
             uint48(block.timestamp)
         );
-
-        // Increment the count
-        _depositPeriodsCount++;
 
         // Emit event for actual enabling
         emit DepositPeriodEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
@@ -684,13 +677,11 @@ contract ConvertibleDepositAuctioneer is
         _depositPeriodsEnabled[depositPeriod_] = false;
 
         // Remove the deposit period from the array
+        // No check necessary, as EnumerableSet will handle non-existence
         _depositPeriods.remove(depositPeriod_);
 
         // Remove the tick
         delete _depositPeriodPreviousTicks[depositPeriod_];
-
-        // Decrement the count
-        _depositPeriodsCount--;
 
         // Emit event for actual disabling
         emit DepositPeriodDisabled(address(_DEPOSIT_ASSET), depositPeriod_);
@@ -790,7 +781,16 @@ contract ConvertibleDepositAuctioneer is
 
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getDepositPeriodsCount() external view override returns (uint256) {
-        return _depositPeriodsCount;
+        return _depositPeriods.length();
+    }
+
+    /// @notice Gets the list of pending deposit period changes, from first to last
+    function getPendingDepositPeriodChanges()
+        external
+        view
+        returns (PendingDepositPeriodChange[] memory)
+    {
+        return _pendingDepositPeriodChanges;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
@@ -930,10 +930,11 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             This function performs the following:
     ///             - Performs validation of the inputs
+    ///             - Captures the current tick state for all enabled deposit periods
+    ///             - Stores the auction results for the previous period
     ///             - Sets the auction parameters
-    ///             - Adjusts the current tick capacity and price, if necessary
-    ///             - Resets the tick size to the standard
-    ///             - Stores the auction results for the period
+    ///             - Sets the tick parameters for all enabled deposit periods
+    ///             - Processes any pending deposit period changes
     ///
     ///             This function reverts if:
     ///             - The caller does not have the ROLE_EMISSION_MANAGER role
@@ -1016,6 +1017,15 @@ contract ConvertibleDepositAuctioneer is
     ///             - The auction parameters are invalid
     ///             - The tick step is invalid
     ///             - The auction tracking period is invalid
+    ///
+    ///             This function performs the following:
+    ///             - Sets the auction parameters
+    ///             - Sets the tick step
+    ///             - Sets the auction tracking period
+    ///             - Ensures all existing ticks have the current parameters
+    ///             - Processes any pending deposit period changes with the new parameters (including any that were pending prior to disabling)
+    ///             - Resets the day state
+    ///             - Resets the auction results
     function _enable(bytes calldata enableData_) internal override {
         if (enableData_.length != _ENABLE_PARAMS_LENGTH)
             revert ConvertibleDepositAuctioneer_InvalidParams("enable data");

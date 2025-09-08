@@ -263,7 +263,7 @@ interface IConvertibleDepositAuctioneer {
     /// @return asset The deposit asset
     function getDepositAsset() external view returns (IERC20 asset);
 
-    /// @notice Get the deposit periods for the deposit asset
+    /// @notice Get the deposit periods for the deposit asset that are enabled
     ///
     /// @return periods The deposit periods
     function getDepositPeriods() external view returns (uint8[] memory periods);
