@@ -484,17 +484,10 @@ contract ConvertibleDepositAuctioneer is
     ///             - If the target is 0, the price will not decay and the capacity will not change. It will only decay when a target is set again to a non-zero value.
     ///
     ///             This function reverts if:
-    ///             - The contract is not enabled
     ///             - The deposit asset and period are not enabled
     function getCurrentTick(
         uint8 depositPeriod_
-    )
-        external
-        view
-        onlyEnabled
-        onlyDepositPeriodEnabled(depositPeriod_)
-        returns (Tick memory tick)
-    {
+    ) external view onlyDepositPeriodEnabled(depositPeriod_) returns (Tick memory tick) {
         return _getCurrentTick(depositPeriod_);
     }
 
@@ -809,6 +802,11 @@ contract ConvertibleDepositAuctioneer is
     ) external override onlyRole(ROLE_EMISSION_MANAGER) {
         uint256 previousTarget = _auctionParameters.target;
 
+        // Update tick state for enabled assets and periods
+        // This prevents retroactive application of new parameters
+        _updateCurrentTicks();
+
+        // Update global state
         _setAuctionParameters(target_, tickSize_, minPrice_);
 
         // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price

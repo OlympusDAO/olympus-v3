@@ -8,12 +8,14 @@ import {console2} from "forge-std/console2.sol";
 
 contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctioneerTest {
     // given the contract is disabled
-    //  [X] it reverts
+    //  [X] it does not revert
 
-    function test_contractDisabled_reverts() public {
-        // Expect revert
-        _expectNotEnabledRevert();
-
+    function test_contractDisabled_reverts()
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDisabled
+    {
         // Call function
         auctioneer.getCurrentTick(PERIOD_MONTHS);
     }
@@ -142,16 +144,20 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Otherwise the time passed will not be correct
         vm.warp(block.timestamp + 36800);
 
-        // Call setAuctionParameters, which resets the day
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Call setAuctionParameters, which resets the day and updates lastUpdate
         vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
-        // Assert tick capacity
-        assertEq(tick.capacity, 10e9, "new tick capacity");
-        assertEq(tick.price, 1815e16, "new tick price");
+        // Assert previously-stored tick was updated with the values before the new parameters were set
+        assertEq(tick.capacity, previousTick.capacity, "new tick capacity");
+        assertEq(tick.price, previousTick.price, "new tick price");
     }
 
     //   [X] the tick price is unchanged
@@ -334,16 +340,20 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // Otherwise the time passed will not be correct
         vm.warp(block.timestamp + 6 * 21600);
 
-        // Call setAuctionParameters, which resets the day
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Call setAuctionParameters, which resets the day and updates lastUpdate
         vm.prank(emissionManager);
         auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
 
-        // Assert tick capacity
-        assertEq(tick.capacity, 10e9, "new tick capacity");
-        assertEq(tick.price, 15e18, "new tick price");
+        // Assert previously-stored tick was updated with the values before the new parameters were set
+        assertEq(tick.capacity, previousTick.capacity, "new tick capacity");
+        assertEq(tick.price, previousTick.price, "new tick price");
     }
 
     //     [ ] the tick price is set to the minimum price

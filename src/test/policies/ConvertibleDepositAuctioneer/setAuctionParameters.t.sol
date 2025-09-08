@@ -116,8 +116,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
     // when the contract is deactivated
     //  [X] it sets the parameters
     //  [X] it emits an event
-    //  [X] it does not change the current tick capacity
-    //  [X] it does not change the current tick price
+    //  [X] it captures the current tick capacity
+    //  [X] it captures the current tick price
     //  [X] it does not change the day state
     //  [X] it does not change the auction results
     //  [X] it does not change the auction results index
@@ -132,12 +132,13 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 lastConvertible = auctioneer.getDayState().convertible;
         int256[] memory lastAuctionResults = auctioneer.getAuctionResults();
         uint8 lastAuctionResultsIndex = auctioneer.getAuctionResultsNextIndex();
-        uint256 lastCapacity = auctioneer.getPreviousTick(PERIOD_MONTHS).capacity;
-        uint256 lastPrice = auctioneer.getPreviousTick(PERIOD_MONTHS).price;
-        uint48 lastUpdate = uint48(block.timestamp);
 
         // Warp to change the block timestamp to the next day
-        vm.warp(lastUpdate + 1 days);
+        vm.warp(block.timestamp + 1 days);
+
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
 
         uint256 newTarget = 21e9;
         uint256 newTickSize = 11e9;
@@ -154,9 +155,13 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Assert state
         _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
 
-        // Assert current tick
-        // Values are unchanged
-        _assertPreviousTick(lastCapacity, lastPrice, newTickSize, lastUpdate);
+        // Assert previously-stored tick was updated with the values before the new parameters were set
+        _assertPreviousTick(
+            previousTick.capacity,
+            previousTick.price,
+            newTickSize,
+            uint48(block.timestamp)
+        );
 
         // Assert day state
         _assertDayState(lastConvertible);
@@ -173,6 +178,72 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             lastAuctionResults[6]
         );
         _assertAuctionResultsNextIndex(lastAuctionResultsIndex);
+    }
+
+    // when the contract is enabled
+    //  [X] it sets the parameters
+    //  [X] it emits an event
+    //  [X] it captures the current tick capacity
+    //  [X] it captures the current tick price
+    //  [X] it resets the day state
+    //  [X] it updates the auction results
+    //  [X] it increments the auction results index
+
+    function test_updatesCurrentTick()
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenRecipientHasBid(1e18)
+    {
+        uint256 lastConvertible = auctioneer.getDayState().convertible;
+        int256[] memory lastAuctionResults = auctioneer.getAuctionResults();
+        uint8 lastAuctionResultsIndex = auctioneer.getAuctionResultsNextIndex();
+
+        // Warp to change the block timestamp to the next day
+        vm.warp(block.timestamp + 1 days);
+
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        uint256 newTarget = 21e9;
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 14e18;
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit AuctionParametersUpdated(address(iReserveToken), newTarget, newTickSize, newMinPrice);
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Assert state
+        _assertAuctionParameters(newTarget, newTickSize, newMinPrice);
+
+        // Assert previously-stored tick was updated with the values before the new parameters were set
+        _assertPreviousTick(
+            previousTick.capacity,
+            previousTick.price,
+            newTickSize,
+            uint48(block.timestamp)
+        );
+
+        // Assert day state is updated
+        _assertDayState(0);
+
+        // Assert auction results
+        // Values are updated
+        _assertAuctionResults(
+            int256(lastConvertible) - int256(TARGET),
+            lastAuctionResults[0],
+            lastAuctionResults[1],
+            lastAuctionResults[2],
+            lastAuctionResults[3],
+            lastAuctionResults[4],
+            lastAuctionResults[5]
+        );
+        _assertAuctionResultsNextIndex(lastAuctionResultsIndex + 1);
     }
 
     // when the new tick size is less than the current tick capacity
@@ -197,7 +268,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been adjusted to the new tick size
-        _assertPreviousTick(newTickSize, MIN_PRICE, newTickSize, lastUpdate);
+        _assertPreviousTick(newTickSize, MIN_PRICE, newTickSize, uint48(block.timestamp));
     }
 
     // when the new tick size is >= the current tick capacity
@@ -222,7 +293,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, lastUpdate);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, uint48(block.timestamp));
     }
 
     // when the new min price is > than the current tick price
@@ -247,7 +318,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been set to the new min price
-        _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, lastUpdate);
+        _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, uint48(block.timestamp));
     }
 
     // when the new min price is <= the current tick price
@@ -272,7 +343,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, lastUpdate);
+        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
     }
 
     // given this is the first day of the auction cycle
