@@ -423,6 +423,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
         auctioneer.bid(PERIOD_MONTHS, deposit_, 1, false, false);
     }
 
+    function _mintAndApprove(address owner_, uint256 deposit_) internal {
+        // Mint
+        _mintReserveToken(owner_, deposit_);
+
+        // Approve spending
+        _approveReserveTokenSpending(owner_, address(depositManager), deposit_);
+    }
+
     function _mintAndBid(address owner_, uint256 deposit_) internal {
         // Mint
         _mintReserveToken(owner_, deposit_);

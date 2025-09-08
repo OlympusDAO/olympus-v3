@@ -20,26 +20,6 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(100, 100, 100);
     }
 
-    // when the new target is 0
-    //  [X] it reverts
-
-    function test_targetZero_reverts() public givenEnabled {
-        uint256 newTickSize = 11e9;
-        uint256 newMinPrice = 14e18;
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
-                "target"
-            )
-        );
-
-        // Call function
-        vm.prank(emissionManager);
-        auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
-    }
-
     // when the new tick size is 0
     //  [X] it reverts
 
@@ -72,6 +52,25 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Call function
         vm.prank(emissionManager);
         auctioneer.setAuctionParameters(21e9, 11e9, 0);
+    }
+
+    // when the new target is 0
+    //  [X] it sets the parameters
+
+    function test_targetZero() public givenEnabled {
+        uint256 newTickSize = 11e9;
+        uint256 newMinPrice = 14e18;
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(0, newTickSize, newMinPrice);
+
+        // Assert state
+        _assertAuctionParameters(0, newTickSize, newMinPrice);
+        // No assets defined, so tick is not initialized
+        _assertPreviousTick(0, 0, newTickSize, 0);
+        // _assertAuctionResultsEmpty(0);
+        // _assertAuctionResultsNextIndex(0);
     }
 
     // given the contract is not initialized

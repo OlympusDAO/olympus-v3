@@ -205,6 +205,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         (, , uint256 emission) = getNextEmission();
 
         // Update the parameters for the convertible deposit auction
+        // This call can revert, however it is mitigated by:
+        // - CDAuctioneer will accept a target (emission) of 0
+        // - getSizeFor() will return a tick size of 1 wei when the target is 0
         cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),
@@ -572,10 +575,17 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice get CD auction tick size for a given target
+    /// @dev    If the target is 0 (no emissions target), a size of 1 will be returned
+    ///
     /// @param  target size of day's CD auction
     /// @return size of tick
     function getSizeFor(uint256 target) public view returns (uint256) {
-        return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+        // CDAuctioneer will not accept a tick size of 0, so return the minimum accepted amount. This will effectively disable auctions, as the price would go vertical.
+        // This also handles the situation where rounding causes the calculated size to be 0
+        uint256 size = (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+        if (size == 0) return 1;
+
+        return size;
     }
 
     /// @notice Get CD auction minimum price for a given price input

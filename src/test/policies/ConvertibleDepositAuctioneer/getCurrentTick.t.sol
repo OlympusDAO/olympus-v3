@@ -53,6 +53,32 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         assertEq(tick.price, expectedTickPrice, "price");
     }
 
+    //  given the target is zero
+    //   [X] the tick price remains at the min price
+    //   [X] the tick capacity remains at the standard tick size
+
+    function test_fullCapacity_targetZero(
+        uint48 secondsPassed_
+    )
+        public
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+    {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert current tick
+        // As the day target is zero, no new capacity is added, hence the values stay the same
+        assertEq(tick.capacity, TICK_SIZE, "capacity");
+        assertEq(tick.price, MIN_PRICE, "price");
+        assertEq(auctioneer.getCurrentTickSize(), TICK_SIZE, "tick size");
+    }
+
     //  [X] the tick price remains at the min price
     //  [X] the tick capacity remains at the standard tick size
 
@@ -830,5 +856,37 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
             expectedPrice,
             "Price should decay exactly once using initial tick size"
         );
+    }
+
+    // given the day target is zero
+    //  given the tick price is above the minimum
+    //   [X] the tick price does not change
+    //   [X] the tick size does not change
+
+    function test_givenTickPriceAboveMinimum_targetZero(
+        uint48 secondsPassed_
+    )
+        public
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenRecipientHasBid(1000e18)
+    {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getPreviousTick(
+            PERIOD_MONTHS
+        );
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert current tick
+        // As the day target is zero, no new capacity is added, hence the values stay the same
+        assertEq(tick.capacity, previousTick.capacity, "capacity");
+        assertEq(tick.price, previousTick.price, "price");
+        assertEq(auctioneer.getCurrentTickSize(), TICK_SIZE, "tick size");
     }
 }
