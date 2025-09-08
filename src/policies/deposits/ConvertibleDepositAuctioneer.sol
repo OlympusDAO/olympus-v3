@@ -546,10 +546,16 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
+    /// @dev        Notes:
+    ///             - Enabling a deposit period will reset the minimum price and tick size to the standard values
+    ///
+    ///             This function will revert if:
+    ///             - The contract is not enabled
     ///             - The caller is not a manager or admin
     ///             - The deposit period is already enabled for this asset
-    function enableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
+    function enableDepositPeriod(
+        uint8 depositPeriod_
+    ) external override onlyEnabled onlyManagerOrAdminRole {
         // Validate that the deposit period is not 0
         if (depositPeriod_ == 0)
             revert ConvertibleDepositAuctioneer_InvalidParams("deposit period");
@@ -589,7 +595,13 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    function disableDepositPeriod(uint8 depositPeriod_) external override onlyManagerOrAdminRole {
+    /// @dev        This function will revert if:
+    ///             - The contract is not enabled
+    ///             - The caller is not a manager or admin
+    ///             - The deposit period is not enabled for this asset
+    function disableDepositPeriod(
+        uint8 depositPeriod_
+    ) external override onlyEnabled onlyManagerOrAdminRole {
         // Validate that the deposit period is enabled
         if (!_depositPeriodsEnabled[depositPeriod_]) {
             revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
@@ -795,7 +807,10 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
-    /// @dev        This function will revert if:
+    /// @dev        Notes:
+    ///             - Calling this function will erase the previous auction results, which in turn may affect the bond markets created to sell under-sold OHM capacity
+    ///
+    ///             This function will revert if:
     ///             - The caller does not have the ROLE_ADMIN role
     ///             - The new auction tracking period is 0
     ///
