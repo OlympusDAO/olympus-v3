@@ -52,7 +52,7 @@ interface IConvertibleDepositFacility {
     /// @param periodMonths      The period of the deposit
     /// @param depositor         The address to create the position for
     /// @param amount            The amount of asset to deposit
-    /// @param conversionPrice   The amount of converted tokens per asset token
+    /// @param conversionPrice   The amount of asset tokens required to receive 1 OHM (scale: asset token decimals)
     /// @param wrapPosition      Whether the position should be wrapped
     /// @param wrapReceipt       Whether the receipt token should be wrapped
     struct CreatePositionParams {

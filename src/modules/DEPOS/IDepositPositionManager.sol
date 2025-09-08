@@ -14,7 +14,7 @@ interface IDepositPositionManager {
     /// @param  asset                   Address of the asset
     /// @param  periodMonths            The period of the deposit
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
+    /// @param  conversionPrice         The amount of asset tokens required to receive 1 OHM (scale: asset token decimals)
     /// @param  expiry                  Timestamp of the position expiry
     /// @param  wrapped                 Whether the term is wrapped
     /// @param  additionalData          Additional data for the position
@@ -36,7 +36,7 @@ interface IDepositPositionManager {
     /// @param  asset                   Address of the asset
     /// @param  periodMonths            The period of the deposit
     /// @param  remainingDeposit        Amount of reserve tokens remaining to be converted
-    /// @param  conversionPrice         The amount of converted tokens per asset token (only for convertible positions)
+    /// @param  conversionPrice         The amount of asset tokens required to receive 1 OHM (scale: asset token decimals)
     /// @param  expiry                  Timestamp of the position expiry
     /// @param  wrapPosition            Whether the position should be wrapped
     /// @param  additionalData          Additional data for the position

@@ -7,6 +7,7 @@ import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 // Libraries
 import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
@@ -19,12 +20,15 @@ import {IPositionTokenRenderer} from "src/modules/DEPOS/IPositionTokenRenderer.s
 ///         This contract is used to create, manage, and wrap/unwrap deposit positions. Positions are optionally convertible.
 contract OlympusDepositPositionManager is DEPOSv1 {
     using EnumerableSet for EnumerableSet.UintSet;
+    using FullMath for uint256;
 
     // ========== STATE VARIABLES ========== //
 
     /// @notice The address of the token renderer contract
     /// @dev    If set, tokenURI() will delegate to this contract. If not set, tokenURI() returns an empty string.
     address internal _tokenRenderer;
+
+    uint256 internal constant _OHM_SCALE = 1e9;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -322,7 +326,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // Validate that the position is wrapped/minted
         if (!position.wrapped) revert DEPOS_NotWrapped(tokenId_);
 
-        // Additional validation performed in super.transferForm():
+        // Additional validation performed in super.transferFrom():
         // - Approvals
         // - Ownership
         // - Destination address
@@ -402,7 +406,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         // amount_ and conversionPrice_ are in the same decimals and cancel each other out
         // The output needs to be in OHM, so we multiply by 1e9
         // This also deliberately rounds down
-        return (amount_ * 1e9) / conversionPrice_;
+        return amount_.mulDiv(_OHM_SCALE, conversionPrice_);
     }
 
     /// @inheritdoc IDepositPositionManager

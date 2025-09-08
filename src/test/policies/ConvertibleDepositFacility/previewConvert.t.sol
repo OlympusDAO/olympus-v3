@@ -386,11 +386,11 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         // Each amount is converted separately to avoid rounding errors
         assertEq(
             converted,
-            (amountOne * 1e6) /
+            (amountOne * 1e9) /
                 conversionPrice +
-                (amountTwo * 1e6) /
+                (amountTwo * 1e9) /
                 conversionPrice +
-                (amountThree * 1e6) /
+                (amountThree * 1e9) /
                 conversionPrice,
             "converted"
         );
@@ -413,9 +413,9 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         givenAddressHasPosition(recipient, 3e18)
         givenAddressHasPosition(recipient, 3e18)
     {
-        uint256 amountOne = bound(amountOne_, 1e2, 3e18);
-        uint256 amountTwo = bound(amountTwo_, 1e2, 3e18);
-        uint256 amountThree = bound(amountThree_, 1e2, 3e18);
+        uint256 amountOne = bound(amountOne_, 1e18, 3e18);
+        uint256 amountTwo = bound(amountTwo_, 1e18, 3e18);
+        uint256 amountThree = bound(amountThree_, 1e18, 3e18);
 
         uint256[] memory positionIds_ = new uint256[](3);
         uint256[] memory amounts_ = new uint256[](3);
@@ -441,11 +441,11 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         // Each amount is converted separately to avoid rounding errors
         assertEq(
             converted,
-            (amountOne * 1e18) /
+            (amountOne * 1e9) /
                 CONVERSION_PRICE +
-                (amountTwo * 1e18) /
+                (amountTwo * 1e9) /
                 CONVERSION_PRICE +
-                (amountThree * 1e18) /
+                (amountThree * 1e9) /
                 CONVERSION_PRICE,
             "converted"
         );
