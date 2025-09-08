@@ -113,6 +113,11 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The deposit token or period are not supported for this facility in the DepositManager
+    ///             - There are not enough available deposits in the DepositManager
     function handleCommit(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -149,6 +154,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The amount is greater than the committed deposits for the operator
     function handleCommitCancel(
         IERC20 depositToken_,
         uint8,
@@ -173,16 +182,23 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
+    ///             - The amount is greater than the committed deposits for the operator
     function handleCommitWithdraw(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
         address recipient_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
-        // Validate that there are enough committed funds
+        // Validate that there are enough committed funds for the operator
         uint256 operatorCommitments = getCommittedDeposits(depositToken_, msg.sender);
         if (amount_ > operatorCommitments)
             revert DepositFacility_InsufficientCommitment(msg.sender, amount_, operatorCommitments);
+
+        // Validate that the amount is not zero
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
 
         // Reduce the commitment
         // The input amount is used here, in order to avoid having residual values
@@ -203,9 +219,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 isWrapped: false
             })
         );
-
-        // Validate that the amount is not zero
-        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
 
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
@@ -256,6 +269,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ///             - Updates the committed deposits
     ///
     ///             This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
     function handleLoanRepay(
         IERC20 depositToken_,
         uint8,
@@ -285,6 +300,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    /// @dev        This function will revert if:
+    ///             - This contract is not enabled
+    ///             - The caller is not an authorized operator
     function handleLoanDefault(
         IERC20 depositToken_,
         uint8 depositPeriod_,

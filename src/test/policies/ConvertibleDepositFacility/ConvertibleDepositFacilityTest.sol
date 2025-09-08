@@ -58,6 +58,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public admin;
     address public HEART;
     address public OPERATOR;
+    address public OPERATOR_TWO;
 
     uint48 public constant INITIAL_BLOCK = 1_000_000;
     uint256 public constant CONVERSION_PRICE = 2e18;
@@ -79,6 +80,7 @@ contract ConvertibleDepositFacilityTest is Test {
         admin = makeAddr("ADMIN");
         HEART = makeAddr("HEART");
         OPERATOR = makeAddr("OPERATOR");
+        OPERATOR_TWO = makeAddr("OPERATOR_TWO");
 
         ohm = new MockERC20("Olympus", "OHM", 9);
         reserveToken = new MockERC20("Reserve Token", "RES", 18);
@@ -216,6 +218,25 @@ contract ConvertibleDepositFacilityTest is Test {
 
     // ========== MODIFIERS ========== //
 
+    function _mintReserveToken(address recipient_, uint256 amount_) internal {
+        MockERC20(address(iReserveToken)).mint(recipient_, amount_);
+    }
+
+    function _approveReserveTokenSpendingByDepositManager(
+        address recipient_,
+        uint256 amount_
+    ) internal {
+        vm.prank(recipient_);
+        iReserveToken.approve(address(depositManager), amount_);
+    }
+
+    function _mintReceiptToken(address recipient_, uint256 amount_) internal returns (uint256) {
+        vm.prank(recipient_);
+        (, uint256 actualAmount) = facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
+
+        return actualAmount;
+    }
+
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
         reserveToken.mint(to_, amount_);
         _;
@@ -340,20 +361,13 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier givenAddressHasConvertibleDepositTokenDefault(address recipient_) {
         // Mint reserve tokens to the account
-        MockERC20(address(iReserveToken)).mint(recipient_, RESERVE_TOKEN_AMOUNT);
+        _mintReserveToken(recipient_, RESERVE_TOKEN_AMOUNT);
 
         // Approve deposit manager to spend the reserve tokens
-        vm.prank(recipient_);
-        iReserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT);
+        _approveReserveTokenSpendingByDepositManager(recipient_, RESERVE_TOKEN_AMOUNT);
 
         // Mint the receipt token to the account
-        vm.prank(recipient_);
-        (, previousDepositActual) = facility.deposit(
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT,
-            false
-        );
+        previousDepositActual = _mintReceiptToken(recipient_, RESERVE_TOKEN_AMOUNT);
         _;
     }
 
@@ -497,9 +511,13 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
-    modifier givenCommitted(address operator_, uint256 amount_) {
+    function _commitReceiptToken(address operator_, uint256 amount_) internal {
         vm.prank(operator_);
         facility.handleCommit(iReserveToken, PERIOD_MONTHS, amount_);
+    }
+
+    modifier givenCommitted(address operator_, uint256 amount_) {
+        _commitReceiptToken(operator_, amount_);
         _;
     }
 

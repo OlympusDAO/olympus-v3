@@ -7,7 +7,6 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
     event AssetCommitWithdrawn(address indexed asset, address indexed operator, uint256 amount);
 
     uint256 public constant COMMIT_AMOUNT = 1e18;
-    address public constant OPERATOR_TWO = address(0xDDD);
 
     // ========== TESTS ========== //
 
@@ -190,7 +189,226 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         );
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
-            previousDepositActual * 2 - COMMIT_AMOUNT,
+            previousDepositActual * 2 - COMMIT_AMOUNT, // Total deposits - initial committed funds (no need to reduce by the withdrawal amount, since it is contained within the commitment amount)
+            "available deposits"
+        );
+    }
+
+    // given the operator has borrowed against the commitment
+    //  [X] it reverts
+
+    function test_givenBorrowed_reverts(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenBorrowed(OPERATOR, COMMIT_AMOUNT, recipient)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, type(uint256).max);
+
+        // Expect revert
+        _expectRevertInsufficientCommitments(OPERATOR, withdrawAmount_, 0);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipient);
+    }
+
+    // given multiple operators have commitments
+    //  given the operator has borrowed funds
+    //   when an operator attempts to withdraw more than the remaining
+    //    [X] it reverts
+    //   [X] it withdraws the requested amount
+    //   [X] the committed deposits of the operator are reduced
+    //   [X] the committed deposits of the other operators are not reduced
+    //  [X] it withdraws the requested amount
+    //  [X] the committed deposits of the operator are reduced
+    //  [X] the committed deposits of the other operators are not reduced
+
+    function test_multipleOperators_givenBorrowed_whenOperatorWithdrawsMoreThanRemaining_reverts(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenBorrowed(OPERATOR, COMMIT_AMOUNT, recipient)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, type(uint256).max);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+        }
+
+        // Expect revert
+        _expectRevertInsufficientCommitments(OPERATOR, withdrawAmount_, 0);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipient);
+    }
+
+    function test_multipleOperators_givenBorrowed(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenBorrowed(OPERATOR, COMMIT_AMOUNT / 2, recipient)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, COMMIT_AMOUNT / 2);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+
+            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+        }
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit AssetCommitWithdrawn(address(iReserveToken), OPERATOR, withdrawAmount_);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipientTwo);
+
+        // Assert tokens
+        assertEq(
+            depositManager.balanceOf(OPERATOR, receiptTokenId),
+            previousDepositActual - withdrawAmount_,
+            "operator receipt token balance"
+        );
+        assertEq(
+            iReserveToken.balanceOf(recipientTwo),
+            withdrawAmount_,
+            "recipientTwo token balance"
+        );
+
+        // Assert deposits
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            2 * COMMIT_AMOUNT - COMMIT_AMOUNT / 2 - withdrawAmount_,
+            "committed deposits"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            COMMIT_AMOUNT - COMMIT_AMOUNT / 2 - withdrawAmount_,
+            "committed deposits for operator"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR_TWO),
+            COMMIT_AMOUNT,
+            "committed deposits for operator two"
+        );
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            previousDepositActual * 3 - 2 * COMMIT_AMOUNT, // Total deposits - initial committed funds (no need to reduce by the withdrawal amount, since it is contained within the commitment amount)
+            "available deposits"
+        );
+    }
+
+    function test_multipleOperators(
+        uint256 withdrawAmount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+    {
+        withdrawAmount_ = bound(withdrawAmount_, 1, COMMIT_AMOUNT);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+
+            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+        }
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit AssetCommitWithdrawn(address(iReserveToken), OPERATOR, withdrawAmount_);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, withdrawAmount_, recipient);
+
+        // Assert tokens
+        assertEq(
+            depositManager.balanceOf(OPERATOR, receiptTokenId),
+            previousDepositActual - withdrawAmount_,
+            "operator receipt token balance"
+        );
+        assertEq(iReserveToken.balanceOf(recipient), withdrawAmount_, "recipient token balance");
+
+        // Assert deposits
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            2 * COMMIT_AMOUNT - withdrawAmount_,
+            "committed deposits"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            COMMIT_AMOUNT - withdrawAmount_,
+            "committed deposits for operator"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR_TWO),
+            COMMIT_AMOUNT,
+            "committed deposits for operator two"
+        );
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            previousDepositActual * 3 - 2 * COMMIT_AMOUNT, // Total deposits - initial committed funds (no need to reduce by the withdrawal amount, since it is contained within the commitment amount)
             "available deposits"
         );
     }

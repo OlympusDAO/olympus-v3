@@ -6,6 +6,8 @@ import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepos
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilityTest {
+    uint256 public constant COMMIT_AMOUNT = 1e18;
+
     // ========== TESTS ========== //
     // given the contract is disabled
     //  [X] it reverts
@@ -35,10 +37,10 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
         facility.handleBorrow(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
     }
 
-    // when the amount is greater than the available capacity
+    // when the amount is greater than the available deposits
     //  [X] it reverts
 
-    function test_whenAmountGreaterThanCapacity_reverts(
+    function test_whenAmountGreaterThanAvailableDeposits_reverts(
         uint256 amount_
     )
         public
@@ -62,8 +64,38 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
         facility.handleBorrow(iReserveToken, PERIOD_MONTHS, amount_, recipient);
     }
 
+    // when the amount is greater than the committed funds
+    //  [X] it reverts
+
+    function test_whenAmountGreaterThanCommittedFunds_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+    {
+        amount_ = bound(amount_, COMMIT_AMOUNT + 1, type(uint256).max);
+
+        // Expect revert
+        _expectRevertInsufficientCommitments(OPERATOR, amount_, COMMIT_AMOUNT);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, amount_, recipient);
+    }
+
     // [X] it transfers the tokens to the recipient
-    // [X] it updates the operator shares
+    // [X] it reduces the operator shares
+    // [X] it reduces the available deposits
+    // [X] it reduces the committed deposits for the facility
+    // [X] it reduces the committed deposits for the operator
 
     function test_success(
         uint256 amount_
@@ -122,6 +154,164 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             facility.getAvailableDeposits(iReserveToken),
             operatorSharesInAssetsAfter - (previousDepositActual - amount_),
             "available deposits"
+        );
+
+        // Assert that the committed deposits have decreased by the amount
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            previousDepositActual - amount_,
+            "committed deposits"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            previousDepositActual - amount_,
+            "committed deposits for operator"
+        );
+    }
+
+    // given multiple operators have commitments
+    //  when an operator attempts to borrow more than committed
+    //   [X] it reverts
+
+    function test_multipleOperators_whenAmountGreaterThanCommittedFunds_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+    {
+        amount_ = bound(amount_, COMMIT_AMOUNT + 1, type(uint256).max);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+
+            previousDepositActual = depositManager.balanceOf(OPERATOR, receiptTokenId);
+        }
+
+        // Expect revert
+        _expectRevertInsufficientCommitments(OPERATOR, amount_, COMMIT_AMOUNT);
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, amount_, recipient);
+    }
+
+    //  [X] it transfers the tokens to the recipient
+    //  [X] it reduces the operator shares
+    //  [X] it reduces the available deposits
+    //  [X] it reduces the committed deposits for the facility
+    //  [X] it reduces the committed deposits for the operator
+    //  [X] it does not change the committed deposit for operator two
+
+    function test_multipleOperators(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1, COMMIT_AMOUNT);
+
+        // Perform actions for the second operator
+        // Doing it here to avoid stack too deep
+        {
+            // Authorise operator
+            vm.prank(admin);
+            facility.authorizeOperator(OPERATOR_TWO);
+
+            // Mint, approve, deposit
+            _mintReserveToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _approveReserveTokenSpendingByDepositManager(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+            _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
+
+            // Commit
+            _commitReceiptToken(OPERATOR_TWO, COMMIT_AMOUNT);
+        }
+
+        uint256 recipientBalanceBefore = iReserveToken.balanceOf(recipient);
+        (, uint256 operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
+        );
+
+        // Call function
+        vm.prank(OPERATOR);
+        uint256 actualAmount = facility.handleBorrow(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            recipient
+        );
+
+        // Assert that the actual amount is the amount
+        assertEq(actualAmount, amount_, "actual amount");
+
+        // Assert that the recipient's balance has increased by the amount
+        assertEq(
+            iReserveToken.balanceOf(recipient),
+            recipientBalanceBefore + amount_,
+            "recipient balance"
+        );
+
+        // Assert that the operator's shares in assets have decreased by the amount
+        (, uint256 operatorSharesInAssetsAfter) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
+        );
+        assertEq(
+            operatorSharesInAssetsAfter,
+            operatorSharesInAssetsBefore - amount_,
+            "operator shares in assets"
+        );
+
+        // Assert that the available deposits have decreased by the amount
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            operatorSharesInAssetsAfter - (2 * COMMIT_AMOUNT - amount_),
+            "available deposits"
+        );
+
+        // Assert that the committed deposits have decreased by the amount
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            COMMIT_AMOUNT * 2 - amount_,
+            "committed deposits"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            COMMIT_AMOUNT - amount_,
+            "committed deposits for operator"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR_TWO),
+            COMMIT_AMOUNT,
+            "committed deposits for operator two"
         );
     }
 }

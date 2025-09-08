@@ -72,21 +72,21 @@ interface IDepositFacility {
     ///
     /// @param depositToken_    The deposit token committed
     /// @param depositPeriod_   The deposit period in months
-    /// @param amount_ The amount to commit
+    /// @param amount_          The amount to commit
     function handleCommit(IERC20 depositToken_, uint8 depositPeriod_, uint256 amount_) external;
 
     /// @notice Allows an operator to cancel committed funds.
     ///
     /// @param depositToken_    The deposit token committed
     /// @param depositPeriod_   The deposit period in months
-    /// @param amount_ The amount to cancel the committed funds by
+    /// @param amount_          The amount to reduce the commitment by
     function handleCommitCancel(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_
     ) external;
 
-    /// @notice Allows an operator to withdraw committed funds
+    /// @notice Allows an operator to withdraw committed funds. This will withdraw deposit tokens to the recipient.
     ///
     /// @param depositToken_    The deposit token to withdraw
     /// @param depositPeriod_   The deposit period in months
@@ -100,13 +100,13 @@ interface IDepositFacility {
         address recipient_
     ) external returns (uint256 actualAmount);
 
-    /// @notice Allows an operator to borrow against deposits owned by this facility
+    /// @notice Allows an operator to borrow against this facility's committed funds.
     ///
-    /// @param depositToken_ The deposit token to borrow against
-    /// @param depositPeriod_ The deposit period in months
-    /// @param amount_ The amount to borrow
-    /// @param recipient_ The address to receive the borrowed tokens
-    /// @return actualAmount The amount of tokens borrowed
+    /// @param depositToken_    The deposit token to borrow against
+    /// @param depositPeriod_   The deposit period in months
+    /// @param amount_          The amount to borrow
+    /// @param recipient_       The address to receive the borrowed tokens
+    /// @return actualAmount    The amount of tokens borrowed
     function handleBorrow(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -116,11 +116,11 @@ interface IDepositFacility {
 
     /// @notice Allows an operator to repay borrowed funds
     ///
-    /// @param depositToken_ The deposit token being repaid
-    /// @param depositPeriod_ The deposit period in months
-    /// @param amount_ The amount being repaid
-    /// @param payer_ The address making the repayment
-    /// @return actualAmount The amount of tokens borrowed
+    /// @param depositToken_    The deposit token being repaid
+    /// @param depositPeriod_   The deposit period in months
+    /// @param amount_          The amount being repaid
+    /// @param payer_           The address making the repayment
+    /// @return actualAmount    The amount of tokens repaid
     function handleLoanRepay(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -208,23 +208,28 @@ interface IDepositFacility {
 
     // ========== BALANCE QUERIES ========== //
 
-    /// @notice Get the available deposit balance for a specific token. This excludes any committed funds.
+    /// @notice Get the available deposit balance for a specific token.
+    ///         This excludes any committed funds.
     ///
     /// @param depositToken_ The deposit token to query
     /// @return balance     The available deposit balance
     function getAvailableDeposits(IERC20 depositToken_) external view returns (uint256 balance);
 
-    /// @notice Get the committed deposits for a specific token
+    /// @notice Get the committed deposits for a specific token.
+    ///         The committed deposits value represents the amount of the deposit token
+    ///         that this contract ensures will be available for all operators to use.
     ///
     /// @param depositToken_    The deposit token to query
     /// @return committed       The total committed deposits
     function getCommittedDeposits(IERC20 depositToken_) external view returns (uint256 committed);
 
-    /// @notice Get the committed deposits for a specific token and operator
+    /// @notice Get the committed deposits for a specific token and operator.
+    ///         The committed deposits value represents the amount of the deposit token
+    ///         that this contract ensures will be available for the specific operator to use.
     ///
-    /// @param depositToken_ The deposit token to query
-    /// @param operator_     The operator
-    /// @return committed   The total committed deposits
+    /// @param depositToken_    The deposit token to query
+    /// @param operator_        The operator
+    /// @return committed       The committed deposits for the operator
     function getCommittedDeposits(
         IERC20 depositToken_,
         address operator_
