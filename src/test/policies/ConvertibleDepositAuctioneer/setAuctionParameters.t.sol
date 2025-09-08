@@ -54,6 +54,26 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(21e9, 11e9, 0);
     }
 
+    // when the tick size is greater than the target
+    //  [X] it reverts
+
+    function test_tickSizeGreaterThanTarget_reverts(uint256 tickSize_) public givenEnabled {
+        uint256 target = 21e9;
+        tickSize_ = bound(tickSize_, target + 1, type(uint256).max);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
+                "tick size"
+            )
+        );
+
+        // Call function
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(target, tickSize_, 16e18);
+    }
+
     // when the new target is 0
     //  [X] it sets the parameters
 
