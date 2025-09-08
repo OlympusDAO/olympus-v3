@@ -163,6 +163,7 @@ contract DepositManager is
     {
         // Deposit into vault
         // This will revert if the asset is not configured
+        // This takes place before any state changes to avoid ERC777 re-entrancy
         (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
 
         // Mint the receipt token to the caller
@@ -609,6 +610,7 @@ contract DepositManager is
 
         // Transfer funds from payer to this contract
         // We ignore the actual amount deposited into the vault, as the payer will not be able to over-pay in case of an off-by-one issue
+        // This takes place before any state changes to avoid ERC777 re-entrancy
         _depositAsset(params_.asset, params_.payer, params_.amount);
 
         // Update borrowed amount
