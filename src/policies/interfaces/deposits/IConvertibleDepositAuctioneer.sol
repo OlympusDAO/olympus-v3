@@ -74,6 +74,18 @@ interface IConvertibleDepositAuctioneer {
     /// @param  depositPeriod     The deposit period
     event DepositPeriodDisabled(address indexed depositAsset, uint8 depositPeriod);
 
+    /// @notice Emitted when a deposit period enable is queued
+    ///
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    event DepositPeriodEnableQueued(address indexed depositAsset, uint8 depositPeriod);
+
+    /// @notice Emitted when a deposit period disable is queued
+    ///
+    /// @param  depositAsset      The asset that is being deposited
+    /// @param  depositPeriod     The deposit period
+    event DepositPeriodDisableQueued(address indexed depositAsset, uint8 depositPeriod);
+
     // ========== ERRORS ========== //
 
     /// @notice Emitted when the parameters are invalid
@@ -90,16 +102,18 @@ interface IConvertibleDepositAuctioneer {
     /// @param  minOhmOut      The minimum amount of OHM that the deposit should convert to, in order to succeed
     error ConvertibleDepositAuctioneer_ConvertedAmountSlippage(uint256 ohmOut, uint256 minOhmOut);
 
-    /// @notice Emitted when the deposit period is already enabled for this asset
-    error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
-        address depositAsset,
-        uint8 depositPeriod
-    );
-
     /// @notice Emitted when the deposit period is not enabled for this asset
     error ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
         address depositAsset,
         uint8 depositPeriod
+    );
+
+    /// @notice Emitted when the deposit period is in an invalid state for the requested operation
+    /// @param  isEnabled   The current enabled state: true if enabled, false if disabled
+    error ConvertibleDepositAuctioneer_DepositPeriodInvalidState(
+        address depositAsset,
+        uint8 depositPeriod,
+        bool isEnabled
     );
 
     // ========== DATA STRUCTURES ========== //
@@ -255,9 +269,12 @@ interface IConvertibleDepositAuctioneer {
 
     /// @notice Returns whether a deposit period is enabled
     ///
-    /// @param  depositPeriod_  The deposit period
-    /// @return isEnabled       Whether the deposit period is enabled
-    function isDepositPeriodEnabled(uint8 depositPeriod_) external view returns (bool isEnabled);
+    /// @param  depositPeriod_      The deposit period
+    /// @return isEnabled           Current state
+    /// @return isPendingEnabled    Desired state after applying all queued changes (equals isEnabled if no changes are queued)
+    function isDepositPeriodEnabled(
+        uint8 depositPeriod_
+    ) external view returns (bool isEnabled, bool isPendingEnabled);
 
     /// @notice Enables a deposit period
     /// @dev    The implementing contract is expected to handle the following:

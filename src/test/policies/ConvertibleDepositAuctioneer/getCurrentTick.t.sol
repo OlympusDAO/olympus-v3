@@ -10,10 +10,10 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     // given the contract is disabled
     //  [X] it does not revert
 
-    function test_contractDisabled_reverts()
+    function test_contractDisabled_doesNotRevert()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenDisabled
     {
         // Call function
@@ -38,7 +38,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_fullCapacity_sameTime(
         uint48 secondsPassed_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 0, 86400 - 1));
 
         // Warp to change the block timestamp
@@ -63,8 +63,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         uint48 secondsPassed_
     )
         public
-        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
     {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
 
@@ -86,7 +86,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_fullCapacity(
         uint48 secondsPassed_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
 
         // Warp to change the block timestamp
@@ -123,8 +123,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityEqualToTickSize_dayTargetMet_nextDay()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(378861111101700000000)
     {
         // 150e18 + 165e18 + 63861111101700000000 = 378861111101700000000
@@ -166,8 +166,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityEqualToTickSize_dayTargetMet()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(360375e15)
     {
         // Bid size of 360375e15 results in:
@@ -199,8 +199,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityEqualToTickSize()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(75e18)
     {
         // Min price is 15e18
@@ -249,8 +249,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityLessThanTickSize()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(90e18)
     {
         // Bid size of 90e18 results in convertible amount of 6e9
@@ -278,9 +278,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickStepSame_newCapacityGreaterThanTickSize()
         public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenEnabled
         givenTickStep(100e2)
-        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(45e18)
     {
         // Bid size of 45e18 results in convertible amount of 3e9
@@ -312,8 +312,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newPriceBelowMinimum_dayTargetMet_nextDay()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -365,8 +365,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newPriceBelowMinimum()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -406,8 +406,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet_nextDay()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -446,8 +446,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(330e18)
     {
         // Bid size of 330e18 results in:
@@ -485,8 +485,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -516,8 +516,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_newCapacityGreaterThanTickSize()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(45e18)
     {
         // Bid size of 45e18 results in convertible amount of 3e9
@@ -543,9 +543,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickStepSame_newCapacityLessThanTickSize()
         public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenEnabled
         givenTickStep(100e2)
-        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(75e18)
     {
         // Bid size of 75e18 results in convertible amount of 5e9
@@ -569,9 +569,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_tickStepSame_newCapacityEqualToTickSize()
         public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenEnabled
         givenTickStep(100e2)
-        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenRecipientHasBid(75e18)
     {
         // Bid size of 75e18 results in convertible amount of 5e9
@@ -599,9 +599,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_givenOtherDepositAssetAndPeriodEnabled_otherTickCapacityDepleted()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -615,7 +615,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            PERIOD_MONTHS + 1
+            PERIOD_MONTHS_TWO
         );
 
         // Assert tick
@@ -628,9 +628,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_givenOtherDepositAssetAndPeriodEnabled_tickCapacityDepleted()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
         givenRecipientHasBid(270e18)
     {
         // Bid size of 270e18 results in:
@@ -664,9 +664,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
     function test_givenOtherDepositAssetAndPeriodEnabled_otherDepositAssetAndPeriodDayTargetMet()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(PERIOD_MONTHS + 1)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
         givenRecipientHasBid(360375e15)
     {
         // Bid size of 360375e15 results in:
@@ -680,7 +680,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Call function
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
-            PERIOD_MONTHS + 1
+            PERIOD_MONTHS_TWO
         );
 
         // Assert tick
@@ -692,8 +692,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     /// @dev This test demonstrates the accelerated price decay bug with deterministic values
     function test_priceDecayUsesInitialTickSize_noDecay()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
     {
         _mintReserveToken(recipient, 100000e18);
         _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
@@ -778,8 +778,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
     /// @dev This test demonstrates that decay calculations use the initial tick size, not the reduced current tick size
     function test_priceDecayUsesInitialTickSize_oneDecayIteration()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
     {
         _mintReserveToken(recipient, 100000e18);
         _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
@@ -877,8 +877,8 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         uint48 secondsPassed_
     )
         public
-        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenRecipientHasBid(1000e18)
     {
         uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));

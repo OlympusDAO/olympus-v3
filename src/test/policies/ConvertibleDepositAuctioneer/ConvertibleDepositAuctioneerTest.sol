@@ -202,6 +202,23 @@ contract ConvertibleDepositAuctioneerTest is Test {
         );
     }
 
+    function _expectDepositPeriodInvalidState(
+        IERC20 depositAsset_,
+        uint8 depositPeriod_,
+        bool isEnabled_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodInvalidState
+                    .selector,
+                address(depositAsset_),
+                depositPeriod_,
+                isEnabled_
+            )
+        );
+    }
+
     function _assertAuctionParameters(
         uint256 target_,
         uint256 tickSize_,
@@ -288,7 +305,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 otherDepositPeriodCount_
     ) internal view {
         // Check the deposit period is enabled
-        assertEq(auctioneer.isDepositPeriodEnabled(depositPeriod_), true, "deposit period enabled");
+        (bool isEnabled, ) = auctioneer.isDepositPeriodEnabled(depositPeriod_);
+        assertEq(isEnabled, true, "deposit period enabled");
 
         // Check that the deposit period is listed
         uint8[] memory depositPeriods = auctioneer.getDepositPeriods();

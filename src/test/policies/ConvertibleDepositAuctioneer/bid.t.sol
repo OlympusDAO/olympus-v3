@@ -139,8 +139,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenSpendingNotApproved_reverts()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
     {
         // Expect revert
@@ -156,8 +156,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenAuctioneerRoleNotGranted_reverts()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -180,8 +180,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 minOhmOut_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -216,8 +216,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -246,8 +246,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_reserveTokenHasSmallerDecimals()
         public
         givenReserveTokenHasDecimals(6)
-        givenEnabledWithParameters(TARGET, TICK_SIZE, 15e6)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(TARGET, TICK_SIZE, 15e6)
         givenAddressHasReserveToken(recipient, 3e6)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 3e6)
     {
@@ -319,8 +319,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenFirstBid()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 3e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 3e18)
     {
@@ -389,8 +389,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenFirstBidOfDay()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(120e18)
         givenAddressHasReserveToken(recipient, 6e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 6e18)
@@ -474,8 +474,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     /// forge-config: default.isolate = true
     function test_secondBidUpdatesDayState()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenRecipientHasBid(3e18)
         givenAddressHasReserveToken(recipient, 6e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 6e18)
@@ -569,8 +569,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 150e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 150e18)
     {
@@ -639,7 +639,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
     function test_convertedAmountLessThanTickCapacity_greaterThanMinOhmOut(
         uint256 bidAmount_,
         uint256 minOhmOut_
-    ) public givenEnabled givenDepositPeriodEnabled(PERIOD_MONTHS) {
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         _mintAndApprove(recipient, 150e18);
 
         // We want the converted amount to be less than the tick capacity (10e9)
@@ -718,8 +718,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 151e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 151e18)
     {
@@ -795,9 +795,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenEnabled
         givenTickStep(100e2)
-        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 151e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 151e18)
     {
@@ -867,8 +867,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 300e18)
     {
@@ -936,8 +936,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 40575e16)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 40575e16)
     {
@@ -1033,9 +1033,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
     {
         // We want the converted amount to be greater than the day target, 20e9, but within tick three
         // Tick one: 10e9, price is 15e18, max bid amount is 150e18
@@ -1172,8 +1172,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 796064875e12)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 796064875e12)
     {
@@ -1198,7 +1198,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             // Tick three: 9075e16 * 1e9 / 1815e16 = 5e9
             // Tick four: 99825e15 * 1e9 / 19965e15 = 5e9
             // Tick five: 1098075e14 * 1e9 / 219615e14 = 5e9
-            // Tick six: 12078825e23 * 1e9 / 2395765e13 = 5e9
+            // Tick six: 12078825e13 * 1e9 / 2415765e13 = 5e9
             uint256 ticksOneToSixConvertedAmount = 40e9;
             uint256 tickSevenConvertedAmount = ((bidAmount - 73617075e13) * 1e9) / 26573415e12;
             expectedConvertedAmount = ticksOneToSixConvertedAmount + tickSevenConvertedAmount;
@@ -1274,8 +1274,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 300e18)
     {
@@ -1357,9 +1357,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenEnabled
         givenTickStep(100e2)
-        givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenAddressHasReserveToken(recipient, 300e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 300e18)
     {
@@ -1427,8 +1427,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
         givenAddressHasReserveToken(recipient, 1e18)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
     {
@@ -1490,8 +1490,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount_
     )
         public
-        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenAddressHasReserveToken(recipient, LARGE_MINT_AMOUNT)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), LARGE_MINT_AMOUNT)
     {
@@ -1549,8 +1549,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     function test_givenTargetZero_whenConvertedAmountEqualToTickCapacity()
         public
-        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenAddressHasReserveToken(recipient, LARGE_MINT_AMOUNT)
         givenReserveTokenSpendingIsApproved(recipient, address(depositManager), LARGE_MINT_AMOUNT)
     {
@@ -1611,8 +1611,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         uint256 bidAmount
     )
         public
-        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
     {
         _mintAndApprove(recipient, LARGE_MINT_AMOUNT);
 

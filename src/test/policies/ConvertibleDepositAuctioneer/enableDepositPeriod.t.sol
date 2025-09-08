@@ -3,14 +3,13 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepositAuctioneerTest {
-    event DepositPeriodEnabled(address indexed depositAsset, uint8 depositPeriod);
+    event DepositPeriodEnableQueued(address indexed depositAsset, uint8 depositPeriod);
 
     // when the caller does not have the "admin" or "manager" role
     //  [X] it reverts
@@ -28,15 +27,21 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     }
 
     // given the contract is not enabled
-    //  [X] it reverts
+    //  [X] it queues the enable (now allowed while disabled)
 
-    function test_givenContractNotEnabled_reverts() public {
-        // Expect revert
-        _expectNotEnabledRevert();
+    function test_givenContractNotEnabled_queuesEnable() public {
+        // Expect queued event (should work while disabled)
+        vm.expectEmit(true, true, true, true);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        // Verify it was queued
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "period should be pending enabled");
     }
 
     // when the deposit period is zero
@@ -61,19 +66,11 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_givenDepositPeriodAlreadyEnabled_reverts()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
     {
         // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleDepositAuctioneer
-                    .ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled
-                    .selector,
-                address(iReserveToken),
-                PERIOD_MONTHS
-            )
-        );
+        _expectDepositPeriodInvalidState(iReserveToken, PERIOD_MONTHS, true);
 
         // Call function
         vm.prank(admin);
@@ -85,26 +82,30 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_givenDepositPeriodPreviouslyEnabled()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenDepositPeriodDisabled(PERIOD_MONTHS)
+        givenEnabled
     {
         // Warp forward, so we know the timestamp will be different
         vm.warp(block.timestamp + 1);
 
-        // Expect event
+        // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS, 0);
+        // Assert state - period should NOT be enabled yet (only queued)
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "deposit period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "deposit period should be pending enabled");
 
-        // Check the tick is populated
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count should still be 0");
+
+        // The tick should not be initialized yet
+        _assertPreviousTick(0, 0, TICK_SIZE, 0);
     }
 
     // given there is another deposit period enabled
@@ -115,22 +116,33 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
 
     function test_givenOtherDepositPeriodEnabled()
         public
-        givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
     {
-        // Expect event
+        // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS + 1);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS_TWO);
 
         // Call function
         vm.prank(admin);
-        auctioneer.enableDepositPeriod(PERIOD_MONTHS + 1);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS_TWO);
 
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS + 1, 1);
+        // Assert state - new period should NOT be enabled yet (only queued)
+        (bool isEnabledPeriodTwo, bool isPendingEnabledPeriodTwo) = auctioneer
+            .isDepositPeriodEnabled(PERIOD_MONTHS_TWO);
+        assertEq(isEnabledPeriodTwo, false, "new period should not be enabled yet");
+        assertEq(isPendingEnabledPeriodTwo, true, "new period should be pending enabled");
 
-        // Check the tick is populated
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        assertEq(
+            auctioneer.getDepositPeriodsCount(),
+            1,
+            "count should still be 1 (existing period)"
+        );
+
+        // Original period should still be enabled
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, true, "existing period should still be enabled");
+        assertEq(isPendingEnabled, true, "existing period pending should match current state");
     }
 
     // [X] the deposit period is added to the deposit periods array
@@ -139,154 +151,67 @@ contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepos
     // [X] an event is emitted
 
     function test_success() public givenEnabled {
-        // Expect event
+        // Expect queued event
         vm.expectEmit(true, true, true, true);
-        emit DepositPeriodEnabled(address(iReserveToken), PERIOD_MONTHS);
+        emit DepositPeriodEnableQueued(address(iReserveToken), PERIOD_MONTHS);
 
         // Call function
         vm.prank(admin);
         auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
-        // Assert state
-        _assertPeriodEnabled(PERIOD_MONTHS, 0);
+        // Assert state - period should NOT be enabled yet (only queued)
+        (bool isEnabled, bool isPendingEnabled) = auctioneer.isDepositPeriodEnabled(PERIOD_MONTHS);
+        assertEq(isEnabled, false, "deposit period should not be enabled yet");
+        assertEq(isPendingEnabled, true, "period should be pending enabled");
 
-        // Check the tick is populated
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        assertEq(auctioneer.getDepositPeriodsCount(), 0, "deposit periods count should still be 0");
+
+        // The tick should not be initialized yet
+        _assertPreviousTick(0, 0, TICK_SIZE, 0);
     }
 
-    /// @notice Test that existing deposit periods maintain correct capacity allocation when a new period is enabled
-    /// @dev This test demonstrates a bug where enabling a new deposit period causes existing periods
-    ///      to lose capacity because _getCurrentTick recalculates using the NEW period count instead
-    ///      of preserving capacity accumulated with the original period count.
-    ///
-    ///      Expected behavior: Capacity accumulated during a time period should be based on the
-    ///      period count that was active during that time, not the current period count.
-    function test_capacityAllocationWhenEnablingDepositPeriod() public givenEnabled {
-        uint8 periodA = PERIOD_MONTHS;
-        uint8 periodB = PERIOD_MONTHS_TWO;
-        uint8 periodC = 18;
-        // Enable the other periods with the DepositManager
-        {
-            vm.startPrank(admin);
-            depositManager.addAssetPeriod(iReserveToken, periodC, address(facility), 90e2);
-            vm.stopPrank();
-        }
-
-        // Step 1: Enable periods A and B (2 periods total)
+    /// @notice Test that queueing enable after enable for same period reverts
+    function test_enableAfterEnable_reverts() public givenEnabled {
+        // Queue first enable
         vm.prank(admin);
-        auctioneer.enableDepositPeriod(periodA);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+
+        // Expect revert when trying to enable again
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer
+                    .ConvertibleDepositAuctioneer_DepositPeriodInvalidState
+                    .selector,
+                address(iReserveToken),
+                PERIOD_MONTHS,
+                true // effective state would be enabled
+            )
+        );
+
+        // Call function again
         vm.prank(admin);
-        auctioneer.enableDepositPeriod(periodB);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
+    }
 
-        assertEq(auctioneer.getDepositPeriodsCount(), 2, "2 periods enabled");
-
-        // Step 1.5: Make bids to reduce capacity so we can see the difference more clearly
-        _mintReserveToken(recipient, 10000e18);
-        _approveReserveTokenSpending(recipient, address(depositManager), 10000e18);
-
-        // Make a large bid on period A to consume most of its capacity
-        vm.prank(recipient);
-        auctioneer.bid(periodA, 5000e18, 1, false, false);
-
-        // Also make a bid on period B
-        vm.prank(recipient);
-        auctioneer.bid(periodB, 5000e18, 1, false, false);
-
-        // Step 2: Let time pass with 2 periods active - use shorter time to avoid tick size capping
-        uint256 timePassedSeconds = 6 hours;
-        vm.warp(block.timestamp + timePassedSeconds);
-
-        // Step 3: Calculate expected values using the same method as the contract
-        uint256 expectedCapacityToAdd2Periods = (TARGET * timePassedSeconds) / 1 days / 2;
-        uint256 expectedCapacityToAdd3Periods = (TARGET * timePassedSeconds) / 1 days / 3;
-
-        console2.log("=== BEFORE ENABLING PERIOD C ===");
-        console2.log("Time passed (seconds):", timePassedSeconds);
-        console2.log("TARGET:", TARGET);
-        console2.log("Periods count:", auctioneer.getDepositPeriodsCount());
-        console2.log("Expected capacity to add (2 periods):", expectedCapacityToAdd2Periods);
-        console2.log("Expected capacity to add (3 periods):", expectedCapacityToAdd3Periods);
-        console2.log("TICK_SIZE:", TICK_SIZE);
-
-        // Check the previous tick state (stored state) before getCurrentTick
-        IConvertibleDepositAuctioneer.Tick memory storedTickA = auctioneer.getPreviousTick(periodA);
-        console2.log("Period A stored tick before getCurrentTick:");
-        console2.log("  - capacity:", storedTickA.capacity);
-        console2.log("  - price:", storedTickA.price);
-        console2.log("  - lastUpdate:", storedTickA.lastUpdate);
-        console2.log("  - current timestamp:", block.timestamp);
-
-        // Capture tick states while 2 periods are active
-        IConvertibleDepositAuctioneer.Tick memory expectedTickA = auctioneer.getCurrentTick(
-            periodA
-        );
-        IConvertibleDepositAuctioneer.Tick memory expectedTickB = auctioneer.getCurrentTick(
-            periodB
-        );
-
-        console2.log("Period A calculated capacity (2 periods):", expectedTickA.capacity);
-        console2.log("Period A calculated price (2 periods):", expectedTickA.price);
-        console2.log("Period B calculated capacity (2 periods):", expectedTickB.capacity);
-        console2.log("Period B calculated price (2 periods):", expectedTickB.price);
-
-        // Manual calculation to verify
-        uint256 manualNewCapacity = storedTickA.capacity + expectedCapacityToAdd2Periods;
-        console2.log("Manual calculation: stored + expected =", manualNewCapacity);
-
-        // Step 4: Enable period C, changing the total to 3 periods
+    /// @notice Test enable -> disable -> enable sequence works correctly
+    function test_enableDisableEnableSequence() public givenEnabled {
+        // Queue enable
         vm.prank(admin);
-        auctioneer.enableDepositPeriod(periodC);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
-        console2.log("\n=== AFTER ENABLING PERIOD C ===");
-        console2.log("Periods count:", auctioneer.getDepositPeriodsCount());
+        // Queue disable (should work since effective state becomes enabled then disabled)
+        vm.prank(admin);
+        auctioneer.disableDepositPeriod(PERIOD_MONTHS);
 
-        // Step 5: Check tick states after enabling period C
-        IConvertibleDepositAuctioneer.Tick memory actualTickA = auctioneer.getCurrentTick(periodA);
-        IConvertibleDepositAuctioneer.Tick memory actualTickB = auctioneer.getCurrentTick(periodB);
+        // Queue enable again (should work since effective state is now disabled)
+        vm.prank(admin);
+        auctioneer.enableDepositPeriod(PERIOD_MONTHS);
 
-        console2.log("Period A capacity (3 periods):", actualTickA.capacity);
-        console2.log("Period A price (3 periods):", actualTickA.price);
-        console2.log("Period B capacity (3 periods):", actualTickB.capacity);
-        console2.log("Period B price (3 periods):", actualTickB.price);
-
-        console2.log("\n=== DIFFERENCES ===");
-        console2.log(
-            "Period A capacity difference:",
-            int256(actualTickA.capacity) - int256(expectedTickA.capacity)
+        // Check final pending state - after enable -> disable -> enable sequence
+        (bool finalIsEnabled, bool finalIsPendingEnabled) = auctioneer.isDepositPeriodEnabled(
+            PERIOD_MONTHS
         );
-        console2.log(
-            "Period B capacity difference:",
-            int256(actualTickB.capacity) - int256(expectedTickB.capacity)
-        );
-
-        // The bug should cause these to be different
-        if (actualTickA.capacity != expectedTickA.capacity) {
-            console2.log("BUG DETECTED: Period A capacity changed after enabling period C");
-        }
-
-        // These assertions should fail if the bug exists
-        // Account for potential rounding differences of ±1 due to mulDivUp operations
-        assertApproxEqAbs(
-            actualTickA.capacity,
-            expectedTickA.capacity,
-            1,
-            "Period A should maintain correct capacity after enabling period C"
-        );
-        assertEq(
-            actualTickA.price,
-            expectedTickA.price,
-            "Period A should maintain correct price after enabling period C"
-        );
-        assertApproxEqAbs(
-            actualTickB.capacity,
-            expectedTickB.capacity,
-            1,
-            "Period B should maintain correct capacity after enabling period C"
-        );
-        assertEq(
-            actualTickB.price,
-            expectedTickB.price,
-            "Period B should maintain correct price after enabling period C"
-        );
+        assertEq(finalIsEnabled, false, "period should not be enabled yet");
+        assertEq(finalIsPendingEnabled, true, "period should end up pending enabled");
     }
 }
